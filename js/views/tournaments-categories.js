@@ -1614,6 +1614,34 @@ window._deleteEmptyCategory = function(tId, cat) {
 
     t.combinedCategories = (t.combinedCategories || []).filter(function(c) { return c !== cat; });
     if (t.mergeHistory) t.mergeHistory = t.mergeHistory.filter(function(mh) { return mh.mergedName !== cat; });
+
+    // Reconcile skillCategories and genderCategories from remaining combinedCategories
+    var _gKeyToLabel = { fem: 'Fem', masc: 'Masc', misto_aleatorio: 'Misto Aleat.', misto_obrigatorio: 'Misto Obrig.' };
+    var _gLabelLong = ['Misto Obrig.', 'Misto Aleat.', 'Fem', 'Masc']; // longest first
+    var _usedGenderLabels = {};
+    var _usedSkills = {};
+    (t.combinedCategories || []).forEach(function(c) {
+        var gp = null;
+        for (var gi = 0; gi < _gLabelLong.length; gi++) {
+            if (c === _gLabelLong[gi] || c.indexOf(_gLabelLong[gi] + ' ') === 0) { gp = _gLabelLong[gi]; break; }
+        }
+        if (gp) {
+            _usedGenderLabels[gp] = true;
+            var skill = c.length > gp.length ? c.slice(gp.length + 1) : '';
+            if (skill) _usedSkills[skill] = true;
+        } else {
+            _usedSkills[c] = true;
+        }
+    });
+    if (t.skillCategories) {
+        t.skillCategories = t.skillCategories.filter(function(s) { return !!_usedSkills[s]; });
+    }
+    if (t.genderCategories) {
+        t.genderCategories = t.genderCategories.filter(function(k) {
+            return !!_usedGenderLabels[_gKeyToLabel[k] || k];
+        });
+    }
+
     window.AppStore.logAction(tId, 'Categoria excluída: ' + cat);
 
     if (window.FirestoreDB && window.FirestoreDB.saveTournament) {

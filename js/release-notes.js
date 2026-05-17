@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.93-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
+      '<p><b>Excluir categoria reconcilia skillCategories e genderCategories no Firestore.</b><br><br>' +
+      'Ao clicar no × de uma categoria vazia, o sistema agora recalcula quais habilidades e gêneros ainda são utilizados nas categorias restantes e remove os que ficaram sem uso. Se sobrarem apenas "Fem" e "Masc" (sem sufixo de habilidade), as habilidades são automaticamente limpas — refletindo corretamente no formulário de edição/criação.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.92-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
       '<p><b>Fix: badges "Fem C" / "Masc D" sumiam dos cards de inscritos quando não fazem parte das categorias do torneio.</b><br><br>' +
       'Badges de categoria nos cards de inscritos agora são filtrados contra <code>combinedCategories</code> do torneio — participantes com categorias obsoletas (ex: "Fem C" quando torneio só tem "Fem" e "Masc") mostram apenas as categorias válidas ou exibem "(sem cat.)" quando nenhuma é válida.</p>' +
