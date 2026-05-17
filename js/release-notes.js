@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.88-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
+      '<p><b>Fix: auto-atribuição de categorias — gênero ausente e skillBySport desatualizado.</b><br><br>' +
+      'Dois bugs adicionais corrigidos no auto-assign:<br><br>' +
+      '(1) <b>Gênero ausente não disparava enriquecimento:</b> participantes com <code>skillBySport</code> preenchido mas sem <code>gender</code> no objeto de inscrição passavam direto pelo <code>_needsEnrichment</code> sem buscar o perfil no Firestore — o gênero nunca era obtido, deixando 2 categorias elegíveis (Masc B + Fem B) e nenhuma atribuição. Agora <code>_needsEnrichment</code> também detecta <code>gender</code> ausente em torneios com categorias de gênero.<br><br>' +
+      '(2) <b>skillBySport desatualizado não era sobrescrito:</b> quando o objeto de inscrição tinha <code>{"Beach Tennis": null}</code> (sport selecionado, nível não escolhido), o enriquecimento pulava a sobrescrita porque o objeto existia. Agora só preserva se houver valores significativos (não-nulos) — dados desatualizados são substituídos pelo perfil atual do Firestore.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.87-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
       '<p><b>Fix: auto-atribuição de categorias agora funciona de verdade.</b><br><br>' +
       'Dois bugs corrigidos na lógica de auto-assign:<br><br>' +

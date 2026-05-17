@@ -1779,7 +1779,9 @@ window._autoAssignCategoriesAsync = async function(tId) {
         // skillBySport with all-null values (sport selected but skill not set) counts as missing
         var hasMeaningfulSkill = p.skillBySport && typeof p.skillBySport === 'object' &&
             Object.keys(p.skillBySport).some(function(k) { return !!p.skillBySport[k]; });
-        return !(p.birthDate || hasMeaningfulSkill || p.defaultCategory);
+        // Missing gender when tournament has gender categories also requires enrichment
+        var missingGender = !p.gender && (t.genderCategories || []).length > 0;
+        return !(p.birthDate || hasMeaningfulSkill || p.defaultCategory) || missingGender;
     }
 
     // Participants with uid — load by uid
@@ -1787,13 +1789,19 @@ window._autoAssignCategoriesAsync = async function(tId) {
     // Participants without uid but with email — load by email query
     var toLoadByEmail = parts.filter(function(p) { return _needsEnrichment(p) && !p.uid && p.email; });
 
+    function _hasMeaningfulSkill(participant) {
+        return participant.skillBySport && typeof participant.skillBySport === 'object' &&
+            Object.keys(participant.skillBySport).some(function(k) { return !!participant.skillBySport[k]; });
+    }
+
     // Enrich by uid
     for (var i = 0; i < toLoadByUid.length; i++) {
         try {
             var profile = await window.FirestoreDB.loadUserProfile(toLoadByUid[i].uid);
             if (profile) {
                 if (profile.birthDate && !toLoadByUid[i].birthDate) toLoadByUid[i].birthDate = profile.birthDate;
-                if (profile.skillBySport && !toLoadByUid[i].skillBySport) toLoadByUid[i].skillBySport = profile.skillBySport;
+                // Overwrite skillBySport even if object exists — stale {sport: null} must be replaced with real data
+                if (profile.skillBySport && !_hasMeaningfulSkill(toLoadByUid[i])) toLoadByUid[i].skillBySport = profile.skillBySport;
                 if (profile.defaultCategory && !toLoadByUid[i].defaultCategory) toLoadByUid[i].defaultCategory = profile.defaultCategory;
                 if (profile.gender && !toLoadByUid[i].gender) toLoadByUid[i].gender = profile.gender;
             }
@@ -1810,7 +1818,8 @@ window._autoAssignCategoriesAsync = async function(tId) {
                 if (!snap.empty) {
                     var pdata = snap.docs[0].data();
                     if (pdata.birthDate && !toLoadByEmail[j].birthDate) toLoadByEmail[j].birthDate = pdata.birthDate;
-                    if (pdata.skillBySport && !toLoadByEmail[j].skillBySport) toLoadByEmail[j].skillBySport = pdata.skillBySport;
+                    // Overwrite skillBySport even if object exists — stale {sport: null} must be replaced with real data
+                    if (pdata.skillBySport && !_hasMeaningfulSkill(toLoadByEmail[j])) toLoadByEmail[j].skillBySport = pdata.skillBySport;
                     if (pdata.defaultCategory && !toLoadByEmail[j].defaultCategory) toLoadByEmail[j].defaultCategory = pdata.defaultCategory;
                     if (pdata.gender && !toLoadByEmail[j].gender) toLoadByEmail[j].gender = pdata.gender;
                     if (!toLoadByEmail[j].uid && snap.docs[0].id) toLoadByEmail[j].uid = snap.docs[0].id;
