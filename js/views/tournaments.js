@@ -781,7 +781,8 @@ function renderTournaments(container, tournamentId = null) {
         ` : '';
 
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
-        const categoriasBtn = (_hasTournCats && isOrg) ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._openCategoryManager('${t.id}')">🏷️ Categorias</button>` : '';
+        // Categorias button removed — category management is now inline in "Inscritos Confirmados"
+        const categoriasBtn = '';
         // v1.3.1-beta: botão de análise sempre visível pro organizador, mesmo
         // sem inscritos — modal trata empty state. User: 'Essa função de
         // relatório de inscritos deve estar entre os botoes ferramentas do
@@ -1516,6 +1517,7 @@ function renderTournaments(container, tournamentId = null) {
     if (tournamentId && visible.length === 1) {
         const t = visible[0];
         const isOrg = typeof window.AppStore.isOrganizer === 'function' ? window.AppStore.isOrganizer(t) : false;
+        const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
         const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
 
         // Pre-load player photos for avatar display (async, updates DOM after load)
@@ -1942,6 +1944,7 @@ function renderTournaments(container, tournamentId = null) {
                  <div data-merge-container="${t.id}" style="${gridStyle}">
                     ${cardsStr}
                  </div>
+                 ${(_hasTournCats && isOrg) ? `<div id="inline-cat-mgr-${t.id}"></div>` : ''}
               </div>
           `;
         }
@@ -2037,6 +2040,14 @@ function renderTournaments(container, tournamentId = null) {
     ${tournamentId ? `<div id="activity-log-section"></div>` : ''}
   `;
     container.innerHTML = html;
+
+    // Hydrate inline category manager (when organizer views tournament detail with categories)
+    if (tournamentId && typeof window._hydrateInlineCatMgr === 'function') {
+        setTimeout(function() {
+            var _inlineCatEl = document.getElementById('inline-cat-mgr-' + tournamentId);
+            if (_inlineCatEl) window._hydrateInlineCatMgr(tournamentId);
+        }, 0);
+    }
 
     // Setup filter bar handlers
     var _filterInput = document.getElementById('tourn-filter-input');

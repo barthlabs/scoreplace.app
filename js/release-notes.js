@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">✨ v1.6.91-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
+      '<p><b>Categorias integradas na seção "Inscritos Confirmados" — botão separado removido.</b><br><br>' +
+      '(1) <b>Categorias inline:</b> o gerenciador de categorias agora aparece diretamente abaixo dos inscritos na página do torneio, sem precisar de um botão separado.<br><br>' +
+      '(2) <b>Filtro de categorias por regras do torneio:</b> participantes com categorias inválidas (ex: "Masc B" quando o torneio só tem "Masc" e "Fem") aparecem automaticamente na zona vermelha "sem categoria".<br><br>' +
+      '(3) <b>Fix de escopo:</b> correção de bug onde a variável de categorias não estava acessível fora da função de renderização de cards, impedindo o painel inline de ser exibido.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">✨ v1.6.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
       '<p><b>Gerenciador de Categorias redesenhado: participantes dentro dos cards, drag-and-drop entre categorias, X para excluir vazia.</b><br><br>' +
       '(1) <b>Participantes visíveis dentro dos cards:</b> cada categoria agora exibe os participantes como chips diretamente no card, sem precisar clicar para abrir um modal separado.<br><br>' +

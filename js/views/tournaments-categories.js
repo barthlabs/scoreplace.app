@@ -982,6 +982,127 @@ window.renderCategoryManagerPage = function(container, tId) {
     }
 };
 
+// Central re-render: tries the inline section (tournament detail) first, then the full category page
+window._refreshCatMgr = function(tId) {
+    var inlineEl = document.getElementById('inline-cat-mgr-' + tId);
+    if (inlineEl) {
+        window._hydrateInlineCatMgr(tId);
+    } else if (window._catManagerRender) {
+        window._catManagerRender();
+    }
+};
+
+// Build the HTML string for the inline category section (embeds inside tournament detail)
+window._buildInlineCatMgrHTML = function(tId) {
+    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    if (!t) return '';
+    var categories = window._sortCategoriesBySkillOrder((t.combinedCategories || []).slice(), t.skillCategories);
+    if (!categories || categories.length === 0) return '';
+    var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
+
+    var catCounts = {};
+    var catPartsMap = {};
+    categories.forEach(function(c) { catCounts[c] = 0; catPartsMap[c] = []; });
+    var uncategorized = [];
+    parts.forEach(function(p, idx) {
+        var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
+        var pCats = window._getParticipantCategories(p);
+        var hasValidCat = false;
+        pCats.forEach(function(pc) {
+            if (categories.indexOf(pc) !== -1) {
+                catCounts[pc] = (catCounts[pc] || 0) + 1;
+                catPartsMap[pc].push({ name: pName, idx: idx, p: p });
+                hasValidCat = true;
+            }
+        });
+        if (!hasValidCat) uncategorized.push({ name: pName, idx: idx, p: p });
+    });
+
+    var genderPrefixes = ['Fem', 'Masc', 'Misto Aleat.', 'Misto Obrig.'];
+    var catRows = [];
+    var usedCats = {};
+    genderPrefixes.forEach(function(prefix) {
+        var rowCats = categories.filter(function(c) { return c.toLowerCase().startsWith(prefix.toLowerCase()); });
+        if (rowCats.length > 0) { catRows.push({ prefix: prefix, cats: rowCats }); rowCats.forEach(function(c) { usedCats[c] = true; }); }
+    });
+    var otherCats = categories.filter(function(c) { return !usedCats[c]; });
+    if (otherCats.length > 0) catRows.push({ prefix: '', cats: otherCats });
+
+    var mergedCatSet = {};
+    (t.mergeHistory || []).forEach(function(mh) { mergedCatSet[mh.mergedName] = true; });
+    var _skillCats = t.skillCategories || [];
+    var _gpList = ['Fem', 'Masc', 'Misto Aleat.', 'Misto Obrig.'];
+    categories.forEach(function(cat) {
+        if (mergedCatSet[cat]) return;
+        if (cat.indexOf('/') !== -1) { mergedCatSet[cat] = true; return; }
+        if (_skillCats.length > 0 && _gpList.some(function(gp) { return cat === gp; })) mergedCatSet[cat] = true;
+    });
+
+    var catRowsHtml = catRows.map(function(row) {
+        return '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;">' +
+            row.cats.map(function(cat) {
+                var count = catCounts[cat] || 0;
+                var catEsc = cat.replace(/\\/g, '\\\\').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+                var catDisplay = window._displayCategoryName(cat);
+                var isMerged = !!mergedCatSet[cat];
+                var unmergeIcon = isMerged
+                    ? '<div class="cat-unmerge-btn" data-unmerge-cat="' + catEsc + '" title="Desmesclar" style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"><path d="M16 3h5v5M8 3H3v5M16 21h5v-5M8 21H3v-5"/></svg></div>'
+                    : '';
+                var delRight = isMerged ? '27px' : '3px';
+                var deleteBtn = count === 0
+                    ? '<div class="cat-delete-btn" data-cat="' + catEsc + '" title="Excluir categoria" style="position:absolute;top:3px;right:' + delRight + ';width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;line-height:1;color:#f87171;font-weight:700;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'">×</div>'
+                    : '';
+                var catParts = catPartsMap[cat] || [];
+                var chipsHtml = catParts.map(function(item) {
+                    var pNameSafe = typeof window._safeHtml === 'function' ? window._safeHtml(item.name) : item.name;
+                    return '<div class="cat-mgr-participant-in-cat" draggable="true" data-pidx="' + item.idx + '" data-sourcecat="' + catEsc + '" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);cursor:grab;font-size:0.78rem;font-weight:500;color:var(--text-bright);touch-action:none;white-space:nowrap;"><span style="font-size:0.65rem;opacity:0.7;">👤</span>' + pNameSafe + '</div>';
+                }).join('');
+                var emptyLabel = count === 0 ? '<div style="font-size:0.72rem;color:var(--text-muted);font-style:italic;padding:2px 0;">nenhum inscrito</div>' : '';
+                var prRight = (isMerged || count === 0) ? '44px' : '8px';
+                return '<div class="cat-mgr-card" draggable="true" data-cat="' + catEsc + '" style="position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:12px;background:rgba(99,102,241,0.08);border:2px solid rgba(99,102,241,0.2);cursor:default;transition:border-color 0.2s;min-width:120px;">' +
+                    unmergeIcon + deleteBtn +
+                    '<div style="font-weight:700;font-size:0.8rem;color:#818cf8;white-space:nowrap;margin-bottom:6px;padding-right:' + prRight + ';">' + catDisplay + '</div>' +
+                    '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + chipsHtml + '</div>' +
+                    emptyLabel + '</div>';
+            }).join('') + '</div>';
+    }).join('');
+
+    var uncatHtml = '';
+    if (uncategorized.length > 0) {
+        var uncatCards = uncategorized.map(function(u) {
+            return '<div class="cat-mgr-participant" draggable="true" data-pidx="' + u.idx + '" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);cursor:grab;font-size:0.85rem;font-weight:500;color:#fca5a5;touch-action:none;"><span style="font-size:0.7rem;">👤</span> ' + (u.name || 'Sem nome') + '</div>';
+        }).join('');
+        uncatHtml = '<div class="cat-mgr-uncat-zone" style="margin-top:0.75rem;padding:0.75rem 1rem;background:rgba(239,68,68,0.06);border:1px dashed rgba(239,68,68,0.3);border-radius:12px;">' +
+            '<div style="font-weight:700;color:#fca5a5;font-size:0.82rem;margin-bottom:6px;">' + uncategorized.length + ' sem categoria — arraste para uma categoria</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + uncatCards + '</div></div>';
+    }
+
+    return '<div style="margin-top:1.25rem;border-top:1px solid var(--border-color);padding-top:1rem;">' +
+        '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.75rem;">🏷️ Arraste participantes entre categorias para reorganizá-los</div>' +
+        catRowsHtml + uncatHtml + '</div>';
+};
+
+// Inject the inline category section into its placeholder and attach events
+window._hydrateInlineCatMgr = function(tId) {
+    var container = document.getElementById('inline-cat-mgr-' + tId);
+    if (!container) return;
+    container.innerHTML = window._buildInlineCatMgrHTML(tId);
+    _attachCatManagerDragDrop(tId);
+
+    container.querySelectorAll('.cat-unmerge-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            _unmergeCategoryAction(tId, btn.getAttribute('data-unmerge-cat'));
+        });
+    });
+    container.querySelectorAll('.cat-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (typeof window._deleteEmptyCategory === 'function') window._deleteEmptyCategory(tId, btn.getAttribute('data-cat'));
+        });
+    });
+};
+
 // Attach drag-and-drop events for category manager (desktop + mobile touch)
 function _attachCatManagerDragDrop(tId) {
     var _dragData = null; // Shared drag state for both desktop and touch
@@ -1373,9 +1494,7 @@ function _executeMerge(tId, sourceCat, targetCat, mergedName) {
     }
 
     // Re-render the modal after a small delay to ensure data is settled
-    setTimeout(function() {
-        if (window._catManagerRender) window._catManagerRender();
-    }, 100);
+    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 }
 
 // Remove a participant from a specific category (set as uncategorized)
@@ -1443,12 +1562,7 @@ function _executeRemoveFromCategory(tId, pIdx, category) {
     }
 
     // Re-render the category detail view (refreshed data)
-    setTimeout(function() {
-        if (window._catManagerRender) {
-            // Go back to main view since the detail might be stale
-            window._catManagerRender();
-        }
-    }, 100);
+    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 }
 
 // Move a participant from one category to another (organizer drag-and-drop)
@@ -1482,7 +1596,7 @@ window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
         showNotification('✅ Categoria atualizada', pName + ': ' + window._displayCategoryName(sourceCat) + ' → ' + window._displayCategoryName(targetCat), 'success');
     }
 
-    setTimeout(function() { if (window._catManagerRender) window._catManagerRender(); }, 100);
+    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 };
 
 // Delete an empty category from the tournament's combinedCategories
@@ -1512,7 +1626,7 @@ window._deleteEmptyCategory = function(tId, cat) {
         showNotification('✅ Categoria excluída', window._displayCategoryName(cat), 'success');
     }
 
-    setTimeout(function() { if (window._catManagerRender) window._catManagerRender(); }, 100);
+    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 };
 
 // Unmerge a previously merged category
@@ -1675,9 +1789,7 @@ function _executeUnmerge(tId, mergeIdx) {
     }
 
     // Re-render
-    setTimeout(function() {
-        if (window._catManagerRender) window._catManagerRender();
-    }, 100);
+    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 }
 
 // Unmerge without mergeHistory — infer from name pattern
@@ -1741,9 +1853,7 @@ function _executeInferredUnmerge(tId, mergedName, inferredCats) {
     }
 
     // Re-render
-    setTimeout(function() {
-        if (window._catManagerRender) window._catManagerRender();
-    }, 100);
+    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 }
 
 // Assign an uncategorized participant to a category (manual by organizer)
@@ -1788,9 +1898,7 @@ function _assignParticipantCategory(tId, pIdx, category) {
     }
 
     // Re-render the modal after a small delay to ensure data is settled
-    setTimeout(function() {
-        if (window._catManagerRender) window._catManagerRender();
-    }, 100);
+    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 }
 
 // Category assignment notification
