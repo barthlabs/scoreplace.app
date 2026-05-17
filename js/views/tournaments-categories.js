@@ -1087,12 +1087,17 @@ window._hydrateInlineCatMgr = function(tId) {
     var container = document.getElementById('inline-cat-mgr-' + tId);
     if (!container) return;
 
-    // Safety net: auto-reconcile stale participant categories (e.g., after form edit
-    // removed skill levels, participants still carry "Fem C" but only "Fem" is valid now).
+    // Safety net: if the tournament was saved with singleton skill categories
+    // (e.g. only "Fem C" and no other Fem category), rename them to bare gender labels
+    // ("Fem") so the manager and participant cards show the correct name.
     var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
-    if (t && _autoReconcileParticipantCategories(t)) {
-        if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
-        else if (window.AppStore && window.AppStore.sync) window.AppStore.sync();
+    if (t) {
+        var _prevCombined = JSON.stringify(t.combinedCategories);
+        _simplifySingletonCategories(t);
+        if (JSON.stringify(t.combinedCategories) !== _prevCombined) {
+            if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+            else if (window.AppStore && window.AppStore.sync) window.AppStore.sync();
+        }
     }
 
     // Preserve scroll: replacing innerHTML removes the focused button from the DOM,
@@ -1613,6 +1618,54 @@ window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
 };
 
 // Auto-reassign participants whose stored categories are no longer valid.
+// When only one category remains per gender prefix (e.g. only "Fem C" and "Masc D"),
+// that category name carries no useful information — it should be just "Fem" / "Masc".
+// This function renames singleton-per-gender categories in combinedCategories AND in
+// each participant's stored assignment. Called in _deleteEmptyCategory and on catmgr open.
+function _simplifySingletonCategories(t) {
+    var cats = t.combinedCategories || [];
+    if (cats.length === 0) return;
+    var gLabelLong = ['Misto Obrig.', 'Misto Aleat.', 'Fem', 'Masc']; // longest first
+    var renames = {};
+    gLabelLong.forEach(function(gp) {
+        // Cats that carry a skill suffix for this gender prefix
+        var withSkill = cats.filter(function(c) { return c.indexOf(gp + ' ') === 0; });
+        // Cats that are the bare gender label (no skill)
+        var exact = cats.filter(function(c) { return c === gp; });
+        // Only rename when exactly 1 exists with a skill suffix and no bare label already
+        if (withSkill.length === 1 && exact.length === 0) {
+            renames[withSkill[0]] = gp;
+        }
+    });
+    if (Object.keys(renames).length === 0) return;
+
+    // Rename in combinedCategories
+    t.combinedCategories = cats.map(function(c) { return renames[c] !== undefined ? renames[c] : c; });
+
+    // Clear skillCategories when no category still carries a skill suffix
+    var anySkillLeft = t.combinedCategories.some(function(c) {
+        return gLabelLong.some(function(gp) { return c.indexOf(gp + ' ') === 0; });
+    });
+    if (!anySkillLeft) t.skillCategories = [];
+
+    // Rename participant assignments to match the new names
+    var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
+    parts.forEach(function(p) {
+        if (typeof p !== 'object' || !p) return;
+        var pCats = window._getParticipantCategories(p);
+        var renamed = pCats.map(function(pc) { return renames[pc] !== undefined ? renames[pc] : pc; });
+        var hasChange = pCats.some(function(pc, i) { return renamed[i] !== pCats[i]; });
+        if (hasChange) window._setParticipantCategories(p, renamed);
+    });
+
+    // Keep mergeHistory names consistent
+    if (t.mergeHistory) {
+        t.mergeHistory.forEach(function(mh) {
+            if (mh.mergedName && renames[mh.mergedName] !== undefined) mh.mergedName = renames[mh.mergedName];
+        });
+    }
+}
+
 // When combinedCategories changes (via merge, delete, or form edit), participants
 // can be left with stale categories like "Fem C" when only "Fem"/"Masc" remain.
 // This function maps each invalid category to the single valid category that shares
@@ -1713,9 +1766,12 @@ window._deleteEmptyCategory = function(tId, cat) {
         });
     }
 
-    // Auto-reassign participants whose stored categories became invalid after deletion.
-    // E.g., if only "Fem" and "Masc" remain and a participant still has "Fem C",
-    // they get reassigned to "Fem" automatically.
+    // If only 1 category per gender remains (e.g. "Fem C" is the only Fem cat),
+    // rename it to the bare gender label ("Fem"). Updates combinedCategories,
+    // skillCategories, and participant assignments in one pass.
+    _simplifySingletonCategories(t);
+
+    // Auto-reassign any remaining stale participant categories (safety net).
     _autoReconcileParticipantCategories(t);
 
     window.AppStore.logAction(tId, 'Categoria excluída: ' + cat);

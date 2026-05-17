@@ -9,9 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.96-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
+      '<p><b>Fix: "Fem C" vira "Fem" (e "Masc D" vira "Masc") quando é a única categoria do gênero.</b><br><br>' +
+      'Sufixos de habilidade (C, D...) só fazem sentido quando existem múltiplas categorias por gênero. Ao excluir categorias e sobrar apenas uma por gênero, o nome é simplificado automaticamente — na lista de categorias e nos cards dos jogadores.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.95-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
       '<p><b>Fix: badges de categoria dos jogadores atualizam automaticamente ao unificar categorias.</b><br><br>' +
-      'Ao excluir categorias e deixar apenas "Fem" e "Masc" (por exemplo), os participantes que tinham "Fem C" ou "Masc D" têm suas categorias atualizadas automaticamente para a categoria remanescente correspondente ao seu gênero. Só reconcilia quando há exatamente uma opção válida por gênero — se houver ambiguidade, preserva o estado atual.</p>' +
+      'Ao excluir categorias e deixar apenas "Fem" e "Masc", os participantes com "Fem C" ou "Masc D" têm suas categorias atualizadas para a categoria remanescente do mesmo gênero.</p>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.94-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
