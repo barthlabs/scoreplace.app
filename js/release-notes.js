@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">✨ v1.6.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
+      '<p><b>Gerenciador de Categorias redesenhado: participantes dentro dos cards, drag-and-drop entre categorias, X para excluir vazia.</b><br><br>' +
+      '(1) <b>Participantes visíveis dentro dos cards:</b> cada categoria agora exibe os participantes como chips diretamente no card, sem precisar clicar para abrir um modal separado.<br><br>' +
+      '(2) <b>Drag-and-drop entre categorias:</b> arraste um chip de participante de uma categoria para outra para movê-lo. Também é possível arrastar de dentro de uma categoria para a área vermelha "sem categoria" para removê-lo da categoria.<br><br>' +
+      '(3) <b>X para excluir categoria vazia:</b> categorias sem participantes inscritos exibem um botão × no canto para excluí-las do torneio.<br><br>' +
+      '(4) <b>Fix: participante voltava para a categoria após remoção manual:</b> quando o organizador removia um participante de uma categoria, o auto-assign recolocava o participante lá logo em seguida (bounce-back). Corrigido: remoção manual marca o participante como <code>categorySource: "organizador"</code>, que o auto-assign respeita.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.88-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
       '<p><b>Fix: auto-atribuição de categorias — gênero ausente e skillBySport desatualizado.</b><br><br>' +
       'Dois bugs adicionais corrigidos no auto-assign:<br><br>' +

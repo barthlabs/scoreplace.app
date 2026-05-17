@@ -676,7 +676,8 @@ window.renderCategoryManagerPage = function(container, tId) {
         // Count participants per category & find uncategorized
         // A participant can belong to multiple categories (non-exclusive)
         var catCounts = {};
-        categories.forEach(function(c) { catCounts[c] = 0; });
+        var catPartsMap = {};
+        categories.forEach(function(c) { catCounts[c] = 0; catPartsMap[c] = []; });
         var uncategorized = [];
         parts.forEach(function(p, idx) {
             var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
@@ -685,6 +686,7 @@ window.renderCategoryManagerPage = function(container, tId) {
             pCats.forEach(function(pc) {
                 if (categories.indexOf(pc) !== -1) {
                     catCounts[pc] = (catCounts[pc] || 0) + 1;
+                    catPartsMap[pc].push({ name: pName, idx: idx, p: p });
                     hasValidCat = true;
                 }
             });
@@ -740,28 +742,45 @@ window.renderCategoryManagerPage = function(container, tId) {
             }
         });
 
-        // Build category rows HTML — compact cards, clickable to see detail
+        // Build category rows HTML — show participants inside cards as draggable chips
         var catRowsHtml = catRows.map(function(row) {
             var cardsHtml = row.cats.map(function(cat) {
                 var count = catCounts[cat] || 0;
                 var catEsc = cat.replace(/\\/g, '\\\\').replace(/"/g, '&quot;').replace(/'/g, "\\'");
                 var catDisplay = window._displayCategoryName(cat);
                 var isMerged = !!mergedCatSet[cat];
-                // Unmerge icon — small split icon in top-right corner, only for merged categories
+                // Unmerge icon — top-right corner, only for merged categories
                 var unmergeIcon = isMerged
                     ? '<div class="cat-unmerge-btn" data-unmerge-cat="' + catEsc + '" title="Desmesclar" style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'">' +
                       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"><path d="M16 3h5v5M8 3H3v5M16 21h5v-5M8 21H3v-5"/></svg>' +
                       '</div>'
                     : '';
+                // Delete button — only visible on empty categories
+                var delRight = isMerged ? '27px' : '3px';
+                var deleteBtn = count === 0
+                    ? '<div class="cat-delete-btn" data-cat="' + catEsc + '" title="Excluir categoria" style="position:absolute;top:3px;right:' + delRight + ';width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;line-height:1;color:#f87171;font-weight:700;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'">×</div>'
+                    : '';
+                // Participant chips inside the card
+                var catParts = catPartsMap[cat] || [];
+                var chipsHtml = catParts.map(function(item) {
+                    var pNameSafe = typeof window._safeHtml === 'function' ? window._safeHtml(item.name) : item.name;
+                    return '<div class="cat-mgr-participant-in-cat" draggable="true" data-pidx="' + item.idx + '" data-sourcecat="' + catEsc + '" ' +
+                        'style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);cursor:grab;font-size:0.78rem;font-weight:500;color:var(--text-bright);touch-action:none;white-space:nowrap;">' +
+                        '<span style="font-size:0.65rem;opacity:0.7;">👤</span>' + pNameSafe + '</div>';
+                }).join('');
+                var emptyLabel = count === 0
+                    ? '<div style="font-size:0.72rem;color:var(--text-muted);font-style:italic;padding:2px 0;">nenhum inscrito</div>'
+                    : '';
+                var prRight = (isMerged || count === 0) ? '44px' : '8px';
                 return '<div class="cat-mgr-card" draggable="true" data-cat="' + catEsc + '" ' +
-                    'style="position:relative;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 14px;border-radius:12px;background:rgba(99,102,241,0.08);border:2px solid rgba(99,102,241,0.2);cursor:pointer;transition:all 0.2s;min-width:80px;">' +
-                    unmergeIcon +
-                    '<div style="font-weight:700;font-size:0.8rem;color:#818cf8;white-space:nowrap;">' + catDisplay + '</div>' +
-                    '<div style="font-size:1.4rem;font-weight:900;color:var(--text-bright);line-height:1.2;">' + count + '</div>' +
-                    '<div style="font-size:0.65rem;color:var(--text-muted);">inscrito' + (count !== 1 ? 's' : '') + '</div>' +
+                    'style="position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:12px;background:rgba(99,102,241,0.08);border:2px solid rgba(99,102,241,0.2);cursor:default;transition:border-color 0.2s;min-width:120px;">' +
+                    unmergeIcon + deleteBtn +
+                    '<div style="font-weight:700;font-size:0.8rem;color:#818cf8;white-space:nowrap;margin-bottom:6px;padding-right:' + prRight + ';">' + catDisplay + '</div>' +
+                    '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + chipsHtml + '</div>' +
+                    emptyLabel +
                     '</div>';
             }).join('');
-            return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">' + cardsHtml + '</div>';
+            return '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;">' + cardsHtml + '</div>';
         }).join('');
 
         // Uncategorized participants HTML — below categories
@@ -804,7 +823,7 @@ window.renderCategoryManagerPage = function(container, tId) {
                 '<p style="font-size:0.7rem;color:#f87171;margin-top:6px;">🔴 vermelho = dado ausente no objeto de inscrição. Se o perfil tiver o dado, ele será buscado ao abrir esse painel — aguarde o auto-assign.</p>' +
                 '</details>'
             ) : '';
-            uncatHtml = '<div style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.06);border:1px dashed rgba(239,68,68,0.3);border-radius:12px;">' +
+            uncatHtml = '<div class="cat-mgr-uncat-zone" style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.06);border:1px dashed rgba(239,68,68,0.3);border-radius:12px;">' +
                 '<div style="font-weight:700;color:#fca5a5;font-size:0.85rem;margin-bottom:8px;">' + _t('cat.noCategory', {count: uncategorized.length}) + '</div>' +
                 '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px;">' + _t('cat.dragToAssign') + '</div>' +
                 '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + uncatCards + '</div>' +
@@ -836,19 +855,6 @@ window.renderCategoryManagerPage = function(container, tId) {
         _attachCatManagerDragDrop(tId);
         if (typeof window._reflowChrome === 'function') window._reflowChrome();
 
-        // Attach click handlers for category detail view
-        var catCardEls = document.querySelectorAll('.cat-mgr-card');
-        catCardEls.forEach(function(cardEl) {
-            cardEl.addEventListener('click', function(e) {
-                // Don't open detail if clicking unmerge button
-                if (e.target.closest && e.target.closest('.cat-unmerge-btn')) return;
-                // Only open detail if not a drag operation
-                if (cardEl._wasDragged) { cardEl._wasDragged = false; return; }
-                var catName = cardEl.getAttribute('data-cat');
-                _renderCategoryDetail(catName);
-            });
-        });
-
         // Attach click handlers for unmerge buttons
         var unmergeBtns = document.querySelectorAll('.cat-unmerge-btn');
         unmergeBtns.forEach(function(btn) {
@@ -856,6 +862,16 @@ window.renderCategoryManagerPage = function(container, tId) {
                 e.stopPropagation();
                 var catName = btn.getAttribute('data-unmerge-cat');
                 _unmergeCategoryAction(tId, catName);
+            });
+        });
+
+        // Attach click handlers for delete category buttons (empty categories only)
+        var deleteBtns = document.querySelectorAll('.cat-delete-btn');
+        deleteBtns.forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var catName = btn.getAttribute('data-cat');
+                if (typeof window._deleteEmptyCategory === 'function') window._deleteEmptyCategory(tId, catName);
             });
         });
     };
@@ -1002,17 +1018,25 @@ function _attachCatManagerDragDrop(tId) {
             if (_dragData && _dragData.type === 'cat' && _dragData.cat !== targetCat) {
                 _confirmMergeCategories(tId, _dragData.cat, targetCat);
             } else if (_dragData && _dragData.type === 'participant') {
-                _assignParticipantCategory(tId, _dragData.pidx, targetCat);
+                if (_dragData.sourceCat) {
+                    // Moving from one category to another
+                    if (_dragData.sourceCat !== targetCat) {
+                        window._moveBetweenCategories(tId, _dragData.pidx, _dragData.sourceCat, targetCat);
+                    }
+                } else {
+                    // Assigning from "sem cat." bucket
+                    _assignParticipantCategory(tId, _dragData.pidx, targetCat);
+                }
             }
             _dragData = null;
         });
     });
 
-    // Participant drag (for assigning to category)
+    // Participant drag from "sem cat." bucket (for assigning to category)
     var pCards = document.querySelectorAll('.cat-mgr-participant');
     pCards.forEach(function(pc) {
         pc.addEventListener('dragstart', function(e) {
-            _dragData = { type: 'participant', pidx: parseInt(pc.getAttribute('data-pidx')) };
+            _dragData = { type: 'participant', pidx: parseInt(pc.getAttribute('data-pidx')), sourceCat: null };
             e.dataTransfer.setData('text/plain', 'participant');
             e.dataTransfer.effectAllowed = 'move';
             pc.style.opacity = '0.5';
@@ -1022,6 +1046,52 @@ function _attachCatManagerDragDrop(tId) {
             _dragData = null;
         });
     });
+
+    // Participant-in-category drag (for moving between categories or back to uncat)
+    var pInCatCards = document.querySelectorAll('.cat-mgr-participant-in-cat');
+    pInCatCards.forEach(function(pc) {
+        pc.addEventListener('dragstart', function(e) {
+            e.stopPropagation(); // prevent category card's dragstart from firing
+            _dragData = {
+                type: 'participant',
+                pidx: parseInt(pc.getAttribute('data-pidx')),
+                sourceCat: pc.getAttribute('data-sourcecat')
+            };
+            e.dataTransfer.setData('text/plain', 'participant');
+            e.dataTransfer.effectAllowed = 'move';
+            pc.style.opacity = '0.5';
+        });
+        pc.addEventListener('dragend', function() {
+            pc.style.opacity = '1';
+            _dragData = null;
+        });
+    });
+
+    // Drop zone: "sem cat." bucket — drag participant from a category here to remove them
+    var uncatZone = document.querySelector('.cat-mgr-uncat-zone');
+    if (uncatZone) {
+        uncatZone.addEventListener('dragover', function(e) {
+            if (_dragData && _dragData.type === 'participant' && _dragData.sourceCat) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                uncatZone.style.border = '1px dashed rgba(239,68,68,0.7)';
+                uncatZone.style.background = 'rgba(239,68,68,0.1)';
+            }
+        });
+        uncatZone.addEventListener('dragleave', function() {
+            uncatZone.style.border = '1px dashed rgba(239,68,68,0.3)';
+            uncatZone.style.background = 'rgba(239,68,68,0.06)';
+        });
+        uncatZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uncatZone.style.border = '1px dashed rgba(239,68,68,0.3)';
+            uncatZone.style.background = 'rgba(239,68,68,0.06)';
+            if (_dragData && _dragData.type === 'participant' && _dragData.sourceCat) {
+                _executeRemoveFromCategory(tId, _dragData.pidx, _dragData.sourceCat);
+            }
+            _dragData = null;
+        });
+    }
 
     // Touch drag-and-drop support for mobile
     var _touchDragEl = null;
@@ -1039,11 +1109,17 @@ function _attachCatManagerDragDrop(tId) {
     }
 
     function _onTouchStart(e) {
-        var target = e.target.closest('.cat-mgr-participant, .cat-mgr-card');
+        var target = e.target.closest('.cat-mgr-participant-in-cat, .cat-mgr-participant, .cat-mgr-card');
         if (!target) return;
         _touchDragEl = target;
-        if (target.classList.contains('cat-mgr-participant')) {
-            _dragData = { type: 'participant', pidx: parseInt(target.getAttribute('data-pidx')) };
+        if (target.classList.contains('cat-mgr-participant-in-cat')) {
+            _dragData = {
+                type: 'participant',
+                pidx: parseInt(target.getAttribute('data-pidx')),
+                sourceCat: target.getAttribute('data-sourcecat')
+            };
+        } else if (target.classList.contains('cat-mgr-participant')) {
+            _dragData = { type: 'participant', pidx: parseInt(target.getAttribute('data-pidx')), sourceCat: null };
         } else {
             _dragData = { type: 'cat', cat: target.getAttribute('data-cat') };
         }
@@ -1089,7 +1165,24 @@ function _attachCatManagerDragDrop(tId) {
             if (_dragData.type === 'cat' && _dragData.cat !== targetCat) {
                 _confirmMergeCategories(tId, _dragData.cat, targetCat);
             } else if (_dragData.type === 'participant') {
-                _assignParticipantCategory(tId, _dragData.pidx, targetCat);
+                if (_dragData.sourceCat) {
+                    if (_dragData.sourceCat !== targetCat) {
+                        window._moveBetweenCategories(tId, _dragData.pidx, _dragData.sourceCat, targetCat);
+                    }
+                } else {
+                    _assignParticipantCategory(tId, _dragData.pidx, targetCat);
+                }
+            }
+        } else if (_dragData && _dragData.type === 'participant' && _dragData.sourceCat) {
+            // Dropped outside category card — check if it landed on the uncat zone
+            var touch = e.changedTouches[0];
+            var uncatZoneEl = document.querySelector('.cat-mgr-uncat-zone');
+            if (uncatZoneEl) {
+                var zr = uncatZoneEl.getBoundingClientRect();
+                if (touch.clientX >= zr.left && touch.clientX <= zr.right &&
+                    touch.clientY >= zr.top && touch.clientY <= zr.bottom) {
+                    _executeRemoveFromCategory(tId, _dragData.pidx, _dragData.sourceCat);
+                }
             }
         }
 
@@ -1323,10 +1416,11 @@ function _executeRemoveFromCategory(tId, pIdx, category) {
     var newCats = pCats.filter(function(c) { return c !== category; });
     window._setParticipantCategories(p, newCats);
 
-    // Mark as uncategorized if no categories left
+    // Mark as uncategorized if no categories left.
+    // Use 'organizador' so auto-assign never re-assigns them (bounce-back fix).
     if (newCats.length === 0) {
         p.wasUncategorized = true;
-        p.categorySource = '';
+        p.categorySource = 'organizador';
     }
 
     // Ensure the array is written back
@@ -1356,6 +1450,70 @@ function _executeRemoveFromCategory(tId, pIdx, category) {
         }
     }, 100);
 }
+
+// Move a participant from one category to another (organizer drag-and-drop)
+window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
+    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    if (!t || !t.participants) return;
+    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+    if (pIdx < 0 || pIdx >= parts.length) return;
+    var p = parts[pIdx];
+    if (typeof p !== 'object') return;
+    var pName = p.displayName || p.name || 'Sem nome';
+
+    // Remove source category, add target category
+    var pCats = window._getParticipantCategories(p);
+    var newCats = pCats.filter(function(c) { return c !== sourceCat; });
+    if (newCats.indexOf(targetCat) === -1) newCats.push(targetCat);
+    window._setParticipantCategories(p, newCats);
+    p.categorySource = 'organizador';
+    if (p.wasUncategorized !== undefined) delete p.wasUncategorized;
+
+    if (!Array.isArray(t.participants)) t.participants = parts;
+    window.AppStore.logAction(tId, 'Participante movido: ' + pName + ' ' + sourceCat + ' → ' + targetCat);
+
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
+        window.FirestoreDB.saveTournament(t);
+    } else {
+        window.AppStore.sync();
+    }
+
+    if (typeof showNotification === 'function') {
+        showNotification('✅ Categoria atualizada', pName + ': ' + window._displayCategoryName(sourceCat) + ' → ' + window._displayCategoryName(targetCat), 'success');
+    }
+
+    setTimeout(function() { if (window._catManagerRender) window._catManagerRender(); }, 100);
+};
+
+// Delete an empty category from the tournament's combinedCategories
+window._deleteEmptyCategory = function(tId, cat) {
+    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    if (!t) return;
+
+    // Safety check: refuse to delete if participants are still assigned
+    var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
+    var hasParticipants = parts.some(function(p) { return typeof window._participantInCategory === 'function' && window._participantInCategory(p, cat); });
+    if (hasParticipants) {
+        if (typeof showNotification === 'function') showNotification('⚠️ Categoria não vazia', 'Mova os participantes antes de excluir.', 'error');
+        return;
+    }
+
+    t.combinedCategories = (t.combinedCategories || []).filter(function(c) { return c !== cat; });
+    if (t.mergeHistory) t.mergeHistory = t.mergeHistory.filter(function(mh) { return mh.mergedName !== cat; });
+    window.AppStore.logAction(tId, 'Categoria excluída: ' + cat);
+
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
+        window.FirestoreDB.saveTournament(t);
+    } else {
+        window.AppStore.sync();
+    }
+
+    if (typeof showNotification === 'function') {
+        showNotification('✅ Categoria excluída', window._displayCategoryName(cat), 'success');
+    }
+
+    setTimeout(function() { if (window._catManagerRender) window._catManagerRender(); }, 100);
+};
 
 // Unmerge a previously merged category
 function _unmergeCategoryAction(tId, catName) {
