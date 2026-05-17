@@ -689,7 +689,7 @@ window.renderCategoryManagerPage = function(container, tId) {
                 }
             });
             if (!hasValidCat) {
-                uncategorized.push({ name: pName, idx: idx });
+                uncategorized.push({ name: pName, idx: idx, p: p });
             }
         });
 
@@ -767,16 +767,48 @@ window.renderCategoryManagerPage = function(container, tId) {
         // Uncategorized participants HTML — below categories
         var uncatHtml = '';
         if (uncategorized.length > 0) {
+            var tSportForDiag = t.sport ? String(t.sport).trim() : null;
             var uncatCards = uncategorized.map(function(u) {
                 return '<div class="cat-mgr-participant" draggable="true" data-pidx="' + u.idx + '" ' +
                     'style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);cursor:grab;font-size:0.85rem;font-weight:500;color:#fca5a5;touch-action:none;">' +
                     '<span style="font-size:0.7rem;">👤</span> ' + (u.name || 'Sem nome') +
                     '</div>';
             }).join('');
+            // Build diagnostic rows: show what data each participant has
+            var diagRows = uncategorized.map(function(u) {
+                var p = u.p;
+                if (!p || typeof p !== 'object') return '';
+                var g = p.gender || '—';
+                var skill = (p.skillBySport && tSportForDiag && p.skillBySport[tSportForDiag]) || p.defaultCategory || '—';
+                var bd = p.birthDate || '—';
+                var uid = p.uid ? p.uid.substring(0, 6) + '…' : '(sem uid)';
+                return '<tr style="font-size:0.72rem;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+                    '<td style="padding:3px 6px;color:var(--text-bright);">' + (u.name || '?') + '</td>' +
+                    '<td style="padding:3px 6px;color:' + (g === '—' ? '#f87171' : '#86efac') + ';">' + g + '</td>' +
+                    '<td style="padding:3px 6px;color:' + (skill === '—' ? '#f87171' : '#86efac') + ';">' + skill + '</td>' +
+                    '<td style="padding:3px 6px;color:' + (bd === '—' ? '#fca5a5' : '#86efac') + ';">' + (bd !== '—' ? '✓' : '—') + '</td>' +
+                    '<td style="padding:3px 6px;color:var(--text-muted);">' + uid + '</td>' +
+                    '</tr>';
+            }).join('');
+            var diagTable = diagRows ? (
+                '<details id="cat-auto-diag" style="margin-top:10px;display:none;">' +
+                '<summary style="font-size:0.72rem;color:var(--text-muted);cursor:pointer;padding:4px 0;">🔍 Dados de perfil detectados (por que não atribuiu)</summary>' +
+                '<table style="width:100%;margin-top:6px;border-collapse:collapse;">' +
+                '<thead><tr style="font-size:0.7rem;color:var(--text-muted);">' +
+                '<th style="padding:3px 6px;text-align:left;">Nome</th>' +
+                '<th style="padding:3px 6px;text-align:left;">Gênero</th>' +
+                '<th style="padding:3px 6px;text-align:left;">Habilidade</th>' +
+                '<th style="padding:3px 6px;text-align:left;">Nasc.</th>' +
+                '<th style="padding:3px 6px;text-align:left;">UID</th>' +
+                '</tr></thead><tbody>' + diagRows + '</tbody></table>' +
+                '<p style="font-size:0.7rem;color:#f87171;margin-top:6px;">🔴 vermelho = dado ausente no objeto de inscrição. Se o perfil tiver o dado, ele será buscado ao abrir esse painel — aguarde o auto-assign.</p>' +
+                '</details>'
+            ) : '';
             uncatHtml = '<div style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.06);border:1px dashed rgba(239,68,68,0.3);border-radius:12px;">' +
                 '<div style="font-weight:700;color:#fca5a5;font-size:0.85rem;margin-bottom:8px;">' + _t('cat.noCategory', {count: uncategorized.length}) + '</div>' +
                 '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px;">' + _t('cat.dragToAssign') + '</div>' +
                 '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + uncatCards + '</div>' +
+                diagTable +
                 '</div>';
         }
 
@@ -917,11 +949,20 @@ window.renderCategoryManagerPage = function(container, tId) {
     window._catManagerTid = tId;
 
     // Auto-assign uncategorized participants based on their Firestore profiles.
-    // Fire-and-forget: if anything gets assigned, re-render the manager.
     if (typeof window._autoAssignCategoriesAsync === 'function') {
         window._autoAssignCategoriesAsync(tId).then(function(n) {
-            if (n > 0) _renderModal();
-        }).catch(function() {});
+            if (n > 0) {
+                _renderModal();
+                if (typeof showNotification === 'function') showNotification('✅ ' + n + ' participante(s) categorizados automaticamente', '', 'success');
+            } else {
+                // Show diagnostic in the uncategorized section
+                var diagEl = document.getElementById('cat-auto-diag');
+                if (diagEl) diagEl.style.display = '';
+            }
+        }).catch(function(err) {
+            var diagEl = document.getElementById('cat-auto-diag');
+            if (diagEl) { diagEl.style.display = ''; diagEl.innerHTML = '⚠️ Erro no auto-assign: ' + (err && err.message || err); }
+        });
     }
 };
 
@@ -1829,7 +1870,34 @@ window._autoAssignCategoriesAsync = async function(tId) {
     }
 
     // Run the sync assign passing the enriched `t` directly to avoid race with onSnapshot
-    return window._autoAssignCategories(tId, t);
+    var n = window._autoAssignCategories(tId, t);
+
+    // If onSnapshot replaced AppStore during our awaits, the enriched `t` is now orphaned.
+    // Sync category assignments back to the current AppStore reference so _renderModal sees them.
+    if (n > 0) {
+        var currentT = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+        if (currentT && currentT !== t) {
+            var eParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+            var cParts = Array.isArray(currentT.participants) ? currentT.participants : Object.values(currentT.participants || {});
+            eParts.forEach(function(ep) {
+                if (!ep || ep.categorySource !== 'perfil') return;
+                var cp = cParts.find(function(p) {
+                    return (ep.uid && p.uid === ep.uid) ||
+                           (ep.email && p.email === ep.email) ||
+                           (ep.name && p.name === ep.name);
+                });
+                if (cp) {
+                    cp.categories = ep.categories;
+                    cp.category = ep.category;
+                    cp.categorySource = ep.categorySource;
+                    if (ep.gender) cp.gender = ep.gender;
+                    if (ep.skillBySport) cp.skillBySport = ep.skillBySport;
+                }
+            });
+        }
+    }
+
+    return n;
 };
 
 // Check and show category notifications for current user
