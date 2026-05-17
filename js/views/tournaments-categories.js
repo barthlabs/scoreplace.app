@@ -1086,7 +1086,11 @@ window._buildInlineCatMgrHTML = function(tId) {
 window._hydrateInlineCatMgr = function(tId) {
     var container = document.getElementById('inline-cat-mgr-' + tId);
     if (!container) return;
+    // Preserve scroll: replacing innerHTML removes the focused button from the DOM,
+    // causing the browser to move focus to body and scroll to top.
+    var _savedScrollY = window.scrollY || window.pageYOffset || 0;
     container.innerHTML = window._buildInlineCatMgrHTML(tId);
+    if (_savedScrollY > 0) window.scrollTo({ top: _savedScrollY, behavior: 'instant' });
     _attachCatManagerDragDrop(tId);
 
     container.querySelectorAll('.cat-unmerge-btn').forEach(function(btn) {
