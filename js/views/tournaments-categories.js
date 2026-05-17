@@ -915,6 +915,14 @@ window.renderCategoryManagerPage = function(container, tId) {
     // Save reference for re-render
     window._catManagerRender = _renderModal;
     window._catManagerTid = tId;
+
+    // Auto-assign uncategorized participants based on their Firestore profiles.
+    // Fire-and-forget: if anything gets assigned, re-render the manager.
+    if (typeof window._autoAssignCategoriesAsync === 'function') {
+        window._autoAssignCategoriesAsync(tId).then(function(n) {
+            if (n > 0) _renderModal();
+        }).catch(function() {});
+    }
 };
 
 // Attach drag-and-drop events for category manager (desktop + mobile touch)
@@ -1766,29 +1774,51 @@ window._autoAssignCategoriesAsync = async function(tId) {
 
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
 
-    // Collect participants missing profile data (but have a uid)
-    var toLoad = parts.filter(function(p) {
-        if (typeof p !== 'object' || !p.uid) return false;
+    // Needs enrichment: participants missing profile data AND uncategorized
+    function _needsEnrichment(p) {
+        if (typeof p !== 'object') return false;
         if (p.categorySource === 'organizador') return false;
         var existingCats = (p.categories || (p.category ? [p.category] : []));
         var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
         if (hasValidCat) return false;
         return !(p.birthDate || p.skillBySport || p.defaultCategory);
-    });
+    }
 
-    if (toLoad.length === 0) return 0;
+    // Participants with uid — load by uid
+    var toLoadByUid = parts.filter(function(p) { return _needsEnrichment(p) && p.uid; });
+    // Participants without uid but with email — load by email query
+    var toLoadByEmail = parts.filter(function(p) { return _needsEnrichment(p) && !p.uid && p.email; });
 
-    // Batch-load profiles (sequential to avoid hammering Firestore)
-    for (var i = 0; i < toLoad.length; i++) {
+    // Enrich by uid
+    for (var i = 0; i < toLoadByUid.length; i++) {
         try {
-            var profile = await window.FirestoreDB.loadUserProfile(toLoad[i].uid);
+            var profile = await window.FirestoreDB.loadUserProfile(toLoadByUid[i].uid);
             if (profile) {
-                if (profile.birthDate && !toLoad[i].birthDate) toLoad[i].birthDate = profile.birthDate;
-                if (profile.skillBySport && !toLoad[i].skillBySport) toLoad[i].skillBySport = profile.skillBySport;
-                if (profile.defaultCategory && !toLoad[i].defaultCategory) toLoad[i].defaultCategory = profile.defaultCategory;
-                if (profile.gender && !toLoad[i].gender) toLoad[i].gender = profile.gender;
+                if (profile.birthDate && !toLoadByUid[i].birthDate) toLoadByUid[i].birthDate = profile.birthDate;
+                if (profile.skillBySport && !toLoadByUid[i].skillBySport) toLoadByUid[i].skillBySport = profile.skillBySport;
+                if (profile.defaultCategory && !toLoadByUid[i].defaultCategory) toLoadByUid[i].defaultCategory = profile.defaultCategory;
+                if (profile.gender && !toLoadByUid[i].gender) toLoadByUid[i].gender = profile.gender;
             }
         } catch (_e) {}
+    }
+
+    // Enrich by email (participants added before uid was stored)
+    if (toLoadByEmail.length > 0 && window.FirestoreDB.db) {
+        for (var j = 0; j < toLoadByEmail.length; j++) {
+            try {
+                var emailQ = toLoadByEmail[j].email.toLowerCase();
+                var snap = await window.FirestoreDB.db.collection('users')
+                    .where('email_lower', '==', emailQ).limit(1).get();
+                if (!snap.empty) {
+                    var pdata = snap.docs[0].data();
+                    if (pdata.birthDate && !toLoadByEmail[j].birthDate) toLoadByEmail[j].birthDate = pdata.birthDate;
+                    if (pdata.skillBySport && !toLoadByEmail[j].skillBySport) toLoadByEmail[j].skillBySport = pdata.skillBySport;
+                    if (pdata.defaultCategory && !toLoadByEmail[j].defaultCategory) toLoadByEmail[j].defaultCategory = pdata.defaultCategory;
+                    if (pdata.gender && !toLoadByEmail[j].gender) toLoadByEmail[j].gender = pdata.gender;
+                    if (!toLoadByEmail[j].uid && snap.docs[0].id) toLoadByEmail[j].uid = snap.docs[0].id;
+                }
+            } catch (_e) {}
+        }
     }
 
     // Run the sync assign now that data is enriched
