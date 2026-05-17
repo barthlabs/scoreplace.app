@@ -1102,7 +1102,10 @@ window._hydrateInlineCatMgr = function(tId) {
 
     // Preserve scroll: replacing innerHTML removes the focused button from the DOM,
     // causing the browser to move focus to body and scroll to top.
-    var _savedScrollY = window.scrollY || window.pageYOffset || 0;
+    // After drag-drop the browser may reset scroll before this runs (100ms delay),
+    // so we use the value captured synchronously at drop time when available.
+    var _savedScrollY = (_catMgrDropScrollY !== null ? _catMgrDropScrollY : 0) || window.scrollY || window.pageYOffset || 0;
+    _catMgrDropScrollY = null;
     container.innerHTML = window._buildInlineCatMgrHTML(tId);
     if (_savedScrollY > 0) window.scrollTo({ top: _savedScrollY, behavior: 'instant' });
     _attachCatManagerDragDrop(tId);
@@ -1120,6 +1123,10 @@ window._hydrateInlineCatMgr = function(tId) {
         });
     });
 };
+
+// Scroll position captured synchronously at drop time so _hydrateInlineCatMgr
+// can restore it even if the browser resets scroll during the 100ms async gap.
+var _catMgrDropScrollY = null;
 
 // Attach drag-and-drop events for category manager (desktop + mobile touch)
 function _attachCatManagerDragDrop(tId) {
@@ -1151,6 +1158,7 @@ function _attachCatManagerDragDrop(tId) {
         card.addEventListener('drop', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            _catMgrDropScrollY = window.scrollY || window.pageYOffset || 0;
             card.style.border = '2px solid rgba(99,102,241,0.2)';
             var targetCat = card.getAttribute('data-cat');
 
@@ -1223,6 +1231,7 @@ function _attachCatManagerDragDrop(tId) {
         });
         uncatZone.addEventListener('drop', function(e) {
             e.preventDefault();
+            _catMgrDropScrollY = window.scrollY || window.pageYOffset || 0;
             uncatZone.style.border = '1px dashed rgba(239,68,68,0.3)';
             uncatZone.style.background = 'rgba(239,68,68,0.06)';
             if (_dragData && _dragData.type === 'participant' && _dragData.sourceCat) {
@@ -1293,6 +1302,7 @@ function _attachCatManagerDragDrop(tId) {
 
     function _onTouchEnd(e) {
         if (!_touchClone) return;
+        _catMgrDropScrollY = window.scrollY || window.pageYOffset || 0;
         var touch = e.changedTouches[0];
         var targetEl = _getTouchTarget(touch.clientX, touch.clientY);
         if (_touchClone.parentElement) _touchClone.remove();
@@ -1331,11 +1341,14 @@ function _attachCatManagerDragDrop(tId) {
         if (typeof window._dragAutoScrollStop === 'function') window._dragAutoScrollStop();
     }
 
-    var modalContent = document.getElementById('cat-manager-modal');
-    if (modalContent) {
-        modalContent.addEventListener('touchstart', _onTouchStart, { passive: true });
-        modalContent.addEventListener('touchmove', _onTouchMove, { passive: false });
-        modalContent.addEventListener('touchend', _onTouchEnd, { passive: true });
+    // Bind touch events: works for the modal overlay AND for the inline manager
+    // (inline manager uses a different container ID, so bind to whichever exists)
+    var touchRoot = document.getElementById('cat-manager-modal') ||
+                    document.getElementById('inline-cat-mgr-' + tId);
+    if (touchRoot) {
+        touchRoot.addEventListener('touchstart', _onTouchStart, { passive: true });
+        touchRoot.addEventListener('touchmove', _onTouchMove, { passive: false });
+        touchRoot.addEventListener('touchend', _onTouchEnd, { passive: true });
     }
 }
 

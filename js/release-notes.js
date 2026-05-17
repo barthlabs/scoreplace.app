@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.97-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
+      '<p><b>Fix: arrastar jogador para categoria não pula mais o scroll para o topo.</b><br><br>' +
+      'O scroll da página é preservado ao soltar um card de jogador em uma categoria — funciona no desktop (drag &amp; drop HTML5) e no mobile (touch). Bônus: drag por toque agora também funciona no gerenciador inline de categorias.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.96-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
       '<p><b>Fix: "Fem C" vira "Fem" (e "Masc D" vira "Masc") quando é a única categoria do gênero.</b><br><br>' +
       'Sufixos de habilidade (C, D...) só fazem sentido quando existem múltiplas categorias por gênero. Ao excluir categorias e sobrar apenas uma por gênero, o nome é simplificado automaticamente — na lista de categorias e nos cards dos jogadores.</p>' +
