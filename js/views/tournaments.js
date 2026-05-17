@@ -1790,7 +1790,9 @@ function renderTournaments(container, tournamentId = null) {
                         else _teamLabel = _t('tourn.teamFormed');
                     }
                     // Category badges — displayed below name as a separate row
-                    const _pCats = window._getParticipantCategories(p);
+                    const _pCatsRaw = window._getParticipantCategories(p);
+                    const _validCats = (t.combinedCategories && t.combinedCategories.length > 0) ? t.combinedCategories : null;
+                    const _pCats = _validCats ? _pCatsRaw.filter(function(c) { return _validCats.indexOf(c) !== -1; }) : _pCatsRaw;
                     const _pCatSource = typeof p === 'object' ? (p.categorySource || '') : '';
                     const _pWasUncat = typeof p === 'object' ? (p.wasUncategorized || false) : false;
                     let catBadgeRow = '';
