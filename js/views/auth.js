@@ -4136,7 +4136,7 @@ function setupProfileModal() {
                 '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 120px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
                   countryOpts +
                 '</select>' +
-                '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 99723-7733" data-digits="">' +
+                '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
               '</div>' +
             '</div>' +
             '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +

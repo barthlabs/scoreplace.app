@@ -21,7 +21,12 @@ function renderExplore(container) {
   container.innerHTML =
     window._renderBackHeader({ href: '#dashboard' }) +
     '<div style="max-width: 800px; margin: 0 auto;">' +
-      '<h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 1.25rem; color: var(--text-bright);">' + _t('explore.title') + '</h2>' +
+      '<h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-bright);">' + _t('explore.title') + '</h2>' +
+
+      // Search bar — topo para filtrar dinamicamente
+      '<div style="margin-bottom: 1.25rem;">' +
+        '<input type="text" id="explore-search-input" class="form-control" placeholder="🔍 Procurar por nome, cidade ou esporte..." style="width: 100%; box-sizing: border-box; font-size: 0.92rem; padding: 10px 14px;">' +
+      '</div>' +
 
       // Received friend requests (need my response)
       '<div id="explore-pending"></div>' +
@@ -31,12 +36,6 @@ function renderExplore(container) {
 
       // Sent friend requests (waiting on them)
       '<div id="explore-sent"></div>' +
-
-      // Search bar
-      '<div style="display: flex; gap: 8px; margin-bottom: 1.25rem; align-items: center;">' +
-        '<input type="text" id="explore-search-input" class="form-control" placeholder="' + _t('explore.searchPlaceholder') + '" style="flex: 1; box-sizing: border-box;">' +
-        '<button class="btn btn-outline btn-sm" id="explore-search-btn" style="padding: 8px 14px; white-space: nowrap;">🔍 ' + _t('explore.search') + '</button>' +
-      '</div>' +
 
       // Unified non-friend, non-invited results
       '<div id="explore-results"></div>' +
@@ -49,7 +48,6 @@ function renderExplore(container) {
 
   // Search handler — live filter as user types (debounced)
   var searchInput = document.getElementById('explore-search-input');
-  var searchBtn = document.getElementById('explore-search-btn');
   var _searchTimer = null;
 
   function doSearch() {
@@ -61,7 +59,6 @@ function renderExplore(container) {
     _searchTimer = setTimeout(doSearch, typeof delayMs === 'number' ? delayMs : 250);
   }
 
-  searchBtn.addEventListener('click', doSearch);
   searchInput.addEventListener('input', function() { scheduleSearch(250); });
   searchInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
