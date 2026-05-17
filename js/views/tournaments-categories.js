@@ -1606,85 +1606,193 @@ function _addCategoryNotification(t, participant, category) {
 }
 
 // Auto-assign categories based on participant profile gender
+// Helper: resolve eligible categories for a participant using gender, age and skill.
+// Mirrors the logic of _resolveEnrollmentCategory but reads from the participant
+// object (p.gender, p.birthDate, p.skillBySport, p.defaultCategory) instead of
+// window.AppStore.currentUser so it works for every participant, not just the
+// logged-in one.
+function _eligibleCatsForParticipant(p, allCats, tSport) {
+    if (!allCats || allCats.length === 0) return [];
+    var eligible = allCats.slice();
+
+    var allGenderPrefixes = ['fem', 'masc', 'misto aleat.', 'misto obrig.'];
+    var genderPrefixMap = { fem: 'fem', masc: 'masc', misto_aleatorio: 'misto aleat.', misto_obrigatorio: 'misto obrig.' };
+
+    // ── 1. Gênero ─────────────────────────────────────────────────────────────
+    var pGender = p.gender || '';
+    if (pGender && typeof window._userGenderToCatCodes === 'function') {
+        var validGenderCodes = window._userGenderToCatCodes(pGender);
+        if (validGenderCodes && validGenderCodes.length > 0) {
+            var gFiltered = eligible.filter(function(cat) {
+                var hasGenderPrefix = allGenderPrefixes.some(function(gp) { return cat.toLowerCase().startsWith(gp); });
+                if (!hasGenderPrefix) return true; // no gender prefix = open to everyone
+                return validGenderCodes.some(function(code) {
+                    return cat.toLowerCase().startsWith(genderPrefixMap[code] || code);
+                });
+            });
+            if (gFiltered.length > 0) eligible = gFiltered;
+        }
+    }
+    if (eligible.length === 1) return eligible;
+
+    // ── 2. Idade ──────────────────────────────────────────────────────────────
+    var birthDate = p.birthDate || '';
+    if (birthDate) {
+        var bd = new Date(birthDate);
+        if (!isNaN(bd.getTime())) {
+            var now = new Date();
+            var age = now.getFullYear() - bd.getFullYear();
+            if (now.getMonth() < bd.getMonth() || (now.getMonth() === bd.getMonth() && now.getDate() < bd.getDate())) age--;
+            var ageBuckets = [];
+            eligible.forEach(function(cat) {
+                var m = cat.match(/(\d+)\+/);
+                if (m) { var v = parseInt(m[1]); if (ageBuckets.indexOf(v) === -1) ageBuckets.push(v); }
+            });
+            if (ageBuckets.length > 0) {
+                ageBuckets.sort(function(a, b) { return b - a; });
+                var myBucket = null;
+                for (var bi = 0; bi < ageBuckets.length; bi++) {
+                    if (age >= ageBuckets[bi]) { myBucket = ageBuckets[bi]; break; }
+                }
+                if (myBucket !== null) {
+                    var byAge = eligible.filter(function(cat) { return cat.indexOf(myBucket + '+') !== -1; });
+                    if (byAge.length > 0) eligible = byAge;
+                } else {
+                    var noAge = eligible.filter(function(cat) { return !cat.match(/\d+\+/); });
+                    if (noAge.length > 0) eligible = noAge;
+                }
+            }
+        }
+    }
+    if (eligible.length === 1) return eligible;
+
+    // ── 3. Habilidade ─────────────────────────────────────────────────────────
+    var profileSkill = null;
+    if (p.skillBySport && typeof p.skillBySport === 'object' && tSport) {
+        var raw = p.skillBySport[tSport];
+        if (raw) profileSkill = String(raw).trim().toUpperCase();
+    }
+    if (!profileSkill && p.defaultCategory) {
+        profileSkill = String(p.defaultCategory).trim().toUpperCase();
+    }
+    if (profileSkill) {
+        var skillFiltered = eligible.filter(function(cat) {
+            return cat.split(' ').some(function(tok) { return tok.toUpperCase() === profileSkill; });
+        });
+        if (skillFiltered.length > 0) eligible = skillFiltered;
+    }
+
+    return eligible;
+}
+
 window._autoAssignCategories = function(tId) {
     var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
     if (!t) return 0;
 
-    var categories = t.combinedCategories || [];
+    var allCats = window._getTournamentCategories ? window._getTournamentCategories(t) : (t.combinedCategories || []);
     var genderCats = t.genderCategories || [];
-    if (categories.length === 0 && genderCats.length === 0) return 0;
+    if (allCats.length === 0 && genderCats.length === 0) return 0;
 
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
     if (parts.length === 0) return 0;
 
-    var genderLabels = { fem: 'Fem', masc: 'Masc', misto_aleatorio: 'Misto Aleat.', misto_obrigatorio: 'Misto Obrig.' };
+    var tSport = t.sport ? String(t.sport).trim() : null;
     var assigned = 0;
 
-    parts.forEach(function(p, idx) {
+    parts.forEach(function(p) {
         if (typeof p !== 'object') return;
-        // Skip if already has a valid category
-        var existingCats = window._getParticipantCategories(p);
-        var hasValidCat = existingCats.some(function(c) { return categories.indexOf(c) !== -1; });
+
+        // Skip if already manually set by organizer
+        if (p.categorySource === 'organizador') return;
+
+        // Skip if already has a valid category from the current category set
+        var existingCats = window._getParticipantCategories ? window._getParticipantCategories(p) : (p.categories || (p.category ? [p.category] : []));
+        var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
         if (hasValidCat) return;
 
-        // Get participant's gender (stored on enrollment or from profile)
-        var pGender = p.gender || '';
-        if (!pGender) return; // No gender info, can't auto-assign
+        // Skip if participant has no profile data to work with
+        var hasAnyProfileData = p.gender || p.birthDate || p.skillBySport || p.defaultCategory;
+        if (!hasAnyProfileData) return;
 
-        // Determine eligible gender codes
-        var eligibleGenderCodes = window._userGenderToCatCodes(pGender);
-        if (eligibleGenderCodes.length === 0) return;
+        var eligible = _eligibleCatsForParticipant(p, allCats, tSport);
+        if (eligible.length === 0) return;
 
-        // Find eligible combined categories
-        var eligible = [];
-        if (categories.length > 0) {
-            categories.forEach(function(c) {
-                var matchesGender = eligibleGenderCodes.some(function(gc) {
-                    return c.toLowerCase().startsWith((genderLabels[gc] || gc).toLowerCase());
-                });
-                if (matchesGender) eligible.push(c);
-            });
-        } else if (genderCats.length > 0) {
-            genderCats.forEach(function(gc) {
-                if (eligibleGenderCodes.indexOf(gc) !== -1) {
-                    eligible.push(genderLabels[gc] || gc);
-                }
-            });
-        }
+        // Auto-assign: if exactly one candidate → assign; if ambiguous → skip
+        // (user will need to self-select or organizer assigns manually)
+        var groups = typeof window._groupEligibleCategories === 'function'
+            ? window._groupEligibleCategories(eligible)
+            : { exclusive: eligible, nonExclusive: [] };
 
-        // Auto-assign: exclusive categories (pick the one matching), non-exclusive (add all)
-        var groups = window._groupEligibleCategories(eligible);
         var autoAssigned = [];
-        // For exclusive, only auto-assign if exactly one match
         if (groups.exclusive.length === 1) autoAssigned.push(groups.exclusive[0]);
-        // For non-exclusive, auto-assign all
         autoAssigned = autoAssigned.concat(groups.nonExclusive);
 
         if (autoAssigned.length > 0) {
-            window._setParticipantCategories(p, autoAssigned);
+            if (typeof window._setParticipantCategories === 'function') {
+                window._setParticipantCategories(p, autoAssigned);
+            } else {
+                p.categories = autoAssigned;
+                p.category = autoAssigned[0];
+            }
             p.categorySource = 'perfil';
             p.wasUncategorized = true;
             autoAssigned.forEach(function(cat) {
-                _addCategoryNotification(t, p, cat);
+                try { _addCategoryNotification(t, p, cat); } catch (_e) {}
             });
             assigned++;
         }
     });
 
     if (assigned > 0) {
-        // Ensure the array is written back
-        if (!Array.isArray(t.participants)) {
-            t.participants = parts;
-        }
-        // Persist
+        if (!Array.isArray(t.participants)) t.participants = parts;
         if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
             window.FirestoreDB.saveTournament(t);
-        } else {
+        } else if (window.AppStore && window.AppStore.sync) {
             window.AppStore.sync();
         }
     }
 
     return assigned;
+};
+
+// Async version: loads Firestore profiles for participants missing profile data,
+// then runs the sync auto-assign. Caller should fire-and-forget.
+window._autoAssignCategoriesAsync = async function(tId) {
+    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    if (!t || !window.FirestoreDB) return 0;
+
+    var allCats = window._getTournamentCategories ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+    if (allCats.length === 0) return 0;
+
+    var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
+
+    // Collect participants missing profile data (but have a uid)
+    var toLoad = parts.filter(function(p) {
+        if (typeof p !== 'object' || !p.uid) return false;
+        if (p.categorySource === 'organizador') return false;
+        var existingCats = (p.categories || (p.category ? [p.category] : []));
+        var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
+        if (hasValidCat) return false;
+        return !(p.birthDate || p.skillBySport || p.defaultCategory);
+    });
+
+    if (toLoad.length === 0) return 0;
+
+    // Batch-load profiles (sequential to avoid hammering Firestore)
+    for (var i = 0; i < toLoad.length; i++) {
+        try {
+            var profile = await window.FirestoreDB.loadUserProfile(toLoad[i].uid);
+            if (profile) {
+                if (profile.birthDate && !toLoad[i].birthDate) toLoad[i].birthDate = profile.birthDate;
+                if (profile.skillBySport && !toLoad[i].skillBySport) toLoad[i].skillBySport = profile.skillBySport;
+                if (profile.defaultCategory && !toLoad[i].defaultCategory) toLoad[i].defaultCategory = profile.defaultCategory;
+                if (profile.gender && !toLoad[i].gender) toLoad[i].gender = profile.gender;
+            }
+        } catch (_e) {}
+    }
+
+    // Run the sync assign now that data is enriched
+    return window._autoAssignCategories(tId);
 };
 
 // Check and show category notifications for current user

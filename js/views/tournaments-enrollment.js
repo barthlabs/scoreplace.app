@@ -154,6 +154,10 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
 
     const participantObj = { name: user.displayName, email: user.email, displayName: user.displayName, uid: user.uid, selfEnrolled: true, ligaActive: true };
     if (user.gender) participantObj.gender = user.gender;
+    // Store profile fields needed for auto-assignment by age and skill
+    if (user.birthDate) participantObj.birthDate = user.birthDate;
+    if (user.skillBySport && typeof user.skillBySport === 'object') participantObj.skillBySport = user.skillBySport;
+    if (user.defaultCategory) participantObj.defaultCategory = user.defaultCategory;
     if (catsArr) {
         participantObj.categories = catsArr;
         participantObj.category = catsArr[0]; // backward compat

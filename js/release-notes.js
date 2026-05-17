@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🎯 v1.6.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
+      '<p><b>Auto-atribuição de categorias por habilidade e idade.</b><br><br>' +
+      'Quando o organizador configura categorias de habilidade (A, B, C…) ou de idade (40+, 50+…) no torneio, os participantes que têm esses dados no perfil são alocados automaticamente — sem ficarem como "sem cat.".<br><br>' +
+      'A lógica aplica os três filtros em cascata: (1) gênero, (2) faixa etária por <code>birthDate</code>, (3) nível de habilidade por <code>skillBySport</code> ou nível padrão. Se restar só uma categoria elegível após os filtros, o participante é alocado automaticamente com <code>categorySource: \'perfil\'</code>.<br><br>' +
+      'Participantes inscritos antes dessa versão (que não têm <code>birthDate</code>/<code>skillBySport</code> no objeto de inscrição) são enriquecidos em background via Firestore — os perfis são buscados por <code>uid</code> e o auto-assign roda de novo com os dados carregados.<br><br>' +
+      'Novas inscrições já armazenam <code>birthDate</code>, <code>skillBySport</code> e <code>defaultCategory</code> no objeto do participante no momento da inscrição.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🏷️ v1.6.84-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
       '<p><b>Categoria por habilidade nos cards de participantes.</b><br><br>' +
       'Os cards de participantes nos torneios exibem agora o nível de habilidade (A, B, C, D, FUN…) quando o torneio tem categorias de habilidade configuradas.<br><br>' +

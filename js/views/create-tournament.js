@@ -3771,12 +3771,18 @@ function setupCreateTournamentModal() {
         // Persiste no localStorage
         window.AppStore.sync();
 
-        // Auto-assign categories to uncategorized participants based on profile gender
+        // Auto-assign categories to uncategorized participants based on profile (gender, age, skill)
         var _autoAssignTid = editId || (window.AppStore.tournaments.length > 0 ? window.AppStore.tournaments[window.AppStore.tournaments.length - 1].id : null);
         if (_autoAssignTid && window._autoAssignCategories) {
           var _autoCount = window._autoAssignCategories(_autoAssignTid);
           if (_autoCount > 0) {
             showNotification(window._t('create.autoAssigned'), window._t('create.autoAssignedMsg', {n: _autoCount}), 'info');
+          }
+          // Also enrich via Firestore for participants missing profile data (fire-and-forget)
+          if (window._autoAssignCategoriesAsync) {
+            window._autoAssignCategoriesAsync(_autoAssignTid).then(function(n) {
+              if (n > 0) showNotification(window._t('create.autoAssigned'), window._t('create.autoAssignedMsg', {n: n}), 'info');
+            }).catch(function() {});
           }
         }
 
