@@ -1086,6 +1086,15 @@ window._buildInlineCatMgrHTML = function(tId) {
 window._hydrateInlineCatMgr = function(tId) {
     var container = document.getElementById('inline-cat-mgr-' + tId);
     if (!container) return;
+
+    // Safety net: auto-reconcile stale participant categories (e.g., after form edit
+    // removed skill levels, participants still carry "Fem C" but only "Fem" is valid now).
+    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    if (t && _autoReconcileParticipantCategories(t)) {
+        if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+        else if (window.AppStore && window.AppStore.sync) window.AppStore.sync();
+    }
+
     // Preserve scroll: replacing innerHTML removes the focused button from the DOM,
     // causing the browser to move focus to body and scroll to top.
     var _savedScrollY = window.scrollY || window.pageYOffset || 0;
@@ -1603,6 +1612,64 @@ window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
     setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 };
 
+// Auto-reassign participants whose stored categories are no longer valid.
+// When combinedCategories changes (via merge, delete, or form edit), participants
+// can be left with stale categories like "Fem C" when only "Fem"/"Masc" remain.
+// This function maps each invalid category to the single valid category that shares
+// the same gender prefix, then saves if anything changed.
+// Returns true if any participant was updated.
+function _autoReconcileParticipantCategories(t) {
+    var validCats = t.combinedCategories || [];
+    if (validCats.length === 0) return false;
+
+    var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
+    var gLabelLong = ['Misto Obrig.', 'Misto Aleat.', 'Fem', 'Masc']; // longest first for prefix match
+    var changed = false;
+
+    // Build gender→validCats index once
+    var genderToValid = {};
+    gLabelLong.forEach(function(gp) {
+        var matches = validCats.filter(function(vc) {
+            return vc === gp || vc.indexOf(gp + ' ') === 0;
+        });
+        if (matches.length === 1) genderToValid[gp] = matches[0];
+    });
+
+    parts.forEach(function(p) {
+        if (typeof p !== 'object' || !p) return;
+        var pCats = window._getParticipantCategories(p);
+        var validPCats = pCats.filter(function(pc) { return validCats.indexOf(pc) !== -1; });
+        if (validPCats.length === pCats.length && pCats.length > 0) return; // all valid
+
+        // Skip participants explicitly left sem-cat by the organizer (deliberate choice).
+        // Only reconcile those with stale/invalid category values.
+        var explicitlyUncategorized = (p.wasUncategorized && p.categorySource === 'organizador' && pCats.length === 0);
+        if (explicitlyUncategorized) return;
+
+        // Build reassignment from invalid cats using gender prefix
+        var reassigned = validPCats.slice();
+        pCats.forEach(function(pc) {
+            if (validCats.indexOf(pc) !== -1) return; // already valid
+            var gp = null;
+            for (var gi = 0; gi < gLabelLong.length; gi++) {
+                if (pc === gLabelLong[gi] || pc.indexOf(gLabelLong[gi] + ' ') === 0) {
+                    gp = gLabelLong[gi]; break;
+                }
+            }
+            if (gp && genderToValid[gp] && reassigned.indexOf(genderToValid[gp]) === -1) {
+                reassigned.push(genderToValid[gp]);
+            }
+        });
+
+        if (reassigned.length > 0) {
+            window._setParticipantCategories(p, reassigned);
+            changed = true;
+        }
+    });
+
+    return changed;
+}
+
 // Delete an empty category from the tournament's combinedCategories
 window._deleteEmptyCategory = function(tId, cat) {
     var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
@@ -1645,6 +1712,11 @@ window._deleteEmptyCategory = function(tId, cat) {
             return !!_usedGenderLabels[_gKeyToLabel[k] || k];
         });
     }
+
+    // Auto-reassign participants whose stored categories became invalid after deletion.
+    // E.g., if only "Fem" and "Masc" remain and a participant still has "Fem C",
+    // they get reassigned to "Fem" automatically.
+    _autoReconcileParticipantCategories(t);
 
     window.AppStore.logAction(tId, 'Categoria excluída: ' + cat);
 
