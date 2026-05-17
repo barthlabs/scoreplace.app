@@ -1693,38 +1693,34 @@ function _eligibleCatsForParticipant(p, allCats, tSport) {
     return eligible;
 }
 
-window._autoAssignCategories = function(tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
-    if (!t) { console.warn('[AutoAssign] torneio não encontrado:', tId); return 0; }
+window._autoAssignCategories = function(tId, _preloadedT) {
+    var t = _preloadedT || window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    if (!t) return 0;
 
     var allCats = window._getTournamentCategories ? window._getTournamentCategories(t) : (t.combinedCategories || []);
     var genderCats = t.genderCategories || [];
-    console.log('[AutoAssign] allCats:', allCats, '| genderCats:', genderCats, '| skillCats:', t.skillCategories);
-    if (allCats.length === 0 && genderCats.length === 0) { console.warn('[AutoAssign] sem categorias configuradas'); return 0; }
+    if (allCats.length === 0 && genderCats.length === 0) return 0;
 
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
-    if (parts.length === 0) { console.warn('[AutoAssign] sem participantes'); return 0; }
+    if (parts.length === 0) return 0;
 
     var tSport = t.sport ? String(t.sport).trim() : null;
     var assigned = 0;
 
     parts.forEach(function(p) {
         if (typeof p !== 'object') return;
-        var pName = p.displayName || p.name || p.email || '?';
 
-        if (p.categorySource === 'organizador') { console.log('[AutoAssign] skip (org):', pName); return; }
+        if (p.categorySource === 'organizador') return;
 
         var existingCats = window._getParticipantCategories ? window._getParticipantCategories(p) : (p.categories || (p.category ? [p.category] : []));
         var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
-        if (hasValidCat) { console.log('[AutoAssign] skip (já tem cat):', pName, existingCats); return; }
+        if (hasValidCat) return;
 
         var hasAnyProfileData = p.gender || p.birthDate || p.skillBySport || p.defaultCategory;
-        console.log('[AutoAssign] analisando:', pName, '| gender:', p.gender, '| skill:', p.skillBySport, '| defaultCat:', p.defaultCategory, '| birthDate:', p.birthDate, '| uid:', p.uid);
-        if (!hasAnyProfileData) { console.warn('[AutoAssign] skip (sem dados de perfil):', pName); return; }
+        if (!hasAnyProfileData) return;
 
         var eligible = _eligibleCatsForParticipant(p, allCats, tSport);
-        console.log('[AutoAssign] eligible para', pName, ':', eligible);
-        if (eligible.length === 0) { console.warn('[AutoAssign] nenhuma cat elegível:', pName); return; }
+        if (eligible.length === 0) return;
 
         var groups = typeof window._groupEligibleCategories === 'function'
             ? window._groupEligibleCategories(eligible)
@@ -1733,7 +1729,6 @@ window._autoAssignCategories = function(tId) {
         var autoAssigned = [];
         if (groups.exclusive.length === 1) autoAssigned.push(groups.exclusive[0]);
         autoAssigned = autoAssigned.concat(groups.nonExclusive);
-        console.log('[AutoAssign] autoAssigned para', pName, ':', autoAssigned, '| groups:', groups);
 
         if (autoAssigned.length > 0) {
             if (typeof window._setParticipantCategories === 'function') {
@@ -1751,7 +1746,6 @@ window._autoAssignCategories = function(tId) {
         }
     });
 
-    console.log('[AutoAssign] resultado:', assigned, 'atribuídos de', parts.length, 'participantes');
     if (assigned > 0) {
         if (!Array.isArray(t.participants)) t.participants = parts;
         if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
@@ -1775,14 +1769,17 @@ window._autoAssignCategoriesAsync = async function(tId) {
 
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
 
-    // Needs enrichment: participants missing profile data AND uncategorized
+    // Needs enrichment: participants missing MEANINGFUL profile data AND uncategorized
     function _needsEnrichment(p) {
         if (typeof p !== 'object') return false;
         if (p.categorySource === 'organizador') return false;
         var existingCats = (p.categories || (p.category ? [p.category] : []));
         var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
         if (hasValidCat) return false;
-        return !(p.birthDate || p.skillBySport || p.defaultCategory);
+        // skillBySport with all-null values (sport selected but skill not set) counts as missing
+        var hasMeaningfulSkill = p.skillBySport && typeof p.skillBySport === 'object' &&
+            Object.keys(p.skillBySport).some(function(k) { return !!p.skillBySport[k]; });
+        return !(p.birthDate || hasMeaningfulSkill || p.defaultCategory);
     }
 
     // Participants with uid — load by uid
@@ -1822,8 +1819,8 @@ window._autoAssignCategoriesAsync = async function(tId) {
         }
     }
 
-    // Run the sync assign now that data is enriched
-    return window._autoAssignCategories(tId);
+    // Run the sync assign passing the enriched `t` directly to avoid race with onSnapshot
+    return window._autoAssignCategories(tId, t);
 };
 
 // Check and show category notifications for current user

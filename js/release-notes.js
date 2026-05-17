@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.87-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
+      '<p><b>Fix: auto-atribuição de categorias agora funciona de verdade.</b><br><br>' +
+      'Dois bugs corrigidos na lógica de auto-assign:<br><br>' +
+      '(1) <b>Race condition com onSnapshot:</b> a versão async enriquecia os objetos de participante em memória via Firestore, mas ao final re-buscava o torneio no AppStore — se o listener do Firestore tinha disparado durante os awaits, o torneio era substituído pelo objeto original, perdendo todo o enriquecimento. Agora o torneio enriquecido é passado diretamente para o sync assign.<br><br>' +
+      '(2) <b>skillBySport com valor null:</b> participantes com o esporte selecionado no perfil mas sem nível de habilidade escolhido tinham <code>skillBySport: {"Beach Tennis": null}</code> — objeto truthy que fazia o enriquecimento ser pulado, mas sem dado útil para o filtro de skill. Agora <code>_needsEnrichment</code> verifica se há valores não-nulos antes de pular o enriquecimento.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🎯 v1.6.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
       '<p><b>Auto-atribuição de categorias por habilidade e idade.</b><br><br>' +
       'Quando o organizador configura categorias de habilidade (A, B, C…) ou de idade (40+, 50+…) no torneio, os participantes que têm esses dados no perfil são alocados automaticamente — sem ficarem como "sem cat.".<br><br>' +
