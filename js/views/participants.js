@@ -1331,6 +1331,18 @@ function renderParticipants(container, tournamentId) {
       };
     } catch (_e) {}
 
+    // Build name → participant object map for skill lookup in check-in mode
+    const _nameToParticipant = {};
+    (t.participants || []).forEach(function(p) {
+      if (!p) return;
+      const pn = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+      if (pn) _nameToParticipant[pn] = p;
+      // also map individual names inside team entries (A/B style)
+      if (typeof p === 'object' && pn && pn.includes('/')) {
+        pn.split('/').forEach(function(nm) { const t2 = nm.trim(); if (t2) _nameToParticipant[t2] = p; });
+      }
+    });
+
     cardsStr = _dedupedIndividuals.map((ind) => {
       const mc = !!checkedIn[ind.name];
       // v0.17.34: W.O. orphan = jogador que teve W.O. decretado e foi
@@ -1534,12 +1546,34 @@ function renderParticipants(container, tournamentId) {
         } catch (_e) {}
       }
       const _showActions = !isWOOrphan || _origMatchPending;
+
+      // Skill category badge/dropdown for check-in mode
+      const _ciSkillCats = t.skillCategories || [];
+      let _ciSkillHtml = '';
+      if (_ciSkillCats.length > 0) {
+        const _ciPObj = _nameToParticipant[ind.name];
+        const _ciCatStr = (_ciPObj && typeof _ciPObj === 'object') ? (_ciPObj.category || '') : '';
+        let _ciCurrentSkill = '';
+        for (let _si = 0; _si < _ciSkillCats.length; _si++) {
+          const _sk = _ciSkillCats[_si];
+          if (_ciCatStr === _sk || _ciCatStr.endsWith(' ' + _sk)) { _ciCurrentSkill = _sk; break; }
+        }
+        const _ciNameSafe = ind.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        if (isOrg) {
+          const _ciOpts = _ciSkillCats.map(sk => `<option value="${sk}" ${_ciCurrentSkill === sk ? 'selected' : ''}>${sk}</option>`).join('');
+          _ciSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${tId}','${_ciNameSafe}',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:3px;"><option value="" ${!_ciCurrentSkill ? 'selected' : ''}>— nível</option>${_ciOpts}</select>`;
+        } else if (_ciCurrentSkill) {
+          _ciSkillHtml = `<span style="font-size:0.68rem;font-weight:700;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);margin-top:3px;display:inline-block;">${_ciCurrentSkill}</span>`;
+        }
+      }
+
       return `
         <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${cardBg};border:1px solid ${cardBorder};${isVipPlayer ? 'border-left:3px solid #fbbf24;' : ''}${isWOOrphan ? 'opacity:0.75;' : ''}transition:all 0.2s;">
             <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.4)' : isAbsent ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
             <div style="flex:1;overflow:hidden;">
                 ${standbyHeader}
                 ${infoBlock}
+                ${_ciSkillHtml}
             </div>
             <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
                 ${isWOOrphan ? '<div style="font-size:0.7rem;font-weight:800;padding:4px 12px;border-radius:8px;background:rgba(239,68,68,0.15);color:#f87171;flex-shrink:0;border:1px solid rgba(239,68,68,0.3);">W.O.</div>' : woBadge}
@@ -1611,6 +1645,24 @@ function renderParticipants(container, tournamentId) {
       }
       const typeText = teamLabel + vipBadge;
 
+      // Skill category badge/dropdown for normal (grid) mode
+      const _nmSkillCats = t.skillCategories || [];
+      let _nmSkillHtml = '';
+      if (_nmSkillCats.length > 0) {
+        const _nmCatStr = (typeof p === 'object' && p !== null) ? (p.category || '') : '';
+        let _nmCurrentSkill = '';
+        for (let _si = 0; _si < _nmSkillCats.length; _si++) {
+          const _sk = _nmSkillCats[_si];
+          if (_nmCatStr === _sk || _nmCatStr.endsWith(' ' + _sk)) { _nmCurrentSkill = _sk; break; }
+        }
+        if (isOrg) {
+          const _nmOpts = _nmSkillCats.map(sk => `<option value="${sk}" ${_nmCurrentSkill === sk ? 'selected' : ''}>${sk}</option>`).join('');
+          _nmSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${t.id}','${safeP}',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:2px;"><option value="" ${!_nmCurrentSkill ? 'selected' : ''}>— nível</option>${_nmOpts}</select>`;
+        } else if (_nmCurrentSkill) {
+          _nmSkillHtml = `<span style="font-size:0.68rem;font-weight:700;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);margin-top:2px;display:inline-block;">${_nmCurrentSkill}</span>`;
+        }
+      }
+
       let actionsDiv = '';
       let dragProps = '';
       if (isOrg && !drawDone) {
@@ -1633,6 +1685,7 @@ function renderParticipants(container, tournamentId) {
                     <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;justify-content:center;">
                         ${pNameHtml}
                         <div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;margin-top:4px;">${typeText}</div>
+                        ${_nmSkillHtml}
                     </div>
                 </div>
                 ${actionsDiv}
@@ -1712,3 +1765,52 @@ function renderParticipants(container, tournamentId) {
     ${standbyPanelHtml}
   `;
 }
+
+// ── Skill category assignment from participant cards ──────────────────────────
+window._setParticipantSkillCategory = function(tId, pName, newSkill) {
+  const t = window.AppStore && window.AppStore.getTournament ? window.AppStore.getTournament(tId) : null;
+  if (!t) return;
+  const skillCats = t.skillCategories || [];
+  if (!skillCats.length) return;
+
+  // Find the participant in t.participants by name (handles both string and object entries)
+  let found = false;
+  (t.participants || []).forEach(function(p) {
+    if (!p) return;
+    const pn = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+    // Also match individual names inside a team "A/B" entry
+    const memberNames = pn.includes('/') ? pn.split('/').map(n => n.trim()) : [pn];
+    if (pn !== pName && !memberNames.includes(pName)) return;
+    if (typeof p === 'string') return; // can't attach category to string entries
+
+    const existingCat = p.category || '';
+    // Extract gender prefix (everything before the skill token)
+    let genderPrefix = '';
+    for (let i = 0; i < skillCats.length; i++) {
+      const sk = skillCats[i];
+      if (existingCat === sk) { genderPrefix = ''; break; }
+      if (existingCat.endsWith(' ' + sk)) { genderPrefix = existingCat.slice(0, existingCat.length - sk.length - 1); break; }
+    }
+    // Build new combined category
+    const newCat = newSkill ? (genderPrefix ? genderPrefix + ' ' + newSkill : newSkill) : genderPrefix;
+    p.category = newCat;
+    p.categorySource = 'organizador';
+    found = true;
+  });
+
+  if (!found) return;
+
+  // Save and re-render
+  const savePromise = (window.AppStore && window.AppStore.syncImmediate)
+    ? window.AppStore.syncImmediate(tId)
+    : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve());
+
+  savePromise.then(function() {
+    const container = document.getElementById('view-container');
+    if (container && typeof window.renderParticipants === 'function') {
+      window.renderParticipants(container, tId);
+    }
+  }).catch(function(e) {
+    console.warn('[Participants] skill save failed:', e);
+  });
+};

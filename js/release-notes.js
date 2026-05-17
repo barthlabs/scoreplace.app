@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🏷️ v1.6.84-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(17 de Maio, 2026)</span></div>' +
+      '<p><b>Categoria por habilidade nos cards de participantes.</b><br><br>' +
+      'Os cards de participantes nos torneios exibem agora o nível de habilidade (A, B, C, D, FUN…) quando o torneio tem categorias de habilidade configuradas.<br><br>' +
+      '<b>Para o organizador:</b> o nível aparece como um dropdown roxo diretamente no card — basta selecionar e a alteração é salva e aplicada imediatamente, sem precisar abrir o Gerenciador de Categorias.<br><br>' +
+      '<b>Para os demais participantes:</b> o nível é exibido como badge roxo estático.<br><br>' +
+      'Funciona em ambos os modos de exibição: grade de cards (pré-sorteio) e lista de check-in (durante o torneio). O gênero prefixado na categoria (ex: "Masc A") é preservado — ao trocar o nível de A para B, a categoria vira "Masc B" automaticamente.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔒 v1.6.82-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(16 de Maio, 2026)</span></div>' +
       '<p><b>Nomes de exibição únicos.</b><br><br>' +
       'Agora não é possível salvar um nome de exibição já cadastrado por outro usuário na plataforma. Ao tentar salvar um nome em uso:<br><br>' +
