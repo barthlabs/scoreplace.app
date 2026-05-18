@@ -1034,17 +1034,20 @@ input[type="number"] {
   100% { box-shadow: 0 0 4px 2px rgba(37,99,235,0.25); }
 }
 [data-theme="light"] .hint-balloon-body {
-  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+  background: linear-gradient(135deg, #f8faff 0%, #eef2fb 100%);
   border-color: rgba(37,99,235,0.35);
   box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 12px rgba(37,99,235,0.1);
 }
 [data-theme="light"] .hint-balloon-text { color: #1e293b; }
+[data-theme="light"] .hint-balloon-actions { border-top-color: rgba(0,0,0,0.08); }
 [data-theme="light"] .hint-balloon-got-it {
   background: rgba(37,99,235,0.1);
   border-color: rgba(37,99,235,0.3);
   color: #2563eb;
 }
 [data-theme="light"] .hint-balloon-got-it:hover { background: rgba(37,99,235,0.2); }
+[data-theme="light"] .hint-balloon-disable { color: #6c6c70; }
+[data-theme="light"] .hint-balloon-disable:hover { color: #3a3a3c; }
 
 [data-theme="sunset"] .hint-glow { animation-name: hint-pulse-sunset !important; }
 @keyframes hint-pulse-sunset {
@@ -1053,16 +1056,20 @@ input[type="number"] {
   100% { box-shadow: 0 0 4px 2px rgba(245,158,11,0.3); }
 }
 [data-theme="sunset"] .hint-balloon-body {
-  background: linear-gradient(135deg, #292018 0%, #1a1210 100%);
-  border-color: rgba(245,158,11,0.4);
+  background: linear-gradient(135deg, #fffdf8 0%, #f5ede0 100%);
+  border-color: rgba(180,83,9,0.35);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.10), 0 0 12px rgba(180,83,9,0.10);
 }
-[data-theme="sunset"] .hint-balloon-text { color: #fed7aa; }
+[data-theme="sunset"] .hint-balloon-text { color: #44403c; }
 [data-theme="sunset"] .hint-balloon-got-it {
-  background: rgba(245,158,11,0.15);
-  border-color: rgba(245,158,11,0.35);
-  color: #fbbf24;
+  background: rgba(180,83,9,0.10);
+  border-color: rgba(180,83,9,0.30);
+  color: #b45309;
 }
-[data-theme="sunset"] .hint-balloon-got-it:hover { background: rgba(245,158,11,0.25); }
+[data-theme="sunset"] .hint-balloon-got-it:hover { background: rgba(180,83,9,0.20); }
+[data-theme="sunset"] .hint-balloon-actions { border-top-color: rgba(0,0,0,0.08); }
+[data-theme="sunset"] .hint-balloon-disable { color: #78716c; }
+[data-theme="sunset"] .hint-balloon-disable:hover { color: #44403c; }
 
 [data-theme="ocean"] .hint-glow { animation-name: hint-pulse-ocean !important; }
 @keyframes hint-pulse-ocean {

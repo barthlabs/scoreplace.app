@@ -51,7 +51,7 @@
 
 :root, [data-theme="dark"] {
   /* NOTURNO — Apple Dark Mode */
-  --bg-darker: #000000;        /* systemBackground dark */
+  --bg-darker: #111114;        /* systemBackground dark — off-black, never pure #000 */
   --bg-dark: #1c1c1e;          /* systemGray6 dark */
   --bg-card: #2c2c2e;          /* systemGray5 dark */
   --bg-card-hover: #3a3a3c;    /* systemGray4 dark */
@@ -63,7 +63,7 @@
 
   --text-main: #ebebf5;         /* secondaryLabel dark @ 100% */
   --text-muted: #98989d;        /* tertiaryLabel dark */
-  --text-bright: #ffffff;
+  --text-bright: #f2f2f7;       /* near-white — evita branco puro, melhor leitura em fundo escuro */
 
   --border-color: #38383a;      /* systemGray3 dark */
   --border-focus: #0a84ff;
@@ -114,7 +114,7 @@
 
   --text-main: #1c1c1e;         /* near-black label */
   --text-muted: #6c6c70;        /* systemGray2 */
-  --text-bright: #000000;
+  --text-bright: #1c1c1e;       /* near-black — evita preto puro, idêntico ao text-main */
 
   --border-color: #d1d1d6;      /* systemGray4 */
   --border-focus: #007aff;

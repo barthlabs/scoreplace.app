@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🎨 v1.6.99-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Maio, 2026)</span></div>' +
+      '<p><b>Ajuste de contraste nos temas: sem preto ou branco puros.</b><br><br>' +
+      'Temas escuros (Noturno, Oceano) agora usam fontes próximas ao branco sem ser branco puro, e fundo off-black em vez de #000000. Temas claros (Claro, Pôr do Sol) usam fontes próximas ao preto sem ser preto absoluto. O balão de dicas do tema Pôr do Sol foi corrigido — era escuro sobre fundo claro, agora é claro (cream) com texto escuro, consistente com o tema quente.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">✨ v1.6.98-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Maio, 2026)</span></div>' +
       '<p><b>Inscrição bloqueada por gênero e faixa etária.</b><br><br>' +
       'Se o torneio tiver apenas categorias femininas, somente participantes com gênero feminino no perfil podem se inscrever. O mesmo vale para masculino. Torneios com categorias de idade (ex: 50+) exigem que a data de nascimento esteja cadastrada e que o participante atinja a faixa mínima. Em todos os casos, a inscrição é bloqueada antes de qualquer outra verificação e uma mensagem clara indica o motivo — com link implícito para completar o perfil.</p>' +
