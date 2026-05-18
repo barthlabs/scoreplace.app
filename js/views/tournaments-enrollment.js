@@ -3,6 +3,97 @@
 (function() {
 var _t = window._t || function(k) { return k; };
 
+// ── Eligibility helpers ──────────────────────────────────────────────────────
+
+// Parse "DD/MM/AAAA" birthDate → age in years (or null)
+function _calcAgeFromBirthDate(birthDate) {
+    if (!birthDate) return null;
+    var parts = String(birthDate).split('/');
+    if (parts.length !== 3) return null;
+    var day = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10) - 1;
+    var year = parseInt(parts[2], 10);
+    if (isNaN(day) || isNaN(month) || isNaN(year) || year < 1900) return null;
+    var today = new Date();
+    var age = today.getFullYear() - year;
+    if (today.getMonth() < month || (today.getMonth() === month && today.getDate() < day)) age--;
+    return age;
+}
+
+// Returns { ok: true } or { ok: false, title, msg }
+function _checkEnrollmentEligibility(t, user) {
+    var MISTO = ['Misto Obrig.', 'Misto Aleat.'];
+    var genderCats = t.genderCategories || [];
+
+    // ── Gender gate ──────────────────────────────────────────────────────────
+    // Only applies when ALL defined gender categories are of a single gender
+    // (no Misto, no opposite gender mixed in).
+    if (genderCats.length > 0) {
+        var hasMisto = genderCats.some(function(g) { return MISTO.indexOf(g) !== -1; });
+        if (!hasMisto) {
+            var hasFem  = genderCats.indexOf('Feminino') !== -1;
+            var hasMasc = genderCats.indexOf('Masculino') !== -1;
+            if (hasFem && !hasMasc) {
+                // Torneio feminino exclusivo
+                if (user.gender !== 'feminino') {
+                    return {
+                        ok: false,
+                        title: 'Torneio feminino exclusivo',
+                        msg: 'Este torneio aceita apenas participantes do gênero feminino. ' +
+                             (!user.gender
+                                 ? 'Seu perfil não possui gênero definido. Atualize seu perfil para se inscrever.'
+                                 : 'Seu gênero cadastrado não permite inscrição neste torneio.')
+                    };
+                }
+            } else if (hasMasc && !hasFem) {
+                // Torneio masculino exclusivo
+                if (user.gender !== 'masculino') {
+                    return {
+                        ok: false,
+                        title: 'Torneio masculino exclusivo',
+                        msg: 'Este torneio aceita apenas participantes do gênero masculino. ' +
+                             (!user.gender
+                                 ? 'Seu perfil não possui gênero definido. Atualize seu perfil para se inscrever.'
+                                 : 'Seu gênero cadastrado não permite inscrição neste torneio.')
+                    };
+                }
+            }
+        }
+    }
+
+    // ── Age gate ─────────────────────────────────────────────────────────────
+    // Applies when the tournament has ageCategories defined (e.g. ["50+", "60+"]).
+    // The minimum requirement = lowest age bracket. Multiple brackets mean
+    // the user only needs to reach the lowest one.
+    var ageCats = t.ageCategories || [];
+    if (ageCats.length > 0) {
+        var minAge = Math.min.apply(null, ageCats.map(function(a) {
+            return parseInt(String(a), 10) || 999;
+        }));
+        if (!user.birthDate) {
+            return {
+                ok: false,
+                title: 'Faixa etária necessária',
+                msg: 'Este torneio é para participantes com ' + minAge + ' anos ou mais. ' +
+                     'Adicione sua data de nascimento no perfil para continuar.'
+            };
+        }
+        var userAge = _calcAgeFromBirthDate(user.birthDate);
+        if (userAge === null || userAge < minAge) {
+            return {
+                ok: false,
+                title: 'Faixa etária não atingida',
+                msg: 'Este torneio exige ' + minAge + ' anos ou mais. ' +
+                     (userAge !== null
+                         ? 'Sua idade cadastrada (' + userAge + ' anos) não atende este requisito.'
+                         : 'Não foi possível calcular sua idade a partir da data cadastrada.')
+            };
+        }
+    }
+
+    return { ok: true };
+}
+
 // Helper: check if late enrollment to standby is allowed
 function _allowsLateEnrollment(t) {
   var le = t.lateEnrollment || 'closed';
@@ -84,6 +175,14 @@ window.enrollCurrentUser = function (tId) {
             }
             return;
         }
+        // Verifica elegibilidade por gênero e faixa etária antes de qualquer outra coisa.
+        // Organizado cobre todas as rotas (inscrição direta, lista de espera, Liga aberta).
+        var _elig = _checkEnrollmentEligibility(t, user);
+        if (!_elig.ok) {
+            showAlertDialog(_elig.title, _elig.msg, null, { type: 'warning' });
+            return;
+        }
+
         // Verifica se as inscrições estão realmente abertas
         if (t.status === 'finished') {
             showAlertDialog(_t('enroll.tournamentFinished'), _t('enroll.tournamentFinishedMsg'), null, { type: 'warning' });
