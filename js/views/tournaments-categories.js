@@ -152,6 +152,7 @@ window._resolveEnrollmentCategory = function(tId, callback) {
     // Use _getTournamentCategories so genderCategories/skillCategories work as
     // fallback when combinedCategories is missing (e.g. older tournament saves).
     var allCats = window._getTournamentCategories(t);
+    if (!Array.isArray(allCats)) allCats = [];
     if (allCats.length === 0) {
         if (callback) callback(null); // No categories
         return;

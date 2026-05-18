@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.100-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Maio, 2026)</span></div>' +
+      '<p><b>Fix: crash ao abrir gerenciador de categorias em torneios sem categorias configuradas (Sentry WEB-19).</b><br><br>' +
+      'Em torneios onde <code>combinedCategories</code> não estava definido, o gerenciador de categorias lançava um erro "allCats.slice is not a function" e travava sem abrir. Adicionado guard defensivo: se <code>_getTournamentCategories</code> retornar undefined, o array é tratado como vazio e o fluxo continua normalmente.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🎨 v1.6.99-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Maio, 2026)</span></div>' +
       '<p><b>Ajuste de contraste nos temas: sem preto ou branco puros.</b><br><br>' +
       'Temas escuros (Noturno, Oceano) agora usam fontes próximas ao branco sem ser branco puro, e fundo off-black em vez de #000000. Temas claros (Claro, Pôr do Sol) usam fontes próximas ao preto sem ser preto absoluto. O balão de dicas do tema Pôr do Sol foi corrigido — era escuro sobre fundo claro, agora é claro (cream) com texto escuro, consistente com o tema quente.</p>' +
