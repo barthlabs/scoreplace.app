@@ -5421,6 +5421,22 @@ window._openLiveScoring = function(tId, matchId, opts) {
         restartSection =
           '<button onclick="window._liveScoreConfirmTournament()" style="width:100%;padding:15px;border-radius:14px;font-size:1.05rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">✓ Confirmar Resultado</button>';
       } else if (isDoubles) {
+        // v1.6.11-beta: Rei/Rainha — botão contextual por rodada
+        if (_reiRainhaMode) {
+          if (_reiRainhaRound < 2) {
+            var _rrNextNum = _reiRainhaRound + 2; // ex: rodada 0→mostra "Jogo 2"
+            restartSection =
+              '<button onclick="window._reiRainhaNextRound()" style="width:100%;padding:13px 18px;border-radius:14px;font-size:1rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;box-shadow:0 4px 20px rgba(245,158,11,0.4);display:flex;align-items:center;justify-content:center;gap:8px;">' +
+                '<span>⚡ Jogo ' + _rrNextNum + ' de 3</span>' +
+                '<span style="font-size:1.1rem;">→</span>' +
+              '</button>';
+          } else {
+            restartSection =
+              '<button onclick="window._reiRainhaShowFinal()" style="width:100%;padding:13px 18px;border-radius:14px;font-size:1rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#f59e0b,#b45309);color:white;box-shadow:0 4px 20px rgba(245,158,11,0.5);display:flex;align-items:center;justify-content:center;gap:8px;">' +
+                '<span>👑 Ver Resultado Final</span>' +
+              '</button>';
+          }
+        } else {
         // v1.3.62-beta: "↔ Desparear" texto amber removido — o elo 🔗
         // com borda pontilhada (unpairChainHtml, abaixo no scroll) já
         // representa a ação visualmente consistente com a tela de setup.
@@ -5435,6 +5451,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
               '</span>' +
             '</label>' +
           '</div>';
+        }
       } else {
         restartSection =
           '<div style="display:flex;gap:8px;width:100%;">' +
@@ -6103,6 +6120,20 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // vínculo guest→friend. Mantido sincronizado via _applyRemoteState.
   var _casualPlayers = (isCasual && opts && Array.isArray(opts.players)) ? opts.players.slice() : [];
 
+  // v1.6.11-beta: Rei/Rainha da Praia state (inside live-scoring closure)
+  var _reiRainhaMode = !!(opts && opts.reiRainhaMode);
+  var _reiRainhaRound = 0;          // 0=1º jogo, 1=2º, 2=3º
+  var _reiRainhaPlayers = null;     // [P1,P2,P3,P4] fixo após 1º jogo
+  var _reiRainhaWins = [0, 0, 0, 0]; // vitórias por jogador (índice fixo)
+  // Pairings canônicos: Round 0: T1=[0,1] vs T2=[2,3]
+  //                    Round 1: T1=[0,2] vs T2=[1,3]
+  //                    Round 2: T1=[0,3] vs T2=[1,2]
+  var _reiRainhaPairings = [
+    { t1: [0, 1], t2: [2, 3] },
+    { t1: [0, 2], t2: [1, 3] },
+    { t1: [0, 3], t2: [1, 2] }
+  ];
+
   // v1.3.33-beta: render das sugestões de vínculo guest→friend.
   // Pra cada slot SEM uid em _casualPlayers, busca matches em
   // window._friendProfilesCache via _suggestFriendsForGuestName e
@@ -6598,6 +6629,152 @@ window._openLiveScoring = function(tId, matchId, opts) {
       }
     );
   };
+
+  // ── v1.6.11-beta: Rei/Rainha da Praia ────────────────────────────────────────
+
+  // Avança para o próximo jogo: salva resultado, rotaciona duplas e reinicia placar.
+  window._reiRainhaNextRound = function() {
+    // 1. Captura jogadores fixos na transição round 0→1
+    if (!_reiRainhaPlayers) {
+      _reiRainhaPlayers = p1Players.slice().concat(p2Players.slice());
+      // garante exatamente 4 entradas
+      while (_reiRainhaPlayers.length < 4) _reiRainhaPlayers.push('Jogador ' + (_reiRainhaPlayers.length + 1));
+    }
+
+    // 2. Salva resultado do jogo atual (silencioso — não fecha overlay)
+    if (state.isFinished && !_resultSaved) {
+      try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
+    }
+    _resultSaved = false;
+
+    // 3. Registra vitórias do round atual
+    var pairing = _reiRainhaPairings[_reiRainhaRound];
+    if (state.winner === 1) {
+      pairing.t1.forEach(function(i) { _reiRainhaWins[i]++; });
+    } else if (state.winner === 2) {
+      pairing.t2.forEach(function(i) { _reiRainhaWins[i]++; });
+    }
+    // empate: ninguém ganha
+
+    // 4. Avança rodada
+    _reiRainhaRound++;
+
+    // 5. Define novas duplas com base no pairing da próxima rodada
+    var nextPairing = _reiRainhaPairings[_reiRainhaRound];
+    p1Players.length = 0;
+    nextPairing.t1.forEach(function(i) { p1Players.push(_reiRainhaPlayers[i]); });
+    p2Players.length = 0;
+    nextPairing.t2.forEach(function(i) { p2Players.push(_reiRainhaPlayers[i]); });
+
+    // 6. Reinicia estado de placar
+    state.sets = [{ gamesP1: 0, gamesP2: 0, tiebreak: null }];
+    state.currentGameP1 = 0; state.currentGameP2 = 0;
+    state.isTiebreak = false; state.isFinished = false;
+    state.winner = null; state.tieRulePending = false;
+    state.totalGamesPlayed = 0; state.serveOrder = [];
+    state.serveSkipped = false; state.servePending = false;
+    state.gameLog = []; state.pointLog = [];
+    state.tieRule = sc.tieRule || null;
+    state._undoSnapshots = []; state._recentUndoStack = [];
+    _matchStartTime = null; _matchEndTime = null;
+    _courtLeft = 1;
+    _reinitServeOrderForNewMatch();
+
+    // 7. Atualiza Firestore (sinaliza nova partida pra todos)
+    if (_casualDocId && window.FirestoreDB && window.FirestoreDB.db) {
+      try {
+        window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId).update({
+          status: 'active',
+          liveState: _serializeState()
+        }).catch(function(e) { console.warn('[ReiRainha] next-round write err:', e); });
+      } catch(e) {}
+    }
+
+    _render();
+    if (typeof window.showNotification === 'function') {
+      window.showNotification('👑 Jogo ' + (_reiRainhaRound + 1) + ' de 3',
+        p1Players.join(' & ') + ' vs ' + p2Players.join(' & '), 'info');
+    }
+  };
+
+  // Exibe o resultado final após os 3 jogos do Rei/Rainha.
+  window._reiRainhaShowFinal = function() {
+    // Garante captura de jogadores
+    if (!_reiRainhaPlayers) {
+      _reiRainhaPlayers = p1Players.slice().concat(p2Players.slice());
+      while (_reiRainhaPlayers.length < 4) _reiRainhaPlayers.push('Jogador ' + (_reiRainhaPlayers.length + 1));
+    }
+
+    // Salva resultado do último jogo
+    if (state.isFinished && !_resultSaved) {
+      try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
+    }
+    _resultSaved = false;
+
+    // Registra vitórias do round 2 (se ainda não registrado)
+    if (_reiRainhaRound === 2) {
+      var pairing = _reiRainhaPairings[2];
+      if (state.winner === 1) {
+        pairing.t1.forEach(function(i) { _reiRainhaWins[i]++; });
+      } else if (state.winner === 2) {
+        pairing.t2.forEach(function(i) { _reiRainhaWins[i]++; });
+      }
+      _reiRainhaRound = 3; // sentinela: bloqueia re-registro
+    }
+
+    // Classifica jogadores por vitórias
+    var playerResults = _reiRainhaPlayers.map(function(name, i) {
+      return { name: name, wins: _reiRainhaWins[i], losses: 3 - _reiRainhaWins[i] };
+    });
+    playerResults.sort(function(a, b) { return b.wins - a.wins || a.name.localeCompare(b.name); });
+
+    function _rrClassify(wins) {
+      if (wins === 3) return { title: 'Rei/Rainha', icon: '👑', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.35)' };
+      if (wins === 2) return { title: 'Vice', icon: '🥈', color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.3)' };
+      if (wins === 1) return { title: 'Semifinalista', icon: '🏅', color: '#60a5fa', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.25)' };
+      return { title: 'Plebeu', icon: '🫠', color: '#6b7280', bg: 'rgba(107,114,128,0.07)', border: 'rgba(107,114,128,0.2)' };
+    }
+
+    var cardsHtml = playerResults.map(function(p, rank) {
+      var cls = _rrClassify(p.wins);
+      var rankEmoji = rank === 0 ? '🥇' : rank === 1 ? '🥈' : rank === 2 ? '🥉' : '4️⃣';
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:' + cls.bg + ';border:1px solid ' + cls.border + ';width:100%;box-sizing:border-box;">' +
+        '<span style="font-size:1.5rem;flex-shrink:0;">' + rankEmoji + '</span>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:0.95rem;font-weight:800;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(p.name) + '</div>' +
+          '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">' + p.wins + 'V · ' + p.losses + 'D</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;">' +
+          '<span style="font-size:1.3rem;">' + cls.icon + '</span>' +
+          '<span style="font-size:0.65rem;font-weight:700;color:' + cls.color + ';text-transform:uppercase;letter-spacing:0.04em;">' + cls.title + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    // Monta painel de resultado final no container do overlay
+    var container = document.querySelector('#live-scoring-overlay > div:first-child');
+    if (!container) {
+      // fallback: pega o primeiro filho do overlay
+      var ov2 = document.getElementById('live-scoring-overlay');
+      if (ov2) container = ov2.firstElementChild;
+    }
+
+    // Substitui restartSection (topo) pelo resumo Rei/Rainha
+    var topBar = document.querySelector('#live-scoring-overlay > div:first-child');
+    if (topBar) {
+      topBar.innerHTML =
+        '<div style="display:flex;flex-direction:column;gap:10px;width:100%;">' +
+          '<div style="display:flex;align-items:center;justify-content:center;gap:8px;">' +
+            '<span style="font-size:1.3rem;">👑</span>' +
+            '<span style="font-size:1.1rem;font-weight:900;color:#f59e0b;">Resultado Final · Rei/Rainha</span>' +
+          '</div>' +
+          cardsHtml +
+          '<button onclick="window._liveScoreGoToSetup()" style="width:100%;padding:11px;border-radius:12px;font-size:0.88rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 16px rgba(16,185,129,0.35);margin-top:2px;">🔄 Jogar Novamente</button>' +
+        '</div>';
+    }
+  };
+
+  // ── fim Rei/Rainha ────────────────────────────────────────────────────────────
 
   // Restart handler: reset score and optionally re-shuffle teams
   window._liveScoreRestart = function() {
@@ -7744,6 +7921,8 @@ window._openCasualMatch = function(restoreOpts) {
   // Coach mode: user stays on screen to manage score for 4 other players (not playing).
   // Frees their own slot (editable), all name inputs become editable.
   var _coachMode = false;
+  // v1.6.11-beta: Rei/Rainha da Praia mode — 3 jogos rotativos entre 4 jogadores
+  var _reiRainhaMode = false;
   // v1.6.51-beta: uid de amigos vinculados via autocomplete por slot. Quando
   // o técnico ou organizador vincula um nome a um amigo, o uid é armazenado
   // aqui e propagado para _buildPlayers() — assim as stats pós-partida são
@@ -8044,6 +8223,18 @@ window._openCasualMatch = function(restoreOpts) {
             '<label class="toggle-switch" style="--toggle-on-bg:#ec4899;"><input type="checkbox" ' + (_mixedDoublesEnabled ? 'checked' : '') + ' onchange="window._casualSetMixedDoubles(this.checked)"><span class="toggle-slider"></span></label>' +
           '</div>';
       }
+      // v1.6.11-beta: Rei/Rainha toggle — 3 jogos rotativos com 4 jogadores
+      togglesHtml +=
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:12px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<span style="font-size:1rem;">👑</span>' +
+            '<div>' +
+              '<span style="font-size:0.85rem;font-weight:700;color:var(--text-bright);">Rei/Rainha</span>' +
+              '<div style="font-size:0.65rem;color:var(--text-muted);">3 jogos rotativos · duplas trocam a cada partida</div>' +
+            '</div>' +
+          '</div>' +
+          '<label class="toggle-switch" style="--toggle-on-bg:#f59e0b;"><input type="checkbox" ' + (_reiRainhaMode ? 'checked' : '') + ' onchange="window._casualSetReiRainha(this.checked)"><span class="toggle-slider"></span></label>' +
+        '</div>';
       togglesHtml += '</div>';
     }
 
@@ -8882,6 +9073,12 @@ window._openCasualMatch = function(restoreOpts) {
     _mixedDoublesEnabled = !!val;
     _renderSetup();
     _syncCasualSetupDebounced();
+  };
+
+  // v1.6.11-beta: Rei/Rainha toggle handler
+  window._casualSetReiRainha = function(val) {
+    _reiRainhaMode = !!val;
+    _renderSetup();
   };
 
   window._casualToggleCoachMode = function(checked) {
@@ -9748,7 +9945,8 @@ window._openCasualMatch = function(restoreOpts) {
       createdBy: cu && cu.uid,
       roomCode: _sessionRoomCode,
       players: players,
-      coachMode: !!_coachMode
+      coachMode: !!_coachMode,
+      reiRainhaMode: _reiRainhaMode  // v1.6.11-beta
     });
   };
 
