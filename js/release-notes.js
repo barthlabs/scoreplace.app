@@ -9,12 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
-      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">👑 v1.6.101-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Maio, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">👑 v1.6.102-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Maio, 2026)</span></div>' +
       '<p><b>Modo Rei/Rainha na Partida Casual.</b><br><br>' +
       'Toggle "Rei/Rainha" na tela de setup da partida casual (duplas). Quando ativado, a sessão roda 3 jogos com duplas rotativas entre os 4 jogadores:<br>' +
       '• Jogo 1: (P1+P2) vs (P3+P4)<br>• Jogo 2: (P1+P3) vs (P2+P4)<br>• Jogo 3: (P1+P4) vs (P2+P3)<br><br>' +
       'Ao fim de cada jogo aparece o botão "⚡ Jogo N de 3 →"; após o 3º jogo, botão "👑 Ver Resultado Final" mostra o placar individual com classificação: ' +
-      '👑 Rei/Rainha (3 vitórias), 🥈 Vice (2), 🏅 Semifinalista (1), 🫠 Plebeu (0).</p>' +
+      '👑 Rei/Rainha (3 vitórias), 🥈 Vice (2), 🏅 Peão (1), 🫠 Plebeu (0).</p>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.100-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Maio, 2026)</span></div>' +

@@ -6731,7 +6731,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     function _rrClassify(wins) {
       if (wins === 3) return { title: 'Rei/Rainha', icon: '👑', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.35)' };
       if (wins === 2) return { title: 'Vice', icon: '🥈', color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.3)' };
-      if (wins === 1) return { title: 'Semifinalista', icon: '🏅', color: '#60a5fa', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.25)' };
+      if (wins === 1) return { title: 'Peão', icon: '🏅', color: '#60a5fa', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.25)' };
       return { title: 'Plebeu', icon: '🫠', color: '#6b7280', bg: 'rgba(107,114,128,0.07)', border: 'rgba(107,114,128,0.2)' };
     }
 
