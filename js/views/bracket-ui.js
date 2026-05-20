@@ -6640,6 +6640,72 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // ── v1.6.11-beta: Rei/Rainha da Praia ────────────────────────────────────────
 
+  // v1.6.105-beta: salva snapshot de 1 round como doc separado em casualMatches.
+  // Permite que as 3 rodadas apareçam individualmente no histórico "Últimas Partidas".
+  // Chamado ANTES de resetar o state (para capturar placar/sets do round concluído).
+  var _saveReiRainhaRoundSnapshot = function(roundIndex, t1Names, t2Names, winnerSide) {
+    if (!window.FirestoreDB || !window.FirestoreDB.db) return;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var createdByUid = (opts && opts.createdBy) || (cu && cu.uid) || '';
+    if (!createdByUid) return;
+    // Build score summary
+    var _rrSummary = '';
+    if (useSets) {
+      _rrSummary = state.sets.map(function(ss) { return ss.gamesP1 + '-' + ss.gamesP2; }).join('  ');
+    } else {
+      _rrSummary = state.currentGameP1 + ' × ' + state.currentGameP2;
+    }
+    // Build players array, matching UIDs from _casualPlayers
+    var _buildTeam = function(names, teamNum) {
+      return (names || []).map(function(nm) {
+        var found = null;
+        for (var ci = 0; ci < (_casualPlayers || []).length; ci++) {
+          var cp = _casualPlayers[ci];
+          if (cp.name === nm || cp.displayName === nm) { found = cp; break; }
+        }
+        return { name: nm, displayName: nm, uid: (found && found.uid) || '', team: teamNum };
+      });
+    };
+    var roundPlayers = _buildTeam(t1Names, 1).concat(_buildTeam(t2Names, 2));
+    var roundUids = roundPlayers.filter(function(p) { return !!p.uid; }).map(function(p) { return p.uid; });
+    var sessionCode = (opts && opts.roomCode) || '';
+    var roundRoomCode = sessionCode ? (sessionCode + '_rr' + roundIndex) : ('rr_' + Date.now() + '_' + roundIndex);
+    var setsData = null;
+    if (useSets) {
+      setsData = state.sets.map(function(ss) {
+        var se = { gamesP1: ss.gamesP1, gamesP2: ss.gamesP2 };
+        if (ss.tiebreak) se.tiebreak = { pointsP1: ss.tiebreak.p1, pointsP2: ss.tiebreak.p2 };
+        return se;
+      });
+    }
+    var resultData = {
+      winner: winnerSide,
+      summary: _rrSummary,
+      p1Score: useSets ? null : state.currentGameP1,
+      p2Score: useSets ? null : state.currentGameP2
+    };
+    if (setsData) resultData.sets = setsData;
+    var payload = {
+      createdBy: createdByUid,
+      createdByName: (cu && cu.displayName) || '',
+      createdAt: new Date().toISOString(),
+      sport: (opts && opts.sportName) || '',
+      isDoubles: true,
+      status: 'finished',
+      result: resultData,
+      players: roundPlayers,
+      playerUids: roundUids,
+      roomCode: roundRoomCode,
+      reiRainhaRound: roundIndex,
+      reiRainhaSessionId: _casualDocId || ''
+    };
+    try {
+      window.FirestoreDB.db.collection('casualMatches').add(payload).catch(function(e) {
+        console.warn('[ReiRainha] round snapshot save err r' + roundIndex + ':', e);
+      });
+    } catch(e) {}
+  };
+
   // Avança para o próximo jogo: salva resultado, rotaciona duplas e reinicia placar.
   window._reiRainhaNextRound = function() {
     // 1. Captura jogadores fixos na transição round 0→1
@@ -6655,7 +6721,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
     _resultSaved = false;
 
-    // 3. Registra vitórias do round atual
+    // 3. Registra vitórias do round atual e salva snapshot independente para histórico
     var pairing = _reiRainhaPairings[_reiRainhaRound];
     if (state.winner === 1) {
       pairing.t1.forEach(function(i) { _reiRainhaWins[i]++; });
@@ -6663,6 +6729,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       pairing.t2.forEach(function(i) { _reiRainhaWins[i]++; });
     }
     // empate: ninguém ganha
+    // v1.6.105-beta: salva doc separado para este round aparecer no histórico
+    _saveReiRainhaRoundSnapshot(_reiRainhaRound, p1Players.slice(), p2Players.slice(), state.winner || 0);
 
     // 4. Avança rodada
     _reiRainhaRound++;
@@ -6727,6 +6795,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       } else if (state.winner === 2) {
         pairing.t2.forEach(function(i) { _reiRainhaWins[i]++; });
       }
+      // v1.6.105-beta: snapshot do round 2 para histórico independente
+      _saveReiRainhaRoundSnapshot(2, p1Players.slice(), p2Players.slice(), state.winner || 0);
       _reiRainhaRound = 3; // sentinela: bloqueia re-registro
     }
 
@@ -7148,20 +7218,31 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
   };
   var _requestWakeLock = function() {
-    // Camada 1: Wake Lock API
+    // Camada 1: Wake Lock API (iOS Safari 16.4+, Chrome Android, etc.)
+    // v1.6.105-beta: só aciona o vídeo NoSleep como FALLBACK quando a Wake
+    // Lock API não está disponível ou falha. Wake Lock API impede auto-sleep
+    // mas permite que o usuário bloqueie a tela manualmente (botão lateral) —
+    // comportamento correto. NoSleep vídeo impede QUALQUER sleep incluindo
+    // bloqueio manual — intrusivo demais. Usar apenas quando necessário.
     try {
       if ('wakeLock' in navigator && !_wakeLock) {
         navigator.wakeLock.request('screen').then(function(lock) {
           _wakeLock = lock;
           lock.addEventListener('release', function() { _wakeLock = null; });
-        }).catch(function() {});
+          // Wake Lock ativo — não precisa do vídeo NoSleep
+        }).catch(function() {
+          // Wake Lock falhou (ex: permissão negada) — usar vídeo como fallback
+          _ensureNoSleepVideo();
+          if (_noSleepVideo && _noSleepVideo.paused) {
+            var p = _noSleepVideo.play();
+            if (p && typeof p.catch === 'function') p.catch(function() {});
+          }
+        });
+        return; // promise em voo — não aciona vídeo agora
       }
     } catch(e) {}
-    // Camada 2: NoSleep video fallback (sempre ativa enquanto live scoring
-    // estiver aberto; idempotente — não cria duplicata). Wake Lock + video
-    // simultâneos é OK.
+    // Wake Lock API indisponível — usar vídeo NoSleep como fallback
     _ensureNoSleepVideo();
-    // Tenta dar replay caso o vídeo tenha pausado por algum motivo
     if (_noSleepVideo && _noSleepVideo.paused) {
       var p = _noSleepVideo.play();
       if (p && typeof p.catch === 'function') p.catch(function() {});
@@ -7313,6 +7394,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
 // manual code input fallback.
 
 window._openScanQR = function() {
+  // v1.6.105-beta: Chrome iOS (CriOS) não suporta getUserMedia/streaming camera.
+  // Redireciona para o scanner via input de arquivo que funciona em qualquer browser iOS.
+  if (/CriOS/i.test(navigator.userAgent)) {
+    if (typeof window._openScanQRNative === 'function') { window._openScanQRNative(); return; }
+  }
+
   var existing = document.getElementById('scan-qr-overlay');
   if (existing) existing.remove();
 
@@ -8621,11 +8708,10 @@ window._openCasualMatch = function(restoreOpts) {
         if (m.roomCode) window._casualPastMatchesCache[m.roomCode] = m;
       });
 
-      // Filter to the sport currently selected in the setup screen
-      var curSport = selectedSport || '';
-      var matches = allMatches.filter(function(m) {
-        return m.sport === curSport || m.sport === (curSport.toLowerCase ? curSport.toLowerCase() : curSport);
-      }).slice(0, 3);
+      // v1.6.105-beta: mostra as 3 últimas partidas independente de modalidade.
+      // Filtro por sport era muito restritivo (Rei/Rainha salva doc com sport do
+      // momento; se user abre setup com outra modalidade, nunca via o histórico).
+      var matches = allMatches.slice(0, 3);
       if (matches.length === 0) { slot.innerHTML = ''; return; }
 
       // Resolve first name token only — used for compact cards

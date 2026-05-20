@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.105-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Maio, 2026)</span></div>' +
+      '<p><b>3 correções em partidas casuais.</b><br><br>' +
+      '<b>1. QR Code no Chrome iOS:</b> o leitor de QR da dashboard usava câmera streaming (getUserMedia) que o Chrome iOS (CriOS) não suporta — funcionava no Safari mas falhava silenciosamente no Chrome. Agora detecta <code>CriOS</code> automaticamente e usa o scanner via input de arquivo, que funciona em qualquer browser iOS.<br><br>' +
+      '<b>2. Histórico "Últimas Partidas" no Rei/Rainha:</b> cada rodada do Rei/Rainha agora é salva como um documento independente no Firestore, então as 3 rodadas aparecem individualmente no histórico. Antes, as 3 rodadas compartilhavam 1 único documento e só a última rodada aparecia. O filtro por modalidade que escondia partidas também foi removido — o histórico mostra as 3 últimas independentemente da modalidade selecionada no setup.<br><br>' +
+      '<b>3. Bloqueio de tela no iPhone (NoSleep):</b> o vídeo NoSleep que impedia qualquer bloqueio de tela (inclusive o botão lateral) agora é usado apenas como fallback quando a Wake Lock API não está disponível. Em iOS Safari 16.4+, a Wake Lock API nativa é suficiente e permite que o usuário bloqueie a tela manualmente quando quiser.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.103-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Maio, 2026)</span></div>' +
       '<p><b>Fix: crash no iOS Safari em partidas casuais com sugestão de vínculo (Sentry WEB-1A e WEB-1B).</b><br><br>' +
       'A função <code>_hydrateCasualLinkSuggestions</code> referenciava <code>_slotLinkedUid</code> de um escopo de closure errado — a variável estava declarada em <code>_openCasualMatch</code> mas sendo acessada dentro de <code>_openLiveScoring</code>, que é uma função separada. No iOS Safari, a Promise rejeitada se propagava como <code>onunhandledrejection</code> sempre que o slot de sugestões estava visível. Corrigido declarando <code>_slotLinkedUid</code> dentro do escopo correto do <code>_openLiveScoring</code> e passando o valor via opts ao iniciar a partida.</p>' +
