@@ -6119,6 +6119,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // do match.players[] no Firestore). Usado pra render das sugestões de
   // vínculo guest→friend. Mantido sincronizado via _applyRemoteState.
   var _casualPlayers = (isCasual && opts && Array.isArray(opts.players)) ? opts.players.slice() : [];
+  // v1.6.103-beta: _slotLinkedUid precisa existir no escopo do _openLiveScoring
+  // para que _hydrateCasualLinkSuggestions (definida aqui) consiga lê-la.
+  // Antes era referenciada de _openCasualMatch via closure não-existente,
+  // causando ReferenceError (SCOREPLACE-WEB-1B) em iOS Safari toda vez que
+  // o slot de sugestões estava no DOM.
+  var _slotLinkedUid = (isCasual && opts && Array.isArray(opts.slotLinkedUid))
+    ? opts.slotLinkedUid.slice()
+    : [null, null, null, null];
 
   // v1.6.11-beta: Rei/Rainha da Praia state (inside live-scoring closure)
   var _reiRainhaMode = !!(opts && opts.reiRainhaMode);
@@ -9946,7 +9954,8 @@ window._openCasualMatch = function(restoreOpts) {
       roomCode: _sessionRoomCode,
       players: players,
       coachMode: !!_coachMode,
-      reiRainhaMode: _reiRainhaMode  // v1.6.11-beta
+      reiRainhaMode: _reiRainhaMode,  // v1.6.11-beta
+      slotLinkedUid: _slotLinkedUid.slice()  // v1.6.103-beta: fix SCOREPLACE-WEB-1B
     });
   };
 

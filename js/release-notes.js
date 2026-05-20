@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.103-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Maio, 2026)</span></div>' +
+      '<p><b>Fix: crash no iOS Safari em partidas casuais com sugestão de vínculo (Sentry WEB-1A e WEB-1B).</b><br><br>' +
+      'A função <code>_hydrateCasualLinkSuggestions</code> referenciava <code>_slotLinkedUid</code> de um escopo de closure errado — a variável estava declarada em <code>_openCasualMatch</code> mas sendo acessada dentro de <code>_openLiveScoring</code>, que é uma função separada. No iOS Safari, a Promise rejeitada se propagava como <code>onunhandledrejection</code> sempre que o slot de sugestões estava visível. Corrigido declarando <code>_slotLinkedUid</code> dentro do escopo correto do <code>_openLiveScoring</code> e passando o valor via opts ao iniciar a partida.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">👑 v1.6.102-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Maio, 2026)</span></div>' +
       '<p><b>Modo Rei/Rainha na Partida Casual.</b><br><br>' +
       'Toggle "Rei/Rainha" na tela de setup da partida casual (duplas). Quando ativado, a sessão roda 3 jogos com duplas rotativas entre os 4 jogadores:<br>' +
