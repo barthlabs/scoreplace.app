@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.6.106-beta';
+window.SCOREPLACE_VERSION = '1.7.0-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches

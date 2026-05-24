@@ -13,6 +13,7 @@
       _css() +
       _hero(t) +
       _features(t) +
+      _tutorials() +
       _howItWorks(t) +
       // v0.17.92: _stats() removido — números (500+ torneios, 2.000+
       // participantes, 5 modalidades) eram fictícios. Voltam quando
@@ -100,6 +101,41 @@
   // suprimidos até termos dados reais. Quando voltarem, restaurar:
   // git show HEAD~N:js/views/landing.js (consultar histórico).
 
+  // v1.7.0-beta: seção de tutoriais em vídeo — 6 YouTube Shorts embeds
+  // com lazy-load via thumbnail. Iframe só carrega no clique, evitando
+  // 6 requests ao YouTube JS na abertura da landing.
+  function _tutorials() {
+    var vids = [
+      { id: 'ffMcLFj5yIs' },
+      { id: 'K5KncI40tIE' },
+      { id: 'q_ZEMJ_bs-Y' },
+      { id: 'wKy5x0D9E-E' },
+      { id: 'XpI7fcdFDn0' },
+      { id: 'jiKAdBkMso8' }
+    ];
+    var cards = vids.map(function(v) {
+      var thumb = 'https://img.youtube.com/vi/' + v.id + '/maxresdefault.jpg';
+      var embed = 'https://www.youtube.com/embed/' + v.id + '?autoplay=1&rel=0&modestbranding=1&playsinline=1';
+      return '<div class="landing-vid-card" onclick="' +
+          'var w=this.querySelector(\'.landing-vid-wrap\');' +
+          'w.innerHTML=\'<iframe src=\\\'' + embed + '\\\' frameborder=\\\'0\\\' allow=\\\'accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture\\\' allowfullscreen></iframe>\';' +
+          'this.querySelector(\'.landing-vid-play\').style.display=\'none\'' +
+        '">' +
+        '<div class="landing-vid-wrap">' +
+          '<img src="' + thumb + '" ' +
+            'onerror="this.src=\'https://img.youtube.com/vi/' + v.id + '/hqdefault.jpg\'" ' +
+            'alt="Tutorial scoreplace.app" loading="lazy">' +
+        '</div>' +
+        '<div class="landing-vid-play" aria-label="Reproduzir vídeo">▶</div>' +
+      '</div>';
+    }).join('');
+    return '<section class="landing-tutorials">' +
+      '<h2>Veja em ação</h2>' +
+      '<p class="landing-tutorials-sub">Tutoriais rápidos de cada funcionalidade</p>' +
+      '<div class="landing-vids-grid">' + cards + '</div>' +
+    '</section>';
+  }
+
   function _ctaBottom(t) {
     return '<section class="landing-cta-section">' +
       '<button class="btn btn-cta btn-success landing-cta-btn" data-landing-cta onclick="if(window.openModal)window.openModal(\'modal-login\');else if(window.handleGoogleLogin)window.handleGoogleLogin();">' +
@@ -171,6 +207,18 @@
     '.landing-stat-value { font-size: 2rem; font-weight: 800; color: var(--primary-color); }' +
     '.landing-stat-label { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }' +
 
+    /* Tutorials */
+    '.landing-tutorials { padding: 40px 0; text-align: center; }' +
+    '.landing-tutorials h2 { font-size: 1.4rem; font-weight: 700; color: var(--text-bright); margin: 0 0 8px; }' +
+    '.landing-tutorials-sub { font-size: 0.9rem; color: var(--text-muted); margin: 0 0 24px; }' +
+    '.landing-vids-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }' +
+    '.landing-vid-card { position: relative; border-radius: 12px; overflow: hidden; background: var(--bg-card); border: 1px solid var(--border-color); cursor: pointer; }' +
+    '.landing-vid-card:hover .landing-vid-play { opacity: 1; transform: translate(-50%,-50%) scale(1.1); }' +
+    '.landing-vid-wrap { position: relative; padding-top: 177.78%; /* 9:16 */ background: #000; }' +
+    '.landing-vid-wrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }' +
+    '.landing-vid-wrap iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }' +
+    '.landing-vid-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 52px; height: 52px; background: rgba(0,0,0,0.72); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; color: #fff; pointer-events: none; opacity: 0.85; transition: opacity 0.2s, transform 0.2s; padding-left: 4px; }' +
+
     /* CTA bottom */
     '.landing-cta-section { text-align: center; padding: 24px 0 40px; }' +
 
@@ -185,6 +233,7 @@
       '.landing-step-arrow { display: none; }' +
       '.landing-steps { flex-direction: column; align-items: center; }' +
       '.landing-stats { gap: 24px; }' +
+      '.landing-vids-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }' +
       // v1.0.25-beta: max-width:320px removido — default agora é 100%
       // já fluido via clamp().
     '}' +
