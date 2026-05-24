@@ -1147,6 +1147,7 @@ try { _completeEmailLinkSignIn(); } catch(e) { console.warn('Email link check er
 window._phoneConfirmationResult = null;
 window._phoneRecaptchaVerifier = null;
 window._phoneRecaptchaWidgetId = null;
+window._phoneLoginInFlight = false;
 
 function handlePhoneLogin() {
   var phoneEl = document.getElementById('login-phone');
@@ -1176,6 +1177,14 @@ function handlePhoneLogin() {
     showNotification(_t('auth.invalidPhone'), _t('auth.invalidPhoneMsg'), 'warning');
     return;
   }
+
+  // v1.6.106-beta: guard de in-flight para iOS. No iOS, eventos de toque
+  // podem disparar handlePhoneLogin() duas vezes em rápida sucessão — o
+  // segundo call ocorre enquanto o render() do primeiro ainda está em voo,
+  // causando dois render() concorrentes no mesmo container →
+  // "reCAPTCHA has already been rendered in this element" (SCOREPLACE-WEB-10).
+  if (window._phoneLoginInFlight) return;
+  window._phoneLoginInFlight = true;
 
   // v1.3.76-beta: mover container pro body ANTES de qualquer operação de
   // reCAPTCHA. Isso garante que o iframe do reCAPTCHA não fica clipado
@@ -1249,6 +1258,7 @@ function handlePhoneLogin() {
       return firebase.auth().signInWithPhoneNumber(phone, window._phoneRecaptchaVerifier);
     })
     .then(function(confirmationResult) {
+      window._phoneLoginInFlight = false;
       window._phoneConfirmationResult = confirmationResult;
       // Show verification code input
       _showPhoneVerificationStep();
@@ -1259,6 +1269,7 @@ function handlePhoneLogin() {
       // v1.3.75-beta: envia error.message ao Sentry (além do code) para
       // diagnosticar casos onde error.code é undefined (erros JS nativos,
       // reCAPTCHA iOS Safari, etc).
+      window._phoneLoginInFlight = false;
       if (typeof window._captureException === 'function') {
         window._captureException(error, {
           area: 'phoneLogin',
