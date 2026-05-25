@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.2-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(25 de Maio, 2026)</span></div>' +
+      '<p><b>Fix crítico: tela de configuração da partida casual não carregava.</b><br><br>' +
+      'Ao clicar em "Partida Casual", a tela de configuração ficava em branco (sem conteúdo). Causa: a função <code>_genderIconHtml</code> estava declarada dentro de um bloco <code>if (isDoubles)</code> — no V8/Chrome, declarações de função dentro de blocos têm escopo de bloco, então em modo singles (não-duplas) a função era <code>undefined</code> e causava um TypeError que interrompia toda a renderização. Corrigido movendo a declaração para fora do bloco.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(25 de Maio, 2026)</span></div>' +
       '<p><b>2 correções na partida casual.</b><br><br>' +
       '<b>1. Pontuação 15-30-40 não era respeitada no placar ao vivo:</b> ao escolher "Tênis" (15-30-40, AD, tie-break) na configuração de partida casual, o placar mostrava 0/1/2/3 em vez de 0/15/30/40. A causa era que prefs salvas em versões anteriores podiam estar sem o campo <code>type</code> — e sem ele, o sistema de sets/games era completamente ignorado, mostrando apenas contagem inteira. Corrigido: agora as prefs salvas são sempre mescladas com os padrões da modalidade, garantindo que <code>type:"sets"</code> e <code>countingType</code> corretos estejam presentes mesmo em prefs legadas.<br><br>' +

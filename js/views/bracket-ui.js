@@ -8361,6 +8361,34 @@ window._openCasualMatch = function(restoreOpts) {
       '</div>' : '';
 
     // Player names — same 4-card grid for both Sortear ON and OFF
+    // v1.6.26-beta: helper pra renderizar ícone de gênero do slot.
+    // v1.7.2-beta FIX: moved outside if(isDoubles) block — was block-scoped in V8
+    // causing "TypeError: _genderIconHtml is not a function" in singles mode.
+    function _genderIconHtml(ci) {
+      var g = _resolveSlotGender(ci);
+      var sym, clr, title, bg, bdr, pulseClass;
+      if (g === 'masculino') {
+        sym = '♂'; clr = '#60a5fa'; title = 'Masculino — toque pra mudar';
+        bg = 'rgba(255,255,255,0.06)'; bdr = 'rgba(255,255,255,0.12)'; pulseClass = '';
+      } else if (g === 'feminino') {
+        sym = '♀'; clr = '#f472b6'; title = 'Feminino — toque pra mudar';
+        bg = 'rgba(255,255,255,0.06)'; bdr = 'rgba(255,255,255,0.12)'; pulseClass = '';
+      } else {
+        // Estado não definido — visualmente chamativo
+        sym = '?'; clr = '#fbbf24'; title = 'Toque pra definir o gênero';
+        bg = 'rgba(251,191,36,0.15)'; bdr = 'rgba(251,191,36,0.5)';
+        pulseClass = ' _casual-gender-pulse';
+      }
+      return '<button type="button" data-gender-slot="' + ci + '" class="' + pulseClass.trim() + '" ' +
+        'onclick="event.stopPropagation();window._casualSetSlotGender(' + ci + ')" ' +
+        'title="' + title + '" aria-label="' + title + '" ' +
+        'style="width:26px;height:26px;min-width:26px;border-radius:50%;background:' + bg + ';' +
+        'border:1px solid ' + bdr + ';color:' + clr + ';font-size:0.95rem;font-weight:800;' +
+        'display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;flex-shrink:0;' +
+        'transition:background 0.15s,transform 0.15s;-webkit-tap-highlight-color:transparent;line-height:1;" ' +
+        'onmouseover="this.style.transform=\'scale(1.1)\'" ' +
+        'onmouseout="this.style.transform=\'\'">' + sym + '</button>';
+    }
     var playersHtml = '';
     if (isDoubles) {
       // Build avatar helper for input cards
@@ -8426,37 +8454,6 @@ window._openCasualMatch = function(restoreOpts) {
           }
         }
       }
-      // v1.6.26-beta: helper pra renderizar ícone de gênero do slot.
-      // v1.6.27-beta: quando gênero não definido (qualquer participante,
-      // logado sem perfil completo ou guest), o ícone "?" usa cor âmbar +
-      // animação pulse + label "Definir gênero — toque" pra deixar EVIDENTE
-      // que é clicável. Antes era cinza discreto e usuários não percebiam.
-      function _genderIconHtml(ci) {
-        var g = _resolveSlotGender(ci);
-        var sym, clr, title, bg, bdr, pulseClass;
-        if (g === 'masculino') {
-          sym = '♂'; clr = '#60a5fa'; title = 'Masculino — toque pra mudar';
-          bg = 'rgba(255,255,255,0.06)'; bdr = 'rgba(255,255,255,0.12)'; pulseClass = '';
-        } else if (g === 'feminino') {
-          sym = '♀'; clr = '#f472b6'; title = 'Feminino — toque pra mudar';
-          bg = 'rgba(255,255,255,0.06)'; bdr = 'rgba(255,255,255,0.12)'; pulseClass = '';
-        } else {
-          // Estado não definido — visualmente chamativo
-          sym = '?'; clr = '#fbbf24'; title = 'Toque pra definir o gênero';
-          bg = 'rgba(251,191,36,0.15)'; bdr = 'rgba(251,191,36,0.5)';
-          pulseClass = ' _casual-gender-pulse';
-        }
-        return '<button type="button" data-gender-slot="' + ci + '" class="' + pulseClass.trim() + '" ' +
-          'onclick="event.stopPropagation();window._casualSetSlotGender(' + ci + ')" ' +
-          'title="' + title + '" aria-label="' + title + '" ' +
-          'style="width:26px;height:26px;min-width:26px;border-radius:50%;background:' + bg + ';' +
-          'border:1px solid ' + bdr + ';color:' + clr + ';font-size:0.95rem;font-weight:800;' +
-          'display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;flex-shrink:0;' +
-          'transition:background 0.15s,transform 0.15s;-webkit-tap-highlight-color:transparent;line-height:1;" ' +
-          'onmouseover="this.style.transform=\'scale(1.1)\'" ' +
-          'onmouseout="this.style.transform=\'\'">' + sym + '</button>';
-      }
-
       function _buildSetupCard(ci) {
         var avatar = _inputAvatar(ci);
         var team = _teamAssignments[ci]; // 1, 2, or undefined
