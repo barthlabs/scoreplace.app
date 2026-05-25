@@ -7366,10 +7366,18 @@ window._openLiveScoring = function(tId, matchId, opts) {
           try { sessionStorage.removeItem('_activeCasualRoom'); } catch(e) {}
         }
         _cleanup();
-        // Navigate the user back to the dashboard so they're not stuck
-        // on the setup/join screen of a match they just abandoned.
+        // v1.7.1-beta: organizador volta ao setup de partida casual para poder
+        // iniciar nova partida imediatamente. Guests (sem overlay de setup em
+        // memória) vão ao dashboard — _casualReopenSetup só faz sentido pra
+        // quem iniciou a partida (referência `overlay` no closure do setup).
         if (isCasual) {
-          try { window.location.hash = '#dashboard'; } catch(e) {}
+          if (isOrganizer && typeof window._casualReopenSetup === 'function') {
+            try { window._casualReopenSetup({ keepSession: false }); } catch(e) {
+              try { window.location.hash = '#dashboard'; } catch(e2) {}
+            }
+          } else {
+            try { window.location.hash = '#dashboard'; } catch(e) {}
+          }
         }
       }
     );
@@ -8160,6 +8168,10 @@ window._openCasualMatch = function(restoreOpts) {
   };
 
   function _getConfig() {
+    // v1.7.1-beta: defaults usados como base — prefs armazenadas sem 'type'
+    // causavam useSets=false, bypassing GSM completamente e mostrando 0/1/2/3
+    // em vez de 15/30/40 mesmo com countingType:'tennis' configurado.
+    var _defaults = _casualDefaults[selectedSport] || { type:'sets', setsToWin:1, gamesPerSet:6, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'tennis', deuceRule:false, twoPointAdvantage:true, tieRule:'ask' };
     try {
       var prefs = JSON.parse(localStorage.getItem('scoreplace_casual_prefs') || '{}');
       if (prefs[selectedSport]) {
@@ -8173,10 +8185,15 @@ window._openCasualMatch = function(restoreOpts) {
           try { localStorage.setItem('scoreplace_casual_prefs', JSON.stringify(prefs)); } catch(e) {}
         }
         if (stored.twoPointAdvantage === undefined) stored.twoPointAdvantage = true;
-        return stored;
+        // Merge: defaults first, then stored on top — garante que campos ausentes
+        // (como 'type') venham dos defaults sem sobrescrever escolhas do usuário.
+        var merged = {}, k;
+        for (k in _defaults) { if (Object.prototype.hasOwnProperty.call(_defaults, k)) merged[k] = _defaults[k]; }
+        for (k in stored)   { if (Object.prototype.hasOwnProperty.call(stored,   k)) merged[k] = stored[k];   }
+        return merged;
       }
     } catch(e) {}
-    return _casualDefaults[selectedSport] || { type:'sets', setsToWin:1, gamesPerSet:6, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'tennis', deuceRule:false, twoPointAdvantage:true, tieRule:'ask' };
+    return _defaults;
   }
 
   var _tieRuleLabels = { 'ask': 'Perguntar no jogo', 'extend': 'Prorrogar (vantagem de 2)', 'tiebreak': 'Tie-break 7pts', 'supertiebreak': 'Super tie-break 10pts' };

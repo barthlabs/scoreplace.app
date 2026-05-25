@@ -9,6 +9,23 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(25 de Maio, 2026)</span></div>' +
+      '<p><b>2 correções na partida casual.</b><br><br>' +
+      '<b>1. Pontuação 15-30-40 não era respeitada no placar ao vivo:</b> ao escolher "Tênis" (15-30-40, AD, tie-break) na configuração de partida casual, o placar mostrava 0/1/2/3 em vez de 0/15/30/40. A causa era que prefs salvas em versões anteriores podiam estar sem o campo <code>type</code> — e sem ele, o sistema de sets/games era completamente ignorado, mostrando apenas contagem inteira. Corrigido: agora as prefs salvas são sempre mescladas com os padrões da modalidade, garantindo que <code>type:"sets"</code> e <code>countingType</code> corretos estejam presentes mesmo em prefs legadas.<br><br>' +
+      '<b>2. Cancelar partida casual não voltava ao menu de configuração:</b> ao cancelar uma partida casual em andamento, o organizador era jogado para o dashboard em vez de voltar ao menu de configuração da partida casual. Corrigido: ao cancelar, o organizador volta à tela de setup da partida casual para poder iniciar uma nova partida imediatamente. (Guests continuam indo ao dashboard, já que não têm setup próprio.)</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">✨ v1.7.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Maio, 2026)</span></div>' +
+      '<p><b>Tutoriais em vídeo na landing page + versão sempre atualizada.</b><br><br>' +
+      'A landing page ganhou uma seção "Veja em ação" com 6 tutoriais rápidos em YouTube Shorts demonstrando as funcionalidades principais. Os vídeos carregam com lazy-load (thumbnail estática até clicar em reproduzir). ' +
+      'A versão exibida na landing agora é sempre atualizada automaticamente a cada deploy.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.106-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Maio, 2026)</span></div>' +
+      '<p><b>Fix: "reCAPTCHA já foi renderizado" no iPhone (Sentry WEB-10).</b><br><br>' +
+      'No iOS, eventos de toque podiam disparar dois cliques em sequência no botão de login por telefone, causando duas chamadas simultâneas ao reCAPTCHA e o erro "reCAPTCHA has already been rendered in this element". Corrigido com um guard de in-flight que ignora o segundo disparo enquanto o primeiro ainda está processando.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.6.105-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Maio, 2026)</span></div>' +
       '<p><b>3 correções em partidas casuais.</b><br><br>' +
       '<b>1. QR Code no Chrome iOS:</b> o leitor de QR da dashboard usava câmera streaming (getUserMedia) que o Chrome iOS (CriOS) não suporta — funcionava no Safari mas falhava silenciosamente no Chrome. Agora detecta <code>CriOS</code> automaticamente e usa o scanner via input de arquivo, que funciona em qualquer browser iOS.<br><br>' +
