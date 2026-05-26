@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.7-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
+      '<p><b>3 correções na partida casual.</b><br><br>' +
+      '<b>1. Seção "Últimas Partidas" voltou a aparecer nas estatísticas de fim de partida:</b> dois mecanismos garantem que a seção seja exibida: (a) fallback incondicional de 1500ms que dispara mesmo quando o write ao servidor falha ou demora; (b) o caminho de erro (.catch) também tenta mostrar a seção. Antes, a seção simplesmente não aparecia quando o write não confirmava a tempo.<br><br>' +
+      '<b>2. Botão de partida passada não "quebrava o link" (saía do overlay):</b> partidas antigas sem <code>roomCode</code> geravam botões que navegavam para fora do overlay de estatísticas. Agora apenas partidas com <code>roomCode</code> válido são exibidas na seção.<br><br>' +
+      '<b>3. Gênero dos jogadores não é mais perdido ao receber atualização da sala:</b> quando o Firestore enviava uma atualização de sala com <code>slotGenders</code> parcialmente preenchido (campo null para slots não alterados), o gênero local definido era sobrescrito por null, perdendo a informação. Agora apenas valores não-nulos do servidor sobrescrevem o estado local.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.6-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
       '<p><b>2 correções na partida casual.</b><br><br>' +
       '<b>1. Ordem das Últimas Partidas corrigida (mais recente à esquerda):</b> o sort por data estava retornando NaN para <code>createdAt</code> armazenado como string ISO — a subtração de strings é NaN, tornando o sort instável e mostrando partidas na ordem errada. Corrigido: datas ISO são agora convertidas via <code>new Date(s).getTime()</code> antes da comparação, garantindo que a partida mais recente apareça sempre na esquerda, a segunda no centro e a terceira na direita.<br><br>' +

@@ -4372,7 +4372,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
               // chegar ao servidor, resultando em dados desatualizados.
               if (typeof _hydrateStatsLastMatchesSlotFn === 'function') _hydrateStatsLastMatchesSlotFn();
             }, 150);
-          }).catch(function() {});
+          }).catch(function() {
+            // v1.7.7-beta: mesmo em erro de write, tenta mostrar seção
+            _statsSlotWriteConfirmed = true;
+            setTimeout(function() {
+              if (typeof _hydrateStatsLastMatchesSlotFn === 'function') _hydrateStatsLastMatchesSlotFn();
+            }, 200);
+          });
         }
       }
       // Persist detailed stats in each registered player's account so they
@@ -5545,6 +5551,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
             var filtered = _statsSlotSport
               ? allMatches.filter(function(m) { return (m.sport || '') === _statsSlotSport; })
               : allMatches;
+            // v1.7.7-beta: filtro de segurança — só exibe partidas com roomCode
+            // (partidas antigas podem não ter roomCode; sem ele o botão navega pra fora do overlay)
+            allMatches = allMatches.filter(function(m) { return !!m.roomCode; });
+            filtered = _statsSlotSport
+              ? allMatches.filter(function(m) { return (m.sport || '') === _statsSlotSport; })
+              : allMatches;
             // Máximo 3 partidas; se não há para a modalidade, usa todas
             var matches = (filtered.length > 0 ? filtered : allMatches).slice(0, 3);
             if (matches.length === 0) return;
@@ -5642,6 +5654,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
         if (_statsSlotWriteConfirmed) {
           setTimeout(_hydrateStatsLastMatchesSlotFn, 150);
         }
+        // v1.7.7-beta: fallback incondicional de 1500ms — garante que a seção
+        // aparece mesmo quando _saveResult não foi chamado (torneios, re-renders)
+        // ou quando a Promise de write demora além do esperado.
+        setTimeout(function() {
+          if (typeof _hydrateStatsLastMatchesSlotFn === 'function') {
+            _hydrateStatsLastMatchesSlotFn();
+          }
+        }, 1500);
       })();
       // v1.0.33-beta: dispara animação on-scroll de barras + contadores nos
       // blocos de stats (_compareBar, etc).
@@ -10566,12 +10586,15 @@ window._openCasualMatch = function(restoreOpts) {
         }
 
         // v1.6.26-beta: sincroniza slotGenders de outros clientes
+        // v1.7.7-beta: só sobrescreve quando o remoto tem valor — nunca apaga
+        // gênero local definido com valor nulo vindo do Firestore (race condition
+        // onde o snapshot chega antes do campo ser preenchido no outro cliente).
         if (fresh.slotGenders && typeof fresh.slotGenders === 'object') {
           var _gChanged = false;
           for (var _gk = 0; _gk < 4; _gk++) {
             var _remoteG = fresh.slotGenders[_gk] || null;
             var _localG = _slotGenders[_gk] || null;
-            if (_remoteG !== _localG) {
+            if (_remoteG && _remoteG !== _localG) {
               _slotGenders[_gk] = _remoteG;
               _gChanged = true;
             }
