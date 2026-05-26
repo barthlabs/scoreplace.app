@@ -6376,7 +6376,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
             return;
           }
           var data = doc.data();
-          // v1.3.30-beta: Match ended (status='finished') — APLICA o
+          // v1.7.3-beta: na 1ª invocação, inicializa _lastKnownSetupAt com
+          // o valor atual do doc (evita falso-positivo de "setup" no attach).
+          if (!_firstSnapshotSeen) {
+            _firstSnapshotSeen = true;
+            _lastKnownSetupAt = (data && data.setupAt) || null;
+          }
+          // v1.7.3-beta: Match ended (status='finished') — APLICA o
           // liveState final no overlay e deixa o usuário ver a tela de
           // stats (renderizada quando state.isFinished=true).
           // Bug reportado: amigo participante de partida casual não viu
@@ -6415,13 +6421,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
             }
             return;
           }
-          // v1.6.41-beta: alguém clicou "Jogar Novamente" ou "Desparear" —
-          // status virou 'setup'. Todos os demais participantes voltam para
-          // o setup com os mesmos jogadores (sem times pré-formados).
-          // v1.6.59-beta: usa _casualReopenSetup em vez de _goToSetupLocally
-          // para reutilizar o mesmo overlay/sala. Antes: criava nova sala →
-          // nomes viravam "Jogador X" por auto-save de doc vazio.
-          if (data && data.status === 'setup' && !_casualCancelled) {
+          // v1.7.3-beta: "Jogar Novamente" / "Desparear" — sinaliza via
+          // campo setupAt (não mais status:'setup', que destruía o registro
+          // histórico ao sobrescrever status:'finished').
+          // Compatibilidade: continua reagindo a status:'setup' de versões
+          // antigas de outros clientes na mesma sala.
+          var _newSetupAt = data && data.setupAt;
+          var _setupSignal = (data && data.status === 'setup') ||
+            (_newSetupAt && _newSetupAt !== _lastKnownSetupAt);
+          if (_setupSignal && !_casualCancelled) {
+            _lastKnownSetupAt = _newSetupAt || _lastKnownSetupAt;
             setTimeout(function() {
               if (_unsubFirestore) { try { _unsubFirestore(); } catch(e) {} _unsubFirestore = null; }
               try { window.removeEventListener('resize', _onResize); } catch(e) {}
@@ -6476,6 +6485,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
   }
   var _lastSyncTs = 0;
+  // v1.7.3-beta: rastreia o último setupAt visto no Firestore.
+  // Inicializado como null e setado no 1º snapshot para que mudanças
+  // posteriores (Jogar Novamente / Desparear) disparem o go-to-setup
+  // sem falso-positivo no attach inicial do listener.
+  var _lastKnownSetupAt = null;
+  var _firstSnapshotSeen = false;
 
   // Start listener if we have a casual doc
   if (_casualDocId) {
@@ -7027,44 +7042,41 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // v1.3.69-beta: versão SEM confirm dialog para a tela de estatísticas
   // (a partida já foi encerrada e salva — não há nada a confirmar).
-  // v1.6.59-beta: usa _closeLiveScoringAndReopenSetup (reutiliza a mesma
-  // sala via _casualReopenSetup) + escreve status:'setup' para que os
-  // outros participantes logados também voltem ao setup.
+  // v1.7.3-beta: escreve setupAt (não mais status:'setup') para preservar
+  // status:'finished' no doc — essencial para o histórico de partidas.
+  // Multi-device: outros clientes reagem a setupAt mudando (onSnapshot).
   window._liveScoreUnpairFromStats = function() {
     if (state.isFinished && !_resultSaved) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
     }
-    // Propaga para os outros participantes via Firestore
+    // Sinaliza para outros dispositivos via campo setupAt (sem alterar status)
     if (_casualDocId && window.FirestoreDB && window.FirestoreDB.db) {
       try {
         window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
-          .update({ status: 'setup' })
-          .catch(function(e) { console.warn('[LiveScore] unpair setup write failed:', e); });
+          .update({ setupAt: new Date().toISOString() })
+          .catch(function(e) { console.warn('[LiveScore] unpair setupAt write failed:', e); });
       } catch(e) {}
     }
-    // v1.6.60-beta: isInitiator=true — este dispositivo escreveu status:'setup'
-    // e tem os gêneros corretos; outros dispositivos devem só ler via polling.
     _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true });
   };
 
-  // v1.6.41-beta: "Jogar Novamente" nas stats — propaga status:'setup' no
-  // Firestore para que TODOS os participantes logados voltem ao setup.
-  // v1.6.59-beta: usa _closeLiveScoringAndReopenSetup para reutilizar a
-  // mesma sala (evita criação de nova sala com nomes "Jogador X").
+  // v1.6.41-beta: "Jogar Novamente" nas stats — propaga sinal para que
+  // TODOS os participantes logados voltem ao setup.
+  // v1.7.3-beta: usa setupAt em vez de status:'setup' para não destruir
+  // o registro histórico (status:'finished' precisa ser preservado para
+  // loadRecentCasualMatchesForUser encontrar essa partida).
   window._liveScoreGoToSetup = function() {
     if (state.isFinished && !_resultSaved) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
     }
-    // Propaga para os outros participantes via Firestore
+    // Sinaliza para outros dispositivos via campo setupAt (sem alterar status)
     if (_casualDocId && window.FirestoreDB && window.FirestoreDB.db) {
       try {
         window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
-          .update({ status: 'setup' })
-          .catch(function(e) { console.warn('[LiveScore] setup status write failed:', e); });
+          .update({ setupAt: new Date().toISOString() })
+          .catch(function(e) { console.warn('[LiveScore] goToSetup setupAt write failed:', e); });
       } catch(e) {}
     }
-    // v1.6.60-beta: isInitiator=true — este dispositivo escreveu status:'setup'
-    // e tem os gêneros corretos; outros dispositivos devem só ler via polling.
     _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true });
   };
 
@@ -9986,12 +9998,14 @@ window._openCasualMatch = function(restoreOpts) {
     var cfg = _getConfig();
     var sportLabel = selectedSport;
 
-    // v1.6.63-beta: se voltamos ao setup via Desparear (keepSession=true),
-    // _sessionReopened está true. Em vez de criar NOVO doc (o que geraria dois
-    // docs com mesmo roomCode — tornando o loadCasualMatch não-determinístico
-    // e quebrando o polling do outro dispositivo), reutilizamos o MESMO doc e
-    // limpamos result:null + status:'active'. Assim há sempre UM único doc por
-    // roomCode → polling do outro dispositivo sempre retorna o doc correto.
+    // v1.7.3-beta: se voltamos ao setup via Desparear/Jogar Novamente
+    // (_sessionReopened=true), criar um NOVO documento Firestore para esta
+    // partida em vez de reutilizar/sobrescrever o doc anterior.
+    // Motivação: reutilizar o mesmo doc apagava result + resetava createdAt
+    // para a data da sessão original, quebrando o histórico de partidas
+    // (usuário via datas antigas de dia 10/15 mesmo jogando hoje).
+    // Novo roomCode gerado junto com o novo doc para que convites (QR code)
+    // apontem para a sala correta.
     var _isReopen = _sessionReopened;
     _sessionReopened = false;
 
@@ -10013,17 +10027,34 @@ window._openCasualMatch = function(restoreOpts) {
           result: null
         });
       } catch (e) { console.warn('Casual start save failed:', e); }
-    } else if (_sessionDocId) {
-      // Update existing match to active with current players.
-      // When _isReopen: limpa result:null para que _openLiveScoring não veja
-      // dados da partida anterior e pule direto às estatísticas.
+    } else if (_sessionDocId && _isReopen) {
+      // v1.7.3-beta: voltou ao setup após partida concluída — criar NOVO doc.
+      // O doc anterior (status:'finished') fica intacto no Firestore e aparece
+      // no histórico com a data correta. Novo roomCode evita conflito de lookup.
+      _sessionRoomCode = _generateRoomCode();
       try {
-        var _startUpdates = { status: 'active', players: players, scoring: cfg, isDoubles: isDoubles, teamsFormed: _isTeamsFormed() };
-        if (_isReopen) {
-          _startUpdates.result = null;
-          _startUpdates.startedAt = new Date().toISOString();
-        }
-        window.FirestoreDB.updateCasualMatch(_sessionDocId, _startUpdates);
+        _sessionDocId = await window.FirestoreDB.saveCasualMatch({
+          createdBy: cu.uid,
+          createdByName: cu.displayName || '',
+          createdAt: new Date().toISOString(),
+          sport: sportLabel,
+          scoring: cfg,
+          isDoubles: isDoubles,
+          teamsFormed: _isTeamsFormed(),
+          players: players,
+          playerUids: players.filter(function(p) { return !!p.uid; }).map(function(p) { return p.uid; }),
+          roomCode: _sessionRoomCode,
+          status: 'active',
+          result: null
+        });
+      } catch (e) { console.warn('Casual reopen save failed:', e); }
+    } else if (_sessionDocId) {
+      // Update existing match to active with current players (sem reopen).
+      try {
+        window.FirestoreDB.updateCasualMatch(_sessionDocId, {
+          status: 'active', players: players, scoring: cfg,
+          isDoubles: isDoubles, teamsFormed: _isTeamsFormed()
+        });
       } catch(e) {}
     }
 
@@ -10216,7 +10247,12 @@ window._openCasualMatch = function(restoreOpts) {
           return;
         }
         var newParts = Array.isArray(fresh.participants) ? fresh.participants : [];
-        if (newParts.length !== _lobbyParticipants.length) {
+        // v1.7.3-beta: se fresh.participants está vazio, o doc nunca recebeu
+        // entradas de QR invite (partida sem convite). NÃO interpretar como
+        // "todos saíram" — sem esta guarda, o código resetava _slotGenders para
+        // null em todos os slots e fazia re-render, fazendo gêneros virarem "?"
+        // quando o usuário voltava ao setup após "Desparear" ou "Jogar Novamente".
+        if (newParts.length > 0 && newParts.length !== _lobbyParticipants.length) {
           var countDecreased = newParts.length < _lobbyParticipants.length;
           // Figure out who left so we can clear their typed-in name from
           // the host's setup cards — freeing the slot for another joiner.
