@@ -962,13 +962,17 @@ window.FirestoreDB = {
     }
 
     // Sort client-side by createdAt desc, take N most recent
+    // v1.7.6-beta: ISO strings (ex: "2026-05-26T...") não são números —
+    // tb - ta em strings = NaN → sort instável (matches em ordem aleatória).
+    // Fix: converter para ms via new Date().getTime() quando for string.
     var arr = Object.keys(out).map(function(k) { return out[k]; });
     arr.sort(function(a, b) {
-      var ta = a.createdAt || a._ts || 0;
-      var tb = b.createdAt || b._ts || 0;
-      // Firestore timestamps may be stored as ms or as Timestamp obj
+      var ta = a.createdAt || a.finishedAt || a._ts || 0;
+      var tb = b.createdAt || b.finishedAt || b._ts || 0;
       if (ta && typeof ta.toMillis === 'function') ta = ta.toMillis();
+      else if (ta && typeof ta === 'string') ta = new Date(ta).getTime() || 0;
       if (tb && typeof tb.toMillis === 'function') tb = tb.toMillis();
+      else if (tb && typeof tb === 'string') tb = new Date(tb).getTime() || 0;
       return tb - ta;
     });
     return arr.slice(0, n);

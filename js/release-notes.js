@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.6-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
+      '<p><b>2 correções na partida casual.</b><br><br>' +
+      '<b>1. Ordem das Últimas Partidas corrigida (mais recente à esquerda):</b> o sort por data estava retornando NaN para <code>createdAt</code> armazenado como string ISO — a subtração de strings é NaN, tornando o sort instável e mostrando partidas na ordem errada. Corrigido: datas ISO são agora convertidas via <code>new Date(s).getTime()</code> antes da comparação, garantindo que a partida mais recente apareça sempre na esquerda, a segunda no centro e a terceira na direita.<br><br>' +
+      '<b>2. Tela de estatísticas comparativas mostra as cores corretas de cada time:</b> antes, as duas barras de comparação apareciam em azul (usavam a cor de quem ganhou vs quem perdeu). Agora o Time 1 sempre aparece em <span style="color:#3b82f6;font-weight:700;">azul</span> (lado direito) e o Time 2 sempre aparece em <span style="color:#ef4444;font-weight:700;">vermelho</span> (lado esquerdo), independente do resultado. Um cabeçalho com os nomes dos times identifica cada lado.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.5-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
       '<p><b>2 melhorias na partida casual.</b><br><br>' +
       '<b>1. Últimas partidas na tela de estatísticas agora mostra a partida que acabou de terminar:</b> antes, a seção "Últimas Partidas" era populada com um timeout fixo de 400ms que podia disparar antes da escrita no servidor ser confirmada — a partida recém jogada não aparecia. Agora a seção só é preenchida depois que o Firestore confirma o write.<br><br>' +

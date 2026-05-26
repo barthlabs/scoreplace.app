@@ -4910,6 +4910,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var losePlayers = winTeam === 1 ? p2Players : p1Players;
       var winClr = winTeam === 1 ? '#3b82f6' : '#ef4444';
       var loseClr = winTeam === 1 ? '#ef4444' : '#3b82f6';
+      // v1.7.6-beta: cores fixas por time — TIME 1 sempre azul, TIME 2 sempre vermelho
+      var p1Clr = '#3b82f6';
+      var p2Clr = '#ef4444';
 
       // Build score summary
       var scoreSummary = '';
@@ -5052,6 +5055,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var winT = _matchStats.teamStats[winTeam] || {};
       var losT = _matchStats.teamStats[winTeam === 1 ? 2 : 1] || {};
       var hasServeData = state.gameLog && state.gameLog.length > 0 && !state.serveSkipped;
+      // v1.7.6-beta: stats por time FIXO (1 e 2) para a comparação com cores corretas
+      var t1T = winTeam === 1 ? winT : losT;
+      var t2T = winTeam === 1 ? losT : winT;
 
       // Player detail modal — called from chip onclick. Uses closure over _computeMatchStats + helpers.
       window._showPlayerMatchStats = function(playerName) {
@@ -5180,46 +5186,43 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // em 0% e do tamanho proporcional em qualquer valor entre cheia e
       // vazia)". Animação on-scroll via data-stat-bar + data-stat-count
       // (IntersectionObserver em window._initStatsAnimation).
-      var _compareBar = function(label, icon, winVal, losVal, fmt, maxCap) {
+      // v1.7.6-beta: _compareBar usa TIME 1 (direita, azul p1Clr) vs TIME 2 (esquerda, vermelho p2Clr).
+      // Antes era vencedor/perdedor — ambas as barras podiam aparecer na mesma cor quando
+      // o user confundia o mapeamento. Agora cores são FIXAS por time independente de quem ganhou.
+      var _compareBar = function(label, icon, p1Val, p2Val, fmt, maxCap) {
         fmt = fmt || function(v) { return v; };
-        var winPctBar, losPctBar;
+        var p1PctBar, p2PctBar;
         if (maxCap === 100) {
-          // Stat já é percentual (ex: "% Pontos no Saque") — barra reflete
-          // o valor diretamente, ambas independentes (não somam 100%).
-          winPctBar = Math.max(0, Math.min(100, winVal));
-          losPctBar = Math.max(0, Math.min(100, losVal));
+          // Stat já é percentual — barra reflete o valor diretamente.
+          p1PctBar = Math.max(0, Math.min(100, p1Val));
+          p2PctBar = Math.max(0, Math.min(100, p2Val));
         } else {
-          // Raw counts complementares (vencedor vs perdedor da mesma partida).
-          // Cada um pega sua fatia do total. Garantimos sum=100% via 100-X.
-          var sum = (winVal || 0) + (losVal || 0);
+          // Raw counts — cada um pega sua fatia do total (sum=100%).
+          var sum = (p1Val || 0) + (p2Val || 0);
           if (sum > 0) {
-            winPctBar = Math.round((winVal || 0) / sum * 100);
-            losPctBar = 100 - winPctBar;
+            p1PctBar = Math.round((p1Val || 0) / sum * 100);
+            p2PctBar = 100 - p1PctBar;
           } else {
-            winPctBar = 0;
-            losPctBar = 0;
+            p1PctBar = 0;
+            p2PctBar = 0;
           }
         }
-        var isPctFmt = (maxCap === 100);
-        // Counter: número absoluto pra raw counts, percentage pra %-stats.
-        // Usa data-stat-count pra animar 0 → target on-scroll. Suffix '%' só
-        // pra fmt que termina em %.
-        var fmtSample = fmt(winVal);
+        var fmtSample = fmt(p1Val);
         var hasPctSuffix = (typeof fmtSample === 'string' && fmtSample.indexOf('%') !== -1);
         var dataSuffix = hasPctSuffix ? '%' : '';
         return (
           '<div style="display:flex;flex-direction:column;gap:4px;">' +
             '<div style="text-align:center;font-size:0.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;">' + icon + ' ' + label + '</div>' +
             '<div style="display:flex;align-items:center;gap:6px;">' +
-              '<span data-stat-count="' + losVal + '" data-stat-count-suffix="' + dataSuffix + '" style="flex:0 0 auto;min-width:36px;text-align:right;font-size:0.9rem;font-weight:900;color:' + loseClr + ';font-variant-numeric:tabular-nums;">0' + dataSuffix + '</span>' +
+              '<span data-stat-count="' + p2Val + '" data-stat-count-suffix="' + dataSuffix + '" style="flex:0 0 auto;min-width:36px;text-align:right;font-size:0.9rem;font-weight:900;color:' + p2Clr + ';font-variant-numeric:tabular-nums;">0' + dataSuffix + '</span>' +
               '<div style="flex:1;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,0.05);display:flex;justify-content:flex-end;position:relative;">' +
-                '<div data-stat-bar="' + losPctBar + '" style="width:0%;height:100%;background:linear-gradient(90deg,' + loseClr + '44,' + loseClr + ');border-radius:5px 0 0 5px;transition:width 0.8s cubic-bezier(0.2,0.8,0.2,1);"></div>' +
+                '<div data-stat-bar="' + p2PctBar + '" style="width:0%;height:100%;background:linear-gradient(90deg,' + p2Clr + '44,' + p2Clr + ');border-radius:5px 0 0 5px;transition:width 0.8s cubic-bezier(0.2,0.8,0.2,1);"></div>' +
               '</div>' +
               '<div style="width:1px;height:14px;background:rgba(255,255,255,0.2);"></div>' +
               '<div style="flex:1;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,0.05);display:flex;">' +
-                '<div data-stat-bar="' + winPctBar + '" style="width:0%;height:100%;background:linear-gradient(90deg,' + winClr + ',' + winClr + '44);border-radius:0 5px 5px 0;transition:width 0.8s cubic-bezier(0.2,0.8,0.2,1);"></div>' +
+                '<div data-stat-bar="' + p1PctBar + '" style="width:0%;height:100%;background:linear-gradient(90deg,' + p1Clr + ',' + p1Clr + '44);border-radius:0 5px 5px 0;transition:width 0.8s cubic-bezier(0.2,0.8,0.2,1);"></div>' +
               '</div>' +
-              '<span data-stat-count="' + winVal + '" data-stat-count-suffix="' + dataSuffix + '" style="flex:0 0 auto;min-width:36px;font-size:0.9rem;font-weight:900;color:' + winClr + ';font-variant-numeric:tabular-nums;">0' + dataSuffix + '</span>' +
+              '<span data-stat-count="' + p1Val + '" data-stat-count-suffix="' + dataSuffix + '" style="flex:0 0 auto;min-width:36px;font-size:0.9rem;font-weight:900;color:' + p1Clr + ';font-variant-numeric:tabular-nums;">0' + dataSuffix + '</span>' +
             '</div>' +
           '</div>'
         );
@@ -5233,21 +5236,34 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var losRecvPct = losT.receivePtsPlayed > 0 ? Math.round(losT.receivePtsWon / losT.receivePtsPlayed * 100) : 0;
       var hasPointServeData = (winT.servePtsPlayed + losT.servePtsPlayed) > 0;
       var hasDeuceData = (winT.deucePtsPlayed + losT.deucePtsPlayed) > 0;
+      // v1.7.6-beta: percentuais por time fixo (para _compareBar com p1Clr/p2Clr)
+      var t1HoldPct = t1T.holdServed > 0 ? Math.round(t1T.held / t1T.holdServed * 100) : 0;
+      var t2HoldPct = t2T.holdServed > 0 ? Math.round(t2T.held / t2T.holdServed * 100) : 0;
+      var t1ServePctPts = t1T.servePtsPlayed > 0 ? Math.round(t1T.servePtsWon / t1T.servePtsPlayed * 100) : 0;
+      var t2ServePctPts = t2T.servePtsPlayed > 0 ? Math.round(t2T.servePtsWon / t2T.servePtsPlayed * 100) : 0;
+      var t1RecvPct = t1T.receivePtsPlayed > 0 ? Math.round(t1T.receivePtsWon / t1T.receivePtsPlayed * 100) : 0;
+      var t2RecvPct = t2T.receivePtsPlayed > 0 ? Math.round(t2T.receivePtsWon / t2T.receivePtsPlayed * 100) : 0;
 
-      // Comparative stats section
+      // Comparative stats section — v1.7.6-beta: TIME 1 (azul) sempre direita, TIME 2 (vermelho) sempre esquerda
+      var _t1Label = p1Players.length ? (p1Players[0].split(/[\s.@_\-]/)[0] || p1Players[0]) : 'Time 1';
+      var _t2Label = p2Players.length ? (p2Players[0].split(/[\s.@_\-]/)[0] || p2Players[0]) : 'Time 2';
       var comparativeSection =
         '<div style="width:100%;max-width:380px;padding:clamp(12px,2.2vh,18px);border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);display:flex;flex-direction:column;gap:clamp(8px,1.6vh,14px);">' +
-          '<div style="text-align:center;font-size:0.6rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:2px;">⚖ Comparação dos Times</div>' +
-          (useSets && !state.isFixedSet ? _compareBar('Sets', '🏅', winT.sets, losT.sets) : '') +
-          (state.totalGamesPlayed > 0 ? _compareBar('Games', '🎾', winT.games, losT.games) : '') +
-          _compareBar('Pontos', '🎯', winT.points, losT.points) +
-          (hasPointServeData ? _compareBar('% Pontos no Saque', '🚀', winServePctPts, losServePctPts, function(v) { return v + '%'; }, 100) : '') +
-          (hasPointServeData ? _compareBar('% Pontos na Recepção', '🎯', winRecvPct, losRecvPct, function(v) { return v + '%'; }, 100) : '') +
-          (hasServeData ? _compareBar('Games Mantidos (saque)', '📊', winHoldPct, losHoldPct, function(v) { return v + '%'; }, 100) : '') +
-          (hasServeData ? _compareBar('Quebras de Saque', '💥', winT.breaks, losT.breaks) : '') +
-          (hasDeuceData ? _compareBar('Killer Points (40-40)', '⚡', winT.deucePtsWon, losT.deucePtsWon) : '') +
-          _compareBar('Maior Sequência', '🔥', winT.longestStreak, losT.longestStreak) +
-          _compareBar('Maior Vantagem', '📈', winT.biggestLead, losT.biggestLead) +
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);">' +
+            '<span style="font-size:0.65rem;font-weight:800;color:' + p2Clr + ';text-transform:uppercase;letter-spacing:0.5px;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">← ' + window._safeHtml(_t2Label) + '</span>' +
+            '<span style="font-size:0.55rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;">⚖</span>' +
+            '<span style="font-size:0.65rem;font-weight:800;color:' + p1Clr + ';text-transform:uppercase;letter-spacing:0.5px;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;">' + window._safeHtml(_t1Label) + ' →</span>' +
+          '</div>' +
+          (useSets && !state.isFixedSet ? _compareBar('Sets', '🏅', t1T.sets, t2T.sets) : '') +
+          (state.totalGamesPlayed > 0 ? _compareBar('Games', '🎾', t1T.games, t2T.games) : '') +
+          _compareBar('Pontos', '🎯', t1T.points, t2T.points) +
+          (hasPointServeData ? _compareBar('% Pontos no Saque', '🚀', t1ServePctPts, t2ServePctPts, function(v) { return v + '%'; }, 100) : '') +
+          (hasPointServeData ? _compareBar('% Pontos na Recepção', '🎯', t1RecvPct, t2RecvPct, function(v) { return v + '%'; }, 100) : '') +
+          (hasServeData ? _compareBar('Games Mantidos (saque)', '📊', t1HoldPct, t2HoldPct, function(v) { return v + '%'; }, 100) : '') +
+          (hasServeData ? _compareBar('Quebras de Saque', '💥', t1T.breaks, t2T.breaks) : '') +
+          (hasDeuceData ? _compareBar('Killer Points (40-40)', '⚡', t1T.deucePtsWon, t2T.deucePtsWon) : '') +
+          _compareBar('Maior Sequência', '🔥', t1T.longestStreak, t2T.longestStreak) +
+          _compareBar('Maior Vantagem', '📈', t1T.biggestLead, t2T.biggestLead) +
         '</div>';
 
       // Winner section: crown + clickable chips + score
