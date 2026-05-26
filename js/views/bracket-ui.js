@@ -3515,6 +3515,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var _matchStartTime = null; // Timestamp when first point is scored
   var _matchEndTime = null;   // Timestamp when match finishes
   var _resultSaved = false;   // Guards idempotent save on restart/close
+  // v1.7.5-beta: "Últimas Partidas" — função armazenada pelo render de stats;
+  // chamada de _saveResult().then() APÓS o write confirmar, garantindo que a
+  // partida recém terminada já está no Firestore antes de consultar.
+  var _hydrateStatsLastMatchesSlotFn = null;
+  var _statsSlotWriteConfirmed = false;
 
   // Initialize first set
   state.sets.push({ gamesP1: 0, gamesP2: 0, tiebreak: null });
@@ -4359,8 +4364,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var _updatePromise = window.FirestoreDB.updateCasualMatch(_casualDocId, _updatePayload);
         if (_updatePromise && typeof _updatePromise.then === 'function') {
           _updatePromise.then(function() {
+            _statsSlotWriteConfirmed = true;
             setTimeout(function() {
               if (typeof window._casualLoadLastMatches === 'function') window._casualLoadLastMatches();
+              // v1.7.5-beta: hidrata "Últimas Partidas" APÓS write confirmado —
+              // antes usava timeout fixo de 400ms que disparava antes da escrita
+              // chegar ao servidor, resultando em dados desatualizados.
+              if (typeof _hydrateStatsLastMatchesSlotFn === 'function') _hydrateStatsLastMatchesSlotFn();
             }, 150);
           }).catch(function() {});
         }
@@ -5495,11 +5505,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (isCasual && typeof window._hydrateCasualLinkSuggestions === 'function') {
         setTimeout(function() { window._hydrateCasualLinkSuggestions(); }, 200);
       }
-      // v1.7.4-beta: hidrata "Últimas Partidas" na tela de stats/resultado
+      // v1.7.5-beta: "Últimas Partidas" populado APÓS write confirmado.
+      // _hydrateStatsLastMatchesSlotFn é chamada de _saveResult().then() em vez
+      // de um timeout fixo que podia disparar antes da escrita chegar ao servidor.
+      // Fallback: se _statsSlotWriteConfirmed (re-render com escrita já concluída),
+      // dispara com delay pequeno para garantir que o DOM slot está disponível.
       (function() {
         var _statsSlotSport = isCasual ? (opts && opts.sportName || '') : (t && t.sport || '');
         var _statsSlotIsCasual = isCasual;
-        setTimeout(function() {
+        _hydrateStatsLastMatchesSlotFn = function() {
           var slot = document.getElementById('live-stats-last-matches-slot');
           if (!slot) return;
           var cu = window.AppStore && window.AppStore.currentUser;
@@ -5607,7 +5621,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
               '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">' + cardsHtml + '</div>' +
               '<div style="text-align:center;font-size:0.54rem;color:var(--text-muted);opacity:0.7;font-style:italic;margin-top:5px;">Toque pra ver as estatísticas</div>';
           }).catch(function(e) { console.warn('[LiveStats] last matches err:', e); });
-        }, 400);
+        };
+        // Fallback para re-render quando write já confirmou anteriormente
+        if (_statsSlotWriteConfirmed) {
+          setTimeout(_hydrateStatsLastMatchesSlotFn, 150);
+        }
       })();
       // v1.0.33-beta: dispara animação on-scroll de barras + contadores nos
       // blocos de stats (_compareBar, etc).
@@ -9043,6 +9061,19 @@ window._openCasualMatch = function(restoreOpts) {
       }
       // Teams are now fixed — shuffle is redundant and misleading, so flip OFF
       autoShuffle = false;
+      // v1.7.5-beta: auto-desativa "Dupla Mista" quando o time formado não é misto
+      // (ambos jogadores do Team 1 com o mesmo gênero). Só aplica em duplas com
+      // 2M+2F detectados — se não há gênero declarado, não interferimos.
+      if (isDoubles) {
+        var _t1Gend = [];
+        for (var _fti = 0; _fti < 4; _fti++) {
+          if (_teamAssignments[_fti] === 1) _t1Gend.push(_resolveSlotGender(_fti));
+        }
+        // Team 1 é não-misto quando ambos os gêneros são conhecidos E iguais
+        if (_t1Gend.length >= 2 && _t1Gend[0] && _t1Gend[1] && _t1Gend[0] === _t1Gend[1]) {
+          _mixedDoublesEnabled = false;
+        }
+      }
       _renderSetup();
       // Broadcast team formation to other players in the lobby
       _syncCasualSetupDebounced();

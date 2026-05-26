@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.5-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
+      '<p><b>2 melhorias na partida casual.</b><br><br>' +
+      '<b>1. Últimas partidas na tela de estatísticas agora mostra a partida que acabou de terminar:</b> antes, a seção "Últimas Partidas" era populada com um timeout fixo de 400ms que podia disparar antes da escrita no servidor ser confirmada — a partida recém jogada não aparecia. Agora a seção só é preenchida depois que o Firestore confirma o write.<br><br>' +
+      '<b>2. Toggle "Dupla Mista" se desativa automaticamente ao formar time não-misto:</b> ao arrastar dois jogadores do mesmo gênero para o mesmo time (ex: dois masculinos), o toggle de Dupla Mista agora se desativa sozinho. Antes era necessário desativá-lo manualmente.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.4-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
       '<p><b>2 melhorias na partida casual.</b><br><br>' +
       '<b>1. Fix crítico: primeira partida sumia ao jogar 2+ partidas consecutivas (Desparear):</b> ao finalizar uma partida e clicar em "Desparear" para remontar os times e jogar novamente, o polling de sincronização da sala (<code>_setupRefreshInterval</code>) continuava rodando depois que um novo código de sala era gerado. No próximo ciclo, o polling usava o novo código — e como o novo documento Firestore ainda não tinha sido criado, encontrava <code>null</code> e entrava na branch de "doc deletado externamente", fechando o overlay e destruindo a sessão. A primeira partida sumia do histórico como resultado. Corrigido: o intervalo de polling agora é parado <b>antes</b> de trocar o código de sala.<br><br>' +
