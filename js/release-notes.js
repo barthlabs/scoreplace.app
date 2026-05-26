@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.4-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
+      '<p><b>2 melhorias na partida casual.</b><br><br>' +
+      '<b>1. Fix crítico: primeira partida sumia ao jogar 2+ partidas consecutivas (Desparear):</b> ao finalizar uma partida e clicar em "Desparear" para remontar os times e jogar novamente, o polling de sincronização da sala (<code>_setupRefreshInterval</code>) continuava rodando depois que um novo código de sala era gerado. No próximo ciclo, o polling usava o novo código — e como o novo documento Firestore ainda não tinha sido criado, encontrava <code>null</code> e entrava na branch de "doc deletado externamente", fechando o overlay e destruindo a sessão. A primeira partida sumia do histórico como resultado. Corrigido: o intervalo de polling agora é parado <b>antes</b> de trocar o código de sala.<br><br>' +
+      '<b>2. Últimas partidas na tela de estatísticas:</b> após o fim de uma partida (placar ao vivo), a tela de estatísticas agora exibe a seção "Últimas Partidas" do usuário para aquela modalidade — mesmo layout de 3 colunas (mais recente à esquerda) já existente na tela de setup. Funciona tanto em partidas casuais quanto em torneios.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
       '<p><b>2 correções na partida casual.</b><br><br>' +
       '<b>1. Histórico de partidas não aparecia / ficava travado em datas antigas:</b> ao concluir uma partida e clicar em "Jogar Novamente" ou "Desparear", o sistema reutilizava o mesmo documento Firestore sobrescrevendo o resultado e a data da partida anterior. As partidas do dia ficavam ocultas porque o histórico sempre mostrava as datas originais (dia 10, 15 etc). Corrigido: cada nova partida após "Jogar Novamente"/"Desparear" cria um documento novo no Firestore com a data atual, preservando o histórico completo.<br><br>' +

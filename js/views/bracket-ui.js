@@ -5465,6 +5465,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // não há candidatos ou não é casual.
       var linkSuggestionsSlot = isCasual ? '<div id="casual-link-suggestions-slot" style="width:100%;max-width:380px;"></div>' : '';
 
+      // v1.7.4-beta: slot para as últimas partidas na modalidade —
+      // populado async após render. Exibido tanto em casuais quanto em
+      // torneios, filtrando pela mesma modalidade da partida atual.
+      var liveStatsLastMatchesSlot = '<div id="live-stats-last-matches-slot" style="width:100%;max-width:420px;"></div>';
+
       // Chain pill is now injected inline between chips — no separate section.
       var unpairChainHtml = '';
 
@@ -5484,11 +5489,126 @@ window._openLiveScoring = function(tId, matchId, opts) {
           timeStatsSection +
           (timeStatsSection ? '' : durationRow) +
           linkSuggestionsSlot +
+          liveStatsLastMatchesSlot +
         '</div>';
       // v1.3.33-beta: hidrata sugestões de vínculo guest→friend
       if (isCasual && typeof window._hydrateCasualLinkSuggestions === 'function') {
         setTimeout(function() { window._hydrateCasualLinkSuggestions(); }, 200);
       }
+      // v1.7.4-beta: hidrata "Últimas Partidas" na tela de stats/resultado
+      (function() {
+        var _statsSlotSport = isCasual ? (opts && opts.sportName || '') : (t && t.sport || '');
+        var _statsSlotIsCasual = isCasual;
+        setTimeout(function() {
+          var slot = document.getElementById('live-stats-last-matches-slot');
+          if (!slot) return;
+          var cu = window.AppStore && window.AppStore.currentUser;
+          if (!cu || !cu.uid || !window.FirestoreDB || typeof window.FirestoreDB.loadRecentCasualMatchesForUser !== 'function') return;
+          window.FirestoreDB.loadRecentCasualMatchesForUser(cu.uid, 15).then(function(allMatches) {
+            if (!allMatches || allMatches.length === 0) return;
+            // Apenas partidas concluídas com vencedor definido
+            allMatches = allMatches.filter(function(m) {
+              var w = m.result && m.result.winner;
+              return w === 1 || w === 2;
+            });
+            // Filtro por modalidade quando disponível
+            var filtered = _statsSlotSport
+              ? allMatches.filter(function(m) { return (m.sport || '') === _statsSlotSport; })
+              : allMatches;
+            // Máximo 3 partidas; se não há para a modalidade, usa todas
+            var matches = (filtered.length > 0 ? filtered : allMatches).slice(0, 3);
+            if (matches.length === 0) return;
+
+            // Atualiza cache global (para _casualOpenPastMatch)
+            if (!window._casualPastMatchesCache) window._casualPastMatchesCache = {};
+            matches.forEach(function(m) { if (m.roomCode) window._casualPastMatchesCache[m.roomCode] = m; });
+
+            function _firstToken(s) { return s ? (s.split(/[\s.@_\-]/)[0] || s) : ''; }
+            function _pname(p, mDoc, isFirstT1) {
+              if (p.uid && cu.uid && p.uid === cu.uid && cu.displayName) return _firstToken(cu.displayName);
+              if (isFirstT1 && mDoc.createdBy === cu.uid && cu.displayName) return _firstToken(cu.displayName);
+              var nm = p.displayName || p.name || '';
+              return _firstToken(nm) || null;
+            }
+            function _teamBlock(st, players, score, win) {
+              var nc = win ? '#fff' : 'rgba(255,255,255,0.72)';
+              var nw = win ? '700' : '600';
+              var rn = players.filter(function(n) { return n != null; });
+              var nh = (rn.length ? rn : ['—']).map(function(nm) {
+                return '<div style="font-size:0.73rem;font-weight:' + nw + ';color:' + nc + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.3;">' + window._safeHtml(nm) + '</div>';
+              }).join('');
+              return '<div style="' + st + '">' +
+                '<div style="flex:1;overflow:hidden;min-width:0;">' + nh + '</div>' +
+                (score ? '<span style="font-weight:800;font-size:0.85rem;color:' + (win ? '#4ade80' : 'var(--text-muted)') + ';font-variant-numeric:tabular-nums;flex-shrink:0;padding-left:4px;align-self:center;">' + window._safeHtml(score) + '</span>' : '') +
+              '</div>';
+            }
+
+            var cardsHtml = '';
+            matches.forEach(function(m) {
+              var sport = m.sport || '';
+              var dateStr = '';
+              if (m.createdAt) {
+                var d = (typeof m.createdAt === 'string') ? new Date(m.createdAt) : null;
+                if (d && !isNaN(d.getTime())) dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+              }
+              var icon = window._sportIcon ? window._sportIcon(sport) : '🎾';
+              var safeRoomCode = (m.roomCode || '').replace(/'/g, "\\'");
+              var t1Players = [], t2Players = [];
+              if (Array.isArray(m.players)) {
+                m.players.forEach(function(p) {
+                  var isFirstT1 = (p.team !== 2 && t1Players.length === 0);
+                  var nm = _pname(p, m, isFirstT1);
+                  if (p.team === 2) t2Players.push(nm);
+                  else t1Players.push(nm);
+                });
+              }
+              if (!m.isDoubles && t2Players.length === 0 && t1Players.length >= 2)
+                t2Players = t1Players.splice(1);
+              var winner = (m.result && m.result.winner) || 0;
+              var t1Win = (winner === 1), t2Win = (winner === 2), isDecided = (t1Win || t2Win);
+              var p1ScoreStr = '', p2ScoreStr = '';
+              if (m.result) {
+                if (m.result.p1Score != null && m.result.p2Score != null) {
+                  p1ScoreStr = String(m.result.p1Score); p2ScoreStr = String(m.result.p2Score);
+                } else if (m.result.sets && m.result.sets.length > 0) {
+                  p1ScoreStr = m.result.sets.map(function(s) { return s.gamesP1; }).join(' ');
+                  p2ScoreStr = m.result.sets.map(function(s) { return s.gamesP2; }).join(' ');
+                } else if (m.result.summary) {
+                  var sp2 = m.result.summary.split(/\s*[×]\s*/);
+                  if (sp2.length === 2) { p1ScoreStr = sp2[0].trim(); p2ScoreStr = sp2[1].trim(); }
+                }
+              }
+              var wRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(16,185,129,0.18);border-left:3px solid #10b981;';
+              var lRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.08);opacity:0.5;';
+              var oRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.25);border-left:3px solid rgba(99,102,241,0.5);';
+              var p1Style = isDecided ? (t1Win ? wRow : lRow) : oRow;
+              var p2Style = isDecided ? (t2Win ? wRow : lRow) : oRow;
+              cardsHtml +=
+                '<button onclick="window._casualOpenPastMatch(\'' + safeRoomCode + '\')" ' +
+                  'style="display:block;text-align:left;border-radius:12px;padding:9px 9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);color:var(--text-bright);cursor:pointer;transition:all 0.15s;font-family:inherit;min-width:0;width:100%;" ' +
+                  'onmouseover="this.style.background=\'rgba(251,191,36,0.07)\';this.style.borderColor=\'rgba(251,191,36,0.30)\'" ' +
+                  'onmouseout="this.style.background=\'rgba(255,255,255,0.04)\';this.style.borderColor=\'rgba(255,255,255,0.10)\'">' +
+                  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;border-bottom:1px solid rgba(255,255,255,0.07);padding-bottom:4px;">' +
+                    '<span style="font-size:0.72rem;">' + icon + '</span>' +
+                    '<span style="font-size:0.57rem;color:var(--text-muted);font-weight:600;">' + window._safeHtml(dateStr || '—') + '</span>' +
+                  '</div>' +
+                  _teamBlock(p1Style, t1Players, p1ScoreStr, t1Win) +
+                  '<div style="text-align:center;font-size:0.52rem;color:var(--text-muted);font-weight:800;letter-spacing:1.5px;padding:2px 0;">VS</div>' +
+                  _teamBlock(p2Style, t2Players, p2ScoreStr, t2Win) +
+                '</button>';
+            });
+
+            // Ordem de exibição: mais recente à esquerda (grid da esquerda pra direita = índice 0=último, 1=penúltimo, 2=antepenúltimo)
+            var typeLabel = _statsSlotIsCasual ? '⚡ Casual' : '🏆 Torneio';
+            slot.innerHTML =
+              '<div style="font-size:0.6rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;text-align:left;">' +
+                typeLabel + (_statsSlotSport ? (' · ' + window._safeHtml(_statsSlotSport)) : '') + ' — Últimas Partidas' +
+              '</div>' +
+              '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">' + cardsHtml + '</div>' +
+              '<div style="text-align:center;font-size:0.54rem;color:var(--text-muted);opacity:0.7;font-style:italic;margin-top:5px;">Toque pra ver as estatísticas</div>';
+          }).catch(function(e) { console.warn('[LiveStats] last matches err:', e); });
+        }, 400);
+      })();
       // v1.0.33-beta: dispara animação on-scroll de barras + contadores nos
       // blocos de stats (_compareBar, etc).
       if (typeof window._initStatsAnimation === 'function') {
@@ -10031,6 +10151,13 @@ window._openCasualMatch = function(restoreOpts) {
       // v1.7.3-beta: voltou ao setup após partida concluída — criar NOVO doc.
       // O doc anterior (status:'finished') fica intacto no Firestore e aparece
       // no histórico com a data correta. Novo roomCode evita conflito de lookup.
+      //
+      // v1.7.4-beta: para o _setupRefreshInterval ANTES de trocar _sessionRoomCode.
+      // Sem isso, o intervalo usa o novo roomCode na próxima tick e, se o novo doc
+      // ainda não chegou ao Firestore, loadCasualMatch retorna null → branch "doc
+      // deletado" → remove overlay e redireciona para dashboard, destruindo a
+      // sessão e fazendo a primeira partida desaparecer do histórico.
+      if (_setupRefreshInterval) { clearInterval(_setupRefreshInterval); _setupRefreshInterval = null; }
       _sessionRoomCode = _generateRoomCode();
       try {
         _sessionDocId = await window.FirestoreDB.saveCasualMatch({
