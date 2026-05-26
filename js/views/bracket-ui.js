@@ -4340,11 +4340,29 @@ window._openLiveScoring = function(tId, matchId, opts) {
         try { clearTimeout(_syncTimer); } catch(_e) {}
         var _finalLiveState = null;
         try { _finalLiveState = _serializeState(); } catch(_e) {}
+        // v1.7.8-beta: gravar players[] com team correto no doc casualMatches.
+        // Antes, _updatePayload não incluía players — o doc ficava com o array
+        // da criação inicial (pré-"Sortear Duplas"), causando exibição errada
+        // de times em "Últimas Partidas".
+        var _playersForUpdate = [];
+        var _allForUpdate = p1Players.concat(p2Players);
+        for (var _upi = 0; _upi < _allForUpdate.length; _upi++) {
+          var _upnm = _allForUpdate[_upi];
+          var _upmt = _playerMeta[_upnm] || {};
+          _playersForUpdate.push({
+            name: _upnm,
+            team: _upi < p1Players.length ? 1 : 2,
+            uid: _upmt.uid || null,
+            photoURL: _upmt.photoURL || null
+          });
+        }
         var _updatePayload = {
           status: 'finished',
           finishedAt: new Date().toISOString(),
           result: resultData,
-          playerUids: playerUids
+          playerUids: playerUids,
+          players: _playersForUpdate,
+          isDoubles: isDoubles
         };
         if (_finalLiveState) _updatePayload.liveState = _finalLiveState;
         // Diagnóstico expostos em window pra debug via DevTools

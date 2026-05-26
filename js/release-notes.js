@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.8-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
+      '<p><b>1 correção na partida casual.</b><br><br>' +
+      '<b>Times em "Últimas Partidas" agora exibidos corretamente:</b> ao finalizar uma partida de duplas, o documento Firestore era atualizado com <code>status</code>, <code>result</code> e <code>playerUids</code> — mas sem o campo <code>players</code> com os times finais. Como resultado, o campo <code>players</code> no banco podia ficar com a atribuição de equipes anterior (do setup, antes do sorteio de duplas), fazendo parceiros aparecerem como adversários nas seções "Últimas Partidas". Corrigido: ao encerrar a partida, o payload agora inclui o campo <code>players</code> com as atribuições de times corretas de <code>p1Players</code> e <code>p2Players</code>, garantindo que o histórico grave e exiba os times como realmente jogaram.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔧 v1.7.7-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Maio, 2026)</span></div>' +
       '<p><b>3 correções na partida casual.</b><br><br>' +
       '<b>1. Seção "Últimas Partidas" voltou a aparecer nas estatísticas de fim de partida:</b> dois mecanismos garantem que a seção seja exibida: (a) fallback incondicional de 1500ms que dispara mesmo quando o write ao servidor falha ou demora; (b) o caminho de erro (.catch) também tenta mostrar a seção. Antes, a seção simplesmente não aparecia quando o write não confirmava a tempo.<br><br>' +
