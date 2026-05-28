@@ -31,18 +31,15 @@ Na transição do alpha pra beta foi feito o reset final das coleções:
 A partir desse reset, **base de dados é considerada produção** e qualquer alteração destrutiva exige fluxo formal.
 
 ### Critérios de saída pra v1.0.0 estável
-- ✅ Performance Lighthouse ≥ 60 (atual 64)
+- ✅ Performance Lighthouse ≥ 60 (atual 64 — aceito definitivamente; não impede lojas)
 - ✅ Acessibilidade ≥ 95 (atual 96)
 - ✅ E2E ≥ 10 cenários green (34 testes)
 - ✅ Sentry recebendo eventos
 - ✅ Backup Firestore diário
 - ✅ Quotas + alertas Firebase (3 policies + budget)
 - ✅ Privacy + Termos publicados
-- ✅ Revisão jurídica (Privacy/Terms cobre uso — considerado fechado em 2026-05-28)
+- ✅ Revisão jurídica (Privacy/Terms cobre uso — fechado em 2026-05-28)
 - ⏳ 30 dias de uso real sem bug crítico — **início: 2026-06-11 (primeiro torneio real) · data alvo v1.0.0: 2026-07-11**
-
-### Pós v1.0.0 — sem prazo
-- Performance Lighthouse ≥ 75: requer bundler (Vite/Rollup) + Firebase SDK modular. Trabalho em branch separada, sem impacto em produção. Fazer com poucos usuários ainda é mais seguro — agendar para logo após estabilização do v1.0.
 
 ## Historico do Projeto
 
