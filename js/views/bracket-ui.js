@@ -3704,8 +3704,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Helper: build small avatar HTML for a player name (from metadata)
   // Falls back to first-name and substring matches so display names like
   // "Maria" still find metadata stored under "Maria Silva".
+  // v1.8.9-beta: delegates to window._avatarHtml for HTML generation.
   function _liveAvatarHtml(name, size) {
-    var sz = size || 28;
     var meta = _playerMeta[name];
     if (!meta || !meta.photoURL) {
       // Try first-name / substring fallback
@@ -3724,11 +3724,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         }
       }
     }
-    if (meta && meta.photoURL) {
-      return '<img src="' + window._safeHtml(meta.photoURL) + '" style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,0.15);" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
-        '<div style="display:none;width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);align-items:center;justify-content:center;font-size:' + (sz * 0.45) + 'px;color:white;font-weight:700;flex-shrink:0;">' + window._safeHtml((name || 'J')[0].toUpperCase()) + '</div>';
-    }
-    return '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:' + (sz * 0.45) + 'px;color:white;font-weight:700;flex-shrink:0;">' + window._safeHtml((name || 'J')[0].toUpperCase()) + '</div>';
+    return window._avatarHtml({ photoURL: meta && meta.photoURL, displayName: name }, size || 28);
   }
 
   // Sport emoji for serve picker
@@ -8625,13 +8621,9 @@ window._openCasualMatch = function(restoreOpts) {
   }
 
   // Build avatar HTML for a participant (photo or initial fallback)
+  // v1.8.9-beta: delegates to window._avatarHtml (store.js).
   function _avatarHtml(pp, size) {
-    var sz = size || 32;
-    if (pp.photoURL) {
-      return '<img src="' + window._safeHtml(pp.photoURL) + '" style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,0.15);" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
-        '<div style="display:none;width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);align-items:center;justify-content:center;font-size:' + (sz * 0.45) + 'px;color:white;font-weight:700;flex-shrink:0;">' + window._safeHtml((pp.displayName || 'J')[0].toUpperCase()) + '</div>';
-    }
-    return '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:' + (sz * 0.45) + 'px;color:white;font-weight:700;flex-shrink:0;">' + window._safeHtml((pp.displayName || 'J')[0].toUpperCase()) + '</div>';
+    return window._avatarHtml(pp, size);
   }
 
   // Build lobby HTML showing participants who joined

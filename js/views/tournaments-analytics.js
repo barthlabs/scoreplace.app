@@ -1281,9 +1281,7 @@ window._renderPersistentMatchStats = function(records, uid) {
         for (var i = 0; i < top.length; i++) {
             var e = top[i];
             var wr = e.played > 0 ? Math.round(e.wins / e.played * 100) : 0;
-            var av = e.photoURL
-                ? '<img src="' + _safe(e.photoURL) + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;">'
-                : '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#fff;font-weight:700;flex-shrink:0;">' + _safe(((e.name || '?')[0] || '?').toUpperCase()) + '</div>';
+            var av = window._avatarHtml({ photoURL: e.photoURL, displayName: e.name }, 26);
             h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--info-pill-bg);border:1px solid var(--border-color);border-radius:8px;margin-bottom:3px;">' +
                 av +
                 '<span style="flex:1;min-width:0;font-size:0.78rem;color:var(--text-main,#e5e7eb);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(e.name || 'Jogador') + '</span>' +

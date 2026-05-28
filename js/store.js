@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.8-beta';
+window.SCOREPLACE_VERSION = '1.8.9-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -976,6 +976,21 @@ window._pName = function(p, fallback) {
   if (!p) return fb;
   if (typeof p === 'string') return p;
   return p.displayName || p.name || p.email || fb;
+};
+
+// v1.8.9-beta: participant avatar HTML — photo with initial fallback
+// pp: {photoURL, displayName/name} or string name; size: px integer
+window._avatarHtml = function(pp, size) {
+  var sz = size || 32;
+  var name = (typeof pp === 'string') ? pp : (window._pName(pp) || '?');
+  var photo = (pp && typeof pp === 'object') ? (pp.photoURL || null) : null;
+  var initial = window._safeHtml((name[0] || '?').toUpperCase());
+  var hiddenCircle = '<div style="display:none;width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);align-items:center;justify-content:center;font-size:' + Math.round(sz * 0.45) + 'px;color:white;font-weight:700;flex-shrink:0;">' + initial + '</div>';
+  var visibleCircle = '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:' + Math.round(sz * 0.45) + 'px;color:white;font-weight:700;flex-shrink:0;">' + initial + '</div>';
+  if (photo) {
+    return '<img src="' + window._safeHtml(photo) + '" style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,0.15);" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' + hiddenCircle;
+  }
+  return visibleCircle;
 };
 
 // v1.8.8-beta: canonical HH:MM formatter — accepts Date, timestamp (number)

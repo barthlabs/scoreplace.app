@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧹 v1.8.9-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Refatoração: helper unificado <code>window._avatarHtml</code> para círculos de avatar.</b><br><br>' +
+      'O padrão de gerar círculos <code>border-radius:50%</code> com foto e fallback de inicial estava duplicado em múltiplos lugares. Centralizado em <code>window._avatarHtml(pp, size)</code> em store.js. As funções privadas <code>_liveAvatarHtml</code> e <code>_avatarHtml</code> em <code>bracket-ui.js</code> e o avatar inline em <code>tournaments-analytics.js</code> agora delegam para o helper global. Nenhuma mudança visual.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧹 v1.8.8-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Refatoração: helper unificado para formatação de horas.</b><br><br>' +
       'O padrão <code>String(d.getHours()).padStart(2,\'0\') + \':\' + String(d.getMinutes()).padStart(2,\'0\')</code> existia repetido em 12 lugares em 4 arquivos diferentes. Centralizado em <code>window._formatHHMM(d)</code> (formato <b>HH:MM</b>) e <code>window._formatDDMM(d)</code> (formato <b>DD/MM HH:MM</b>) em store.js. Nenhuma mudança de comportamento.</p>' +
