@@ -1666,11 +1666,11 @@ function _safeSetup(name) {
   setTimeout(function() {
     if (typeof window[name] === 'function') {
       try { window[name](); } catch (e) {
-        if (typeof console !== 'undefined') console.warn('[main.js] ' + name + ' retry threw:', e);
+        if (typeof console !== 'undefined') window._warn('[main.js] ' + name + ' retry threw:', e);
       }
     } else {
-      if (typeof console !== 'undefined' && console.warn) {
-        console.warn('[main.js] ' + name + ' indisponível no boot — UI pode estar parcialmente carregada.');
+      if (typeof console !== 'undefined' && window._warn) {
+        window._warn('[main.js] ' + name + ' indisponível no boot — UI pode estar parcialmente carregada.');
       }
       if (typeof window._captureMessage === 'function') {
         window._captureMessage('Boot: ' + name + ' undefined', 'warning');
@@ -1679,18 +1679,18 @@ function _safeSetup(name) {
   }, 1000);
 }
 
-if (typeof setupUI === 'function') { try { setupUI(); } catch (e) { console.warn('[main.js] setupUI threw:', e); } }
+if (typeof setupUI === 'function') { try { setupUI(); } catch (e) { window._warn('[main.js] setupUI threw:', e); } }
 
 if (typeof setupCreateTournamentModal === 'function') {
-  try { setupCreateTournamentModal(); } catch (e) { console.warn('[main.js] setupCreateTournamentModal threw:', e); }
+  try { setupCreateTournamentModal(); } catch (e) { window._warn('[main.js] setupCreateTournamentModal threw:', e); }
 } else { _safeSetup('setupCreateTournamentModal'); }
 
 if (typeof setupLoginModal === 'function') {
-  try { setupLoginModal(); } catch (e) { console.warn('[main.js] setupLoginModal threw:', e); }
+  try { setupLoginModal(); } catch (e) { window._warn('[main.js] setupLoginModal threw:', e); }
 } else { _safeSetup('setupLoginModal'); }
 
 if (typeof setupProfileModal === 'function') {
-  try { setupProfileModal(); } catch (e) { console.warn('[main.js] setupProfileModal threw:', e); }
+  try { setupProfileModal(); } catch (e) { window._warn('[main.js] setupProfileModal threw:', e); }
 } else { _safeSetup('setupProfileModal'); }
 // v0.16.42: setupResultModal/setupEnrollModal removidos — ambos arquivos eram
 // dead code (result-modal deprecated v0.4.0; enroll-modal sem callers reais).
@@ -1922,7 +1922,7 @@ if (window.AppStore && window.AppStore._loadFromCache) {
 // Firebase onAuthStateChanged will handle auto-login and real-time data from Firestore
 initRouter();
 
-console.log("scoreplace.app v" + (window.SCOREPLACE_VERSION || '?') + " Inicializado com Sucesso");
+window._log("scoreplace.app v" + (window.SCOREPLACE_VERSION || '?') + " Inicializado com Sucesso");
 
 // === Offline/Online indicator ===
 (function() {
@@ -1971,10 +1971,10 @@ console.log("scoreplace.app v" + (window.SCOREPLACE_VERSION || '?') + " Iniciali
     try {
       var p = window._checkLigaAutoDraws();
       if (p && typeof p.catch === 'function') {
-        p.catch(function(e) { console.warn('[auto-draw poller]', e); });
+        p.catch(function(e) { window._warn('[auto-draw poller]', e); });
       }
     } catch (e) {
-      console.warn('[auto-draw poller]', e);
+      window._warn('[auto-draw poller]', e);
     }
   }
   // Run shortly after load (once the store and user are ready)

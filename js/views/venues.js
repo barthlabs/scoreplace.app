@@ -89,7 +89,7 @@
         var Maps = await google.maps.importLibrary('maps');
         var Marker = await google.maps.importLibrary('marker');
         _mapsLibs = { Map: Maps.Map, AdvancedMarkerElement: Marker.AdvancedMarkerElement, PinElement: Marker.PinElement };
-      } catch (e) { console.warn('Google Maps load failed:', e); return; }
+      } catch (e) { window._warn('Google Maps load failed:', e); return; }
     }
     var el = document.getElementById('venues-map');
     if (!el) return;
@@ -329,7 +329,7 @@
         // Só re-renderiza se ainda estamos em #place / #venues
         var hash = window.location.hash || '';
         if (hash.indexOf('#place') === 0 || hash.indexOf('#venues') === 0) {
-          try { refresh(); } catch (e) { console.warn('[venues v0.17.3] retry refresh failed', e); }
+          try { refresh(); } catch (e) { window._warn('[venues v0.17.3] retry refresh failed', e); }
         }
       };
       document.addEventListener('scoreplace:profile-loaded', _onProfile, { once: true });
@@ -1148,7 +1148,7 @@
           _renderNowAtVenueBox('pref-now-' + safePid, presences, realPid);
           _renderUpcomingBox('pref-upcoming-' + safePid, presences, matchTournaments, dayKeyStr, realPid);
         }).catch(function(e) {
-          console.warn('[venues movement] load failed for', realPid, e);
+          window._warn('[venues movement] load failed for', realPid, e);
         });
       })(safePid, realPid, venueName, dayKeyStr, dayLabel);
     }
@@ -1709,7 +1709,7 @@
       }
       state.results = list;
     } catch (e) {
-      console.warn('listVenues failed:', e);
+      window._warn('listVenues failed:', e);
       state.results = [];
     }
 
@@ -1763,7 +1763,7 @@
         });
       }
     } catch (e) {
-      console.warn('preferred venue fetch failed:', e);
+      window._warn('preferred venue fetch failed:', e);
     }
 
     // v1.3.26-beta: PINTA AGORA com preferidos + registrados resolvidos.
@@ -1793,7 +1793,7 @@
           }
         } catch (_e) {}
       }).catch(function(e) {
-        console.warn('Google nearby fetch failed:', e);
+        window._warn('Google nearby fetch failed:', e);
         state.googleLoading = false;
         state.googleResults = [];
         renderResults();
@@ -1835,7 +1835,7 @@
               break;
             }
           }
-        }).catch(function(e) { console.warn('auto-focus preferred failed:', e); });
+        }).catch(function(e) { window._warn('auto-focus preferred failed:', e); });
       }
     }
 
@@ -2216,7 +2216,7 @@
           },
           maxResultCount: 10
         }).catch(function(e) {
-          console.warn('[Places] term failed:', term, e && e.message);
+          window._warn('[Places] term failed:', term, e && e.message);
           return null;
         });
       });
@@ -2259,11 +2259,11 @@
       });
       var droppedFar = mapped.length - filtered.length;
       if (droppedFar > 0) {
-        console.warn('[Places] dropped ' + droppedFar + ' results outside ' + maxKm + 'km radius');
+        window._warn('[Places] dropped ' + droppedFar + ' results outside ' + maxKm + 'km radius');
       }
       return filtered;
     } catch (e) {
-      console.warn('Places nearby err:', e && e.message);
+      window._warn('Places nearby err:', e && e.message);
       return [];
     }
   }
@@ -2733,7 +2733,7 @@
               detailParts +
             '</div>';
         }
-      }).catch(function(e) { console.warn('courts agg:', e); });
+      }).catch(function(e) { window._warn('courts agg:', e); });
     } else if (v.description || v.priceRange) {
       // fallback quando courts DB não disponível — mostra o box de detalhes igualmente
       setTimeout(function() {
@@ -2855,7 +2855,7 @@
           window._hydrateMyActivePresenceWidget();
         }
       } catch (e) {
-        console.warn('Cancel venue presence failed:', e);
+        window._warn('Cancel venue presence failed:', e);
         if (window.showNotification) window.showNotification('Erro ao cancelar.', '', 'error');
         if (btn) { btn.disabled = false; btn.style.opacity = ''; }
       }
@@ -3180,7 +3180,7 @@
       window._venueEditBaseline = null;
       if (typeof window._venuesOpenDetail === 'function') window._venuesOpenDetail(placeId);
     } catch (e) {
-      console.error('Erro ao salvar venue:', e);
+      window._error('Erro ao salvar venue:', e);
       var msg = String(e && e.message || e);
       if (msg.indexOf('venue-já-reivindicado') !== -1) {
         if (window.showNotification) window.showNotification('Este local já tem um dono.', 'Só o proprietário pode editar.', 'error');
@@ -3435,7 +3435,7 @@
         window._hydrateMyActivePresenceWidget();
       }
     } catch (e) {
-      console.error('Cancel from confirm failed:', e);
+      window._error('Cancel from confirm failed:', e);
       if (window.showNotification) window.showNotification('Erro ao cancelar.', '', 'error');
     } finally {
       if (ov) ov.remove();
@@ -3636,9 +3636,9 @@
       }
       // Notifica amigos — compartilha o helper com o quick-checkin pra manter
       // throttle consistente.
-      try { _notifyFriendsOfPlan(v, payload); } catch (e) { console.warn('Plan notify failed:', e); }
+      try { _notifyFriendsOfPlan(v, payload); } catch (e) { window._warn('Plan notify failed:', e); }
     } catch (e) {
-      console.error('Save plan failed:', e);
+      window._error('Save plan failed:', e);
       if (window.showNotification) window.showNotification('Erro ao planejar ida.', 'error');
     }
   };
@@ -3677,7 +3677,7 @@
         placeId: payload.placeId,
         sports: payload.sports,
         startsAt: payload.startsAt
-      }).catch(function(e) { console.warn('Plan notify failed:', e); });
+      }).catch(function(e) { window._warn('Plan notify failed:', e); });
     });
   }
 
@@ -3755,7 +3755,7 @@
       var venueDoc = await window.VenueDB.loadVenue(st.placeId);
       if (venueDoc) _hydrateReviews(venueDoc);
     } catch (e) {
-      console.error(e);
+      window._error(e);
       if (window.showNotification) window.showNotification('Erro ao publicar avaliação.', String(e.message || e), 'error');
     }
   };
@@ -4006,7 +4006,7 @@
         window._hydrateMyActivePresenceWidget();
       }
     } catch (e) {
-      console.error('Quick check-in failed:', e);
+      window._error('Quick check-in failed:', e);
       if (window.showNotification) window.showNotification('Erro ao registrar presença.', 'error');
     }
   }
@@ -4054,7 +4054,7 @@
         placeId: v.placeId,
         sports: payload.sports,
         startsAt: payload.startsAt
-      }).catch(function(e) { console.warn('Quick checkin notify failed:', e); });
+      }).catch(function(e) { window._warn('Quick checkin notify failed:', e); });
     });
   }
 

@@ -812,10 +812,10 @@
           renderNow();
           renderUpcoming();
         }, function(err) {
-          console.warn('Presence listener error:', err && err.message);
+          window._warn('Presence listener error:', err && err.message);
         });
     } catch (e) {
-      console.warn('Failed to attach presence listener:', e);
+      window._warn('Failed to attach presence listener:', e);
     }
   }
 
@@ -1037,7 +1037,7 @@
       }, 500);
       _notifyFriendsOfCheckin(payload);
     }).catch(function(e) {
-      console.error(e);
+      window._error(e);
       if (window.showNotification) window.showNotification('Erro ao registrar presença.', 'error');
     }).finally(function() {
       state._savingCheckin = false;
@@ -1092,7 +1092,7 @@
         placeId: payload.placeId,
         sports: payload.sports,
         startsAt: payload.startsAt
-      }).catch(function(e) { console.warn('Presence check-in notify failed:', e); });
+      }).catch(function(e) { window._warn('Presence check-in notify failed:', e); });
     });
   }
 
@@ -1218,7 +1218,7 @@
       }, 500);
       _notifyFriendsOfPlan(payload);
     }).catch(function(e) {
-      console.error(e);
+      window._error(e);
       if (window.showNotification) window.showNotification('Erro ao planejar ida.', 'error');
     }).finally(function() {
       state._savingPlan = false;
@@ -1255,7 +1255,7 @@
         placeId: payload.placeId,
         sports: payload.sports,
         startsAt: payload.startsAt
-      }).catch(function(e) { console.warn('Presence plan notify failed:', e); });
+      }).catch(function(e) { window._warn('Presence plan notify failed:', e); });
     });
   }
 

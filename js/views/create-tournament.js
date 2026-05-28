@@ -1341,7 +1341,7 @@ function setupCreateTournamentModal() {
       window._applyTournamentLogo(aiDataUrl);
       return; // sucesso — done
     } catch (aiErr) {
-      console.warn('[logo] Pollinations.ai falhou, usando fallback canvas:', aiErr && aiErr.message);
+      window._warn('[logo] Pollinations.ai falhou, usando fallback canvas:', aiErr && aiErr.message);
       // segue pro fallback abaixo
     }
 
@@ -2065,7 +2065,7 @@ function setupCreateTournamentModal() {
         _placesLibLoaded = true;
         // Google Places library loaded
       }).catch(function (err) {
-        console.warn('Google Places library load failed:', err.message);
+        window._warn('Google Places library load failed:', err.message);
       });
     } else {
       // Retry loading after 2s if Google Maps base not ready yet
@@ -2176,7 +2176,7 @@ function setupCreateTournamentModal() {
 
       suggestionsDiv.style.display = 'block';
     } catch (err) {
-      console.error('Venue search error:', err);
+      window._error('Venue search error:', err);
       suggestionsDiv.innerHTML = '<div style="padding:10px 14px; color:#f87171; font-size:0.8rem;">Erro na busca: ' + window._safeHtml(err.message || 'API indisponível') + '</div>';
       suggestionsDiv.style.display = 'block';
     }
@@ -2233,7 +2233,7 @@ function setupCreateTournamentModal() {
         try {
           venuePhotoUrl = place.photos[0].getURI({ maxWidth: 800, maxHeight: 400 });
         } catch (photoErr) {
-          console.warn('Could not get photo URI:', photoErr);
+          window._warn('Could not get photo URI:', photoErr);
         }
       }
       if (photoUrlEl) photoUrlEl.value = venuePhotoUrl;
@@ -2273,7 +2273,7 @@ function setupCreateTournamentModal() {
       // Show map with the selected venue
       window._initVenueCreateMap(place.location.lat(), place.location.lng(), name);
     } catch (err) {
-      console.error('Place details fetch error:', err);
+      window._error('Place details fetch error:', err);
       if (typeof showNotification === 'function') {
         showNotification(window._t('auth.error'), window._t('create.venueDetailError', {msg: err.message || ''}), 'error');
       }
@@ -2346,7 +2346,7 @@ function setupCreateTournamentModal() {
         title: venueName || ''
       });
     } catch (e) {
-      console.warn('[venue-create-map] init error:', e);
+      window._warn('[venue-create-map] init error:', e);
       container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:0.75rem;">' + _t('create.mapUnavailable') + '</div>';
     }
   };
@@ -2382,7 +2382,7 @@ function setupCreateTournamentModal() {
         window._initVenueCreateMap(lat, lng, '');
       }
     }, function(err) {
-      console.warn('Geolocation error:', err);
+      window._warn('Geolocation error:', err);
       if (typeof showNotification === 'function') showNotification(window._t('auth.error'), window._t('create.geoFailed'), 'error');
     }, { enableHighAccuracy: true, timeout: 10000 });
   };
@@ -3043,7 +3043,7 @@ function setupCreateTournamentModal() {
     }
     var _titleEl = document.getElementById('create-modal-title');
     if (!_titleEl) {
-      console.warn('[openEditTournamentModal] create-modal-title not found — modal init failed');
+      window._warn('[openEditTournamentModal] create-modal-title not found — modal init failed');
       return;
     }
     _titleEl.innerText = _t('create.editTournament');
@@ -3824,7 +3824,7 @@ function setupCreateTournamentModal() {
           window.location.hash = '#tournaments/' + editId;
         }
       } catch (err) {
-        console.error('Erro ao salvar torneio:', err);
+        window._error('Erro ao salvar torneio:', err);
         showNotification(window._t('auth.error'), window._t('create.saveError', {msg: err.message}), 'error');
       }
   };

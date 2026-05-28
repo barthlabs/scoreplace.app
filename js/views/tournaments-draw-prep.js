@@ -2371,12 +2371,12 @@ window.toggleRegistrationStatus = function (tId) {
             window.FirestoreDB.saveTournament(t).then(function() {
                 if (callback) callback();
             }).catch(function(err) {
-                console.error('[toggleRegistrationStatus] save error:', err);
+                window._error('[toggleRegistrationStatus] save error:', err);
                 if (callback) callback();
                 if (typeof showNotification === 'function') showNotification(_t('draw.savedLocally'), _t('draw.savedLocallyMsg'), 'warning');
             });
         } else {
-            try { window.AppStore.sync(); } catch(e) { console.error('sync error:', e); }
+            try { window.AppStore.sync(); } catch(e) { window._error('sync error:', e); }
             if (callback) callback();
         }
     };
@@ -2395,7 +2395,7 @@ window.toggleRegistrationStatus = function (tId) {
             if (typeof showAlertDialog === 'function') showAlertDialog(_t('draw.notAllowedTitle'), _t('draw.cantReopenAfterDraw'), null, { type: 'warning' });
             return;
         }
-        if (typeof showConfirmDialog !== 'function') { console.error('showConfirmDialog not available'); return; }
+        if (typeof showConfirmDialog !== 'function') { window._error('showConfirmDialog not available'); return; }
         showConfirmDialog(_t('draw.reopenEnrollTitle'), _t('draw.reopenEnrollMsg', { name: window._safeHtml(t.name || '') }) + (t.activePollId ? _t('draw.reopenEnrollPollSuffix') : ''), function() {
             t.status = 'open';
             // v1.6.66-beta: limpa prazo de inscrição ao reabrir — inscrições
@@ -2514,7 +2514,7 @@ window.toggleRegistrationStatus = function (tId) {
             ? (diag.incompleteTeams.length > 0 || diag.remainder > 0)
             : diag.hasIssues;
         try {
-            console.log('[Encerrar Inscrições] diag', {
+            window._log('[Encerrar Inscrições] diag', {
                 format: t.format,
                 isGrupos: isGrupos,
                 isLigaOrSwiss: isLigaOrSwiss,
@@ -2560,7 +2560,7 @@ window.toggleRegistrationStatus = function (tId) {
                 }
             } catch(e) {
                 panelThrew = true;
-                console.error('[Encerrar Inscrições] panel throw:', e);
+                window._error('[Encerrar Inscrições] panel throw:', e);
                 if (typeof showNotification === 'function') {
                     showNotification('⚠️ Erro ao abrir painel (sync)', _diagStr('err=' + String(e && e.message || e)), 'error');
                 }
@@ -2584,7 +2584,7 @@ window.toggleRegistrationStatus = function (tId) {
             return;
         }
     } else if (diagError) {
-        console.error('[Encerrar Inscrições] _diagnoseAll throw:', diagError);
+        window._error('[Encerrar Inscrições] _diagnoseAll throw:', diagError);
         if (typeof showNotification === 'function') {
             showNotification('⚠️ Falha no diagnóstico',
                 'Não consegui avaliar o número de inscritos: ' + (diagError.message || String(diagError)) + '. Encerrando mesmo assim.',
@@ -2594,7 +2594,7 @@ window.toggleRegistrationStatus = function (tId) {
     }
 
     // Confirmar antes de encerrar
-    if (typeof showConfirmDialog !== 'function') { console.error('showConfirmDialog not available'); return; }
+    if (typeof showConfirmDialog !== 'function') { window._error('showConfirmDialog not available'); return; }
     showConfirmDialog(_t('draw.closeEnrollTitle'), _t('draw.closeEnrollMsg', { name: window._safeHtml(t.name || '') }), function() {
         t.status = 'closed';
         window.AppStore.logAction(tId, 'Inscrições Encerradas manualmente');
@@ -2633,7 +2633,7 @@ window._handleClosureOption = function (tId, option) {
                 var container = document.getElementById('view-container');
                 if (container) renderTournaments(container, String(tId));
                 if (document.getElementById('closure-panel')) document.getElementById('closure-panel').remove();
-            }).catch(function(err) { console.error('_handleClosureOption error:', err); });
+            }).catch(function(err) { window._error('_handleClosureOption error:', err); });
         }
     }
 };

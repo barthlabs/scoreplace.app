@@ -116,7 +116,7 @@
         window.showNotification('📍 Check-in automático', 'Registrado em ' + (location.name || 'local') + ' — ' + sport + '. Amigos já podem ver.', 'success');
       }
     }).catch(function(e) {
-      console.warn('Auto check-in falhou:', e);
+      window._warn('Auto check-in falhou:', e);
     });
   }
 
@@ -184,7 +184,7 @@
       }
     }, function(err) {
       // User denied or error — don't retry this session.
-      console.log('[PresenceGeo] geolocation skipped:', err && err.message);
+      window._log('[PresenceGeo] geolocation skipped:', err && err.message);
     }, { timeout: 8000, maximumAge: 5 * 60 * 1000 });
   };
 })();

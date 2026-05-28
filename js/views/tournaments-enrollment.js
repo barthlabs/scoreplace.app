@@ -328,7 +328,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
                             level: 'all'
                         });
                     }
-                }).catch(function(e) { console.warn('Notify organizer error:', e); });
+                }).catch(function(e) { window._warn('Notify organizer error:', e); });
             }
 
             // Auto-amizade (fire-and-forget)
@@ -342,10 +342,10 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
                     _autoFriendOnInvite(_refUid, user);
                     try { sessionStorage.removeItem('_inviteRefUid'); } catch(e2) {}
                 }
-            } catch(e) { console.warn('Auto-friend error:', e); }
+            } catch(e) { window._warn('Auto-friend error:', e); }
         }).catch(function(err) {
             // Rollback: remove from local state and re-render
-            console.warn('Enroll transaction error:', err);
+            window._warn('Enroll transaction error:', err);
             t.participants = t.participants.filter(function(p) {
                 return !(p.email === user.email && p.uid === user.uid);
             });
@@ -474,7 +474,7 @@ window.submitTeamEnroll = function (tId) {
                             level: 'all'
                         });
                     }
-                }).catch(function(e) { console.warn('Notify organizer error:', e); });
+                }).catch(function(e) { window._warn('Notify organizer error:', e); });
             }
 
             // Auto-amizade (fire-and-forget)
@@ -488,10 +488,10 @@ window.submitTeamEnroll = function (tId) {
                     _autoFriendOnInvite(_refUid3, user);
                     try { sessionStorage.removeItem('_inviteRefUid'); } catch(e2) {}
                 }
-            } catch(e) { console.warn('Auto-friend error:', e); }
+            } catch(e) { window._warn('Auto-friend error:', e); }
         }).catch(function(err) {
             // Rollback: remove from local state and re-render
-            console.warn('Team enroll transaction error:', err);
+            window._warn('Team enroll transaction error:', err);
             t.participants = t.participants.filter(function(p) {
                 return !(typeof p === 'object' && p.name === teamString && p.email === user.email);
             });
@@ -545,11 +545,11 @@ window.deenrollCurrentUser = function (tId) {
                                         level: 'important'
                                     });
                                 }
-                            }).catch(function(e) { console.warn('Notify organizer unenroll error:', e); });
+                            }).catch(function(e) { window._warn('Notify organizer unenroll error:', e); });
                         }
                     }).catch(function(err) {
                         // Rollback: restore original participants and re-render
-                        console.warn('Deenroll transaction error:', err);
+                        window._warn('Deenroll transaction error:', err);
                         t.participants = _savedParticipants;
                         if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.cancelError'), 'error');
                         var c2 = document.getElementById('view-container');
@@ -558,7 +558,7 @@ window.deenrollCurrentUser = function (tId) {
                 } else {
                     // Fallback: non-transactional save (already removed locally above)
                     if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-                        window.FirestoreDB.saveTournament(t).catch(function(err) { console.warn('Deenroll save error:', err); });
+                        window.FirestoreDB.saveTournament(t).catch(function(err) { window._warn('Deenroll save error:', err); });
                     }
                 }
             },
@@ -617,7 +617,7 @@ window.addParticipantFunction = function (tId) {
                     const container = document.getElementById('view-container');
                     if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
                 }).catch(function(err) {
-                    console.warn('Add participant error:', err);
+                    window._warn('Add participant error:', err);
                     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.addError'), 'error');
                 });
             } else {
@@ -726,7 +726,7 @@ window.deleteTournamentFunction = function (tId) {
                             message: _t('notif.tournamentDeleted').replace('{name}', _delTour.name || 'Torneio'),
                             level: 'fundamental'
                         }, _cu ? _cu.email : null);
-                    } catch(e) { console.warn('Delete notification error:', e); }
+                    } catch(e) { window._warn('Delete notification error:', e); }
                 }
 
                 // Firestore delete runs in background
@@ -736,7 +736,7 @@ window.deleteTournamentFunction = function (tId) {
                         if (delIdx !== -1) window.AppStore._deletedTournamentIds.splice(delIdx, 1);
                         try { localStorage.setItem('scoreplace_deleted_ids', JSON.stringify(window.AppStore._deletedTournamentIds)); } catch(e) {}
                     }).catch(function(err) {
-                        console.error('Erro ao deletar torneio do Firestore:', err);
+                        window._error('Erro ao deletar torneio do Firestore:', err);
                         showNotification(_t('enroll.deleteError'), _t('enroll.deleteErrorMsg'), 'error');
                     });
                 }
@@ -815,7 +815,7 @@ window._toggleLigaActive = function(tId, isActive) {
     // Não re-renderiza. DOM já foi atualizado in-place. Firestore listener
     // sincroniza next soft-refresh (preservando scroll).
   }).catch(function(e) {
-    console.warn('[toggle-liga] save failed', e);
+    window._warn('[toggle-liga] save failed', e);
     // Reverte o update otimista no DOM se save falhou.
     isActive = !isActive;
     found.ligaActive = !!isActive;

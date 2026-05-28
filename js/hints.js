@@ -949,7 +949,7 @@
     }
     if (!_isDisabled()) {
       _startIdleWatch();
-      console.log('[hints] system active, idle timeout=' + IDLE_TIMEOUT + 'ms');
+      window._log('[hints] system active, idle timeout=' + IDLE_TIMEOUT + 'ms');
     }
   }
 

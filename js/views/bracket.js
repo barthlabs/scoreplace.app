@@ -231,7 +231,7 @@ function renderBracket(container, tournamentId, isInline) {
       container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult) + standbyHtml;
     }
   } catch (bracketErr) {
-    console.error('[Bracket] Render error:', bracketErr);
+    window._error('[Bracket] Render error:', bracketErr);
     container.innerHTML = headerHtml + '<div style="padding:2rem;text-align:center;color:#f87171;"><p>Erro ao renderizar chaveamento.</p><pre style="font-size:0.7rem;text-align:left;max-width:600px;margin:1rem auto;overflow:auto;background:rgba(0,0,0,0.3);padding:1rem;border-radius:8px;">' + window._safeHtml(String(bracketErr.stack || bracketErr)) + '</pre></div>';
   }
   _applyMyMatchesFilter();

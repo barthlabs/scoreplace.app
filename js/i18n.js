@@ -59,7 +59,7 @@
         if (typeof window._warn === 'function') {
           window._warn('[i18n] Falha ao carregar dict:', lang);
         } else {
-          console.warn('[i18n] Falha ao carregar dict:', lang);
+          window._warn('[i18n] Falha ao carregar dict:', lang);
         }
         resolve(false);
       };

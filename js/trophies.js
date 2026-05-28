@@ -102,7 +102,7 @@
                 var cIds = _getCheckedTrophyIds(uid);
                 var idx = cIds.indexOf('perfil_foto');
                 if (idx !== -1) { cIds.splice(idx, 1); _saveCheckedTrophyIds(uid, cIds); }
-                console.warn('[trophies] REVOKED perfil_foto via pixel-sampling — only', count, 'unique colors (monogram detected)');
+                window._warn('[trophies] REVOKED perfil_foto via pixel-sampling — only', count, 'unique colors (monogram detected)');
                 window._lastMonogramCheck.revoked = true;
               })
               .catch(function() {});
@@ -425,7 +425,7 @@
             email: _cuT.email || (_fbU && _fbU.email) || null,
             providerId: (_fbU && _fbU.providerData && _fbU.providerData[0]) ? _fbU.providerData[0].providerId : null
           };
-          console.warn('[trophy perfil_foto AWARDED] photoURL=', payload._debugInfo.photoURL_fb || payload._debugInfo.photoURL_store);
+          window._warn('[trophy perfil_foto AWARDED] photoURL=', payload._debugInfo.photoURL_fb || payload._debugInfo.photoURL_store);
         } catch (_e) {}
       }
       return db.collection('users').doc(uid)
@@ -459,12 +459,12 @@
           // Exibe overlay de conquista
           _showTrophyUnlockOverlay(trophy, tier);
 
-          console.log('[trophies] AWARDED', trophyId, 'tier:', tier);
+          window._log('[trophies] AWARDED', trophyId, 'tier:', tier);
           return true;
         })
         .catch(function(e) {
           delete _pendingAwards[lockKey];
-          console.warn('[trophies] award failed', trophyId, e && e.message);
+          window._warn('[trophies] award failed', trophyId, e && e.message);
           return false;
         });
     });
@@ -527,7 +527,7 @@
               };
               _showTrophyUnlockOverlay(fakeTrophy, tier);
             }
-            console.log('[trophies] MILESTONE', milestoneId, 'level', level, 'tier', tier);
+            window._log('[trophies] MILESTONE', milestoneId, 'level', level, 'tier', tier);
           })
           .catch(function() {});
       })(lvl);
@@ -674,7 +674,7 @@
                   if (idx !== -1) { cIds.splice(idx, 1); _saveCheckedTrophyIds(uid, cIds); }
                   // Garante que este ID entre na passagem de awards abaixo
                   if (toCheckIds.indexOf(trophy.id) === -1) toCheckIds.push(trophy.id);
-                  console.log('[trophies] REVOKED', trophy.id, '— condition no longer met');
+                  window._log('[trophies] REVOKED', trophy.id, '— condition no longer met');
                 })
                 .catch(function() {});
             });
@@ -999,5 +999,5 @@
       .catch(function() { return []; });
   };
 
-  console.log('[trophies] engine loaded');
+  window._log('[trophies] engine loaded');
 })();

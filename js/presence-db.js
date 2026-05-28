@@ -88,7 +88,7 @@ window.PresenceDB = {
 
     var key = this._makeInflightKey(clean);
     if (key && this._inflight[key]) {
-      console.log('[PresenceDB] dedup in-flight: reusando promise para', key);
+      window._log('[PresenceDB] dedup in-flight: reusando promise para', key);
       return this._inflight[key];
     }
 
@@ -129,11 +129,11 @@ window.PresenceDB = {
             existingId = doc.id;
           });
           if (existingId) {
-            console.log('[PresenceDB] dedup firestore: presença existente', existingId);
+            window._log('[PresenceDB] dedup firestore: presença existente', existingId);
             return existingId;
           }
         } catch (e) {
-          console.warn('[PresenceDB] dedup query falhou, seguindo com add:', e);
+          window._warn('[PresenceDB] dedup query falhou, seguindo com add:', e);
         }
       }
       var ref = await self.db.collection('presences').add(clean);
@@ -166,7 +166,7 @@ window.PresenceDB = {
       await this.db.collection('presences').doc(docId).update({ cancelled: true, cancelledAt: Date.now() });
       return true;
     } catch (e) {
-      console.error('Erro ao cancelar presença:', e);
+      window._error('Erro ao cancelar presença:', e);
       if (typeof window._captureException === 'function') {
         window._captureException(e, { area: 'cancelPresence', code: e && e.code });
       }
@@ -197,7 +197,7 @@ window.PresenceDB = {
       });
       return list;
     } catch (e) {
-      console.error('Erro ao carregar presenças:', e);
+      window._error('Erro ao carregar presenças:', e);
       return [];
     }
   },
@@ -224,7 +224,7 @@ window.PresenceDB = {
       });
       return list;
     } catch (e) {
-      console.error('Erro ao carregar presenças do venue:', e);
+      window._error('Erro ao carregar presenças do venue:', e);
       return [];
     }
   },
@@ -234,7 +234,7 @@ window.PresenceDB = {
   // in at X" and by the presence view to avoid duplicate check-ins.
   async loadMyActive(uid) {
     if (!this.db || !uid) {
-      console.log('[loadMyActive v0.16.79] short-circuit: hasDb=' + !!this.db + ' uid=' + uid);
+      window._log('[loadMyActive v0.16.79] short-circuit: hasDb=' + !!this.db + ' uid=' + uid);
       return [];
     }
     try {
@@ -260,7 +260,7 @@ window.PresenceDB = {
         d._id = doc.id;
         list.push(d);
       });
-      console.log('[loadMyActive v0.16.79]', {
+      window._log('[loadMyActive v0.16.79]', {
         uid: String(uid).substring(0, 12) + '…',
         totalRaw: totalRaw,
         droppedCancelled: droppedCancelled,
@@ -276,7 +276,7 @@ window.PresenceDB = {
       });
       return list;
     } catch (e) {
-      console.error('[loadMyActive v0.16.79] erro:', e);
+      window._error('[loadMyActive v0.16.79] erro:', e);
       // permission-denied = sessão expirada ou bot não autenticado — caminho
       // esperado, não vale ruído no Sentry.
       if (typeof window._captureException === 'function' &&
@@ -292,7 +292,7 @@ window.PresenceDB = {
   // or upcoming presences within the next 48h.
   async loadForFriends(uids, windowMs) {
     if (!this.db || !Array.isArray(uids) || uids.length === 0) {
-      console.log('[loadForFriends v0.16.47] short-circuit:', { hasDb: !!this.db, uidsLen: (uids||[]).length });
+      window._log('[loadForFriends v0.16.47] short-circuit:', { hasDb: !!this.db, uidsLen: (uids||[]).length });
       return [];
     }
     var win = windowMs || (48 * 60 * 60 * 1000);
@@ -324,7 +324,7 @@ window.PresenceDB = {
           all.push(d);
         });
       }
-      console.log('[loadForFriends v0.16.47]', {
+      window._log('[loadForFriends v0.16.47]', {
         uidsCount: uids.length,
         chunksCount: chunks.length,
         totalRaw: totalRaw,
@@ -336,7 +336,7 @@ window.PresenceDB = {
       });
       return all;
     } catch (e) {
-      console.error('[loadForFriends v0.16.47] erro:', e);
+      window._error('[loadForFriends v0.16.47] erro:', e);
       return [];
     }
   },
@@ -362,9 +362,9 @@ window.PresenceDB = {
           d._id = doc.id;
           list.push(d);
         });
-        try { callback(list); } catch (e) { console.error('[listenMyActive cb]', e); }
+        try { callback(list); } catch (e) { window._error('[listenMyActive cb]', e); }
       }, function(err) {
-        console.error('[listenMyActive] err:', err);
+        window._error('[listenMyActive] err:', err);
       });
     return unsub;
   },
@@ -390,7 +390,7 @@ window.PresenceDB = {
           all.push(d);
         });
       });
-      try { callback(all); } catch (e) { console.error('[listenForFriends cb]', e); }
+      try { callback(all); } catch (e) { window._error('[listenForFriends cb]', e); }
     };
     var self = this;
     chunks.forEach(function(chunk, idx) {
@@ -406,7 +406,7 @@ window.PresenceDB = {
           perChunk[idx] = arr;
           emit();
         }, function(err) {
-          console.error('[listenForFriends chunk', idx, '] err:', err);
+          window._error('[listenForFriends chunk', idx, '] err:', err);
         });
       unsubs.push(u);
     });

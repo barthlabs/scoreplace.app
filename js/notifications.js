@@ -33,7 +33,7 @@ window._registerFCMToken = async function() {
         // Token saved to Firestore
       }
     } else {
-      console.warn('[FCM] No token received');
+      window._warn('[FCM] No token received');
     }
 
     // Note: onTokenRefresh was removed in Firebase 10+. Token refresh is handled
@@ -50,7 +50,7 @@ window._registerFCMToken = async function() {
     });
 
   } catch (err) {
-    console.warn('[FCM] Token registration error:', err);
+    window._warn('[FCM] Token registration error:', err);
   }
 };
 
@@ -77,7 +77,7 @@ window._enablePushNotifications = async function() {
       }
     }
   } catch (err) {
-    console.warn('[FCM] Permission request error:', err);
+    window._warn('[FCM] Permission request error:', err);
   }
 };
 
@@ -99,7 +99,7 @@ window._initFCM = async function() {
     return;
   }
   if (!firebase || !firebase.messaging) {
-    console.warn('[FCM] Firebase Messaging SDK not loaded');
+    window._warn('[FCM] Firebase Messaging SDK not loaded');
     return;
   }
   var user = window.AppStore && window.AppStore.currentUser;

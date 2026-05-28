@@ -85,7 +85,7 @@ function initRouter() {
     // quebrar a app.
     if (!viewContainer) viewContainer = document.getElementById('view-container');
     if (!viewContainer) {
-      console.warn('[router] view-container missing on handleRoute — aborting');
+      window._warn('[router] view-container missing on handleRoute — aborting');
       return;
     }
     if (!_shouldPreservePrerender) {
@@ -162,7 +162,7 @@ function initRouter() {
     var _isLoggedInNow = !!(window.AppStore && window.AppStore.currentUser);
     var _hasAuthCacheNow = false;
     try { _hasAuthCacheNow = !!localStorage.getItem('scoreplace_authCache'); } catch(e) {}
-    console.log('[scoreplace-router] route', hash, 'loggedIn:', _isLoggedInNow, 'authCache:', _hasAuthCacheNow, 'authResolved:', !!window._authStateResolved);
+    window._log('[scoreplace-router] route', hash, 'loggedIn:', _isLoggedInNow, 'authCache:', _hasAuthCacheNow, 'authResolved:', !!window._authStateResolved);
 
     if (!_isLoggedInNow && (view === '' || view === 'dashboard') && typeof renderLanding === 'function') {
 
@@ -210,11 +210,11 @@ function initRouter() {
       // limpa nem re-renderiza — evita flicker. Próxima navegação volta
       // ao flow normal.
       if (_firstRoute && _hasPrerender) {
-        console.log('[scoreplace-router] → preserving prerendered LANDING (skip re-render)');
+        window._log('[scoreplace-router] → preserving prerendered LANDING (skip re-render)');
         _firstRoute = false;
         return;
       }
-      console.log('[scoreplace-router] → rendering LANDING (not logged in, auth resolved null)');
+      window._log('[scoreplace-router] → rendering LANDING (not logged in, auth resolved null)');
       renderLanding(viewContainer);
       _firstRoute = false;
       return;

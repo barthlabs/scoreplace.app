@@ -603,13 +603,13 @@
           }
         }
         if (ok) {
-          console.log('%c[bracket-model ✓] ' + fx.name, 'color:#4ade80;');
+          window._log('%c[bracket-model ✓] ' + fx.name, 'color:#4ade80;');
         } else {
-          console.warn('[bracket-model ✗] ' + fx.name, msgs.join(' | '), out);
+          window._warn('[bracket-model ✗] ' + fx.name, msgs.join(' | '), out);
         }
       });
     } catch (e) {
-      console.error('[bracket-model] sanity check error:', e);
+      window._error('[bracket-model] sanity check error:', e);
     }
   }
 

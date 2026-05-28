@@ -88,12 +88,12 @@ window._executeMerge = function(sourceName, targetName, tId) {
             }
             if (_removeIdx !== -1) {
                 parts.splice(_removeIdx, 1);
-                console.debug('[Merge] Removed duplicate at index ' + _removeIdx);
+                window._debug('[Merge] Removed duplicate at index ' + _removeIdx);
             }
 
             t.updatedAt = new Date().toISOString();
             if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-                window.FirestoreDB.saveTournament(t).catch(function(e) { console.warn('[Merge] Save error:', e); });
+                window.FirestoreDB.saveTournament(t).catch(function(e) { window._warn('[Merge] Save error:', e); });
             }
             window.AppStore.logAction(tId, 'Participantes mesclados: "' + oldName + '" -> "' + newName + '"');
             if (typeof showNotification === 'function') {
@@ -339,7 +339,7 @@ window._deduplicateParticipants = function(t) {
 
     if (removedCount > 0) {
         t.participants = deduped;
-        console.debug('[Dedup] Removed ' + removedCount + ' duplicate participant(s) from tournament ' + (t.name || t.id));
+        window._debug('[Dedup] Removed ' + removedCount + ' duplicate participant(s) from tournament ' + (t.name || t.id));
     }
     return removedCount;
 };
@@ -401,7 +401,7 @@ window._fixOrphanedMatchNames = function(t) {
     });
 
     if (unaccounted.length === 0) return 0;
-    console.debug('[FixOrphans] Phantom objects (not in draw):', phantoms, 'Unaccounted team members:', unaccounted);
+    window._debug('[FixOrphans] Phantom objects (not in draw):', phantoms, 'Unaccounted team members:', unaccounted);
 
     // 4. Try to pair phantoms with unaccounted names
     var fixes = [];
@@ -435,7 +435,7 @@ window._fixOrphanedMatchNames = function(t) {
                     if (pFirstChar !== uFirstChar) { allMatch = false; break; }
                 }
                 if (allMatch) {
-                    console.debug('[FixOrphans] Initials match: "' + uName + '" → "' + phantom + '"');
+                    window._debug('[FixOrphans] Initials match: "' + uName + '" → "' + phantom + '"');
                     fixes.push({ oldName: uName, newName: phantom });
                     _usedPhantoms[phantom] = true;
                     _usedUnaccounted[uName] = true;
@@ -466,7 +466,7 @@ window._fixOrphanedMatchNames = function(t) {
     }
 
     // 5. Apply fixes using _propagateNameChange
-    console.debug('[FixOrphans] Applying ' + fixes.length + ' fix(es):', fixes.map(function(f) { return '"' + f.oldName + '" → "' + f.newName + '"'; }));
+    window._debug('[FixOrphans] Applying ' + fixes.length + ' fix(es):', fixes.map(function(f) { return '"' + f.oldName + '" → "' + f.newName + '"'; }));
     var fixCount = 0;
     fixes.forEach(function(f) {
         if (typeof window._propagateNameChange === 'function') {
@@ -497,7 +497,7 @@ window._fixOrphanedMatchNames = function(t) {
                         });
                         if (inTeam) {
                             parts.splice(i, 1);
-                            console.debug('[FixOrphans] Removed duplicate object "' + nm + '" (now in team string)');
+                            window._debug('[FixOrphans] Removed duplicate object "' + nm + '" (now in team string)');
                         }
                     }
                 }
@@ -506,7 +506,7 @@ window._fixOrphanedMatchNames = function(t) {
 
         if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
             t.updatedAt = new Date().toISOString();
-            window.FirestoreDB.saveTournament(t).catch(function(e) { console.warn('[FixOrphans] Save error:', e); });
+            window.FirestoreDB.saveTournament(t).catch(function(e) { window._warn('[FixOrphans] Save error:', e); });
         }
         if (typeof showNotification === 'function') {
             showNotification(_t('utils.namesFixed'), fixes.map(function(f) { return '"' + f.oldName + '" → "' + f.newName + '"'; }).join(', '), 'info');
@@ -674,7 +674,7 @@ window._initTournamentVenueMap = async function(el) {
             title: venueName
         });
     } catch (e) {
-        console.warn('[venue-map] init error:', e);
+        window._warn('[venue-map] init error:', e);
         el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:0.75rem;">Mapa indisponível</div>';
     }
 };

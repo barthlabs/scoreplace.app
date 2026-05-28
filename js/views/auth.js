@@ -60,7 +60,7 @@
         // será efetivamente consumido. Scanners não chegam aqui.
         window.location.replace(data.firebaseLink);
       }).catch(function(err) {
-        console.error('[magicLink] erro ao buscar token:', err);
+        window._error('[magicLink] erro ao buscar token:', err);
         if (typeof window._captureException === 'function') {
           window._captureException(err, { area: 'magicLinkWrapper', token: token.substring(0, 6) + '...' });
         }
@@ -69,7 +69,7 @@
     };
     resolve();
   } catch (e) {
-    console.error('[magicLink] handler crashed:', e);
+    window._error('[magicLink] handler crashed:', e);
   }
 })();
 
@@ -169,21 +169,21 @@
               window.location.replace('/#dashboard');
             }, 400);
           }).catch(function(err) {
-            console.error('[wtMagicLink] signInWithCustomToken failed:', err);
+            window._error('[wtMagicLink] signInWithCustomToken failed:', err);
             if (typeof window._captureException === 'function') {
               window._captureException(err, { area: 'wtMagicLink', token: token.substring(0, 6) + '...' });
             }
             showStatus('⚠️', 'Não foi possível entrar', 'O link pode ter expirado. Tente fazer login pelo app normalmente.', true);
           });
         }).catch(function(err) {
-          console.error('[wtMagicLink] Firestore fetch failed:', err);
+          window._error('[wtMagicLink] Firestore fetch failed:', err);
           showStatus('⚠️', 'Erro ao validar o link', 'Tente abrir de novo. Se persistir, faça login pelo app.', true);
         });
       };
       resolve();
     }
   } catch (e) {
-    console.error('[wtMagicLink] handler crashed:', e);
+    window._error('[wtMagicLink] handler crashed:', e);
   }
 })();
 
@@ -249,14 +249,14 @@ try {
   // setting it explicitly also surfaces storage-blocked errors early.)
   if (firebase.auth && firebase.auth.Auth && firebase.auth.Auth.Persistence) {
     firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-      .catch(function(err) { console.warn('setPersistence error:', err); });
+      .catch(function(err) { window._warn('setPersistence error:', err); });
   }
   // Initialize Firestore
   if (window.FirestoreDB) {
     window.FirestoreDB.init();
   }
 } catch (e) {
-  console.warn("Firebase initialization error:", e);
+  window._warn("Firebase initialization error:", e);
 }
 
 // ─── Helper: force-close the login modal ────────────────────────────────────
@@ -285,7 +285,7 @@ function _forceCloseLoginModal() {
     // fechar; cumpriu o papel — agora só polui Sentry com 36 events em 2d
     // (issue #1, level info, sem valor diagnóstico atual).
   } catch (e) {
-    console.warn('[scoreplace-auth] _forceCloseLoginModal error:', e);
+    window._warn('[scoreplace-auth] _forceCloseLoginModal error:', e);
     if (typeof window._captureException === 'function') {
       window._captureException(e, { area: 'forceCloseLoginModal' });
     }
@@ -378,7 +378,7 @@ window._updateTopbarForUser = function(user) {
         '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>' +
       '</div>';
   } catch (e) {
-    console.warn('[scoreplace-auth] _updateTopbarForUser error:', e);
+    window._warn('[scoreplace-auth] _updateTopbarForUser error:', e);
   }
 };
 
@@ -389,9 +389,9 @@ window._updateTopbarForUser = function(user) {
 // link operations just like the popup flow does.
 if (firebase && firebase.auth) {
   try {
-    console.log('[scoreplace-auth] Checking getRedirectResult on page load...');
+    window._log('[scoreplace-auth] Checking getRedirectResult on page load...');
     firebase.auth().getRedirectResult().then(function(result) {
-      console.log('[scoreplace-auth] getRedirectResult:', result && result.user ? { uid: result.user.uid, email: result.user.email } : 'no user');
+      window._log('[scoreplace-auth] getRedirectResult:', result && result.user ? { uid: result.user.uid, email: result.user.email } : 'no user');
       if (!result || !result.user) return;
       var user = result.user;
 
@@ -425,7 +425,7 @@ if (firebase && firebase.auth) {
           displayName: user.displayName, photoURL: user.photoURL
         }));
       } catch(e) {}
-      console.log('[scoreplace-auth] Calling simulateLoginSuccess directly from getRedirectResult');
+      window._log('[scoreplace-auth] Calling simulateLoginSuccess directly from getRedirectResult');
       if (typeof simulateLoginSuccess === 'function') {
         simulateLoginSuccess({
           uid: user.uid,
@@ -436,14 +436,14 @@ if (firebase && firebase.auth) {
       }
     }).catch(function(error) {
       if (!error || !error.code) return;
-      console.warn('[scoreplace-auth] getRedirectResult error:', error);
+      window._warn('[scoreplace-auth] getRedirectResult error:', error);
       if (error.code === 'auth/account-exists-with-different-credential') {
         _handleAccountLinking(error, 'Google');
       } else if (error.code !== 'auth/credential-already-in-use' && error.code !== 'auth/no-auth-event') {
         try { showNotification(_t('auth.googleError'), _t('auth.googleErrorMsg'), 'error'); } catch(e) {}
       }
     });
-  } catch (e) { console.warn('getRedirectResult init error:', e); }
+  } catch (e) { window._warn('getRedirectResult init error:', e); }
 }
 
 // Listen for auth state changes to auto-login returning users
@@ -470,7 +470,7 @@ if (firebase && firebase.auth) {
     var loginModalActive = !!document.querySelector('#modal-login.active');
 
     if (!hadSession) {
-      console.log('[scoreplace-auth] _commitSignOut: skipping — no prior session');
+      window._log('[scoreplace-auth] _commitSignOut: skipping — no prior session');
       try { localStorage.removeItem('scoreplace_authCache'); } catch(e) {}
       // v1.3.81-beta: removido initRouter() daqui (regressão v1.3.80 — causava
       // fechamento do hamburger ~2500ms após o load para usuários não logados).
@@ -480,7 +480,7 @@ if (firebase && firebase.auth) {
       return;
     }
 
-    console.log('[scoreplace-auth] onAuthStateChanged: committing sign-out after grace period');
+    window._log('[scoreplace-auth] onAuthStateChanged: committing sign-out after grace period');
     try { localStorage.removeItem('scoreplace_authCache'); } catch(e) {}
     if (window.AppStore) {
       window.AppStore.currentUser = null;
@@ -497,7 +497,7 @@ if (firebase && firebase.auth) {
       // v0.17.92: skip initRouter se user está com modal-login aberto —
       // ele tá ativamente tentando logar, dismissAllOverlays mataria o modal.
       if (loginModalActive) {
-        console.log('[scoreplace-auth] _commitSignOut: skipping initRouter — login modal active');
+        window._log('[scoreplace-auth] _commitSignOut: skipping initRouter — login modal active');
       } else {
         if (typeof initRouter === 'function') initRouter();
       }
@@ -509,19 +509,19 @@ if (firebase && firebase.auth) {
   // intenção de logar; signout pendente de 2.5s é irrelevante e prejudicial.
   window._cancelPendingSignout = function() {
     if (_pendingSignoutTimer) {
-      console.log('[scoreplace-auth] cancelling pending signout — user is logging in');
+      window._log('[scoreplace-auth] cancelling pending signout — user is logging in');
       clearTimeout(_pendingSignoutTimer);
       _pendingSignoutTimer = null;
     }
   };
 
   firebase.auth().onAuthStateChanged(async function(user) {
-    console.log('[scoreplace-auth] onAuthStateChanged fired:', user ? { uid: user.uid, email: user.email } : 'null');
+    window._log('[scoreplace-auth] onAuthStateChanged fired:', user ? { uid: user.uid, email: user.email } : 'null');
     window._authStateResolved = true;
     if (user) {
       // Cancel any pending sign-out — auth came back with a user before grace elapsed
       if (_pendingSignoutTimer) {
-        console.log('[scoreplace-auth] cancelling pending sign-out — auth re-resolved');
+        window._log('[scoreplace-auth] cancelling pending sign-out — auth re-resolved');
         clearTimeout(_pendingSignoutTimer);
         _pendingSignoutTimer = null;
       }
@@ -536,7 +536,7 @@ if (firebase && firebase.auth) {
       window._authNoCacheFallback = null;
       // Skip if email registration is still updating displayName profile
       if (window._pendingProfileUpdate) {
-        console.log('[scoreplace-auth] onAuthStateChanged skipped (pending profile update)');
+        window._log('[scoreplace-auth] onAuthStateChanged skipped (pending profile update)');
         return;
       }
       // Cache login state for instant restore on next page load
@@ -563,20 +563,20 @@ if (firebase && firebase.auth) {
       // If a manual logout is in progress, commit immediately — the user pressed
       // "Sair" and we don't want to wait for the grace period.
       if (window._manualLogoutInProgress) {
-        console.log('[scoreplace-auth] onAuthStateChanged: signed out (manual logout — committing immediately)');
+        window._log('[scoreplace-auth] onAuthStateChanged: signed out (manual logout — committing immediately)');
         _commitSignOut();
         return;
       }
       // Transient null event — defer the clear so a quick re-resolution
       // (common on Safari) cancels it silently.
-      console.log('[scoreplace-auth] onAuthStateChanged: null — deferring sign-out ' + _AUTH_SIGNOUT_GRACE_MS + 'ms');
+      window._log('[scoreplace-auth] onAuthStateChanged: null — deferring sign-out ' + _AUTH_SIGNOUT_GRACE_MS + 'ms');
       if (_pendingSignoutTimer) clearTimeout(_pendingSignoutTimer);
       _pendingSignoutTimer = setTimeout(function() {
         _pendingSignoutTimer = null;
         // Re-check current auth state — if it's back to a user, don't sign out
         var now = firebase.auth().currentUser;
         if (now) {
-          console.log('[scoreplace-auth] deferred sign-out aborted — user is present');
+          window._log('[scoreplace-auth] deferred sign-out aborted — user is present');
           return;
         }
         _commitSignOut();
@@ -643,11 +643,11 @@ function handleGoogleLogin() {
   if (authProvider && typeof authProvider.setCustomParameters === 'function') {
     authProvider.setCustomParameters({ prompt: 'select_account' });
   }
-  console.log('[scoreplace-auth] Google popup starting (prompt=select_account)... UA:', navigator.userAgent);
+  window._log('[scoreplace-auth] Google popup starting (prompt=select_account)... UA:', navigator.userAgent);
   firebase.auth().signInWithPopup(authProvider)
     .then(function(result) {
       var user = result.user;
-      console.log('[scoreplace-auth] Popup success:', { uid: user && user.uid, email: user && user.email });
+      window._log('[scoreplace-auth] Popup success:', { uid: user && user.uid, email: user && user.email });
 
       // v0.17.83: belt+suspenders — close login modal IMMEDIATELY upon popup
       // success, before any other logic. simulateLoginSuccess also closes it
@@ -686,7 +686,7 @@ function handleGoogleLogin() {
               if (!data || !Array.isArray(data.photos) || data.photos.length === 0) return;
               var primary = data.photos.find(function(p) { return p.metadata && p.metadata.primary; }) || data.photos[0];
               var hasReal = !primary['default']; // bracket pra evitar reserved word issues
-              console.log('[scoreplace-auth] Google People API photo.default=', primary['default'], '→ hasGooglePhotoReal=', hasReal);
+              window._log('[scoreplace-auth] Google People API photo.default=', primary['default'], '→ hasGooglePhotoReal=', hasReal);
               if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
                 window.FirestoreDB.saveUserProfile(user.uid, { hasGooglePhotoReal: hasReal }).catch(function() {});
               }
@@ -695,17 +695,17 @@ function handleGoogleLogin() {
                 window.AppStore.currentUser.hasGooglePhotoReal = hasReal;
               }
             }).catch(function(err) {
-              console.warn('[scoreplace-auth] People API error (non-fatal):', err && err.message);
+              window._warn('[scoreplace-auth] People API error (non-fatal):', err && err.message);
             });
         }
       } catch (_peopleErr) {
-        console.warn('[scoreplace-auth] People API setup error (non-fatal):', _peopleErr && _peopleErr.message);
+        window._warn('[scoreplace-auth] People API setup error (non-fatal):', _peopleErr && _peopleErr.message);
       }
 
       // Try linking pending credential from another provider.
       // v0.17.85: try/catch — sem ele, exception aqui pulava simulateLoginSuccess.
       try { _tryLinkPendingCredential(result); } catch(_lkErr) {
-        console.warn('[scoreplace-auth] _tryLinkPendingCredential error (non-fatal):', _lkErr);
+        window._warn('[scoreplace-auth] _tryLinkPendingCredential error (non-fatal):', _lkErr);
         if (typeof window._captureException === 'function') {
           window._captureException(_lkErr, { area: 'tryLinkPendingCredential' });
         }
@@ -722,7 +722,7 @@ function handleGoogleLogin() {
           displayName: user.displayName, photoURL: user.photoURL
         }));
       } catch(e) {}
-      console.log('[scoreplace-auth] Calling simulateLoginSuccess directly from popup callback');
+      window._log('[scoreplace-auth] Calling simulateLoginSuccess directly from popup callback');
       simulateLoginSuccess({
         uid: user.uid,
         email: user.email,
@@ -731,7 +731,7 @@ function handleGoogleLogin() {
       });
     })
     .catch(function(error) {
-      console.error('[scoreplace-auth] Firebase auth error:', error);
+      window._error('[scoreplace-auth] Firebase auth error:', error);
       if (typeof window._captureException === 'function') {
         window._captureException(error, { area: 'googleLogin', code: error && error.code });
       }
@@ -742,7 +742,7 @@ function handleGoogleLogin() {
           authProvider.setCustomParameters({ prompt: 'select_account' });
         }
         firebase.auth().signInWithRedirect(authProvider).catch(function(err2) {
-          console.error('Redirect fallback error:', err2);
+          window._error('Redirect fallback error:', err2);
           showNotification(_t('auth.popupBlocked'), _t('auth.popupBlockedMsg'), 'error');
         });
         return;
@@ -822,7 +822,7 @@ function _handleAccountLinking(error, providerName) {
       'info'
     );
   }).catch(function(err) {
-    console.warn('fetchSignInMethodsForEmail error:', err);
+    window._warn('fetchSignInMethodsForEmail error:', err);
     showNotification(_t('auth.accountExists'), _t('auth.accountExistsMsg'), 'warning');
   });
   return true;
@@ -839,7 +839,7 @@ function _tryLinkPendingCredential(result) {
   user.linkWithCredential(cred).then(function() {
     showNotification(_t('auth.accountLinked'), _t('auth.accountLinkedMsg'), 'success');
   }).catch(function(err) {
-    console.warn('Account link error:', err);
+    window._warn('Account link error:', err);
     // Not critical — user is already logged in
   });
 }
@@ -988,7 +988,7 @@ function handleEmailLinkLogin() {
       }
     })
     .catch(function(error) {
-      console.error('Email link send error:', error);
+      window._error('Email link send error:', error);
       // v1.0.40-beta: filtra erros do Firebase Messaging que vazam pra cá.
       // Bug reportado via screenshot: usuário clicou Enviar e viu "Erro:
       // Messaging: We are unable to register the default service worker..."
@@ -1000,7 +1000,7 @@ function handleEmailLinkLogin() {
       var isMessagingNoise = (typeof msg === 'string' && msg.indexOf('Messaging:') === 0)
                           || (typeof code === 'string' && code.indexOf('messaging/') === 0);
       if (isMessagingNoise) {
-        console.warn('[handleEmailLinkLogin] Ignoring FCM messaging noise:', msg || code);
+        window._warn('[handleEmailLinkLogin] Ignoring FCM messaging noise:', msg || code);
         // Tenta novamente — provavelmente o magic link ENVIOU OK mas o erro
         // de FCM veio depois. Só não conseguimos confirmar; mostra panel
         // otimista pro usuário.
@@ -1107,12 +1107,12 @@ function _completeEmailLinkSignIn() {
               if (_bestMatchId && !best.mergedInto) {
                 window._pendingCrossRefOldUid = _bestMatchId;
               }
-              console.log('[email-link] cross-ref por email encontrado, herdando:',
+              window._log('[email-link] cross-ref por email encontrado, herdando:',
                 Object.keys(profileData).filter(function(k){ return k !== 'authProvider' && k !== 'updatedAt' && k !== 'email'; }));
             }
           }
         } catch (e) {
-          console.warn('[email-link] cross-ref por email falhou:', e);
+          window._warn('[email-link] cross-ref por email falhou:', e);
         }
         // Fallback: se não temos displayName herdado nem do Firebase, usa
         // o email completo como nome inicial (mais identificável que o local-part).
@@ -1135,7 +1135,7 @@ function _completeEmailLinkSignIn() {
       }
     })
     .catch(function(error) {
-      console.error('Email link sign-in error:', error);
+      window._error('Email link sign-in error:', error);
       window.localStorage.removeItem('scoreplace_emailForSignIn');
       if (error.code === 'auth/invalid-action-code') {
         showNotification(_t('auth.linkExpired'), _t('auth.linkExpiredMsg'), 'error');
@@ -1148,7 +1148,7 @@ function _completeEmailLinkSignIn() {
 }
 
 // Run email link check on page load
-try { _completeEmailLinkSignIn(); } catch(e) { console.warn('Email link check error:', e); }
+try { _completeEmailLinkSignIn(); } catch(e) { window._warn('Email link check error:', e); }
 
 // ─── Phone/SMS Login ────────────────────────────────────────────────────────
 window._phoneConfirmationResult = null;
@@ -1243,7 +1243,7 @@ function handlePhoneLogin() {
         .then(function(r) { return r.json(); })
         .then(function(body) {
           var d = body && body.result;
-          console.log('[WA magic link] resultado:', JSON.stringify(d));
+          window._log('[WA magic link] resultado:', JSON.stringify(d));
           window._waMagicLinkResult = d;
           var ws = document.getElementById('phone-step-wa-status');
           if (!ws) return;
@@ -1256,7 +1256,7 @@ function handlePhoneLogin() {
           }
         })
         .catch(function(err) {
-          console.warn('[WA magic link] fetch falhou:', err && err.message);
+          window._warn('[WA magic link] fetch falhou:', err && err.message);
           var ws = document.getElementById('phone-step-wa-status');
           if (ws) ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">ℹ️ WA: rede</span>';
         });
@@ -1272,7 +1272,7 @@ function handlePhoneLogin() {
       showNotification(_t('auth.codeSent'), _t('auth.codeSentMsg', {phone: phone}), 'success');
     })
     .catch(function(error) {
-      console.error('Phone sign-in error:', error);
+      window._error('Phone sign-in error:', error);
       // v1.3.75-beta: envia error.message ao Sentry (além do code) para
       // diagnosticar casos onde error.code é undefined (erros JS nativos,
       // reCAPTCHA iOS Safari, etc).
@@ -1438,12 +1438,12 @@ function handlePhoneVerifyCode() {
               if (_bestPhoneMatchId && !best.mergedInto) {
                 window._pendingCrossRefOldUid = _bestPhoneMatchId;
               }
-              console.log('[phone-login] cross-ref encontrado, herdando:',
+              window._log('[phone-login] cross-ref encontrado, herdando:',
                 Object.keys(profileData).filter(function(k){ return k !== 'authProvider' && k !== 'updatedAt' && k !== 'phone'; }));
             }
           }
         } catch (e) {
-          console.warn('[phone-login] cross-ref por phone falhou:', e);
+          window._warn('[phone-login] cross-ref por phone falhou:', e);
         }
 
         // Fallback: se ainda não temos displayName e não achamos cross-ref,
@@ -1461,7 +1461,7 @@ function handlePhoneVerifyCode() {
       _resetPhoneLoginUI();
     })
     .catch(function(error) {
-      console.error('Phone verify error:', error);
+      window._error('Phone verify error:', error);
       if (error.code === 'auth/invalid-verification-code') {
         showNotification(_t('auth.wrongCode'), _t('auth.wrongCodeMsg'), 'error');
       } else if (error.code === 'auth/code-expired') {
@@ -1537,7 +1537,7 @@ function handleEmailLogin() {
       if (modal) modal.classList.remove('active');
     })
     .catch(function(error) {
-      console.error('Email login error:', error);
+      window._error('Email login error:', error);
       if (typeof window._captureException === 'function') {
         window._captureException(error, { area: 'emailLogin', code: error && error.code });
       }
@@ -1598,7 +1598,7 @@ function handleEmailRegister() {
         user.sendEmailVerification().then(function() {
           showNotification(_t('auth.verifyEmail'), _t('auth.verifyEmailMsg', {email: email}), 'info');
         }).catch(function(e) {
-          console.warn('Email verification send error:', e);
+          window._warn('Email verification send error:', e);
         });
         showNotification(_t('auth.accountCreated'), _t('auth.accountCreatedMsg', {name: name}), 'success');
         var modal = document.getElementById('modal-login');
@@ -1625,7 +1625,7 @@ function handleEmailRegister() {
     })
     .catch(function(error) {
       window._pendingProfileUpdate = false;
-      console.error('Email register error:', error);
+      window._error('Email register error:', error);
       var code = (error && error.code) || 'unknown';
       // v1.3.23-beta: NÃO mandar pra Sentry códigos esperados de UX
       // (user errou senha, email já cadastrado, etc.) — esses já têm
@@ -1680,7 +1680,7 @@ function handlePasswordReset() {
       showNotification(_t('auth.emailSent'), _t('auth.emailSentMsg', {email: email}), 'success');
     })
     .catch(function(error) {
-      console.error('Password reset error:', error);
+      window._error('Password reset error:', error);
       if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
         showNotification(_t('auth.emailNotFound'), _t('auth.emailNotFoundMsg'), 'error');
       } else if (error.code === 'auth/too-many-requests') {
@@ -1840,7 +1840,7 @@ function _fetchGoogleDemographics(accessToken, uid) {
     // Salva no Firestore se houve atualizações
     if (Object.keys(profileUpdates).length > 0 && window.FirestoreDB && window.FirestoreDB.db && uid) {
       window.FirestoreDB.saveUserProfile(uid, profileUpdates).catch(function(err) {
-        console.warn('Erro ao salvar dados demográficos:', err);
+        window._warn('Erro ao salvar dados demográficos:', err);
       });
     }
   })
@@ -1910,14 +1910,14 @@ async function simulateLoginSuccess(user) {
   var now = Date.now();
   var inProgressAt = window._simulateLoginInProgressAt || 0;
   var STALE_MS = 10000; // 10s
-  console.log('[scoreplace-auth] simulateLoginSuccess called for', user && user.email,
+  window._log('[scoreplace-auth] simulateLoginSuccess called for', user && user.email,
     'inProgressAt:', inProgressAt, 'staleAfter:', STALE_MS + 'ms', 'isStale:', (now - inProgressAt) > STALE_MS);
   if (inProgressAt && (now - inProgressAt) <= STALE_MS) {
-    console.log('[scoreplace-auth] simulateLoginSuccess: skipping — fresh in-progress (' + (now - inProgressAt) + 'ms ago)');
+    window._log('[scoreplace-auth] simulateLoginSuccess: skipping — fresh in-progress (' + (now - inProgressAt) + 'ms ago)');
     return;
   }
   if (inProgressAt) {
-    console.warn('[scoreplace-auth] simulateLoginSuccess: previous attempt stale (' + (now - inProgressAt) + 'ms), proceeding');
+    window._warn('[scoreplace-auth] simulateLoginSuccess: previous attempt stale (' + (now - inProgressAt) + 'ms), proceeding');
   }
   window._simulateLoginInProgressAt = now;
   window._simulateLoginInProgress = true; // mantido pra compat com callers antigos
@@ -1936,7 +1936,7 @@ async function simulateLoginSuccess(user) {
   window.AppStore.currentUser = sameUser
     ? Object.assign({}, existingUser, user)
     : Object.assign({}, user);
-  console.log('[scoreplace-auth] currentUser set (' + (sameUser ? 'merged' : 'replaced') + '), running early router refresh');
+  window._log('[scoreplace-auth] currentUser set (' + (sameUser ? 'merged' : 'replaced') + '), running early router refresh');
 
   // v0.17.93: atualizar topbar IMEDIATAMENTE com o user do Google.
   // Antes, topbar só era atualizado no fim da função (linha 1274+) DEPOIS
@@ -1949,7 +1949,7 @@ async function simulateLoginSuccess(user) {
     if (typeof window._updateTopbarForUser === 'function') {
       window._updateTopbarForUser(user);
     }
-  } catch (e) { console.warn('Early topbar update failed:', e); }
+  } catch (e) { window._warn('Early topbar update failed:', e); }
 
   // Close any open login modal + hamburger, and immediately refresh the route
   // so the landing page gives way to the dashboard BEFORE any async Firestore
@@ -1962,7 +1962,7 @@ async function simulateLoginSuccess(user) {
         (window.location.hash === '' || window.location.hash === '#dashboard' || window.location.hash === '#')) {
       initRouter();
     }
-  } catch (e) { console.warn('Early post-login refresh failed:', e); }
+  } catch (e) { window._warn('Early post-login refresh failed:', e); }
 
   // Load user profile from Firestore (merge extra fields like gender, sports)
   var uid = user.uid || user.email;
@@ -1994,7 +1994,7 @@ async function simulateLoginSuccess(user) {
       }
     } catch (_metaErr) {}
     var _maxAttempts = _isReturning ? 4 : 1;
-    console.log('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] profile load — isReturning=' + _isReturning + ', maxAttempts=' + _maxAttempts);
+    window._log('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] profile load — isReturning=' + _isReturning + ', maxAttempts=' + _maxAttempts);
     for (var _attempt = 0; _attempt < _maxAttempts; _attempt++) {
       if (_attempt > 0) {
         // Suprime nudge durante retries
@@ -2005,16 +2005,16 @@ async function simulateLoginSuccess(user) {
         existingProfile = await window.AppStore.loadUserProfile(uid);
         if (existingProfile && Object.keys(existingProfile).length > 0) {
           if (_attempt > 0) {
-            console.log('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] profile loaded on retry attempt #' + _attempt);
+            window._log('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] profile loaded on retry attempt #' + _attempt);
           }
           break;
         }
       } catch (_loadErr) {
-        console.warn('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] loadUserProfile attempt ' + _attempt + ' threw:', _loadErr && _loadErr.message);
+        window._warn('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] loadUserProfile attempt ' + _attempt + ' threw:', _loadErr && _loadErr.message);
       }
     }
     if (_isReturning && (!existingProfile || Object.keys(existingProfile).length === 0)) {
-      console.warn('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] returning user but profile load failed after ' + _maxAttempts + ' attempts');
+      window._warn('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] returning user but profile load failed after ' + _maxAttempts + ' attempts');
     }
   }
 
@@ -2062,7 +2062,7 @@ async function simulateLoginSuccess(user) {
   if (window._pendingCrossRef && window._pendingCrossRef.uid === user.uid) {
     var _xref = window._pendingCrossRef;
     window._pendingCrossRef = null;
-    console.log('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] consuming pendingCrossRef:', Object.keys(_xref).filter(function(k){return k!=='uid';}));
+    window._log('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] consuming pendingCrossRef:', Object.keys(_xref).filter(function(k){return k!=='uid';}));
     if (!existingProfile) existingProfile = {};
     Object.keys(_xref).forEach(function(k) {
       if (k === 'uid') return;
@@ -2092,7 +2092,7 @@ async function simulateLoginSuccess(user) {
     window._pendingCrossRefOldUid = null;
     setTimeout(function() {
       if (typeof window._executePhoneAccountMerge === 'function') {
-        console.log('[scoreplace-auth] auto-merge cross-ref account:', _autoMergeOldUid);
+        window._log('[scoreplace-auth] auto-merge cross-ref account:', _autoMergeOldUid);
         window._executePhoneAccountMerge(_autoMergeOldUid);
       }
     }, 3000);
@@ -2114,14 +2114,14 @@ async function simulateLoginSuccess(user) {
             if (gDoc.id !== _gCrossUid && !gDoc.data().mergedInto) {
               setTimeout(function() {
                 if (typeof window._executePhoneAccountMerge === 'function') {
-                  console.log('[google-login] auto-merge conta anterior por email:', gDoc.id);
+                  window._log('[google-login] auto-merge conta anterior por email:', gDoc.id);
                   window._executePhoneAccountMerge(gDoc.id);
                 }
               }, 3000);
             }
           });
         })
-        .catch(function(e) { console.warn('[google-login] email cross-ref error:', e); });
+        .catch(function(e) { window._warn('[google-login] email cross-ref error:', e); });
     })();
   }
 
@@ -2145,10 +2145,10 @@ async function simulateLoginSuccess(user) {
         window.FirestoreDB.saveUserProfile(uid, _notifyPatch).catch(function() {});
         if (window.AppStore.currentUser) Object.assign(window.AppStore.currentUser, _notifyPatch);
         if (existingProfile) Object.assign(existingProfile, _notifyPatch);
-        console.log('[scoreplace-auth] notify defaults set:', _notifyPatch);
+        window._log('[scoreplace-auth] notify defaults set:', _notifyPatch);
       }
     } catch (_notifyErr) {
-      console.warn('[scoreplace-auth] notify defaults error (non-fatal):', _notifyErr);
+      window._warn('[scoreplace-auth] notify defaults error (non-fatal):', _notifyErr);
     }
   }
 
@@ -2209,7 +2209,7 @@ async function simulateLoginSuccess(user) {
         }
       }
     } catch (e) {
-      console.warn('Legacy doc migration error:', e);
+      window._warn('Legacy doc migration error:', e);
     }
   }
 
@@ -2275,7 +2275,7 @@ async function simulateLoginSuccess(user) {
     if (needsSave) {
       basicData.updatedAt = new Date().toISOString();
       window.FirestoreDB.saveUserProfile(uid, basicData).catch(function(err) {
-        console.warn('Erro ao salvar dados básicos do perfil:', err);
+        window._warn('Erro ao salvar dados básicos do perfil:', err);
       });
     }
   }
@@ -2309,18 +2309,18 @@ async function simulateLoginSuccess(user) {
     // Auto-detect and fix stale participant names in tournaments
     // (handles cases where user changed name before propagation code existed)
     if (typeof window._autoFixStaleNames === 'function') {
-      window._autoFixStaleNames().catch(function(e) { console.warn('Auto-fix stale names error:', e); });
+      window._autoFixStaleNames().catch(function(e) { window._warn('Auto-fix stale names error:', e); });
     }
 
     // Load templates from Firestore (with localStorage migration)
     if (typeof window._loadTemplates === 'function') {
-      window._loadTemplates().catch(function(e) { console.warn('Template load error:', e); });
+      window._loadTemplates().catch(function(e) { window._warn('Template load error:', e); });
     }
     if (typeof window._checkTournamentReminders === 'function') {
-      window._checkTournamentReminders().catch(function(e) { console.warn('Reminder check error:', e); });
+      window._checkTournamentReminders().catch(function(e) { window._warn('Reminder check error:', e); });
     }
     if (typeof window._checkNearbyTournaments === 'function') {
-      window._checkNearbyTournaments().catch(function(e) { console.warn('Nearby check error:', e); });
+      window._checkNearbyTournaments().catch(function(e) { window._warn('Nearby check error:', e); });
     }
     // Prime the discovery feed (public open tournaments the user isn't in).
     // Used by the dashboard "Descobrir torneios" section — separate query
@@ -2328,21 +2328,21 @@ async function simulateLoginSuccess(user) {
     if (window.AppStore && typeof window.AppStore.loadPublicDiscovery === 'function') {
       window.AppStore.loadPublicDiscovery().then(function() {
         if (typeof window._softRefreshView === 'function') window._softRefreshView();
-      }).catch(function(e) { console.warn('Discovery load error:', e); });
+      }).catch(function(e) { window._warn('Discovery load error:', e); });
     }
     // Initialize FCM push notifications (requests permission + saves token)
     if (typeof window._initFCM === 'function') {
-      window._initFCM().catch(function(e) { console.warn('FCM init error:', e); });
+      window._initFCM().catch(function(e) { window._warn('FCM init error:', e); });
     }
     // Geolocation check — suggests or auto-creates presence if at a preferred venue.
     // Respects presenceMuteUntil, presenceVisibility and presenceAutoCheckin flags.
     if (typeof window._presenceGeoCheck === 'function') {
-      try { window._presenceGeoCheck(); } catch (e) { console.warn('Presence geo error:', e); }
+      try { window._presenceGeoCheck(); } catch (e) { window._warn('Presence geo error:', e); }
     }
     // Kick Liga auto-draw poller once immediately after login; the interval
     // keeps it ticking thereafter (wired in main.js).
     if (typeof window._checkLigaAutoDraws === 'function') {
-      window._checkLigaAutoDraws().catch(function(e) { console.warn('Liga auto-draw error:', e); });
+      window._checkLigaAutoDraws().catch(function(e) { window._warn('Liga auto-draw error:', e); });
     }
     // Bootstrap trophy engine — varre todos os troféus/milestones ao logar.
     // Não-bloqueante; roda após 3s para não competir com auth/routing init.
@@ -2374,7 +2374,7 @@ async function simulateLoginSuccess(user) {
       // Close hamburger before opening modal (avoids stacking focus trap issues)
       if (typeof window._closeHamburger === 'function') window._closeHamburger();
       window._openMyProfileModal();
-    } catch (err) { console.warn('_onProfileBtnClick error', err); }
+    } catch (err) { window._warn('_onProfileBtnClick error', err); }
   };
 
   // Populate all form fields in the profile modal from window.AppStore.currentUser.
@@ -2402,7 +2402,7 @@ async function simulateLoginSuccess(user) {
           cu.authProvider = fbUser.providerData[0].providerId;
         }
       }
-    } catch (e) { console.warn('Profile fallback from firebase auth failed:', e); }
+    } catch (e) { window._warn('Profile fallback from firebase auth failed:', e); }
 
     if (!cu.phoneCountry) {
       try {
@@ -2650,7 +2650,7 @@ async function simulateLoginSuccess(user) {
         if (window.location.hash === '#profile') {
           window._populateProfileModalFields();
         }
-      } catch (e) { console.warn('Profile refresh on open failed:', e); }
+      } catch (e) { window._warn('Profile refresh on open failed:', e); }
     }
     // Remove loading banner.
     if (_loadingBanner && _loadingBanner.parentNode) {
@@ -2708,7 +2708,7 @@ async function simulateLoginSuccess(user) {
   // Fallback pra currentUser caso existingProfile seja null (login pós-
   // migração legacy doc, race em load, etc.). Diagnóstico via console.
   var _termsCheckProfile = existingProfile || window.AppStore.currentUser;
-  console.log('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] terms-gate check:', {
+  window._log('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] terms-gate check:', {
     existingProfile_exists: !!existingProfile,
     existingProfile_acceptedTerms: existingProfile && existingProfile.acceptedTerms,
     existingProfile_acceptedAt: existingProfile && existingProfile.acceptedTermsAt,
@@ -2734,7 +2734,7 @@ async function simulateLoginSuccess(user) {
         var freshDoc = await window.FirestoreDB.db.collection('users').doc(uid).get();
         if (freshDoc.exists) {
           var freshData = freshDoc.data();
-          console.log('[terms-gate v1.0.53] re-fetch result:', {
+          window._log('[terms-gate v1.0.53] re-fetch result:', {
             acceptedTerms: freshData.acceptedTerms,
             acceptedTermsAt: freshData.acceptedTermsAt,
             acceptedTermsVersion: freshData.acceptedTermsVersion,
@@ -2756,11 +2756,11 @@ async function simulateLoginSuccess(user) {
             });
           }
         } else {
-          console.log('[terms-gate v1.0.53] re-fetch: doc não existe pra uid=' + uid);
+          window._log('[terms-gate v1.0.53] re-fetch: doc não existe pra uid=' + uid);
         }
       }
     } catch (_freshErr) {
-      console.warn('[terms-gate v1.0.53] re-fetch failed:', _freshErr && _freshErr.message);
+      window._warn('[terms-gate v1.0.53] re-fetch failed:', _freshErr && _freshErr.message);
     }
   }
   // v1.0.53-beta: GRANDFATHER de usuários existentes. Bug reportado por
@@ -2813,12 +2813,12 @@ async function simulateLoginSuccess(user) {
           var _s2 = new Date(_fbu2.metadata.lastSignInTime).getTime();
           if ((_s2 - _c2) > 60000) {
             _hasUsageEvidence = true;
-            console.log('[terms-gate v1.0.61] grandfather via Firebase Auth metadata (returning user, lastSignIn-creation=' + Math.round((_s2-_c2)/60000) + 'min)');
+            window._log('[terms-gate v1.0.61] grandfather via Firebase Auth metadata (returning user, lastSignIn-creation=' + Math.round((_s2-_c2)/60000) + 'min)');
           }
         }
       } catch (_fbErr) {}
     }
-    console.log('[terms-gate v1.0.53] grandfather check — hasUsageEvidence:', _hasUsageEvidence,
+    window._log('[terms-gate v1.0.53] grandfather check — hasUsageEvidence:', _hasUsageEvidence,
       'fields present:', Object.keys(_profile).sort().slice(0, 20).join(','));
     if (_hasUsageEvidence && window.FirestoreDB && window.FirestoreDB.db && uid) {
       try {
@@ -2832,23 +2832,23 @@ async function simulateLoginSuccess(user) {
         // Sincroniza estado local
         Object.assign(_termsCheckProfile, _grandfatherPayload);
         if (window.AppStore.currentUser) Object.assign(window.AppStore.currentUser, _grandfatherPayload);
-        console.log('[terms-gate v1.0.53] grandfathered existing user — modal SKIPPED');
+        window._log('[terms-gate v1.0.53] grandfathered existing user — modal SKIPPED');
       } catch (_gfErr) {
-        console.warn('[terms-gate v1.0.53] grandfather save failed:', _gfErr && _gfErr.message);
+        window._warn('[terms-gate v1.0.53] grandfather save failed:', _gfErr && _gfErr.message);
       }
     }
   }
   if (typeof window._needsTermsAcceptance === 'function' &&
       window._needsTermsAcceptance(_termsCheckProfile)) {
-    console.log('[terms-gate v1.0.53] showing modal — no acceptance signal AND no usage evidence (truly new user)');
+    window._log('[terms-gate v1.0.53] showing modal — no acceptance signal AND no usage evidence (truly new user)');
     var accepted = await window._showTermsAcceptanceModal();
     if (!accepted) {
-      console.log('[scoreplace-auth] Terms not accepted — logging out');
+      window._log('[scoreplace-auth] Terms not accepted — logging out');
       window._simulateLoginInProgress = false;
       if (typeof handleLogout === 'function') handleLogout();
       return;
     }
-    console.log('[scoreplace-auth] Terms accepted, version=' + window._CURRENT_TERMS_VERSION);
+    window._log('[scoreplace-auth] Terms accepted, version=' + window._CURRENT_TERMS_VERSION);
   }
 
   // Auto-enroll if there was a pending enrollment
@@ -2976,13 +2976,13 @@ async function simulateLoginSuccess(user) {
                     level: 'all'
                   });
                 }
-              }).catch(function(e) { console.warn('Notify organizer error:', e); });
+              }).catch(function(e) { window._warn('Notify organizer error:', e); });
             }
             // Navigate to tournament details after enrollment
             window.location.hash = '#tournaments/' + pendingEnrollId;
             if (typeof initRouter === 'function') initRouter();
           }).catch(function(err) {
-            console.warn('Auto-enroll transaction error:', err);
+            window._warn('Auto-enroll transaction error:', err);
           });
         } else {
           // Fallback: navigate to tournament page
@@ -3034,7 +3034,7 @@ async function simulateLoginSuccess(user) {
   } catch (loginErr) {
     // v0.17.85: catch + finally garantem que o guard nunca fica stuck.
     // Captura no Sentry mas não rethrow — login parcial é melhor que login zero.
-    console.error('[scoreplace-auth] simulateLoginSuccess body error:', loginErr);
+    window._error('[scoreplace-auth] simulateLoginSuccess body error:', loginErr);
     if (typeof window._captureException === 'function') {
       window._captureException(loginErr, { area: 'simulateLoginSuccess', uid: user && user.uid });
     }
@@ -3238,7 +3238,7 @@ function handleLogout() {
   // Sign out from Firebase
   if (firebase && firebase.auth) {
     firebase.auth().signOut().catch(function(error) {
-      console.error('Firebase sign out error:', error);
+      window._error('Firebase sign out error:', error);
     }).finally(function() {
       // Clear flag shortly after so future transient nulls are debounced again
       setTimeout(function() { window._manualLogoutInProgress = false; }, 3000);
@@ -3368,7 +3368,7 @@ window._executeDeleteAccount = async function() {
         }
       });
       if (count > 0) await batch.commit();
-    } catch (e) { console.warn('Erro ao excluir notificações:', e); }
+    } catch (e) { window._warn('Erro ao excluir notificações:', e); }
 
     // 2b. Remove user from tournament participants
     try {
@@ -3392,7 +3392,7 @@ window._executeDeleteAccount = async function() {
         }
       });
       if (tCount > 0) await tBatch.commit();
-    } catch (e) { console.warn('Erro ao remover inscrições:', e); }
+    } catch (e) { window._warn('Erro ao remover inscrições:', e); }
 
     // 2c. Delete tournaments organized by this user
     try {
@@ -3404,12 +3404,12 @@ window._executeDeleteAccount = async function() {
         dCount++;
       });
       if (dCount > 0) await dBatch.commit();
-    } catch (e) { console.warn('Erro ao excluir torneios:', e); }
+    } catch (e) { window._warn('Erro ao excluir torneios:', e); }
 
     // 2d. Delete user profile document
     try {
       await db.collection('users').doc(uid).delete();
-    } catch (e) { console.warn('Erro ao excluir perfil:', e); }
+    } catch (e) { window._warn('Erro ao excluir perfil:', e); }
 
     // 3. Delete Firebase Auth account — best effort, no re-auth popup
     try {
@@ -3417,7 +3417,7 @@ window._executeDeleteAccount = async function() {
     } catch (e) {
       // If requires-recent-login, just sign out — all data is already gone
       // Firebase will clean up orphaned auth accounts
-      console.warn('Auth delete:', e.code || e.message);
+      window._warn('Auth delete:', e.code || e.message);
       try { await firebase.auth().signOut(); } catch (so) {}
     }
 
@@ -3480,7 +3480,7 @@ window._executeDeleteAccount = async function() {
     if (typeof initRouter === 'function') initRouter();
 
   } catch (err) {
-    console.error('Erro ao excluir conta:', err);
+    window._error('Erro ao excluir conta:', err);
     showNotification(_t('auth.error'), _t('auth.deleteErrorMsg'), 'error');
     if (btn) { btn.textContent = _t('auth.deleteAccountBtn'); btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; }
   }
@@ -3755,7 +3755,7 @@ window._autoFixStaleNames = async function(forceTournamentId) {
   var tournamentsToScan = forceTournamentId
     ? window.AppStore.tournaments.filter(function(t) { return t.id === forceTournamentId; })
     : window.AppStore.tournaments;
-  console.debug('[AutoFixNames] Scanning ' + tournamentsToScan.length + ' tournaments...');
+  window._debug('[AutoFixNames] Scanning ' + tournamentsToScan.length + ' tournaments...');
 
   var uidMap = {};
   var emailMap = {};
@@ -3812,7 +3812,7 @@ window._autoFixStaleNames = async function(forceTournamentId) {
 
   var uids = Object.keys(uidMap);
   var emails = Object.keys(emailMap);
-  console.debug('[AutoFixNames] Found ' + uids.length + ' UIDs and ' + emails.length + ' emails to check');
+  window._debug('[AutoFixNames] Found ' + uids.length + ' UIDs and ' + emails.length + ' emails to check');
   if (uids.length === 0 && emails.length === 0) return;
 
   var profileMap = {};
@@ -3843,7 +3843,7 @@ window._autoFixStaleNames = async function(forceTournamentId) {
       });
     }
   } catch(e) {
-    console.warn('[AutoFixNames] Error fetching profiles:', e);
+    window._warn('[AutoFixNames] Error fetching profiles:', e);
     return;
   }
 
@@ -3954,7 +3954,7 @@ window._autoFixStaleNames = async function(forceTournamentId) {
   });
 
   if (Object.keys(_prevNameMap).length > 0) {
-    console.debug('[AutoFixNames] Previous display names found:', Object.keys(_prevNameMap));
+    window._debug('[AutoFixNames] Previous display names found:', Object.keys(_prevNameMap));
     // Scan ALL tournament data for these old names
     tournamentsToScan.forEach(function(t) {
       var parts = Array.isArray(t.participants) ? t.participants : [];
@@ -4001,13 +4001,13 @@ window._autoFixStaleNames = async function(forceTournamentId) {
   }
 
   if (fixes.length > 0) {
-    console.debug('[AutoFixNames] Fixing ' + fixes.length + ' stale name(s):', fixes.map(function(f) { return '"' + f.oldName + '" → "' + f.newName + '"'; }));
+    window._debug('[AutoFixNames] Fixing ' + fixes.length + ' stale name(s):', fixes.map(function(f) { return '"' + f.oldName + '" → "' + f.newName + '"'; }));
     fixes.forEach(function(f) {
       window._propagateNameChange(f.oldName, f.newName, f.uid, f.email);
     });
     setTimeout(function() { if (typeof window._softRefreshView === 'function') window._softRefreshView(); }, 500);
   } else {
-    console.debug('[AutoFixNames] All names up to date');
+    window._debug('[AutoFixNames] All names up to date');
   }
 };
 
@@ -4015,7 +4015,7 @@ window._autoFixStaleNames = async function(forceTournamentId) {
 window._propagateNameChange = function _propagateNameChange(oldName, newName, targetUid, targetEmail) {
   if (!oldName || !newName || oldName === newName) return;
   if (!window.AppStore || !Array.isArray(window.AppStore.tournaments)) return;
-  console.debug('[PropageName] "' + oldName + '" → "' + newName + '" (uid=' + (targetUid || 'none') + ', email=' + (targetEmail || 'none') + ')');
+  window._debug('[PropageName] "' + oldName + '" → "' + newName + '" (uid=' + (targetUid || 'none') + ', email=' + (targetEmail || 'none') + ')');
 
   var user = window.AppStore.currentUser;
   var matchUid = targetUid || (user ? user.uid : null);
@@ -4122,20 +4122,20 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
   });
 
   if (modifiedTournaments.length > 0 && window.FirestoreDB && window.FirestoreDB.saveTournament) {
-    console.debug('[PropageName] Saving ' + modifiedTournaments.length + ' tournament(s) to Firestore');
+    window._debug('[PropageName] Saving ' + modifiedTournaments.length + ' tournament(s) to Firestore');
     var savePromises = modifiedTournaments.map(function(t) {
       t.updatedAt = new Date().toISOString();
-      return window.FirestoreDB.saveTournament(t).catch(function(err) { console.warn('[PropageName] Save error for ' + t.id + ':', err); });
+      return window.FirestoreDB.saveTournament(t).catch(function(err) { window._warn('[PropageName] Save error for ' + t.id + ':', err); });
     });
     Promise.all(savePromises).then(function() {
-      console.debug('[PropageName] All saves complete, refreshing UI');
+      window._debug('[PropageName] All saves complete, refreshing UI');
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
     });
     if (typeof showNotification !== 'undefined') {
       showNotification(_t('auth.nameUpdated'), _t('auth.nameUpdatedMsg', {old: oldName, new: newName, n: modifiedTournaments.length}), 'info');
     }
   } else {
-    console.debug('[PropageName] No tournaments needed updating');
+    window._debug('[PropageName] No tournaments needed updating');
   }
 };
 
@@ -4591,7 +4591,7 @@ function setupProfileModal() {
         // Setup search
         _setupProfileSearch();
       } catch (e) {
-        console.warn('[profile-map] init error:', e);
+        window._warn('[profile-map] init error:', e);
         container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:0.75rem;">' + _t('auth.mapUnavailable') + '</div>';
       }
     };
@@ -4844,7 +4844,7 @@ function setupProfileModal() {
 
         sugBox.style.display = 'block';
       } catch (e) {
-        console.warn('[profile-map] search error:', e);
+        window._warn('[profile-map] search error:', e);
         sugBox.innerHTML = '<div style="padding:10px 14px;color:#f87171;font-size:0.8rem;">' + _t('auth.locationSearchError', {msg: window._safeHtml(e.message || 'API indisponível')}) + '</div>';
         sugBox.style.display = 'block';
       }
@@ -4890,7 +4890,7 @@ function setupProfileModal() {
           _profileMap.setZoom(14);
         }
       } catch (e) {
-        console.warn('[profile-map] select error:', e);
+        window._warn('[profile-map] select error:', e);
       }
     }
 
@@ -4983,7 +4983,7 @@ function setupProfileModal() {
           }
         })
         .catch(function(e) {
-          console.warn('[PhoneMerge] query error:', e);
+          window._warn('[PhoneMerge] query error:', e);
         });
     };
 
@@ -5012,10 +5012,10 @@ function setupProfileModal() {
             if (typeof showNotification !== 'undefined') {
               showNotification('Erro ao mesclar contas', msg, 'error');
             }
-            console.error('[PhoneMerge] merge error:', err);
+            window._error('[PhoneMerge] merge error:', err);
           });
       } catch(e) {
-        console.error('[PhoneMerge] httpsCallable error:', e);
+        window._error('[PhoneMerge] httpsCallable error:', e);
       }
     };
 
@@ -5082,7 +5082,7 @@ function setupProfileModal() {
     window.saveUserProfile = async function() {
       // Dump state upfront para debug via DevTools — independente de qual guard dispara
       try {
-        console.log('[Profile v' + window.SCOREPLACE_VERSION + '] save start',
+        window._log('[Profile v' + window.SCOREPLACE_VERSION + '] save start',
           'hasAppStore:', !!window.AppStore,
           'hasCurrentUser:', !!(window.AppStore && window.AppStore.currentUser),
           'currentUser:', window.AppStore && window.AppStore.currentUser,
@@ -5296,7 +5296,7 @@ function setupProfileModal() {
             }
           }
         } catch (nameCheckErr) {
-          console.warn('[Profile] unique name check failed (non-blocking):', nameCheckErr);
+          window._warn('[Profile] unique name check failed (non-blocking):', nameCheckErr);
           // Falha na verificação não bloqueia o save — worst-case: nome duplicado
         }
       }
@@ -5370,12 +5370,12 @@ function setupProfileModal() {
       if (!payload.email_lower && cu.email) payload.email_lower = String(cu.email).toLowerCase();
 
       // ── 4. INSTRUMENTAÇÃO — tudo visível no console e em window ─────────
-      console.log('[Profile v0.16.9] uid:', uid);
-      console.log('[Profile v0.16.9] form raw:', {
+      window._log('[Profile v0.16.9] uid:', uid);
+      window._log('[Profile v0.16.9] form raw:', {
         name: nameIn, gender: genderIn, birthRaw: birthRaw, city: cityIn,
         phone: phoneDigits, sports: sportsArr
       });
-      console.log('[Profile v0.16.9] payload:', JSON.parse(JSON.stringify(payload)));
+      window._log('[Profile v0.16.9] payload:', JSON.parse(JSON.stringify(payload)));
       window._lastProfileSave = {
         uid: uid,
         version: window.SCOREPLACE_VERSION,
@@ -5389,12 +5389,12 @@ function setupProfileModal() {
       try {
         await window.FirestoreDB.db.collection('users').doc(uid).set(payload, { merge: true });
         window._lastProfileSave.ok = true;
-        console.log('[Profile v0.16.9] save ok');
+        window._log('[Profile v0.16.9] save ok');
       } catch (e) {
         saveError = (e && e.message) || String(e);
         window._lastProfileSave.ok = false;
         window._lastProfileSave.error = saveError;
-        console.error('[Profile v0.16.9] save FAILED:', e);
+        window._error('[Profile v0.16.9] save FAILED:', e);
       }
 
       // ── 6. RE-LER PRA CONFIRMAR (round-trip por valor) ──────────────────
@@ -5438,7 +5438,7 @@ function setupProfileModal() {
             }
           });
           window._lastProfileSave.mismatch = mismatch;
-          console.log('[Profile v0.16.9] readback gender:', got.gender, '· mismatch:', mismatch.length);
+          window._log('[Profile v0.16.9] readback gender:', got.gender, '· mismatch:', mismatch.length);
 
           // Atualiza currentUser com o que REALMENTE está no Firestore —
           // single source of truth. Próximo load não vai divergir.
@@ -5446,7 +5446,7 @@ function setupProfileModal() {
           cu.name = cu.displayName; // compat com código que ainda lê .name
         } catch (e) {
           window._lastProfileSave.readbackError = (e && e.message) || String(e);
-          console.warn('[Profile v0.16.9] readback failed:', e);
+          window._warn('[Profile v0.16.9] readback failed:', e);
         }
       }
 
@@ -5523,9 +5523,9 @@ function setupProfileModal() {
           fbUser.updateProfile({
             displayName: name,
             photoURL: window.AppStore.currentUser.photoURL || null
-          }).catch(function(e) { console.warn('[Profile] Firebase Auth updateProfile failed:', e); });
+          }).catch(function(e) { window._warn('[Profile] Firebase Auth updateProfile failed:', e); });
         }
-      } catch (e) { console.warn('[Profile] Firebase Auth sync error:', e); }
+      } catch (e) { window._warn('[Profile] Firebase Auth sync error:', e); }
 
       // Propagate name change to all tournaments if displayName changed
       if (name && _oldDisplayName && name !== _oldDisplayName) {
@@ -5539,10 +5539,10 @@ function setupProfileModal() {
             if (_prevNames.length > 5) _prevNames = _prevNames.slice(_prevNames.length - 5);
             window.FirestoreDB.db.collection('users').doc(user.uid).update({
               previousDisplayNames: _prevNames
-            }).catch(function(e) { console.warn('[Profile] Failed to save previousDisplayNames:', e); });
+            }).catch(function(e) { window._warn('[Profile] Failed to save previousDisplayNames:', e); });
             window.AppStore.currentUser.previousDisplayNames = _prevNames;
           }
-        } catch(e) { console.warn('[Profile] previousDisplayNames error:', e); }
+        } catch(e) { window._warn('[Profile] previousDisplayNames error:', e); }
 
         _propagateNameChange(_oldDisplayName, name);
         // Update auth cache with new name
@@ -5610,7 +5610,7 @@ function setupProfileModal() {
                 window._executePhoneAccountMerge(oldDoc.id);
               }
             })
-            .catch(function(e) { console.warn('[EmailMerge] query error:', e); });
+            .catch(function(e) { window._warn('[EmailMerge] query error:', e); });
         }, 1200);
       }
 
@@ -5719,7 +5719,7 @@ if (typeof window.renderProfilePage !== 'function') {
         if (window.location.hash === '#profile' && typeof window._populateProfileModalFields === 'function') {
           window._populateProfileModalFields();
         }
-      } catch (e) { console.warn('Profile refresh on open failed:', e); }
+      } catch (e) { window._warn('Profile refresh on open failed:', e); }
     }
 
     if (typeof window._reflowChrome === 'function') window._reflowChrome();

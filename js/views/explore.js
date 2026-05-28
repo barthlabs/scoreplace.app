@@ -1176,7 +1176,7 @@ window._cancelFriendRequestMulti = function(toUids) {
   // Cancel all in parallel — Firestore arrayRemove é idempotente, sem risco
   var promises = toUids.map(function(toUid) {
     return window.FirestoreDB.cancelFriendRequest(myUid, toUid).catch(function(e) {
-      console.warn('[cancelFriendRequest] failed for', toUid, e);
+      window._warn('[cancelFriendRequest] failed for', toUid, e);
     });
   });
 
@@ -1599,7 +1599,7 @@ function _loadAndRenderFriendStats(friendUid, hr) {
       if (typeof window._initStatsAnimation === 'function') window._initStatsAnimation(el);
     })
     .catch(function(e) {
-      console.warn('[FriendStats]', e);
+      window._warn('[FriendStats]', e);
       var el = document.getElementById('friend-stats-section');
       if (el) el.innerHTML = '<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;font-style:italic;">Histórico indisponível</div>';
     });

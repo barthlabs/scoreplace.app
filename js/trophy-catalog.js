@@ -861,4 +861,4 @@ window._isTournamentQualifiedForTrophy = function(t) {
   return count >= 4;
 };
 
-console.log('[trophy-catalog] loaded — ' + window.TROPHY_CATALOG.length + ' trophies, ' + window.MILESTONE_CATALOG.length + ' milestones');
+window._log('[trophy-catalog] loaded — ' + window.TROPHY_CATALOG.length + ' trophies, ' + window.MILESTONE_CATALOG.length + ' milestones');

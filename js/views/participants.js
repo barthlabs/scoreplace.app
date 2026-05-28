@@ -308,7 +308,7 @@ window._markAbsent = function (tId, playerName) {
               }
             }
           }
-        } catch (_e) { console.warn('[markAbsent revert] failed:', _e); }
+        } catch (_e) { window._warn('[markAbsent revert] failed:', _e); }
       }
       // Sempre limpa woHistory após revert
       delete t.woHistory[playerName];
@@ -720,7 +720,7 @@ window._declareAbsent = function (tId, playerName) {
         }
         _reRenderParticipants();
       } catch (_e) {
-        console.error('[v1.0.87 _processWoSubstitutions] erro:', _e);
+        window._error('[v1.0.87 _processWoSubstitutions] erro:', _e);
         _processed = false;
       }
     }
@@ -1811,6 +1811,6 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill) {
       window.renderParticipants(container, tId);
     }
   }).catch(function(e) {
-    console.warn('[Participants] skill save failed:', e);
+    window._warn('[Participants] skill save failed:', e);
   });
 };

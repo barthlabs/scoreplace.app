@@ -166,7 +166,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
 
         return { email: email, phone: phone };
     } catch(e) {
-        console.warn('_sendUserNotification error:', e);
+        window._warn('_sendUserNotification error:', e);
         return null;
     }
 };
@@ -224,7 +224,7 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
                 if (result && result.email) allEmails.push(result.email);
                 if (result && result.phone) allPhones.push(result.phone);
             }
-        } catch(e) { console.warn('Notify participant error:', e); }
+        } catch(e) { window._warn('Notify participant error:', e); }
     }
 
     // Auto-dispatch email & WhatsApp channels

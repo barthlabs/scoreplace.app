@@ -46,7 +46,7 @@ window.VenueDB = {
       var doc = await this.db.collection('venues').doc(key).get();
       return doc.exists ? Object.assign({}, doc.data(), { _id: doc.id }) : null;
     } catch (e) {
-      console.error('Erro ao carregar venue:', e);
+      window._error('Erro ao carregar venue:', e);
       return null;
     }
   },
@@ -120,7 +120,7 @@ window.VenueDB = {
       await this.db.collection('venues').doc(key).update(clean);
       return true;
     } catch (e) {
-      console.error('Erro ao atualizar venue:', e);
+      window._error('Erro ao atualizar venue:', e);
       return false;
     }
   },
@@ -138,7 +138,7 @@ window.VenueDB = {
       });
       return true;
     } catch (e) {
-      console.error('Erro ao liberar venue:', e);
+      window._error('Erro ao liberar venue:', e);
       return false;
     }
   },
@@ -233,7 +233,7 @@ window.VenueDB = {
         return (a.name || '').localeCompare(b.name || '');
       });
     } catch (e) {
-      console.error('Erro ao listar venues:', e);
+      window._error('Erro ao listar venues:', e);
       return [];
     }
   },
@@ -302,7 +302,7 @@ window.VenueDB = {
       });
       return list;
     } catch (e) {
-      console.error('Erro ao carregar reviews:', e);
+      window._error('Erro ao carregar reviews:', e);
       return [];
     }
   },
@@ -314,7 +314,7 @@ window.VenueDB = {
         .collection('reviews').doc(reviewId).delete();
       return true;
     } catch (e) {
-      console.error('Erro ao apagar review:', e);
+      window._error('Erro ao apagar review:', e);
       return false;
     }
   },
@@ -384,7 +384,7 @@ window.VenueDB = {
       var venue = await this.loadVenue(venueKey);
       return Array.isArray(venue && venue.courts) ? venue.courts : [];
     } catch (e) {
-      console.warn('Erro ao carregar courts:', e && e.message);
+      window._warn('Erro ao carregar courts:', e && e.message);
       return [];
     }
   },
@@ -420,7 +420,7 @@ window.VenueDB = {
       });
       return true;
     } catch (e) {
-      console.error('Erro ao apagar court:', e);
+      window._error('Erro ao apagar court:', e);
       return false;
     }
   },
@@ -477,13 +477,13 @@ window.VenueDB = {
         });
       };
       await Promise.all([
-        this.db.collection('venues').where('ownerUid', '==', uid).get().then(addSnap).catch(function(e) { console.warn('ownerUid query:', e && e.message); }),
-        this.db.collection('venues').where('createdByUid', '==', uid).get().then(addSnap).catch(function(e) { console.warn('createdByUid query:', e && e.message); })
+        this.db.collection('venues').where('ownerUid', '==', uid).get().then(addSnap).catch(function(e) { window._warn('ownerUid query:', e && e.message); }),
+        this.db.collection('venues').where('createdByUid', '==', uid).get().then(addSnap).catch(function(e) { window._warn('createdByUid query:', e && e.message); })
       ]);
       list.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
       return list;
     } catch (e) {
-      console.error('Erro ao carregar meus venues:', e);
+      window._error('Erro ao carregar meus venues:', e);
       return [];
     }
   }

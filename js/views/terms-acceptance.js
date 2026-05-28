@@ -173,7 +173,7 @@
         // termos quando relogamos". Agora exige Firestore disponível e
         // verifica round-trip antes de resolver true.
         if (!window.FirestoreDB || !window.FirestoreDB.db) {
-          console.error('[TermsAccept v1.0.52] Firestore não inicializado — não pode persistir');
+          window._error('[TermsAccept v1.0.52] Firestore não inicializado — não pode persistir');
           if (typeof window._captureException === 'function') {
             window._captureException(new Error('Terms accept: Firestore not initialized'), { area: 'termsAccept', uid: cu.uid });
           }
@@ -197,13 +197,13 @@
           if (!verifyData || verifyData.acceptedTerms !== true) {
             throw new Error('round-trip falhou: ' + (verifyData ? 'doc existe mas acceptedTerms=' + verifyData.acceptedTerms : 'doc não encontrado'));
           }
-          console.log('[TermsAccept v1.0.52] saved + verified, acceptedTermsVersion=' + verifyData.acceptedTermsVersion);
+          window._log('[TermsAccept v1.0.52] saved + verified, acceptedTermsVersion=' + verifyData.acceptedTermsVersion);
           // Atualiza estado local
           Object.assign(cu, payload);
           cleanup();
           resolve(true);
         } catch (err) {
-          console.error('[TermsAccept v1.0.52] save failed:', err);
+          window._error('[TermsAccept v1.0.52] save failed:', err);
           if (typeof window._captureException === 'function') {
             window._captureException(err, { area: 'termsAccept', uid: cu.uid });
           }

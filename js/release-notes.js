@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">📡 v1.8.14-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Migração <code>console.log</code> → <code>window._log</code> em todo o projeto (433 ocorrências).</b><br><br>' +
+      'Todos os <code>console.log</code>, <code>console.warn</code>, <code>console.error</code> e <code>console.debug</code> em 37 arquivos JS foram substituídos pelos wrappers canônicos <code>window._log</code> / <code>window._warn</code> / <code>window._error</code> / <code>window._debug</code> do <code>logger.js</code>. Em produção, <code>_log</code> e <code>_debug</code> são silenciados automaticamente; <code>_warn</code> e <code>_error</code> adicionam breadcrumb no Sentry. Nenhuma mudança de comportamento para o usuário.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧹 v1.8.13-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Remoção de aliases mortos em <code>store.js</code>.</b><br><br>' +
       'Três aliases sem callers removidos: <code>_adjustBackHeaderForHamburger</code>, <code>_syncBackHeaderSpacer</code> (ambos apontavam para <code>_reflowChrome</code>) e <code>_showSupportModal</code> (compat wrapper de <code>#support</code>). Zero impacto funcional.</p>' +

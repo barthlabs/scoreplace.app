@@ -245,7 +245,7 @@
           });
         });
       } catch (e) {
-        console.warn('[trophies] friend comparison load error:', e);
+        window._warn('[trophies] friend comparison load error:', e);
       }
     }
 
@@ -654,5 +654,5 @@
     }
   };
 
-  console.log('[trophies-view] loaded');
+  window._log('[trophies-view] loaded');
 })();

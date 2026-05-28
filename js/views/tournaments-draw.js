@@ -1290,7 +1290,7 @@ window.handleDropTeam = function (e, targetIdx) {
             { type: 'info', confirmText: _t('btn.group'), cancelText: _t('btn.keepSeparate') }
         );
 
-    } catch (err) { console.error(err); }
+    } catch (err) { window._error(err); }
 };
 
 
@@ -1435,7 +1435,7 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
                 startDate: startDate
             });
         } catch(e) {
-            console.warn('[notifyDrawPersonalized] uid=' + uid, e);
+            window._warn('[notifyDrawPersonalized] uid=' + uid, e);
         }
     }
 };

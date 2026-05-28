@@ -226,7 +226,7 @@ function renderTournaments(container, tournamentId = null) {
                         emailRecipients.push(profile.email);
                     }
                 } catch(e) {
-                    console.warn('Error inviting friend', friendUid, e);
+                    window._warn('Error inviting friend', friendUid, e);
                 }
             }
 
@@ -299,7 +299,7 @@ function renderTournaments(container, tournamentId = null) {
                     window.FirestoreDB.saveTournament(t).then(function() {
                         showNotification(_t('tourn.botsAdded'), _t('tourn.botsAddedMsg', { n: qtd }), 'success');
                     }).catch(function(err) {
-                        console.error('Erro ao salvar bots:', err);
+                        window._error('Erro ao salvar bots:', err);
                         showNotification(_t('enroll.error'), _t('tourn.botError'), 'error');
                     });
                 }
@@ -467,7 +467,7 @@ function renderTournaments(container, tournamentId = null) {
                     window.location.hash = '#dashboard';
                 }
             }).catch(function(err) {
-                console.warn('Error loading tournament:', err);
+                window._warn('Error loading tournament:', err);
                 // Firestore read failed (permissions or network) — show invite card
                 window._renderInviteFallbackCard(container, tournamentId);
             });
@@ -1438,7 +1438,7 @@ function renderTournaments(container, tournamentId = null) {
 
         // Auto-fix stale names (async Firestore check)
         if (typeof window._autoFixStaleNames === 'function') {
-            window._autoFixStaleNames(visible[0].id).catch(function(e) { console.warn('Auto-fix stale names error:', e); });
+            window._autoFixStaleNames(visible[0].id).catch(function(e) { window._warn('Auto-fix stale names error:', e); });
         }
 
         // Deduplicação de participantes
@@ -2105,7 +2105,7 @@ function renderTournaments(container, tournamentId = null) {
             try {
                 renderBracket(inlineContainer, tournamentId, true);
             } catch (inlineErr) {
-                console.error('[InlineBracket] Error:', inlineErr);
+                window._error('[InlineBracket] Error:', inlineErr);
                 inlineContainer.innerHTML = '<div style="padding:1rem;color:#f87171;font-size:0.85rem;">Erro ao renderizar chaveamento: ' + window._safeHtml(String(inlineErr)) + '</div>';
             }
         }

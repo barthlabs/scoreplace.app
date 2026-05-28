@@ -249,7 +249,7 @@
         }
       }
       if (typeof showNotification === 'function') showNotification(_tH('org.accepted'), _tH('org.youAreNow') + ' ' + (inviteType === 'transfer' ? _tH('org.organizerRole') : _tH('org.coOrganizerRole')) + '.', 'success');
-    }).catch(function(e) { console.warn('Accept host invite error:', e); if (typeof showNotification === 'function') showNotification(_tH('org.error'), _tH('org.errorProcessing'), 'error'); });
+    }).catch(function(e) { window._warn('Accept host invite error:', e); if (typeof showNotification === 'function') showNotification(_tH('org.error'), _tH('org.errorProcessing'), 'error'); });
   };
 
   // ─── Reject host invite ───────────────────────────────────────────────────
@@ -306,7 +306,7 @@
         }
       }
       if (typeof showNotification === 'function') showNotification(_tH('org.rejected'), _tH('org.inviteRejected'), 'info');
-    }).catch(function(e) { console.warn('Reject host invite error:', e); if (typeof showNotification === 'function') showNotification(_tH('org.error'), _tH('org.errorProcessing'), 'error'); });
+    }).catch(function(e) { window._warn('Reject host invite error:', e); if (typeof showNotification === 'function') showNotification(_tH('org.error'), _tH('org.errorProcessing'), 'error'); });
   };
 
   // ─── Cancel host invite (by organizer) ────────────────────────────────────
@@ -443,7 +443,7 @@
 
   // ─── Helper: send notification — uses _sendUserNotification (proven path) with fallback ──
   function _notifyByEmail(uidOrEmail, data) {
-    if (!uidOrEmail) { console.warn('[host-transfer] _notifyByEmail: no uidOrEmail'); return; }
+    if (!uidOrEmail) { window._warn('[host-transfer] _notifyByEmail: no uidOrEmail'); return; }
     var cu = window.AppStore.currentUser || {};
     var payload = {
       type: data.type || 'info',
@@ -464,7 +464,7 @@
       if (typeof window._sendUserNotification === 'function') {
         window._sendUserNotification(uid, data).then(function() {
         }).catch(function(e) {
-          console.warn('[host-transfer] _sendUserNotification failed, trying direct write:', e);
+          window._warn('[host-transfer] _sendUserNotification failed, trying direct write:', e);
           _sendDirect(uid);
         });
         return true;
@@ -476,10 +476,10 @@
       if (window.FirestoreDB && window.FirestoreDB.addNotification) {
         window.FirestoreDB.addNotification(uid, payload).then(function() {
         }).catch(function(e) {
-          console.error('[host-transfer] addNotification FAILED for uid:', uid, e);
+          window._error('[host-transfer] addNotification FAILED for uid:', uid, e);
         });
       } else {
-        console.warn('[host-transfer] FirestoreDB.addNotification not available');
+        window._warn('[host-transfer] FirestoreDB.addNotification not available');
       }
     }
 
@@ -499,13 +499,13 @@
             if (!snap2.empty) {
               _resolveAndSend(snap2.docs[0].id);
             } else {
-              console.warn('[host-transfer] No user found for email:', email, 'or name:', fallbackName);
+              window._warn('[host-transfer] No user found for email:', email, 'or name:', fallbackName);
             }
-          }).catch(function(e) { console.error('[host-transfer] Name lookup FAILED:', e); });
+          }).catch(function(e) { window._error('[host-transfer] Name lookup FAILED:', e); });
         } else {
-          console.warn('[host-transfer] No user found for email:', email);
+          window._warn('[host-transfer] No user found for email:', email);
         }
-      }).catch(function(e) { console.error('[host-transfer] Email lookup FAILED:', e); });
+      }).catch(function(e) { window._error('[host-transfer] Email lookup FAILED:', e); });
     }
 
     // If it looks like a UID (no @), try direct send + verify the doc exists
@@ -515,13 +515,13 @@
           if (doc.exists) {
             _resolveAndSend(uidOrEmail);
           } else {
-            console.warn('[host-transfer] UID doc not found:', uidOrEmail, '— trying email/name fallback');
+            window._warn('[host-transfer] UID doc not found:', uidOrEmail, '— trying email/name fallback');
             var fallbackEmail = data._fallbackEmail || '';
             var fallbackName = data._fallbackName || '';
             if (fallbackEmail) {
               _lookupByEmail(fallbackEmail, fallbackName);
             } else {
-              console.warn('[host-transfer] No fallback email available for uid:', uidOrEmail);
+              window._warn('[host-transfer] No fallback email available for uid:', uidOrEmail);
             }
           }
         }).catch(function() { _resolveAndSend(uidOrEmail); });

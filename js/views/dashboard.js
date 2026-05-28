@@ -1852,7 +1852,7 @@ function renderDashboard(container) {
         }
       } catch (e1) {
         if (e1 && e1.code !== 'permission-denied')
-          console.warn('[users count] aggregate failed, falling back to .get():', e1 && e1.message);
+          window._warn('[users count] aggregate failed, falling back to .get():', e1 && e1.message);
       }
       // Path 2: fallback — get() todos os docs e count via .size
       if (n == null) {
@@ -1861,7 +1861,7 @@ function renderDashboard(container) {
           if (fullSnap && typeof fullSnap.size === 'number') n = fullSnap.size;
         } catch (e2) {
           if (e2 && e2.code !== 'permission-denied')
-            console.warn('[users count] .get() fallback also failed:', e2 && e2.message);
+            window._warn('[users count] .get() fallback also failed:', e2 && e2.message);
         }
       }
       if (n != null) {
@@ -1958,7 +1958,7 @@ function renderDashboard(container) {
         if (subEl) subEl.innerHTML = fmt.subtitle;
         pill.setAttribute('title', fmt.title);
       } catch (e) {
-        console.warn('[matches stats] async refresh failed:', e);
+        window._warn('[matches stats] async refresh failed:', e);
       }
     })();
   }
@@ -2179,10 +2179,10 @@ function renderDashboard(container) {
     var _force = _curLen === 0; // sem dados = sempre re-fetch, sem throttle
     if (_force || Date.now() - _lastFetch > 15000) {
       window.AppStore._publicDiscoveryLastFetch = Date.now();
-      console.log('[Discovery v0.16.60] re-fetch disparado', { curLen: _curLen, force: _force, msSinceLast: Date.now() - _lastFetch });
+      window._log('[Discovery v0.16.60] re-fetch disparado', { curLen: _curLen, force: _force, msSinceLast: Date.now() - _lastFetch });
       window.AppStore.loadPublicDiscovery().then(function() {
         var newLen = (window.AppStore.publicDiscovery || []).length;
-        console.log('[Discovery v0.16.60] re-fetch retornou', { newLen: newLen, oldLen: _curLen });
+        window._log('[Discovery v0.16.60] re-fetch retornou', { newLen: newLen, oldLen: _curLen });
         // Re-render se ainda estamos no dashboard E o count mudou.
         if (window.location.hash === '' || window.location.hash === '#' || window.location.hash.indexOf('#dashboard') === 0) {
           if (newLen !== _curLen) {
@@ -2191,7 +2191,7 @@ function renderDashboard(container) {
           }
         }
       }).catch(function(e) {
-        console.error('[Discovery v0.16.60] re-fetch FAILED', e);
+        window._error('[Discovery v0.16.60] re-fetch FAILED', e);
         window._lastDiscoveryError = String(e && e.message || e);
       });
     }
@@ -2378,7 +2378,7 @@ function _hydrateCasualLinkWidget() {
       widgetBox.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px;">' + cards.join('') + '</div>';
     })
     .catch(function(e) {
-      console.warn('[casual-link-widget] error loading notifs:', e);
+      window._warn('[casual-link-widget] error loading notifs:', e);
       var widgetBox = document.getElementById('dashboard-casual-link-widget');
       if (widgetBox) widgetBox.innerHTML = '';
     });
@@ -2402,7 +2402,7 @@ window._dashConfirmCasualLink = async function(notifId, accept) {
           .collection('notifications').doc(notifId).get();
         if (docSnap.exists) { notif = docSnap.data(); notif._id = docSnap.id; }
       } catch (e) {
-        console.warn('[casual-link-widget] notif fallback load failed:', e);
+        window._warn('[casual-link-widget] notif fallback load failed:', e);
       }
     }
   }
@@ -2464,7 +2464,7 @@ window._dashCancelPresence = function(docId) {
     if (typeof showNotification === 'function') showNotification('Presença cancelada.', '', 'info');
     _hydrateMyActivePresenceWidget();
   }).catch(function(e) {
-    console.warn('Cancel presence failed:', e);
+    window._warn('Cancel presence failed:', e);
     if (typeof showNotification === 'function') showNotification('Erro ao cancelar.', '', 'error');
   });
 };
@@ -2492,7 +2492,7 @@ function _hydrateFriendsPresenceWidget() {
   var friendsRaw = Array.isArray(cu.friends) ? cu.friends.filter(function(u) { return u && u !== cu.uid; }) : [];
   var friendsLikeUid = friendsRaw.filter(function(u) { return typeof u === 'string' && u.indexOf('@') === -1; });
   var friendsLikeEmail = friendsRaw.filter(function(u) { return typeof u === 'string' && u.indexOf('@') !== -1; });
-  console.log('[FriendsWidget v0.16.43]', {
+  window._log('[FriendsWidget v0.16.43]', {
     uid: cu.uid,
     friendsRawCount: friendsRaw.length,
     friendsRaw: friendsRaw,
@@ -2520,12 +2520,12 @@ function _hydrateFriendsPresenceWidget() {
         })
         .then(function(snap) {
           if (snap.empty) {
-            console.warn('[FriendsWidget] email não resolvido pra uid:', em);
+            window._warn('[FriendsWidget] email não resolvido pra uid:', em);
             return null;
           }
           var doc = snap.docs[0];
           var resolvedUid = doc.id;
-          console.log('[FriendsWidget] email resolvido:', em, '→', resolvedUid);
+          window._log('[FriendsWidget] email resolvido:', em, '→', resolvedUid);
           // Persiste a migração no doc do usuário atual
           try {
             var FV = firebase.firestore.FieldValue;
@@ -2535,16 +2535,16 @@ function _hydrateFriendsPresenceWidget() {
               return window.FirestoreDB.db.collection('users').doc(cu.uid).update({
                 friends: FV.arrayRemove(em)
               });
-            }).catch(function(e) { console.warn('[FriendsWidget] migrate persist falhou:', e); });
+            }).catch(function(e) { window._warn('[FriendsWidget] migrate persist falhou:', e); });
           } catch (e) {}
           return resolvedUid;
         })
-        .catch(function(e) { console.warn('[FriendsWidget] resolve query falhou pra', em, e); return null; });
+        .catch(function(e) { window._warn('[FriendsWidget] resolve query falhou pra', em, e); return null; });
     });
     Promise.all(resolvePromises).then(function(resolved) {
       var added = resolved.filter(function(u) { return u && friends.indexOf(u) === -1; });
       if (added.length > 0) {
-        console.log('[FriendsWidget] re-querying com uids resolvidos:', added);
+        window._log('[FriendsWidget] re-querying com uids resolvidos:', added);
         // Atualiza cache local também
         if (Array.isArray(cu.friends)) {
           added.forEach(function(u) { if (cu.friends.indexOf(u) === -1) cu.friends.push(u); });
@@ -2749,7 +2749,7 @@ function _hydrateFriendsPresenceWidget() {
       setTimeout(window._venuesHydrateAllPreferredMovement, 50);
     }
   }).catch(function(e) {
-    console.warn('Erro ao carregar presenças de amigos:', e);
+    window._warn('Erro ao carregar presenças de amigos:', e);
   });
 }
 

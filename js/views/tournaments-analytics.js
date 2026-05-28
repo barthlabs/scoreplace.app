@@ -615,7 +615,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
                 window._initStatsAnimation(slot);
             }
         }).catch(function(e) {
-            console.warn('[player-stats] loadUserMatchHistory failed', e);
+            window._warn('[player-stats] loadUserMatchHistory failed', e);
             if (slot) {
                 slot.innerHTML = window._renderPersistentMatchStats(_collectLocalRecordsForPlayer(playerName, resolvedUid), resolvedUid) +
                     (stats.tournamentsPlayed > 0 ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);padding:6px 0;">📋 Torneios Disputados (' + stats.tournamentsPlayed + ')</summary><div style="margin-top:6px;">' + tourListHtml + '</div></details>' : '');

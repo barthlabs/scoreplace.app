@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.13-beta';
+window.SCOREPLACE_VERSION = '1.8.14-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -43,8 +43,8 @@ window.SCOREPLACE_VERSION = '1.8.13-beta';
     // Preferências preservadas: theme, lang, dashView, debug, emailForSignIn,
     // fcm_dismissed, gsm_prefs, loginPhoneCountry, sentry_dsn.
     localStorage.setItem('scoreplace_beta_cleanup_v1', '1');
-    if (typeof console !== 'undefined' && console.log) {
-      console.log('[scoreplace-beta] one-time cleanup done — ' + dataKeys.length + ' data keys cleared (Firebase IndexedDB preserved)');
+    if (typeof console !== 'undefined' && window._log) {
+      window._log('[scoreplace-beta] one-time cleanup done — ' + dataKeys.length + ' data keys cleared (Firebase IndexedDB preserved)');
     }
   } catch (e) {
     // localStorage pode estar indisponível em modo private; não bloqueia o boot
@@ -62,7 +62,7 @@ window.SCOREPLACE_VERSION = '1.8.13-beta';
     }).then(function(txt) {
       var m = txt.match(/SCOREPLACE_VERSION\s*=\s*'([^']+)'/);
       if (m && m[1] && m[1] !== window.SCOREPLACE_VERSION) {
-        console.log('[AutoUpdate] New version:', m[1], '(running:', window.SCOREPLACE_VERSION + '). Updating...');
+        window._log('[AutoUpdate] New version:', m[1], '(running:', window.SCOREPLACE_VERSION + '). Updating...');
         // 1. Nuke all SW caches
         var p1 = ('caches' in window) ? caches.keys().then(function(keys) {
           return Promise.all(keys.map(function(k) { return caches.delete(k); }));
@@ -475,13 +475,13 @@ window._installBackNavDelegate = function() {
     // Override path: callback function registered in _backNavCallbacks.
     var cbId = el.getAttribute('data-back-cb');
     if (cbId && typeof window._backNavCallbacks[cbId] === 'function') {
-      try { window._backNavCallbacks[cbId](e); } catch(err) { console.warn('[scoreplace-back] cb error', err); }
+      try { window._backNavCallbacks[cbId](e); } catch(err) { window._warn('[scoreplace-back] cb error', err); }
       return;
     }
     // Override path: legacy inline JS string (Function exec).
     var inline = el.getAttribute('data-back-inline');
     if (inline) {
-      try { (new Function(inline))(); } catch(err) { console.warn('[scoreplace-back] inline error', err); }
+      try { (new Function(inline))(); } catch(err) { window._warn('[scoreplace-back] inline error', err); }
       return;
     }
     // Default path: navigate to the hash. If we're already there (edge case
@@ -1410,7 +1410,7 @@ window._startProCheckout = async function() {
       throw new Error(data.error || 'Erro ao criar sessão de pagamento');
     }
   } catch (err) {
-    console.error('Checkout error:', err);
+    window._error('Checkout error:', err);
     if (typeof window._captureException === 'function') {
       window._captureException(err, { area: 'stripeCheckout', code: err && err.code });
     }
@@ -1532,11 +1532,11 @@ window._recoverWipedAdminEmails = function() {
         // Atualiza AppStore em memória para que a sessão atual funcione
         t.adminEmails = newAdminEmails;
         t.memberEmails = newMemberEmails;
-        console.log('[Recovery v1.6.68] restaurado adminEmails para torneio', t.id,
+        window._log('[Recovery v1.6.68] restaurado adminEmails para torneio', t.id,
           '→', newAdminEmails);
       })
       .catch(function(e) {
-        console.warn('[Recovery v1.6.68] falhou para torneio', t.id, e);
+        window._warn('[Recovery v1.6.68] falhou para torneio', t.id, e);
       });
   });
 };
@@ -1681,7 +1681,7 @@ window.AppStore = {
         // Loaded from local cache
         return true;
       }
-    } catch(e) { console.warn('[AppStore] Erro ao carregar cache local:', e.message); }
+    } catch(e) { window._warn('[AppStore] Erro ao carregar cache local:', e.message); }
     return false;
   },
 
@@ -1695,7 +1695,7 @@ window.AppStore = {
       if (t.organizerEmail === store.currentUser.email ||
           (Array.isArray(t.coHosts) && t.coHosts.some(function(ch) { return ch.email === store.currentUser.email && ch.status === 'active'; }))) {
         window.FirestoreDB.saveTournament(t, { skipParticipants: true }).catch(function(err) {
-          console.warn('Sync error:', err);
+          window._warn('Sync error:', err);
         });
       }
     });
@@ -1706,14 +1706,14 @@ window.AppStore = {
   // Use for critical operations: draw, match results, status changes, enrollments
   async syncImmediate(tournamentId) {
     if (!window.FirestoreDB || !window.FirestoreDB.db) {
-      console.error('syncImmediate: Firestore not available');
+      window._error('syncImmediate: Firestore not available');
       return false;
     }
     var t = this.tournaments.find(function(tour) {
       return String(tour.id) === String(tournamentId);
     });
     if (!t) {
-      console.error('syncImmediate: Tournament not found:', tournamentId);
+      window._error('syncImmediate: Tournament not found:', tournamentId);
       return false;
     }
     try {
@@ -1723,7 +1723,7 @@ window.AppStore = {
       // Tournament saved to Firestore
       return true;
     } catch (err) {
-      console.error('syncImmediate: FAILED to save tournament ' + tournamentId, err);
+      window._error('syncImmediate: FAILED to save tournament ' + tournamentId, err);
       // Sentry observability (no-op se DSN não configurada — ver js/sentry-init.js)
       if (typeof window._captureException === 'function') {
         window._captureException(err, { area: 'syncImmediate', tournamentId: tournamentId, code: err && err.code });
@@ -1796,7 +1796,7 @@ window.AppStore = {
           }
           // Auto-fix stale names after tournaments are loaded (no currentUser check needed)
           if (typeof window._autoFixStaleNames === 'function') {
-            window._autoFixStaleNames().catch(function(e) { console.warn('Auto-fix stale names error:', e); });
+            window._autoFixStaleNames().catch(function(e) { window._warn('Auto-fix stale names error:', e); });
           }
           // Auto-close tournaments whose registration deadline has passed
           window._autoCloseExpiredEnrollments();
@@ -1808,7 +1808,7 @@ window.AppStore = {
         // Subsequent snapshots = remote changes → soft refresh (preserve UX)
         window._softRefreshView();
       }, function(err) {
-        console.warn('Real-time listener error:', err);
+        window._warn('Real-time listener error:', err);
         // Fallback to one-time load
         store.loadFromFirestore();
       });
@@ -1865,7 +1865,7 @@ window.AppStore = {
           if (vc && typeof renderNotifications === 'function') renderNotifications(vc);
         }
       }, function(err) {
-        console.warn('Notifications listener error:', err);
+        window._warn('Notifications listener error:', err);
       });
   },
 
@@ -1991,7 +1991,7 @@ window.AppStore = {
           }
         }
       }, function(err) {
-        console.warn('Profile listener error:', err);
+        window._warn('Profile listener error:', err);
       });
   },
 
@@ -2034,7 +2034,7 @@ window.AppStore = {
       this._publicDiscoveryCursor = res.nextCursor;
       this._publicDiscoveryHasMore = !!res.hasMore;
     } catch (e) {
-      console.warn('Erro ao carregar descoberta pública:', e);
+      window._warn('Erro ao carregar descoberta pública:', e);
     }
   },
 
@@ -2058,7 +2058,7 @@ window.AppStore = {
       this._saveToCache();
       // Tournaments loaded from Firestore
     } catch (e) {
-      console.error('Erro ao carregar torneios:', e);
+      window._error('Erro ao carregar torneios:', e);
       if (typeof window._captureException === 'function') {
         window._captureException(e, { area: 'loadTournaments', code: e && e.code });
       }
@@ -2089,7 +2089,7 @@ window.AppStore = {
           birthDate: profile ? profile.birthDate : undefined,
           fields: profile ? Object.keys(profile).sort() : []
         };
-        console.log('[Profile Load]', uid, 'gender:', window._lastProfileLoad.gender, 'city:', window._lastProfileLoad.city);
+        window._log('[Profile Load]', uid, 'gender:', window._lastProfileLoad.gender, 'city:', window._lastProfileLoad.city);
       } catch (_e) {}
       if (profile && this.currentUser) {
         // Merge saved profile data into currentUser
@@ -2180,7 +2180,7 @@ window.AppStore = {
         var self = this;
         setTimeout(function() {
           self._selfHealFriendsList().catch(function(e) {
-            console.warn('[selfHealFriends] background failed:', e);
+            window._warn('[selfHealFriends] background failed:', e);
           });
         }, 0);
       }
@@ -2203,7 +2203,7 @@ window.AppStore = {
       }
       return profile;
     } catch (e) {
-      console.error('Erro ao carregar perfil:', e);
+      window._error('Erro ao carregar perfil:', e);
       if (typeof window._captureException === 'function') {
         window._captureException(e, { area: 'loadUserProfile', uid: uid, code: e && e.code });
       }
@@ -2254,7 +2254,7 @@ window.AppStore = {
                      friends.length !== (uniqueUidCount + emailsToResolve.length);
     if (!needsClean) return;
 
-    console.log('[selfHealFriends v0.17.6] starting', {
+    window._log('[selfHealFriends v0.17.6] starting', {
       total: friends.length,
       uniqueUids: uniqueUidCount,
       emailsToResolve: emailsToResolve.length,
@@ -2283,7 +2283,7 @@ window.AppStore = {
           resolvedMap[email] = null; // órfão, dropar
         }
       } catch (e) {
-        console.warn('[selfHealFriends] resolve falhou pra', email, e);
+        window._warn('[selfHealFriends] resolve falhou pra', email, e);
         resolvedMap[email] = null;
       }
     }));
@@ -2314,7 +2314,7 @@ window.AppStore = {
     var origKeys = Object.keys(origSet);
     var cleanKeys = Object.keys(cleanSet);
     if (origKeys.length === cleanKeys.length && origKeys.every(function(k) { return cleanSet[k]; })) {
-      console.log('[selfHealFriends] no changes after dedup');
+      window._log('[selfHealFriends] no changes after dedup');
       return;
     }
 
@@ -2322,7 +2322,7 @@ window.AppStore = {
     try {
       await db.collection('users').doc(uid).update({ friends: clean });
       this.currentUser.friends = clean;
-      console.log('[selfHealFriends v0.17.6] cleaned', {
+      window._log('[selfHealFriends v0.17.6] cleaned', {
         before: friends.length,
         after: clean.length,
         droppedOrphans: emailsToResolve.filter(function(em) { return !resolvedMap[em]; }).length,
@@ -2332,7 +2332,7 @@ window.AppStore = {
         document.dispatchEvent(new CustomEvent('scoreplace:friends-cleaned', { detail: { uid: uid, before: friends.length, after: clean.length } }));
       } catch (e) {}
     } catch (e) {
-      console.error('[selfHealFriends v0.17.6] commit falhou:', e);
+      window._error('[selfHealFriends v0.17.6] commit falhou:', e);
     }
   },
 
@@ -2408,7 +2408,7 @@ window.AppStore = {
       if (Array.isArray(payload[k]) && payload[k].length === 0) delete payload[k];
     });
     var _persistedKeys = Object.keys(payload).sort();
-    console.log('[Profile Save]', uid, 'fields persisted:', _persistedKeys.join(','));
+    window._log('[Profile Save]', uid, 'fields persisted:', _persistedKeys.join(','));
     // v0.16.7: evidência em tela. Expõe o último save pra UI consumir.
     // v0.16.8: agora compara VALORES no round-trip (não só presença da chave).
     // v0.16.7 checava apenas `_roundtrip[k] === undefined`, o que passava mesmo
@@ -2448,8 +2448,8 @@ window.AppStore = {
         });
         window._lastProfileSave.roundtripMissing = _missing;
         window._lastProfileSave.roundtripMismatch = _mismatch;
-        if (_missing.length > 0) console.warn('[Profile Save] roundtrip missing:', _missing);
-        if (_mismatch.length > 0) console.warn('[Profile Save] roundtrip mismatch:', _mismatch);
+        if (_missing.length > 0) window._warn('[Profile Save] roundtrip missing:', _missing);
+        if (_mismatch.length > 0) window._warn('[Profile Save] roundtrip mismatch:', _mismatch);
       } catch (_e) {
         window._lastProfileSave.roundtripError = (_e && _e.message) || String(_e);
       }
@@ -2543,7 +2543,7 @@ window.AppStore = {
     // Save to Firestore immediately
     if (window.FirestoreDB && window.FirestoreDB.db) {
       window.FirestoreDB.saveTournament(tourData).catch(function(err) {
-        console.error('Erro ao salvar novo torneio:', err);
+        window._error('Erro ao salvar novo torneio:', err);
         // permission-denied = token expirado ou regra de auth — não é bug de código
         if (err && err.code === 'permission-denied') {
           if (typeof showNotification === 'function') {
@@ -2611,7 +2611,7 @@ window._loadTemplates = async function() {
     }
     return templates;
   } catch(e) {
-    console.warn('[Templates] Firestore load failed, using localStorage:', e);
+    window._warn('[Templates] Firestore load failed, using localStorage:', e);
     // Fallback to localStorage
     var lsKey2 = 'scoreplace_templates_' + (u.email || '');
     try {
@@ -2641,7 +2641,7 @@ window._saveTemplate = async function(template) {
     }
     return 'error';
   } catch(e) {
-    console.warn('[Templates] Firestore save failed, using localStorage:', e);
+    window._warn('[Templates] Firestore save failed, using localStorage:', e);
     // Fallback: save to localStorage
     template._id = 'tpl_' + Date.now();
     window._templateCache = window._templateCache || [];

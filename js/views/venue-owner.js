@@ -236,7 +236,7 @@
       }
     } catch (e) {
       // Fallback: show the address instead of a broken map iframe.
-      console.warn('venue-owner map init failed:', e && e.message);
+      window._warn('venue-owner map init failed:', e && e.message);
       el.innerHTML = '<div style="padding:14px;color:var(--text-muted);font-size:0.78rem;text-align:center;">📍 mapa indisponível</div>';
     }
   }
@@ -259,7 +259,7 @@
         var Maps = await google.maps.importLibrary('maps');
         var Marker = await google.maps.importLibrary('marker');
         _ownerMapsLibs = { Map: Maps.Map, AdvancedMarkerElement: Marker.AdvancedMarkerElement, PinElement: Marker.PinElement };
-      } catch (e) { console.warn('[owner-map] load failed:', e); return; }
+      } catch (e) { window._warn('[owner-map] load failed:', e); return; }
     }
     var el = document.getElementById('venue-owner-main-map');
     if (!el) return;
@@ -354,7 +354,7 @@
     try {
       _registeredVenues = await window.VenueDB.listVenues({}, { limit: 50 });
     } catch (e) {
-      console.warn('[owner-map] listVenues failed:', e);
+      window._warn('[owner-map] listVenues failed:', e);
       _registeredVenues = [];
     }
     _renderOwnerMarkers();
@@ -577,7 +577,7 @@
         });
         googleSugs = (result.suggestions || []).filter(function(s) { return s.placePrediction; });
       } catch (err) {
-        console.error('Venue owner search error:', err);
+        window._error('Venue owner search error:', err);
         googleError = err && err.message;
       }
     } else {
@@ -681,7 +681,7 @@
         creatorName: alreadyCommunity ? existing.createdByName : ''
       });
     } catch (err) {
-      console.error('Place details error:', err);
+      window._error('Place details error:', err);
     }
   }
 
@@ -998,7 +998,7 @@
       _refreshCourtsScreenList(venueKey);
       if (window.showNotification) window.showNotification(courtId ? 'Entrada atualizada!' : 'Quadras adicionadas!', '', 'success');
     } catch (e) {
-      console.error('courts form save:', e);
+      window._error('courts form save:', e);
       if (window.showNotification) window.showNotification('Erro ao salvar: ' + (e && e.message || ''), '', 'error');
     }
   };
@@ -1043,7 +1043,7 @@
       html += '</div>';
       box.innerHTML = html;
     } catch (e) {
-      console.warn('courts screen refresh:', e);
+      window._warn('courts screen refresh:', e);
       box.innerHTML = '<div style="font-size:0.8rem;color:var(--danger-color);padding:10px;">Erro ao carregar quadras.</div>';
     }
   }
@@ -1120,7 +1120,7 @@
       if (String(e.message).indexOf('venue-já-reivindicado') !== -1) {
         if (window.showNotification) window.showNotification('Este local já tem um proprietário formal.', 'Escreva para scoreplace.app@gmail.com se você é o verdadeiro dono.', 'error');
       } else {
-        console.error(e);
+        window._error(e);
         if (window.showNotification) window.showNotification('Erro ao salvar local.', String(e.message || e), 'error');
       }
     }
@@ -1313,7 +1313,7 @@
     } catch (e) {
       // Falha de leitura — deixa a transação do delete tratar. Não bloqueia
       // o fluxo destrutivo por um erro transitório de rede.
-      console.warn('[venue-delete] pre-check failed:', e && e.message);
+      window._warn('[venue-delete] pre-check failed:', e && e.message);
     }
     window.showConfirmDialog(
       '🗑️ Apagar este local?',

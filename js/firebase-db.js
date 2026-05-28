@@ -13,19 +13,19 @@ window.FirestoreDB = {
     try {
       if (typeof firebase === 'undefined') {
         this.lastInitError = 'SDK Firebase não carregado (firebase undefined)';
-        console.error('[FirestoreDB.init]', this.lastInitError);
+        window._error('[FirestoreDB.init]', this.lastInitError);
         return;
       }
       if (typeof firebase.firestore !== 'function') {
         this.lastInitError = 'firebase-firestore-compat.js não carregado';
-        console.error('[FirestoreDB.init]', this.lastInitError);
+        window._error('[FirestoreDB.init]', this.lastInitError);
         return;
       }
       this.db = firebase.firestore();
       this.lastInitError = null;
     } catch (e) {
       this.lastInitError = (e && e.message) || String(e);
-      console.error('[FirestoreDB.init] Erro ao inicializar Firestore:', e);
+      window._error('[FirestoreDB.init] Erro ao inicializar Firestore:', e);
     }
   },
 
@@ -277,7 +277,7 @@ window.FirestoreDB = {
     try {
       await this.db.collection('tournaments').doc(String(tournamentId)).delete();
     } catch (e) {
-      console.error('Erro ao deletar torneio:', e);
+      window._error('Erro ao deletar torneio:', e);
       if (typeof window._captureException === 'function') {
         window._captureException(e, { area: 'deleteTournament', tournamentId: tournamentId, code: e && e.code });
       }
@@ -296,7 +296,7 @@ window.FirestoreDB = {
       // Torneios carregados do Firestore
       return tournaments;
     } catch (e) {
-      console.error('Erro ao carregar torneios:', e);
+      window._error('Erro ao carregar torneios:', e);
       if (typeof window._captureException === 'function') {
         window._captureException(e, { area: 'loadAllTournaments', code: e && e.code });
       }
@@ -324,7 +324,7 @@ window.FirestoreDB = {
       });
       return tournaments;
     } catch (e) {
-      console.error('Erro ao carregar torneios do usuário:', e);
+      window._error('Erro ao carregar torneios do usuário:', e);
       return [];
     }
   },
@@ -394,7 +394,7 @@ window.FirestoreDB = {
         hasMore: snap.size >= (limit + 1) * 3
       };
     } catch (e) {
-      console.error('Erro ao carregar torneios públicos:', e);
+      window._error('Erro ao carregar torneios públicos:', e);
       return { tournaments: [], nextCursor: null, hasMore: false };
     }
   },
@@ -441,14 +441,14 @@ window.FirestoreDB = {
       });
       var hasMore = tournaments.length > limit;
       if (hasMore) tournaments = tournaments.slice(0, limit);
-      console.log('[loadAllPublicTournaments v0.16.62]', { snapSize: snap.size, returned: tournaments.length, hasMore: hasMore });
+      window._log('[loadAllPublicTournaments v0.16.62]', { snapSize: snap.size, returned: tournaments.length, hasMore: hasMore });
       return {
         tournaments: tournaments,
         nextCursor: null, // paginação por cursor desabilitada temporariamente
         hasMore: hasMore
       };
     } catch (e) {
-      console.error('Erro ao carregar todos os torneios públicos:', e);
+      window._error('Erro ao carregar todos os torneios públicos:', e);
       return { tournaments: [], nextCursor: null, hasMore: false };
     }
   },
@@ -475,7 +475,7 @@ window.FirestoreDB = {
       });
       return tournaments;
     } catch (e) {
-      console.error('Erro ao carregar torneios abertos:', e);
+      window._error('Erro ao carregar torneios abertos:', e);
       return [];
     }
   },
@@ -489,7 +489,7 @@ window.FirestoreDB = {
       var doc = await this.db.collection('tournaments').doc(String(id)).get();
       return doc.exists ? doc.data() : null;
     } catch (e) {
-      console.error('Erro ao carregar torneio:', e);
+      window._error('Erro ao carregar torneio:', e);
       return null;
     }
   },
@@ -526,7 +526,7 @@ window.FirestoreDB = {
       var doc = await this.db.collection('users').doc(uid).get();
       return doc.exists ? doc.data() : null;
     } catch (e) {
-      console.error('Erro ao carregar perfil:', e);
+      window._error('Erro ao carregar perfil:', e);
       return null;
     }
   },
@@ -558,15 +558,15 @@ window.FirestoreDB = {
         this.db.collection('users')
           .where('updatedAt', '>=', cutoff)
           .orderBy('updatedAt', 'desc')
-          .limit(lim).get().then(addFromSnap).catch(function(e) { console.warn('recent-updatedAt err', e && e.message); }),
+          .limit(lim).get().then(addFromSnap).catch(function(e) { window._warn('recent-updatedAt err', e && e.message); }),
         this.db.collection('users')
           .where('createdAt', '>=', cutoff)
           .orderBy('createdAt', 'desc')
-          .limit(lim).get().then(addFromSnap).catch(function(e) { console.warn('recent-createdAt err', e && e.message); })
+          .limit(lim).get().then(addFromSnap).catch(function(e) { window._warn('recent-createdAt err', e && e.message); })
       ]);
       return Object.keys(results).map(function(k) { return results[k]; });
     } catch (e) {
-      console.error('Erro ao carregar usuários recentes:', e);
+      window._error('Erro ao carregar usuários recentes:', e);
       return [];
     }
   },
@@ -624,13 +624,13 @@ window.FirestoreDB = {
         .where('displayName_lower', '>=', q)
         .where('displayName_lower', '<', end)
         .limit(perQueryLimit).get().then(addFromSnap).catch(function(e) {
-          console.warn('displayName search error:', e && e.message);
+          window._warn('displayName search error:', e && e.message);
         }),
       this.db.collection('users')
         .where('email_lower', '>=', q)
         .where('email_lower', '<', end)
         .limit(perQueryLimit).get().then(addFromSnap).catch(function(e) {
-          console.warn('email search error:', e && e.message);
+          window._warn('email search error:', e && e.message);
         })
     ];
     await Promise.all(queries);
@@ -688,7 +688,7 @@ window.FirestoreDB = {
         read: false
       });
     } catch (e) {
-      console.error('Erro ao enviar convite de amizade:', e);
+      window._error('Erro ao enviar convite de amizade:', e);
     }
   },
 
@@ -709,7 +709,7 @@ window.FirestoreDB = {
         if (typeof window._trophyOnFriendAdded === 'function') window._trophyOnFriendAdded();
       }, 500);
     } catch (e) {
-      console.error('Erro ao aceitar amizade:', e);
+      window._error('Erro ao aceitar amizade:', e);
     }
   },
 
@@ -723,7 +723,7 @@ window.FirestoreDB = {
         friends: firebase.firestore.FieldValue.arrayRemove(myUid)
       }, { merge: true });
     } catch (e) {
-      console.error('Erro ao remover amizade:', e);
+      window._error('Erro ao remover amizade:', e);
     }
   },
 
@@ -737,7 +737,7 @@ window.FirestoreDB = {
         friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove(fromUid)
       }, { merge: true });
     } catch (e) {
-      console.error('Erro ao cancelar convite de amizade:', e);
+      window._error('Erro ao cancelar convite de amizade:', e);
     }
   },
 
@@ -751,7 +751,7 @@ window.FirestoreDB = {
         friendRequestsSent: firebase.firestore.FieldValue.arrayRemove(myUid)
       }, { merge: true });
     } catch (e) {
-      console.error('Erro ao rejeitar amizade:', e);
+      window._error('Erro ao rejeitar amizade:', e);
     }
   },
 
@@ -762,7 +762,7 @@ window.FirestoreDB = {
     try {
       await this.db.collection('users').doc(uid).collection('notifications').add(notifData);
     } catch (e) {
-      console.error('Erro ao criar notificação:', e);
+      window._error('Erro ao criar notificação:', e);
     }
   },
 
@@ -781,7 +781,7 @@ window.FirestoreDB = {
       });
       return notifs;
     } catch (e) {
-      console.error('Erro ao carregar notificações:', e);
+      window._error('Erro ao carregar notificações:', e);
       return [];
     }
   },
@@ -791,7 +791,7 @@ window.FirestoreDB = {
     try {
       await this.db.collection('users').doc(uid).collection('notifications').doc(notifId).update({ read: true });
     } catch (e) {
-      console.error('Erro ao marcar notificação como lida:', e);
+      window._error('Erro ao marcar notificação como lida:', e);
     }
   },
 
@@ -818,7 +818,7 @@ window.FirestoreDB = {
         createdAt: new Date().toISOString()
       });
     } catch (e) {
-      console.warn('Erro ao enfileirar email:', e);
+      window._warn('Erro ao enfileirar email:', e);
     }
   },
 
@@ -834,7 +834,7 @@ window.FirestoreDB = {
         status: 'pending'
       });
     } catch (e) {
-      console.warn('Erro ao enfileirar WhatsApp:', e);
+      window._warn('Erro ao enfileirar WhatsApp:', e);
     }
   },
 
@@ -847,7 +847,7 @@ window.FirestoreDB = {
       var ref = await this.db.collection('users').doc(uid).collection('templates').add(clean);
       return ref.id;
     } catch (e) {
-      console.error('Erro ao salvar template:', e);
+      window._error('Erro ao salvar template:', e);
       return null;
     }
   },
@@ -868,7 +868,7 @@ window.FirestoreDB = {
       });
       return templates;
     } catch (e) {
-      console.error('Erro ao carregar templates:', e);
+      window._error('Erro ao carregar templates:', e);
       return [];
     }
   },
@@ -878,7 +878,7 @@ window.FirestoreDB = {
     try {
       await this.db.collection('users').doc(uid).collection('templates').doc(templateId).delete();
     } catch (e) {
-      console.error('Erro ao excluir template:', e);
+      window._error('Erro ao excluir template:', e);
     }
   },
 
@@ -891,7 +891,7 @@ window.FirestoreDB = {
       var ref = await this.db.collection('casualMatches').add(clean);
       return ref.id;
     } catch (e) {
-      console.error('Erro ao salvar partida casual:', e);
+      window._error('Erro ao salvar partida casual:', e);
       return null;
     }
   },
@@ -907,7 +907,7 @@ window.FirestoreDB = {
       data._docId = doc.id;
       return data;
     } catch (e) {
-      console.error('Erro ao carregar partida casual:', e);
+      window._error('Erro ao carregar partida casual:', e);
       return null;
     }
   },
@@ -942,7 +942,7 @@ window.FirestoreDB = {
         out[d.id] = data;
       });
     } catch (e) {
-      console.warn('loadRecentCasualMatchesForUser createdBy err:', e);
+      window._warn('loadRecentCasualMatchesForUser createdBy err:', e);
     }
 
     // Query 2: array-contains em playerUids (denormalizado em
@@ -961,7 +961,7 @@ window.FirestoreDB = {
         out[d.id] = data;
       });
     } catch (e) {
-      console.warn('loadRecentCasualMatchesForUser participants err:', e);
+      window._warn('loadRecentCasualMatchesForUser participants err:', e);
     }
 
     // Sort client-side by finishedAt desc (fallback: createdAt), take N most recent.
@@ -987,7 +987,7 @@ window.FirestoreDB = {
       var clean = this._cleanUndefined(updates);
       await this.db.collection('casualMatches').doc(docId).update(clean);
     } catch (e) {
-      console.error('Erro ao atualizar partida casual:', e);
+      window._error('Erro ao atualizar partida casual:', e);
     }
   },
 
@@ -1011,7 +1011,7 @@ window.FirestoreDB = {
         return true;
       });
     } catch (e) {
-      console.error('Erro ao reservar vaga casual:', e);
+      window._error('Erro ao reservar vaga casual:', e);
       return false;
     }
   },
@@ -1036,7 +1036,7 @@ window.FirestoreDB = {
         return true;
       });
     } catch (e) {
-      console.error('Erro ao entrar na partida casual:', e);
+      window._error('Erro ao entrar na partida casual:', e);
       return false;
     }
   },
@@ -1049,7 +1049,7 @@ window.FirestoreDB = {
       await this.db.collection('casualMatches').doc(docId).delete();
       return true;
     } catch (e) {
-      console.error('Erro ao cancelar partida casual:', e);
+      window._error('Erro ao cancelar partida casual:', e);
       return false;
     }
   },
@@ -1085,7 +1085,7 @@ window.FirestoreDB = {
         return true;
       });
     } catch (e) {
-      console.error('Erro ao sair da partida casual:', e);
+      window._error('Erro ao sair da partida casual:', e);
       return false;
     }
   },
@@ -1108,7 +1108,7 @@ window.FirestoreDB = {
       });
       return matches;
     } catch (e) {
-      console.error('Erro ao carregar partidas casuais:', e);
+      window._error('Erro ao carregar partidas casuais:', e);
       return [];
     }
   },
@@ -1132,7 +1132,7 @@ window.FirestoreDB = {
             await self.db.collection('users').doc(p.uid)
               .collection('matchHistory').doc(recordId)
               .set(clean, { merge: true });
-          } catch (e) { console.warn('saveUserMatchRecords for', p.uid, 'failed', e); }
+          } catch (e) { window._warn('saveUserMatchRecords for', p.uid, 'failed', e); }
         })());
       })(clean.players[i]);
     }
@@ -1156,7 +1156,7 @@ window.FirestoreDB = {
       });
       return out;
     } catch (e) {
-      console.error('Erro ao carregar histórico de partidas:', e);
+      window._error('Erro ao carregar histórico de partidas:', e);
       return [];
     }
   }

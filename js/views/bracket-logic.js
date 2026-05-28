@@ -2187,7 +2187,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   }
 
   if (players.length < 2) {
-    console.warn('[bracket-logic] Not enough active players for Rei/Rainha round:', players.length);
+    window._warn('[bracket-logic] Not enough active players for Rei/Rainha round:', players.length);
     return;
   }
   if (players.length < 4) {
@@ -2354,7 +2354,7 @@ function _generateNextRoundForPlayers(t, category) {
     ? allPlayersSwiss.filter(function(n) { return activeNamesSwiss[n]; })
     : allPlayersSwiss;
   if (players.length < 2) {
-    console.warn('[bracket-logic] Not enough active players for round generation:', players.length);
+    window._warn('[bracket-logic] Not enough active players for round generation:', players.length);
     return;
   }
 
@@ -2570,7 +2570,7 @@ window._checkLigaAutoDraws = async function() {
     try {
       await _fireLigaAutoDraw(t, mostRecentScheduled);
     } catch (e) {
-      console.warn('[auto-draw] failed for tournament ' + t.id, e);
+      window._warn('[auto-draw] failed for tournament ' + t.id, e);
     }
   }
 };
@@ -2591,7 +2591,7 @@ async function _fireLigaAutoDraw(t, scheduledTime) {
     return p.ligaActive !== false;
   });
   if (activeParts.length < 2) {
-    console.log('[auto-draw] Skipping tournament ' + t.id + ': fewer than 2 active participants');
+    window._log('[auto-draw] Skipping tournament ' + t.id + ': fewer than 2 active participants');
     return;
   }
 
@@ -2662,19 +2662,19 @@ async function _fireLigaAutoDraw(t, scheduledTime) {
   // we don't recreate a deleted doc via set({merge:true}).
   var _del = (window.AppStore._deletedTournamentIds || []).map(String);
   if (_del.indexOf(String(t.id)) !== -1) {
-    console.log('[auto-draw] Tournament ' + t.id + ' was deleted during draw — skipping save.');
+    window._log('[auto-draw] Tournament ' + t.id + ' was deleted during draw — skipping save.');
     return;
   }
   var _stillInStore = (window.AppStore.tournaments || []).some(function(x) { return String(x.id) === String(t.id); });
   if (!_stillInStore) {
-    console.log('[auto-draw] Tournament ' + t.id + ' vanished from store (listener removed it) — skipping save.');
+    window._log('[auto-draw] Tournament ' + t.id + ' vanished from store (listener removed it) — skipping save.');
     return;
   }
 
   try {
     await window.AppStore.syncImmediate(t.id);
   } catch (e) {
-    console.warn('[auto-draw] syncImmediate failed for tournament ' + t.id, e);
+    window._warn('[auto-draw] syncImmediate failed for tournament ' + t.id, e);
   }
 
   // Notify Liga round via WhatsApp (fire-and-forget)
@@ -2743,9 +2743,9 @@ function _notifyLigaRoundWhatsApp(t, roundIndex) {
         }
       })
       .catch(function(e) {
-        console.warn('[notifyLigaRoundWhatsApp] cloud function error:', e && e.message);
+        window._warn('[notifyLigaRoundWhatsApp] cloud function error:', e && e.message);
       });
   } catch (e) {
-    console.warn('[notifyLigaRoundWhatsApp] init error:', e && e.message);
+    window._warn('[notifyLigaRoundWhatsApp] init error:', e && e.message);
   }
 }

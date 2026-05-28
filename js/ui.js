@@ -33,7 +33,7 @@ function openModal(modalId) {
     if (inner) inner.scrollTop = 0;
     modal.scrollTop = 0;
   } else {
-    console.warn(`Modal ${modalId} não encontrado.`);
+    window._warn(`Modal ${modalId} não encontrado.`);
   }
 }
 

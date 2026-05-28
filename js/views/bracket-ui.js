@@ -170,7 +170,7 @@ window._confirmCasualLinkRequest = async function(notif, accept) {
       try {
         await window.FirestoreDB.db.collection('users').doc(cu.uid)
           .collection('matchHistory').doc('casual_' + notif.casualMatchDocId).delete();
-      } catch (_mhE) { console.warn('[casual link] delete matchHistory err:', _mhE); }
+      } catch (_mhE) { window._warn('[casual link] delete matchHistory err:', _mhE); }
     }
     // Marca notif como lida + envia confirmação de volta pro solicitante
     if (window.FirestoreDB.markNotificationRead && notif._id) {
@@ -195,7 +195,7 @@ window._confirmCasualLinkRequest = async function(notif, accept) {
       );
     }
   } catch (e) {
-    console.warn('[casual link] confirm err:', e);
+    window._warn('[casual link] confirm err:', e);
     if (typeof showNotification === 'function') showNotification('Erro', 'Não foi possível processar. Tente novamente.', 'error');
   }
 };
@@ -637,7 +637,7 @@ function _rerenderBracket(tId, anchorMatchId) {
 
   // v0.16.87: log diagnóstico — qual container, anchor encontrado, modo inline
   try {
-    console.log('[_rerenderBracket v0.16.87]', {
+    window._log('[_rerenderBracket v0.16.87]', {
       tId: tId,
       anchorMatchId: anchorMatchId,
       anchorElFound: !!anchorEl,
@@ -653,18 +653,18 @@ function _rerenderBracket(tId, anchorMatchId) {
   // próprio (que duplicaria o header da página de detalhe).
   try {
     renderBracket(container, tId, !!inlineContainer);
-    console.log('[_rerenderBracket v0.16.87] renderBracket completed OK');
+    window._log('[_rerenderBracket v0.16.87] renderBracket completed OK');
   } catch (rerr) {
-    console.error('[_rerenderBracket v0.16.87] renderBracket THREW:', rerr);
+    window._error('[_rerenderBracket v0.16.87] renderBracket THREW:', rerr);
     // Fallback: tenta view-container se inlineContainer falhou
     if (inlineContainer) {
       var fallbackContainer = document.getElementById('view-container');
       if (fallbackContainer) {
         try {
           renderBracket(fallbackContainer, tId, false);
-          console.log('[_rerenderBracket v0.16.87] fallback view-container render OK');
+          window._log('[_rerenderBracket v0.16.87] fallback view-container render OK');
         } catch (fallbackErr) {
-          console.error('[_rerenderBracket v0.16.87] fallback ALSO threw:', fallbackErr);
+          window._error('[_rerenderBracket v0.16.87] fallback ALSO threw:', fallbackErr);
         }
       }
     }
@@ -1686,7 +1686,7 @@ window._saveSetResult = function(tId, matchId) {
     _propagateMatchUpdate(t, m);
     window.AppStore.logAction(tId, 'Resultado proposto (sets): ' + m.p1 + ' vs ' + m.p2 + ' — aguardando aprovação (' + m.pendingResult.proposedByName + ')');
     window.AppStore.syncImmediate(tId);
-    try { _notifyPendingApproval(t, m, m.pendingResult.proposedByName); } catch (e) { console.error('[pendingApproval gsm] notify failed', e); }
+    try { _notifyPendingApproval(t, m, m.pendingResult.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
     showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     _rerenderBracket(tId, matchId);
     return;
@@ -1894,7 +1894,7 @@ window._saveResultInline = function (tId, matchId) {
     _propagateMatchUpdate(t, m);
     window.AppStore.logAction(tId, 'Resultado proposto: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — aguardando aprovação (' + _pendingPayload.proposedByName + ')');
     window.AppStore.syncImmediate(tId);
-    try { _notifyPendingApproval(t, m, _pendingPayload.proposedByName); } catch (e) { console.error('[pendingApproval] notify failed', e); }
+    try { _notifyPendingApproval(t, m, _pendingPayload.proposedByName); } catch (e) { window._error('[pendingApproval] notify failed', e); }
     showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     _rerenderBracket(tId, matchId);
     return;
@@ -4332,7 +4332,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
               try { window._lastCasualSaveResult = { docId: newId, fallback: true, winner: state.winner, at: _finishedAt }; } catch(_e) {}
               _afterSave();
             }).catch(function(e) {
-              console.warn('[Casual] fallback-save err:', e);
+              window._warn('[Casual] fallback-save err:', e);
               _afterSave();
             });
           }
@@ -5532,7 +5532,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
               '</div>' +
               '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">' + cardsHtml + '</div>' +
               '<div style="text-align:center;font-size:0.54rem;color:var(--text-muted);opacity:0.7;font-style:italic;margin-top:5px;">Toque pra ver as estatísticas</div>';
-          }).catch(function(e) { console.warn('[LiveStats] last matches err:', e); });
+          }).catch(function(e) { window._warn('[LiveStats] last matches err:', e); });
         };
         // Fallback para re-render quando write já confirmou anteriormente
         if (_statsSlotWriteConfirmed) {
@@ -6326,7 +6326,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Re-render
       try { window._hydrateCasualLinkSuggestions(); } catch(e) {}
     } catch (e) {
-      console.warn('[casual link] suggest err:', e);
+      window._warn('[casual link] suggest err:', e);
       if (typeof showNotification === 'function') showNotification('Erro', 'Não foi possível enviar a sugestão. Tente novamente.', 'error');
     }
   };
@@ -6539,7 +6539,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           }
         });
     } catch(e) {
-      console.warn('[LiveScore] Firestore listener error:', e);
+      window._warn('[LiveScore] Firestore listener error:', e);
     }
   }
   var _lastSyncTs = 0;
@@ -6636,7 +6636,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     try {
       snap = JSON.parse(snapJson);
     } catch (e) {
-      console.error('[liveScoreUndo] snapshot parse failed', e);
+      window._error('[liveScoreUndo] snapshot parse failed', e);
       showNotification('Erro', 'Não foi possível desfazer (snapshot corrompido).', 'error');
       return;
     }
@@ -6773,7 +6773,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     };
     try {
       window.FirestoreDB.db.collection('casualMatches').add(payload).catch(function(e) {
-        console.warn('[ReiRainha] round snapshot save err r' + roundIndex + ':', e);
+        window._warn('[ReiRainha] round snapshot save err r' + roundIndex + ':', e);
       });
     } catch(e) {}
   };
@@ -6834,7 +6834,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId).update({
           status: 'active',
           liveState: _serializeState()
-        }).catch(function(e) { console.warn('[ReiRainha] next-round write err:', e); });
+        }).catch(function(e) { window._warn('[ReiRainha] next-round write err:', e); });
       } catch(e) {}
     }
 
@@ -6999,7 +6999,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId).update({
             status: 'active',
             liveState: _serializeState()
-          }).catch(function(e) { console.warn('[Casual] restart write err:', e); });
+          }).catch(function(e) { window._warn('[Casual] restart write err:', e); });
         }
         _render();
       }
@@ -7111,7 +7111,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try {
         window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
           .update({ setupAt: new Date().toISOString() })
-          .catch(function(e) { console.warn('[LiveScore] unpair setupAt write failed:', e); });
+          .catch(function(e) { window._warn('[LiveScore] unpair setupAt write failed:', e); });
       } catch(e) {}
     }
     _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true });
@@ -7131,7 +7131,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try {
         window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
           .update({ setupAt: new Date().toISOString() })
-          .catch(function(e) { console.warn('[LiveScore] goToSetup setupAt write failed:', e); });
+          .catch(function(e) { window._warn('[LiveScore] goToSetup setupAt write failed:', e); });
       } catch(e) {}
     }
     _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true });
@@ -8895,7 +8895,7 @@ window._openCasualMatch = function(restoreOpts) {
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">' + cardsHtml + '</div>' +
         '<div style="text-align:center;font-size:0.54rem;color:var(--text-muted);opacity:0.7;font-style:italic;margin-top:5px;">Toque pra ver as estatísticas</div>';
     } catch (e) {
-      console.warn('[Casual] _casualLoadLastMatches err:', e);
+      window._warn('[Casual] _casualLoadLastMatches err:', e);
       slot.innerHTML = '';
     }
   };
@@ -8939,7 +8939,7 @@ window._openCasualMatch = function(restoreOpts) {
         initialLiveState: match.liveState || null
       });
     } catch(e) {
-      console.warn('[Casual] _casualOpenPastMatch err:', e);
+      window._warn('[Casual] _casualOpenPastMatch err:', e);
       try { window.location.hash = '#casual/' + roomCode; } catch(e2) {}
     }
   };
@@ -9782,7 +9782,7 @@ window._openCasualMatch = function(restoreOpts) {
           status: 'waiting',
           result: null
         });
-      } catch (e) { console.warn('Casual invite save failed:', e); }
+      } catch (e) { window._warn('Casual invite save failed:', e); }
     } else if (_sessionDocId) {
       // Update existing with current players/config
       try {
@@ -10092,7 +10092,7 @@ window._openCasualMatch = function(restoreOpts) {
           status: 'active',
           result: null
         });
-      } catch (e) { console.warn('Casual start save failed:', e); }
+      } catch (e) { window._warn('Casual start save failed:', e); }
     } else if (_sessionDocId && _isReopen) {
       // v1.7.3-beta: voltou ao setup após partida concluída — criar NOVO doc.
       // O doc anterior (status:'finished') fica intacto no Firestore e aparece
@@ -10120,7 +10120,7 @@ window._openCasualMatch = function(restoreOpts) {
           status: 'active',
           result: null
         });
-      } catch (e) { console.warn('Casual reopen save failed:', e); }
+      } catch (e) { window._warn('Casual reopen save failed:', e); }
     } else if (_sessionDocId) {
       // Update existing match to active with current players (sem reopen).
       try {
@@ -10245,10 +10245,10 @@ window._openCasualMatch = function(restoreOpts) {
       status: 'waiting',
       result: null
     }).then(function(docId) {
-      if (docId) { _sessionDocId = docId; console.debug('[Casual] Saved to Firestore, docId:', docId, 'roomCode:', _sessionRoomCode); }
-      else console.warn('[Casual] saveCasualMatch returned null — check Firestore rules for casualMatches collection');
+      if (docId) { _sessionDocId = docId; window._debug('[Casual] Saved to Firestore, docId:', docId, 'roomCode:', _sessionRoomCode); }
+      else window._warn('[Casual] saveCasualMatch returned null — check Firestore rules for casualMatches collection');
     }).catch(function(e) {
-      console.error('[Casual] Auto-save failed:', e);
+      window._error('[Casual] Auto-save failed:', e);
       if (typeof window._captureException === 'function') {
         window._captureException(e, { area: 'casualMatchAutoSave', roomCode: _sessionRoomCode, code: e && e.code });
       }
@@ -11302,7 +11302,7 @@ window._renderCasualJoin = function(container, roomCode) {
     _autoJoin();
     _startLobbyRefresh();
   }).catch(function(err) {
-    console.error('Error loading casual match:', err);
+    window._error('Error loading casual match:', err);
     _setBody(
       '<div style="text-align:center;padding:3rem 1rem;">' +
         '<div style="font-size:2.5rem;margin-bottom:1rem;">⚠️</div>' +

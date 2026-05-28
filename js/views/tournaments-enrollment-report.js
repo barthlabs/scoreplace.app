@@ -902,11 +902,11 @@
       var rows = _buildRows(t, parts, fetchResult);
       var byUid = fetchResult.byUid || {};
       var resolved = fetchResult.resolvedFor || {};
-      console.log('[EnrollmentReport v1.3.24] profiles fetched:', Object.keys(byUid).length,
+      window._log('[EnrollmentReport v1.3.24] profiles fetched:', Object.keys(byUid).length,
         'rescued:', Object.keys(resolved).length, 'rows:', rows);
       _renderPage(container, t, rows, byUid, parts, resolved);
     }).catch(function (err) {
-      console.error('[EnrollmentReport] erro:', err);
+      window._error('[EnrollmentReport] erro:', err);
       if (window.location.hash !== '#analise/' + tId) return;
       var rows = _buildRows(t, parts, { byUid: {}, resolvedFor: {} });
       _renderPage(container, t, rows, {}, parts, {});

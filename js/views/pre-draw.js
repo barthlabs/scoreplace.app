@@ -204,7 +204,7 @@ function renderPreDraw(container, tournamentId) {
       }
 
       _reRenderPreDrawColumns(tId);
-    } catch (err) { console.error(err); }
+    } catch (err) { window._error(err); }
   };
 
   window._renameCat = function (oldName) {
