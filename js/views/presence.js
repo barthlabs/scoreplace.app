@@ -59,8 +59,7 @@
 
   function _fmtTime(ts) {
     if (!ts) return '';
-    var d = new Date(ts);
-    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    return window._formatHHMM(new Date(ts));
   }
 
   // Build a deduplicated list of venues the user has a relationship with:
@@ -1239,7 +1238,7 @@
     if (typeof window._sendUserNotification !== 'function') return;
 
     var d = new Date(payload.startsAt);
-    var hhmm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    var hhmm = window._formatHHMM(d);
     var sportLabel = (Array.isArray(payload.sports) && payload.sports.length > 0)
       ? payload.sports.join('/')
       : 'algo';

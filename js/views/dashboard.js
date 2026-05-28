@@ -2702,7 +2702,7 @@ function _hydrateFriendsPresenceWidget() {
         var pSports = Array.isArray(p.sports) && p.sports.length ? p.sports.join('/') : '';
         var docId = String(p._id || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
         var d = new Date(p.startsAt);
-        var hhmm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        var hhmm = window._formatHHMM(d);
         var dayLabel = (d.toDateString() === new Date().toDateString())
           ? 'hoje'
           : (d.toDateString() === new Date(nowMs + 86400000).toDateString() ? 'amanhã' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }));

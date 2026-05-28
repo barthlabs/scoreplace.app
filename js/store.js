@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.7-beta';
+window.SCOREPLACE_VERSION = '1.8.8-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -976,6 +976,25 @@ window._pName = function(p, fallback) {
   if (!p) return fb;
   if (typeof p === 'string') return p;
   return p.displayName || p.name || p.email || fb;
+};
+
+// v1.8.8-beta: canonical HH:MM formatter — accepts Date, timestamp (number)
+// or ISO string. Eliminates the repeated padStart(2,'0') pattern spread
+// across venues.js, presence.js, dashboard.js and bracket-ui.js.
+window._formatHHMM = function(d) {
+  if (!d) return '';
+  if (typeof d === 'number' || typeof d === 'string') d = new Date(d);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+};
+
+// v1.8.8-beta: canonical DD/MM HH:MM formatter — builds on _formatHHMM.
+// Useful for notification messages and presence labels that need date + time.
+window._formatDDMM = function(d) {
+  if (!d) return '';
+  if (typeof d === 'number' || typeof d === 'string') d = new Date(d);
+  var dd = String(d.getDate()).padStart(2, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  return dd + '/' + mm + ' ' + window._formatHHMM(d);
 };
 
 // v1.0.33-beta: animação on-scroll de barras + contadores de stats.

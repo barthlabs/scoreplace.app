@@ -2931,16 +2931,15 @@ function setupCreateTournamentModal() {
         // Suggestion 2: Extend time
         const extraNeeded = totalMinutes - availableMin;
         const newEndDt = new Date(new Date(endStr).getTime() + extraNeeded * 60000);
-        const newEndH = String(newEndDt.getHours()).padStart(2, '0');
-        const newEndM = String(newEndDt.getMinutes()).padStart(2, '0');
+        const newEndHHMM = window._formatHHMM(newEndDt);
         const newEndDate = newEndDt.getFullYear() + '-' + String(newEndDt.getMonth() + 1).padStart(2, '0') + '-' + String(newEndDt.getDate()).padStart(2, '0');
         const endDateEl = document.getElementById('tourn-end-date').value || '';
         const sameDay = newEndDate === endDateEl;
-        const extLabel = sameDay ? _t('create.closeAt', { time: newEndH + ':' + newEndM }) : _t('create.extendUntil', { date: newEndDate.split('-').reverse().join('/'), time: newEndH + ':' + newEndM });
+        const extLabel = sameDay ? _t('create.closeAt', { time: newEndHHMM }) : _t('create.extendUntil', { date: newEndDate.split('-').reverse().join('/'), time: newEndHHMM });
         suggestions.push(_sugCard('⏰', _t('create.extendTime'),
           _t('create.extendTimeBody', { time: _fmtMin(extraNeeded), desc: _descOption(fmt, n) + ' ' + _t('create.fitsInTime') }) + (sameDay ? '' : _t('create.spansMultipleDays')),
           extLabel,
-          'document.getElementById(\\\'tourn-end-date\\\').value=\\\'' + newEndDate + '\\\'; document.getElementById(\\\'tourn-end-time\\\').value=\\\'' + newEndH + ':' + newEndM + '\\\'; window._recalcDuration()'));
+          'document.getElementById(\\\'tourn-end-date\\\').value=\\\'' + newEndDate + '\\\'; document.getElementById(\\\'tourn-end-time\\\').value=\\\'' + newEndHHMM + '\\\'; window._recalcDuration()'));
 
         // Suggestion 3: Add extra day
         const extraDayMin = availableMin + 480;

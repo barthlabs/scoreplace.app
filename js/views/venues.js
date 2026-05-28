@@ -2368,7 +2368,7 @@
       allUpcoming.sort(function(a, b) { return a.ts - b.ts; });
       allUpcoming.slice(0, 5).forEach(function(row) {
         var d = new Date(row.ts);
-        var hhmm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        var hhmm = window._formatHHMM(d);
         if (row.kind === 'tournament') {
           html += '<div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-bright);margin-bottom:4px;">' +
             '<span style="min-width:44px;font-weight:600;">' + hhmm + '</span>' +
@@ -2975,7 +2975,7 @@
       try {
         var d = new Date(ts);
         return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) +
-               ' · ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+               ' · ' + window._formatHHMM(d);
       } catch (e) { return ''; }
     };
     var rows = entries.map(function(e) {
@@ -3203,7 +3203,7 @@
     if (prev) prev.remove();
     var now = new Date();
     var defStart = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    var fmt = function(d) { return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
+    var fmt = window._formatHHMM;
     var defStartStr = fmt(defStart);
     // v0.16.25: default de Saída = Chegada + 2h. Autofill do browser venceu todas
     // as contra-medidas pra manter vazio — melhor assumir um default útil que o
@@ -3495,7 +3495,7 @@
       newStart = '07:00';
     } else {
       var n = new Date(Date.now() + 2 * 60 * 60 * 1000);
-      newStart = String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0');
+      newStart = window._formatHHMM(n);
     }
     startEl.value = newStart;
     startEl.dataset.autoValue = newStart;
@@ -3592,7 +3592,7 @@
       _pendingPlanState = null;
       var d1 = new Date(startsAt);
       var d2 = new Date(endsAt);
-      var hm = function(d) { return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
+      var hm = window._formatHHMM;
       var dayLabel = (selectedDay === 'tomorrow') ? 'amanhã' : 'hoje';
       var timeLabel = dayLabel + ' · ' + hm(d1) + (openEnded ? '' : ' – ' + hm(d2));
       // v0.16.26: toast leve em vez de overlay bloqueante. O foco visual fica
@@ -3654,7 +3654,7 @@
     if (friends.length === 0) return;
     if (typeof window._sendUserNotification !== 'function') return;
     var d = new Date(payload.startsAt);
-    var hhmm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    var hhmm = window._formatHHMM(d);
     var sportLabel = (Array.isArray(payload.sports) && payload.sports.length > 0)
       ? payload.sports.join('/')
       : 'algo';
@@ -3858,7 +3858,7 @@
     var prev = document.getElementById('venue-checkin-overlay');
     if (prev) prev.remove();
     var nowDate = new Date();
-    var nowLabel = String(nowDate.getHours()).padStart(2, '0') + ':' + String(nowDate.getMinutes()).padStart(2, '0');
+    var nowLabel = window._formatHHMM(nowDate);
     var sportsPills = (sports || []).map(function(s) {
       var safeS = _safe(s);
       return '<button type="button" class="checkin-sport-pill" data-sport="' + safeS + '" data-active="1" ' +
@@ -3959,7 +3959,7 @@
     try {
       var docId = await window.PresenceDB.savePresence(payload);
       var nowDate = new Date();
-      var timeLabel = 'agora · ' + String(nowDate.getHours()).padStart(2,'0') + ':' + String(nowDate.getMinutes()).padStart(2,'0');
+      var timeLabel = 'agora · ' + window._formatHHMM(nowDate);
       // v0.16.26: toast leve em vez de overlay bloqueante. Foco visual vai
       // pro card colapsado + gráfico de barras (focusedPreferred). Botão
       // "Cancelar presença" fica inline no próprio card.
