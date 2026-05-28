@@ -860,173 +860,6 @@ function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGames
   } catch(e) {}
 }
 
-window._substituteFromStandby = function (tId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
-  if (!t) return;
-
-  const select = document.getElementById('standby-wo-select');
-  if (!select || !select.value) {
-    showAlertDialog(_t('result.selectAbsent'), '', null, { type: 'warning' });
-    return;
-  }
-
-  const standby = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
-  if (standby.length === 0) {
-    showAlertDialog(_t('result.emptyList'), '', null, { type: 'warning' });
-    return;
-  }
-
-  const mode = (t.standbyMode === 'disqualify') ? 'teams' : (t.standbyMode || 'teams');
-  const teamSize = parseInt(t.teamSize) || 1;
-  const getName = (p) => window._pName(p, '?');
-
-  if (mode === 'individual') {
-    // Individual mode: replace one member inside a team
-    const parts = select.value.split('|');
-    const matchId = parts[0];
-    const slot = parts[1];
-    const memberIdx = parseInt(parts[2]);
-    const absentPlayer = parts[3];
-
-    const m = _findMatch(t, matchId);
-    if (!m) return;
-
-    const replacement = standby[0];
-    const replacementName = getName(replacement);
-    const teamName = m[slot];
-
-    let confirmMsg = '';
-    let newTeamName = teamName;
-    if (teamName.includes(' / ') && memberIdx >= 0) {
-      const members = teamName.split(' / ');
-      members[memberIdx] = replacementName;
-      newTeamName = members.join(' / ');
-      confirmMsg = `<div><strong style="color:#ef4444;">Ausente:</strong> ${window._safeHtml(absentPlayer)} (do time "${window._safeHtml(teamName)}")</div>
-        <div><strong style="color:#4ade80;">Substituto:</strong> ${window._safeHtml(replacementName)}</div>
-        <div style="margin-top:6px;"><strong>Novo time:</strong> ${window._safeHtml(newTeamName)}</div>`;
-    } else {
-      newTeamName = replacementName;
-      confirmMsg = `<div><strong style="color:#ef4444;">Ausente:</strong> ${window._safeHtml(absentPlayer)}</div>
-        <div><strong style="color:#4ade80;">Substituto:</strong> ${window._safeHtml(replacementName)}</div>`;
-    }
-
-    showConfirmDialog(_t('result.confirmSub'),
-      `<div style="text-align:left;line-height:1.8;">${confirmMsg}
-        <div style="margin-top:8px;font-size:0.85rem;color:#94a3b8;">O jogador ausente será substituído dentro do time.</div>
-      </div>`,
-      function () {
-        const oldTeamName = m[slot];
-        m[slot] = newTeamName;
-        t.standbyParticipants = standby.slice(1);
-
-        // Update participants array
-        const partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-        const idx = partsArr.findIndex(p => getName(p) === oldTeamName);
-        if (idx !== -1) partsArr[idx] = newTeamName;
-        t.participants = partsArr;
-
-        // Update all match references — canonical collector covers all 7 shapes
-        // (else Groups/thirdPlace/rodadas refs would silently survive).
-        if (typeof window._collectAllMatches === 'function') {
-          window._collectAllMatches(t).forEach(match => {
-            if (!match) return;
-            if (match.p1 === oldTeamName) match.p1 = newTeamName;
-            if (match.p2 === oldTeamName) match.p2 = newTeamName;
-            if (match.winner === oldTeamName) match.winner = newTeamName;
-          });
-        } else {
-          // Defensive fallback: bracket-model.js not loaded.
-          (t.matches || []).forEach(match => {
-            if (match.p1 === oldTeamName) match.p1 = newTeamName;
-            if (match.p2 === oldTeamName) match.p2 = newTeamName;
-            if (match.winner === oldTeamName) match.winner = newTeamName;
-          });
-          (t.rounds || []).forEach(r => (r.matches || []).forEach(match => {
-            if (match.p1 === oldTeamName) match.p1 = newTeamName;
-            if (match.p2 === oldTeamName) match.p2 = newTeamName;
-            if (match.winner === oldTeamName) match.winner = newTeamName;
-          }));
-        }
-
-        window.AppStore.logAction(tId, `Substituição individual: ${absentPlayer} → ${replacementName} (time: ${newTeamName})`);
-        window.AppStore.syncImmediate(tId);
-        showNotification(_t('sub.done'), _t('sub.doneMsg', {name: replacementName, absent: absentPlayer}), 'success');
-        _rerenderBracket(tId);
-      }, null,
-      { type: 'warning', confirmText: _t('bui.subWoConfirm'), cancelText: _t('btn.cancel') }
-    );
-
-  } else {
-    // Teams mode: disqualify incomplete team and replace with standby team
-    const [matchId, slot] = select.value.split('|');
-    const m = _findMatch(t, matchId);
-    if (!m) return;
-
-    const absentTeam = m[slot];
-
-    // Build replacement team from standby list
-    let replacementName = '';
-    let consumeCount = 1;
-    if (teamSize > 1 && !standby[0].toString().includes(' / ')) {
-      // Need to form a team from individual standby players
-      consumeCount = Math.min(teamSize, standby.length);
-      if (consumeCount < teamSize) {
-        showAlertDialog(_t('bui.tooFewSubTitle'), _t('bui.tooFewSubMsg', { teamSize: teamSize, n: standby.length }), null, { type: 'warning' });
-        return;
-      }
-      replacementName = standby.slice(0, teamSize).map(p => getName(p)).join(' / ');
-    } else {
-      replacementName = getName(standby[0]);
-      consumeCount = 1;
-    }
-
-    showConfirmDialog(
-      'Desclassificar e Substituir Time',
-      `<div style="text-align:left;line-height:1.8;">
-        <div><strong style="color:#ef4444;">Desclassificado:</strong> ${window._safeHtml(absentTeam)}</div>
-        <div><strong style="color:#4ade80;">Substituto:</strong> ${window._safeHtml(replacementName)}</div>
-        <div style="margin-top:8px;font-size:0.85rem;color:#94a3b8;">O time incompleto será desclassificado e o substituto ocupará a vaga na mesma partida.</div>
-      </div>`,
-      function () {
-        m[slot] = replacementName;
-        t.standbyParticipants = standby.slice(consumeCount);
-
-        const partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-        const absentIdx = partsArr.findIndex(p => getName(p) === absentTeam);
-        if (absentIdx !== -1) partsArr.splice(absentIdx, 1);
-        partsArr.push(replacementName);
-        t.participants = partsArr;
-
-        if (typeof window._collectAllMatches === 'function') {
-          window._collectAllMatches(t).forEach(match => {
-            if (!match) return;
-            if (match.p1 === absentTeam) match.p1 = replacementName;
-            if (match.p2 === absentTeam) match.p2 = replacementName;
-            if (match.winner === absentTeam) match.winner = replacementName;
-          });
-        } else {
-          // Defensive fallback: bracket-model.js not loaded.
-          (t.matches || []).forEach(match => {
-            if (match.p1 === absentTeam) match.p1 = replacementName;
-            if (match.p2 === absentTeam) match.p2 = replacementName;
-            if (match.winner === absentTeam) match.winner = replacementName;
-          });
-          (t.rounds || []).forEach(r => (r.matches || []).forEach(match => {
-            if (match.p1 === absentTeam) match.p1 = replacementName;
-            if (match.p2 === absentTeam) match.p2 = replacementName;
-            if (match.winner === absentTeam) match.winner = replacementName;
-          }));
-        }
-
-        window.AppStore.logAction(tId, `Desclassificação: ${absentTeam} → ${replacementName}`);
-        window.AppStore.syncImmediate(tId);
-        showNotification(_t('sub.done'), _t('sub.doneMsg', {name: replacementName, absent: absentTeam}), 'success');
-        _rerenderBracket(tId);
-      }, null,
-      { type: 'warning', confirmText: _t('btn.dqSub'), cancelText: _t('btn.cancel') }
-    );
-  }
-};
 
 // Auto-substitute: find first W.O. player in bracket and replace with first present standby
 window._autoSubstituteWO = function(tId, overrideReplacementName) {
@@ -1576,109 +1409,6 @@ window._highlightWinner = function (matchId) {
   s2El.style.color = s2 > s1 ? '#4ade80' : s2 < s1 ? '#f87171' : 'var(--text-bright)';
 };
 
-// ─── Save result inline ───────────────────────────────────────────────────────
-// ─── Set Scoring Overlay ─────────────────────────────────────────────────────
-window._openSetScoring = function(tId, matchId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
-  if (!t || !t.scoring) return;
-  const m = _findMatch(t, matchId);
-  if (!m) return;
-
-  const sc = t.scoring;
-  const isFixedSet = sc.fixedSet === true;
-  const p1Name = m.p1 || 'Jogador 1';
-  const p2Name = m.p2 || 'Jogador 2';
-  const _esc = function(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
-
-  // Remove existing overlay
-  const existing = document.getElementById('set-scoring-overlay');
-  if (existing) existing.remove();
-
-  let setsHtml = '';
-
-  if (isFixedSet) {
-    // Fixed Set mode: single input for games won by each player
-    const fsGames = sc.fixedSetGames || sc.gamesPerSet || 6;
-    setsHtml += '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:12px;margin-bottom:12px;">' +
-      '<div style="font-size:0.78rem;color:#f59e0b;font-weight:600;margin-bottom:4px;">⚡ Set Fixo de ' + fsGames + ' games</div>' +
-      '<div style="font-size:0.72rem;color:var(--text-muted);">Informe quantos games cada jogador venceu (total = ' + fsGames + ').</div>' +
-    '</div>';
-    setsHtml += '<div class="set-row" data-set="0" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-color);">' +
-      '<div style="width:100px;font-size:0.82rem;font-weight:600;color:var(--text-muted);">Games</div>' +
-      '<input type="number" id="set-p1-0" min="0" max="' + fsGames + '" placeholder="0" style="width:56px;text-align:center;font-size:1.1rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:8px;" oninput="window._checkSetComplete(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\',0)">' +
-      '<span style="font-size:0.75rem;color:var(--text-muted);font-weight:800;">×</span>' +
-      '<input type="number" id="set-p2-0" min="0" max="' + fsGames + '" placeholder="0" style="width:56px;text-align:center;font-size:1.1rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:8px;" oninput="window._checkSetComplete(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\',0)">' +
-      '<div id="tb-indicator-0" style="font-size:0.72rem;color:#c084fc;font-weight:600;min-width:60px;"></div>' +
-    '</div>';
-    // Tiebreak row for fixed set tie
-    setsHtml += '<div id="tb-input-row" style="display:none;padding:10px 0;border-bottom:1px solid var(--border-color);">' +
-      '<div style="display:flex;align-items:center;gap:12px;">' +
-        '<div style="width:100px;font-size:0.82rem;font-weight:600;color:#c084fc;">Tie-break</div>' +
-        '<input type="number" id="tb-p1" min="0" placeholder="0" style="width:56px;text-align:center;font-size:1.1rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:8px;padding:8px;" oninput="window._checkSetComplete(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\',0)">' +
-        '<span style="font-size:0.75rem;color:var(--text-muted);font-weight:800;">×</span>' +
-        '<input type="number" id="tb-p2" min="0" placeholder="0" style="width:56px;text-align:center;font-size:1.1rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:8px;padding:8px;" oninput="window._checkSetComplete(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\',0)">' +
-      '</div>' +
-      '<div id="tb-for-set" style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;padding-left:100px;">' + _t('bui.drawTiebreak') + '</div>' +
-    '</div>';
-  } else {
-    // Standard set-by-set scoring
-    const totalSets = sc.setsToWin * 2 - 1;
-    for (let i = 0; i < totalSets; i++) {
-      const isDecidingSet = (i === totalSets - 1) && sc.superTiebreak;
-      const label = isDecidingSet ? 'Super Tie-break' : 'Set ' + (i + 1);
-      setsHtml += '<div class="set-row" data-set="' + i + '" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-color);">' +
-        '<div style="width:100px;font-size:0.82rem;font-weight:600;color:var(--text-muted);">' + label + '</div>' +
-        '<input type="number" id="set-p1-' + i + '" min="0" placeholder="0" style="width:56px;text-align:center;font-size:1.1rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:8px;" oninput="window._checkSetComplete(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\',' + i + ')">' +
-        '<span style="font-size:0.75rem;color:var(--text-muted);font-weight:800;">×</span>' +
-        '<input type="number" id="set-p2-' + i + '" min="0" placeholder="0" style="width:56px;text-align:center;font-size:1.1rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:8px;" oninput="window._checkSetComplete(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\',' + i + ')">' +
-        '<div id="tb-indicator-' + i + '" style="font-size:0.72rem;color:#c084fc;font-weight:600;min-width:60px;"></div>' +
-      '</div>';
-    }
-    // Tiebreak input row (shown dynamically when needed)
-    setsHtml += '<div id="tb-input-row" style="display:none;padding:10px 0;border-bottom:1px solid var(--border-color);">' +
-      '<div style="display:flex;align-items:center;gap:12px;">' +
-        '<div style="width:100px;font-size:0.82rem;font-weight:600;color:#c084fc;">Tie-break</div>' +
-        '<input type="number" id="tb-p1" min="0" placeholder="0" style="width:56px;text-align:center;font-size:1.1rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:8px;padding:8px;" oninput="window._checkSetComplete(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\',0)">' +
-        '<span style="font-size:0.75rem;color:var(--text-muted);font-weight:800;">×</span>' +
-        '<input type="number" id="tb-p2" min="0" placeholder="0" style="width:56px;text-align:center;font-size:1.1rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:8px;padding:8px;" oninput="window._checkSetComplete(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\',0)">' +
-      '</div>' +
-      '<div id="tb-for-set" style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;padding-left:100px;"></div>' +
-    '</div>';
-  }
-
-  const headerSubtitle = isFixedSet
-    ? '⚡ Set Fixo de ' + (sc.fixedSetGames || sc.gamesPerSet) + ' games'
-    : sc.setsToWin + ' set' + (sc.setsToWin > 1 ? 's' : '') + ' · ' + sc.gamesPerSet + ' games/set';
-
-  const overlay = document.createElement('div');
-  overlay.id = 'set-scoring-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);backdrop-filter:blur(8px);z-index:100001;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;';
-
-  overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:500px;border-radius:20px;border:1px solid rgba(168,85,247,0.25);box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;margin:auto 0;max-height:90vh;display:flex;flex-direction:column;">' +
-    '<div style="background:linear-gradient(135deg,' + (isFixedSet ? '#b45309 0%,#f59e0b' : '#6d28d9 0%,#a855f7') + ' 100%);padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
-      '<div>' +
-        '<h3 style="margin:0;color:#f5f3ff;font-size:1.05rem;font-weight:800;">' + (isFixedSet ? _t('bui.fixedSet') : _t('bui.setResult')) + '</h3>' +
-        '<p style="margin:2px 0 0;color:#fef3c7;font-size:0.75rem;">' + headerSubtitle + '</p>' +
-      '</div>' +
-      '<div style="display:flex;gap:8px;">' +
-        '<button type="button" onclick="document.getElementById(\'set-scoring-overlay\').remove();" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#f5f3ff;border:1px solid rgba(255,255,255,0.25);">' + _t('btn.cancel') + '</button>' +
-        '<button type="button" id="btn-save-sets" onclick="window._saveSetResult(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\')" class="btn btn-sm" style="background:#fff;color:' + (isFixedSet ? '#b45309' : '#6d28d9') + ';font-weight:700;border:none;" disabled>' + _t('btn.save') + '</button>' +
-      '</div>' +
-    '</div>' +
-    '<div style="padding:1rem 1.5rem;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;">' +
-      '<div style="display:flex;gap:12px;margin-bottom:1rem;padding:8px 0;font-weight:700;font-size:0.85rem;">' +
-        '<div style="width:100px;"></div>' +
-        '<div style="width:56px;text-align:center;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + window._safeHtml(p1Name) + '">' + window._safeHtml(p1Name.split(' ')[0]) + '</div>' +
-        '<div style="width:14px;"></div>' +
-        '<div style="width:56px;text-align:center;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + window._safeHtml(p2Name) + '">' + window._safeHtml(p2Name.split(' ')[0]) + '</div>' +
-      '</div>' +
-      setsHtml +
-      '<div id="set-scoring-status" style="margin-top:12px;padding:8px 12px;border-radius:8px;font-size:0.82rem;font-weight:600;text-align:center;"></div>' +
-    '</div>' +
-  '</div>';
-
-  document.body.appendChild(overlay);
-};
 
 window._checkSetComplete = function(tId, matchId, setIndex) {
   const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
@@ -2448,68 +2178,6 @@ window._approveResult = function(tId, matchId) {
   _rerenderBracket(tId, matchId);
 };
 
-// v0.17.1: rejeitar resultado pendente. Limpa m.pendingResult e re-abre
-// inputs pra novo lançamento. Notifica o proposer.
-window._rejectResult = function(tId, matchId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
-  if (!t) return;
-  var m = _findMatch(t, matchId);
-  if (!m || !m.pendingResult) {
-    showNotification('Sem proposta ativa', 'Esse jogo não tem resultado pendente.', 'warning');
-    return;
-  }
-  var pr = m.pendingResult;
-  var cu = window.AppStore && window.AppStore.currentUser;
-  // Permission: org OR opposing team OR proposer (cancel own proposal)
-  var canReject = false;
-  var isProposerSelf = false;
-  if (cu) {
-    if (_isUserOrgOrCoHost(t, cu)) {
-      canReject = true;
-    } else {
-      var userSide = _userTeamInMatch(t, m, cu);
-      var proposerSide = 0;
-      if (pr.proposedBy || pr.proposedByEmail) {
-        proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
-      }
-      if (userSide > 0 && userSide !== proposerSide) canReject = true;
-      // Proposer can also cancel their own proposal
-      if (cu.uid && pr.proposedBy && cu.uid === pr.proposedBy) { canReject = true; isProposerSelf = true; }
-      if (cu.email && pr.proposedByEmail && cu.email === pr.proposedByEmail) { canReject = true; isProposerSelf = true; }
-    }
-  }
-  if (!canReject) {
-    showNotification('Sem permissão', 'Só o time adversário, o organizador ou quem propôs pode rejeitar.', 'warning');
-    return;
-  }
-
-  showConfirmDialog(
-    isProposerSelf ? 'Cancelar proposta?' : 'Rejeitar resultado?',
-    isProposerSelf ? 'Sua proposta de placar será descartada.' : 'O placar será descartado e o time adversário poderá lançar de novo.',
-    function() {
-      delete m.pendingResult;
-      _propagateMatchUpdate(t, m);
-      window.AppStore.logAction(tId, (isProposerSelf ? 'Proposta cancelada' : 'Resultado rejeitado') + ': ' + m.p1 + ' vs ' + m.p2);
-      window.AppStore.syncImmediate(tId);
-      // Notifica proposer (se não foi self-cancel)
-      if (!isProposerSelf && typeof window._sendUserNotification === 'function' && pr.proposedBy) {
-        window._sendUserNotification(pr.proposedBy, {
-          type: 'match-rejected',
-          title: '❌ Resultado rejeitado',
-          message: 'O resultado de ' + m.p1 + ' vs ' + m.p2 + ' foi rejeitado. Lance novamente quando combinar com o adversário.',
-          tournamentId: tId,
-          tournamentName: t.name,
-          level: 'fundamental',
-          timestamp: Date.now()
-        });
-      }
-      showNotification(isProposerSelf ? 'Proposta cancelada' : 'Resultado rejeitado', '', 'success');
-      _rerenderBracket(tId, matchId);
-    },
-    'OK',
-    'Cancelar'
-  );
-};
 
 // _editPendingResult: any party with launch permission (org, arbiter, proposer,
 // or opposing team) can open this overlay to edit the pending score.
@@ -3403,8 +3071,6 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   showAlertDialog('⚡ Pontos Avançados — ' + playerName, summary + tableHtml, null, { type: 'info' });
 };
-
-window._saveGroupResult = window._saveResultInline; // Reuse existing inline save
 
 // ─── Advance from Groups to Elimination ─────────────────────────────────────
 window._advanceToElimination = function (tId) {
@@ -6891,7 +6557,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // ── Global handlers (attached to window for onclick access) ──
   window._liveScorePoint = function(player) { _addPoint(player); };
-  window._liveScoreSave = _saveResult;
   window._liveScoreFinish = function() {
     // For simple scoring: finish and set winner
     if (state.currentGameP1 === state.currentGameP2 && state.currentGameP1 === 0) {
@@ -11555,7 +11220,6 @@ window._renderCasualJoin = function(container, roomCode) {
       }
     }
     // Expose so inline onclick handlers (non-logged-in button) can reach it
-    window._casualEvacuateToDashboard = _evacuateToDashboard;
 
     // Periodic refresh to see new players and detect match start
     function _startLobbyRefresh() {
