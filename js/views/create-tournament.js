@@ -2932,7 +2932,7 @@ function setupCreateTournamentModal() {
         const extraNeeded = totalMinutes - availableMin;
         const newEndDt = new Date(new Date(endStr).getTime() + extraNeeded * 60000);
         const newEndHHMM = window._formatHHMM(newEndDt);
-        const newEndDate = newEndDt.getFullYear() + '-' + String(newEndDt.getMonth() + 1).padStart(2, '0') + '-' + String(newEndDt.getDate()).padStart(2, '0');
+        const newEndDate = window._formatYYYYMMDD(newEndDt);
         const endDateEl = document.getElementById('tourn-end-date').value || '';
         const sameDay = newEndDate === endDateEl;
         const extLabel = sameDay ? _t('create.closeAt', { time: newEndHHMM }) : _t('create.extendUntil', { date: newEndDate.split('-').reverse().join('/'), time: newEndHHMM });

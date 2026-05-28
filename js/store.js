@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.9-beta';
+window.SCOREPLACE_VERSION = '1.8.10-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -1010,6 +1010,24 @@ window._formatDDMM = function(d) {
   var dd = String(d.getDate()).padStart(2, '0');
   var mm = String(d.getMonth() + 1).padStart(2, '0');
   return dd + '/' + mm + ' ' + window._formatHHMM(d);
+};
+
+// v1.8.10-beta: canonical YYYY-MM-DD formatter (ISO date, for Firestore keys
+// and <input type="date"> values). Replaces inline getFullYear+padStart chains.
+window._formatYYYYMMDD = function(d) {
+  if (!d) return '';
+  if (typeof d === 'number' || typeof d === 'string') d = new Date(d);
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+};
+
+// v1.8.10-beta: extract first token from a display name, email or similar
+// string. Splits on whitespace, dot, @, underscore or hyphen — matches the
+// pattern used internally in _buildCasualMatchCardsHtml.
+window._firstToken = function(s) {
+  if (!s) return '';
+  return s.split(/[\s.@_\-]+/)[0] || s;
 };
 
 // v1.0.33-beta: animação on-scroll de barras + contadores de stats.
