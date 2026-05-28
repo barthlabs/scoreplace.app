@@ -11,7 +11,7 @@
   window._openHostTransferDialog = function(participant, tId) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     if (!t) return;
-    var pName = typeof participant === 'string' ? participant : (participant.displayName || participant.name || participant.email || '');
+    var pName = window._pName(participant);
     var pEmail = typeof participant === 'object' ? (participant.email || '') : '';
     var pUid = typeof participant === 'object' ? (participant.uid || '') : '';
 

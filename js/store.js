@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.6-beta';
+window.SCOREPLACE_VERSION = '1.8.7-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -964,6 +964,18 @@ window._friendlyDisplayName = function(u) {
   // E.164 from Firebase Auth (SMS users who never loaded their profile)
   if (u.phoneNumber) return u.phoneNumber;
   return name || 'Usuário';
+};
+
+// v1.8.7-beta: canonical participant name resolver — used everywhere a
+// participant object (or plain string name) needs to be shown as text.
+// p can be: a plain string, or an object with displayName/name/email fields
+// (the two shapes stored in t.participants[], t.matches[].p1/p2, etc.).
+// fallback defaults to '' when omitted.
+window._pName = function(p, fallback) {
+  var fb = (fallback !== undefined && fallback !== null) ? fallback : '';
+  if (!p) return fb;
+  if (typeof p === 'string') return p;
+  return p.displayName || p.name || p.email || fb;
 };
 
 // v1.0.33-beta: animação on-scroll de barras + contadores de stats.

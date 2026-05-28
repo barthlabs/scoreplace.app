@@ -9,7 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
-      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧹 v1.8.6-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧹 v1.8.7-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Refatoração: helper unificado para nome de participante.</b><br><br>' +
+      'O padrão <code>typeof p === \'string\' ? p : (p.displayName || p.name || p.email || \'\')</code> existia repetido mais de 40 vezes em 11 arquivos diferentes. Centralizado em <code>window._pName(p, fallback)</code> em store.js. Nenhuma mudança de comportamento.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🧹 v1.8.6-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Refatoração: código duplicado eliminado.</b><br><br>' +
       'A lógica de renderização dos cards de "Últimas Partidas" existia em dois lugares independentes do código (overlay de setup e tela de estatísticas pós-partida). Unificada em uma única função <code>_buildCasualMatchCardsHtml</code> — os dois pontos de exibição agora usam o mesmo código. Nenhuma mudança visual; apenas manutenção interna.</p>' +
     '</div>' +

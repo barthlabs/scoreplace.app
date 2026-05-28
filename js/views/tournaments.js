@@ -334,7 +334,7 @@ function renderTournaments(container, tournamentId = null) {
                     if (t && t.participants) {
                         let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
                         var idx = arr.findIndex(function(p) {
-                            var name = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+                            var name = window._pName(p);
                             return name === participantName;
                         });
                         if (idx === -1) return;
@@ -383,12 +383,12 @@ function renderTournaments(container, tournamentId = null) {
                     if (t && t.participants) {
                         let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
                         var idx = arr.findIndex(function(p) {
-                            var name = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+                            var name = window._pName(p);
                             return name === participantName;
                         });
                         if (idx === -1) return;
                         const p = arr[idx];
-                        const pStr = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+                        const pStr = window._pName(p);
 
                         if (pStr.includes('/')) {
                             const parts = pStr.split('/').map(s => s.trim());
@@ -654,7 +654,7 @@ function renderTournaments(container, tournamentId = null) {
                     teamCount++;
                     individualCount += p.participants.length;
                 } else {
-                    const pStr = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+                    const pStr = window._pName(p);
                     if (pStr.includes('/')) {
                         teamCount++;
                         individualCount += pStr.split('/').filter(n => n.trim().length > 0).length;
@@ -1538,7 +1538,7 @@ function renderTournaments(container, tournamentId = null) {
         }
         let individualCountParts = 0;
         parts.forEach(p => {
-            const pStr = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+            const pStr = window._pName(p);
             if (pStr.includes('/')) {
                 individualCountParts += pStr.split('/').filter(n => n.trim().length > 0).length;
             } else {
@@ -1589,7 +1589,7 @@ function renderTournaments(container, tournamentId = null) {
             let totalIndividuals = 0;
             let checkedCount = 0;
             parts.forEach(p => {
-                const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+                const pName = window._pName(p);
                 if (pName.includes('/')) {
                     pName.split('/').forEach(n => {
                         const nm = n.trim();

@@ -878,7 +878,7 @@ window._substituteFromStandby = function (tId) {
 
   const mode = (t.standbyMode === 'disqualify') ? 'teams' : (t.standbyMode || 'teams');
   const teamSize = parseInt(t.teamSize) || 1;
-  const getName = (p) => typeof p === 'string' ? p : (p.displayName || p.name || p.email || '?');
+  const getName = (p) => window._pName(p, '?');
 
   if (mode === 'individual') {
     // Individual mode: replace one member inside a team
@@ -1035,7 +1035,7 @@ window._autoSubstituteWO = function(tId, overrideReplacementName) {
 
   var ab = t.absent || {};
   var ci = t.checkedIn || {};
-  var getName = function(p) { return typeof p === 'string' ? p : (p.displayName || p.name || p.email || '?'); };
+  var getName = function(p) { return window._pName(p, '?'); };
 
   // Merge standby sources (waitlist + standbyParticipants, deduplicated)
   var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];

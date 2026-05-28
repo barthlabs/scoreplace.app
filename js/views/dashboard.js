@@ -446,14 +446,14 @@ function renderDashboard(container) {
       const arr = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (Array.isArray(t.participants) ? t.participants : Object.values(t.participants));
       arr.forEach(p => {
         // Skip waitlisted participants from the active count
-        var _pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
-        if (_waitlistNames.has(_pName)) return;
+        var _pN = window._pName(p);
+        if (_waitlistNames.has(_pN)) return;
 
         if (typeof p === 'object' && p !== null && Array.isArray(p.participants)) {
           teamCount++;
           individualCount += p.participants.length;
         } else {
-          const pStr = _pName;
+          const pStr = _pN;
           if (pStr.includes('/')) {
             teamCount++;
             individualCount += pStr.split('/').filter(n => n.trim().length > 0).length;

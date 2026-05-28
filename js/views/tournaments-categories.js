@@ -568,7 +568,7 @@ window._buildTimeEstimation = function(t) {
     if (typeof p === 'object' && p !== null && Array.isArray(p.participants)) {
       realCount += p.participants.length;
     } else {
-      var pStr = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+      var pStr = window._pName(p);
       if (pStr.includes('/')) {
         realCount += pStr.split('/').filter(function(n) { return n.trim().length > 0; }).length;
       } else {

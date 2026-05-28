@@ -103,7 +103,7 @@ function _allowsLateEnrollment(t) {
 // Helper: add participant to standby/waitlist instead of main roster
 function _enrollToStandby(t, tId, participantObj, callback) {
   if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-  var getName = function(p) { return typeof p === 'string' ? p : (p.displayName || p.name || p.email || ''); };
+  var getName = function(p) { return window._pName(p); };
   var newName = getName(participantObj);
   // Check if already in standby
   var already = t.standbyParticipants.some(function(sp) { return getName(sp) === newName; });

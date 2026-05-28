@@ -49,7 +49,7 @@ window._processWoSubstitutions = function(tId) {
   if (!t.absent || Object.keys(t.absent).length === 0) return { ok: false, reason: 'no-absent', subCount: 0 };
   if (!t.checkedIn) return { ok: false, reason: 'no-checkedIn', subCount: 0 };
 
-  const _getName = p => typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+  const _getName = p => window._pName(p);
   const _normTeam = (s) => (s || '').replace(/\s*\/\s*/g, '/').trim();
 
   // Build fresh standby pool
@@ -294,13 +294,13 @@ window._markAbsent = function (tId, playerName) {
               // Devolve substituto à waitlist se ele veio de lá
               const partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
               const _subIdx = partsArr.findIndex(function(p) {
-                const _n = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+                const _n = window._pName(p);
                 return _n === _replacedBy;
               });
               // Adiciona à waitlist (só se não tava lá)
               if (!Array.isArray(t.waitlist)) t.waitlist = [];
               const _alreadyInWaitlist = t.waitlist.some(function(w) {
-                const _wn = typeof w === 'string' ? w : (w.displayName || w.name || w.email || '');
+                const _wn = window._pName(w);
                 return _wn === _replacedBy;
               });
               if (!_alreadyInWaitlist && _subIdx >= 0) {
@@ -511,7 +511,7 @@ window._declareAbsent = function (tId, playerName) {
   let partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   let teamName = null;
   partsArr.forEach(p => {
-    const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+    const pName = window._pName(p);
     if (pName.includes('/')) {
       const members = pName.split('/').map(n => n.trim()).filter(n => n);
       if (members.includes(playerName)) teamName = pName;
@@ -541,7 +541,7 @@ window._declareAbsent = function (tId, playerName) {
   });
 
   // Merge both waitlist sources (dedup by name) — mesmo padrão de _autoSubstituteWO e bracket.js
-  const _getName = p => typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+  const _getName = p => window._pName(p);
   const _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
   const _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
   const _spNames = new Set(_sp.map(_getName));
@@ -669,7 +669,7 @@ window._declareAbsent = function (tId, playerName) {
           const _wlF = tF && Array.isArray(tF.waitlist) ? tF.waitlist : [];
           const _stbCount = _spF.length + _wlF.length;
           const _ciF = tF && tF.checkedIn || {};
-          const _gN = p => typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+          const _gN = p => window._pName(p);
           const _allStb = _spF.concat(_wlF);
           const _presCount = _allStb.filter(p => !!_ciF[_gN(p)]).length;
           if (typeof showNotification === 'function') {
@@ -747,7 +747,7 @@ window._declareAbsent = function (tId, playerName) {
       // TRUTHINESS direto cobre ambos os casos sem ambiguidade.
       const _presentSorted = standby
         .map((p, idx) => {
-          const _name = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+          const _name = window._pName(p);
           const _ci = t.checkedIn[_name];
           // ts numérico pra ordenar; truthy não-numérico (true) vira 1.
           const ts = typeof _ci === 'number' ? _ci : (_ci ? 1 : 0);
@@ -773,7 +773,7 @@ window._declareAbsent = function (tId, playerName) {
           hasStandby: hasStandby,
           standbyCount: standby.length,
           standbyDetail: standby.map(p => {
-            const _n = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+            const _n = window._pName(p);
             return { name: _n, ci: t.checkedIn[_n] };
           }),
           presentSortedCount: _presentSorted.length,
@@ -867,7 +867,7 @@ window._declareAbsent = function (tId, playerName) {
       });
       // Update participants
       const pIdx = partsArr.findIndex(p => {
-        const pn = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+        const pn = window._pName(p);
         return pn === teamName;
       });
       if (pIdx >= 0) {
@@ -902,7 +902,7 @@ window._declareAbsent = function (tId, playerName) {
       // entradas POR INDIVIDUAL. Substituto vindo da waitlist precisa ser
       // adicionado a t.participants pra aparecer na lista de inscritos.
       const _hasNextEntry = partsArr.some(function(p) {
-        const _n = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+        const _n = window._pName(p);
         return _n === nextName;
       });
       if (!_hasNextEntry) {
@@ -936,11 +936,11 @@ window._declareAbsent = function (tId, playerName) {
         window._lastDeclareAbsent.matchAfter_p2 = matchEntry.p2;
         window._lastDeclareAbsent.partsArrAfterCount = partsArr.length;
         window._lastDeclareAbsent.partsArrIncludesNew = partsArr.some(p => {
-          const _n = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+          const _n = window._pName(p);
           return _n === nextName;
         });
         window._lastDeclareAbsent.partsArrIncludesNewTeam = partsArr.some(p => {
-          const _n = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+          const _n = window._pName(p);
           return _n === newTeamName;
         });
       } catch (_e) {}
@@ -961,7 +961,7 @@ window._declareAbsent = function (tId, playerName) {
       let nextStandbyIdx = -1;
       const _eligibleSorted = standby
         .map((p, idx) => {
-          const sName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+          const sName = window._pName(p);
           const sMembers = sName.includes('/') ? sName.split('/').map(n => n.trim()).filter(n => n) : [sName];
           const allPresent = sMembers.every(m => !!t.checkedIn[m]);
           if (!allPresent) return null;
@@ -985,7 +985,7 @@ window._declareAbsent = function (tId, playerName) {
 
       matchEntry[matchSide] = nextName;
       const pIdx = partsArr.findIndex(p => {
-        const pn = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+        const pn = window._pName(p);
         return pn === teamName;
       });
       if (pIdx >= 0) partsArr[pIdx] = nextName;
@@ -995,7 +995,7 @@ window._declareAbsent = function (tId, playerName) {
       // User: 'parece que o primeiro a substituir adota 1 caminho e os
       // demais adotam outro... deveria haver apenas 1 caminho'.
       const _hasNextEntryTeam = partsArr.some(function(p) {
-        const _n = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+        const _n = window._pName(p);
         return _n === nextName;
       });
       if (!_hasNextEntryTeam) {
@@ -1072,7 +1072,7 @@ function renderParticipants(container, tournamentId) {
 
   let individualCount = 0;
   parts.forEach(p => {
-    const pStr = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+    const pStr = window._pName(p);
     if (pStr.includes('/')) {
       individualCount += pStr.split('/').filter(n => n.trim().length > 0).length;
     } else {
@@ -1082,8 +1082,8 @@ function renderParticipants(container, tournamentId) {
 
   // Ordenar: Times primeiro, depois individuais
   parts.sort((a, b) => {
-    const nameA = typeof a === 'string' ? a : (a.displayName || a.name || a.email || '');
-    const nameB = typeof b === 'string' ? b : (b.displayName || b.name || b.email || '');
+    const nameA = window._pName(a);
+    const nameB = window._pName(b);
     const isTeamA = nameA.includes('/');
     const isTeamB = nameB.includes('/');
     if (isTeamA && !isTeamB) return -1;
@@ -1104,7 +1104,7 @@ function renderParticipants(container, tournamentId) {
 
   // Standby participants — merge both sources (waitlist + standbyParticipants, dedup by name)
   // mesmo padrão de _declareAbsent, _autoSubstituteWO e bracket.js
-  const _getStandbyName = p => typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+  const _getStandbyName = p => window._pName(p);
   const _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
   const _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
   const _spNameSet = new Set(_sp.map(_getStandbyName));
@@ -1117,7 +1117,7 @@ function renderParticipants(container, tournamentId) {
   let absentConfirmedCount = 0;
   const countIndividuals = (arr) => {
     arr.forEach(p => {
-      const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+      const pName = window._pName(p);
       if (pName.includes('/')) {
         pName.split('/').forEach(n => {
           const nm = n.trim();
@@ -1316,9 +1316,9 @@ function renderParticipants(container, tournamentId) {
         version: window.SCOREPLACE_VERSION,
         at: new Date().toISOString(),
         partsCount: parts.length,
-        partsNames: parts.map(p => typeof p === 'string' ? p : (p.displayName || p.name || p.email || '?')),
+        partsNames: parts.map(p => window._pName(p, '?')),
         standbyCount: standbyParts.length,
-        standbyNames: standbyParts.map(p => typeof p === 'string' ? p : (p.displayName || p.name || p.email || '?')),
+        standbyNames: standbyParts.map(p => window._pName(p, '?')),
         woHistory: t.woHistory ? Object.keys(t.woHistory).map(k => ({
           woName: k,
           replacedBy: t.woHistory[k] && t.woHistory[k].replacedBy,
@@ -1335,7 +1335,7 @@ function renderParticipants(container, tournamentId) {
     const _nameToParticipant = {};
     (t.participants || []).forEach(function(p) {
       if (!p) return;
-      const pn = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+      const pn = window._pName(p);
       if (pn) _nameToParticipant[pn] = p;
       // also map individual names inside team entries (A/B style)
       if (typeof p === 'object' && pn && pn.includes('/')) {
@@ -1777,7 +1777,7 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill) {
   let found = false;
   (t.participants || []).forEach(function(p) {
     if (!p) return;
-    const pn = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+    const pn = window._pName(p);
     // Also match individual names inside a team "A/B" entry
     const memberNames = pn.includes('/') ? pn.split('/').map(n => n.trim()) : [pn];
     if (pn !== pName && !memberNames.includes(pName)) return;

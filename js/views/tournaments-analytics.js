@@ -262,7 +262,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         // Check if player is a participant
         var pList = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
         var isParticipant = pList.some(function(p) {
-            var name = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '');
+            var name = window._pName(p);
             return _nameMatch(name, playerName);
         });
         if (!isParticipant) return;
@@ -654,7 +654,7 @@ window._buildActivityLog = function(tournamentId) {
     // 2. Participants enrolled (use enrolledAt if available, or createdAt)
     var pList = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     pList.forEach(function(p) {
-        var name = typeof p === 'string' ? p : (p.displayName || p.name || p.email || '?');
+        var name = window._pName(p, '?');
         var pDate = (typeof p === 'object' && p.enrolledAt) ? p.enrolledAt : null;
         if (name && name !== 'BYE') {
             events.push({ date: pDate || t.createdAt, icon: '👤', text: '<b>' + window._safeHtml(name) + '</b> se inscreveu', color: '#4ade80' });

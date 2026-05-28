@@ -357,7 +357,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   });
   if (_merged.length === 0) return '';
 
-  const getName = (p) => typeof p === 'string' ? p : (p.displayName || p.name || p.email || '?');
+  const getName = (p) => window._pName(p, '?');
   const _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const ci = t.checkedIn || {};
   const ab = t.absent || {};
