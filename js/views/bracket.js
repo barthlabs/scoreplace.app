@@ -1468,7 +1468,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     }
     var _isOpposingMember = _userSideInner > 0 && _userSideInner !== _proposerSideInner;
     var _canApprove = _isUserOrgInner || _isOpposingMember;
-    var _canReject = _canApprove || _isProposerSelf;
+    // Org can reject (cancel outright); proposer can cancel own; opposing team contests (new counter-proposal)
+    var _canReject = _isUserOrgInner || _isProposerSelf;
+    var _canContest = _isOpposingMember && !_isUserOrgInner;
 
     if (_canApprove) {
       pendingActionBtns += `<button onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')"
@@ -1476,11 +1478,17 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
           onmouseover="this.style.background='rgba(16,185,129,0.32)'" onmouseout="this.style.background='rgba(16,185,129,0.18)'"
           title="Aprovar resultado">✅ Aprovar</button>`;
     }
+    if (_canContest) {
+      pendingActionBtns += `<button onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')"
+          style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);color:#fbbf24;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;margin-left:4px;"
+          onmouseover="this.style.background='rgba(251,191,36,0.24)'" onmouseout="this.style.background='rgba(251,191,36,0.12)'"
+          title="Contestar: propor placar diferente">⚡ Contestar</button>`;
+    }
     if (_canReject) {
       pendingActionBtns += `<button onclick="window._rejectResult('${_esc(tId)}','${_esc(m.id)}')"
           style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.32);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;margin-left:4px;"
           onmouseover="this.style.background='rgba(239,68,68,0.24)'" onmouseout="this.style.background='rgba(239,68,68,0.12)'"
-          title="${_isProposerSelf ? 'Cancelar proposta' : 'Rejeitar resultado'}">${_isProposerSelf ? '🚫 Cancelar' : '❌ Rejeitar'}</button>`;
+          title="${_isProposerSelf ? 'Cancelar proposta' : 'Rejeitar e descartar resultado'}">${_isProposerSelf ? '🚫 Cancelar' : '❌ Rejeitar'}</button>`;
     }
   }
   const _isMyMatch = !!(_cu && !isByeMatch && (function() {

@@ -30,8 +30,9 @@ window.NOTIF_CATALOG = {
   // Match events
   result:                      { level: 'fundamental', icon: '🏅', color: '#a78bfa' },
   // v0.17.1: aprovação de placar pelo time adversário
-  'match-pending-approval':    { level: 'important',   icon: '⏳', color: '#fbbf24' },
-  'match-rejected':            { level: 'important',   icon: '❌', color: 'var(--danger-color, #ef4444)' },
+  // v1.8.2-beta: level → 'fundamental' (jogador precisa ver mesmo com notify filtrado)
+  'match-pending-approval':    { level: 'fundamental', icon: '⏳', color: '#fbbf24' },
+  'match-rejected':            { level: 'fundamental', icon: '❌', color: 'var(--danger-color, #ef4444)' },
 
   // Reminders
   tournament_reminder:         { level: 'fundamental', icon: '⏰', color: '#f59e0b' },

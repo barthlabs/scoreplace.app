@@ -1295,6 +1295,221 @@ function renderDashboard(container) {
     return html;
   }
 
+  // ── Meus Resultados ─────────────────────────────────────────────────────────
+  // v1.8.2-beta: seção abaixo da hero box com (a) partidas pendentes de
+  // resultado ou aprovação, (b) últimos resultados confirmados. Exclusivo pra
+  // quem tem torneios ativos como participante.
+  function _buildMyResultsHtml() {
+    var cu = window.AppStore.currentUser;
+    if (!cu) return '';
+
+    var email = cu.email ? cu.email.toLowerCase() : '';
+    var dName = (cu.displayName || '').toLowerCase();
+    var uid = cu.uid || '';
+
+    function _isMe(label) {
+      if (!label) return false;
+      var l = label.toLowerCase();
+      if (email && l === email) return true;
+      if (dName && (l === dName || l.indexOf(dName) !== -1 || dName.indexOf(l) !== -1)) return true;
+      if (uid && l === uid) return true;
+      return false;
+    }
+
+    var pendingForMe = [];   // m.pendingResult e sou time adversário (preciso agir)
+    var pendingByMe = [];    // m.pendingResult e sou o proposer (aguardando adversário)
+    var noResult = [];       // match sem resultado, torneio ativo, sou participante
+    var recentConfirmed = []; // últimas partidas com resultado confirmado
+
+    participacoes.forEach(function(t) {
+      var matchSources = [];
+      if (typeof window._collectAllMatches === 'function') {
+        matchSources = window._collectAllMatches(t).slice();
+      } else {
+        if (Array.isArray(t.matches)) matchSources = matchSources.concat(t.matches);
+        if (t.thirdPlaceMatch) matchSources.push(t.thirdPlaceMatch);
+        if (Array.isArray(t.rounds)) t.rounds.forEach(function(r) {
+          if (r && Array.isArray(r.matches)) matchSources = matchSources.concat(r.matches);
+          else if (Array.isArray(r)) matchSources = matchSources.concat(r);
+        });
+        if (Array.isArray(t.groups)) t.groups.forEach(function(g) {
+          if (g && Array.isArray(g.matches)) matchSources = matchSources.concat(g.matches);
+        });
+        if (Array.isArray(t.rodadas)) t.rodadas.forEach(function(r) {
+          if (r && Array.isArray(r.matches)) matchSources = matchSources.concat(r.matches);
+          else if (Array.isArray(r)) matchSources = matchSources.concat(r);
+        });
+      }
+
+      matchSources.forEach(function(m) {
+        if (!m) return;
+        if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return;
+
+        // Am I in this match?
+        var p1Names = String(m.p1 || '').split(/\s*\/\s*/).filter(Boolean);
+        var p2Names = String(m.p2 || '').split(/\s*\/\s*/).filter(Boolean);
+        if (m.isMonarch && Array.isArray(m.team1)) p1Names = m.team1.slice();
+        if (m.isMonarch && Array.isArray(m.team2)) p2Names = m.team2.slice();
+        var inP1 = p1Names.some(_isMe) || _isMe(m.p1);
+        var inP2 = p2Names.some(_isMe) || _isMe(m.p2);
+        if (!inP1 && !inP2) return;
+
+        var matchInfo = {
+          tId: t.id, tName: t.name || '', sport: t.sport || '', m: m,
+          opp: inP1 ? (m.p2 || '') : (m.p1 || '')
+        };
+
+        if (m.winner) {
+          // Confirmed result — up to 10 recent
+          recentConfirmed.push(Object.assign({ confirmedAt: m.updatedAt || m.proposedAt || 0 }, matchInfo));
+        } else if (m.pendingResult) {
+          var pr = m.pendingResult;
+          var isProposerSelf = (uid && pr.proposedBy === uid) || (email && pr.proposedByEmail === (cu.email || '').toLowerCase());
+          if (isProposerSelf) {
+            pendingByMe.push(matchInfo);
+          } else {
+            pendingForMe.push(matchInfo);
+          }
+        } else if (t.status !== 'finished') {
+          // Only include if resultEntry allows players
+          var re = t.resultEntry || 'organizer';
+          if (re === 'players' || re === 'all' || (Array.isArray(re) && re.indexOf('players') !== -1)) {
+            noResult.push(matchInfo);
+          }
+        }
+      });
+    });
+
+    // Recent confirmed: sort by confirmedAt desc, cap at 5
+    recentConfirmed.sort(function(a, b) { return (b.confirmedAt || 0) - (a.confirmedAt || 0); });
+    recentConfirmed = recentConfirmed.slice(0, 5);
+
+    var totalAction = pendingForMe.length + pendingByMe.length + noResult.length;
+    var totalSection = totalAction + recentConfirmed.length;
+    if (totalSection === 0) return '';
+
+    var _sf = window._safeHtml || function(s) { return String(s || ''); };
+    var _sportIcon = function(s) {
+      var sL = (s || '').toLowerCase();
+      if (sL.indexOf('beach') !== -1) return '🎾';
+      if (sL.indexOf('paddle') !== -1 || sL.indexOf('padel') !== -1) return '🏓';
+      if (sL.indexOf('pickle') !== -1) return '🥒';
+      if (sL.indexOf('tenis') !== -1 || sL.indexOf('tênis') !== -1) return '🎾';
+      if (sL.indexOf('squash') !== -1) return '🟡';
+      if (sL.indexOf('badmin') !== -1) return '🏸';
+      if (sL.indexOf('volei') !== -1 || sL.indexOf('vôlei') !== -1) return '🏐';
+      return '🏅';
+    };
+
+    var html = '<div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+    html += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;">🏅 Meus Resultados</h3>';
+
+    // ── Aguardando minha ação ──
+    if (pendingForMe.length > 0) {
+      html += '<div style="margin-bottom:10px;">';
+      html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
+      pendingForMe.forEach(function(item) {
+        var pr = item.m.pendingResult || {};
+        var scoreStr = '';
+        if (pr.useSets && Array.isArray(pr.sets) && pr.sets.length > 0) {
+          scoreStr = pr.sets.map(function(s) { return s.gamesP1 + '-' + s.gamesP2; }).join(' ');
+        } else {
+          scoreStr = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
+        }
+        var proposerName = pr.proposedByName || 'Adversário';
+        html += '<div onclick="window.location.hash=\'#bracket/' + _sf(item.tId) + '\'" style="cursor:pointer;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;">';
+        html += '<span style="font-size:1rem;">' + _sportIcon(item.sport) + '</span>';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:0.78rem;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sf(item.m.p1 || '') + ' <span style="color:var(--text-muted)">×</span> ' + _sf(item.m.p2 || '') + '</div>';
+        html += '<div style="font-size:0.68rem;color:#fbbf24;">Placar proposto: <b>' + _sf(scoreStr) + '</b> por ' + _sf(proposerName) + '</div>';
+        html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
+        html += '</div>';
+        html += '<div style="display:flex;gap:4px;flex-shrink:0;">';
+        html += '<button onclick="event.stopPropagation();window._approveResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;">✅</button>';
+        html += '<button onclick="event.stopPropagation();window._contestResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);color:#fbbf24;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;">⚡</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // ── Resultado proposto (aguardando adversário) ──
+    if (pendingByMe.length > 0) {
+      html += '<div style="margin-bottom:10px;">';
+      html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
+      pendingByMe.forEach(function(item) {
+        var pr = item.m.pendingResult || {};
+        var scoreStr = '';
+        if (pr.useSets && Array.isArray(pr.sets) && pr.sets.length > 0) {
+          scoreStr = pr.sets.map(function(s) { return s.gamesP1 + '-' + s.gamesP2; }).join(' ');
+        } else {
+          scoreStr = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
+        }
+        html += '<div onclick="window.location.hash=\'#bracket/' + _sf(item.tId) + '\'" style="cursor:pointer;background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;">';
+        html += '<span style="font-size:1rem;">' + _sportIcon(item.sport) + '</span>';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:0.78rem;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sf(item.m.p1 || '') + ' <span style="color:var(--text-muted)">×</span> ' + _sf(item.m.p2 || '') + '</div>';
+        html += '<div style="font-size:0.68rem;color:#94a3b8;">Você propôs: <b>' + _sf(scoreStr) + '</b></div>';
+        html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
+        html += '</div>';
+        html += '<button onclick="event.stopPropagation();window._rejectResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;flex-shrink:0;" title="Cancelar proposta">🚫</button>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // ── Partidas sem resultado que eu posso lançar ──
+    if (noResult.length > 0) {
+      var capped = noResult.slice(0, 5);
+      html += '<div style="margin-bottom:10px;">';
+      html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.04em;">📋 Para lançar resultado (' + noResult.length + ')</p>';
+      capped.forEach(function(item) {
+        html += '<div onclick="window.location.hash=\'#bracket/' + _sf(item.tId) + '\'" style="cursor:pointer;background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.12);border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;">';
+        html += '<span style="font-size:1rem;">' + _sportIcon(item.sport) + '</span>';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:0.78rem;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sf(item.m.p1 || '') + ' × ' + _sf(item.m.p2 || '') + '</div>';
+        html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
+        html += '</div>';
+        html += '<span style="font-size:0.65rem;color:#38bdf8;flex-shrink:0;">Ver →</span>';
+        html += '</div>';
+      });
+      if (noResult.length > 5) {
+        html += '<p style="margin:2px 0 0;font-size:0.68rem;color:var(--text-muted);text-align:center;">...e mais ' + (noResult.length - 5) + '</p>';
+      }
+      html += '</div>';
+    }
+
+    // ── Últimos resultados confirmados ──
+    if (recentConfirmed.length > 0) {
+      html += '<div>';
+      html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.04em;">✅ Últimos resultados (' + recentConfirmed.length + ')</p>';
+      recentConfirmed.forEach(function(item) {
+        var m2 = item.m;
+        var isWinner = (m2.winner && _isMe(m2.winner)) || (m2.winner && String(m2.p1 || '').split(/\s*\/\s*/).some(function(n) { return _isMe(n) && n === m2.winner; }));
+        var resultColor = m2.draw ? '#94a3b8' : (isWinner ? '#4ade80' : '#f87171');
+        var resultLabel = m2.draw ? 'Empate' : (isWinner ? 'Vitória' : 'Derrota');
+        var scoreStr = '';
+        if (Array.isArray(m2.sets) && m2.sets.length > 0) {
+          scoreStr = m2.sets.map(function(s) { return s.gamesP1 + '-' + s.gamesP2; }).join(' ');
+        } else if (m2.scoreP1 != null && m2.scoreP2 != null) {
+          scoreStr = m2.scoreP1 + ' × ' + m2.scoreP2;
+        }
+        html += '<div onclick="window.location.hash=\'#bracket/' + _sf(item.tId) + '\'" style="cursor:pointer;background:rgba(74,222,128,0.04);border:1px solid rgba(74,222,128,0.1);border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;">';
+        html += '<span style="font-size:1rem;">' + _sportIcon(item.sport) + '</span>';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:0.78rem;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sf(m2.p1 || '') + ' ' + (scoreStr ? '<b>' + _sf(scoreStr) + '</b> ' : '') + _sf(m2.p2 || '') + '</div>';
+        html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
+        html += '</div>';
+        html += '<span style="font-size:0.7rem;font-weight:700;color:' + resultColor + ';flex-shrink:0;">' + resultLabel + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
   const curFilter = window._dashFilter || 'todos';
   const curSport = window._dashSport || '';
   const curLocation = window._dashLocation || '';
@@ -1848,6 +2063,9 @@ function renderDashboard(container) {
         ${_statPill('⚔️', _socialMatchesDisplay, 'Partidas', _socialMatchesClick, _socialMatchesTitle, { wider: true, labelOnTop: true, subtitle: _socialMatchesSubtitle, dataAttrs: 'data-stat-matches-pill', countDataAttr: 'data-stat-matches-count', subtitleDataAttr: 'data-stat-matches-subtitle' })}
       </div>
     </div>
+
+    <!-- Meus Resultados (v1.8.2-beta): pendentes de ação + últimos confirmados -->
+    ${_buildMyResultsHtml()}
 
     <!-- Filter Bar (organizer analytics moved into hero 📊 Estatísticas modal in v0.14.32) -->
     ${filterBarHtml}

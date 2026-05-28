@@ -8,6 +8,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🏅 v1.8.2-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Aprovação de resultados pelos jogadores — revisão completa.</b><br><br>' +
+      '<b>Contestar resultado:</b> o time adversário agora pode propor um placar diferente (⚡ Contestar) em vez de apenas rejeitar. O adversário recebe notificação para aprovar ou contestar o novo placar, até que ambos os lados concordem.<br><br>' +
+      '<b>Botões distintos por papel:</b> no card da partida, o time adversário vê "✅ Aprovar" e "⚡ Contestar"; o organizador e quem propôs o resultado original veem "❌ Rejeitar" (descarte direto). Isso deixa o fluxo mais claro — contestar ≠ rejeitar.<br><br>' +
+      '<b>Meus Resultados no dashboard:</b> nova seção logo abaixo do hero box com três grupos — partidas aguardando <em>sua</em> aprovação (com botões de ação inline), resultados que você propôs aguardando o adversário e partidas sem resultado que você pode lançar. Abaixo, os últimos resultados confirmados com vitória/derrota/empate. Tudo clicável para o bracket do torneio.<br><br>' +
+      '<b>Correções técnicas:</b> organizadores sem e-mail cadastrado (conta via telefone) agora recebem notificações de aprovação corretamente via UID; notificações de aprovação e rejeição passaram para nível <b>Fundamental</b>; placar de games em resultados GSM é preservado corretamente ao aprovar.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔔 v1.8.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Notificações ricas e personalizadas.</b><br><br>' +

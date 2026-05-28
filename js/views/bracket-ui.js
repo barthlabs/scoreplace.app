@@ -390,8 +390,11 @@ function _userTeamInMatch(t, m, user) {
         if (user.email && pp.email && pp.email === user.email) return true;
         if (user.email && pp.email_lower && pp.email_lower === (user.email || '').toLowerCase()) return true;
       }
-      // Fallback by displayName
-      if (user.displayName && nm === user.displayName) return true;
+      // Fallback by displayName (substring to handle "A / B" doubles or short names)
+      if (user.displayName) {
+        var uDN = user.displayName;
+        if (nm === uDN || nm.indexOf(uDN) !== -1 || uDN.indexOf(nm) !== -1) return true;
+      }
     }
     return false;
   };
@@ -405,11 +408,21 @@ function _userTeamInMatch(t, m, user) {
 function _isUserOrgOrCoHost(t, user) {
   if (!t || !user) return false;
   var email = user.email;
-  if (!email) return false;
-  if (t.organizerEmail === email) return true;
-  if (t.creatorEmail === email) return true;
-  if (Array.isArray(t.coHosts)) {
-    return t.coHosts.some(function(ch) { return ch.email === email && ch.status === 'active'; });
+  var uid = user.uid;
+  // UID-based check first (works for phone-only accounts without email)
+  if (uid) {
+    if (t.creatorUid && t.creatorUid === uid) return true;
+    if (Array.isArray(t.coHosts)) {
+      if (t.coHosts.some(function(ch) { return ch.uid === uid && ch.status === 'active'; })) return true;
+    }
+  }
+  // Email-based fallback
+  if (email) {
+    if (t.organizerEmail === email) return true;
+    if (t.creatorEmail === email) return true;
+    if (Array.isArray(t.coHosts)) {
+      if (t.coHosts.some(function(ch) { return ch.email === email && ch.status === 'active'; })) return true;
+    }
   }
   return false;
 }
@@ -460,7 +473,7 @@ function _notifyPendingApproval(t, m, proposerName) {
     tournamentId: t.id,
     tournamentName: t.name,
     matchId: m.id,
-    level: 'important',
+    level: 'fundamental',
     timestamp: Date.now()
   };
   // Find proposer's side, then notify opposing team
@@ -501,15 +514,21 @@ function _notifyPendingApproval(t, m, proposerName) {
     });
   });
   // Also notify organizer if not proposer and not already notified
-  var orgEmail = t.organizerEmail || t.creatorEmail;
-  if (orgEmail) {
-    var orgPart = parts.find(function(p) {
-      return typeof p === 'object' && p.email === orgEmail;
-    });
-    if (orgPart && orgPart.uid && !skipUids[orgPart.uid]) {
-      window._sendUserNotification(orgPart.uid, notifData);
-    } else if (!orgPart) {
-      // Organizer might not be a participant — try by email lookup against AppStore.users? skip for now.
+  // First try by uid (works even when org isn't a participant — e.g. phone-only)
+  var orgUid = t.creatorUid;
+  if (orgUid && !skipUids[orgUid]) {
+    window._sendUserNotification(orgUid, notifData);
+    skipUids[orgUid] = true;
+  } else {
+    // Fallback: look up organizer in participants by email
+    var orgEmail = t.organizerEmail || t.creatorEmail;
+    if (orgEmail) {
+      var orgPart = parts.find(function(p) {
+        return typeof p === 'object' && p.email === orgEmail;
+      });
+      if (orgPart && orgPart.uid && !skipUids[orgPart.uid]) {
+        window._sendUserNotification(orgPart.uid, notifData);
+      }
     }
   }
 }
@@ -2321,8 +2340,9 @@ window._approveResult = function(tId, matchId) {
     if (pr.isFixedSet) m.fixedSet = true;
     m.scoreP1 = s1;
     m.scoreP2 = s2;
-    m.totalGamesP1 = s1;
-    m.totalGamesP2 = s2;
+    // Bug 4 fix: totalGames = sum of games across all sets, not sets-won count
+    m.totalGamesP1 = pr.totalGamesP1 != null ? pr.totalGamesP1 : s1;
+    m.totalGamesP2 = pr.totalGamesP2 != null ? pr.totalGamesP2 : s2;
   } else {
     m.scoreP1 = s1;
     m.scoreP2 = s2;
@@ -2380,7 +2400,14 @@ window._approveResult = function(tId, matchId) {
   window.AppStore.syncImmediate(tId);
 
   // Notifica participantes do match (proposer + opposing team)
-  try { _persistInlineTournamentMatchRecord(t, m, s1, s2, pr.tbP1, pr.tbP2, !!pr.isTiebreakEntry, !!pr.useSets); } catch(e) {}
+  // Bug 5 fix: choose persist function based on how the result was entered
+  try {
+    if (pr.kind === 'gsm' && typeof _persistGSMTournamentMatchRecord === 'function') {
+      _persistGSMTournamentMatchRecord(t, m);
+    } else {
+      _persistInlineTournamentMatchRecord(t, m, s1, s2, pr.tbP1, pr.tbP2, !!pr.isTiebreakEntry, !!pr.useSets);
+    }
+  } catch(e) {}
   if (typeof window._sendUserNotification === 'function') {
     var resultText = m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — ' + (m.draw ? _t('bui.drawResult') : _t('bui.matchWon', {winner: m.winner}));
     var notifData = {
@@ -2460,7 +2487,7 @@ window._rejectResult = function(tId, matchId) {
           message: 'O resultado de ' + m.p1 + ' vs ' + m.p2 + ' foi rejeitado. Lance novamente quando combinar com o adversário.',
           tournamentId: tId,
           tournamentName: t.name,
-          level: 'important',
+          level: 'fundamental',
           timestamp: Date.now()
         });
       }
@@ -2470,6 +2497,107 @@ window._rejectResult = function(tId, matchId) {
     'OK',
     'Cancelar'
   );
+};
+
+// _contestResult: the opposing team proposes a counter-result.
+// Opens a simple overlay for entering their own score, then stores it as the
+// new m.pendingResult (overwriting the previous proposal) and notifies the
+// original proposer team.
+window._contestResult = function(tId, matchId) {
+  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  if (!t) return;
+  var m = _findMatch(t, matchId);
+  if (!m) return;
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
+
+  // Only opposing team (or org) can contest
+  var pr = m.pendingResult;
+  var isOrg = _isUserOrgOrCoHost(t, cu);
+  var userSide = _userTeamInMatch(t, m, cu);
+  var proposerSide = 0;
+  if (pr && (pr.proposedBy || pr.proposedByEmail)) {
+    proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
+  }
+  var canContest = isOrg || (userSide > 0 && userSide !== proposerSide);
+  if (!canContest) {
+    showNotification('Sem permissão', 'Só o time adversário ou o organizador pode contestar.', 'warning');
+    return;
+  }
+
+  // Build simple score-entry overlay
+  var existingOverlay = document.getElementById('contest-result-overlay');
+  if (existingOverlay) existingOverlay.remove();
+
+  var matchLabel = window._safeHtml((m.p1 || '?') + ' vs ' + (m.p2 || '?'));
+  var overlay = document.createElement('div');
+  overlay.id = 'contest-result-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10060;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);padding:1rem;';
+  overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);border:1px solid rgba(251,191,36,0.4);border-radius:16px;padding:24px;width:100%;max-width:360px;box-shadow:0 0 32px rgba(251,191,36,0.18);">' +
+    '<h3 style="margin:0 0 6px;font-size:1rem;color:#fbbf24;">⚡ Contestar resultado</h3>' +
+    '<p style="margin:0 0 16px;font-size:0.78rem;color:var(--text-muted,#94a3b8);">' + matchLabel + '</p>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
+      '<div>' +
+        '<label style="display:block;font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-bottom:4px;">' + window._safeHtml(m.p1 || 'Lado 1') + '</label>' +
+        '<input id="contest-s1" type="number" min="0" max="99" placeholder="0" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:1rem;text-align:center;box-sizing:border-box;">' +
+      '</div>' +
+      '<div>' +
+        '<label style="display:block;font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-bottom:4px;">' + window._safeHtml(m.p2 || 'Lado 2') + '</label>' +
+        '<input id="contest-s2" type="number" min="0" max="99" placeholder="0" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:1rem;text-align:center;box-sizing:border-box;">' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;">' +
+      '<button onclick="document.getElementById(\'contest-result-overlay\').remove()" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted,#94a3b8);border-radius:8px;padding:9px;font-size:0.82rem;cursor:pointer;">Cancelar</button>' +
+      '<button onclick="window._confirmContest(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\')" style="flex:2;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;color:#fff;border-radius:8px;padding:9px;font-size:0.85rem;font-weight:700;cursor:pointer;">⚡ Contestar</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  var inp = document.getElementById('contest-s1');
+  if (inp) inp.focus();
+};
+
+// Internal: confirm the contest — save new pendingResult and notify original proposer
+window._confirmContest = function(tId, matchId) {
+  var overlay = document.getElementById('contest-result-overlay');
+  var s1El = document.getElementById('contest-s1');
+  var s2El = document.getElementById('contest-s2');
+  var s1 = s1El ? parseInt(s1El.value, 10) : NaN;
+  var s2 = s2El ? parseInt(s2El.value, 10) : NaN;
+  if (isNaN(s1) || isNaN(s2)) {
+    showNotification('Placar inválido', 'Preencha os dois campos.', 'warning');
+    return;
+  }
+  if (overlay) overlay.remove();
+
+  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  if (!t) return;
+  var m = _findMatch(t, matchId);
+  if (!m) return;
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu) return;
+
+  var winner = s1 > s2 ? m.p1 : (s2 > s1 ? m.p2 : null);
+  var proposerName = cu.displayName || cu.email || 'Jogador';
+
+  m.pendingResult = {
+    scoreP1: s1,
+    scoreP2: s2,
+    winner: winner,
+    draw: s1 === s2,
+    proposedBy: cu.uid || '',
+    proposedByEmail: cu.email || '',
+    proposedByName: proposerName,
+    proposedAt: Date.now(),
+    kind: 'inline'
+  };
+
+  _propagateMatchUpdate(t, m);
+  window.AppStore.logAction(tId, 'Resultado contestado por ' + proposerName + ': ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2);
+  window.AppStore.syncImmediate(tId);
+  _notifyPendingApproval(t, m, proposerName);
+  showNotification('⚡ Contestação enviada', 'O time adversário foi notificado para aprovar ou contestar.', 'success');
+  _rerenderBracket(tId, matchId);
 };
 
 window._editResult = function (tId, matchId) {
