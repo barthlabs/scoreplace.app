@@ -9,7 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
-      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🏅 v1.8.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🎨 v1.8.4-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Cores de time corretas na tela de estatísticas.</b><br><br>' +
+      'Na tela de resultado após partida ao vivo, time 1 agora aparece consistentemente em <b style="color:#3b82f6;">azul</b> e time 2 em <b style="color:#ef4444;">vermelho</b> — tanto nas seções de Vencedor e Perdedor quanto nas bordas dos chips de jogador e nos rótulos de cada seção. Antes, os chips do time perdedor sempre apareciam em cinza neutro independente de qual time venceu.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🏅 v1.8.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Botão ✏️ Editar unificado para resultados pendentes.</b><br><br>' +
       '<b>Qualquer um que lança pode editar:</b> o botão ✏️ Editar substitui os antigos Contestar/Descartar/Cancelar. Quem pode lançar resultados (organizador, árbitro confirmado ou jogador — conforme a configuração do torneio) pode editar o placar pendente a qualquer momento.<br><br>' +
       '<b>Comportamento por papel:</b> organizador e árbitros confirmados têm autoridade — ao editar, o placar é confirmado diretamente sem precisar de aprovação do adversário (o overlay avisa "Você tem autoridade"). Jogadores (proponente ou time adversário) ao editar geram uma nova proposta que aguarda confirmação do outro lado.<br><br>' +

@@ -5423,7 +5423,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var sz = bigSize ? 32 : 26;
         var fs = bigSize ? 'clamp(0.92rem,3vw,1.15rem)' : 'clamp(0.8rem,2.6vw,0.95rem)';
         var pad = bigSize ? '8px 10px' : '6px 8px';
-        var borderClr = bigSize ? accentClr + '66' : 'rgba(255,255,255,0.10)';
+        var borderClr = accentClr + (bigSize ? '66' : '40');
         var escName = String(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         return (
           '<button type="button" onclick="window._showPlayerMatchStats(\'' + escName + '\')" title="Ver estatísticas" ' +
@@ -5563,8 +5563,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
       // Loser section: names as clickable chips
       var loserSection =
-        '<div style="width:100%;max-width:380px;padding:clamp(8px,1.8vh,14px) clamp(10px,2vw,16px);border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;align-items:center;gap:clamp(4px,1vh,8px);opacity:0.94;">' +
-          '<div style="font-size:0.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:2px;">Perdedor</div>' +
+        '<div style="width:100%;max-width:380px;padding:clamp(8px,1.8vh,14px) clamp(10px,2vw,16px);border-radius:14px;background:linear-gradient(180deg,rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.08),rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.02));border:1px solid rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.25);display:flex;flex-direction:column;align-items:center;gap:clamp(4px,1vh,8px);opacity:0.94;">' +
+          '<div style="font-size:0.6rem;font-weight:700;color:' + loseClr + ';text-transform:uppercase;letter-spacing:2px;opacity:0.8;">Perdedor</div>' +
           '<div style="display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;max-width:260px;">' + loseChipsHtml + '</div>' +
         '</div>';
 
