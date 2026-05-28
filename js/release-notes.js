@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧪 v1.8.11-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Testes automatizados expandidos.</b><br><br>' +
+      'Adicionadas 6 novas suites de teste (≈48 casos) para os helpers canônicos introduzidos em v1.8.7–v1.8.10: <code>_pName</code>, <code>_formatHHMM</code>, <code>_formatDDMM</code>, <code>_formatYYYYMMDD</code>, <code>_firstToken</code> e <code>_avatarHtml</code>. Cobertura total do projeto sobe para 34 suites. Nenhuma mudança de comportamento.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧹 v1.8.10-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Refatoração: helpers <code>window._formatYYYYMMDD</code> e <code>window._firstToken</code>.</b><br><br>' +
       'Padrões inline de formatação de data ISO (<code>YYYY-MM-DD</code>) e extração do primeiro token de nome unificados em helpers globais. Substituições em <code>create-tournament.js</code>, <code>explore.js</code> e <code>trophies-view.js</code>. Nenhuma mudança visual.</p>' +

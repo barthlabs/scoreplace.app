@@ -26,7 +26,7 @@
 </style>
 </head>
 <body>
-<h1>scoreplace.app — Testes Automatizados v0.8.74</h1>
+<h1>scoreplace.app — Testes Automatizados v1.8.10-beta</h1>
 <div class="summary" id="summary">Executando...</div>
 <div id="load-status" class="load-status"></div>
 <div id="results"></div>
@@ -811,9 +811,11 @@ describe('SCOREPLACE_VERSION', function() {
   it('esta definida', function() {
     expect(!!window.SCOREPLACE_VERSION).toBeTruthy();
   });
-  it('segue padrao semver alpha', function() {
-    expect(window.SCOREPLACE_VERSION).toContain('-alpha');
-    expect(window.SCOREPLACE_VERSION.split('.').length).toBeGreaterThanOrEqual(3);
+  it('segue padrao semver com canal (alpha ou beta)', function() {
+    var v = window.SCOREPLACE_VERSION;
+    var hasChannel = v.indexOf('-alpha') !== -1 || v.indexOf('-beta') !== -1;
+    expect(hasChannel).toBe(true);
+    expect(v.split('.').length).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -1477,6 +1479,212 @@ describe('Z-Index Hierarchy', function() {
     expect(typeof window._toggleHamburger).toBe('function');
     expect(typeof window._closeHamburger).toBe('function');
     expect(typeof window._adjustBackHeaderForHamburger).toBe('function');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// _pName — Resolução canônica de nome de participante (v1.8.7-beta)
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('_pName — Resolução de nome de participante', function() {
+  it('string passada diretamente retorna ela mesma', function() {
+    expect(window._pName('Alice')).toBe('Alice');
+  });
+  it('objeto com displayName retorna displayName', function() {
+    expect(window._pName({ displayName: 'Bob' })).toBe('Bob');
+  });
+  it('objeto sem displayName cai para name', function() {
+    expect(window._pName({ name: 'Carol' })).toBe('Carol');
+  });
+  it('objeto sem displayName e name cai para email', function() {
+    expect(window._pName({ email: 'dave@x.com' })).toBe('dave@x.com');
+  });
+  it('objeto vazio retorna string vazia', function() {
+    expect(window._pName({})).toBe('');
+  });
+  it('null retorna string vazia', function() {
+    expect(window._pName(null)).toBe('');
+  });
+  it('undefined retorna string vazia', function() {
+    expect(window._pName(undefined)).toBe('');
+  });
+  it('null com fallback customizado retorna fallback', function() {
+    expect(window._pName(null, 'Convidado')).toBe('Convidado');
+  });
+  it('displayName vazio cai para name (cadeia de falsy)', function() {
+    expect(window._pName({ displayName: '', name: 'Eve' })).toBe('Eve');
+  });
+  it('prioridade: displayName > name > email', function() {
+    expect(window._pName({ displayName: 'A', name: 'B', email: 'c@d.com' })).toBe('A');
+    expect(window._pName({ name: 'B', email: 'c@d.com' })).toBe('B');
+  });
+  it('fallback ignorado quando objeto tem nome válido', function() {
+    expect(window._pName({ displayName: 'Real' }, 'FB')).toBe('Real');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// _formatHHMM / _formatDDMM — Formatação canônica de hora (v1.8.8-beta)
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('_formatHHMM — Formatação HH:MM', function() {
+  it('formata hora com zero-padding correto', function() {
+    expect(window._formatHHMM(new Date(2024, 0, 1, 9, 5))).toBe('09:05');
+  });
+  it('formata hora cheia sem zeros desnecessários', function() {
+    expect(window._formatHHMM(new Date(2024, 0, 1, 23, 30))).toBe('23:30');
+  });
+  it('meia-noite retorna 00:00', function() {
+    expect(window._formatHHMM(new Date(2024, 0, 1, 0, 0))).toBe('00:00');
+  });
+  it('null retorna string vazia', function() {
+    expect(window._formatHHMM(null)).toBe('');
+  });
+  it('undefined retorna string vazia', function() {
+    expect(window._formatHHMM(undefined)).toBe('');
+  });
+  it('aceita timestamp numérico', function() {
+    var ts = new Date(2024, 5, 15, 14, 30).getTime();
+    expect(window._formatHHMM(ts)).toBe('14:30');
+  });
+  it('resultado sempre tem exatamente 5 caracteres (HH:MM)', function() {
+    var result = window._formatHHMM(new Date(2024, 0, 1, 8, 3));
+    expect(result.length).toBe(5);
+    expect(result[2]).toBe(':');
+  });
+});
+
+describe('_formatDDMM — Formatação DD/MM HH:MM', function() {
+  it('formata data e hora completos com zero-padding', function() {
+    expect(window._formatDDMM(new Date(2024, 0, 5, 9, 5))).toBe('05/01 09:05');
+  });
+  it('null retorna string vazia', function() {
+    expect(window._formatDDMM(null)).toBe('');
+  });
+  it('dia e mês com zero-padding independentes', function() {
+    expect(window._formatDDMM(new Date(2024, 2, 3, 7, 8))).toBe('03/03 07:08');
+  });
+  it('resultado no formato DD/MM HH:MM', function() {
+    var result = window._formatDDMM(new Date(2026, 11, 25, 18, 0));
+    expect(result).toBe('25/12 18:00');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// _formatYYYYMMDD — Formatação canônica de data ISO (v1.8.10-beta)
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('_formatYYYYMMDD — Formatação YYYY-MM-DD', function() {
+  it('formata data com zero-padding no mês e dia', function() {
+    expect(window._formatYYYYMMDD(new Date(2024, 0, 5))).toBe('2024-01-05');
+  });
+  it('null retorna string vazia', function() {
+    expect(window._formatYYYYMMDD(null)).toBe('');
+  });
+  it('data no fim do ano formata corretamente', function() {
+    expect(window._formatYYYYMMDD(new Date(2026, 11, 31))).toBe('2026-12-31');
+  });
+  it('aceita timestamp numérico', function() {
+    var ts = new Date(2024, 5, 15).getTime();
+    expect(window._formatYYYYMMDD(ts)).toBe('2024-06-15');
+  });
+  it('formato sempre YYYY-MM-DD (10 caracteres com hífens)', function() {
+    var result = window._formatYYYYMMDD(new Date(2024, 2, 8));
+    expect(result.length).toBe(10);
+    expect(result[4]).toBe('-');
+    expect(result[7]).toBe('-');
+  });
+  it('ano com 4 dígitos preservado', function() {
+    expect(window._formatYYYYMMDD(new Date(2026, 0, 1))).toContain('2026');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// _firstToken — Extração do primeiro token de nome/email (v1.8.10-beta)
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('_firstToken — Primeiro token de nome', function() {
+  it('nome composto retorna primeiro nome', function() {
+    expect(window._firstToken('Alice Smith')).toBe('Alice');
+  });
+  it('email retorna parte antes do @', function() {
+    expect(window._firstToken('alice@mail.com')).toBe('alice');
+  });
+  it('nome único retorna ele mesmo', function() {
+    expect(window._firstToken('Alice')).toBe('Alice');
+  });
+  it('null retorna string vazia', function() {
+    expect(window._firstToken(null)).toBe('');
+  });
+  it('string vazia retorna string vazia', function() {
+    expect(window._firstToken('')).toBe('');
+  });
+  it('nome com ponto retorna antes do ponto', function() {
+    expect(window._firstToken('john.doe')).toBe('john');
+  });
+  it('nome com underscore retorna antes do underscore', function() {
+    expect(window._firstToken('test_user')).toBe('test');
+  });
+  it('nome com hífen retorna antes do hífen', function() {
+    expect(window._firstToken('Ana-Paula')).toBe('Ana');
+  });
+  it('resultado nunca tem separador (espaço, @, _, -)', function() {
+    var result = window._firstToken('Alice Smith Junior');
+    expect(result.indexOf(' ')).toBe(-1);
+    expect(result.indexOf('@')).toBe(-1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// _avatarHtml — HTML de avatar com foto e fallback de inicial (v1.8.9-beta)
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('_avatarHtml — HTML de avatar', function() {
+  it('sem foto retorna div com inicial em maiúsculo', function() {
+    var html = window._avatarHtml({ displayName: 'Alice' });
+    expect(html).toContain('<div');
+    expect(html).toContain('A');
+    expect(html).toNotContain('<img');
+  });
+  it('com foto retorna img + div de fallback oculto', function() {
+    var html = window._avatarHtml({ photoURL: 'https://example.com/photo.jpg', displayName: 'Bob' });
+    expect(html).toContain('<img');
+    expect(html).toContain('onerror');
+    expect(html).toContain('display:none');
+  });
+  it('tamanho padrão é 32px', function() {
+    var html = window._avatarHtml({ displayName: 'Carol' });
+    expect(html).toContain('32px');
+  });
+  it('tamanho customizado reflete no style', function() {
+    var html = window._avatarHtml({ displayName: 'Dave' }, 48);
+    expect(html).toContain('48px');
+    expect(html).toNotContain('32px');
+  });
+  it('string passada usa inicial da string', function() {
+    var html = window._avatarHtml('Eve');
+    expect(html).toContain('E');
+  });
+  it('null retorna div com ? como inicial', function() {
+    var html = window._avatarHtml(null);
+    expect(html).toContain('?');
+    expect(html).toNotContain('<img');
+  });
+  it('objeto sem nome retorna div com ?', function() {
+    var html = window._avatarHtml({});
+    expect(html).toContain('?');
+  });
+  it('photoURL com aspas é escapada pelo _safeHtml', function() {
+    var html = window._avatarHtml({ photoURL: 'https://x.com/a"b', displayName: 'X' });
+    expect(html).toNotContain('"b');
+    expect(html).toContain('&quot;');
+  });
+  it('resultado é sempre uma string HTML não-vazia', function() {
+    var html = window._avatarHtml({ displayName: 'Test' });
+    expect(typeof html).toBe('string');
+    expect(html.length > 0).toBe(true);
+    expect(html).toContain('border-radius:50%');
+  });
+  it('foto com fallback: div hidden tem mesma inicial que seria exibida sozinha', function() {
+    var withPhoto = window._avatarHtml({ photoURL: 'https://x.com/p.jpg', displayName: 'Zara' });
+    var withoutPhoto = window._avatarHtml({ displayName: 'Zara' });
+    expect(withoutPhoto).toContain('>Z<');
+    expect(withPhoto).toContain('>Z<'); // fallback div also has Z
   });
 });
 
