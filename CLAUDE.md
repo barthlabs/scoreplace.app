@@ -38,9 +38,11 @@ A partir desse reset, **base de dados é considerada produção** e qualquer alt
 - ✅ Backup Firestore diário
 - ✅ Quotas + alertas Firebase (3 policies + budget)
 - ✅ Privacy + Termos publicados
-- ⏳ Revisão jurídica completa (deferred — Privacy/Terms cobre uso beta)
-- ⏳ 30 dias de uso real sem bug crítico
-- ⏳ Performance Lighthouse ≥ 75 (refactor arquitetural — bundler, modular Firebase)
+- ✅ Revisão jurídica (Privacy/Terms cobre uso — considerado fechado em 2026-05-28)
+- ⏳ 30 dias de uso real sem bug crítico — **início: 2026-06-11 (primeiro torneio real) · data alvo v1.0.0: 2026-07-11**
+
+### Pós v1.0.0 — sem prazo
+- Performance Lighthouse ≥ 75: requer bundler (Vite/Rollup) + Firebase SDK modular. Trabalho em branch separada, sem impacto em produção. Fazer com poucos usuários ainda é mais seguro — agendar para logo após estabilização do v1.0.
 
 ## Historico do Projeto
 
