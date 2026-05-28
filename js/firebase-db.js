@@ -935,7 +935,9 @@ window.FirestoreDB = {
         .limit(200).get();
       createdSnap.forEach(function(d) {
         var data = d.data();
-        if (data.status !== 'finished') return; // filtro client-side
+        // v1.8.5-beta: também incluir docs com result.winner mesmo que
+        // status não seja 'finished' (save pode ter falhado na transição).
+        if (data.status !== 'finished' && !(data.result && data.result.winner)) return;
         data._docId = d.id;
         out[d.id] = data;
       });
@@ -953,7 +955,8 @@ window.FirestoreDB = {
       partSnap.forEach(function(d) {
         if (out[d.id]) return; // dedup
         var data = d.data();
-        if (data.status !== 'finished') return; // filtro client-side
+        // v1.8.5-beta: idem — incluir docs com result.winner mesmo sem status:'finished'
+        if (data.status !== 'finished' && !(data.result && data.result.winner)) return;
         data._docId = d.id;
         out[d.id] = data;
       });
@@ -961,14 +964,14 @@ window.FirestoreDB = {
       console.warn('loadRecentCasualMatchesForUser participants err:', e);
     }
 
-    // Sort client-side by createdAt desc, take N most recent
-    // v1.7.6-beta: ISO strings (ex: "2026-05-26T...") não são números —
-    // tb - ta em strings = NaN → sort instável (matches em ordem aleatória).
-    // Fix: converter para ms via new Date().getTime() quando for string.
+    // Sort client-side by finishedAt desc (fallback: createdAt), take N most recent.
+    // v1.7.6-beta: ISO strings converted to ms before subtraction (NaN-safe).
+    // v1.8.5-beta: prefer finishedAt over createdAt — "most recently finished"
+    // is more intuitive than "most recently created" for last-played ordering.
     var arr = Object.keys(out).map(function(k) { return out[k]; });
     arr.sort(function(a, b) {
-      var ta = a.createdAt || a.finishedAt || a._ts || 0;
-      var tb = b.createdAt || b.finishedAt || b._ts || 0;
+      var ta = a.finishedAt || a.createdAt || a._ts || 0;
+      var tb = b.finishedAt || b.createdAt || b._ts || 0;
       if (ta && typeof ta.toMillis === 'function') ta = ta.toMillis();
       else if (ta && typeof ta === 'string') ta = new Date(ta).getTime() || 0;
       if (tb && typeof tb.toMillis === 'function') tb = tb.toMillis();

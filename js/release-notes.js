@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
-      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🎨 v1.8.4-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">📊 v1.8.5-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Últimas Partidas: histórico completo com data e horário.</b><br><br>' +
+      '<b>Data e horário de término:</b> cada card de partida na seção "Últimas Partidas" exibe agora a data e o horário de conclusão no formato <b>28/05 14h58</b> — antes aparecia apenas a data sem hora.<br><br>' +
+      '<b>Partidas que não apareciam:</b> corrigido bug em que partidas com resultado registrado não apareciam no histórico quando o status no banco não tinha sido atualizado corretamente (por exemplo, por falha de rede no momento do Iniciar). Agora qualquer partida com placar confirmado aparece nas Últimas Partidas. A ordenação também foi corrigida para usar o horário de término em vez do horário de criação.<br><br>' +
+      '<b>Save robusto:</b> se o save inicial ("Iniciar") falhou por rede, o resultado é salvo diretamente com status concluído ao fim da partida, garantindo que nenhum jogo se perca do histórico.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🎨 v1.8.4-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Cores de time corretas na tela de estatísticas.</b><br><br>' +
       'Na tela de resultado após partida ao vivo, time 1 agora aparece consistentemente em <b style="color:#3b82f6;">azul</b> e time 2 em <b style="color:#ef4444;">vermelho</b> — tanto nas seções de Vencedor e Perdedor quanto nas bordas dos chips de jogador e nos rótulos de cada seção. Antes, os chips do time perdedor sempre apareciam em cinza neutro independente de qual time venceu.</p>' +
     '</div>' +

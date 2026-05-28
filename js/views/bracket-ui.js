@@ -4579,7 +4579,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // and cause the Firestore update to be skipped whenever _saveResult is
       // called without opts.casualDocId (e.g. from _liveScoreRestart / Desparear).
       // Use the outer _casualDocId from the _openLiveScoring closure directly.
-      if (_casualDocId && typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.db) {
+      if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.db) {
+        // Compute result payload unconditionally so it's available for both
+        // the update path (_casualDocId exists) and the fallback create path.
         var resultData = {
           winner: state.winner, // 1, 2, or 0
           summary: summary,
@@ -4587,24 +4589,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
           p2Score: useSets ? null : state.currentGameP2
         };
         if (setsData) resultData.sets = setsData;
-        // Collect uids from opts.players (when available) or fall back to
-        // _casualPlayers which is populated from opts when _openLiveScoring starts.
         var _plForUids = (opts && opts.players && opts.players.length) ? opts.players : _casualPlayers;
         var playerUids = _plForUids.filter(function(p) { return !!p.uid; }).map(function(p) { return p.uid; });
-        // v1.6.14-beta: gravar liveState junto com status:'finished'.
-        // Antes, o autosave gravava só status/result/playerUids, e o
-        // liveState ficava pra _syncLiveState (debounce 300ms). Race: outro
-        // cliente recebia status:'finished' via onSnapshot ANTES do liveState
-        // atualizado chegar, então _applyRemoteState aplicava estado antigo
-        // (sem isFinished=true) → tela travada sem stats. Cancela timer de
-        // sync pendente pra evitar last-write-wins favorecer estado antigo.
         try { clearTimeout(_syncTimer); } catch(_e) {}
         var _finalLiveState = null;
         try { _finalLiveState = _serializeState(); } catch(_e) {}
-        // v1.7.8-beta: gravar players[] com team correto no doc casualMatches.
-        // Antes, _updatePayload não incluía players — o doc ficava com o array
-        // da criação inicial (pré-"Sortear Duplas"), causando exibição errada
-        // de times em "Últimas Partidas".
         var _playersForUpdate = [];
         var _allForUpdate = p1Players.concat(p2Players);
         for (var _upi = 0; _upi < _allForUpdate.length; _upi++) {
@@ -4617,47 +4606,74 @@ window._openLiveScoring = function(tId, matchId, opts) {
             photoURL: _upmt.photoURL || null
           });
         }
-        var _updatePayload = {
-          status: 'finished',
-          finishedAt: new Date().toISOString(),
-          result: resultData,
-          playerUids: playerUids,
-          players: _playersForUpdate,
-          isDoubles: isDoubles
-        };
-        if (_finalLiveState) _updatePayload.liveState = _finalLiveState;
-        // Diagnóstico expostos em window pra debug via DevTools
-        try {
-          window._lastCasualSaveResult = {
-            docId: _casualDocId,
+        var _finishedAt = new Date().toISOString();
+
+        // Helper to trigger history refresh after write confirms
+        function _afterSave() {
+          _statsSlotWriteConfirmed = true;
+          setTimeout(function() {
+            if (typeof window._casualLoadLastMatches === 'function') window._casualLoadLastMatches();
+            if (typeof _hydrateStatsLastMatchesSlotFn === 'function') _hydrateStatsLastMatchesSlotFn();
+          }, 150);
+        }
+
+        if (_casualDocId) {
+          // Normal path: update existing doc
+          var _updatePayload = {
+            status: 'finished',
+            finishedAt: _finishedAt,
+            result: resultData,
             playerUids: playerUids,
-            winner: state.winner,
-            hasLiveState: !!_finalLiveState,
-            at: new Date().toISOString()
+            players: _playersForUpdate,
+            isDoubles: isDoubles
           };
-        } catch(_e) {}
-        // v1.6.65-beta: captura a promise e dispara _casualLoadLastMatches
-        // quando o write confirma — resolve race condition onde a tela de
-        // setup recarregava 300ms após o match terminar mas o status:'finished'
-        // ainda não tinha chegado ao servidor.
-        var _updatePromise = window.FirestoreDB.updateCasualMatch(_casualDocId, _updatePayload);
-        if (_updatePromise && typeof _updatePromise.then === 'function') {
-          _updatePromise.then(function() {
-            _statsSlotWriteConfirmed = true;
-            setTimeout(function() {
-              if (typeof window._casualLoadLastMatches === 'function') window._casualLoadLastMatches();
-              // v1.7.5-beta: hidrata "Últimas Partidas" APÓS write confirmado —
-              // antes usava timeout fixo de 400ms que disparava antes da escrita
-              // chegar ao servidor, resultando em dados desatualizados.
-              if (typeof _hydrateStatsLastMatchesSlotFn === 'function') _hydrateStatsLastMatchesSlotFn();
-            }, 150);
-          }).catch(function() {
-            // v1.7.7-beta: mesmo em erro de write, tenta mostrar seção
-            _statsSlotWriteConfirmed = true;
-            setTimeout(function() {
-              if (typeof _hydrateStatsLastMatchesSlotFn === 'function') _hydrateStatsLastMatchesSlotFn();
-            }, 200);
-          });
+          if (_finalLiveState) _updatePayload.liveState = _finalLiveState;
+          try {
+            window._lastCasualSaveResult = {
+              docId: _casualDocId, playerUids: playerUids,
+              winner: state.winner, hasLiveState: !!_finalLiveState,
+              at: _finishedAt
+            };
+          } catch(_e) {}
+          var _updatePromise = window.FirestoreDB.updateCasualMatch(_casualDocId, _updatePayload);
+          if (_updatePromise && typeof _updatePromise.then === 'function') {
+            _updatePromise.then(_afterSave).catch(function() {
+              // v1.7.7-beta: mesmo em erro de write, tenta mostrar seção
+              _statsSlotWriteConfirmed = true;
+              setTimeout(function() {
+                if (typeof _hydrateStatsLastMatchesSlotFn === 'function') _hydrateStatsLastMatchesSlotFn();
+              }, 200);
+            });
+          }
+        } else if (_casualCreatedBy) {
+          // v1.8.5-beta: fallback — _casualDocId é null porque saveCasualMatch
+          // falhou em "Iniciar" (rede ou Firestore indisponível). Criar doc
+          // completo com status:'finished' agora para que a partida apareça
+          // no histórico de "Últimas Partidas".
+          var _fallbackPayload = {
+            createdBy: _casualCreatedBy,
+            createdAt: _finishedAt,
+            finishedAt: _finishedAt,
+            sport: (opts && opts.sportName) || '',
+            scoring: (opts && opts.scoring) || null,
+            isDoubles: isDoubles,
+            roomCode: _casualRoomCode || null,
+            status: 'finished',
+            result: resultData,
+            playerUids: playerUids,
+            players: _playersForUpdate
+          };
+          if (_finalLiveState) _fallbackPayload.liveState = _finalLiveState;
+          var _createPromise = window.FirestoreDB.saveCasualMatch(_fallbackPayload);
+          if (_createPromise && typeof _createPromise.then === 'function') {
+            _createPromise.then(function(newId) {
+              try { window._lastCasualSaveResult = { docId: newId, fallback: true, winner: state.winner, at: _finishedAt }; } catch(_e) {}
+              _afterSave();
+            }).catch(function(e) {
+              console.warn('[Casual] fallback-save err:', e);
+              _afterSave();
+            });
+          }
         }
       }
       // Persist detailed stats in each registered player's account so they
@@ -9228,10 +9244,16 @@ window._openCasualMatch = function(restoreOpts) {
       matches.forEach(function(m) {
         var sport = m.sport || '';
         var dateStr = '';
-        if (m.createdAt) {
-          var d = (typeof m.createdAt === 'string') ? new Date(m.createdAt) : null;
-          if (d && !isNaN(d.getTime()))
-            dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        var _finTs = m.finishedAt || m.createdAt;
+        if (_finTs) {
+          var d = (typeof _finTs === 'string') ? new Date(_finTs) : (_finTs && typeof _finTs.toMillis === 'function' ? new Date(_finTs.toMillis()) : null);
+          if (d && !isNaN(d.getTime())) {
+            var _dd = String(d.getDate()).padStart(2,'0');
+            var _mm = String(d.getMonth()+1).padStart(2,'0');
+            var _hh = String(d.getHours()).padStart(2,'0');
+            var _mn = String(d.getMinutes()).padStart(2,'0');
+            dateStr = _dd + '/' + _mm + ' ' + _hh + 'h' + _mn;
+          }
         }
         var icon = '🎾';
         for (var ssi = 0; ssi < sports.length; ssi++) {
