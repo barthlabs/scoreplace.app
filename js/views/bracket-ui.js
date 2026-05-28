@@ -5884,9 +5884,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
             matches.forEach(function(m) {
               var sport = m.sport || '';
               var dateStr = '';
-              if (m.createdAt) {
-                var d = (typeof m.createdAt === 'string') ? new Date(m.createdAt) : null;
-                if (d && !isNaN(d.getTime())) dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+              var _finTs2 = m.finishedAt || m.createdAt;
+              if (_finTs2) {
+                var d = (typeof _finTs2 === 'string') ? new Date(_finTs2) : (_finTs2 && typeof _finTs2.toMillis === 'function' ? new Date(_finTs2.toMillis()) : null);
+                if (d && !isNaN(d.getTime())) {
+                  var _dd2 = String(d.getDate()).padStart(2,'0');
+                  var _mm2 = String(d.getMonth()+1).padStart(2,'0');
+                  var _hh2 = String(d.getHours()).padStart(2,'0');
+                  var _mn2 = String(d.getMinutes()).padStart(2,'0');
+                  dateStr = _dd2 + '/' + _mm2 + ' ' + _hh2 + 'h' + _mn2;
+                }
               }
               var icon = window._sportIcon ? window._sportIcon(sport) : '🎾';
               var safeRoomCode = (m.roomCode || '').replace(/'/g, "\\'");
