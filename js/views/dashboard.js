@@ -1425,8 +1425,8 @@ function renderDashboard(container) {
         html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
         html += '</div>';
         html += '<div style="display:flex;gap:4px;flex-shrink:0;">';
-        html += '<button onclick="event.stopPropagation();window._approveResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;">✅</button>';
-        html += '<button onclick="event.stopPropagation();window._contestResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);color:#fbbf24;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;">⚡</button>';
+        html += '<button onclick="event.stopPropagation();window._approveResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;" title="Aprovar resultado">✅</button>';
+        html += '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;" title="Editar placar">✏️</button>';
         html += '</div>';
         html += '</div>';
       });
@@ -1452,7 +1452,7 @@ function renderDashboard(container) {
         html += '<div style="font-size:0.68rem;color:#94a3b8;">Você propôs: <b>' + _sf(scoreStr) + '</b></div>';
         html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
         html += '</div>';
-        html += '<button onclick="event.stopPropagation();window._rejectResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;flex-shrink:0;" title="Cancelar proposta">🚫</button>';
+        html += '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;flex-shrink:0;" title="Editar placar proposto">✏️</button>';
         html += '</div>';
       });
       html += '</div>';

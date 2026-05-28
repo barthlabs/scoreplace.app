@@ -9,10 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
-      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🏅 v1.8.2-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🏅 v1.8.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Botão ✏️ Editar unificado para resultados pendentes.</b><br><br>' +
+      '<b>Qualquer um que lança pode editar:</b> o botão ✏️ Editar substitui os antigos Contestar/Descartar/Cancelar. Quem pode lançar resultados (organizador, árbitro confirmado ou jogador — conforme a configuração do torneio) pode editar o placar pendente a qualquer momento.<br><br>' +
+      '<b>Comportamento por papel:</b> organizador e árbitros confirmados têm autoridade — ao editar, o placar é confirmado diretamente sem precisar de aprovação do adversário (o overlay avisa "Você tem autoridade"). Jogadores (proponente ou time adversário) ao editar geram uma nova proposta que aguarda confirmação do outro lado.<br><br>' +
+      '<b>Aprovação continua:</b> o time adversário ainda pode aprovar o placar com ✅ Aprovar (sem abrir o overlay), ou clicar ✏️ Editar para propor um placar diferente. No dashboard, seção "Meus Resultados" mostra os mesmos botões inline.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🏅 v1.8.2-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Aprovação de resultados pelos jogadores — revisão completa.</b><br><br>' +
-      '<b>Contestar resultado:</b> o time adversário agora pode propor um placar diferente (⚡ Contestar) em vez de apenas rejeitar. O adversário recebe notificação para aprovar ou contestar o novo placar, até que ambos os lados concordem.<br><br>' +
-      '<b>Botões distintos por papel:</b> no card da partida, o time adversário vê "✅ Aprovar" e "⚡ Contestar"; o organizador e quem propôs o resultado original veem "❌ Rejeitar" (descarte direto). Isso deixa o fluxo mais claro — contestar ≠ rejeitar.<br><br>' +
       '<b>Meus Resultados no dashboard:</b> nova seção logo abaixo do hero box com três grupos — partidas aguardando <em>sua</em> aprovação (com botões de ação inline), resultados que você propôs aguardando o adversário e partidas sem resultado que você pode lançar. Abaixo, os últimos resultados confirmados com vitória/derrota/empate. Tudo clicável para o bracket do torneio.<br><br>' +
       '<b>Correções técnicas:</b> organizadores sem e-mail cadastrado (conta via telefone) agora recebem notificações de aprovação corretamente via UID; notificações de aprovação e rejeição passaram para nível <b>Fundamental</b>; placar de games em resultados GSM é preservado corretamente ao aprovar.</p>' +
     '</div>' +

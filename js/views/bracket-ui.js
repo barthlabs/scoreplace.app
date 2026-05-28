@@ -538,6 +538,18 @@ window._userTeamInMatch = _userTeamInMatch;
 window._isUserOrgOrCoHost = _isUserOrgOrCoHost;
 window._resultNeedsApproval = _resultNeedsApproval;
 
+// Helper: org, co-host OR confirmed arbiter — these users confirm results directly
+// without requiring approval from the opposing side.
+function _isUserAuthority(t, user) {
+  if (!t || !user) return false;
+  if (_isUserOrgOrCoHost(t, user)) return true;
+  if (user.uid && Array.isArray(t.arbitros)) {
+    return t.arbitros.some(function(a) { return a.uid === user.uid && a.status === 'confirmed'; });
+  }
+  return false;
+}
+window._isUserAuthority = _isUserAuthority;
+
 // Helper: re-render bracket preserving scroll position (zero jump)
 // Uses anchor-based approach: saves the viewport-relative offset of a reference
 // element, re-renders, then scrolls so the same element is at the same offset.
@@ -2499,11 +2511,13 @@ window._rejectResult = function(tId, matchId) {
   );
 };
 
-// _contestResult: the opposing team proposes a counter-result.
-// Opens a simple overlay for entering their own score, then stores it as the
-// new m.pendingResult (overwriting the previous proposal) and notifies the
-// original proposer team.
-window._contestResult = function(tId, matchId) {
+// _editPendingResult: any party with launch permission (org, arbiter, proposer,
+// or opposing team) can open this overlay to edit the pending score.
+// • Authority (org / co-host / confirmed arbiter): inputs pre-filled, button
+//   says "✅ Confirmar" — on confirm the result is set directly without approval.
+// • Player (proposer or opposing): button says "✏️ Propor placar" — on confirm
+//   a new pendingResult is stored and the other side is notified to approve.
+window._editPendingResult = function(tId, matchId) {
   var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
   if (!t) return;
   var m = _findMatch(t, matchId);
@@ -2511,57 +2525,73 @@ window._contestResult = function(tId, matchId) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
 
-  // Only opposing team (or org) can contest
   var pr = m.pendingResult;
-  var isOrg = _isUserOrgOrCoHost(t, cu);
+  var isAuthority = _isUserAuthority(t, cu);
   var userSide = _userTeamInMatch(t, m, cu);
   var proposerSide = 0;
   if (pr && (pr.proposedBy || pr.proposedByEmail)) {
     proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
   }
-  var canContest = isOrg || (userSide > 0 && userSide !== proposerSide);
-  if (!canContest) {
-    showNotification('Sem permissão', 'Só o time adversário ou o organizador pode contestar.', 'warning');
+  var isProposerSelf = !!(pr && (
+    (cu.uid && pr.proposedBy && cu.uid === pr.proposedBy) ||
+    (cu.email && pr.proposedByEmail && cu.email === pr.proposedByEmail)
+  ));
+  var isOpposingMember = userSide > 0 && userSide !== proposerSide;
+  var canEdit = isAuthority || isProposerSelf || isOpposingMember;
+
+  if (!canEdit) {
+    showNotification('Sem permissão', 'Você não pode editar este resultado.', 'warning');
     return;
   }
 
-  // Build simple score-entry overlay
-  var existingOverlay = document.getElementById('contest-result-overlay');
+  // Pre-fill inputs with current pending values
+  var prefillP1 = pr && pr.scoreP1 != null ? pr.scoreP1 : '';
+  var prefillP2 = pr && pr.scoreP2 != null ? pr.scoreP2 : '';
+
+  var existingOverlay = document.getElementById('edit-pending-overlay');
   if (existingOverlay) existingOverlay.remove();
 
   var matchLabel = window._safeHtml((m.p1 || '?') + ' vs ' + (m.p2 || '?'));
+  var authorityNote = isAuthority
+    ? '<p style="margin:0 0 12px;font-size:0.75rem;color:#a5f3fc;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);border-radius:6px;padding:6px 10px;">Você tem autoridade — o placar será confirmado diretamente.</p>'
+    : '';
+  var confirmLabel = isAuthority ? '✅ Confirmar' : '✏️ Propor placar';
+
   var overlay = document.createElement('div');
-  overlay.id = 'contest-result-overlay';
+  overlay.id = 'edit-pending-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:10060;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);padding:1rem;';
-  overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);border:1px solid rgba(251,191,36,0.4);border-radius:16px;padding:24px;width:100%;max-width:360px;box-shadow:0 0 32px rgba(251,191,36,0.18);">' +
-    '<h3 style="margin:0 0 6px;font-size:1rem;color:#fbbf24;">⚡ Contestar resultado</h3>' +
-    '<p style="margin:0 0 16px;font-size:0.78rem;color:var(--text-muted,#94a3b8);">' + matchLabel + '</p>' +
+  overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);border:1px solid rgba(99,102,241,0.4);border-radius:16px;padding:24px;width:100%;max-width:360px;box-shadow:0 0 32px rgba(99,102,241,0.18);">' +
+    '<h3 style="margin:0 0 6px;font-size:1rem;color:#a78bfa;">✏️ Editar resultado</h3>' +
+    '<p style="margin:0 0 12px;font-size:0.78rem;color:var(--text-muted,#94a3b8);">' + matchLabel + '</p>' +
+    authorityNote +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
       '<div>' +
         '<label style="display:block;font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-bottom:4px;">' + window._safeHtml(m.p1 || 'Lado 1') + '</label>' +
-        '<input id="contest-s1" type="number" min="0" max="99" placeholder="0" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:1rem;text-align:center;box-sizing:border-box;">' +
+        '<input id="edit-pending-s1" type="number" min="0" max="99" value="' + prefillP1 + '" placeholder="0" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:1rem;text-align:center;box-sizing:border-box;">' +
       '</div>' +
       '<div>' +
         '<label style="display:block;font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-bottom:4px;">' + window._safeHtml(m.p2 || 'Lado 2') + '</label>' +
-        '<input id="contest-s2" type="number" min="0" max="99" placeholder="0" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:1rem;text-align:center;box-sizing:border-box;">' +
+        '<input id="edit-pending-s2" type="number" min="0" max="99" value="' + prefillP2 + '" placeholder="0" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:1rem;text-align:center;box-sizing:border-box;">' +
       '</div>' +
     '</div>' +
     '<div style="display:flex;gap:8px;">' +
-      '<button onclick="document.getElementById(\'contest-result-overlay\').remove()" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted,#94a3b8);border-radius:8px;padding:9px;font-size:0.82rem;cursor:pointer;">Cancelar</button>' +
-      '<button onclick="window._confirmContest(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\')" style="flex:2;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;color:#fff;border-radius:8px;padding:9px;font-size:0.85rem;font-weight:700;cursor:pointer;">⚡ Contestar</button>' +
+      '<button onclick="document.getElementById(\'edit-pending-overlay\').remove()" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted,#94a3b8);border-radius:8px;padding:9px;font-size:0.82rem;cursor:pointer;">Cancelar</button>' +
+      '<button onclick="window._confirmEditPending(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\')" style="flex:2;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;border-radius:8px;padding:9px;font-size:0.85rem;font-weight:700;cursor:pointer;">' + confirmLabel + '</button>' +
     '</div>' +
   '</div>';
   document.body.appendChild(overlay);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-  var inp = document.getElementById('contest-s1');
+  var inp = document.getElementById('edit-pending-s1');
   if (inp) inp.focus();
 };
 
-// Internal: confirm the contest — save new pendingResult and notify original proposer
-window._confirmContest = function(tId, matchId) {
-  var overlay = document.getElementById('contest-result-overlay');
-  var s1El = document.getElementById('contest-s1');
-  var s2El = document.getElementById('contest-s2');
+// Internal: confirm the edit.
+// Authority → confirms directly (no pending, result is final).
+// Player → stores as new pendingResult and notifies opposing side.
+window._confirmEditPending = function(tId, matchId) {
+  var overlay = document.getElementById('edit-pending-overlay');
+  var s1El = document.getElementById('edit-pending-s1');
+  var s2El = document.getElementById('edit-pending-s2');
   var s1 = s1El ? parseInt(s1El.value, 10) : NaN;
   var s2 = s2El ? parseInt(s2El.value, 10) : NaN;
   if (isNaN(s1) || isNaN(s2)) {
@@ -2577,26 +2607,129 @@ window._confirmContest = function(tId, matchId) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu) return;
 
+  var isAuthority = _isUserAuthority(t, cu);
   var winner = s1 > s2 ? m.p1 : (s2 > s1 ? m.p2 : null);
-  var proposerName = cu.displayName || cu.email || 'Jogador';
+  var editorName = cu.displayName || cu.email || 'Usuário';
 
-  m.pendingResult = {
-    scoreP1: s1,
-    scoreP2: s2,
-    winner: winner,
-    draw: s1 === s2,
-    proposedBy: cu.uid || '',
-    proposedByEmail: cu.email || '',
-    proposedByName: proposerName,
-    proposedAt: Date.now(),
-    kind: 'inline'
-  };
+  if (isAuthority) {
+    // ── Authority path: confirm directly (mirrors _approveResult logic) ──
+    var pr = m.pendingResult || {};
+    if (pr.useSets && Array.isArray(pr.sets)) {
+      m.sets = pr.sets.slice();
+      m.setsWonP1 = pr.setsWonP1 || 0;
+      m.setsWonP2 = pr.setsWonP2 || 0;
+      if (pr.isFixedSet) m.fixedSet = true;
+      m.scoreP1 = s1;
+      m.scoreP2 = s2;
+      m.totalGamesP1 = pr.totalGamesP1 != null ? pr.totalGamesP1 : s1;
+      m.totalGamesP2 = pr.totalGamesP2 != null ? pr.totalGamesP2 : s2;
+    } else {
+      m.scoreP1 = s1;
+      m.scoreP2 = s2;
+    }
+    m.winner = winner;
+    m.draw = s1 === s2;
+    delete m.pendingResult;
 
-  _propagateMatchUpdate(t, m);
-  window.AppStore.logAction(tId, 'Resultado contestado por ' + proposerName + ': ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2);
-  window.AppStore.syncImmediate(tId);
-  _notifyPendingApproval(t, m, proposerName);
-  showNotification('⚡ Contestação enviada', 'O time adversário foi notificado para aprovar ou contestar.', 'success');
+    if (!t.checkedIn) t.checkedIn = {};
+    if (!t.absent) t.absent = {};
+    [m.p1, m.p2].forEach(function(side) {
+      if (!side || side === 'TBD' || side === 'BYE') return;
+      if (side.indexOf(' / ') !== -1) {
+        side.split(' / ').forEach(function(n) { var nm = n.trim(); if (nm) { t.checkedIn[nm] = t.checkedIn[nm] || Date.now(); delete t.absent[nm]; } });
+      } else {
+        t.checkedIn[side] = t.checkedIn[side] || Date.now();
+        delete t.absent[side];
+      }
+    });
+    if (!t.tournamentStarted) t.tournamentStarted = Date.now();
+
+    var isGroupMatch = m.group !== undefined;
+    var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function(r) {
+      return (r.matches || []).some(function(rm) { return rm.id === matchId; });
+    }));
+
+    if (!isGroupMatch && !isRoundMatch) {
+      _advanceWinner(t, m);
+      showNotification('✅ Resultado confirmado', (m.winner || 'Resultado') + ' registrado!', 'success');
+    } else if (isRoundMatch) {
+      showNotification('✅ Resultado confirmado', m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner}), 'success');
+      var _roundIdxAuto = -1;
+      (t.rounds || []).forEach(function(r, idx) {
+        (r.matches || []).forEach(function(rm) { if (rm.id === matchId) _roundIdxAuto = idx; });
+      });
+      if (_roundIdxAuto >= 0) {
+        var _thisRound = t.rounds[_roundIdxAuto];
+        var _thisComplete = (_thisRound.matches || []).every(function(rm) { return !!rm.winner; });
+        var _isLast = _roundIdxAuto === (t.rounds.length - 1);
+        if (_thisComplete && _isLast && _thisRound.status !== 'complete') {
+          setTimeout(function() {
+            if (typeof window._closeRound === 'function') window._closeRound(tId, _roundIdxAuto, matchId);
+          }, 0);
+        }
+      }
+    } else {
+      _checkGroupRoundComplete(t, m.group);
+      showNotification('✅ Resultado confirmado', m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner}), 'success');
+    }
+
+    _propagateMatchUpdate(t, m);
+    window.AppStore.logAction(tId, 'Resultado confirmado por ' + editorName + ': ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + (m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner));
+    window.AppStore.syncImmediate(tId);
+
+    try {
+      if (pr.kind === 'gsm' && typeof _persistGSMTournamentMatchRecord === 'function') {
+        _persistGSMTournamentMatchRecord(t, m);
+      } else {
+        _persistInlineTournamentMatchRecord(t, m, s1, s2, pr.tbP1, pr.tbP2, !!pr.isTiebreakEntry, !!pr.useSets);
+      }
+    } catch(e) {}
+
+    if (typeof window._sendUserNotification === 'function') {
+      var resultText = m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — ' + (m.draw ? _t('bui.drawResult') : _t('bui.matchWon', {winner: m.winner}));
+      var notifData = {
+        type: 'result',
+        title: '✅ Resultado confirmado',
+        message: resultText,
+        tournamentId: tId,
+        tournamentName: t.name,
+        level: 'fundamental',
+        timestamp: Date.now()
+      };
+      var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+      [m.p1, m.p2].forEach(function(side) {
+        if (!side || side === 'TBD' || side === 'BYE') return;
+        var members = side.indexOf('/') !== -1 ? side.split('/').map(function(n) { return n.trim(); }) : [side];
+        members.forEach(function(nm) {
+          var p = parts.find(function(pp) {
+            var n = typeof pp === 'string' ? pp : (pp.displayName || pp.name || '');
+            return n === nm;
+          });
+          if (p && typeof p === 'object' && p.uid) window._sendUserNotification(p.uid, notifData);
+        });
+      });
+    }
+
+  } else {
+    // ── Player path: update pendingResult, notify other side ──
+    m.pendingResult = {
+      scoreP1: s1,
+      scoreP2: s2,
+      winner: winner,
+      draw: s1 === s2,
+      proposedBy: cu.uid || '',
+      proposedByEmail: cu.email || '',
+      proposedByName: editorName,
+      proposedAt: Date.now(),
+      kind: 'inline'
+    };
+    _propagateMatchUpdate(t, m);
+    window.AppStore.logAction(tId, 'Resultado atualizado por ' + editorName + ': ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2);
+    window.AppStore.syncImmediate(tId);
+    _notifyPendingApproval(t, m, editorName);
+    showNotification('✏️ Placar atualizado', 'O time adversário foi notificado para aprovar.', 'success');
+  }
+
   _rerenderBracket(tId, matchId);
 };
 
