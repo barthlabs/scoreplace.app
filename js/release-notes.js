@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">✨ v1.8.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Perfil reorganizado.</b><br><br>' +
+      '<b>Celular logo após o e-mail:</b> o campo de celular foi movido para ser o primeiro campo editável do perfil, logo abaixo do e-mail, para que os dados de contato fiquem juntos em uma sequência natural.<br><br>' +
+      '<b>Bloco de social e notificações após locais preferidos:</b> a seção "Comunicação e social" (aceitar convites de amizade, filtros de notificação e canais — plataforma, e-mail, WhatsApp) foi movida para após os locais preferidos, agrupando as configurações de privacidade e presença antes das preferências sociais.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔗 v1.7.9-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Login e perfil: consolidação de identidade e notificações automáticas.</b><br><br>' +
       '<b>Toggles de notificação ativados automaticamente:</b> ao criar conta por e-mail (magic link, Google ou e-mail+senha), o toggle de notificações por e-mail é ativado automaticamente. Ao criar conta por SMS, o toggle de notificações por WhatsApp é ativado. O mesmo acontece ao adicionar um contato que ainda não tinha sido cadastrado — adicionar celular ativa WhatsApp; adicionar e-mail ativa notificações por e-mail. Esses padrões só são definidos se o campo ainda não foi configurado pelo usuário.<br><br>' +

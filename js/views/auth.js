@@ -4195,6 +4195,16 @@ function setupProfileModal() {
             '<span style="font-size:0.68rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">O e-mail será salvo ao clicar em Salvar.</span>' +
           '</div>' +
           '<form id="form-edit-profile" onsubmit="event.preventDefault(); saveUserProfile()" style="overflow: hidden;">' +
+            // Telefone: País + Número
+            '<div class="form-group" style="margin-bottom: 10px;">' +
+              '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
+              '<div style="display: flex; gap: 6px;">' +
+                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 120px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
+                  countryOpts +
+                '</select>' +
+                '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
+              '</div>' +
+            '</div>' +
             // Row: Sexo + Nascimento (2 colunas)
             '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">' +
               '<div class="form-group" style="margin: 0;">' +
@@ -4245,41 +4255,6 @@ function setupProfileModal() {
               '<div id="profile-skill-by-sport" style="margin-top:8px;display:flex;flex-direction:column;gap:4px;"></div>' +
               '<input type="hidden" id="profile-edit-skill-by-sport" value="">' +
             '</div>' +
-            // Telefone: País + Número
-            '<div class="form-group" style="margin-bottom: 10px;">' +
-              '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
-              '<div style="display: flex; gap: 6px;">' +
-                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 120px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
-                  countryOpts +
-                '</select>' +
-                '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
-              '</div>' +
-            '</div>' +
-            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
-            // Social toggle + notification filters
-            '<div style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.8rem;">' + _t('profile.socialCommsTitle') + '</label>' +
-              '<p style="font-size: 0.75rem; color: var(--text-muted); margin: 0 0 8px 0;">' + _t('profile.socialCommsDesc') + '</p>' +
-              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-accept-friends', label: _t('profile.acceptFriends'), icon: '🤝', checked: true, color: '#3b82f6' }) : '') +
-              '<div style="margin-top:6px;">' +
-                '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + _t('profile.receiveComms') + '</div>' +
-                // v1.0.5-beta: defaults dos 3 toggles agora são ON (era todas=ON,
-                // importantes=OFF, fundamentais=OFF; user via brevemente esse
-                // estado antes de _applyNotifyFilterUI('todas') corrigir via
-                // cascata). Como o default canônico é "todas" → 3 ativos por
-                // cascata → faz mais sentido o HTML inicial já refletir isso.
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-todas', label: _t('profile.notifAll'), icon: '🟢', checked: true, color: '#22c55e', onchange: 'window._onNotifyToggle(\'todas\')' }) : '') +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-importantes', label: _t('profile.notifImportant'), icon: '🟡', checked: true, color: '#f59e0b', onchange: 'window._onNotifyToggle(\'importantes\')' }) : '') +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-fundamentais', label: _t('profile.notifFundamental'), icon: '🔴', checked: true, color: '#ef4444', onchange: 'window._onNotifyToggle(\'fundamentais\')' }) : '') +
-              '</div>' +
-              // Notification channel toggles (between comm filters and locations)
-              '<div style="margin-top:10px;">' +
-                '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + _t('profile.notifChannels') + '</div>' +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-platform', label: _t('profile.notifPlatform'), icon: '🔔', checked: true }) : '') +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-email', label: _t('profile.notifEmail'), icon: '✉️', checked: true, color: '#3b82f6' }) : '') +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-whatsapp', label: _t('profile.notifWhatsApp'), icon: '💬', checked: false, color: '#25d366' }) : '') +
-              '</div>' +
-            '</div>' +
             // Presença — visibilidade + silenciar
             '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
             '<div class="form-group" style="margin-bottom: 1rem;">' +
@@ -4322,6 +4297,25 @@ function setupProfileModal() {
               '<div id="profile-map-container" style="width:100%;height:200px;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);margin-bottom:8px;background:#1a1a2e;"></div>' +
               '<div id="profile-locations-list" style="display:flex;flex-direction:column;gap:4px;"></div>' +
               '<input type="hidden" id="profile-edit-ceps" value="">' +
+            '</div>' +
+            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
+            // Social toggle + notification filters
+            '<div style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.8rem;">' + _t('profile.socialCommsTitle') + '</label>' +
+              '<p style="font-size: 0.75rem; color: var(--text-muted); margin: 0 0 8px 0;">' + _t('profile.socialCommsDesc') + '</p>' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-accept-friends', label: _t('profile.acceptFriends'), icon: '🤝', checked: true, color: '#3b82f6' }) : '') +
+              '<div style="margin-top:6px;">' +
+                '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + _t('profile.receiveComms') + '</div>' +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-todas', label: _t('profile.notifAll'), icon: '🟢', checked: true, color: '#22c55e', onchange: 'window._onNotifyToggle(\'todas\')' }) : '') +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-importantes', label: _t('profile.notifImportant'), icon: '🟡', checked: true, color: '#f59e0b', onchange: 'window._onNotifyToggle(\'importantes\')' }) : '') +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-fundamentais', label: _t('profile.notifFundamental'), icon: '🔴', checked: true, color: '#ef4444', onchange: 'window._onNotifyToggle(\'fundamentais\')' }) : '') +
+              '</div>' +
+              '<div style="margin-top:10px;">' +
+                '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + _t('profile.notifChannels') + '</div>' +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-platform', label: _t('profile.notifPlatform'), icon: '🔔', checked: true }) : '') +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-email', label: _t('profile.notifEmail'), icon: '✉️', checked: true, color: '#3b82f6' }) : '') +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-whatsapp', label: _t('profile.notifWhatsApp'), icon: '💬', checked: false, color: '#25d366' }) : '') +
+              '</div>' +
             '</div>' +
             '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
             // Theme — exclusive buttons
