@@ -386,8 +386,6 @@
     refresh();
   }
 
-  window._venuesSetMode = function() {}; // no-op — kept for compat
-
   function _registerCtaHtml() {
     return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
       '<span style="font-size:0.8rem;color:var(--text-muted);">Não encontrou seu local?</span>' +
@@ -1993,22 +1991,6 @@
     if (pillsBox) pillsBox.innerHTML = _sportPillsHtml();
     refresh();
   };
-  // Compat: callers antigos ou deep links com ?sport= podem tentar setar um
-  // esporte único. Converte pra array pra não quebrar.
-  window._venuesSetSport = function(v) {
-    state.sports = v ? [v] : [];
-    _saveFilters();
-    var pillsBox = document.getElementById('venues-sport-pills');
-    if (pillsBox) pillsBox.innerHTML = _sportPillsHtml();
-    refresh();
-  };
-  window._venuesSetPrice = function(v) { state.priceRange = v; _saveFilters(); refresh(); render(document.getElementById('view-container')); };
-  window._venuesSetMinCourts = function(v) {
-    state.minCourts = parseInt(v, 10) || 1;
-    _saveFilters();
-    clearTimeout(window._venuesCourtsDebounce);
-    window._venuesCourtsDebounce = setTimeout(refresh, 250);
-  };
   window._venuesSetDistance = function(v) {
     state.distanceKm = Math.max(1, Math.min(500, parseInt(v, 10) || 10));
     _saveFilters();
@@ -3397,50 +3379,6 @@
   // de modalidade, pills Hoje/Amanhã, fix de tamanho dos campos) aparece
   // automaticamente em ambos os caminhos do app.
   window._openInlinePlanOverlay = _openInlinePlanOverlay;
-
-  // Cancel handler disparado pelo overlay de confirmação. Fecha o overlay ao
-  // fim, re-hidrata todos os slots (botões, movimento, widget dashboard).
-  window._venuesCancelPresenceFromConfirm = async function(docId, placeId, type) {
-    var ov = document.getElementById('venue-presence-confirm-overlay');
-    if (!docId || !window.PresenceDB) { if (ov) ov.remove(); return; }
-    try {
-      await window.PresenceDB.cancelPresence(docId);
-      if (window.showNotification) {
-        window.showNotification(
-          type === 'planned' ? 'Plano cancelado.' : 'Presença cancelada.',
-          '',
-          'info'
-        );
-      }
-      var v = null;
-      try { v = await window.VenueDB.loadVenue(placeId); } catch (e) {}
-      if (v) {
-        _hydratePresenceButtonsForVenue(v);
-        _buildMovimentoHtml(v).then(function(html) {
-          var slot = document.getElementById('venue-movimento-slot');
-          if (slot && html) slot.innerHTML = html;
-        });
-      }
-      // v0.16.20: se o cancel bate com o foco ativo, reabre a lista completa.
-      if (state.focusedPreferred && state.focusedPreferred.docId === docId) {
-        state.focusedPreferred = null;
-        _stopChartAutoTick();
-        renderResults();
-      } else {
-        _hydratePreferredPresenceSlots();
-        // v0.16.28: movimento reflete cancelamento sem re-render completo.
-        _hydrateAllPreferredMovement();
-      }
-      if (typeof window._hydrateMyActivePresenceWidget === 'function') {
-        window._hydrateMyActivePresenceWidget();
-      }
-    } catch (e) {
-      window._error('Cancel from confirm failed:', e);
-      if (window.showNotification) window.showNotification('Erro ao cancelar.', '', 'error');
-    } finally {
-      if (ov) ov.remove();
-    }
-  };
 
   // Toggle de pill de modalidade no overlay de plano.
   window._venuesTogglePlanSport = function(btn) {

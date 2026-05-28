@@ -392,20 +392,6 @@
       '<div id="venue-owner-list" style="margin-top:14px;"></div>';
   }
 
-  // Legacy entry used when the section was inlined inside the profile modal.
-  // Kept for compat; new surface is the #my-venues full-page view below.
-  window._renderVenueOwnerSection = function(container) {
-    if (!container) return;
-    container.innerHTML =
-      '<div style="margin-top:1rem;">' +
-        '<label class="form-label" style="font-size:0.8rem;font-weight:600;display:flex;align-items:center;gap:6px;">🏢 Cadastre locais</label>' +
-        '<p style="font-size:0.7rem;color:var(--text-muted);margin:0 0 8px 0;">Gerenciamento completo agora fica em <a href="#my-venues" onclick="document.getElementById(\'modal-profile\').classList.remove(\'active\')" style="color:#a5b4fc;font-weight:600;">Meus locais</a>.</p>' +
-        _ownerInnerHtml() +
-      '</div>';
-    ensurePlaces();
-    window._loadMyVenuesList();
-  };
-
   // Dedicated, full-page venue management view. Conceptually separate from
   // the user profile — this is where a proprietor (not a player) works.
   window.renderMyVenues = function(container) {
@@ -1226,56 +1212,6 @@
     }, { existing: v });
     var form = document.getElementById('venue-owner-form-wrap');
     if (form) form.scrollIntoView({ block: 'center' });
-  };
-
-  // Pro upgrade — v0.14.69 interim: queues an interest email and shows the
-  // owner what Pro unlocks. A full Stripe checkout for venue-level Pro needs
-  // a matching Cloud Function + Stripe Price ID, which lives outside the
-  // client and is deferred until the first interested proprietor surfaces.
-  window._venueOwnerUpgrade = function(placeId) {
-    var cu = window.AppStore && window.AppStore.currentUser;
-    if (!cu || typeof window.showConfirmDialog !== 'function') return;
-    var msg = '<b>Plano Pro do local (R$49/mês)</b><br><br>' +
-      '• Destaque no topo da busca em <code>#venues</code><br>' +
-      '• Badge PRO visível + marker com cor diferenciada no mapa<br>' +
-      '• Painel de analytics (visualizações, presenças, torneios)<br>' +
-      '• Fotos ilimitadas (em breve)<br>' +
-      '• Prioridade em filtros de cidade/modalidade<br><br>' +
-      'Checkout Stripe chega em breve. Clique "Tenho interesse" para nos avisar — entramos em contato para ativar manualmente neste alpha.';
-    window.showConfirmDialog(
-      '🚀 Promover local para Pro',
-      msg,
-      async function() {
-        if (window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
-          await window.FirestoreDB.queueEmail(
-            'scoreplace.app@gmail.com',
-            'Interesse em Pro para venue — ' + (cu.displayName || cu.email),
-            '<p>Proprietário: ' + (cu.displayName || '') + ' (' + (cu.email || '') + ')</p>' +
-            '<p>Venue placeId: ' + placeId + '</p>' +
-            '<p>Versão: ' + (window.SCOREPLACE_VERSION || '?') + '</p>'
-          );
-        }
-        if (window.showNotification) window.showNotification('Interesse registrado!', 'Entraremos em contato em até 24h pelo e-mail do seu perfil.', 'success');
-      },
-      null,
-      { confirmText: 'Tenho interesse', cancelText: 'Fechar', type: 'info' }
-    );
-  };
-
-  window._venueOwnerRelease = function(placeId) {
-    if (typeof window.showConfirmDialog !== 'function') return;
-    window.showConfirmDialog(
-      'Liberar este local?',
-      'O local continuará existindo, mas você não será mais o dono. Outro usuário poderá reivindicar.',
-      function() {
-        window.VenueDB.releaseVenue(placeId).then(function(ok) {
-          if (ok) {
-            if (window.showNotification) window.showNotification('Local liberado.', '', 'info');
-            window._loadMyVenuesList();
-          }
-        });
-      }, null, { confirmText: 'Liberar', cancelText: 'Cancelar', type: 'warning' }
-    );
   };
 
   // Apaga o venue em definitivo — só quem é dono ou criador pode chamar

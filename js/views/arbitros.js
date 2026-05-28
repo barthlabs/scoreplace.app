@@ -361,49 +361,4 @@
       });
   };
 
-  // ─── Accept invite (called from notification / profile area) ────────────────
-  // Public — árbitro accepts a pending invitation.
-  window._arbitrosAccept = function(tId) {
-    var db = window.FirestoreDB && window.FirestoreDB.db;
-    var cu = window.AppStore && window.AppStore.currentUser;
-    if (!db || !cu || !tId) return;
-    var myUid = cu.uid;
-
-    db.collection('tournaments').doc(tId).get()
-      .then(function(snap) {
-        if (!snap.exists) throw new Error('Torneio não encontrado');
-        var t = snap.data();
-        var arbitros = Array.isArray(t.arbitros) ? t.arbitros : [];
-        var oldEntry = null;
-        for (var i = 0; i < arbitros.length; i++) {
-          if (arbitros[i].uid === myUid && arbitros[i].status === 'invited') {
-            oldEntry = arbitros[i]; break;
-          }
-        }
-        if (!oldEntry) throw new Error('Convite não encontrado');
-        var newEntry = Object.assign({}, oldEntry, {
-          status: 'confirmed',
-          confirmedAt: new Date().toISOString()
-        });
-        return db.collection('tournaments').doc(tId).update({
-          arbitros: firebase.firestore.FieldValue.arrayRemove(oldEntry)
-        }).then(function() {
-          return db.collection('tournaments').doc(tId).update({
-            arbitros: firebase.firestore.FieldValue.arrayUnion(newEntry)
-          });
-        });
-      })
-      .then(function() {
-        if (typeof window.showNotification === 'function') {
-          window.showNotification('Arbitragem confirmada', 'Você confirmou sua arbitragem neste torneio.', 'success');
-        }
-        window.location.hash = '#arbitros/' + tId;
-      })
-      .catch(function(err) {
-        if (typeof window.showNotification === 'function') {
-          window.showNotification('Erro', String(err.message || err), 'error');
-        }
-      });
-  };
-
 })();

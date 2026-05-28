@@ -1722,23 +1722,6 @@ function switchLoginTab(tabId) {
   if (tabId !== 'phone') _resetPhoneLoginUI();
 }
 
-// Toggle expandable login sections (accordion-style)
-window._toggleLoginSection = function(sectionId) {
-  var sections = ['emaillink', 'phone', 'email', 'google'];
-  sections.forEach(function(s) {
-    var panel = document.getElementById('login-panel-' + s);
-    if (panel) {
-      if (s === sectionId) {
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-      } else {
-        panel.style.display = 'none';
-      }
-    }
-  });
-  // Reset phone UI when collapsing
-  if (sectionId !== 'phone') _resetPhoneLoginUI();
-};
-
 // Busca dados demográficos do Google via People API e salva no Firestore
 function _fetchGoogleDemographics(accessToken, uid) {
   fetch('https://people.googleapis.com/v1/people/me?personFields=genders,birthdays,ageRanges,locales,addresses,phoneNumbers', {
@@ -4922,11 +4905,6 @@ function setupProfileModal() {
       );
     };
     // ─── End Profile Map ──────────────────────────────────────────────────────
-
-    // v1.0.23-beta: avatar picker removido (cartoons "ridículos"). Iniciais
-    // são auto-geradas do nome. Função mantida como no-op pra compat com
-    // qualquer caller externo (tests, deep-link, etc.).
-    window._selectAvatar = function(_src) { /* no-op desde v1.0.23-beta */ };
 
     // Re-renderiza o avatar do perfil enquanto o usuário digita o nome —
     // pra que iniciais reflitam imediatamente o que ele tá editando.

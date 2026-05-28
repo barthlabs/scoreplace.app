@@ -4,11 +4,6 @@
 
 var _t = window._t || function(k) { return k; };
 
-// Helper: restore body scroll when any overlay panel is removed
-window._restoreBodyScroll = function() {
-    document.body.style.overflow = '';
-};
-
 // ============ UNIFIED RESOLUTION PANEL SYSTEM ============
 
 window._diagnoseAll = function(t) {

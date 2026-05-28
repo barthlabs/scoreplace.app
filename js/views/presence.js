@@ -939,12 +939,6 @@
     window._presenceCustomDebounce = setTimeout(refreshData, 400);
   };
 
-  window._presenceOnSportChange = function(value) {
-    state.sports = value ? [value] : [];
-    renderActions();
-    refreshData();
-  };
-
   // Multi-select: toggle a sport pill. When all pills get turned off we fall
   // back to the first preferred sport so queries have something to go on.
   window._presenceToggleSport = function(sport) {
@@ -1125,104 +1119,6 @@
     // compatível com o que _openInlinePlanOverlay espera. state.sports é
     // o array de modalidades selecionadas no #presence — passa direto.
     window._openInlinePlanOverlay(state.venue, sports);
-  };
-
-  window._presenceConfirmPlan = function() {
-    var cu = window.AppStore && window.AppStore.currentUser;
-    if (!cu || !cu.uid || !state.venue) return;
-    var sports = Array.isArray(state.sports) ? state.sports : [];
-    if (sports.length === 0) return;
-    if (cu.presenceVisibility === 'off') {
-      if (window.showNotification) window.showNotification('Presença desligada no seu perfil.', 'info');
-      return;
-    }
-    if (_muted(cu)) {
-      if (window.showNotification) window.showNotification('Presença silenciada. Desative em Perfil → Presença para planejar.', 'info');
-      return;
-    }
-    var startStr = (document.getElementById('plan-start') || {}).value;
-    var endStr = (document.getElementById('plan-end') || {}).value;
-    if (!startStr) return;
-    var now = new Date();
-    var build = function(hm) {
-      var parts = hm.split(':').map(Number);
-      var d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parts[0] || 0, parts[1] || 0, 0, 0);
-      return d.getTime();
-    };
-    var startsAt = build(startStr);
-    var endsAt;
-    var openEnded = false;
-    if (endStr) {
-      endsAt = build(endStr);
-      if (endsAt <= startsAt) {
-        if (window.showNotification) window.showNotification('Horário final deve ser maior que o inicial.', 'error');
-        return;
-      }
-    } else {
-      // Open-ended plan: cap at 12h after start so the doc still satisfies
-      // endsAt-based queries and isn't indefinite. UI shows "a partir de HH:mm".
-      openEnded = true;
-      endsAt = startsAt + 12 * 60 * 60 * 1000;
-    }
-    var normSports = sports.map(window.PresenceDB.normalizeSport).filter(Boolean);
-    // Duplicate check: existe plano ativo no mesmo local com sports que
-    // intersectam e janela de tempo que se sobrepõe? Se sim, não cria de novo.
-    var dup = state.myActive.filter(function(p) {
-      if (p.type !== 'planned' || p.placeId !== state.venue.placeId) return false;
-      var pSports = Array.isArray(p.sports) ? p.sports : [];
-      var sportsOverlap = pSports.some(function(ns) { return normSports.indexOf(ns) !== -1; });
-      if (!sportsOverlap) return false;
-      var pStart = p.startsAt || 0;
-      var pEnd = p.endsAt || (pStart + 12 * 60 * 60 * 1000);
-      return (startsAt < pEnd && endsAt > pStart);
-    })[0];
-    if (dup) {
-      if (window.showNotification) window.showNotification('Você já tem um plano para este local neste horário.', 'info');
-      var ov0 = document.getElementById('presence-plan-overlay');
-      if (ov0) ov0.remove();
-      return;
-    }
-    // Race guard: evita criar dois docs num double-tap no Confirmar enquanto
-    // o save ainda está em voo.
-    if (state._savingPlan) return;
-    state._savingPlan = true;
-    var payload = {
-      uid: cu.uid,
-      email_lower: (cu.email || '').toLowerCase(),
-      displayName: cu.displayName || '',
-      photoURL: cu.photoURL || '',
-      placeId: state.venue.placeId,
-      venueName: state.venue.name || '',
-      venueLat: state.venue.lat || null,
-      venueLon: state.venue.lon || null,
-      sports: normSports,
-      type: 'planned',
-      startsAt: startsAt,
-      endsAt: endsAt,
-      openEnded: openEnded,
-      dayKey: window.PresenceDB.dayKey(new Date(startsAt)),
-      visibility: ((window.AppStore.currentUser && window.AppStore.currentUser.presenceVisibility) || 'friends'),
-      cancelled: false,
-      createdAt: Date.now()
-    };
-    window.PresenceDB.savePresence(payload).then(function(id) {
-      if (window.showNotification) window.showNotification('Planejamento registrado! Amigos podem se programar.', 'success');
-      var ov = document.getElementById('presence-plan-overlay');
-      if (ov) ov.remove();
-      payload._id = id;
-      // onSnapshot rebuilda state.myActive/presences do Firestore — push manual
-      // aqui causava duplicata visual quando o snapshot chegava antes do .then.
-      // Trophy hook — plan creation milestone
-      setTimeout(function() {
-        try { if (typeof window._trophyOnPlanCreated === 'function') window._trophyOnPlanCreated(payload); } catch(_te) {}
-      }, 500);
-      _notifyFriendsOfPlan(payload);
-    }).catch(function(e) {
-      window._error(e);
-      if (window.showNotification) window.showNotification('Erro ao planejar ida.', 'error');
-    }).finally(function() {
-      state._savingPlan = false;
-    });
   };
 
   // Send a low-priority notification to each friend when a planned presence

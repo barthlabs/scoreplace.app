@@ -1298,13 +1298,6 @@ function setupHelpModal() {
     if (noResults) noResults.style.display = visibleCount === 0 ? '' : 'none';
   };
 
-  // Scroll to section and open it
-  window._helpScrollTo = function(sectionId) {
-    var sec = document.querySelector('.help-section[data-help-id="' + sectionId + '"]');
-    if (!sec) return;
-    sec.classList.add('open');
-    sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 }
 window.setupHelpModal = setupHelpModal;
 setupHelpModal();
@@ -1349,9 +1342,6 @@ window.renderHelpPage = function (container) {
 
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
 };
-
-// Compat: openModal('modal-help') redireciona pra rota.
-window._openHelpPage = function () { window.location.hash = '#help'; };
 
 // === Modal Criação Rápida ===
 (function setupQuickCreateModal() {

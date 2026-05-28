@@ -533,11 +533,6 @@
     }
   }
 
-  // Expose helper para abrir diretamente da dashboard
-  window._openTrophiesPage = function() {
-    window.location.hash = '#trofeus';
-  };
-
   // ─── Admin: sincroniza _rankStats para todos os usuários ─────────────────
   window._trophyRankingSync = function() {
     var btn = document.getElementById('trophy-ranking-sync-btn');

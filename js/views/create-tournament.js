@@ -1070,19 +1070,6 @@ function setupCreateTournamentModal() {
     var descEl = document.getElementById('result-entry-desc');
     if (descEl) descEl.textContent = parts.length ? _t('create.resultWho', { list: parts.join(' + ') }) : '';
   };
-  // Legacy compat wrapper
-  window._selectResultEntry = function(btn) {
-    var value = btn && btn.getAttribute ? btn.getAttribute('data-value') : null;
-    if (!value) return;
-    var org = document.getElementById('re-toggle-organizer');
-    var plr = document.getElementById('re-toggle-players');
-    var ref = document.getElementById('re-toggle-referee');
-    if (value === 'organizer' && org) org.checked = true;
-    if (value === 'players' && plr) plr.checked = true;
-    if (value === 'referee' && ref) ref.checked = true;
-    window._syncResultEntryToggles();
-  };
-
   // ── W.O. Scope sync (single toggle) ──
   // ON  → 'individual' (only absent player eliminated; partner continues)
   // OFF → 'team'       (whole team eliminated on W.O.)
@@ -2406,18 +2393,6 @@ function setupCreateTournamentModal() {
       box.style.backgroundRepeat = '';
       box.style.borderColor = '';
     }
-  };
-
-  window._inferVenueAccess = function (types) {
-    const suggested = [];
-    if (types.includes('gym') || types.includes('stadium') || types.includes('sports_complex')) {
-      suggested.push('members');
-    } else if (types.includes('park') || types.includes('neighborhood')) {
-      suggested.push('public');
-    } else {
-      suggested.push('public');
-    }
-    return suggested;
   };
 
   // --- Weather forecast ---
@@ -4170,8 +4145,6 @@ window._gsmSetType = function(type) {
   window._gsmUpdateSummary();
 };
 
-// Legacy stubs (old overlay used these, kept for safety)
-window._gsmSetCounting = function() {};
 window._gsmToggleFixedSet = function() {
   var checked = document.getElementById('gsm-cfg-fixedSet').checked;
   var gamesLabel = document.querySelector('label[for="gsm-cfg-gamesPerSet"]') || document.getElementById('gsm-cfg-gamesPerSet').previousElementSibling;

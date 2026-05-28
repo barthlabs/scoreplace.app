@@ -1024,16 +1024,6 @@ window._toggleConhecidosSort = function(dimension) {
   _renderConhecidosCards(div, profiles);
 };
 
-// Keep legacy entry point for any external callers
-window._setConhecidosSort = function(mode) {
-  window._conhecidosSortMode = mode;
-  var div = document.getElementById('explore-conhecidos');
-  var profiles = window._conhecidosProfiles;
-  if (!div || !profiles) return;
-  _sortConhecidosArray(profiles, mode);
-  _renderConhecidosCards(div, profiles);
-};
-
 function _renderConhecidosCards(div, profiles) {
   var mySent = (window.AppStore.currentUser && window.AppStore.currentUser.friendRequestsSent) || [];
   var myReceived = (window.AppStore.currentUser && window.AppStore.currentUser.friendRequestsReceived) || [];
