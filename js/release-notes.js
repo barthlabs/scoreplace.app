@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧹 v1.8.13-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Remoção de aliases mortos em <code>store.js</code>.</b><br><br>' +
+      'Três aliases sem callers removidos: <code>_adjustBackHeaderForHamburger</code>, <code>_syncBackHeaderSpacer</code> (ambos apontavam para <code>_reflowChrome</code>) e <code>_showSupportModal</code> (compat wrapper de <code>#support</code>). Zero impacto funcional.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧹 v1.8.12-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Remoção de código morto em <code>bracket-ui.js</code> (−336 linhas).</b><br><br>' +
       'Seis funções confirmadas sem nenhum caller foram removidas: <code>_substituteFromStandby</code> (substituída por <code>_autoSubstituteWO</code>), <code>_openSetScoring</code> (substituída por <code>_openLiveScoring</code>), <code>_rejectResult</code> (botão nunca foi renderizado em <code>bracket.js</code>), e três aliases mortos <code>_saveGroupResult</code>, <code>_liveScoreSave</code>, <code>_casualEvacuateToDashboard</code>. Nenhuma funcionalidade afetada.</p>' +

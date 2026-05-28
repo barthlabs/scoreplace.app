@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.12-beta';
+window.SCOREPLACE_VERSION = '1.8.13-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -806,9 +806,6 @@ window._reflowChrome = function() {
     }
   }
 };
-// Legacy aliases — external callers may reference the old names.
-window._adjustBackHeaderForHamburger = window._reflowChrome;
-
 window._hamburgerOutsideClick = function(e) {
   var dd = document.getElementById('hamburger-dropdown');
   var btn = document.querySelector('.hamburger-btn');
@@ -816,9 +813,6 @@ window._hamburgerOutsideClick = function(e) {
     window._closeHamburger();
   }
 };
-
-// Legacy alias — every caller now routes through _reflowChrome.
-window._syncBackHeaderSpacer = window._reflowChrome;
 
 // Observe DOM for added/removed sticky headers and their size changes.
 // All triggers funnel into _reflowChrome so chrome positioning has exactly
@@ -1453,9 +1447,6 @@ window.renderSupportPage = function(container) {
     '</div>';
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
 };
-
-// Compat: botões antigos que chamam _showSupportModal redirecionam para a página
-window._showSupportModal = function() { window.location.hash = '#support'; };
 
 // Global HTML escape utility (XSS protection)
 window._safeHtml = function(str) {
