@@ -1075,8 +1075,9 @@ function _completeEmailLinkSignIn() {
               .where('email_lower', '==', String(user.email).toLowerCase())
               .limit(5).get();
             var matches = [];
+            var matchIds = [];
             snap.forEach(function(doc) {
-              if (doc.id !== user.uid) matches.push(doc.data());
+              if (doc.id !== user.uid) { matches.push(doc.data()); matchIds.push(doc.id); }
             });
             if (matches.length > 0) {
               var best = matches.find(function(m) {
@@ -1100,6 +1101,12 @@ function _completeEmailLinkSignIn() {
               // v1.0.49-beta: stash cross-ref data pra simulateLoginSuccess mergear
               // antes do terms gate (evita race com Firestore save assíncrono).
               window._pendingCrossRef = Object.assign({}, profileData, { uid: user.uid });
+              // v1.7.9-beta: email magic link = ownership verificado → agendar merge automático
+              var _bestMatchIdx = matches.indexOf(best);
+              var _bestMatchId = matchIds[_bestMatchIdx >= 0 ? _bestMatchIdx : 0];
+              if (_bestMatchId && !best.mergedInto) {
+                window._pendingCrossRefOldUid = _bestMatchId;
+              }
               console.log('[email-link] cross-ref por email encontrado, herdando:',
                 Object.keys(profileData).filter(function(k){ return k !== 'authProvider' && k !== 'updatedAt' && k !== 'email'; }));
             }
@@ -1395,8 +1402,9 @@ function handlePhoneVerifyCode() {
               .where('phone', 'in', _crossRefPhones)
               .limit(5).get();
             var matches = [];
+            var matchIds = [];
             snap.forEach(function(doc) {
-              if (doc.id !== user.uid) matches.push(doc.data());
+              if (doc.id !== user.uid) { matches.push(doc.data()); matchIds.push(doc.id); }
             });
             if (matches.length > 0) {
               // Pega o match com mais info (preferência: tem displayName não-vazio
@@ -1424,6 +1432,12 @@ function handlePhoneVerifyCode() {
               // existingProfile em simulateLoginSuccess — terms eram pedidos de
               // novo mesmo o human já tendo aceitado em outra conta.
               window._pendingCrossRef = Object.assign({}, profileData, { uid: user.uid });
+              // v1.7.9-beta: SMS = número verificado → agendar merge automático
+              var _bestPhoneMatchIdx = matches.indexOf(best);
+              var _bestPhoneMatchId = matchIds[_bestPhoneMatchIdx >= 0 ? _bestPhoneMatchIdx : 0];
+              if (_bestPhoneMatchId && !best.mergedInto) {
+                window._pendingCrossRefOldUid = _bestPhoneMatchId;
+              }
               console.log('[phone-login] cross-ref encontrado, herdando:',
                 Object.keys(profileData).filter(function(k){ return k !== 'authProvider' && k !== 'updatedAt' && k !== 'phone'; }));
             }
@@ -2070,6 +2084,74 @@ async function simulateLoginSuccess(user) {
     }
   }
 
+  // v1.7.9-beta: auto-merge conta antiga — cross-ref de email-link ou SMS
+  // marcou window._pendingCrossRefOldUid com o uid da conta anterior.
+  // Executa com delay de 3s pra dar tempo do login completar e do modal fechar.
+  if (window._pendingCrossRefOldUid) {
+    var _autoMergeOldUid = window._pendingCrossRefOldUid;
+    window._pendingCrossRefOldUid = null;
+    setTimeout(function() {
+      if (typeof window._executePhoneAccountMerge === 'function') {
+        console.log('[scoreplace-auth] auto-merge cross-ref account:', _autoMergeOldUid);
+        window._executePhoneAccountMerge(_autoMergeOldUid);
+      }
+    }, 3000);
+  }
+
+  // v1.7.9-beta: cross-ref por e-mail para login Google — mescla conta anterior
+  // se existir outro doc com o mesmo email_lower (conta phone/email criada antes).
+  // Só roda se login é Google (não duplica a verificação do email-link acima).
+  if (user.email && _method === 'google' && uid &&
+      window.FirestoreDB && window.FirestoreDB.db) {
+    (function() {
+      var _gCrossEmail = String(user.email).toLowerCase();
+      var _gCrossUid = uid;
+      window.FirestoreDB.db.collection('users')
+        .where('email_lower', '==', _gCrossEmail)
+        .limit(5).get()
+        .then(function(gSnap) {
+          gSnap.forEach(function(gDoc) {
+            if (gDoc.id !== _gCrossUid && !gDoc.data().mergedInto) {
+              setTimeout(function() {
+                if (typeof window._executePhoneAccountMerge === 'function') {
+                  console.log('[google-login] auto-merge conta anterior por email:', gDoc.id);
+                  window._executePhoneAccountMerge(gDoc.id);
+                }
+              }, 3000);
+            }
+          });
+        })
+        .catch(function(e) { console.warn('[google-login] email cross-ref error:', e); });
+    })();
+  }
+
+  // v1.7.9-beta: defaults de notificação — ativa notifyEmail/notifyWhatsApp
+  // se ainda não configurado na conta. Preserva escolhas explícitas do usuário:
+  // notifyEmail: false (ou true) já definido → NÃO é sobrescrito.
+  // Roda para contas novas E para contas existentes sem o campo definido.
+  if (uid && window.FirestoreDB && window.FirestoreDB.db) {
+    try {
+      var _notifyPatch = {};
+      var _ep = existingProfile || {};
+      // notifyEmail = true para contas com e-mail (emailLink, Google, password)
+      if (typeof _ep.notifyEmail === 'undefined' && user.email) {
+        _notifyPatch.notifyEmail = true;
+      }
+      // notifyWhatsApp = true para contas com telefone (SMS)
+      if (typeof _ep.notifyWhatsApp === 'undefined' && user.phoneNumber) {
+        _notifyPatch.notifyWhatsApp = true;
+      }
+      if (Object.keys(_notifyPatch).length > 0) {
+        window.FirestoreDB.saveUserProfile(uid, _notifyPatch).catch(function() {});
+        if (window.AppStore.currentUser) Object.assign(window.AppStore.currentUser, _notifyPatch);
+        if (existingProfile) Object.assign(existingProfile, _notifyPatch);
+        console.log('[scoreplace-auth] notify defaults set:', _notifyPatch);
+      }
+    } catch (_notifyErr) {
+      console.warn('[scoreplace-auth] notify defaults error (non-fatal):', _notifyErr);
+    }
+  }
+
   // Migrate legacy doc: if user has a doc keyed by email, merge it into the UID doc
   if (window.FirestoreDB && window.FirestoreDB.db && uid && user.email && uid !== user.email) {
     try {
@@ -2351,14 +2433,24 @@ async function simulateLoginSuccess(user) {
                      || '';
     _setVal('profile-edit-name', _fallbackName);
     // v1.0.43-beta: read-only display do email autenticado.
+    // v1.7.9-beta: phone-only accounts show add-email input by default.
     var emailDisplay = document.getElementById('profile-email-display');
     var emailText = document.getElementById('profile-email-text');
+    var emailEditWrap = document.getElementById('profile-email-edit-wrap');
+    var editEmailInp = document.getElementById('profile-edit-email');
     if (emailDisplay && emailText) {
       if (cu.email) {
         emailText.textContent = cu.email;
         emailDisplay.style.display = '';
+        if (emailEditWrap) { emailEditWrap.style.display = 'none'; }
+        if (editEmailInp) { editEmailInp.value = ''; }
       } else {
         emailDisplay.style.display = 'none';
+        // Phone-only account: show add-email field so user can add email easily
+        if (emailEditWrap) {
+          emailEditWrap.style.display = '';
+          if (editEmailInp) { editEmailInp.value = ''; }
+        }
       }
     }
     _setVal('profile-edit-gender', cu.gender || '');
@@ -4080,14 +4172,27 @@ function setupProfileModal() {
               '<input type="text" id="profile-edit-name" aria-label="' + _t('profile.labelName') + '" class="form-control" style="width: 100%; box-sizing: border-box;" required oninput="window._refreshProfileAvatarFromName && window._refreshProfileAvatarFromName()">' +
             '</div>' +
           '</div>' +
-          // v1.0.43-beta: read-only display do email autenticado. Pedido do user:
-          // "não vejo o email na pagina de perfil do usuário. seria legal ter".
-          // Read-only porque mudar o email é operação de Firebase Auth (com
-          // re-verificação), fora de escopo. Quando phone-only login (sem email),
-          // o slot fica oculto.
-          '<div id="profile-email-display" style="display:none;margin:0 0 1rem 0;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
-            '<span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;opacity:0.7;margin-right:8px;">📧</span>' +
-            '<span id="profile-email-text" style="font-family:var(--font-body);color:var(--text-bright);"></span>' +
+          // v1.0.43-beta: display do email autenticado.
+          // v1.7.9-beta: adicionado botão "Alterar" e campo de edição/adição.
+          // Contas phone-only mostram o campo de adição de e-mail por padrão
+          // (via _populateProfileModalFields). Contas com e-mail mostram
+          // display + botão "Alterar" que expõe o campo de edição.
+          '<div id="profile-email-display" style="display:none;margin:0 0 0.5rem 0;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+              '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">' +
+                '<span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;opacity:0.7;flex-shrink:0;">📧</span>' +
+                '<span id="profile-email-text" style="font-family:var(--font-body);color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
+              '</div>' +
+              '<button type="button" onclick="window._profileShowEmailEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:3px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;white-space:nowrap;flex-shrink:0;line-height:1.4;">Alterar</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="profile-email-edit-wrap" style="display:none;margin:0 0 1rem 0;">' +
+            '<label class="form-label" style="font-size:0.75rem;">📧 E-mail</label>' +
+            '<div style="display:flex;gap:8px;align-items:center;">' +
+              '<input type="email" id="profile-edit-email" class="form-control" placeholder="seu@email.com" autocomplete="off" style="flex:1;min-width:0;box-sizing:border-box;">' +
+              '<button type="button" onclick="window._profileCancelEmailEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:6px 10px;border-radius:8px;font-size:0.82rem;cursor:pointer;white-space:nowrap;line-height:1;">✕</button>' +
+            '</div>' +
+            '<span style="font-size:0.68rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">O e-mail será salvo ao clicar em Salvar.</span>' +
           '</div>' +
           '<form id="form-edit-profile" onsubmit="event.preventDefault(); saveUserProfile()" style="overflow: hidden;">' +
             // Row: Sexo + Nascimento (2 colunas)
@@ -4920,6 +5025,50 @@ function setupProfileModal() {
       }
     };
 
+    // v1.7.9-beta: _triggerAccountMerge — ponte genérica chamada quando
+    // qualquer fluxo de detecção de duplicata (name conflict, email overlap)
+    // encontra candidato a mesclagem. Mostra diálogo de confirmação e delega
+    // pra _executePhoneAccountMerge (Cloud Function mergePhoneAccount).
+    window._triggerAccountMerge = function(oldUid, oldData) {
+      if (!oldUid) return;
+      var oldName = (oldData && (oldData.displayName || oldData.name)) || '';
+      var label = oldName ? ' (nome: ' + oldName + ')' : '';
+      var confirmMsg = 'Encontramos uma conta anterior com os mesmos dados' + label + '.\n\nDeseja mesclar? As inscrições em torneios e o histórico de partidas daquela conta serão transferidos para a sua conta atual.';
+      if (typeof showConfirmDialog === 'function') {
+        showConfirmDialog(
+          '🔀 Conta anterior encontrada',
+          confirmMsg,
+          function() { window._executePhoneAccountMerge(oldUid); },
+          function() {},
+          'Mesclar contas',
+          'Não, ignorar'
+        );
+      } else if (confirm(confirmMsg)) {
+        window._executePhoneAccountMerge(oldUid);
+      }
+    };
+
+    // v1.7.9-beta: _profileShowEmailEdit / _profileCancelEmailEdit —
+    // expõe/oculta o campo de edição/adição de e-mail no formulário de perfil.
+    window._profileShowEmailEdit = function() {
+      var wrap = document.getElementById('profile-email-edit-wrap');
+      var display = document.getElementById('profile-email-display');
+      if (display) display.style.display = 'none';
+      if (wrap) wrap.style.display = '';
+      var inp = document.getElementById('profile-edit-email');
+      if (inp) { inp.value = ''; setTimeout(function() { inp.focus(); }, 60); }
+    };
+
+    window._profileCancelEmailEdit = function() {
+      var wrap = document.getElementById('profile-email-edit-wrap');
+      var display = document.getElementById('profile-email-display');
+      var _cu = window.AppStore && window.AppStore.currentUser;
+      if (wrap) wrap.style.display = 'none';
+      if (display && _cu && _cu.email) display.style.display = '';
+      var inp = document.getElementById('profile-edit-email');
+      if (inp) inp.value = '';
+    };
+
     // Porque reescrever: a cadeia anterior (auth.js → currentUser → store.js
     // saveUserProfileToFirestore → firebase-db.js saveUserProfile → Firestore
     // set merge) tinha 4 camadas, 3 conversões, 2 "clobber guards"
@@ -5008,6 +5157,8 @@ function setupProfileModal() {
       var phoneEl = document.getElementById('profile-edit-phone');
       var phoneDigits = (phoneEl && (phoneEl.getAttribute('data-digits') || '')).replace(/\D/g, '');
       var phoneCountry = _v('profile-phone-country') || '55';
+      // v1.7.9-beta: email pode ser adicionado/alterado via profile-edit-email
+      var emailIn = (_v('profile-edit-email') || '').trim().toLowerCase();
       var sportsArr = Array.isArray(window._profileSelectedSports)
         ? window._profileSelectedSports.slice()
         : [];
@@ -5036,6 +5187,22 @@ function setupProfileModal() {
       var notifyWhatsApp = _chk('profile-notify-whatsapp', false);
       var presenceAutoCheckin = _chk('profile-presence-auto-checkin', false);
       var hintsEnabled = _chk('profile-hints-enabled', true);
+
+      // v1.7.9-beta: auto-enable notifyWhatsApp quando celular está sendo adicionado
+      // e auto-enable notifyEmail quando e-mail está sendo adicionado ao perfil.
+      var _cuPhoneDigits = (cu.phone || '').replace(/\D/g, '');
+      if ((_cuPhoneDigits.length < 8) && (phoneDigits.length >= 8)) {
+        // Phone is being newly added — auto-enable WhatsApp notifications
+        notifyWhatsApp = true;
+      }
+      var _savedEmailLower = (cu.email || '').toLowerCase();
+      var _emailIsValid = emailIn.length >= 6 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn);
+      var _emailChanged = _emailIsValid && emailIn !== _savedEmailLower;
+      var _emailNewlyAdded = _emailChanged && !_savedEmailLower;
+      if (_emailNewlyAdded) {
+        // Email is being newly added to a phone-only account — auto-enable email notifications
+        notifyEmail = true;
+      }
 
       var notifyLevel = _chk('profile-filter-todas', true)
         ? 'todas'
@@ -5159,6 +5326,11 @@ function setupProfileModal() {
       if (phoneDigits) payload.phone = (typeof window._normalizePhoneE164 === 'function')
         ? window._normalizePhoneE164(phoneDigits, phoneCountry || '55')
         : phoneDigits;
+      // v1.7.9-beta: include email when user adds/changes it in profile
+      if (_emailChanged) {
+        payload.email = emailIn;
+        payload.email_lower = emailIn;
+      }
       // defaultCategory removido — v1.3.98-beta (skill vive em skillBySport)
       if (preferredCeps) payload.preferredCeps = preferredCeps;
 
@@ -5199,7 +5371,9 @@ function setupProfileModal() {
 
       // Denormalizados para lookups case-insensitive
       if (payload.displayName) payload.displayName_lower = String(payload.displayName).toLowerCase();
-      if (cu.email) payload.email_lower = String(cu.email).toLowerCase();
+      // v1.7.9-beta: email_lower — usa payload.email se email está sendo alterado,
+      // senão usa cu.email. Evita duplicar se _emailChanged já setou email_lower.
+      if (!payload.email_lower && cu.email) payload.email_lower = String(cu.email).toLowerCase();
 
       // ── 4. INSTRUMENTAÇÃO — tudo visível no console e em window ─────────
       console.log('[Profile v0.16.9] uid:', uid);
@@ -5312,6 +5486,15 @@ function setupProfileModal() {
           setTimeout(function() {
             if (typeof window._trophyOnProfileSaved === 'function') window._trophyOnProfileSaved();
           }, 500);
+          // v1.7.9-beta: se e-mail foi adicionado/alterado, refresh o display do e-mail no perfil
+          if (_emailChanged) {
+            var _emailDispEl = document.getElementById('profile-email-display');
+            var _emailTextEl = document.getElementById('profile-email-text');
+            var _emailEditWrap = document.getElementById('profile-email-edit-wrap');
+            if (_emailTextEl) _emailTextEl.textContent = emailIn;
+            if (_emailDispEl) _emailDispEl.style.display = '';
+            if (_emailEditWrap) _emailEditWrap.style.display = 'none';
+          }
         }
       }
 
@@ -5399,6 +5582,42 @@ function setupProfileModal() {
             window._checkPhoneAccountMerge(payload.phone, uid);
           }
         }, 800);
+      }
+
+      // ── 9b. EMAIL MERGE — detectar conta anterior com mesmo e-mail ──────
+      // v1.7.9-beta: só dispara quando o e-mail foi adicionado/alterado neste save.
+      // Busca outras contas com o mesmo email_lower e oferece mesclagem via dialog.
+      if (!saveError && _emailChanged && window.FirestoreDB && window.FirestoreDB.db) {
+        setTimeout(function() {
+          window.FirestoreDB.db.collection('users')
+            .where('email_lower', '==', emailIn)
+            .limit(5)
+            .get()
+            .then(function(snap) {
+              var oldDoc = null;
+              snap.forEach(function(doc) {
+                if (doc.id !== uid && !doc.data().mergedInto) oldDoc = doc;
+              });
+              if (!oldDoc) return;
+              var oldData = oldDoc.data();
+              var oldName = oldData.displayName || '';
+              var label = oldName ? ' (nome: ' + oldName + ')' : '';
+              var confirmMsg = 'Encontramos uma conta anterior vinculada a este e-mail' + label + '.\n\nDeseja mesclar? As inscrições em torneios e o histórico de partidas daquela conta serão transferidos para a sua conta atual.';
+              if (typeof showConfirmDialog === 'function') {
+                showConfirmDialog(
+                  '📧 Conta anterior encontrada',
+                  confirmMsg,
+                  function() { window._executePhoneAccountMerge(oldDoc.id); },
+                  function() {},
+                  'Mesclar contas',
+                  'Não, ignorar'
+                );
+              } else if (confirm(confirmMsg)) {
+                window._executePhoneAccountMerge(oldDoc.id);
+              }
+            })
+            .catch(function(e) { console.warn('[EmailMerge] query error:', e); });
+        }, 1200);
       }
 
       // v1.3.5-beta: usar helper centralizado que trata tanto rota #profile
