@@ -5860,87 +5860,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             if (!window._casualPastMatchesCache) window._casualPastMatchesCache = {};
             matches.forEach(function(m) { if (m.roomCode) window._casualPastMatchesCache[m.roomCode] = m; });
 
-            function _firstToken(s) { return s ? (s.split(/[\s.@_\-]/)[0] || s) : ''; }
-            function _pname(p, mDoc, isFirstT1) {
-              if (p.uid && cu.uid && p.uid === cu.uid && cu.displayName) return _firstToken(cu.displayName);
-              if (isFirstT1 && mDoc.createdBy === cu.uid && cu.displayName) return _firstToken(cu.displayName);
-              var nm = p.displayName || p.name || '';
-              return _firstToken(nm) || null;
-            }
-            function _teamBlock(st, players, score, win) {
-              var nc = win ? '#fff' : 'rgba(255,255,255,0.72)';
-              var nw = win ? '700' : '600';
-              var rn = players.filter(function(n) { return n != null; });
-              var nh = (rn.length ? rn : ['—']).map(function(nm) {
-                return '<div style="font-size:0.73rem;font-weight:' + nw + ';color:' + nc + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.3;">' + window._safeHtml(nm) + '</div>';
-              }).join('');
-              return '<div style="' + st + '">' +
-                '<div style="flex:1;overflow:hidden;min-width:0;">' + nh + '</div>' +
-                (score ? '<span style="font-weight:800;font-size:0.85rem;color:' + (win ? '#4ade80' : 'var(--text-muted)') + ';font-variant-numeric:tabular-nums;flex-shrink:0;padding-left:4px;align-self:center;">' + window._safeHtml(score) + '</span>' : '') +
-              '</div>';
-            }
-
-            var cardsHtml = '';
-            matches.forEach(function(m) {
-              var sport = m.sport || '';
-              var dateStr = '';
-              var _finTs2 = m.finishedAt || m.createdAt;
-              if (_finTs2) {
-                var d = (typeof _finTs2 === 'string') ? new Date(_finTs2) : (_finTs2 && typeof _finTs2.toMillis === 'function' ? new Date(_finTs2.toMillis()) : null);
-                if (d && !isNaN(d.getTime())) {
-                  var _dd2 = String(d.getDate()).padStart(2,'0');
-                  var _mm2 = String(d.getMonth()+1).padStart(2,'0');
-                  var _hh2 = String(d.getHours()).padStart(2,'0');
-                  var _mn2 = String(d.getMinutes()).padStart(2,'0');
-                  dateStr = _dd2 + '/' + _mm2 + ' ' + _hh2 + 'h' + _mn2;
-                }
-              }
-              var icon = window._sportIcon ? window._sportIcon(sport) : '🎾';
-              var safeRoomCode = (m.roomCode || '').replace(/'/g, "\\'");
-              var t1Players = [], t2Players = [];
-              if (Array.isArray(m.players)) {
-                m.players.forEach(function(p) {
-                  var isFirstT1 = (p.team !== 2 && t1Players.length === 0);
-                  var nm = _pname(p, m, isFirstT1);
-                  if (p.team === 2) t2Players.push(nm);
-                  else t1Players.push(nm);
-                });
-              }
-              if (!m.isDoubles && t2Players.length === 0 && t1Players.length >= 2)
-                t2Players = t1Players.splice(1);
-              var winner = (m.result && m.result.winner) || 0;
-              var t1Win = (winner === 1), t2Win = (winner === 2), isDecided = (t1Win || t2Win);
-              var p1ScoreStr = '', p2ScoreStr = '';
-              if (m.result) {
-                if (m.result.p1Score != null && m.result.p2Score != null) {
-                  p1ScoreStr = String(m.result.p1Score); p2ScoreStr = String(m.result.p2Score);
-                } else if (m.result.sets && m.result.sets.length > 0) {
-                  p1ScoreStr = m.result.sets.map(function(s) { return s.gamesP1; }).join(' ');
-                  p2ScoreStr = m.result.sets.map(function(s) { return s.gamesP2; }).join(' ');
-                } else if (m.result.summary) {
-                  var sp2 = m.result.summary.split(/\s*[×]\s*/);
-                  if (sp2.length === 2) { p1ScoreStr = sp2[0].trim(); p2ScoreStr = sp2[1].trim(); }
-                }
-              }
-              var wRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(16,185,129,0.18);border-left:3px solid #10b981;';
-              var lRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.08);opacity:0.5;';
-              var oRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.25);border-left:3px solid rgba(99,102,241,0.5);';
-              var p1Style = isDecided ? (t1Win ? wRow : lRow) : oRow;
-              var p2Style = isDecided ? (t2Win ? wRow : lRow) : oRow;
-              cardsHtml +=
-                '<button onclick="window._casualOpenPastMatch(\'' + safeRoomCode + '\')" ' +
-                  'style="display:block;text-align:left;border-radius:12px;padding:9px 9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);color:var(--text-bright);cursor:pointer;transition:all 0.15s;font-family:inherit;min-width:0;width:100%;" ' +
-                  'onmouseover="this.style.background=\'rgba(251,191,36,0.07)\';this.style.borderColor=\'rgba(251,191,36,0.30)\'" ' +
-                  'onmouseout="this.style.background=\'rgba(255,255,255,0.04)\';this.style.borderColor=\'rgba(255,255,255,0.10)\'">' +
-                  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;border-bottom:1px solid rgba(255,255,255,0.07);padding-bottom:4px;">' +
-                    '<span style="font-size:0.72rem;">' + icon + '</span>' +
-                    '<span style="font-size:0.57rem;color:var(--text-muted);font-weight:600;">' + window._safeHtml(dateStr || '—') + '</span>' +
-                  '</div>' +
-                  _teamBlock(p1Style, t1Players, p1ScoreStr, t1Win) +
-                  '<div style="text-align:center;font-size:0.52rem;color:var(--text-muted);font-weight:800;letter-spacing:1.5px;padding:2px 0;">VS</div>' +
-                  _teamBlock(p2Style, t2Players, p2ScoreStr, t2Win) +
-                '</button>';
-            });
+            var cardsHtml = window._buildCasualMatchCardsHtml(matches, cu);
 
             // Ordem de exibição: mais recente à esquerda (grid da esquerda pra direita = índice 0=último, 1=penúltimo, 2=antepenúltimo)
             var typeLabel = _statsSlotIsCasual ? '⚡ Casual' : '🏆 Torneio';
@@ -9176,6 +9096,101 @@ window._openCasualMatch = function(restoreOpts) {
     }, 200);
   }
 
+  // v1.8.6-beta: shared card renderer — builds the "Últimas Partidas" grid HTML
+  // used by both _casualLoadLastMatches (setup overlay) and
+  // _hydrateStatsLastMatchesSlotFn (post-match stats screen).
+  // Returns the cardsHtml string (grid content only, no wrapper).
+  window._buildCasualMatchCardsHtml = function(matches, cu) {
+    function _firstToken(s) { return s ? (s.split(/[\s.@_\-]/)[0] || s) : ''; }
+    function _pname(p, mDoc, isFirstT1) {
+      if (p.uid && cu.uid && p.uid === cu.uid && cu.displayName) return _firstToken(cu.displayName);
+      if (isFirstT1 && mDoc.createdBy === cu.uid && cu.displayName) return _firstToken(cu.displayName);
+      var nm = p.displayName || p.name || '';
+      return _firstToken(nm) || null;
+    }
+    function _teamBlock(st, players, score, win) {
+      var nameColor = win ? '#fff' : 'rgba(255,255,255,0.72)';
+      var nameWeight = win ? '700' : '600';
+      var realNames = players.filter(function(nm) { return nm != null; });
+      var namesHtml = (realNames.length ? realNames : ['—']).map(function(nm) {
+        return '<div style="font-size:0.73rem;font-weight:' + nameWeight + ';color:' + nameColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.3;">' + window._safeHtml(nm) + '</div>';
+      }).join('');
+      return '<div style="' + st + '">' +
+        '<div style="flex:1;overflow:hidden;min-width:0;">' + namesHtml + '</div>' +
+        (score ? '<span style="font-weight:800;font-size:0.85rem;color:' + (win ? '#4ade80' : 'var(--text-muted)') + ';font-variant-numeric:tabular-nums;flex-shrink:0;padding-left:4px;align-self:center;">' + window._safeHtml(score) + '</span>' : '') +
+      '</div>';
+    }
+
+    var cardsHtml = '';
+    matches.forEach(function(m) {
+      var sport = m.sport || '';
+      var dateStr = '';
+      var _finTs = m.finishedAt || m.createdAt;
+      if (_finTs) {
+        var d = (typeof _finTs === 'string') ? new Date(_finTs) : (_finTs && typeof _finTs.toMillis === 'function' ? new Date(_finTs.toMillis()) : null);
+        if (d && !isNaN(d.getTime())) {
+          var _dd = String(d.getDate()).padStart(2,'0');
+          var _mm = String(d.getMonth()+1).padStart(2,'0');
+          var _hh = String(d.getHours()).padStart(2,'0');
+          var _mn = String(d.getMinutes()).padStart(2,'0');
+          dateStr = _dd + '/' + _mm + ' ' + _hh + 'h' + _mn;
+        }
+      }
+      var icon = window._sportIcon ? window._sportIcon(sport) : '🎾';
+      var safeRoomCode = (m.roomCode || '').replace(/'/g, "\\'");
+
+      var t1Players = [], t2Players = [];
+      if (Array.isArray(m.players)) {
+        m.players.forEach(function(p) {
+          var isFirstT1 = (p.team !== 2 && t1Players.length === 0);
+          var nm = _pname(p, m, isFirstT1);
+          if (p.team === 2) t2Players.push(nm);
+          else t1Players.push(nm);
+        });
+      }
+      if (!m.isDoubles && t2Players.length === 0 && t1Players.length >= 2)
+        t2Players = t1Players.splice(1);
+
+      var winner = (m.result && m.result.winner) || 0;
+      var t1Win = (winner === 1), t2Win = (winner === 2), isDecided = (t1Win || t2Win);
+
+      var p1ScoreStr = '', p2ScoreStr = '';
+      if (m.result) {
+        if (m.result.p1Score != null && m.result.p2Score != null) {
+          p1ScoreStr = String(m.result.p1Score);
+          p2ScoreStr = String(m.result.p2Score);
+        } else if (m.result.sets && m.result.sets.length > 0) {
+          p1ScoreStr = m.result.sets.map(function(s) { return s.gamesP1; }).join(' ');
+          p2ScoreStr = m.result.sets.map(function(s) { return s.gamesP2; }).join(' ');
+        } else if (m.result.summary) {
+          var sp = m.result.summary.split(/\s*[×]\s*/);
+          if (sp.length === 2) { p1ScoreStr = sp[0].trim(); p2ScoreStr = sp[1].trim(); }
+        }
+      }
+
+      var wRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(16,185,129,0.18);border-left:3px solid #10b981;';
+      var lRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.08);opacity:0.5;';
+      var oRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.25);border-left:3px solid rgba(99,102,241,0.5);';
+      var p1Style = isDecided ? (t1Win ? wRow : lRow) : oRow;
+      var p2Style = isDecided ? (t2Win ? wRow : lRow) : oRow;
+
+      cardsHtml +=
+        '<button onclick="window._casualOpenPastMatch(\'' + safeRoomCode + '\')" ' +
+          'style="display:block;text-align:left;border-radius:12px;padding:9px 9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);color:var(--text-bright);cursor:pointer;transition:all 0.15s;font-family:inherit;min-width:0;width:100%;" ' +
+          'onmouseover="this.style.background=\'rgba(251,191,36,0.07)\';this.style.borderColor=\'rgba(251,191,36,0.30)\'" ' +
+          'onmouseout="this.style.background=\'rgba(255,255,255,0.04)\';this.style.borderColor=\'rgba(255,255,255,0.10)\'">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;border-bottom:1px solid rgba(255,255,255,0.07);padding-bottom:4px;">' +
+            '<span style="font-size:0.72rem;">' + icon + '</span>' +
+            '<span style="font-size:0.57rem;color:var(--text-muted);font-weight:600;">' + window._safeHtml(dateStr || '—') + '</span>' +
+          '</div>' +
+          _teamBlock(p1Style, t1Players, p1ScoreStr, t1Win) +
+          '<div style="text-align:center;font-size:0.52rem;color:var(--text-muted);font-weight:800;letter-spacing:1.5px;padding:2px 0;">VS</div>' +
+          _teamBlock(p2Style, t2Players, p2ScoreStr, t2Win) +
+        '</button>';
+    });
+    return cardsHtml;
+  };
+
   // v1.3.32-beta: carrega últimas 3 partidas casuais finalizadas do user
   // e renderiza 3 botões. Click → abre overlay de live scoring com o
   // liveState salvo (mesma tela de stats que aparece no fim de cada
@@ -9216,108 +9231,7 @@ window._openCasualMatch = function(restoreOpts) {
       var matches = allMatches.slice(0, 3);
       if (matches.length === 0) { slot.innerHTML = ''; return; }
 
-      // Resolve first name token only — used for compact cards
-      function _firstToken(s) { return s ? (s.split(/[\s.@_\-]/)[0] || s) : ''; }
-      // Best display name for a player in a match doc:
-      // 1) uid match → use fresh cu.displayName
-      // 2) match createdBy === cu.uid AND first team-1 slot → use cu.displayName (for old docs without uid)
-      // 3) p.displayName / p.name → show as-is (including generic "Jogador X" names)
-      function _pname(p, mDoc, isFirstT1) {
-        if (p.uid && cu.uid && p.uid === cu.uid && cu.displayName)
-          return _firstToken(cu.displayName);
-        if (isFirstT1 && mDoc.createdBy === cu.uid && cu.displayName)
-          return _firstToken(cu.displayName);
-        var nm = p.displayName || p.name || '';
-        if (!nm) return null;
-        return _firstToken(nm) || null;
-      }
-
-      // Renders a team block with stacked player names + score on the right.
-      // Null entries in `players` are skipped (placeholder slots).
-      function _teamBlock(st, players, score, win) {
-        var nameColor = win ? '#fff' : 'rgba(255,255,255,0.72)';
-        var nameWeight = win ? '700' : '600';
-        var realNames = players.filter(function(nm) { return nm != null; });
-        var namesHtml = (realNames.length ? realNames : ['—']).map(function(nm) {
-          return '<div style="font-size:0.73rem;font-weight:' + nameWeight + ';color:' + nameColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.3;">' + window._safeHtml(nm) + '</div>';
-        }).join('');
-        return '<div style="' + st + '">' +
-          '<div style="flex:1;overflow:hidden;min-width:0;">' + namesHtml + '</div>' +
-          (score ? '<span style="font-weight:800;font-size:0.85rem;color:' + (win ? '#4ade80' : 'var(--text-muted)') + ';font-variant-numeric:tabular-nums;flex-shrink:0;padding-left:4px;align-self:center;">' + window._safeHtml(score) + '</span>' : '') +
-        '</div>';
-      }
-
-      var cardsHtml = '';
-      matches.forEach(function(m) {
-        var sport = m.sport || '';
-        var dateStr = '';
-        var _finTs = m.finishedAt || m.createdAt;
-        if (_finTs) {
-          var d = (typeof _finTs === 'string') ? new Date(_finTs) : (_finTs && typeof _finTs.toMillis === 'function' ? new Date(_finTs.toMillis()) : null);
-          if (d && !isNaN(d.getTime())) {
-            var _dd = String(d.getDate()).padStart(2,'0');
-            var _mm = String(d.getMonth()+1).padStart(2,'0');
-            var _hh = String(d.getHours()).padStart(2,'0');
-            var _mn = String(d.getMinutes()).padStart(2,'0');
-            dateStr = _dd + '/' + _mm + ' ' + _hh + 'h' + _mn;
-          }
-        }
-        var icon = '🎾';
-        for (var ssi = 0; ssi < sports.length; ssi++) {
-          if (sports[ssi].label === sport || sports[ssi].key === sport) { icon = sports[ssi].icon; break; }
-        }
-        var safeRoomCode = (m.roomCode || '').replace(/'/g, "\\'");
-
-        // Build per-team player name lists; track first-T1 slot for createdBy fallback
-        var t1Players = [], t2Players = [];
-        if (Array.isArray(m.players)) {
-          m.players.forEach(function(p) {
-            var isFirstT1 = (p.team !== 2 && t1Players.length === 0);
-            var nm = _pname(p, m, isFirstT1);
-            if (p.team === 2) t2Players.push(nm);
-            else t1Players.push(nm);
-          });
-        }
-        if (!m.isDoubles && t2Players.length === 0 && t1Players.length >= 2)
-          t2Players = t1Players.splice(1);
-
-        var winner = (m.result && m.result.winner) || 0;
-        var t1Win = (winner === 1), t2Win = (winner === 2), isDecided = (t1Win || t2Win);
-
-        var p1ScoreStr = '', p2ScoreStr = '';
-        if (m.result) {
-          if (m.result.p1Score != null && m.result.p2Score != null) {
-            p1ScoreStr = String(m.result.p1Score);
-            p2ScoreStr = String(m.result.p2Score);
-          } else if (m.result.sets && m.result.sets.length > 0) {
-            p1ScoreStr = m.result.sets.map(function(s) { return s.gamesP1; }).join(' ');
-            p2ScoreStr = m.result.sets.map(function(s) { return s.gamesP2; }).join(' ');
-          } else if (m.result.summary) {
-            var sp = m.result.summary.split(/\s*[×]\s*/);
-            if (sp.length === 2) { p1ScoreStr = sp[0].trim(); p2ScoreStr = sp[1].trim(); }
-          }
-        }
-
-        var wRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(16,185,129,0.18);border-left:3px solid #10b981;';
-        var lRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.08);opacity:0.5;';
-        var oRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.25);border-left:3px solid rgba(99,102,241,0.5);';
-        var p1Style = isDecided ? (t1Win ? wRow : lRow) : oRow;
-        var p2Style = isDecided ? (t2Win ? wRow : lRow) : oRow;
-
-        cardsHtml +=
-          '<button onclick="window._casualOpenPastMatch(\'' + safeRoomCode + '\')" ' +
-            'style="display:block;text-align:left;border-radius:12px;padding:9px 9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);color:var(--text-bright);cursor:pointer;transition:all 0.15s;font-family:inherit;min-width:0;width:100%;" ' +
-            'onmouseover="this.style.background=\'rgba(251,191,36,0.07)\';this.style.borderColor=\'rgba(251,191,36,0.30)\'" ' +
-            'onmouseout="this.style.background=\'rgba(255,255,255,0.04)\';this.style.borderColor=\'rgba(255,255,255,0.10)\'">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;border-bottom:1px solid rgba(255,255,255,0.07);padding-bottom:4px;">' +
-              '<span style="font-size:0.72rem;">' + icon + '</span>' +
-              '<span style="font-size:0.57rem;color:var(--text-muted);font-weight:600;">' + window._safeHtml(dateStr || '—') + '</span>' +
-            '</div>' +
-            _teamBlock(p1Style, t1Players, p1ScoreStr, t1Win) +
-            '<div style="text-align:center;font-size:0.52rem;color:var(--text-muted);font-weight:800;letter-spacing:1.5px;padding:2px 0;">VS</div>' +
-            _teamBlock(p2Style, t2Players, p2ScoreStr, t2Win) +
-          '</button>';
-      });
+      var cardsHtml = window._buildCasualMatchCardsHtml(matches, cu);
 
       slot.innerHTML =
         '<div style="font-size:0.6rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;text-align:left;">📊 Últimas Partidas</div>' +
