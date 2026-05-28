@@ -15,17 +15,17 @@ window.NOTIF_CATALOG = {
   // Tournament lifecycle
   tournament_created:          { level: 'all',         icon: '🏆', color: 'var(--primary-color)' },
   tournament_deleted:          { level: 'fundamental', icon: '🗑️', color: 'var(--danger-color, #ef4444)' },
-  tournament_update:           { level: 'important',   icon: '📢', color: '#f59e0b' },
+  tournament_update:           { level: 'fundamental', icon: '📢', color: '#f59e0b' },
   // Alias — create-tournament.js dispara com 'tournament_updated' (forma verbal
   // passada) em vez de 'tournament_update'. Mantemos as duas chaves pra não
   // quebrar notificações já persistidas em Firestore.
-  tournament_updated:          { level: 'important',   icon: '📢', color: '#f59e0b' },
+  tournament_updated:          { level: 'fundamental', icon: '📢', color: '#f59e0b' },
   tournament_finished:         { level: 'important',   icon: '🏆', color: '#a78bfa' },
   tournament_invite:           { level: 'all',         icon: '🏆', color: 'var(--primary-color)' },
 
   // Draw / rounds
-  draw:                        { level: 'important',   icon: '🎲', color: 'var(--primary-color)' },
-  new_round:                   { level: 'important',   icon: '🔄', color: 'var(--primary-color)' },
+  draw:                        { level: 'fundamental', icon: '🎲', color: 'var(--primary-color)' },
+  new_round:                   { level: 'fundamental', icon: '🔄', color: 'var(--primary-color)' },
 
   // Match events
   result:                      { level: 'fundamental', icon: '🏅', color: '#a78bfa' },
@@ -34,7 +34,7 @@ window.NOTIF_CATALOG = {
   'match-rejected':            { level: 'important',   icon: '❌', color: 'var(--danger-color, #ef4444)' },
 
   // Reminders
-  tournament_reminder:         { level: 'important',   icon: '⏰', color: '#f59e0b' },
+  tournament_reminder:         { level: 'fundamental', icon: '⏰', color: '#f59e0b' },
   tournament_nearby:           { level: 'all',         icon: '📍', color: 'var(--primary-color)' },
 
   // Organizer actions

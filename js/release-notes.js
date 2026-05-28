@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">🔔 v1.8.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
+      '<p><b>Notificações ricas e personalizadas.</b><br><br>' +
+      '<b>Níveis corrigidos:</b> sorteio, nova rodada, atualização de torneio e lembrete de torneio passaram para o nível <b>Fundamental</b> — garantindo entrega mesmo para usuários com preferência "Somente Fundamentais".<br><br>' +
+      '<b>E-mails completos (sem "clique para ver"):</b> todos os campos do payload da notificação chegam agora no template de e-mail. Resultado de partida, lista de jogos e demais dados ficam visíveis direto no e-mail, sem precisar abrir o app.<br><br>' +
+      '<b>Chaveamento personalizado por participante:</b> ao sortear (qualquer formato — Eliminatórias, Liga, Suíço, Grupos, Rei/Rainha), cada participante recebe uma notificação individual destacando <em>seu</em> jogo específico. No e-mail aparece um bloco em destaque "Seu Jogo N: Nome Parceiro (você) vs Adversário" com nome real + "(você)" entre parênteses, mais a lista completa de todos os jogos da rodada. No WhatsApp: texto personalizado com o jogo do destinatário, local e data. Rodadas seguintes da Liga também são personalizadas da mesma forma.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#f59e0b; font-size:1rem; margin-bottom:8px;">✨ v1.8.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Perfil reorganizado.</b><br><br>' +
       '<b>Celular logo após o e-mail:</b> o campo de celular foi movido para ser o primeiro campo editável do perfil, logo abaixo do e-mail, para que os dados de contato fiquem juntos em uma sequência natural.<br><br>' +

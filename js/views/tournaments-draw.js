@@ -256,15 +256,9 @@ window.generateDrawFunction = function (tId) {
         if (document.getElementById('final-review-panel')) document.getElementById('final-review-panel').remove(); document.body.style.overflow = '';
         showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: _roundMatchCount }), 'success');
 
-        // Notify all participants about the new round
-        if (typeof window._notifyTournamentParticipants === 'function') {
-            window._notifyTournamentParticipants(t, {
-                type: 'draw',
-                level: 'important',
-                title: _t('tdraw.round1NotifTitle', {name: t.name || _t('dashboard.tournamentName')}),
-                message: _t('tdraw.round1NotifMsg', {count: _roundMatchCount}),
-                tournamentId: tId
-            });
+        // Notify all participants — personalized per recipient (shows their match)
+        if (typeof window._notifyDrawPersonalized === 'function') {
+            window._notifyDrawPersonalized(t, tId);
         }
 
         // Save immediately to Firestore, then navigate
@@ -327,14 +321,9 @@ window.generateDrawFunction = function (tId) {
         t.status = 'active';
         window.AppStore.logAction(tId, _t('monarch.drawDone') + ' — ' + numGroups + ' grupos de 4');
 
-        // Notify participants about Rei/Rainha draw
-        if (typeof window._notifyTournamentParticipants === 'function') {
-            window._notifyTournamentParticipants(t, {
-                type: 'draw',
-                level: 'important',
-                message: _t('notif.drawMade').replace('{name}', t.name || 'Torneio'),
-                tournamentId: tId
-            }, t.organizerEmail);
+        // Notify participants — personalized per recipient
+        if (typeof window._notifyDrawPersonalized === 'function') {
+            window._notifyDrawPersonalized(t, tId);
         }
         if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
             window.FirestoreDB.saveTournament(t).then(function() {
@@ -481,14 +470,9 @@ window.generateDrawFunction = function (tId) {
 
         if (document.getElementById('final-review-panel')) document.getElementById('final-review-panel').remove(); document.body.style.overflow = '';
         showNotification(_t('tdraw.groupsStarted'), _t('tdraw.groupsStartedMsg', { n: numGroups }), 'success');
-        // Notify participants about groups draw
-        if (typeof window._notifyTournamentParticipants === 'function') {
-            window._notifyTournamentParticipants(t, {
-                type: 'draw',
-                level: 'important',
-                message: _t('notif.drawMade').replace('{name}', t.name || 'Torneio'),
-                tournamentId: tId
-            }, t.organizerEmail);
+        // Notify participants — personalized per recipient
+        if (typeof window._notifyDrawPersonalized === 'function') {
+            window._notifyDrawPersonalized(t, tId);
         }
         window.AppStore.syncImmediate(tId).then(function() {
             window.location.hash = `#bracket/${tId}`;
@@ -583,15 +567,9 @@ window.generateDrawFunction = function (tId) {
         var _swRoundMatches = (t.rounds[0] && t.rounds[0].matches || []).filter(function(m) { return !m.isSitOut; }).length;
         if (document.getElementById('final-review-panel')) document.getElementById('final-review-panel').remove(); document.body.style.overflow = '';
         showNotification(_t('tdraw.swissStarted'), _t('tdraw.swissStartedMsg', { rounds: t.swissRounds, n: _swRoundMatches, lo: _swLo, format: t.format || 'Eliminatórias' }), 'success');
-        // Notify participants
-        if (typeof window._notifyTournamentParticipants === 'function') {
-            window._notifyTournamentParticipants(t, {
-                type: 'draw',
-                level: 'important',
-                title: _t('tdraw.swissNotifTitle', {name: t.name || _t('dashboard.tournamentName')}),
-                message: _t('tdraw.swissNotifMsg', {rounds: t.swissRounds, lo: _swLo, format: t.format || _t('participants.defaultFormat')}),
-                tournamentId: tId
-            });
+        // Notify participants — personalized per recipient
+        if (typeof window._notifyDrawPersonalized === 'function') {
+            window._notifyDrawPersonalized(t, tId);
         }
         window.AppStore.syncImmediate(tId).then(function() {
             // Notify Liga round via WhatsApp if this is a Liga/Suíço tournament (fire-and-forget)
@@ -939,14 +917,9 @@ window.generateDrawFunction = function (tId) {
 
     showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
 
-    // Notify all participants about the draw
-    if (typeof window._notifyTournamentParticipants === 'function') {
-        window._notifyTournamentParticipants(t, {
-            type: 'draw',
-            level: 'important',
-            message: _t('notif.drawMade').replace('{name}', t.name || 'Torneio'),
-            tournamentId: tId
-        }, t.organizerEmail);
+    // Notify all participants — personalized per recipient
+    if (typeof window._notifyDrawPersonalized === 'function') {
+        window._notifyDrawPersonalized(t, tId);
     }
 
     window._lastActiveTournamentId = tId;
@@ -1320,5 +1293,151 @@ window.handleDropTeam = function (e, targetIdx) {
     } catch (err) { console.error(err); }
 };
 
+
+/**
+ * v1.8.1-beta: Personalized draw / new-round notifications.
+ * Each participant gets their own notification showing their specific
+ * match with real name + "(você)" in the email body.
+ *
+ * @param {object} t      - tournament object (already mutated with matches)
+ * @param {string} tId    - tournament id
+ * @param {object} [opts] - { type:'new_round', roundIndex: N } for Liga rounds 2+
+ *                          Defaults: type='draw', roundIndex=last round for rounds-based,
+ *                          or auto-detect from groups / matches.
+ *
+ * Supports: Eliminatórias / Dupla Elim (t.matches R1),
+ *           Liga / Suíço (t.rounds[N].matches),
+ *           Grupos + Elim / Rei-Rainha (t.groups[*].rounds[0].matches).
+ */
+window._notifyDrawPersonalized = async function(t, tId, opts) {
+    if (typeof window._sendUserNotification !== 'function') return;
+    if (!window.FirestoreDB || !window.FirestoreDB.db) return;
+
+    opts = opts || {};
+    var notifType = opts.type || 'draw';
+    var _tId = String(tId || t.id || '');
+    var tUrl = 'https://scoreplace.app/#tournaments/' + _tId;
+    var venue = t.venue || '';
+    var startDate = t.startDate || '';
+    var tName = t.name || 'Torneio';
+
+    // ── Collect matches to notify about ─────────────────────────────────
+    // allMatches = [{p1, p2, groupName?}]
+    var allMatches = [];
+    var isGroupsStage = Array.isArray(t.groups) && t.groups.length > 0 && t.currentStage === 'groups';
+
+    if (isGroupsStage) {
+        t.groups.forEach(function(g) {
+            var gName = g.name || '';
+            var r0 = Array.isArray(g.rounds) && g.rounds[0];
+            if (r0 && Array.isArray(r0.matches)) {
+                r0.matches.forEach(function(m) {
+                    if (!m.isSitOut) allMatches.push({ p1: m.p1 || '', p2: m.p2 || '', groupName: gName });
+                });
+            }
+        });
+    } else if (Array.isArray(t.rounds) && t.rounds.length > 0) {
+        // Liga / Suíço — use specified roundIndex or last round
+        var _ri = (opts.roundIndex !== undefined) ? opts.roundIndex : (t.rounds.length - 1);
+        var _rnd = t.rounds[_ri] || {};
+        (_rnd.matches || []).forEach(function(m) {
+            if (!m.isSitOut) allMatches.push({ p1: m.p1 || '', p2: m.p2 || '' });
+        });
+    } else if (Array.isArray(t.matches)) {
+        // Eliminatórias / Dupla Elim — round 1 only, skip BYEs
+        t.matches.forEach(function(m) {
+            if (m.round === 1 && !m.isBye && !m.isSitOut && (m.p1 || m.p2)) {
+                allMatches.push({ p1: m.p1 || '', p2: m.p2 || '' });
+            }
+        });
+    }
+
+    if (!allMatches.length) return;
+
+    // ── Build matchLines for email (Jogo N: P1 vs P2) ───────────────────
+    var matchLines = allMatches.map(function(m, i) {
+        var prefix = m.groupName ? (m.groupName + ' · Jogo ' + (i + 1)) : ('Jogo ' + (i + 1));
+        return prefix + ': ' + (m.p1 || '?') + ' vs ' + (m.p2 || '?');
+    });
+
+    // ── Check if playerName appears in a match side (handles "A / B" teams) ──
+    var _isInSide = function(playerName, side) {
+        if (!playerName || !side) return false;
+        var pn = playerName.trim().toLowerCase();
+        return side.split(' / ').some(function(s) { return s.trim().toLowerCase() === pn; });
+    };
+
+    // ── Format date for WhatsApp text ────────────────────────────────────
+    var _fmtDate = function(d) {
+        try { var dt = new Date(d); return isNaN(dt) ? d : dt.toLocaleDateString('pt-BR'); } catch(e) { return d; }
+    };
+
+    // ── Notification labels per type ────────────────────────────────────
+    var _isNewRound = (notifType === 'new_round');
+    var notifIcon = _isNewRound ? '🔄' : '🎲';
+    var notifTitle = (_isNewRound ? '🔄 Nova Rodada: ' : '🎲 Chaveamento: ') + tName;
+    var baseMsg = _isNewRound
+        ? 'Uma nova rodada foi gerada no torneio ' + tName + '.'
+        : 'O chaveamento do torneio ' + tName + ' foi gerado.';
+    var ctaText = _isNewRound ? 'Ver rodada' : 'Ver chaveamento';
+
+    // ── Notify each participant individually ─────────────────────────────
+    var parts = Array.isArray(t.participants)
+        ? t.participants
+        : (t.participants ? Object.values(t.participants) : []);
+
+    for (var _pi = 0; _pi < parts.length; _pi++) {
+        var p = parts[_pi];
+        if (typeof p === 'string') continue;
+        var uid = p.uid;
+        if (!uid) continue;
+        var pName = p.displayName || p.name || '';
+        if (!pName) continue;
+
+        // Find this player's match
+        var playerMatch = null;
+        var playerMatchNum = 0;
+        for (var _mi = 0; _mi < allMatches.length; _mi++) {
+            var am = allMatches[_mi];
+            if (_isInSide(pName, am.p1) || _isInSide(pName, am.p2)) {
+                playerMatch = am;
+                playerMatchNum = _mi + 1;
+                break;
+            }
+        }
+
+        // Personalized plain-text (WhatsApp)
+        var msg = baseMsg;
+        if (playerMatch && playerMatchNum) {
+            var _gmatch = playerMatch.groupName ? (' (' + playerMatch.groupName + ')') : '';
+            msg = notifIcon + ' ' + (_isNewRound ? 'Nova rodada no torneio' : 'Chaveamento do torneio') +
+                ' ' + tName + '!' +
+                '\n\nSeu Jogo ' + playerMatchNum + _gmatch + ': ' + playerMatch.p1 + ' vs ' + playerMatch.p2 +
+                (venue ? '\n📍 ' + venue : '') +
+                (startDate ? '\n📅 ' + _fmtDate(startDate) : '');
+        }
+
+        try {
+            await window._sendUserNotification(uid, {
+                type: notifType,
+                level: 'fundamental',
+                title: notifTitle,
+                message: msg,
+                tournamentId: _tId,
+                tournamentName: tName,
+                ctaUrl: tUrl,
+                ctaText: ctaText,
+                matchLines: matchLines,
+                playerMatch: playerMatch || undefined,
+                playerMatchNum: playerMatchNum || 0,
+                playerName: pName,
+                venue: venue,
+                startDate: startDate
+            });
+        } catch(e) {
+            console.warn('[notifyDrawPersonalized] uid=' + uid, e);
+        }
+    }
+};
 
 })();

@@ -1773,15 +1773,9 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId) {
     var _newMatchCount = (_newRound && _newRound.matches || []).filter(function(m) { return !m.isSitOut; }).length;
     showNotification(_t('bui.newRound'), _t('bui.newRoundMsg', { n: t.rounds.length, count: _newMatchCount }), 'success');
 
-    // Notify all participants about the new round
-    if (typeof window._notifyTournamentParticipants === 'function') {
-      window._notifyTournamentParticipants(t, {
-        type: 'new_round',
-        level: 'important',
-        title: _t('bui.newRoundTitle', {n: t.rounds.length, name: t.name || 'Torneio'}),
-        message: _t('bui.newRoundNotifMsg', {n: _newMatchCount}),
-        tournamentId: tId
-      });
+    // Notify all participants — personalized per recipient (shows their match)
+    if (typeof window._notifyDrawPersonalized === 'function') {
+      window._notifyDrawPersonalized(t, tId, { type: 'new_round', roundIndex: t.rounds.length - 1 });
     }
   }
 
@@ -2654,15 +2648,9 @@ async function _fireLigaAutoDraw(t, scheduledTime) {
 
     window.AppStore.logAction(t.id, 'Rodada ' + t.rounds.length + ' gerada automaticamente com ' + newMatchCount + ' partida(s)');
 
-    if (typeof window._notifyTournamentParticipants === 'function') {
-      var _tFn2 = window._t || function(k, v) { return v && v.n ? v.n : k; };
-      window._notifyTournamentParticipants(t, {
-        type: 'new_round',
-        level: 'important',
-        title: _tFn2('bui.newRoundTitle', { n: t.rounds.length, name: t.name || 'Torneio' }) || ((t.name || 'Torneio') + ' — Rodada ' + t.rounds.length),
-        message: _tFn2('bui.newRoundNotifMsg', { n: newMatchCount }) || ('Nova rodada gerada automaticamente com ' + newMatchCount + ' partida(s).'),
-        tournamentId: t.id
-      });
+    // Notify all participants — personalized per recipient
+    if (typeof window._notifyDrawPersonalized === 'function') {
+      window._notifyDrawPersonalized(t, t.id, { type: 'new_round', roundIndex: t.rounds.length - 1 });
     }
   }
 

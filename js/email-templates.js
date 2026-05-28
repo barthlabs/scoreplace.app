@@ -112,6 +112,56 @@
         '<b>Alterações:</b><br>' + _messageToHtml(data.changes) + '</div>';
     } else if (type === 'tournament_finished' && data.champion) {
       extra += '<p style="margin:16px 0 0;font-size:1rem;">🏆 <b>' + _escape(data.champion) + '</b> é o campeão!</p>';
+    } else if (type === 'draw' || type === 'new_round') {
+      // Rich draw block: player's match highlighted + full match list
+      var _drawLines = Array.isArray(data.matchLines) ? data.matchLines : [];
+      var _pmNum = data.playerMatchNum || 0;
+      var _pName = data.playerName || '';
+      var _pm = data.playerMatch || null;
+
+      // Venue + date meta line
+      var _metaParts = [];
+      if (data.venue) _metaParts.push('📍 ' + _escape(data.venue));
+      if (data.startDate) {
+        try {
+          var _sd = new Date(data.startDate);
+          if (!isNaN(_sd)) _metaParts.push('📅 ' + _sd.toLocaleDateString('pt-BR'));
+        } catch(e) {}
+      }
+      if (_metaParts.length) {
+        extra += '<p style="margin:0 0 14px;font-size:0.88rem;color:' + MUTED_COLOR + ';">' + _metaParts.join(' &nbsp;·&nbsp; ') + '</p>';
+      }
+
+      // Highlighted "seu jogo" block
+      if (_pm && _pmNum) {
+        var _mp1 = _escape(_pm.p1 || '');
+        var _mp2 = _escape(_pm.p2 || '');
+        if (_pName) {
+          var _epn = _escape(_pName);
+          _mp1 = _mp1.split(_epn).join('<b>' + _epn + ' (você)</b>');
+          _mp2 = _mp2.split(_epn).join('<b>' + _epn + ' (você)</b>');
+        }
+        extra += '<div style="margin-bottom:14px;padding:14px 16px;background:rgba(59,130,246,0.15);border-left:3px solid ' + BRAND_COLOR + ';border-radius:6px;">' +
+          '<p style="margin:0 0 5px;font-size:0.78rem;color:' + MUTED_COLOR + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">Seu Jogo ' + _pmNum + '</p>' +
+          '<p style="margin:0;font-size:1.05rem;font-weight:600;color:#f3f4f6;">' + _mp1 +
+            ' <span style="color:' + MUTED_COLOR + ';font-weight:400;"> vs </span>' + _mp2 + '</p>' +
+        '</div>';
+      }
+
+      // All matches in round
+      if (_drawLines.length > 0) {
+        var _allRows = _drawLines.reduce(function(acc, line, i) {
+          var isMe = (_pmNum === i + 1);
+          var rowStyle = isMe
+            ? 'padding:8px 10px;border-radius:5px;margin-bottom:3px;background:rgba(59,130,246,0.08);font-weight:600;font-size:0.88rem;color:#f3f4f6;'
+            : 'padding:8px 10px;border-radius:5px;margin-bottom:3px;font-size:0.88rem;color:#d1d5db;';
+          return acc + '<div style="' + rowStyle + '">' + _escape(line) + '</div>';
+        }, '');
+        extra += '<div style="margin-top:6px;">' +
+          '<p style="margin:0 0 6px;font-size:0.78rem;color:' + MUTED_COLOR + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">Todos os Jogos da Rodada</p>' +
+          _allRows +
+        '</div>';
+      }
     }
 
     var ctaText = data.ctaText || (data.tournamentUrl ? 'Ver no scoreplace.app' : '');

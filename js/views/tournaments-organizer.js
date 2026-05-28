@@ -150,10 +150,17 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         // (skip when called from _notifyTournamentParticipants which does batch dispatch)
         if (!_skipDispatch && (email || phone) && typeof window._dispatchChannels === 'function') {
             var tUrl = notifData.tournamentId ? 'https://scoreplace.app/#tournaments/' + notifData.tournamentId : 'https://scoreplace.app';
+            // v1.8.1-beta: pass ALL notifData fields so rich email templates
+            // can access player1/player2/score1/score2/matchLines/playerMatch etc.
+            var _tplData = Object.assign({}, notifData);
+            delete _tplData.level; // local-only filter, not needed in template
+            _tplData.tournamentUrl = _tplData.tournamentUrl || tUrl;
+            _tplData.subject = 'scoreplace.app — ' + (notifData.tournamentName || 'Notificação');
+            if (!_tplData.message) _tplData.message = '';
             window._dispatchChannels(
                 { emails: email ? [email] : [], phones: phone ? [phone] : [] },
                 notifData.type || 'info',
-                { tournamentName: notifData.tournamentName || '', tournamentUrl: tUrl, subject: 'scoreplace.app — ' + (notifData.tournamentName || 'Notificação'), message: notifData.message || '' }
+                _tplData
             );
         }
 
@@ -224,12 +231,13 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
     var channelResult = { emails: allEmails, phones: allPhones };
     if ((allEmails.length > 0 || allPhones.length > 0) && typeof window._dispatchChannels === 'function') {
         var tUrl = 'https://scoreplace.app/#tournaments/' + String(t.id);
-        window._dispatchChannels(channelResult, nd.type || 'info', {
-            tournamentName: t.name || '',
-            tournamentUrl: tUrl,
-            subject: 'scoreplace.app — ' + (t.name || 'Notificação'),
-            message: nd.message || ''
-        });
+        // v1.8.1-beta: pass all nd fields so rich email templates receive full payload
+        var _tplData = Object.assign({}, nd);
+        delete _tplData.level;
+        _tplData.tournamentUrl = _tplData.tournamentUrl || tUrl;
+        _tplData.subject = 'scoreplace.app — ' + (t.name || 'Notificação');
+        if (!_tplData.message) _tplData.message = '';
+        window._dispatchChannels(channelResult, nd.type || 'info', _tplData);
     }
 
     return channelResult;
