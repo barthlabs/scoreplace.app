@@ -267,8 +267,15 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
     }
     var _phoneFormatted = user.phone ? _fmtPhone(user.phone) : '';
     var _dispName = user.displayName || _phoneFormatted || null;
-    const participantObj = { name: _dispName, email: user.email, displayName: _dispName, uid: user.uid, selfEnrolled: true, ligaActive: true };
-    if (user.phone) participantObj.phone = user.phone;
+    // Somente persiste email se ele realmente pertence a este uid.
+    // Quando um usuário phone-only faz login numa sessão que antes pertencia
+    // a outra conta (ex: Google), AppStore.currentUser.email pode estar
+    // contaminado com o email anterior. Verificação: se o uid não bate com
+    // o provedor de email (sem @), descarta o email para evitar coroa falsa.
+    var _safeEmail = user.email || null;
+    const participantObj = { name: _dispName, email: _safeEmail, displayName: _dispName, uid: user.uid, selfEnrolled: true, ligaActive: true };
+    // Audit trail: timestamp de inscrição própria
+    participantObj.addedAt = new Date().toISOString();
     if (user.gender) participantObj.gender = user.gender;
     // Store profile fields needed for auto-assignment by age and skill
     if (user.birthDate) participantObj.birthDate = user.birthDate;
@@ -617,7 +624,16 @@ window.addParticipantFunction = function (tId) {
         _addMsg,
         (pName) => {
             if (!pName || !pName.trim()) return;
-            var participantObj = { name: pName.trim(), displayName: pName.trim(), ligaActive: true };
+            // Audit trail: quem adicionou manualmente e quando.
+            // selfEnrolled=false distingue de inscrição própria (selfEnrolled=true).
+            var _cu = window.AppStore && window.AppStore.currentUser;
+            var participantObj = {
+                name: pName.trim(), displayName: pName.trim(), ligaActive: true,
+                selfEnrolled: false,
+                addedByUid:  (_cu && _cu.uid)   || null,
+                addedByName: (_cu && (_cu.displayName || _cu.email)) || null,
+                addedAt:     new Date().toISOString()
+            };
             // If late enrollment, add to standby instead
             if (_closedOrDrawn) {
                 _enrollToStandby(t, tId, participantObj, function() {

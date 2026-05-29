@@ -1777,9 +1777,16 @@ function renderTournaments(container, tournamentId = null) {
                         const _pSeed = encodeURIComponent(pName);
                         const _pPhoto = (window._playerPhotoCache && window._playerPhotoCache[pName.toLowerCase()] && window._playerPhotoCache[pName.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[pName.toLowerCase()] : 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                         const _pFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-                        // Crown detection (moved before building HTML so it can be inline)
+                        // Crown detection: uid é mais confiável que email.
+                        // Quando o participante tem uid, exige que bata com creatorUid.
+                        // Fallback para email só quando não há uid (inscrições legadas).
+                        // Evita coroa falsa quando email do organizador foi gravado
+                        // por engano num participante phone-only (contaminação de sessão).
+                        var _pUid   = typeof p === 'object' ? (p.uid   || '') : '';
                         var _pEmail = typeof p === 'object' ? (p.email || '') : '';
-                        var _isOrgParticipant = !!_orgEmails[_pEmail];
+                        var _isOrgParticipant = _pUid
+                          ? (_pUid === (t.creatorUid || '') || !!_orgEmails[_pEmail] && _pUid === (t.creatorUid || ''))
+                          : !!_orgEmails[_pEmail];
                         var _crownInline = _isOrgParticipant ? ' <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M2 20h20v2H2zM4 17l2-9 4 4 2-6 2 6 4-4 2 9z"/></svg>' : '';
                         pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhoto}" onerror="this.onerror=null;this.src='${_pFallback}'" data-player-name="${window._safeHtml(pName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;" title="${window._safeHtml(pName)}">${window._safeHtml(pName)}</span>${_crownInline}</div>`;
                     }
