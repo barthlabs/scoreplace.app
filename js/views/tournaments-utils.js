@@ -13,6 +13,8 @@ window._mergeDragData = null;
 
 // ── Core merge logic (reusable) ──
 window._executeMerge = function(sourceName, targetName, tId) {
+    // Guard: null/undefined source ou target nunca deve disparar merge
+    if (!sourceName || !targetName) return;
     if (sourceName === targetName) return;
     if (!tId) return;
 
@@ -249,6 +251,26 @@ window._initMergeTouchDrag = function(tId) {
             _touchClone.style.left = (touch.clientX - _touchClone.offsetWidth / 2) + 'px';
             _touchClone.style.top = (touch.clientY - _touchClone.offsetHeight / 2) + 'px';
 
+            // Auto-scroll quando o dedo chega perto das bordas superior/inferior
+            // da viewport — permite arrastar participantes para fora do viewport.
+            var EDGE = 90; // px da borda que ativa o scroll
+            var cy = touch.clientY;
+            var vh = window.innerHeight;
+            if (cy < EDGE) {
+                // Próximo da borda superior → scroll para cima
+                var speed = Math.round(10 * (1 - cy / EDGE));
+                window.scrollBy({ top: -speed, behavior: 'instant' });
+                // Também tenta scroll do container pai (view-container)
+                var vc = document.getElementById('view-container');
+                if (vc) vc.scrollTop -= speed;
+            } else if (cy > vh - EDGE) {
+                // Próximo da borda inferior → scroll para baixo
+                var speed2 = Math.round(10 * ((cy - (vh - EDGE)) / EDGE));
+                window.scrollBy({ top: speed2, behavior: 'instant' });
+                var vc2 = document.getElementById('view-container');
+                if (vc2) vc2.scrollTop += speed2;
+            }
+
             // Highlight drop target
             var targetCard = _findCardAt(touch.clientX, touch.clientY);
             container.querySelectorAll('[data-merge-name],.participant-card').forEach(function(c) {
@@ -268,11 +290,18 @@ window._initMergeTouchDrag = function(tId) {
             var targetCard = _findCardAt(touch.clientX, touch.clientY);
             var targetName = targetCard ? _getCardName(targetCard) : null;
 
+            // CRÍTICO: salvar sourceName ANTES de _resetAll() zerar _touchSourceName.
+            // Bug anterior: _resetAll() era chamado primeiro → _touchSourceName virava
+            // null → _executeMerge(null, targetName) → "merge com null" / dialog errado.
+            var sourceName = _touchSourceName;
             _resetAll();
 
-            if (targetName && targetName !== _touchSourceName) {
-                window._executeMerge(_touchSourceName, targetName, tId);
+            // Só executa merge se há source e target distintos
+            if (sourceName && targetName && targetName !== sourceName) {
+                window._executeMerge(sourceName, targetName, tId);
             }
+            // Se targetName === sourceName ou null: usuário soltou no mesmo card
+            // ou fora — não faz nada (comportamento correto).
         }, { passive: true });
 
         container.addEventListener('touchcancel', function() {
