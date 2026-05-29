@@ -84,8 +84,29 @@ window._resolveOrganizerUid = async function(t) {
  * @param {string} uid - target user UID
  * @param {object} notifData - { type, message, tournamentId, tournamentName, level ('fundamental'|'important'|'all') }
  */
+// v1.8.17-beta: dedup em memória para _sendUserNotification. Previne que a
+// mesma notificação (type + tournamentId) chegue ao mesmo uid múltiplas vezes
+// em rápida sucessão (race entre _doEnrollCurrentUser e _tryAutoEnroll, ou
+// entre enrollment_new e enrollments_closed quando auto-close ocorre).
+// Window de 30s: suficiente pra cobrir qualquer race sem suprimir notificações
+// legítimas de eventos separados.
+var _notifDedup = {};
+function _notifDedupKey(uid, type, tId) { return uid + '|' + type + '|' + (tId || ''); }
+function _notifDedupCheck(uid, type, tId) {
+    var key = _notifDedupKey(uid, type, tId);
+    var now = Date.now();
+    if (_notifDedup[key] && now - _notifDedup[key] < 30000) return true;
+    _notifDedup[key] = now;
+    return false;
+}
+
 window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     if (!window.FirestoreDB || !window.FirestoreDB.db || !uid) return;
+    // Dedup guard: mesma notificação pro mesmo uid dentro de 30s é silenciada.
+    if (_notifDedupCheck(uid, notifData.type || '', notifData.tournamentId || '')) {
+        window._log('[notif] dedup suprimiu', notifData.type, 'para uid', uid.substring(0, 8) + '...');
+        return;
+    }
     // v0.17.8: defesa contra self-notification. cu.friends pode conter o
     // próprio uid em casos edge (auto-friendship via bugs históricos ou
     // email que resolve pra si mesmo). Notif pra si mesmo é sempre noise —
@@ -196,13 +217,20 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
         else if (e && !u && !seenEmails[e]) { seenEmails[e] = true; recipients.push({ uid: '', email: e }); }
     });
 
-    // Also notify organizer if not excluded and not already in list
+    // Also notify organizer if not excluded and not already in list.
+    // v1.8.17-beta: bug fix — dedup anterior usava `(!orgUid && seenEmails[email])`
+    // que só checava o email quando orgUid estava vazio. Quando o organizador é
+    // participante (adicionado via email sem uid) E tem creatorUid no torneio,
+    // `seenEmails` marcava o email mas a dedup ignorava (por causa do `!orgUid`).
+    // Resultado: organizador entrava na lista 2x e recebia 2 notifs de fechamento.
+    // Fix: checar seenEmails independentemente de orgUid.
     if (t.organizerEmail && t.organizerEmail !== excludeEmail) {
         var orgUid = t.creatorUid || '';
-        var orgAlready = (orgUid && seenUids[orgUid]) || (!orgUid && seenEmails[t.organizerEmail]);
+        var orgAlready = (orgUid && seenUids[orgUid]) || seenEmails[t.organizerEmail];
         if (!orgAlready) {
             recipients.push({ uid: orgUid, email: t.organizerEmail });
             if (orgUid) seenUids[orgUid] = true;
+            seenEmails[t.organizerEmail] = true;
         }
     }
 

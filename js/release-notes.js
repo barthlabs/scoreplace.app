@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🐛 v1.8.18-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Maio, 2026)</span></div>' +
+      '<p><b>Correções: Participante X no torneio + notificações duplas + máscara de celular no login.</b><br><br>' +
+      '<b>Bug 1 — Participante N:</b> usuários autenticados apenas por celular (sem e-mail e sem displayName no Firebase) apareciam como "Participante 3", "Participante 8" etc. nos inscritos. Correção em 3 camadas: (1) <code>_pName()</code> agora inclui <code>p.phone</code> como fallback; (2) inscrição via <code>_doEnrollCurrentUser</code> persiste <code>phone</code> no objeto do participante; (3) dois render sites em <code>tournaments.js</code> que usavam fallback inline agora passam por <code>_pName()</code>.<br><br>' +
+      '<b>Bug 2 — Notificações duplicadas:</b> organizador recebia 2–3 notificações por inscrição em vez de 1. Causa: (a) em <code>_notifyTournamentParticipants</code>, o dedup do organizador falhava quando ele estava inscrito como participante sem uid — condição <code>!orgUid &&</code> impedia checar <code>seenEmails</code> quando <code>creatorUid</code> existia; (b) race entre <code>_doEnrollCurrentUser</code> e <code>_tryAutoEnroll</code>. Correção: dedup agora verifica <code>seenEmails</code> independente de orgUid existir. Adicionado guard de dedup global em <code>_sendUserNotification</code> (30s por tipo+torneio+uid).<br><br>' +
+      '<b>Login — máscara de celular:</b> ao digitar apenas números, o campo formata automaticamente como <code>(11) 91693-6454</code>. Detecção de celular agora dispara com DDD + 1 dígito (antes exigia 8). Título do bloco "Entrar com 1 clique" quebrado em 2 linhas. Se o usuário digitar @ em qualquer momento, reverte para modo e-mail.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🔐 v1.8.16-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Maio, 2026)</span></div>' +
       '<p><b>Tela de login redesenhada — blocos diferenciados + exclusão mútua + botões verdes.</b><br><br>' +
       '3 blocos visualmente distintos: <b>Entrar com 1 clique</b> (fundo cyan) · <b>E-mail e Senha</b> (fundo índigo) · <b>Google</b>. ' +

@@ -1617,7 +1617,7 @@ function renderTournaments(container, tournamentId = null) {
                 const _woHistCI = (t.woHistory && typeof t.woHistory === 'object') ? t.woHistory : {};
                 const allIndividuals = [];
                 parts.forEach((p, idx) => {
-                    const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || 'Participante ' + (idx + 1));
+                    const pName = typeof p === 'string' ? p : (window._pName(p) || 'Participante ' + (idx + 1));
                     if (pName.includes('/')) {
                         // Find which team this person belongs to
                         pName.split('/').map(n => n.trim()).filter(n => n).forEach(n => {
@@ -1742,7 +1742,7 @@ function renderTournaments(container, tournamentId = null) {
                     // Use original index in parts array for drag operations
                     var idx = parts.indexOf(p);
                     if (idx === -1) idx = sortedIdx;
-                    const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || 'Participante ' + (sortedIdx + 1));
+                    const pName = typeof p === 'string' ? p : (window._pName(p) || 'Participante ' + (sortedIdx + 1));
                     const isTeam = pName.includes('/');
                     const isVip = !!_vipMap[pName];
                     const safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");

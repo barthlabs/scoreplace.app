@@ -854,28 +854,52 @@ function _tryLinkPendingCredential(result) {
 //   - ambíguo → erro com instrução clara
 // Notação SMS comunicada de forma explícita via placeholder + helper text
 // dinâmico — usuário vê 🇧🇷 +55 (DDI) ao lado do que digitou (DDD + número).
+// v1.8.17-beta: máscara de telefone BR — formata dígitos progressivamente
+// conforme o usuário digita: (DDD) 9XXXX-XXXX ou (DDD) XXXX-XXXX
+function _maskBRPhone(digits) {
+  var d = String(digits || '').replace(/\D/g, '');
+  if (d.length === 0) return '';
+  if (d.length <= 2) return '(' + d;
+  if (d.length <= 6) return '(' + d.substring(0, 2) + ') ' + d.substring(2);
+  if (d.length <= 10) return '(' + d.substring(0, 2) + ') ' + d.substring(2, 6) + '-' + d.substring(6);
+  return '(' + d.substring(0, 2) + ') ' + d.substring(2, 7) + '-' + d.substring(7, 11);
+}
+
 function _detectInputModeRaw(value) {
   if (!value) return null;
   var v = String(value).trim();
   if (v.indexOf('@') !== -1) return 'email';
-  // Conta dígitos pra distinguir telefone (8-15 dígitos = E.164 válido) de
-  // string ambígua. Aceita pontuação comum: parênteses, espaços, traços, +.
+  // Se contém letras, é início de e-mail sem @ — aguardar digitação do @.
+  if (/[a-zA-Z]/.test(v)) return null;
   var digits = v.replace(/\D/g, '');
-  if (digits.length >= 8 && digits.length <= 15) return 'phone';
+  // v1.8.17-beta: threshold reduzido de 8 para 3 dígitos — detecta celular
+  // assim que DDD (2 dígitos) + 1º dígito do número são digitados (ex: 119).
+  // Sem letras = certamente tentativa de celular, não e-mail incompleto.
+  if (digits.length >= 3 && digits.length <= 15) return 'phone';
   return null;
 }
 
 window._detectLoginInputMode = function() {
-  // v1.0.31-beta: DDI volta a ser dinâmico — só aparece quando phone
-  // detectado (pra não induzir usuário a achar que campo é só pra
-  // telefone). Estado inicial neutro: input + botão (2 colunas).
-  // Phone detectado: DDI aparece à esquerda (3 colunas auto 1fr auto).
   var unifiedEl = document.getElementById('login-unified');
   var countryEl = document.getElementById('login-unified-country');
   var helperEl = document.getElementById('login-unified-helper');
   var rowEl = document.getElementById('login-unified-row');
   if (!unifiedEl) return;
   var mode = _detectInputModeRaw(unifiedEl.value);
+
+  // v1.8.17-beta: aplicar máscara de telefone BR progressivamente
+  if (mode === 'phone') {
+    var rawDigits = unifiedEl.value.replace(/\D/g, '');
+    var masked = _maskBRPhone(rawDigits);
+    if (unifiedEl.value !== masked) unifiedEl.value = masked;
+    unifiedEl.dataset.rawPhone = rawDigits;
+  } else if (unifiedEl.dataset && unifiedEl.dataset.rawPhone) {
+    // Saiu do modo phone (voltou a 2 dígitos ou digitou @) — mostra raw digits
+    var cleanDigits = unifiedEl.value.replace(/\D/g, '');
+    if (cleanDigits !== unifiedEl.value.trim()) unifiedEl.value = cleanDigits;
+    delete unifiedEl.dataset.rawPhone;
+  }
+
   if (countryEl) countryEl.style.display = (mode === 'phone') ? '' : 'none';
   if (rowEl) rowEl.style.gridTemplateColumns = (mode === 'phone') ? 'auto 1fr auto' : '1fr auto';
   if (helperEl) {
@@ -985,7 +1009,9 @@ window.handleUnifiedLogin = function() {
     var phoneEl = document.getElementById('login-phone');
     var unifiedCountry = document.getElementById('login-unified-country');
     var hiddenCountry = document.getElementById('login-phone-country');
-    if (phoneEl) phoneEl.value = raw;
+    // v1.8.17-beta: se máscara foi aplicada, usar dígitos puros (sem parênteses
+    // e traços) para o handler de SMS que concatena com o DDI do país.
+    if (phoneEl) phoneEl.value = (unifiedEl.dataset && unifiedEl.dataset.rawPhone) || raw.replace(/\D/g, '');
     // Sincroniza country code do dropdown visível pro hidden input
     // (handlePhoneLogin lê de login-phone-country).
     if (unifiedCountry && hiddenCountry) hiddenCountry.value = unifiedCountry.value;
@@ -3134,7 +3160,10 @@ function setupLoginModal() {
           // delegam pros handlers existentes (handleEmailLinkLogin /
           // handlePhoneLogin) sem duplicar lógica.
           '<div id="login-unified-step" style="margin-bottom:4px;background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.22);border-radius:12px;padding:14px 14px 10px 14px;transition:opacity 0.2s;">' +
-            '<div style="font-size:0.9rem;font-weight:700;color:#22d3ee;margin-bottom:8px;">✉️📱 Entrar com 1 clique <span style="font-size:0.72rem;font-weight:400;color:var(--text-muted);">(seu@email.com ou 11 9999-8888)</span></div>' +
+            '<div style="margin-bottom:10px;">' +
+              '<div style="font-size:0.9rem;font-weight:700;color:#22d3ee;line-height:1.3;">✉️📱 Entrar com 1 clique</div>' +
+              '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">(seu@email.com  ou  11 9999-8888)</div>' +
+            '</div>' +
             '<form novalidate onsubmit="event.preventDefault(); handleUnifiedLogin();">' +
               // v1.0.31-beta: DDI volta a ser oculto no estado inicial (UX
               // da v1.0.27-beta). User clarificou: "ja aparecer direto a

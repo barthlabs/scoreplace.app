@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.16-beta';
+window.SCOREPLACE_VERSION = '1.8.18-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -969,7 +969,11 @@ window._pName = function(p, fallback) {
   var fb = (fallback !== undefined && fallback !== null) ? fallback : '';
   if (!p) return fb;
   if (typeof p === 'string') return p;
-  return p.displayName || p.name || p.email || fb;
+  // v1.8.16-beta: inclui p.phone como fallback — usuários phone-only (Firebase
+  // phone auth) não têm displayName nem email; sem esse fallback aparecem como
+  // "Participante N" em qualquer render site que não usa _pName diretamente.
+  var phone = p.phone ? String(p.phone) : '';
+  return p.displayName || p.name || p.email || phone || fb;
 };
 
 // v1.8.9-beta: participant avatar HTML — photo with initial fallback

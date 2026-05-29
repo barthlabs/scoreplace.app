@@ -251,7 +251,13 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
         catsArr = [selectedCategories];
     }
 
-    const participantObj = { name: user.displayName, email: user.email, displayName: user.displayName, uid: user.uid, selfEnrolled: true, ligaActive: true };
+    // v1.8.17-beta: usuários phone-only (Firebase phone auth) têm displayName=null
+    // e email=null. Sem fallback para phone, o nome fica null no Firestore e a
+    // UI mostra "Participante N" em qualquer render que use o índice do array.
+    // Persiste phone para que _pName() possa mostrá-lo como identificador.
+    var _dispName = user.displayName || user.phone || null;
+    const participantObj = { name: _dispName, email: user.email, displayName: _dispName, uid: user.uid, selfEnrolled: true, ligaActive: true };
+    if (user.phone) participantObj.phone = user.phone;
     if (user.gender) participantObj.gender = user.gender;
     // Store profile fields needed for auto-assignment by age and skill
     if (user.birthDate) participantObj.birthDate = user.birthDate;
