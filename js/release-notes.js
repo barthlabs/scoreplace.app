@@ -9,6 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🔐 v1.8.16-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Maio, 2026)</span></div>' +
+      '<p><b>Tela de login redesenhada — blocos diferenciados + exclusão mútua + botões verdes.</b><br><br>' +
+      '3 blocos visualmente distintos: <b>Entrar com 1 clique</b> (fundo cyan) · <b>E-mail e Senha</b> (fundo índigo) · <b>Google</b>. ' +
+      'Ao digitar em um bloco, o outro fica desabilitado (opacity reduzida) e volta ao normal ao apagar. ' +
+      'Botão <b>Enviar</b> fica verde quando o campo tem e-mail ou celular válido; botão <b>Entrar</b> fica verde quando e-mail + senha (≥6 chars) estão preenchidos. ' +
+      'Label dinâmico: depois de digitar o e-mail, o campo de senha mostra o próprio e-mail como identificador — fica claro de qual conta é a senha. ' +
+      'Divisores "ou" maiores e em negrito. Links "Criar conta" e "Esqueci a senha" com fonte maior.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧹 v1.8.15-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Maio, 2026)</span></div>' +
       '<p><b>Remoção de 25 funções mortas em 11 arquivos.</b><br><br>' +
       'Segunda leva de cleanup de código morto: 25 funções <code>window._*</code> confirmadas sem nenhum caller foram removidas de <code>auth.js</code>, <code>bracket-ui.js</code>, <code>venues.js</code>, <code>presence.js</code>, <code>create-tournament.js</code>, <code>venue-owner.js</code>, <code>main.js</code>, <code>explore.js</code>, <code>trophies-view.js</code>, <code>arbitros.js</code> e <code>tournaments-draw-prep.js</code>. Inclui wrappers de compat legados, no-ops explícitos e funções de UI substituídas por implementações mais recentes. Zero impacto funcional.</p>' +

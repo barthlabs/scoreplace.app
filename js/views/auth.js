@@ -888,6 +888,84 @@ window._detectLoginInputMode = function() {
       helperEl.innerHTML = 'Aceita <b>e-mail</b> (recebe link mágico) ou <b>celular com DDD</b> (recebe SMS com código). Pra celular, o seletor de país aparece automaticamente — padrão 🇧🇷 +55.';
     }
   }
+  // Botão Enviar fica verde quando há valor válido no campo
+  var enviarBtn = document.getElementById('btn-enviar-magic');
+  if (enviarBtn) {
+    var isValid = (mode === 'email' || mode === 'phone');
+    enviarBtn.style.background = isValid ? 'linear-gradient(135deg,#10b981,#059669)' : '';
+    enviarBtn.style.borderColor = isValid ? '#059669' : '';
+  }
+  // Exclusão mútua: bloco "E-mail e Senha" fica desbilitado enquanto este tem conteúdo
+  if (typeof window._loginMutualExclude === 'function') window._loginMutualExclude();
+};
+
+// Exclusão mútua entre os blocos de login. Quando um bloco tem conteúdo,
+// o outro fica com opacity reduzida e pointer-events desativado. Ao apagar
+// tudo do bloco ativo, o outro volta ao normal.
+window._loginMutualExclude = function() {
+  var unifiedEl = document.getElementById('login-unified');
+  var loginEmailEl = document.getElementById('login-email');
+  var loginPassEl = document.getElementById('login-password');
+  var regNameEl = document.getElementById('register-name');
+  var regEmailEl = document.getElementById('register-email');
+  var regPassEl = document.getElementById('register-password');
+  var block1 = document.getElementById('login-unified-step');
+  var block2 = document.getElementById('login-block-email');
+  var hasBlock1 = !!(unifiedEl && unifiedEl.value.trim().length > 0);
+  var hasBlock2 = !!(
+    (loginEmailEl && loginEmailEl.value.trim().length > 0) ||
+    (loginPassEl && loginPassEl.value.length > 0) ||
+    (regNameEl && regNameEl.value.trim().length > 0) ||
+    (regEmailEl && regEmailEl.value.trim().length > 0) ||
+    (regPassEl && regPassEl.value.length > 0)
+  );
+  if (block1) {
+    block1.style.opacity = hasBlock2 ? '0.4' : '1';
+    block1.style.pointerEvents = hasBlock2 ? 'none' : '';
+  }
+  if (block2) {
+    block2.style.opacity = hasBlock1 ? '0.4' : '1';
+    block2.style.pointerEvents = hasBlock1 ? 'none' : '';
+  }
+};
+
+// Valida o bloco "E-mail e Senha": atualiza o label dinâmico da senha
+// (mostra o e-mail digitado como identificador) e torna o botão verde
+// quando ambos os campos têm valores válidos.
+window._updateEmailSenhaValidity = function() {
+  var emailEl = document.getElementById('login-email');
+  var passEl = document.getElementById('login-password');
+  var passLabelEl = document.getElementById('login-senha-label');
+  var entrarBtn = document.getElementById('btn-email-entrar');
+  var email = emailEl ? emailEl.value.trim() : '';
+  var pass = passEl ? passEl.value : '';
+  var emailValid = email.indexOf('@') !== -1 && email.length > 4;
+  var passValid = pass.length >= 6;
+  // Label dinâmico: mostra o e-mail digitado pra o usuário saber de qual conta é a senha
+  if (passLabelEl) {
+    if (emailValid) {
+      passLabelEl.textContent = email;
+      passLabelEl.style.color = 'var(--text-bright)';
+      passLabelEl.style.fontWeight = '700';
+    } else {
+      passLabelEl.textContent = 'Senha';
+      passLabelEl.style.color = 'var(--text-muted)';
+      passLabelEl.style.fontWeight = '400';
+    }
+  }
+  // Botão Entrar fica verde quando ambos válidos
+  if (entrarBtn) {
+    if (emailValid && passValid) {
+      entrarBtn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
+      entrarBtn.style.borderColor = '#059669';
+      entrarBtn.style.color = '#fff';
+    } else {
+      entrarBtn.style.background = '';
+      entrarBtn.style.borderColor = '';
+      entrarBtn.style.color = '';
+    }
+  }
+  if (typeof window._loginMutualExclude === 'function') window._loginMutualExclude();
 };
 
 window.handleUnifiedLogin = function() {
@@ -3055,8 +3133,8 @@ function setupLoginModal() {
           // O DDI dropdown só aparece quando phone detectado. Hidden inputs
           // delegam pros handlers existentes (handleEmailLinkLogin /
           // handlePhoneLogin) sem duplicar lógica.
-          '<div id="login-unified-step" style="margin-bottom:4px;">' +
-            '<div style="font-size:0.78rem;font-weight:600;color:var(--text-bright);margin-bottom:6px;">✉️📱 Entrar com 1 clique</div>' +
+          '<div id="login-unified-step" style="margin-bottom:4px;background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.22);border-radius:12px;padding:14px 14px 10px 14px;transition:opacity 0.2s;">' +
+            '<div style="font-size:0.9rem;font-weight:700;color:#22d3ee;margin-bottom:8px;">✉️📱 Entrar com 1 clique <span style="font-size:0.72rem;font-weight:400;color:var(--text-muted);">(seu@email.com ou 11 9999-8888)</span></div>' +
             '<form novalidate onsubmit="event.preventDefault(); handleUnifiedLogin();">' +
               // v1.0.31-beta: DDI volta a ser oculto no estado inicial (UX
               // da v1.0.27-beta). User clarificou: "ja aparecer direto a
@@ -3073,7 +3151,7 @@ function setupLoginModal() {
                   }).join('') : '<option value="55">🇧🇷 +55</option>') +
                 '</select>' +
                 '<input type="text" id="login-unified" class="form-control" placeholder="seu@email.com  ou  11 99999-8888" required autocomplete="off" oninput="window._detectLoginInputMode && window._detectLoginInputMode()" style="width:100%;min-width:0;box-sizing:border-box;font-size:0.92rem;padding:11px 12px;">' +
-                '<button type="submit" class="btn btn-primary" style="font-size:0.78rem;white-space:nowrap;padding:9px 14px;font-weight:700;width:auto;justify-self:end;">Enviar</button>' +
+                '<button type="submit" id="btn-enviar-magic" class="btn btn-primary" style="font-size:0.82rem;white-space:nowrap;padding:9px 16px;font-weight:700;width:auto;justify-self:end;transition:background 0.2s,border-color 0.2s;">Enviar</button>' +
               '</div>' +
               '<div id="login-unified-helper" style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.4;">' +
                 'Aceita <b>e-mail</b> (recebe link mágico) ou <b>celular com DDD</b> (recebe SMS com código). Pra celular, o seletor de país aparece automaticamente — padrão 🇧🇷 +55.' +
@@ -3109,43 +3187,45 @@ function setupLoginModal() {
           '<div id="login-panel-phone" style="display:none;"></div>' +
 
           // --- Divider ---
-          '<div style="display:flex;align-items:center;gap:12px;margin:12px 0;">' +
+          '<div style="display:flex;align-items:center;gap:12px;margin:14px 0;">' +
             '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
-            '<span style="color:var(--text-muted);font-size:0.7rem;">ou</span>' +
+            '<span style="color:var(--text-muted);font-size:1rem;font-weight:700;letter-spacing:1px;">ou</span>' +
             '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
           '</div>' +
 
           // --- 3. E-mail e Senha ---
-          '<div style="margin-bottom:4px;">' +
-            '<div style="font-size:0.78rem;font-weight:600;color:var(--text-bright);margin-bottom:6px;">🔑 E-mail e Senha</div>' +
+          '<div id="login-block-email" style="margin-bottom:4px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:14px 14px 10px 14px;transition:opacity 0.2s;">' +
+            '<div style="font-size:0.9rem;font-weight:700;color:#a5b4fc;margin-bottom:8px;">🔑 E-mail e Senha</div>' +
             '<div id="email-login-mode" style="display:block;">' +
               '<form id="form-login" novalidate onsubmit="event.preventDefault(); handleEmailLogin();">' +
-                '<div style="margin-bottom:6px;">' +
-                  '<input type="email" id="login-email" class="form-control" placeholder="seu@email.com" required style="font-size:0.85rem;">' +
+                '<div style="margin-bottom:8px;">' +
+                  '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:3px;">E-mail <span style="font-style:italic;font-size:0.72rem;">(seu@email.com)</span></div>' +
+                  '<input type="email" id="login-email" class="form-control" placeholder="seu@email.com" required autocomplete="email" style="font-size:0.88rem;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
                 '</div>' +
-                '<div style="margin-bottom:6px;">' +
-                  '<input type="password" id="login-password" class="form-control" placeholder="Senha" required minlength="6" style="font-size:0.85rem;">' +
+                '<div style="margin-bottom:8px;">' +
+                  '<div id="login-senha-label" style="font-size:0.78rem;color:var(--text-muted);margin-bottom:3px;font-weight:400;transition:color 0.2s;">Senha</div>' +
+                  '<input type="password" id="login-password" class="form-control" placeholder="" required minlength="6" autocomplete="current-password" style="font-size:0.88rem;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
                 '</div>' +
                 '<div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;">' +
-                  '<button type="submit" class="btn btn-secondary" style="font-size:0.8rem;white-space:nowrap;padding:8px 14px;">Entrar</button>' +
+                  '<button type="submit" id="btn-email-entrar" class="btn btn-secondary" style="font-size:0.85rem;white-space:nowrap;padding:8px 16px;transition:background 0.2s,border-color 0.2s,color 0.2s;">Entrar</button>' +
                 '</div>' +
               '</form>' +
-              '<div style="text-align:center;margin-top:6px;font-size:0.75rem;">' +
-                '<a href="#" onclick="event.preventDefault();toggleEmailMode(\'register\')" style="color:var(--primary-color);font-weight:600;">Criar conta</a>' +
+              '<div style="text-align:center;margin-top:10px;font-size:0.88rem;">' +
+                '<a href="#" onclick="event.preventDefault();toggleEmailMode(\'register\')" style="color:var(--primary-color);font-weight:700;">Criar conta</a>' +
                 '<span style="color:var(--text-muted);margin:0 8px;">|</span>' +
-                '<a href="#" onclick="event.preventDefault();handlePasswordReset()" style="color:var(--text-muted);">Esqueci a senha</a>' +
+                '<a href="#" onclick="event.preventDefault();handlePasswordReset()" style="color:var(--text-muted);font-weight:500;">Esqueci a senha</a>' +
               '</div>' +
             '</div>' +
             '<div id="email-register-mode" style="display:none;">' +
               '<form id="form-register" novalidate onsubmit="event.preventDefault(); handleEmailRegister();">' +
                 '<div style="margin-bottom:6px;">' +
-                  '<input type="text" id="register-name" class="form-control" placeholder="Seu nome" required style="font-size:0.85rem;">' +
+                  '<input type="text" id="register-name" class="form-control" placeholder="Seu nome" required style="font-size:0.88rem;" oninput="window._loginMutualExclude && window._loginMutualExclude()">' +
                 '</div>' +
                 '<div style="margin-bottom:6px;">' +
-                  '<input type="email" id="register-email" class="form-control" placeholder="seu@email.com" required style="font-size:0.85rem;">' +
+                  '<input type="email" id="register-email" class="form-control" placeholder="seu@email.com" required style="font-size:0.88rem;" oninput="window._loginMutualExclude && window._loginMutualExclude()">' +
                 '</div>' +
                 '<div style="margin-bottom:6px;">' +
-                  '<input type="password" id="register-password" class="form-control" placeholder="Senha (min. 6)" required minlength="6" style="font-size:0.85rem;">' +
+                  '<input type="password" id="register-password" class="form-control" placeholder="Senha (mín. 6)" required minlength="6" style="font-size:0.88rem;" oninput="window._loginMutualExclude && window._loginMutualExclude()">' +
                 '</div>' +
                 '<div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;">' +
                   '<button type="submit" class="btn btn-primary" style="font-size:0.8rem;white-space:nowrap;padding:8px 14px;">Criar Conta</button>' +
@@ -3159,9 +3239,9 @@ function setupLoginModal() {
           '<div id="login-panel-email" style="display:none;"></div>' +
 
           // --- Divider ---
-          '<div style="display:flex;align-items:center;gap:12px;margin:12px 0;">' +
+          '<div style="display:flex;align-items:center;gap:12px;margin:14px 0;">' +
             '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
-            '<span style="color:var(--text-muted);font-size:0.7rem;">ou</span>' +
+            '<span style="color:var(--text-muted);font-size:1rem;font-weight:700;letter-spacing:1px;">ou</span>' +
             '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
           '</div>' +
 
