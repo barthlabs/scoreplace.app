@@ -4125,15 +4125,15 @@ window._repairNullIdentityParticipants = async function() {
   var cu = window.AppStore.currentUser;
   if (!cu) return 0;
 
-  // Formata telefone E.164 (ex: +5511916936454) → "+55 (11) 91693-6454"
-  function _phoneDisplayFull(raw) {
+  // Formata telefone → "+55 (DDD) XXXXX-XXXX" (DDI sempre presente no BD).
+  function _phoneRawDigits(raw) {
     if (!raw) return '';
-    var digits = String(raw).replace(/\D/g, '');
-    // Strip country code 55 (Brasil) se presente
-    if (digits.length > 11 && digits.substring(0, 2) === '55') digits = digits.substring(2);
-    if (digits.length > 11) digits = digits.substring(digits.length - 11);
-    var local = (typeof window._maskBRPhone === 'function') ? window._maskBRPhone(digits) : digits;
-    return '+55 ' + local;
+    var d = String(raw).replace(/\D/g, '');
+    if (d.length > 11 && d.substring(0, 2) === '55') d = d.substring(2);
+    if (d.length > 11) d = d.substring(d.length - 11);
+    if (d.length === 11) return '+55 (' + d.substring(0,2) + ') ' + d.substring(2,7) + '-' + d.substring(7);
+    if (d.length === 10) return '+55 (' + d.substring(0,2) + ') ' + d.substring(2,6) + '-' + d.substring(6);
+    return raw;
   }
 
   // Coletar uid → [{t, idx}] de participantes sem nome
@@ -4178,8 +4178,9 @@ window._repairNullIdentityParticipants = async function() {
   uids.forEach(function(uid) {
     var profile = profileMap[uid];
     if (!profile) return;
-    // Melhor identificador: displayName > email > telefone formatado
-    var identifier = profile.displayName || profile.email || _phoneDisplayFull(profile.phone);
+    // Melhor identificador: displayName > email > dígitos do telefone (sem máscara)
+    // A máscara é aplicada ao exibir por _pNameDisplay() em store.js.
+    var identifier = profile.displayName || profile.email || _phoneRawDigits(profile.phone);
     if (!identifier) return;
 
     needsFix[uid].forEach(function(entry) {

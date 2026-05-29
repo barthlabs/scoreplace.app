@@ -251,11 +251,22 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
         catsArr = [selectedCategories];
     }
 
-    // v1.8.17-beta: usuários phone-only (Firebase phone auth) têm displayName=null
-    // e email=null. Sem fallback para phone, o nome fica null no Firestore e a
-    // UI mostra "Participante N" em qualquer render que use o índice do array.
-    // Persiste phone para que _pName() possa mostrá-lo como identificador.
-    var _dispName = user.displayName || user.phone || null;
+    // v1.8.20-beta: usuários phone-only têm displayName=null e email=null.
+    // Telefone guardado como dígitos puros (sem +55, sem máscara) — ex: 11916936454.
+    // _pNameDisplay() em store.js aplica a máscara (11) XXXXX-XXXX ao exibir.
+    // v1.8.20-beta: para phone-only auth, formata "+55 (DDD) XXXXX-XXXX" como nome.
+    // O DDI é obrigatório tanto no BD quanto na exibição.
+    function _fmtPhone(ph) {
+      if (!ph) return '';
+      var d = String(ph).replace(/\D/g, '');
+      if (d.length > 11 && d.substring(0, 2) === '55') d = d.substring(2);
+      if (d.length > 11) d = d.substring(d.length - 11);
+      if (d.length === 11) return '+55 (' + d.substring(0,2) + ') ' + d.substring(2,7) + '-' + d.substring(7);
+      if (d.length === 10) return '+55 (' + d.substring(0,2) + ') ' + d.substring(2,6) + '-' + d.substring(6);
+      return ph;
+    }
+    var _phoneFormatted = user.phone ? _fmtPhone(user.phone) : '';
+    var _dispName = user.displayName || _phoneFormatted || null;
     const participantObj = { name: _dispName, email: user.email, displayName: _dispName, uid: user.uid, selfEnrolled: true, ligaActive: true };
     if (user.phone) participantObj.phone = user.phone;
     if (user.gender) participantObj.gender = user.gender;

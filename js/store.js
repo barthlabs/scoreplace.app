@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.19-beta';
+window.SCOREPLACE_VERSION = '1.8.21-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -965,15 +965,40 @@ window._friendlyDisplayName = function(u) {
 // p can be: a plain string, or an object with displayName/name/email fields
 // (the two shapes stored in t.participants[], t.matches[].p1/p2, etc.).
 // fallback defaults to '' when omitted.
+// v1.8.20-beta: formata para display um valor bruto do campo nome.
+// Padrão canônico no BD desde v1.8.20: "+55 (DDD) XXXXX-XXXX".
+// Esta função também lida com formas legadas que possam ter escapado:
+//   - E.164 bruto: "+5511916936454" → formata
+//   - Dígitos puros: "11916936454" → adiciona +55 e máscara
+//   - Já formatado: "+55 (11) 91693-6454" → retorna como está
+function _pNameDisplay(raw) {
+  if (!raw) return raw;
+  var s = String(raw).trim();
+  // Já formatado com DDI e máscara
+  if (/^\+\d{1,3}\s\(\d{2}\)\s\d{4,5}-\d{4}$/.test(s)) return s;
+  // E.164 bruto sem espaços/máscara (ex: +5511916936454)
+  if (/^\+55\d{10,11}$/.test(s)) {
+    var local = s.replace(/\D/g, '').substring(2);
+    if (local.length === 11) return '+55 (' + local.substring(0,2) + ') ' + local.substring(2,7) + '-' + local.substring(7);
+    return '+55 (' + local.substring(0,2) + ') ' + local.substring(2,6) + '-' + local.substring(6);
+  }
+  // Dígitos puros BR (legado)
+  if (/^\d{10,11}$/.test(s)) {
+    if (s.length === 11) return '+55 (' + s.substring(0,2) + ') ' + s.substring(2,7) + '-' + s.substring(7);
+    return '+55 (' + s.substring(0,2) + ') ' + s.substring(2,6) + '-' + s.substring(6);
+  }
+  return s;
+}
+
 window._pName = function(p, fallback) {
   var fb = (fallback !== undefined && fallback !== null) ? fallback : '';
   if (!p) return fb;
-  if (typeof p === 'string') return p;
-  // v1.8.16-beta: inclui p.phone como fallback — usuários phone-only (Firebase
-  // phone auth) não têm displayName nem email; sem esse fallback aparecem como
-  // "Participante N" em qualquer render site que não usa _pName diretamente.
-  var phone = p.phone ? String(p.phone) : '';
-  return p.displayName || p.name || p.email || phone || fb;
+  if (typeof p === 'string') return _pNameDisplay(p) || fb;
+  // Prioridade: displayName > name > email > phone (todos passam por _pNameDisplay)
+  var raw = p.displayName || p.name || p.email
+         || (p.phone ? String(p.phone) : '')
+         || fb;
+  return _pNameDisplay(raw) || fb;
 };
 
 // v1.8.9-beta: participant avatar HTML — photo with initial fallback
