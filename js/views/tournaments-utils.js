@@ -596,6 +596,8 @@ window._calcNextDrawDate = function(t) {
 
 // Navigate to tournament detail and scroll to highlight the enrolled participant
 window._scrollToParticipant = function(tId, participantName) {
+    // Guard: participantName pode ser null para inscritos sem nome (phone-only)
+    if (!participantName) return;
     window.location.hash = '#tournaments/' + tId;
     // Wait for render, then scroll to the participant card
     var _attempts = 0;
