@@ -856,7 +856,8 @@ function _tryLinkPendingCredential(result) {
 // dinâmico — usuário vê 🇧🇷 +55 (DDI) ao lado do que digitou (DDD + número).
 // v1.8.17-beta: máscara de telefone BR — formata dígitos progressivamente
 // conforme o usuário digita: (DDD) 9XXXX-XXXX ou (DDD) XXXX-XXXX
-function _maskBRPhone(digits) {
+// Exposto como window._ para uso em _repairNullIdentityParticipants e outros.
+window._maskBRPhone = function _maskBRPhone(digits) {
   var d = String(digits || '').replace(/\D/g, '');
   if (d.length === 0) return '';
   if (d.length <= 2) return '(' + d;
@@ -3844,6 +3845,12 @@ window._autoFixStaleNames = async function(forceTournamentId) {
   }
   window._autoFixStaleNames._lastRun = now;
 
+  // v1.8.19-beta: reparar participantes sem nome (phone-only auth) PRIMEIRO,
+  // antes do restante do fix de nomes obsoletos.
+  if (typeof window._repairNullIdentityParticipants === 'function') {
+    await window._repairNullIdentityParticipants();
+  }
+
   var tournamentsToScan = forceTournamentId
     ? window.AppStore.tournaments.filter(function(t) { return t.id === forceTournamentId; })
     : window.AppStore.tournaments;
@@ -4101,6 +4108,119 @@ window._autoFixStaleNames = async function(forceTournamentId) {
   } else {
     window._debug('[AutoFixNames] All names up to date');
   }
+};
+
+// ─── Repair null-identity participants (phone-only Firebase auth) ──────────
+// Participantes que se inscreveram por celular (sem e-mail, sem displayName)
+// ficam com name/displayName/email = null no Firestore e aparecem como
+// "Participante N" na UI. Esta função:
+//   1. Encontra participantes com uid mas sem nenhum identificador textual
+//   2. Busca o perfil em users/{uid}
+//   3. Atualiza com email (preferência) ou telefone formatado "+55 (DDD) XXXXX-XXXX"
+//   4. Salva os torneios afetados e propaga o nome em matches/brackets
+// Chamada automaticamente por _autoFixStaleNames na carga de dados.
+window._repairNullIdentityParticipants = async function() {
+  if (!window.AppStore || !Array.isArray(window.AppStore.tournaments)) return 0;
+  if (!window.FirestoreDB || !window.FirestoreDB.db) return 0;
+  var cu = window.AppStore.currentUser;
+  if (!cu) return 0;
+
+  // Formata telefone E.164 (ex: +5511916936454) → "+55 (11) 91693-6454"
+  function _phoneDisplayFull(raw) {
+    if (!raw) return '';
+    var digits = String(raw).replace(/\D/g, '');
+    // Strip country code 55 (Brasil) se presente
+    if (digits.length > 11 && digits.substring(0, 2) === '55') digits = digits.substring(2);
+    if (digits.length > 11) digits = digits.substring(digits.length - 11);
+    var local = (typeof window._maskBRPhone === 'function') ? window._maskBRPhone(digits) : digits;
+    return '+55 ' + local;
+  }
+
+  // Coletar uid → [{t, idx}] de participantes sem nome
+  var needsFix = {}; // uid → [{t, idx}]
+  window.AppStore.tournaments.forEach(function(t) {
+    var parts = Array.isArray(t.participants) ? t.participants : [];
+    parts.forEach(function(p, idx) {
+      if (typeof p !== 'object' || !p || !p.uid) return;
+      if (p.displayName || p.name || p.email) return; // já tem identificador
+      if (!needsFix[p.uid]) needsFix[p.uid] = [];
+      needsFix[p.uid].push({ t: t, idx: idx });
+    });
+  });
+
+  var uids = Object.keys(needsFix);
+  if (uids.length === 0) return 0;
+  window._log('[RepairNullIdentity] ' + uids.length + ' participante(s) sem nome encontrado(s)');
+
+  // Buscar perfis em lotes de 10
+  var profileMap = {};
+  try {
+    for (var i = 0; i < uids.length; i += 10) {
+      var batch = uids.slice(i, i + 10);
+      var snap = await window.FirestoreDB.db.collection('users')
+        .where(firebase.firestore.FieldPath.documentId(), 'in', batch).get();
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        profileMap[doc.id] = {
+          displayName: d.displayName || '',
+          email: d.email || '',
+          phone: d.phone || ''
+        };
+      });
+    }
+  } catch(e) {
+    window._warn('[RepairNullIdentity] Erro ao buscar perfis:', e);
+    return 0;
+  }
+
+  var modifiedTournaments = new Set();
+  var repairCount = 0;
+  uids.forEach(function(uid) {
+    var profile = profileMap[uid];
+    if (!profile) return;
+    // Melhor identificador: displayName > email > telefone formatado
+    var identifier = profile.displayName || profile.email || _phoneDisplayFull(profile.phone);
+    if (!identifier) return;
+
+    needsFix[uid].forEach(function(entry) {
+      var p = entry.t.participants[entry.idx];
+      if (typeof p !== 'object' || !p) return;
+      p.displayName = identifier;
+      p.name = identifier;
+      if (!p.email && profile.email) p.email = profile.email;
+      if (!p.phone && profile.phone) p.phone = profile.phone;
+      modifiedTournaments.add(entry.t);
+      repairCount++;
+      window._log('[RepairNullIdentity] uid=' + uid.substring(0, 8) + '... → "' + identifier + '"');
+    });
+  });
+
+  if (modifiedTournaments.size === 0) return 0;
+
+  // Salvar somente torneios onde o usuário é organizador (tem permissão Firestore)
+  var saved = 0;
+  modifiedTournaments.forEach(function(t) {
+    var canWrite = (t.organizerEmail && cu.email && t.organizerEmail === cu.email) ||
+                   (t.creatorUid && cu.uid && t.creatorUid === cu.uid) ||
+                   (Array.isArray(t.coHosts) && t.coHosts.some(function(ch) {
+                     return ch.status === 'active' && (ch.uid === cu.uid || ch.email === cu.email);
+                   }));
+    if (!canWrite) return;
+    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+      window.FirestoreDB.saveTournament(t).catch(function(e) {
+        window._warn('[RepairNullIdentity] Erro ao salvar torneio', t.id, e);
+      });
+      saved++;
+    }
+  });
+
+  window._log('[RepairNullIdentity] ' + repairCount + ' participante(s) corrigido(s) em ' + saved + ' torneio(s) salvo(s)');
+  if (saved > 0) {
+    setTimeout(function() {
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }, 800);
+  }
+  return repairCount;
 };
 
 // ─── Propagate displayName change across all tournaments ─────────────────

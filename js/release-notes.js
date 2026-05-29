@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🔧 v1.8.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Maio, 2026)</span></div>' +
+      '<p><b>Reparo automático de participantes sem nome na base de dados.</b><br><br>' +
+      'A nova função <code>_repairNullIdentityParticipants()</code> é chamada automaticamente ao carregar o app. Ela encontra participantes inscritos em torneios que têm uid mas nenhum identificador textual (displayName, name ou email = null — caso de auth por celular), busca o perfil em <code>users/{uid}</code> e atualiza com o <b>e-mail</b> (preferência) ou o <b>telefone formatado</b> (<code>+55 (DDD) XXXXX-XXXX</code>) como nome de apresentação. A correção é persistida no Firestore e refletida imediatamente em toda a interface — lista de inscritos, chaveamento, check-in, dashboard, explorar. Só salva torneios onde o usuário logado é organizador ou co-organizador (respeitando as permissões do Firestore).</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🐛 v1.8.18-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Maio, 2026)</span></div>' +
       '<p><b>Correções: Participante X no torneio + notificações duplas + máscara de celular no login.</b><br><br>' +
       '<b>Bug 1 — Participante N:</b> usuários autenticados apenas por celular (sem e-mail e sem displayName no Firebase) apareciam como "Participante 3", "Participante 8" etc. nos inscritos. Correção em 3 camadas: (1) <code>_pName()</code> agora inclui <code>p.phone</code> como fallback; (2) inscrição via <code>_doEnrollCurrentUser</code> persiste <code>phone</code> no objeto do participante; (3) dois render sites em <code>tournaments.js</code> que usavam fallback inline agora passam por <code>_pName()</code>.<br><br>' +
