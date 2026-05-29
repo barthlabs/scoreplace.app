@@ -374,11 +374,19 @@ window._updateTopbarForUser = function(user) {
     // Defensive guard: evita TypeError se auth.js ainda não terminou de
     // carregar durante transição de SW ou race de cache parcial.
     btnLogin.setAttribute('onclick', 'if(typeof window._onProfileBtnClick==="function") window._onProfileBtnClick(event)');
+    // Indicador de carregamento: se _profileLoaded ainda não é true, mostrar
+    // spinner sutil ao lado do nome — previne cliques prematuros que abririam
+    // modal de login para usuário já autenticado mas com AppStore ainda carregando.
+    var _profileLoading = !(cu && cu._profileLoaded);
+    var _loadingIndicator = _profileLoading
+      ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgba(251,191,36,0.7);margin-left:4px;animation:pulseDot 1s infinite;" title="Carregando perfil…"></span>'
+      : '';
     btnLogin.innerHTML =
       '<div style="display:flex; align-items:center; justify-content:center; gap:8px;" title="Meu Perfil">' +
         '<img src="' + _sh(photoUrl) + '" style="width:32px; height:32px; border-radius:50%; border: 2px solid var(--primary-color); object-fit:cover;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
         '<div style="display:none;width:32px;height:32px;border-radius:50%;background:var(--primary-color);color:white;align-items:center;justify-content:center;font-size:0.85rem;flex-shrink:0;">👤</div>' +
         '<span class="user-name-label" style="font-weight:600; font-size:1rem;">' + _sh(displayFirstName) + '</span>' +
+        _loadingIndicator +
       '</div>' +
       '<div title="Sair da Conta" class="logoff-btn" style="color: var(--danger-color); margin-left: 8px; display:flex; align-items:center; cursor:pointer; opacity: 0.8;" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.8\'">' +
         '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>' +
@@ -2437,6 +2445,20 @@ async function simulateLoginSuccess(user) {
     window.AppStore.startProfileListener();
   }
 
+  // Quando perfil carregar: remover dot de carregamento da topbar e re-renderizar botão
+  // Ouvinte único — remove-se após disparar pra não acumular listeners entre logins.
+  (function() {
+    function _onProfileLoaded(evt) {
+      document.removeEventListener('scoreplace:profile-loaded', _onProfileLoaded);
+      var cu = window.AppStore && window.AppStore.currentUser;
+      if (cu && typeof window._updateTopbarForUser === 'function') {
+        var fbU = window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
+        if (fbU) window._updateTopbarForUser(fbU);
+      }
+    }
+    document.addEventListener('scoreplace:profile-loaded', _onProfileLoaded);
+  })();
+
   // Check tournament reminders and nearby tournaments (delayed to let data load)
   setTimeout(function() {
     // Auto-detect and fix stale participant names in tournaments
@@ -2498,13 +2520,17 @@ async function simulateLoginSuccess(user) {
   // `onclick` attributes but NOT addEventListener listeners — hence inline wiring.
   window._onProfileBtnClick = function(e) {
     try {
+      // Clique no botão de logout (→) — sempre faz logout
       if (e && e.target && e.target.closest && e.target.closest('[title="Sair da Conta"]')) {
         e.stopPropagation();
         if (typeof window._closeHamburger === 'function') window._closeHamburger();
         handleLogout();
         return;
       }
-      // Close hamburger before opening modal (avoids stacking focus trap issues)
+      // Clique na área do perfil (avatar/nome)
+      // Se já está na página de perfil, não fazer nada — evita re-render desnecessário
+      var currentHash = (window.location.hash || '').replace('#', '').split('/')[0];
+      if (currentHash === 'profile') return;
       if (typeof window._closeHamburger === 'function') window._closeHamburger();
       window._openMyProfileModal();
     } catch (err) { window._warn('_onProfileBtnClick error', err); }
@@ -2698,8 +2724,26 @@ async function simulateLoginSuccess(user) {
   // scrollável. Compat: _openMyProfileModal e _showProfileModal redirecionam
   // pra hash #profile pra preservar todos os call-sites antigos.
   window._openMyProfileModal = function () {
+    // Se já está na página de perfil, não fazer nada
+    if ((window.location.hash || '').replace('#','').split('/')[0] === 'profile') return;
     var cu = window.AppStore && window.AppStore.currentUser;
-    if (!cu) { if (typeof openModal === 'function') openModal('modal-login'); return; }
+    if (!cu) {
+      // Sem sessão — verificar se está em andamento (perfil carregando)
+      var fbUser = window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
+      if (fbUser) {
+        // Firebase confirma sessão ativa mas AppStore ainda carregando — aguardar
+        // em vez de abrir modal de login (evita abrir login para quem já está logado)
+        var _waitForProfile = setInterval(function() {
+          var cu2 = window.AppStore && window.AppStore.currentUser;
+          if (cu2) { clearInterval(_waitForProfile); window.location.hash = '#profile'; }
+        }, 150);
+        setTimeout(function() { clearInterval(_waitForProfile); }, 5000);
+        return;
+      }
+      // Realmente sem sessão → abrir login
+      if (typeof openModal === 'function') openModal('modal-login');
+      return;
+    }
     window.location.hash = '#profile';
   };
   window._showProfileModal = window._openMyProfileModal;

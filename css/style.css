@@ -515,6 +515,12 @@ body, .topbar, .card {
   100% { transform: translateX(100%); }
 }
 
+/* Dot pulsante na topbar enquanto perfil carrega */
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
 /* Respeita reduced-motion: usuários com prefers-reduced-motion não veem
    a animação shimmer, só o background sólido — comunica loading sem irritar. */
 @media (prefers-reduced-motion: reduce) {
