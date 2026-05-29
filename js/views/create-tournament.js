@@ -3625,6 +3625,31 @@ function setupCreateTournamentModal() {
           tourData.ligaSeasonMonths = null;
         }
 
+        // Limpar campos exclusivos de Liga quando o formato NÃO é Liga.
+        // Sem isso, ao editar um torneio que já foi Liga e mudar o formato,
+        // drawFirstDate/drawIntervalDays etc. ficam no Firestore e o display
+        // mostra "1º Sorteio" e "Intervalo" em torneios que não são mais Liga.
+        if (formatValue !== 'liga') {
+          tourData.drawFirstDate = null;
+          tourData.drawFirstTime = null;
+          tourData.drawIntervalDays = null;
+          tourData.drawManual = null;
+          tourData.ligaRoundFormat = null;
+          tourData.ligaNewPlayerScore = null;
+          tourData.ligaInactivity = null;
+          tourData.ligaInactivityX = null;
+          tourData.ligaOpenEnrollment = null;
+          tourData.ligaSeasonMonths = null;
+          tourData.temporada = null;
+          tourData.equilibrado = null;
+          tourData.clusterSize = null;
+          tourData.balanceBy = null;
+        }
+        // Limpar campos exclusivos de Suíço quando não é Suíço
+        if (formatValue !== 'suico') {
+          tourData.swissRounds = null;
+        }
+
         // Eliminatórias
         if (formatValue === 'elim_simples' || formatValue === 'elim_dupla' || formatValue === 'grupos_mata') {
           tourData.elimThirdPlace = true;

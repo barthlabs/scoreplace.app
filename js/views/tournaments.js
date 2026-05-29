@@ -1325,8 +1325,8 @@ function renderTournaments(container, tournamentId = null) {
                     }
                     return _seasonInfo + '</div>';
                   })() : ''}
-                  ${(t.drawFirstDate) ? `<div><strong>1º Sorteio:</strong> ${(() => { try { var _dd = t.drawFirstDate.split('-'); return _dd[2] + '/' + _dd[1] + '/' + _dd[0]; } catch(e) { return t.drawFirstDate; } })()} às ${t.drawFirstTime || '19:00'}</div>` : ''}
-                  ${(t.drawIntervalDays) ? `<div><strong>Intervalo:</strong> ${t.drawManual ? 'Manual' : 'A cada ' + t.drawIntervalDays + ' dia' + (t.drawIntervalDays > 1 ? 's' : '') + ' (automático)'}</div>` : ''}
+                  ${(window._isLigaFormat(t) && t.drawFirstDate) ? `<div><strong>1º Sorteio:</strong> ${(() => { try { var _dd = t.drawFirstDate.split('-'); return _dd[2] + '/' + _dd[1] + '/' + _dd[0]; } catch(e) { return t.drawFirstDate; } })()} às ${t.drawFirstTime || '19:00'}</div>` : ''}
+                  ${(window._isLigaFormat(t) && t.drawIntervalDays) ? `<div><strong>Intervalo:</strong> ${t.drawManual ? 'Manual' : 'A cada ' + t.drawIntervalDays + ' dia' + (t.drawIntervalDays > 1 ? 's' : '') + ' (automático)'}</div>` : ''}
                   ${(!t.combinedCategories || t.combinedCategories.length === 0) ? `<div><strong>Categorias:</strong> ${cats}</div>` : ''}
                </div>
             </div>
