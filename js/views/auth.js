@@ -844,6 +844,32 @@ function _tryLinkPendingCredential(result) {
   });
 }
 
+// ─── Identidade verificada do usuário atual (LGPD guard) ────────────────────
+// Retorna apenas campos CONFIRMADOS pelo Firebase Auth para o uid ativo.
+// Usar em toda operação que persiste dados de identidade no Firestore
+// (inscrições, presenças, notificações) para evitar contaminação cruzada.
+// NUNCA usar AppStore.currentUser.email diretamente — sempre usar esta função.
+window._verifiedCurrentUser = function() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid) return null;
+  // Fonte da verdade: Firebase Auth
+  var fbUser = window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
+  if (!fbUser) return cu; // sem Firebase (offline/mock), confia no AppStore
+  // Se o uid não bate, a sessão está contaminada — não liberar dados pessoais
+  if (fbUser.uid !== cu.uid) {
+    window._warn('[LGPD] _verifiedCurrentUser: uid mismatch Firebase=' + fbUser.uid + ' AppStore=' + cu.uid + ' — retornando só uid Firebase');
+    return { uid: fbUser.uid, email: fbUser.email || null, displayName: fbUser.displayName || null, photoURL: fbUser.photoURL || null, phone: fbUser.phoneNumber || null };
+  }
+  // uid bate: complementar com dados do AppStore (tem campos extras do perfil)
+  // mas sobrescrever email com o do Firebase Auth (ground truth)
+  return Object.assign({}, cu, {
+    email: fbUser.email || null,          // Firebase Auth é a fonte da verdade para email
+    displayName: fbUser.displayName || cu.displayName || null,
+    photoURL: fbUser.photoURL || cu.photoURL || null,
+    phone: fbUser.phoneNumber || cu.phone || null
+  });
+};
+
 // ─── Unified Login Input (email magic link OR SMS) ──────────────────────────
 // v1.0.22-beta: feedback do user — ter dois campos (Link Mágico e SMS) com
 // dois "Enviar" estava confundindo. Botão verde do SMS parecia mais
@@ -1997,17 +2023,30 @@ async function simulateLoginSuccess(user) {
   // Agora flag carrega timestamp da entrada. >10s = stale (deixa passar).
   var now = Date.now();
   var inProgressAt = window._simulateLoginInProgressAt || 0;
+  var inProgressUid = window._simulateLoginInProgressUid || '';
   var STALE_MS = 10000; // 10s
+  var newUid = user && user.uid;
   window._log('[scoreplace-auth] simulateLoginSuccess called for', user && user.email,
     'inProgressAt:', inProgressAt, 'staleAfter:', STALE_MS + 'ms', 'isStale:', (now - inProgressAt) > STALE_MS);
   if (inProgressAt && (now - inProgressAt) <= STALE_MS) {
-    window._log('[scoreplace-auth] simulateLoginSuccess: skipping — fresh in-progress (' + (now - inProgressAt) + 'ms ago)');
-    return;
+    // LGPD GUARD: o guard de 10s só é válido para a MESMA conta.
+    // Se chegar um uid diferente enquanto outro login está em andamento,
+    // limpar imediatamente o currentUser e deixar passar — impede que dados
+    // da conta anterior contaminem ações do novo usuário.
+    if (inProgressUid && newUid && inProgressUid !== newUid) {
+      window._warn('[scoreplace-auth] uid diferente durante login ativo — limpando currentUser para prevenir contaminação de dados (LGPD)');
+      window.AppStore.currentUser = null;
+      // Não retornar — deixa prosseguir com o novo usuário
+    } else {
+      window._log('[scoreplace-auth] simulateLoginSuccess: skipping — fresh in-progress (' + (now - inProgressAt) + 'ms ago)');
+      return;
+    }
   }
-  if (inProgressAt) {
+  if (inProgressAt && inProgressUid === newUid) {
     window._warn('[scoreplace-auth] simulateLoginSuccess: previous attempt stale (' + (now - inProgressAt) + 'ms), proceeding');
   }
   window._simulateLoginInProgressAt = now;
+  window._simulateLoginInProgressUid = newUid || '';
   window._simulateLoginInProgress = true; // mantido pra compat com callers antigos
 
   try {

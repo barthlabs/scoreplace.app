@@ -124,7 +124,10 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         var notifLevel = notifData.level || 'all';
         if (!window._notifLevelAllowed(userLevel, notifLevel)) return;
 
-        var cu = window.AppStore.currentUser || {};
+        // LGPD: identidade de quem envia deve ser verificada contra Firebase Auth
+        var cu = (typeof window._verifiedCurrentUser === 'function')
+          ? (window._verifiedCurrentUser() || {})
+          : (window.AppStore.currentUser || {});
         // Platform notification
         if (profile.notifyPlatform !== false) {
             // v1.6.11-beta: passthrough seguro dos campos custom do notifData.

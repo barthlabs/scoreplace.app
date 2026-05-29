@@ -138,7 +138,8 @@ window.enrollCurrentUser = function (tId) {
         t = fromDiscovery;
       }
     }
-    const user = window.AppStore.currentUser;
+    // LGPD: identidade verificada contra Firebase Auth
+    const user = (typeof window._verifiedCurrentUser === 'function') ? window._verifiedCurrentUser() : window.AppStore.currentUser;
     if (!user) {
         // Save pending enrollment and trigger login
         try { sessionStorage.setItem('_pendingEnrollTournamentId', String(tId)); } catch(e) {}
@@ -240,8 +241,11 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
         t = fromDiscovery;
       }
     }
-    const user = window.AppStore.currentUser;
-    if (!t || !user) return;
+    // LGPD: usar identidade verificada contra Firebase Auth, nunca AppStore diretamente.
+    const user = (typeof window._verifiedCurrentUser === 'function')
+      ? window._verifiedCurrentUser()
+      : window.AppStore.currentUser;
+    if (!t || !user || !user.uid) return;
 
     // Normalize selectedCategories: accept string, array, or null
     var catsArr = null;
@@ -393,7 +397,8 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
 
 window.submitTeamEnroll = function (tId) {
     const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
-    const user = window.AppStore.currentUser;
+    // LGPD: identidade verificada contra Firebase Auth
+    const user = (typeof window._verifiedCurrentUser === 'function') ? window._verifiedCurrentUser() : window.AppStore.currentUser;
     if (!t || !user) return;
 
     // v1.3.24-beta: GUARD — mesma proteção de enrollCurrentUser. Sem uid,
@@ -539,7 +544,8 @@ window.submitTeamEnroll = function (tId) {
 
 window.deenrollCurrentUser = function (tId) {
     const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
-    const user = window.AppStore.currentUser;
+    // LGPD: identidade verificada contra Firebase Auth
+    const user = (typeof window._verifiedCurrentUser === 'function') ? window._verifiedCurrentUser() : window.AppStore.currentUser;
     if (!user) return;
     if (t && t.participants) {
         showConfirmDialog(
