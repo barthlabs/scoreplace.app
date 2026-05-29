@@ -353,7 +353,13 @@ window._updateTopbarForUser = function(user) {
       } else {
         // Chamada antecipada: perfil Firestore ainda não carregou
         var _rawPh = (user.phoneNumber || '').replace(/^\+/, '');
-        displayFirstName = _rawPh || _t('auth.defaultUser');
+        // Formata para exibição com máscara (+55 (DDD) XXXXX-XXXX)
+        if (_rawPh && typeof window._maskBRPhone === 'function') {
+          var _localD = (_rawPh.startsWith('55') && _rawPh.length > 11) ? _rawPh.substring(2) : _rawPh;
+          displayFirstName = '+55 ' + window._maskBRPhone(_localD);
+        } else {
+          displayFirstName = (_rawPh ? '+' + _rawPh : '') || _t('auth.defaultUser');
+        }
       }
     } else {
       displayFirstName = _t('auth.defaultUser');
@@ -2558,7 +2564,36 @@ async function simulateLoginSuccess(user) {
                      : (cu.firstName && cu.lastName ? (cu.firstName + ' ' + cu.lastName) : '')
                      || (cu.email ? cu.email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, function(c){return c.toUpperCase();}) : '')
                      || '';
+    // v1.8.27: se usuário não tem nome amigável, pré-preenche com telefone ou
+    // email formatado pra que o campo nunca apareça em branco — mas adiciona
+    // nudge pedindo para trocar por um nome real.
+    var _isUnfriendly = !_fallbackName;
+    var _nudgeText = '';
+    if (_isUnfriendly) {
+      // Pré-preencher com phone formatado ou email
+      if (cu.phone && typeof window._maskBRPhone === 'function') {
+        var _phD2 = String(cu.phone).replace(/\D/g, '');
+        if (_phD2.length > 11 && _phD2.startsWith('55')) _phD2 = _phD2.substring(2);
+        _fallbackName = '+55 ' + window._maskBRPhone(_phD2);
+        _nudgeText = '📱 Seu nome aparece como número de telefone. Coloque um nome para se apresentar melhor!';
+      } else if (cu.email) {
+        _fallbackName = cu.email;
+        _nudgeText = '✉️ Seu nome aparece como e-mail. Coloque um nome para se apresentar melhor!';
+      }
+    } else if (_dnLooksLikePhone || (cu.displayName && cu.displayName === cu.email)) {
+      _nudgeText = '💡 Adicione um nome amigável para que outros usuários te reconheçam!';
+    }
     _setVal('profile-edit-name', _fallbackName);
+    // Exibir/ocultar nudge abaixo do campo nome
+    var _nudgeEl = document.getElementById('profile-name-nudge');
+    if (_nudgeEl) {
+      if (_nudgeText) {
+        _nudgeEl.textContent = _nudgeText;
+        _nudgeEl.style.display = 'block';
+      } else {
+        _nudgeEl.style.display = 'none';
+      }
+    }
     // v1.0.43-beta: read-only display do email autenticado.
     // v1.7.9-beta: phone-only accounts show add-email input by default.
     var emailDisplay = document.getElementById('profile-email-display');
@@ -4415,13 +4450,16 @@ function setupProfileModal() {
           // avatar agora é sempre derivado do displayName (iniciais geradas
           // automaticamente via dicebear /initials). Foto real do Google/
           // Apple é preservada quando existe.
-          '<div style="display: flex; align-items: center; gap: 14px; margin-bottom: 0.75rem;">' +
-            '<div style="flex-shrink: 0;" title="Foto gerada das iniciais do nome">' +
-              '<img id="profile-avatar" src="" style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid var(--primary-color); object-fit: cover; display: none;">' +
+          '<div style="display: flex; align-items: center; gap: 14px; margin-bottom: 0.5rem;">' +
+            '<div style="flex-shrink: 0; position: relative;" title="Clique para trocar a foto">' +
+              '<img id="profile-avatar" src="" style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid var(--primary-color); object-fit: cover; display: none; cursor: pointer;" onclick="document.getElementById(\'profile-photo-input\').click()">' +
+              '<div id="profile-avatar-edit-icon" style="position:absolute;bottom:0;right:0;width:18px;height:18px;border-radius:50%;background:var(--primary-color);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.6rem;border:2px solid var(--bg-dark);" onclick="document.getElementById(\'profile-photo-input\').click()" title="Trocar foto">✏️</div>' +
+              '<input type="file" id="profile-photo-input" accept="image/*,.gif" style="display:none;" onchange="window._handleProfilePhotoUpload && window._handleProfilePhotoUpload(this)">' +
             '</div>' +
             '<div style="flex: 1; min-width: 0;">' +
               '<label for="profile-edit-name" class="form-label" style="font-size: 0.75rem; margin-bottom: 2px;">' + _t('profile.labelName') + '</label>' +
               '<input type="text" id="profile-edit-name" aria-label="' + _t('profile.labelName') + '" class="form-control" style="width: 100%; box-sizing: border-box;" required oninput="window._refreshProfileAvatarFromName && window._refreshProfileAvatarFromName()">' +
+              '<div id="profile-name-nudge" style="display:none;margin-top:6px;padding:7px 10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;font-size:0.75rem;color:#fbbf24;line-height:1.4;"></div>' +
             '</div>' +
           '</div>' +
           // v1.0.43-beta: display do email autenticado.
@@ -5177,6 +5215,36 @@ function setupProfileModal() {
 
     // Re-renderiza o avatar do perfil enquanto o usuário digita o nome —
     // pra que iniciais reflitam imediatamente o que ele tá editando.
+    // v1.8.27: upload de foto de perfil — abre FileReader, converte para
+    // base64 e atualiza o avatar localmente. O save persiste em Firebase Storage
+    // (quando disponível) ou como base64 no Firestore (fallback).
+    window._handleProfilePhotoUpload = function(input) {
+      if (!input || !input.files || !input.files[0]) return;
+      var file = input.files[0];
+      // Validação: máx 5 MB, apenas imagem
+      if (file.size > 5 * 1024 * 1024) {
+        if (typeof showNotification === 'function') showNotification('Arquivo muito grande', 'Máximo 5 MB para foto de perfil.', 'warning');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var dataUrl = e.target.result;
+        // Atualizar avatar no DOM imediatamente
+        var avatarEl = document.getElementById('profile-avatar');
+        if (avatarEl) avatarEl.src = dataUrl;
+        // Guardar no AppStore para salvar junto com o perfil
+        var cu = window.AppStore && window.AppStore.currentUser;
+        if (cu) {
+          cu.photoURL = dataUrl;
+          cu._pendingPhotoUpload = dataUrl;
+        }
+        if (typeof showNotification === 'function') showNotification('Foto atualizada', 'Clique em Salvar para confirmar.', 'success');
+      };
+      reader.readAsDataURL(file);
+      // Limpar input para permitir reselecionar o mesmo arquivo
+      input.value = '';
+    };
+
     window._refreshProfileAvatarFromName = function() {
       var nameEl = document.getElementById('profile-edit-name');
       var avatarEl = document.getElementById('profile-avatar');

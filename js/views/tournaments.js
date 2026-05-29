@@ -333,9 +333,11 @@ function renderTournaments(container, tournamentId = null) {
                     const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
                     if (t && t.participants) {
                         let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-                        var idx = arr.findIndex(function(p) {
+                        var idx = arr.findIndex(function(p, i) {
                             var name = window._pName(p);
-                            return name === participantName;
+                            if (name) return name === participantName;
+                            // Participante sem nome: match pelo fallback "Participante N"
+                            return ('Participante ' + (i + 1)) === participantName;
                         });
                         if (idx === -1) return;
                         // Capture participant before removing to send notification
@@ -1788,7 +1790,9 @@ function renderTournaments(container, tournamentId = null) {
                           ? (_pUid === (t.creatorUid || '') || !!_orgEmails[_pEmail] && _pUid === (t.creatorUid || ''))
                           : !!_orgEmails[_pEmail];
                         var _crownInline = _isOrgParticipant ? ' <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M2 20h20v2H2zM4 17l2-9 4 4 2-6 2 6 4-4 2 9z"/></svg>' : '';
-                        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhoto}" onerror="this.onerror=null;this.src='${_pFallback}'" data-player-name="${window._safeHtml(pName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;" title="${window._safeHtml(pName)}">${window._safeHtml(pName)}</span>${_crownInline}</div>`;
+                        // Estrela VIP inline ao lado do nome (igual à coroa de organizador)
+                        var _vipInline = isVip ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;margin-left:2px;" title="VIP"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
+                        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhoto}" onerror="this.onerror=null;this.src='${_pFallback}'" data-player-name="${window._safeHtml(pName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;" title="${window._safeHtml(pName)}">${window._safeHtml(pName)}</span>${_crownInline}${_vipInline}</div>`;
                     }
 
                     const vipBadge = isVip ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;margin-left:4px;">⭐ VIP</span>' : '';
@@ -1842,7 +1846,7 @@ function renderTournaments(container, tournamentId = null) {
                         dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
                     }
 
-                    const bgNum = isVip ? '⭐' : sortedIdx + 1;
+                    const bgNum = sortedIdx + 1; // sempre número; VIP aparece inline ao lado do nome
 
                     // Liga: per-card active/inactive toggle (default ON; undefined ⇒ active).
                     // Editable only for the current user's own entry; others render disabled.
