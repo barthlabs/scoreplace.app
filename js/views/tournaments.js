@@ -1615,10 +1615,19 @@ function renderTournaments(container, tournamentId = null) {
             // Current filter state
             const currentFilter = window._checkInFilter || 'all';
 
-            // Build organizer emails set (shared by check-in and normal modes)
+            // Build organizer emails + uids sets (shared by check-in and normal modes)
+            // _orgUids é necessário para que co-organizadores com uid (mas sem email
+            // no participant object) também mostrem a coroa.
             var _orgEmailsShared = {};
+            var _orgUidsShared = {};
             _orgEmailsShared[t.organizerEmail] = true;
-            if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) { if (ch.status === 'active') _orgEmailsShared[ch.email] = true; });
+            if (t.creatorUid) _orgUidsShared[t.creatorUid] = true;
+            if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) {
+                if (ch.status === 'active') {
+                    if (ch.email) _orgEmailsShared[ch.email] = true;
+                    if (ch.uid)   _orgUidsShared[ch.uid]   = true;
+                }
+            });
 
             // ── Check-in mode: show each individual with checkbox ──
             let cardsStr = '';
@@ -1721,8 +1730,9 @@ function renderTournaments(container, tournamentId = null) {
             } else {
                 // ── Normal mode: show teams/individuals with drag, split, delete, VIP ──
                 const _vipMap = t.vips || {};
-                // Use shared organizer emails set
+                // Use shared organizer emails + uids sets
                 var _orgEmails = _orgEmailsShared;
+                var _orgUidsSort = _orgUidsShared;
 
                 // Sort: respect user sort preference, with organizers first as secondary.
                 // For active_asc/active_desc we skip the organizer-first rule so the
@@ -1736,8 +1746,10 @@ function renderTournaments(container, tournamentId = null) {
                   }
                   var aEmail = (typeof a === 'object' ? (a.email || '') : '');
                   var bEmail = (typeof b === 'object' ? (b.email || '') : '');
-                  var aIsOrg = _orgEmails[aEmail] ? 0 : 1;
-                  var bIsOrg = _orgEmails[bEmail] ? 0 : 1;
+                  var aUid   = (typeof a === 'object' ? (a.uid   || '') : '');
+                  var bUid   = (typeof b === 'object' ? (b.uid   || '') : '');
+                  var aIsOrg = (_orgEmails[aEmail] || _orgUidsSort[aUid]) ? 0 : 1;
+                  var bIsOrg = (_orgEmails[bEmail] || _orgUidsSort[bUid]) ? 0 : 1;
                   if (aIsOrg !== bIsOrg) return aIsOrg - bIsOrg; // organizers first
                   if (_enrollSort === 'alpha_asc' || _enrollSort === 'alpha_desc') {
                     var nA = (typeof a === 'string' ? a : (a.displayName || a.name || '')).toLowerCase();
@@ -1784,15 +1796,18 @@ function renderTournaments(container, tournamentId = null) {
                         const _pPhoto = (window._playerPhotoCache && window._playerPhotoCache[pName.toLowerCase()] && window._playerPhotoCache[pName.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[pName.toLowerCase()] : 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                         const _pFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                         // Crown detection: uid é mais confiável que email.
-                        // Quando o participante tem uid, exige que bata com creatorUid.
+                        // _orgUids inclui creatorUid + uids dos co-hosts ativos.
+                        // _orgEmails inclui organizerEmail + emails dos co-hosts ativos.
                         // Fallback para email só quando não há uid (inscrições legadas).
-                        // Evita coroa falsa quando email do organizador foi gravado
-                        // por engano num participante phone-only (contaminação de sessão).
+                        // Evita coroa falsa por contaminação de sessão (phone-only com
+                        // email errado gravado) — uid match é o critério primário.
                         var _pUid   = typeof p === 'object' ? (p.uid   || '') : '';
                         var _pEmail = typeof p === 'object' ? (p.email || '') : '';
+                        var _orgEmails = _orgEmailsShared;
+                        var _orgUids   = _orgUidsShared;
                         var _isOrgParticipant = _pUid
-                          ? (_pUid === (t.creatorUid || '') || !!_orgEmails[_pEmail] && _pUid === (t.creatorUid || ''))
-                          : !!_orgEmails[_pEmail];
+                          ? !!_orgUids[_pUid]                  // uid match: org ou co-host ativo
+                          : (_pEmail && !!_orgEmails[_pEmail]); // fallback email para legados
                         var _crownInline = _isOrgParticipant ? ' <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M2 20h20v2H2zM4 17l2-9 4 4 2-6 2 6 4-4 2 9z"/></svg>' : '';
                         // Estrela VIP inline ao lado do nome (igual à coroa de organizador)
                         var _vipInline = isVip ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;margin-left:2px;" title="VIP"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
