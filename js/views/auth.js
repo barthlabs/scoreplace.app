@@ -5265,27 +5265,32 @@ function setupProfileModal() {
     window._handleProfilePhotoUpload = function(input) {
       if (!input || !input.files || !input.files[0]) return;
       var file = input.files[0];
-      // Validação: máx 5 MB, apenas imagem
       if (file.size > 5 * 1024 * 1024) {
         if (typeof showNotification === 'function') showNotification('Arquivo muito grande', 'Máximo 5 MB para foto de perfil.', 'warning');
+        input.value = '';
         return;
       }
       var reader = new FileReader();
       reader.onload = function(e) {
-        var dataUrl = e.target.result;
-        // Atualizar avatar no DOM imediatamente
-        var avatarEl = document.getElementById('profile-avatar');
-        if (avatarEl) avatarEl.src = dataUrl;
-        // Guardar no AppStore para salvar junto com o perfil
-        var cu = window.AppStore && window.AppStore.currentUser;
-        if (cu) {
-          cu.photoURL = dataUrl;
-          cu._pendingPhotoUpload = dataUrl;
+        var rawDataUrl = e.target.result;
+        // Abrir editor de crop/zoom (círculo pra foto de perfil)
+        function _applyPhoto(dataUrl) {
+          var avatarEl = document.getElementById('profile-avatar');
+          if (avatarEl) avatarEl.src = dataUrl;
+          var cu = window.AppStore && window.AppStore.currentUser;
+          if (cu) { cu.photoURL = dataUrl; cu._pendingPhotoUpload = dataUrl; }
+          if (typeof showNotification === 'function') showNotification('Foto atualizada', 'Clique em Salvar para confirmar.', 'success');
         }
-        if (typeof showNotification === 'function') showNotification('Foto atualizada', 'Clique em Salvar para confirmar.', 'success');
+        if (typeof window._openImageCropEditor === 'function') {
+          window._openImageCropEditor(rawDataUrl,
+            { shape: 'circle', size: 400, title: '📸 Ajustar foto de perfil' },
+            _applyPhoto
+          );
+        } else {
+          _applyPhoto(rawDataUrl);
+        }
       };
       reader.readAsDataURL(file);
-      // Limpar input para permitir reselecionar o mesmo arquivo
       input.value = '';
     };
 

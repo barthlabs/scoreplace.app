@@ -1144,7 +1144,7 @@ function renderTournaments(container, tournamentId = null) {
 
             <!-- Middle Left: Nome + Logo + Favorito -->
             <div style="display: flex; align-items: center; gap: 14px; margin: 1.8rem 0 0.5rem 0;">
-              ${t.logoData ? `<img src="${t.logoData}" alt="Logo" style="width: 64px; height: 64px; border-radius: 12px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">` : ''}
+              ${t.logoData ? `<img src="${t.logoData}" alt="Logo" style="width: ${tournamentId ? '100px' : '56px'}; height: ${tournamentId ? '100px' : '56px'}; border-radius: ${tournamentId ? '16px' : '10px'}; object-fit: cover; flex-shrink: 0; box-shadow: 0 4px 16px rgba(0,0,0,0.4);">` : ''}
               <h4 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: white; line-height: 1.2; text-align: left; flex: 1; min-width: 0; overflow-wrap: break-word;">
                 ${window._safeHtml(t.name)}
               </h4>

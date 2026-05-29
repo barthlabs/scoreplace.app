@@ -1484,25 +1484,22 @@ function setupCreateTournamentModal() {
     }
     var reader = new FileReader();
     reader.onload = function(e) {
-      // Resize to max 400x400 and compress as JPEG to keep Firestore doc size safe
-      var img = new Image();
-      img.onload = function() {
-        var maxSize = 400;
-        var w = img.width, h = img.height;
-        if (w > maxSize || h > maxSize) {
-          if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
-          else { w = Math.round(w * maxSize / h); h = maxSize; }
-        }
-        var c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        var ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        var dataUrl = c.toDataURL('image/jpeg', 0.85);
-        window._applyTournamentLogo(dataUrl);
-      };
-      img.src = e.target.result;
+      // Abrir editor de crop/zoom antes de aplicar
+      if (typeof window._openImageCropEditor === 'function') {
+        window._openImageCropEditor(e.target.result,
+          { shape: 'square', size: 400, title: '🎨 Ajustar logo do torneio' },
+          function(croppedDataUrl) {
+            window._applyTournamentLogo(croppedDataUrl);
+          }
+        );
+      } else {
+        // Fallback sem editor
+        window._applyTournamentLogo(e.target.result);
+      }
     };
     reader.readAsDataURL(file);
+    // Reset input para permitir reselecionar o mesmo arquivo
+    event.target.value = '';
   };
 
   window._applyTournamentLogo = function(dataUrl) {

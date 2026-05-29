@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.29-beta';
+window.SCOREPLACE_VERSION = '1.8.30-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -989,6 +989,128 @@ function _pNameDisplay(raw) {
   }
   return s;
 }
+
+// ─── Editor de crop/zoom para upload de imagem ───────────────────────────────
+// Uso: window._openImageCropEditor(dataUrl, opts, callback)
+//   opts.shape  : 'square' (default) | 'circle'
+//   opts.size   : tamanho do output em px (default: 400)
+//   opts.title  : título do overlay (default: 'Ajustar imagem')
+//   callback(croppedDataUrl) chamado quando usuário confirma
+window._openImageCropEditor = function(dataUrl, opts, callback) {
+  opts = opts || {};
+  var SIZE   = opts.size  || 400;
+  var SHAPE  = opts.shape || 'square';
+  var TITLE  = opts.title || 'Ajustar imagem';
+  var PREV   = 240; // preview canvas size (px)
+
+  // Remove overlay anterior se existir
+  var _old = document.getElementById('img-crop-overlay');
+  if (_old) _old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'img-crop-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:20000;display:flex;align-items:center;justify-content:center;';
+
+  var panel = document.createElement('div');
+  panel.style.cssText = 'background:var(--bg-card,#1e293b);border-radius:16px;padding:20px;max-width:320px;width:95%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.6);';
+
+  panel.innerHTML =
+    '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright,#f1f5f9);margin-bottom:14px;">' + TITLE + '</div>' +
+    '<canvas id="crop-canvas" width="' + PREV + '" height="' + PREV + '" style="border-radius:' + (SHAPE==='circle'?'50%':'12px') + ';cursor:move;touch-action:none;max-width:100%;"></canvas>' +
+    '<div style="margin:14px 0 6px;display:flex;align-items:center;gap:10px;">' +
+      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);">🔍−</span>' +
+      '<input type="range" id="crop-zoom" min="50" max="300" value="100" style="flex:1;accent-color:var(--primary-color,#6366f1);">' +
+      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);">+🔍</span>' +
+    '</div>' +
+    '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">Arraste para reposicionar · Slider para zoom</div>' +
+    '<div style="display:flex;gap:10px;">' +
+      '<button id="crop-cancel" class="btn btn-sm" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted,#94a3b8);border:1px solid rgba(255,255,255,0.1);">Cancelar</button>' +
+      '<button id="crop-confirm" class="btn btn-sm btn-primary" style="flex:2;">✅ Confirmar</button>' +
+    '</div>';
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  var canvas = document.getElementById('crop-canvas');
+  var ctx = canvas.getContext('2d');
+  var zoomSlider = document.getElementById('crop-zoom');
+
+  var img = new Image();
+  var scale = 1.0;
+  var offsetX = 0, offsetY = 0;
+  var isDragging = false, lastX = 0, lastY = 0;
+
+  function draw() {
+    ctx.clearRect(0, 0, PREV, PREV);
+    var sw = img.width * scale;
+    var sh = img.height * scale;
+    var dx = PREV/2 + offsetX - sw/2;
+    var dy = PREV/2 + offsetY - sh/2;
+    ctx.save();
+    if (SHAPE === 'circle') {
+      ctx.beginPath(); ctx.arc(PREV/2, PREV/2, PREV/2, 0, Math.PI*2); ctx.clip();
+    } else {
+      ctx.beginPath(); ctx.roundRect(0, 0, PREV, PREV, 12); ctx.clip();
+    }
+    ctx.drawImage(img, dx, dy, sw, sh);
+    ctx.restore();
+    // Borda sutil
+    ctx.strokeStyle = 'rgba(99,102,241,0.4)'; ctx.lineWidth = 2;
+    if (SHAPE === 'circle') { ctx.beginPath(); ctx.arc(PREV/2, PREV/2, PREV/2-1, 0, Math.PI*2); ctx.stroke(); }
+    else { ctx.strokeRect(1,1,PREV-2,PREV-2); }
+  }
+
+  img.onload = function() {
+    // Fit image to fill the preview
+    var ratio = Math.max(PREV / img.width, PREV / img.height);
+    scale = ratio;
+    zoomSlider.min = Math.max(20, Math.round(ratio * 80));
+    zoomSlider.max = Math.round(ratio * 400);
+    zoomSlider.value = Math.round(ratio * 100);
+    draw();
+  };
+  img.src = dataUrl;
+
+  zoomSlider.addEventListener('input', function() {
+    scale = parseFloat(this.value) / 100;
+    draw();
+  });
+
+  function startDrag(x, y) { isDragging = true; lastX = x; lastY = y; }
+  function moveDrag(x, y) {
+    if (!isDragging) return;
+    offsetX += x - lastX; offsetY += y - lastY;
+    lastX = x; lastY = y; draw();
+  }
+  function endDrag() { isDragging = false; }
+
+  canvas.addEventListener('mousedown', function(e) { startDrag(e.offsetX, e.offsetY); });
+  canvas.addEventListener('mousemove', function(e) { moveDrag(e.offsetX, e.offsetY); });
+  canvas.addEventListener('mouseup', endDrag);
+  canvas.addEventListener('mouseleave', endDrag);
+  canvas.addEventListener('touchstart', function(e) { e.preventDefault(); var t=e.touches[0]; var r=canvas.getBoundingClientRect(); startDrag(t.clientX-r.left, t.clientY-r.top); }, {passive:false});
+  canvas.addEventListener('touchmove', function(e) { e.preventDefault(); var t=e.touches[0]; var r=canvas.getBoundingClientRect(); moveDrag(t.clientX-r.left, t.clientY-r.top); }, {passive:false});
+  canvas.addEventListener('touchend', endDrag);
+
+  document.getElementById('crop-cancel').addEventListener('click', function() { overlay.remove(); });
+  document.getElementById('crop-confirm').addEventListener('click', function() {
+    // Render final output at target SIZE
+    var out = document.createElement('canvas');
+    out.width = SIZE; out.height = SIZE;
+    var octx = out.getContext('2d');
+    var ratio = SIZE / PREV;
+    var sw = img.width * scale * ratio;
+    var sh = img.height * scale * ratio;
+    var dx = SIZE/2 + offsetX*ratio - sw/2;
+    var dy = SIZE/2 + offsetY*ratio - sh/2;
+    if (SHAPE === 'circle') { octx.beginPath(); octx.arc(SIZE/2,SIZE/2,SIZE/2,0,Math.PI*2); octx.clip(); }
+    else { octx.beginPath(); octx.roundRect(0,0,SIZE,SIZE,Math.round(12*ratio)); octx.clip(); }
+    octx.drawImage(img, dx, dy, sw, sh);
+    var result = out.toDataURL('image/jpeg', 0.88);
+    overlay.remove();
+    if (typeof callback === 'function') callback(result);
+  });
+};
 
 window._pName = function(p, fallback) {
   var fb = (fallback !== undefined && fallback !== null) ? fallback : '';
