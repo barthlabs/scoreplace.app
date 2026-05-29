@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.36-beta';
+window.SCOREPLACE_VERSION = '1.8.37-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2816,7 +2816,7 @@ window._applyTemplate = function(index) {
 };
 
 // ─── Crown helper: adds crown SVG next to organizer names ──────────────────
-window._CROWN_MINI = '<svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.85)" style="flex-shrink:0;vertical-align:middle;margin-left:2px;"><path d="M2 20h20v2H2zM4 17l2-9 4 4 2-6 2 6 4-4 2 9z"/></svg>';
+window._CROWN_MINI = '<svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.85)" style="flex-shrink:0;vertical-align:middle;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
 
 window._isOrgName = function(name, tournament) {
   if (!name || !tournament) return false;

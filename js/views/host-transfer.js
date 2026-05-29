@@ -4,7 +4,7 @@
   var _tH = window._t || function(k) { return k; };
 
   // Crown SVG reusable
-  var CROWN_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)"><path d="M2 20h20v2H2zM4 17l2-9 4 4 2-6 2 6 4-4 2 9z"/></svg>';
+  var CROWN_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
   window._CROWN_SVG = CROWN_SVG;
 
   // ─── Open host transfer dialog ────────────────────────────────────────────
@@ -34,7 +34,7 @@
       // Body
       '<div style="padding:1rem 1.25rem;">' +
         '<div style="text-align:center;margin-bottom:1rem;">' +
-          '<div style="font-size:1.5rem;margin-bottom:4px;">👑</div>' +
+          '<div style="font-size:1.5rem;margin-bottom:4px;">⭐</div>' +
           '<div style="font-weight:700;color:var(--text-bright);font-size:0.95rem;">' + window._safeHtml(pName) + '</div>' +
           '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml(t.name) + '</div>' +
         '</div>' +

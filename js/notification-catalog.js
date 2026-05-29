@@ -47,8 +47,8 @@ window.NOTIF_CATALOG = {
   participant_removed:         { level: 'fundamental', icon: '🚫', color: 'var(--danger-color, #ef4444)' },
 
   // Host/cohost
-  cohost_invite:               { level: 'fundamental', icon: '👑', color: '#fbbf24' },
-  host_transfer_invite:        { level: 'fundamental', icon: '👑', color: '#fbbf24' },
+  cohost_invite:               { level: 'fundamental', icon: '⭐', color: '#fbbf24' },
+  host_transfer_invite:        { level: 'fundamental', icon: '⭐', color: '#fbbf24' },
   cohost_invite_sent:          { level: 'all',         icon: '📨', color: '#fbbf24' },
   host_transfer_sent:          { level: 'all',         icon: '📨', color: '#fbbf24' },
   host_invite_accepted:        { level: 'important',   icon: '✅', color: 'var(--success-color)' },
