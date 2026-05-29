@@ -193,10 +193,18 @@ function renderDashboard(container) {
   const organizadosCount = organizados.length;
   const participacoesCount = participacoes.length;
 
+  // Torneios com qualquer data definida (startDate, registrationLimit ou endDate)
+  // aparecem antes dos sem datas. Dentro de cada grupo, ordena por startDate
+  // crescente; fallback para registrationLimit quando sem startDate.
   const sortByDate = (a, b) => {
-    const timeA = a.startDate ? new Date(a.startDate).getTime() : Infinity;
-    const timeB = b.startDate ? new Date(b.startDate).getTime() : Infinity;
-    return timeA - timeB;
+    const _hasDate = t => !!(t.startDate || t.registrationLimit || t.endDate);
+    const hasA = _hasDate(a), hasB = _hasDate(b);
+    if (hasA && !hasB) return -1;
+    if (!hasA && hasB) return 1;
+    const _time = t => t.startDate ? new Date(t.startDate).getTime()
+                     : t.registrationLimit ? new Date(t.registrationLimit).getTime()
+                     : Infinity;
+    return _time(a) - _time(b);
   };
 
   const participacoesSorted = [...participacoes].sort(sortByDate);

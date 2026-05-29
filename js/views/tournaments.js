@@ -716,8 +716,14 @@ function renderTournaments(container, tournamentId = null) {
           (function() { try { return sessionStorage.getItem('_pendingEnrollTournamentId') === String(t.id); } catch(e) { return false; } })()
         );
         const _enrollFlash = _isInviteTarget ? 'animation:enrollPulse 1.5s ease-in-out infinite;' : '';
+        // Perfil carregado = currentUser existe E _profileLoaded = true.
+        // Enquanto carrega, botão fica cinza desabilitado para evitar inscrições
+        // com uid indefinido que gerariam participantes fantasmas no Firestore.
+        const _profileReady = !!(window.AppStore.currentUser && window.AppStore.currentUser._profileLoaded);
         const enrollBtnHtml = (isParticipating && isAberto) ? `
              <button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>
+          ` : (isAberto && !_profileReady && window.AppStore.currentUser) ? `
+             <button class="btn btn-sm" disabled style="opacity:0.45;cursor:not-allowed;padding:6px 12px;font-size:0.78rem;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:8px;color:var(--text-muted);">⏳ Carregando…</button>
           ` : (isAberto ? `
              <button class="btn btn-sm btn-success hover-lift" style="${_enrollFlash}" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.enrollCurrentUser('${t.id}')">✅ ${_t('enroll.enrollBtn')}</button>
           ` : (isParticipating ? `
