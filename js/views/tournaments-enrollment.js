@@ -279,6 +279,17 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
         participantObj.category = catsArr[0]; // backward compat
         participantObj.categorySource = 'inscricao';
     }
+    // Guard: se AppStore.currentUser ainda não carregou completamente (race
+    // condition entre login e inscrição), o participantObj pode ter todos os
+    // identificadores nulos. Nesse caso, abortar silenciosamente — o _tryAutoEnroll
+    // em auth.js vai retomar a inscrição quando o perfil estiver disponível.
+    var _hasAnyId = !!(participantObj.uid || participantObj.email ||
+                       participantObj.displayName || participantObj.name || participantObj.phone);
+    if (!_hasAnyId) {
+        window._warn('[enroll] participantObj sem identificador — aguardando perfil carregar');
+        return;
+    }
+
     // Feature gate: limite de participantes no plano Free (organizador do torneio)
     if (window.AppStore.isOrganizer(t) && !window._canAddParticipant(t)) {
         window._showUpgradeModal('participants');

@@ -155,6 +155,15 @@ window.FirestoreDB = {
   // where concurrent enrollments overwrite each other's participants array
   async enrollParticipant(tournamentId, participantObj, extraUpdates) {
     if (!this.db) throw new Error('Firestore not initialized');
+    // Guard: rejeitar participante completamente sem identificador.
+    // Evita objetos fantasmas {name:null,email:null,displayName:null} causados
+    // por race condition entre login e inscrição (AppStore.currentUser ainda
+    // não carregado quando _doEnrollCurrentUser rodou).
+    var _hasId = !!(participantObj && (
+      participantObj.uid || participantObj.email ||
+      participantObj.displayName || participantObj.name || participantObj.phone
+    ));
+    if (!_hasId) throw new Error('enrollParticipant: participantObj sem identificador válido');
     var docRef = this.db.collection('tournaments').doc(String(tournamentId));
     var self = this;
     return this.db.runTransaction(async function(transaction) {
