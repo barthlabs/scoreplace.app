@@ -128,7 +128,9 @@
       email: target.email, displayName: target.displayName, uid: target.uid,
       status: 'pending', type: 'cohost', invitedAt: new Date().toISOString()
     });
-    window.FirestoreDB.saveTournament(t);
+    window.FirestoreDB.saveTournament(t).catch(function(e) {
+      window._warn('[coHostInvite] saveTournament failed:', e);
+    });
 
     _notifyByEmail(target.uid || target.email, {
       type: 'cohost_invite', tournamentId: String(t.id), tournamentName: t.name,
@@ -222,30 +224,56 @@
         if (local) { Object.assign(local, t); }
       } else if (inviteType === 'cohost') {
         if (!Array.isArray(t.coHosts)) t.coHosts = [];
-        var entry = t.coHosts.find(function(ch) { return ch.email === user.email && ch.status === 'pending'; });
+        // Busca pela entrada do co-host: uid tem prioridade sobre email para
+        // suportar usuários phone-only (sem email). Status deve ser 'pending'.
+        var entry = t.coHosts.find(function(ch) {
+          if (ch.status !== 'pending') return false;
+          if (user.uid && ch.uid && ch.uid === user.uid) return true;
+          if (user.email && ch.email && ch.email === user.email) return true;
+          return false;
+        });
         if (entry) {
           entry.status = 'active';
-          window.FirestoreDB.saveTournament(t);
-          // Notify organizer that cohost was accepted
-          var orgUid = t.creatorUid || '';
-          var orgRef = orgUid || t.creatorEmail || t.organizerEmail;
-          _notifyByEmail(orgRef, {
-            type: 'host_invite_accepted', tournamentId: String(t.id), tournamentName: t.name,
-            message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.acceptedCohost') + ' "' + t.name + '".',
-            level: 'important'
+          // Garantir que o novo co-host está em adminEmails e memberEmails
+          // (necessário para que as Firestore rules reconheçam como admin)
+          if (!Array.isArray(t.adminEmails)) t.adminEmails = [];
+          if (!Array.isArray(t.memberEmails)) t.memberEmails = [];
+          var cohostEmail = user.email || entry.email || '';
+          if (cohostEmail && !t.adminEmails.includes(cohostEmail)) {
+            t.adminEmails.push(cohostEmail);
+          }
+          if (cohostEmail && !t.memberEmails.includes(cohostEmail)) {
+            t.memberEmails.push(cohostEmail);
+          }
+          // Salvar com tratamento de erro explícito
+          window.FirestoreDB.saveTournament(t).then(function() {
+            // Notify organizer that cohost was accepted
+            var orgUid = t.creatorUid || '';
+            var orgRef = orgUid || t.creatorEmail || t.organizerEmail;
+            _notifyByEmail(orgRef, {
+              type: 'host_invite_accepted', tournamentId: String(t.id), tournamentName: t.name,
+              message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.acceptedCohost') + ' "' + t.name + '".',
+              level: 'important'
+            });
+            if (orgRef) _markInviteNotifsRead(orgRef, tId, ['cohost_invite_sent']);
+            _notifyByEmail(user.uid, {
+              type: 'host_invite_accepted', tournamentId: String(t.id), tournamentName: t.name,
+              message: _tH('org.youAcceptedCohost') + ' "' + t.name + '".',
+              level: 'important'
+            });
+            _markInviteNotifsRead(user.uid, tId, ['cohost_invite']);
+            var local = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
+            if (local) { Object.assign(local, t); }
+            if (typeof showNotification === 'function') showNotification(_tH('org.accepted'), _tH('org.youAreNow') + ' ' + _tH('org.coOrganizerRole') + '.', 'success');
+          }).catch(function(saveErr) {
+            window._warn('[acceptCoHost] saveTournament failed:', saveErr);
+            if (typeof showNotification === 'function') showNotification(_tH('org.error'), 'Não foi possível salvar: ' + (saveErr && saveErr.message ? saveErr.message.substring(0,80) : 'erro desconhecido'), 'error');
           });
-          // Mark organizer's "sent" notification as read (uid or email — helper resolves)
-          if (orgRef) _markInviteNotifsRead(orgRef, tId, ['cohost_invite_sent']);
-          // Notify the acceptor (confirmation)
-          _notifyByEmail(user.uid, {
-            type: 'host_invite_accepted', tournamentId: String(t.id), tournamentName: t.name,
-            message: _tH('org.youAcceptedCohost') + ' "' + t.name + '".',
-            level: 'important'
-          });
-          // Mark acceptor's invite notification as read
-          _markInviteNotifsRead(user.uid, tId, ['cohost_invite']);
-          var local = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
-          if (local) { Object.assign(local, t); }
+          return; // evitar showNotification duplicado abaixo
+        } else {
+          window._warn('[acceptCoHost] entry not found. coHosts:', JSON.stringify(t.coHosts), 'user uid:', user.uid, 'email:', user.email);
+          if (typeof showNotification === 'function') showNotification(_tH('org.error'), 'Convite não encontrado. Peça ao organizador para re-enviar.', 'warning');
+          return;
         }
       }
       if (typeof showNotification === 'function') showNotification(_tH('org.accepted'), _tH('org.youAreNow') + ' ' + (inviteType === 'transfer' ? _tH('org.organizerRole') : _tH('org.coOrganizerRole')) + '.', 'success');

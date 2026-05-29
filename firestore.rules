@@ -38,6 +38,15 @@ service cloud.firestore {
         .hasOnly(['participants', 'memberEmails', 'status', 'teamOrigins']);
     }
 
+    // Participante aceita convite de co-organização (muda seu próprio status
+    // de 'pending' para 'active' em coHosts + atualiza adminEmails/memberEmails).
+    // Só permitido para quem já está em memberEmails (é participante do torneio).
+    function isCoHostAcceptanceDiff() {
+      return isTournamentParticipant(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['coHosts', 'adminEmails', 'memberEmails']);
+    }
+
     // Participant of the tournament (uses denormalized memberEmails[]).
     // Required pra que participantes possam lançar/aprovar resultados,
     // marcar check-in, etc., sem precisar virar admin.
@@ -114,6 +123,7 @@ service cloud.firestore {
           isTournamentAdmin(resource.data)
           || isEnrollmentOnlyDiff()
           || (isTournamentParticipant(resource.data) && isParticipantBracketDiff())
+          || isCoHostAcceptanceDiff()
         );
 
       // Delete: admins only.
