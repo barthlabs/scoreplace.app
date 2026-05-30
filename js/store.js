@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.37-beta';
+window.SCOREPLACE_VERSION = '1.8.38-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -1773,12 +1773,12 @@ window._toggleFavorite = function(tId, event) {
   var idx = favs.indexOf(id);
   if (idx === -1) { favs.push(id); } else { favs.splice(idx, 1); }
   try { localStorage.setItem(key, JSON.stringify(favs)); } catch (e) {}
-  // Update star icons on the page
+  // Update heart icons on the page
   var stars = document.querySelectorAll('[data-fav-id="' + id + '"]');
   stars.forEach(function(el) {
-    el.textContent = (idx === -1) ? '★' : '☆';
+    el.textContent = (idx === -1) ? '♥' : '♡';
     el.title = (idx === -1) ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
-    el.style.color = (idx === -1) ? '#fbbf24' : 'rgba(255,255,255,0.4)';
+    el.style.color = (idx === -1) ? '#f43f5e' : 'rgba(255,255,255,0.4)';
   });
 };
 

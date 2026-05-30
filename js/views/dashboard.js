@@ -521,7 +521,7 @@ function renderDashboard(container) {
               <h4 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: white; line-height: 1.2; text-align: left; flex: 1;">
                 ${window._safeHtml(t.name)}
               </h4>
-              <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.5rem;cursor:pointer;flex-shrink:0;color:${_isFav ? '#fbbf24' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '★' : '☆'}</span>
+              <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.5rem;cursor:pointer;flex-shrink:0;color:${_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '♥' : '♡'}</span>
             </div>
 
             ${t.venueName ? `
@@ -1726,7 +1726,7 @@ function renderDashboard(container) {
         (t.logoData ? '<img src="' + t.logoData + '" class="compact-logo" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;">' : '<div class="compact-logo" style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">' + (getSportIcon(t.sport)) + '</div>') +
         '<div class="compact-info" style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;">' +
           '<div class="compact-name-block" style="flex:1;min-width:0;">' +
-            '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (isFav ? '★ ' : '') + window._safeHtml(t.name) + '</div>' +
+            '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (isFav ? '<span style="color:#f43f5e">♥</span> ' : '') + window._safeHtml(t.name) + '</div>' +
             '<div class="compact-details" style="font-size:0.7rem;color:var(--text-muted);display:flex;gap:8px;margin-top:2px;flex-wrap:wrap;">' +
               '<span>' + (t.sport || '—') + '</span>' +
               '<span>' + (t.format || '—') + '</span>' +
@@ -2054,7 +2054,7 @@ function renderDashboard(container) {
         ${_fStyle('organizados', '🏆', organizadosCount, _t('dashboard.filterOrganized'))}
         ${_fStyle('participando', '👤', participacoesCount, _t('dashboard.filterParticipating'))}
         ${_fStyle('abertos', '🗓️', abertosParaVoce.length, _t('dashboard.filterOpen'))}
-        ${favoritosCount > 0 ? _fStyle('favoritos', '⭐', favoritosCount, _t('dashboard.filterFavorites')) : ''}
+        ${favoritosCount > 0 ? _fStyle('favoritos', '♥', favoritosCount, _t('dashboard.filterFavorites')) : ''}
         ${encerradosCount > 0 ? _fStyle('encerrados', '🏆', encerradosCount, _t('dashboard.filterFinished')) : ''}
       </div>
       <!-- v1.0.44-beta: Social/personal stats pills (separadas das de torneio

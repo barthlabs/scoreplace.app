@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #f43f5e;border-radius:12px;padding:14px 16px;background:rgba(244,63,94,0.07);">' +
+      '<div style="font-weight:800; color:#fb7185; font-size:1rem; margin-bottom:8px;">♥ v1.8.38-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(30 de Maio, 2026)</span></div>' +
+      '<p><b>Favoritos agora usam coração ♥ em vez de estrela ⭐.</b><br><br>' +
+      'O ícone de favoritar torneios trocou de estrela (★/☆) para coração (♥/♡) em todos os pontos do app: cards do dashboard, detalhe do torneio, modo lista compacto e filtro "Favoritos" no hero. Cor ativa agora é rosa-vermelho (#f43f5e) em vez de âmbar. A estrela ⭐ ficou exclusiva do ícone de organizador/co-host. Textos do manual e dicas contextuais atualizados.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🔧 v1.8.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Maio, 2026)</span></div>' +
       '<p><b>Reparo automático de participantes sem nome na base de dados.</b><br><br>' +

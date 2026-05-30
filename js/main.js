@@ -183,7 +183,7 @@ function setupHelpModal() {
         '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Cards de Torneio</div>' +
           '<p>Cada card mostra: nome, esporte, formato, inscritos, barra de progresso, countdown e status. Cor de fundo indica seu papel (organizador = índigo, participante = teal).</p>' +
-          '<p><b>Estrela ⭐</b> — Favoritar/desfavoritar. Aparecem no filtro "Favoritos".</p>' +
+          '<p><b>Coração ♥</b> — Favoritar/desfavoritar. Aparecem no filtro "Favoritos".</p>' +
           '<p><b>Foto do local</b> — Fundo do card quando o venue tem <code>venuePhotoUrl</code>.</p>' +
           '<p><b>Logo do torneio</b> — Miniatura 56×56. Gerada automaticamente ou upload manual em Editar Torneio.</p>' +
           '<p><b>Botão de inscrição inline</b> — ✅ Inscrever-se / 🛑 Desinscrever-se / ✓ INSCRITO (badge), conforme seu estado atual. Funciona inclusive com torneios do feed de descoberta (hidratação defensiva injeta o doc em <code>AppStore.tournaments</code> antes do enroll).</p>' +
@@ -836,7 +836,7 @@ function setupHelpModal() {
             '• <b>Filtro Encerrados</b> — Classificação final e pódio<br>' +
             '• <b>Filtros gerais</b> — Por tipo, esporte, local, formato<br>' +
             '• <b>Cards/Lista</b> — Alterne visualização compacta<br>' +
-            '• <b>Estrela ⭐</b> — Favoritar torneio<br>' +
+            '• <b>Coração ♥</b> — Favoritar torneio<br>' +
             '• <b>Filtro por esporte</b> — Beach Tennis, Tênis, Padel...<br>' +
             '• <b>Filtro por local</b> — Torneios perto de você<br>' +
             '• <b>Filtro por formato</b> — Eliminatórias, Dupla, Grupos+Elim, Liga<br>' +
