@@ -1236,7 +1236,6 @@ window.handleDragLeave = function (e) {
 
 window.handleDropTeam = function (e, targetIdx) {
     e.preventDefault();
-    const card = e.currentTarget;
 
     try {
         const data = JSON.parse(e.dataTransfer.getData('text/plain'));
@@ -1253,41 +1252,68 @@ window.handleDropTeam = function (e, targetIdx) {
             return;
         }
 
+        // Capturar referências AGORA (antes do dialog — evita índices stale)
+        const arr0 = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+        const p1snap = arr0[sourceIdx];
+        const p2snap = arr0[targetIdx];
+        if (!p1snap || !p2snap) return;
+
+        const name1 = typeof p1snap === 'string' ? p1snap : (p1snap.displayName || p1snap.name || p1snap.email || '');
+        const name2 = typeof p2snap === 'string' ? p2snap : (p2snap.displayName || p2snap.name || p2snap.email || '');
+
+        if (!name1 || !name2 || name1 === name2) return;
+        if (name1.includes('/') || name2.includes('/')) {
+            showAlertDialog('Já em dupla', 'Um dos participantes já está em dupla. Desfaça a dupla existente antes.', null, { type: 'warning' });
+            return;
+        }
+
+        const uid1 = typeof p1snap === 'object' ? (p1snap.uid || '') : '';
+        const uid2 = typeof p2snap === 'object' ? (p2snap.uid || '') : '';
+        const newName = name1 + ' / ' + name2;
+
         showConfirmDialog(
-            _t('draw.groupPartsTitle'),
-            _t('draw.groupPartsMsg'),
+            'Formar dupla',
+            name1 + ' e ' + name2 + ' formarão a dupla "' + newName + '". Confirmar?',
             () => {
+                // Re-ler array no momento do confirm (pode ter mudado por snapshot)
                 const arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-                const p1 = arr[sourceIdx];
-                const p2 = arr[targetIdx];
 
-                const name1 = typeof p1 === 'string' ? p1 : (p1.displayName || p1.name || p1.email || '');
-                const name2 = typeof p2 === 'string' ? p2 : (p2.displayName || p2.name || p2.email || '');
+                // Localizar por uid (mais confiável) ou por nome exato
+                const findIdx = function(snap, uid, name) {
+                    // Primeiro por uid
+                    if (uid) {
+                        const i = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uid; });
+                        if (i !== -1) return i;
+                    }
+                    // Fallback por nome
+                    return arr.findIndex(function(p) {
+                        var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+                        return n === name;
+                    });
+                };
 
-                // Não formar dupla com si mesmo ou quando nomes já estão pareados
-                if (name1 === name2 || name1.includes('/') || name2.includes('/')) return;
+                const i1 = findIdx(p1snap, uid1, name1);
+                const i2 = findIdx(p2snap, uid2, name2);
 
-                const newName = name1 + ' / ' + name2;
+                if (i1 === -1 || i2 === -1 || i1 === i2) return; // segurança
 
-                // Preservar objeto do usuário com conta (uid, photoURL etc)
-                // Se um dos dois tem uid, usar esse objeto como base da dupla
-                const uid1 = typeof p1 === 'object' && p1 ? (p1.uid || '') : '';
-                const uid2 = typeof p2 === 'object' && p2 ? (p2.uid || '') : '';
+                // Criar entrada da dupla preservando uid e dados do usuário com conta
                 let mergedEntry;
                 if (uid1) {
-                    mergedEntry = Object.assign({}, p1, { displayName: newName, name: newName });
-                    if (uid2) mergedEntry.partnerUid = uid2; // ambos têm uid → registra parceiro
+                    mergedEntry = Object.assign({}, arr[i1], { displayName: newName, name: newName });
+                    if (uid2) mergedEntry.partnerUid = uid2;
                 } else if (uid2) {
-                    mergedEntry = Object.assign({}, p2, { displayName: newName, name: newName });
+                    mergedEntry = Object.assign({}, arr[i2], { displayName: newName, name: newName });
                 } else {
                     mergedEntry = newName;
                 }
 
-                const maxIdx = Math.max(sourceIdx, targetIdx);
-                const minIdx = Math.min(sourceIdx, targetIdx);
-                arr.splice(maxIdx, 1);
-                arr.splice(minIdx, 1);
-                arr.splice(minIdx, 0, mergedEntry);
+                // Remover ambos e inserir dupla (índice maior primeiro)
+                const maxI = Math.max(i1, i2);
+                const minI = Math.min(i1, i2);
+                arr.splice(maxI, 1);
+                arr.splice(minI, 1);
+                arr.splice(minI, 0, mergedEntry);
                 t.participants = arr;
 
                 if (!t.teamOrigins) t.teamOrigins = {};
@@ -1299,7 +1325,7 @@ window.handleDropTeam = function (e, targetIdx) {
                 if (container) renderTournaments(container, tId);
             },
             null,
-            { type: 'info', confirmText: _t('btn.group'), cancelText: _t('btn.keepSeparate') }
+            { type: 'info', confirmText: 'Formar dupla', cancelText: _t('btn.keepSeparate') }
         );
 
     } catch (err) { window._error(err); }
