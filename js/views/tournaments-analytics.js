@@ -161,8 +161,26 @@ window._openPlayerProfile = function(playerName, opts) {
     if (statsBtn) {
       var _nameSafe = name;
       statsBtn.onclick = function() {
-        document.getElementById('player-profile-overlay') && document.getElementById('player-profile-overlay').remove();
-        if (typeof window._showPlayerStats === 'function') window._showPlayerStats(_nameSafe, opts.tournamentId);
+        // Esconder o perfil (não remover) para restaurar no Voltar
+        var ppo = document.getElementById('player-profile-overlay');
+        if (ppo) ppo.style.display = 'none';
+
+        if (typeof window._showPlayerStats !== 'function') {
+          if (ppo) ppo.style.display = '';
+          return;
+        }
+        window._showPlayerStats(_nameSafe, opts.tournamentId);
+
+        // MutationObserver: quando player-stats-overlay for removido do DOM,
+        // restaura o overlay do perfil automaticamente (cobre Voltar e ×)
+        var _obs = new MutationObserver(function() {
+          if (!document.getElementById('player-stats-overlay')) {
+            _obs.disconnect();
+            var ppo2 = document.getElementById('player-profile-overlay');
+            if (ppo2) ppo2.style.display = '';
+          }
+        });
+        _obs.observe(document.body, { childList: true, subtree: false });
       };
     }
 
@@ -310,6 +328,12 @@ window._resolvePlayerPhoto = function(playerName, opts) {
                 if (_eq(ps[j].name, playerName) && ps[j].photoURL) return ps[j].photoURL;
             }
         }
+    }
+    // v1.8.79: verificar _playerPhotoCache (populado por _preloadPlayerPhotos
+    // via Firestore uid lookup e por _openPlayerProfile)
+    if (window._playerPhotoCache && window._playerPhotoCache[n]) {
+        var cached = window._playerPhotoCache[n];
+        if (cached && cached.indexOf('dicebear.com') === -1) return cached;
     }
     return null;
 };
