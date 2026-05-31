@@ -104,9 +104,57 @@ function renderTournaments(container, tournamentId = null) {
     var _t = window._t || function(k) { return k; };
     let visible = window.AppStore.getVisibleTournaments() || [];
 
+    // Inscrever solo em torneio de duplas (sem parceiro definido)
+    window._enrollSoloInDoubles = function(tId) {
+        var mod = document.getElementById('team-enroll-modal-' + tId);
+        if (mod) mod.style.display = 'none';
+        // Chama inscrição individual diretamente
+        if (typeof window._doEnrollCurrentUser === 'function') {
+            window._doEnrollCurrentUser(tId, null);
+        }
+    };
+
+    // Auto-mover participantes solo para waitlist antes do sorteio em torneios de duplas
+    window._autoMoveSoloToWaitlist = function(t) {
+        if (!t) return 0;
+        var enrollmentMode = t.enrollmentMode || t.enrollment || 'individual';
+        var teamSize = parseInt(t.teamSize) || 1;
+        if (!((enrollmentMode === 'time' || enrollmentMode === 'misto') && teamSize === 2)) return 0;
+
+        var parts = Array.isArray(t.participants) ? t.participants : [];
+        var solo = parts.filter(function(p) {
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            return n && !n.includes('/');
+        });
+        if (solo.length === 0) return 0;
+
+        // Remove solos dos participants e adiciona à waitlist
+        t.participants = parts.filter(function(p) {
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            return !n || n.includes('/');
+        });
+        if (!Array.isArray(t.waitlist)) t.waitlist = [];
+        solo.forEach(function(p) {
+            // Evita duplicata na waitlist
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            var already = t.waitlist.some(function(w) {
+                var wn = typeof w === 'string' ? w : (w.displayName || w.name || '');
+                return wn === n;
+            });
+            if (!already) t.waitlist.push(p);
+        });
+        return solo.length;
+    };
+
     window._handleSortearClick = function (tId, isAberto) {
         window._lastActiveTournamentId = tId;
         var _startDraw = function() {
+            // Auto-mover solos para waitlist em torneios de duplas
+            var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+            var movedCount = t ? window._autoMoveSoloToWaitlist(t) : 0;
+            if (movedCount > 0 && typeof showNotification !== 'undefined') {
+                showNotification('🙋 ' + movedCount + ' participante(s) sem dupla', 'Movido(s) para lista de espera.', 'info');
+            }
             if (typeof window.showUnifiedResolutionPanel === 'function') {
                 window.showUnifiedResolutionPanel(tId);
             } else if (typeof window.showFinalReviewPanel === 'function') {
@@ -748,6 +796,13 @@ function renderTournaments(container, tournamentId = null) {
                         <button type="submit" class="btn btn-success hover-lift" id="partner-confirm-${t.id}">Confirmar dupla</button>
                      </div>
                   </form>
+                  ${isDoublesTournament ? `
+                  <div style="margin-top:1rem;padding-top:1rem;border-top:1px dashed rgba(255,255,255,0.1);text-align:center;">
+                     <button type="button" class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._enrollSoloInDoubles('${t.id}')" style="font-size:0.8rem;opacity:0.75;">
+                        🙋 Inscrever sem parceiro — escolher depois
+                     </button>
+                     <div style="font-size:0.68rem;color:var(--text-muted);margin-top:5px;">Quem não tiver dupla no sorteio vai para a lista de espera.</div>
+                  </div>` : ''}
                </div>
             </div>
          </div>
@@ -2023,6 +2078,33 @@ function renderTournaments(container, tournamentId = null) {
               ${_ligaSortBtnFinal}
             </div>`;
 
+            // Seção "Sem Dupla" — só em torneios de duplas com participantes solo
+            const _isDoublesTournament = (t.enrollmentMode === 'time' || t.enrollmentMode === 'misto') && (t.teamSize || 2) === 2;
+            const _soloParticipants = _isDoublesTournament
+              ? (Array.isArray(t.participants) ? t.participants : []).filter(function(p) {
+                  var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+                  return n && !n.includes('/');
+                })
+              : [];
+            const _semDuplaHtml = (_isDoublesTournament && _soloParticipants.length > 0) ? `
+              <div style="margin-top:1.5rem;padding:14px 16px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);border-radius:12px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                  <span style="font-size:1rem;">🙋</span>
+                  <span style="font-weight:700;font-size:0.9rem;color:#fbbf24;">Sem Dupla (${_soloParticipants.length})</span>
+                  <span style="font-size:0.7rem;color:var(--text-muted);flex:1;">Serão movidos para lista de espera no sorteio</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                  ${_soloParticipants.map(function(p) {
+                    var nm = typeof p === 'string' ? p : (p.displayName || p.name || '');
+                    var photo = (typeof p === 'object' && p.photoURL) ? p.photoURL : '';
+                    return '<div style="display:flex;align-items:center;gap:6px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);border-radius:20px;padding:4px 10px 4px 6px;">' +
+                      (photo ? '<img src="' + window._safeHtml(photo) + '" style="width:22px;height:22px;border-radius:50%;object-fit:cover;" onerror="this.style.display=\'none\'">' : '<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:#fff;font-weight:700;">' + window._safeHtml((nm[0]||'?').toUpperCase()) + '</div>') +
+                      '<span style="font-size:0.8rem;color:var(--text-bright);">' + window._safeHtml(nm) + '</span>' +
+                      '</div>';
+                  }).join('')}
+                </div>
+              </div>` : '';
+
             participantsHtml = `
               <div class="mt-5 mb-4">
                  <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; flex-wrap:wrap;">
@@ -2034,6 +2116,7 @@ function renderTournaments(container, tournamentId = null) {
                  <div data-merge-container="${t.id}" style="${gridStyle}">
                     ${cardsStr}
                  </div>
+                 ${_semDuplaHtml}
                  ${(_hasTournCats && isOrg) ? `<div id="inline-cat-mgr-${t.id}"></div>` : ''}
               </div>
           `;
