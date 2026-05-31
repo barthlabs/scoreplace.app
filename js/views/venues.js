@@ -2027,8 +2027,51 @@
   }
 
   // Ask the browser for GPS and populate state.location + state.center from
-  // the resolved address. Flag `userTriggered` distinguishes an explicit 📍
-  // click (we tell the user if denied) from the silent auto-try on view load.
+  // ── Cache de GPS em localStorage (TTL 10 min) ────────────────────────────
+  // Evita re-pedir permissão em cada abertura do #place. Coordenadas frescas
+  // são reutilizadas sem chamar getCurrentPosition novamente.
+  var _GPS_CACHE_KEY = 'scoreplace_gps_cache';
+  var _GPS_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+  function _readGpsCache() {
+    try {
+      var raw = localStorage.getItem(_GPS_CACHE_KEY);
+      if (!raw) return null;
+      var d = JSON.parse(raw);
+      if (!d || !d.lat || !d.lng || !d.ts) return null;
+      if (Date.now() - d.ts > _GPS_CACHE_TTL) return null;
+      return d;
+    } catch(e) { return null; }
+  }
+  function _writeGpsCache(lat, lng) {
+    try { localStorage.setItem(_GPS_CACHE_KEY, JSON.stringify({ lat: lat, lng: lng, ts: Date.now() })); } catch(e) {}
+  }
+
+  // Verifica estado da permissão de geolocalização via Permissions API.
+  // Retorna Promise<'granted'|'prompt'|'denied'|'unknown'>.
+  function _checkGeoPermission() {
+    if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve('unknown');
+    return navigator.permissions.query({ name: 'geolocation' })
+      .then(function(r) { return r.state; })
+      .catch(function() { return 'unknown'; });
+  }
+
+  // Aplica coordenadas GPS ao estado da view e re-renderiza.
+  async function _applyGpsCoords(lat, lng, btn) {
+    state.center = { lat: lat, lng: lng };
+    state.centerFromGps = true;
+    _writeGpsCache(lat, lng);
+    var address = await _reverseGeocode(lat, lng);
+    state.location = address || 'Minha localização atual';
+    _saveFilters();
+    var inp = document.getElementById('venues-location');
+    if (inp) inp.value = state.location;
+    if (btn) { btn.disabled = false; btn.textContent = '📍'; }
+    refresh();
+  }
+
+  // Botão 📍 explícito — sempre chama GPS independente de permissão.
+  // Flag `userTriggered` distinguishes an explicit 📍 click (we tell the
+  // user if denied) from the silent auto-try on view load.
   window._venuesUseMyLocation = function(userTriggered) {
     if (!navigator.geolocation) {
       if (userTriggered && window.showNotification) window.showNotification('GPS indisponível neste dispositivo.', '', 'error');
@@ -2036,21 +2079,15 @@
     }
     var btn = document.getElementById('venues-geo-btn');
     if (btn && userTriggered) { btn.disabled = true; btn.textContent = '⏳'; }
-    navigator.geolocation.getCurrentPosition(async function(pos) {
-      var lat = pos.coords.latitude;
-      var lng = pos.coords.longitude;
-      state.center = { lat: lat, lng: lng };
-      // Flag que sinaliza "centro veio do GPS, não mexe" — o refresh() não
-      // deve rodar o geocoder em cima do endereço e sobrescrever o lat/lng
-      // preciso do dispositivo.
-      state.centerFromGps = true;
-      var address = await _reverseGeocode(lat, lng);
-      state.location = address || 'Minha localização atual';
-      _saveFilters();
-      var inp = document.getElementById('venues-location');
-      if (inp) inp.value = state.location;
-      if (btn) { btn.disabled = false; btn.textContent = '📍'; }
-      refresh();
+
+    // Se há cache fresco, usar sem chamar GPS (evita dialog desnecessário)
+    if (!userTriggered) {
+      var cached = _readGpsCache();
+      if (cached) { _applyGpsCoords(cached.lat, cached.lng, btn); return; }
+    }
+
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      _applyGpsCoords(pos.coords.latitude, pos.coords.longitude, btn);
     }, function(err) {
       if (btn) { btn.disabled = false; btn.textContent = '📍'; }
       if (userTriggered && window.showNotification) {
@@ -2059,19 +2096,26 @@
     }, { timeout: 8000, maximumAge: 5 * 60 * 1000 });
   };
 
-  // Auto-geolocate na primeira abertura da view. O usuário pediu que a
-  // página abra como se o 📍 já tivesse sido clicado — em TODOS os devices.
-  //   - Se permissão = granted: resolve silencioso.
-  //   - Se permissão = prompt: browser mostra o diálogo nativo imediatamente.
-  //   - Se permissão = denied: erro catch-ado em _venuesUseMyLocation(false),
-  //     fallback na cidade do perfil/filtro salvo.
-  // Idempotência: controlada pelo caller via `state.centerFromGps` (já fez
-  // GPS nesta sessão → não re-pede). Sem sessionStorage flag — refresh da
-  // página deve re-disparar o GPS automaticamente.
+  // Auto-geolocate ao abrir #place.
+  // v1.8.41-beta: só dispara GPS automaticamente se permissão já for
+  // "granted" (sem mostrar dialog) OU se há cache fresco de coords.
+  // Se permissão for "prompt" ou "denied", usa cidade do perfil como
+  // fallback — o usuário pode sempre clicar 📍 para conceder e centrar.
   function _tryAutoGeolocate() {
-    // Dispara independente de mobile/desktop, independente de permissão
-    // prévia. userTriggered=false mantém o UI silencioso se o user negar.
-    window._venuesUseMyLocation(false);
+    // 1. Cache fresco — usa sem pedir GPS
+    var cached = _readGpsCache();
+    if (cached) { _applyGpsCoords(cached.lat, cached.lng, null); return; }
+
+    // 2. Verifica permissão antes de chamar GPS
+    _checkGeoPermission().then(function(perm) {
+      if (perm === 'granted' || perm === 'unknown') {
+        // "granted": silencioso. "unknown": Permissions API indisponível
+        // (iOS antigo) — tenta e deixa o SO decidir.
+        window._venuesUseMyLocation(false);
+      }
+      // perm === "prompt" ou "denied": não dispara automaticamente.
+      // O usuário toca em 📍 se quiser conceder.
+    });
   }
 
   // ── Geocoding: center the map on the typed city (or user's profile city).
