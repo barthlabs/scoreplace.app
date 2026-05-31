@@ -1865,7 +1865,48 @@ window._doPasswordReset = function() {
     if (statusEl) statusEl.innerHTML = '<span style="color:#f87171;">Digite um e-mail válido.</span>';
     return;
   }
-  _sendPasswordResetEmail(email);
+
+  var statusEl = document.getElementById('reset-status');
+  var btn = document.querySelector('#reset-password-panel .btn-primary');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">Verificando...</span>';
+  if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
+
+  // v1.8.71: verificar o provider da conta antes de enviar reset de senha.
+  // Contas Google/Apple não têm senha — enviar reset cria estado confuso.
+  firebase.auth().fetchSignInMethodsForEmail(email)
+    .then(function(methods) {
+      var providerLabels = { 'google.com': 'Google', 'apple.com': 'Apple', 'facebook.com': 'Facebook' };
+      var socialProvider = methods.find(function(m) { return providerLabels[m]; });
+      if (socialProvider) {
+        // Conta criada via provedor social — não tem senha, orientar corretamente
+        var provLabel = providerLabels[socialProvider];
+        if (statusEl) statusEl.innerHTML = '';
+        if (btn) { btn.disabled = false; btn.textContent = 'Enviar link'; }
+        var panel = document.getElementById('reset-password-panel');
+        if (panel) {
+          panel.innerHTML =
+            '<div style="padding:8px 0;">' +
+              '<div style="font-size:1.1rem;margin-bottom:6px;text-align:center;">ℹ️</div>' +
+              '<div style="font-weight:700;color:var(--text-bright);font-size:0.88rem;margin-bottom:6px;text-align:center;">Esta conta usa o ' + provLabel + '</div>' +
+              '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;text-align:center;">A conta <b>' + email + '</b> foi criada com o botão "Entrar com ' + provLabel + '". Não é necessária senha — use o mesmo botão para entrar.</div>' +
+              '<button onclick="document.getElementById(\'reset-password-panel\').remove();handleGoogleLogin && handleGoogleLogin()" class="btn" style="width:100%;background:#fff;color:#1a1a2e;font-weight:700;font-size:0.85rem;padding:9px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.2);">' +
+                '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
+                'Entrar com ' + provLabel +
+              '</button>' +
+              '<div style="text-align:center;margin-top:8px;">' +
+                '<button onclick="document.getElementById(\'reset-password-panel\').remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.75rem;text-decoration:underline;">Fechar</button>' +
+              '</div>' +
+            '</div>';
+        }
+        return;
+      }
+      // Conta com email/senha → enviar reset normalmente
+      _sendPasswordResetEmail(email);
+    })
+    .catch(function() {
+      // Não conseguiu verificar → tentar enviar mesmo assim
+      _sendPasswordResetEmail(email);
+    });
 };
 
 function _sendPasswordResetEmail(email) {
