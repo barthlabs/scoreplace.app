@@ -1814,34 +1814,90 @@ function handleEmailRegister() {
 }
 
 // ─── Password Reset ──────────────────────────────────────────────────────────
+// v1.8.69: abre painel inline no modal de login com campo de email pré-preenchido.
 function handlePasswordReset() {
-  var emailEl = document.getElementById('login-email');
-  var email = emailEl ? emailEl.value.trim() : '';
-  if (!email) {
-    showNotification(_t('auth.enterEmail'), _t('auth.enterEmailReset'), 'info');
-    if (emailEl) emailEl.focus();
+  // Pré-preencher com o email que já está digitado no campo de login
+  var loginEmail = (document.getElementById('login-email') || {}).value || '';
+
+  // Remover painel anterior se existir
+  var old = document.getElementById('reset-password-panel');
+  if (old) old.remove();
+
+  // Criar painel inline acima do formulário email/senha
+  var emailLoginMode = document.getElementById('email-login-mode');
+  if (!emailLoginMode) {
+    // Fallback: prompt simples
+    var fb = window.prompt('Digite seu e-mail para redefinir a senha:', loginEmail);
+    if (fb) _sendPasswordResetEmail(fb.trim());
     return;
   }
 
-  showNotification(_t('auth.sending'), _t('auth.sendingReset'), 'info');
+  var panel = document.createElement('div');
+  panel.id = 'reset-password-panel';
+  panel.style.cssText = 'margin-bottom:12px;padding:14px 16px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:12px;animation:fadeIn 0.2s ease;';
+  panel.innerHTML =
+    '<div style="font-weight:700;font-size:0.88rem;color:var(--text-bright);margin-bottom:4px;">🔑 Redefinir senha</div>' +
+    '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;">Enviaremos um link para você criar uma nova senha.</div>' +
+    '<input type="email" id="reset-email-input" class="form-control" placeholder="seu@email.com" value="' + (loginEmail.replace(/"/g,'&quot;')) + '" style="font-size:0.88rem;margin-bottom:8px;" autocomplete="email">' +
+    '<div style="display:flex;gap:8px;">' +
+      '<button onclick="window._doPasswordReset()" class="btn btn-primary" style="flex:1;font-size:0.85rem;padding:8px 12px;">Enviar link</button>' +
+      '<button onclick="document.getElementById(\'reset-password-panel\').remove()" class="btn" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted);font-size:0.85rem;padding:8px 12px;">Cancelar</button>' +
+    '</div>' +
+    '<div id="reset-status" style="margin-top:8px;font-size:0.78rem;"></div>';
+
+  emailLoginMode.parentNode.insertBefore(panel, emailLoginMode);
+  // Focar no campo e posicionar cursor no fim
+  setTimeout(function() {
+    var inp = document.getElementById('reset-email-input');
+    if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = inp.value.length; }
+  }, 50);
+}
+
+window._doPasswordReset = function() {
+  var inp = document.getElementById('reset-email-input');
+  var email = inp ? inp.value.trim() : '';
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    var statusEl = document.getElementById('reset-status');
+    if (statusEl) statusEl.innerHTML = '<span style="color:#f87171;">Digite um e-mail válido.</span>';
+    return;
+  }
+  _sendPasswordResetEmail(email);
+};
+
+function _sendPasswordResetEmail(email) {
+  var statusEl = document.getElementById('reset-status');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">Enviando...</span>';
+  var btn = document.querySelector('#reset-password-panel .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+
   firebase.auth().sendPasswordResetEmail(email, {
     url: 'https://scoreplace.app/#dashboard',
     handleCodeInApp: false
   })
     .then(function() {
-      showNotification(_t('auth.emailSent'), _t('auth.emailSentMsg', {email: email}), 'success');
+      var panel = document.getElementById('reset-password-panel');
+      if (panel) {
+        panel.innerHTML =
+          '<div style="text-align:center;padding:8px 0;">' +
+            '<div style="font-size:1.4rem;margin-bottom:6px;">✅</div>' +
+            '<div style="font-weight:700;color:var(--text-bright);font-size:0.9rem;margin-bottom:4px;">Link enviado!</div>' +
+            '<div style="font-size:0.78rem;color:var(--text-muted);">Verifique <b>' + email + '</b>.<br>Clique no link do e-mail para criar sua nova senha.</div>' +
+            '<button onclick="document.getElementById(\'reset-password-panel\').remove()" style="margin-top:10px;background:none;border:none;color:var(--primary-color);cursor:pointer;font-size:0.8rem;text-decoration:underline;">Fechar</button>' +
+          '</div>';
+      }
     })
     .catch(function(error) {
       window._error('Password reset error:', error);
+      var statusEl2 = document.getElementById('reset-status');
+      var btn2 = document.querySelector('#reset-password-panel .btn-primary');
+      if (btn2) { btn2.disabled = false; btn2.textContent = 'Enviar link'; }
+      var msg = 'Erro ao enviar. Tente novamente.';
       if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
-        showNotification(_t('auth.emailNotFound'), _t('auth.emailNotFoundMsg'), 'error');
+        msg = 'E-mail não encontrado. Verifique e tente novamente.';
       } else if (error.code === 'auth/too-many-requests') {
-        showNotification(_t('auth.tooManyAttempts'), _t('auth.tooManyReset'), 'warning');
-      } else if (error.code === 'auth/operation-not-allowed') {
-        showNotification(_t('auth.notAvailable'), _t('auth.resetUnavailable'), 'warning');
-      } else {
-        showNotification(_t('auth.error'), error.message || _t('auth.resetErrorMsg'), 'error');
+        msg = 'Muitas tentativas. Aguarde alguns minutos.';
       }
+      if (statusEl2) statusEl2.innerHTML = '<span style="color:#f87171;">' + msg + '</span>';
     });
 }
 
