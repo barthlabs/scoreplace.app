@@ -1107,7 +1107,16 @@ function _getCheckInStatus(tId, teamName) {
 
 // ─── Player photo cache (loaded from Firestore) ─────────────────────────────
 // Maps displayName (lowercase) -> photoURL
-window._playerPhotoCache = window._playerPhotoCache || {};
+// v1.8.57: reset automático por versão para evitar cache de dados corrompidos
+(function() {
+  var _cacheVer = 'scoreplace_photocache_v1.8.57';
+  if (sessionStorage.getItem('_photoCacheVer') !== _cacheVer) {
+    window._playerPhotoCache = {};
+    try { sessionStorage.setItem('_photoCacheVer', _cacheVer); } catch(e) {}
+  } else {
+    window._playerPhotoCache = window._playerPhotoCache || {};
+  }
+})();
 
 // Pre-load participant photos from Firestore for a tournament
 async function _preloadPlayerPhotos(tournament) {
