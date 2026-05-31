@@ -128,6 +128,33 @@ window.FirestoreDB = {
     return Object.keys(set);
   },
 
+  // v1.8.62: memberUids[] — UIDs de todos os participantes + organizador.
+  // Permite que usuários phone-only (sem email) sejam identificados nas
+  // regras do Firestore, onde authEmail() retorna '' para esses usuários.
+  _computeMemberUids(data) {
+    if (!data) return [];
+    var set = {};
+    var push = function(u) {
+      if (!u || typeof u !== 'string' || u.length < 4) return;
+      set[u] = true;
+    };
+    push(data.creatorUid);
+    if (Array.isArray(data.coHosts)) {
+      data.coHosts.forEach(function(ch) { if (ch && ch.status === 'active') push(ch.uid); });
+    }
+    var parts = Array.isArray(data.participants) ? data.participants : [];
+    parts.forEach(function(p) {
+      if (!p || typeof p === 'string') return;
+      push(p.uid);
+      // Dupla formada: p1Uid e p2Uid
+      push(p.p1Uid); push(p.p2Uid);
+      if (Array.isArray(p.participants)) {
+        p.participants.forEach(function(sub) { if (sub) push(sub.uid); });
+      }
+    });
+    return Object.keys(set);
+  },
+
   async saveTournament(tourData, options) {
     if (!this.db) return;
     var docId = String(tourData.id);
@@ -146,7 +173,8 @@ window.FirestoreDB = {
       delete cleanData.adminEmails;
     } else {
       cleanData.memberEmails = this._computeMemberEmails(cleanData);
-      cleanData.adminEmails = this._computeAdminEmails(cleanData);
+      cleanData.adminEmails  = this._computeAdminEmails(cleanData);
+      cleanData.memberUids   = this._computeMemberUids(cleanData);
     }
     await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
   },
@@ -223,9 +251,11 @@ window.FirestoreDB = {
 
       participants.push(self._cleanUndefined(participantObj));
 
+      var _enrollData = Object.assign({}, data, { participants: participants });
       var updateData = {
         participants: participants,
-        memberEmails: self._computeMemberEmails(Object.assign({}, data, { participants: participants }))
+        memberEmails: self._computeMemberEmails(_enrollData),
+        memberUids:   self._computeMemberUids(_enrollData)
       };
       if (extraUpdates) {
         Object.keys(extraUpdates).forEach(function(k) {
@@ -273,9 +303,11 @@ window.FirestoreDB = {
         return { notFound: true, participants: participants };
       }
 
+      var _deenrollData = Object.assign({}, data, { participants: newParticipants });
       transaction.update(docRef, {
         participants: newParticipants,
-        memberEmails: self._computeMemberEmails(Object.assign({}, data, { participants: newParticipants }))
+        memberEmails: self._computeMemberEmails(_deenrollData),
+        memberUids:   self._computeMemberUids(_deenrollData)
       });
       return { notFound: false, participants: newParticipants };
     });

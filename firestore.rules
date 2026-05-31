@@ -35,7 +35,7 @@ service cloud.firestore {
     // outside this set requires admin rights.
     function isEnrollmentOnlyDiff() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['participants', 'memberEmails', 'status', 'teamOrigins']);
+        .hasOnly(['participants', 'memberEmails', 'memberUids', 'status', 'teamOrigins']);
     }
 
     // Participante aceita convite de co-organização (muda seu próprio status
@@ -47,13 +47,25 @@ service cloud.firestore {
            .hasOnly(['coHosts', 'adminEmails', 'memberEmails']);
     }
 
-    // Participant of the tournament (uses denormalized memberEmails[]).
-    // Required pra que participantes possam lançar/aprovar resultados,
-    // marcar check-in, etc., sem precisar virar admin.
+    // Participant of the tournament.
+    // v1.8.62: verifica por email OU por uid (memberUids[]).
+    // Usuários phone-only não têm email no token — authEmail() retorna ''
+    // para eles. A verificação por uid garante que esses usuários consigam
+    // lançar/aprovar resultados, marcar check-in, etc.
     function isTournamentParticipant(data) {
-      return authEmail() != ''
-        && data.memberEmails is list
-        && authEmail() in data.memberEmails;
+      return request.auth != null && (
+        // Caminho email (usuários com email/Google/magic-link)
+        (authEmail() != '' && data.memberEmails is list && authEmail() in data.memberEmails)
+        // Caminho uid (usuários phone-only sem email)
+        || (data.memberUids is list && data.memberUids.size() > 0 && request.auth.uid in data.memberUids)
+      );
+    }
+
+    // v1.8.62: admin por uid (creatorUid) — fallback para organizadores phone-only.
+    function isTournamentAdminByUid(data) {
+      return request.auth != null
+        && data.creatorUid is string
+        && data.creatorUid == request.auth.uid;
     }
 
     // v0.17.24: Diff que participantes podem fazer. Lista positiva expandida
@@ -121,13 +133,16 @@ service cloud.firestore {
       allow update: if request.auth != null
         && (
           isTournamentAdmin(resource.data)
+          // v1.8.62: admin por uid (organizador phone-only sem email)
+          || isTournamentAdminByUid(resource.data)
           || isEnrollmentOnlyDiff()
           || (isTournamentParticipant(resource.data) && isParticipantBracketDiff())
           || isCoHostAcceptanceDiff()
         );
 
       // Delete: admins only.
-      allow delete: if request.auth != null && isTournamentAdmin(resource.data);
+      allow delete: if request.auth != null
+        && (isTournamentAdmin(resource.data) || isTournamentAdminByUid(resource.data));
     }
 
     // ─── User profiles ───────────────────────────────────────────────────────
