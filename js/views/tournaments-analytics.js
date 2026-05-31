@@ -1,5 +1,98 @@
 // ── Analytics & Details Functions ──
 
+// _openPlayerProfile: abre perfil do jogador.
+// - Próprio usuário → navega para #profile (editável, propaga tudo)
+// - Outro jogador → overlay read-only com foto, info + stats
+window._openPlayerProfile = function(playerName, opts) {
+  opts = opts || {};
+  var uid = opts.uid || '';
+  var cu = window.AppStore && window.AppStore.currentUser;
+
+  // Verificar se é o próprio usuário (por uid ou por nome)
+  var isSelf = (uid && cu && uid === cu.uid) ||
+               (!uid && cu && cu.displayName &&
+                cu.displayName.toLowerCase().trim() === String(playerName || '').toLowerCase().trim());
+
+  if (isSelf) {
+    // Próprio perfil → editar
+    window.location.hash = '#profile';
+    return;
+  }
+
+  // Outro jogador → buscar perfil no Firestore e mostrar overlay read-only
+  var db = window.FirestoreDB && window.FirestoreDB.db;
+  if (!db) { if (typeof window._showPlayerStats === 'function') window._showPlayerStats(playerName, opts.tournamentId); return; }
+
+  var _renderProfileOverlay = function(profile) {
+    var name    = (profile && profile.displayName) || playerName || '?';
+    var photo   = (profile && profile.photoURL) || (window._playerPhotoCache && window._playerPhotoCache[String(playerName||'').toLowerCase()]) || '';
+    var city    = (profile && profile.city) || '';
+    var sports  = (profile && Array.isArray(profile.preferredSports)) ? profile.preferredSports : [];
+    var seed    = encodeURIComponent(name);
+    var fallback= 'https://api.dicebear.com/9.x/initials/svg?seed=' + seed + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=80';
+    var avatarSrc = (photo && photo.indexOf('dicebear.com') === -1) ? photo : fallback;
+
+    // Remover overlay anterior
+    var old = document.getElementById('player-profile-overlay');
+    if (old) old.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'player-profile-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:10050;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;';
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+    var sportsHtml = sports.length
+      ? '<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:8px;">' +
+        sports.map(function(s) { return '<span style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:20px;padding:2px 10px;font-size:0.72rem;color:#a5b4fc;">' + window._safeHtml(s) + '</span>'; }).join('') +
+        '</div>' : '';
+
+    overlay.innerHTML =
+      '<div style="background:var(--bg-card,#1e293b);border-radius:16px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto;">' +
+        '<div style="display:flex;justify-content:flex-end;padding:12px 14px 0;">' +
+          '<button onclick="document.getElementById(\'player-profile-overlay\').remove()" style="background:none;border:none;color:var(--text-muted,#94a3b8);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>' +
+        '</div>' +
+        '<div style="padding:0 24px 20px;text-align:center;">' +
+          '<img src="' + window._safeHtml(avatarSrc) + '" onerror="this.src=\'' + fallback + '\'" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(99,102,241,0.4);margin-bottom:10px;">' +
+          '<div style="font-size:1.2rem;font-weight:800;color:var(--text-bright,#f1f5f9);">' + window._safeHtml(name) + '</div>' +
+          (city ? '<div style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:3px;">📍 ' + window._safeHtml(city) + '</div>' : '') +
+          sportsHtml +
+        '</div>' +
+        '<div style="border-top:1px solid var(--border-color,rgba(255,255,255,0.08));padding:12px 24px 20px;" id="player-profile-stats-slot">' +
+          '<div style="text-align:center;color:var(--text-muted);font-size:0.8rem;">Carregando estatísticas…</div>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    // Injetar stats no slot
+    setTimeout(function() {
+      var slot = document.getElementById('player-profile-stats-slot');
+      if (!slot) return;
+      if (typeof window._showPlayerStats !== 'function') { slot.innerHTML = ''; return; }
+      // Capturar o HTML das stats sem mostrar o modal — usa helper interno
+      if (typeof window._buildPlayerStatsHtml === 'function') {
+        slot.innerHTML = window._buildPlayerStatsHtml(playerName, opts.tournamentId);
+      } else {
+        // Fallback: botão para abrir o modal de stats
+        slot.innerHTML = '<div style="text-align:center;">' +
+          '<button onclick="document.getElementById(\'player-profile-overlay\').remove();window._showPlayerStats(\'' + window._safeHtml(playerName).replace(/'/g,"\\'") + '\')" class="btn btn-outline btn-sm" style="font-size:0.8rem;">📊 Ver estatísticas detalhadas</button>' +
+          '</div>';
+      }
+    }, 50);
+  };
+
+  // Buscar perfil: uid direto > query por displayName
+  if (uid) {
+    db.collection('users').doc(uid).get()
+      .then(function(doc) { _renderProfileOverlay(doc.exists ? doc.data() : null); })
+      .catch(function() { _renderProfileOverlay(null); });
+  } else {
+    db.collection('users').where('displayName', '==', playerName).limit(1).get()
+      .then(function(snap) { _renderProfileOverlay(!snap.empty ? snap.docs[0].data() : null); })
+      .catch(function() { _renderProfileOverlay(null); });
+  }
+};
+
 // Resolve a photoURL for a player name by checking currentUser and friends,
 // plus looking through any matchHistory player records that carry photoURL.
 window._resolvePlayerPhoto = function(playerName, opts) {
