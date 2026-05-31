@@ -73,6 +73,77 @@
   }
 })();
 
+// ── Verificação de email secundário (?verify_email=TOKEN) ────────────────────
+// Quando o usuário clica no link de confirmação enviado pela função _profileSendEmailLink,
+// lê o token, busca no Firestore, adiciona o email a linkedEmails[] do dono.
+(function _handleEmailVerification() {
+  try {
+    var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
+    var token = qs && qs.get('verify_email');
+    if (!token) return;
+
+    // Limpar parâmetro da URL imediatamente
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', '/#dashboard');
+    }
+
+    // Aguardar Firestore estar pronto
+    var tries = 0;
+    var resolve = function() {
+      var db = window.FirestoreDB && window.FirestoreDB.db;
+      if (!db) {
+        if (tries++ < 60) return setTimeout(resolve, 100);
+        return;
+      }
+      db.collection('emailVerifications').doc(token).get().then(function(doc) {
+        if (!doc.exists) {
+          if (window.showNotification) window.showNotification('Link inválido', 'Este link de verificação não existe ou já foi usado.', 'error');
+          return;
+        }
+        var data = doc.data() || {};
+        if (data.verified) {
+          if (window.showNotification) window.showNotification('Já confirmado', data.emailToVerify + ' já está vinculado.', 'info');
+          return;
+        }
+        if (new Date(data.expiresAt) < new Date()) {
+          if (window.showNotification) window.showNotification('Link expirado', 'Solicite uma nova verificação no seu perfil.', 'warning');
+          return;
+        }
+        var ownerUid = data.ownerUid;
+        var emailToVerify = data.emailToVerify;
+        // Adicionar à linkedEmails do dono
+        db.collection('users').doc(ownerUid).get().then(function(userDoc) {
+          var userData = userDoc.exists ? (userDoc.data() || {}) : {};
+          var linked = Array.isArray(userData.linkedEmails) ? userData.linkedEmails.slice() : [];
+          if (linked.indexOf(emailToVerify) === -1) linked.push(emailToVerify);
+          return db.collection('users').doc(ownerUid).update({ linkedEmails: linked });
+        }).then(function() {
+          // Marcar token como usado
+          return doc.ref.update({ verified: true, verifiedAt: new Date().toISOString() });
+        }).then(function() {
+          if (window.showNotification) {
+            window.showNotification('✅ E-mail confirmado!', emailToVerify + ' foi vinculado à sua conta.', 'success');
+          }
+          // Atualizar currentUser em memória se for o dono
+          var cu = window.AppStore && window.AppStore.currentUser;
+          if (cu && cu.uid === ownerUid) {
+            var linked2 = Array.isArray(cu.linkedEmails) ? cu.linkedEmails.slice() : [];
+            if (linked2.indexOf(emailToVerify) === -1) linked2.push(emailToVerify);
+            cu.linkedEmails = linked2;
+            if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
+          }
+        }).catch(function(e) {
+          window._warn('[EmailVerify] update error:', e);
+          if (window.showNotification) window.showNotification('Erro ao vincular', e && e.message, 'error');
+        });
+      }).catch(function(e) {
+        window._warn('[EmailVerify] read error:', e);
+      });
+    };
+    setTimeout(resolve, 500);
+  } catch(e) {}
+})();
+
 // v1.3.83-beta: WhatsApp Magic Link Wrapper — detecta /?wt=TOKEN gerado por
 // sendWhatsAppMagicLink (Cloud Function). Diferente do ?ml= (email magic link
 // que redireciona pro Firebase), o ?wt= usa signInWithCustomToken — login
@@ -5697,28 +5768,62 @@ function setupProfileModal() {
         if (window.showNotification) window.showNotification('Mesmo e-mail', 'Este já é o seu e-mail principal.', 'warning');
         return;
       }
-      // Salvar intenção no localStorage para detectar quando o link for clicado
-      try {
-        localStorage.setItem('scoreplace_linkEmailIntent', JSON.stringify({
-          ownerUid: cu.uid,
-          emailToLink: email,
-          requestedAt: Date.now()
-        }));
-      } catch(e) {}
-      // Enviar magic link para o email secundário
-      var sendFn = firebase.functions().httpsCallable('sendMagicLink');
+      var linked = Array.isArray(cu.linkedEmails) ? cu.linkedEmails : [];
+      if (linked.indexOf(email) !== -1) {
+        if (window.showNotification) window.showNotification('Já vinculado', 'Este e-mail já está na sua lista.', 'info');
+        return;
+      }
+
+      var db = window.FirestoreDB && window.FirestoreDB.db;
+      if (!db) return;
+
       inp.disabled = true;
       if (window.showNotification) window.showNotification('📧 Enviando verificação...', email, 'info');
-      sendFn({ email: email })
-        .then(function() {
-          if (window.showNotification) window.showNotification('✅ Link enviado!', 'Verifique ' + email + ' e clique no link para vincular.', 'success');
-          inp.value = '';
-          inp.disabled = false;
-        })
-        .catch(function(err) {
-          inp.disabled = false;
-          if (window.showNotification) window.showNotification('Erro ao enviar', (err && err.message) || 'Tente novamente.', 'error');
+
+      // Gerar token de verificação simples
+      var token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      var verifyUrl = 'https://scoreplace.app/?verify_email=' + token;
+      var expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString(); // 24h
+
+      // Salvar token no Firestore
+      db.collection('emailVerifications').doc(token).set({
+        ownerUid: cu.uid,
+        ownerName: cu.displayName || cu.email || '',
+        emailToVerify: email,
+        createdAt: new Date().toISOString(),
+        expiresAt: expiresAt,
+        verified: false
+      }).then(function() {
+        // Criar email via coleção mail (Trigger Email extension)
+        return db.collection('mail').add({
+          to: [email],
+          message: {
+            subject: 'Confirme seu e-mail no scoreplace.app',
+            html:
+              '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0f172a;color:#e2e8f0;border-radius:12px;">' +
+              '<div style="text-align:center;margin-bottom:24px;">' +
+                '<img src="https://scoreplace.app/icons/icon-192.svg" width="48" height="48" style="border-radius:10px;">' +
+                '<h2 style="color:#fbbf24;margin:12px 0 4px;">scoreplace.app</h2>' +
+              '</div>' +
+              '<p style="font-size:1rem;margin-bottom:8px;">Olá!</p>' +
+              '<p style="color:#94a3b8;margin-bottom:20px;">Clique no botão abaixo para confirmar que <b style="color:#e2e8f0;">' + email + '</b> é seu e-mail e vinculá-lo à sua conta.</p>' +
+              '<div style="text-align:center;margin:24px 0;">' +
+                '<a href="' + verifyUrl + '" style="background:#6366f1;color:#fff;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem;display:inline-block;">Confirmar e-mail</a>' +
+              '</div>' +
+              '<p style="font-size:0.8rem;color:#64748b;text-align:center;">Este link expira em 24 horas. Se você não solicitou isso, ignore este e-mail.</p>' +
+              '</div>'
+          }
         });
+      }).then(function() {
+        inp.value = '';
+        inp.disabled = false;
+        if (window.showNotification) window.showNotification('✅ E-mail enviado!', 'Verifique ' + email + ' e clique no link de confirmação.', 'success');
+        if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
+      }).catch(function(err) {
+        inp.disabled = false;
+        window._warn('[linkEmail] send error:', err);
+        if (window.showNotification) window.showNotification('Erro ao enviar', (err && err.message) || 'Tente novamente.', 'error');
+      });
     };
 
     window._profileUnlinkEmail = function(email) {

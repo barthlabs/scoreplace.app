@@ -207,6 +207,15 @@ service cloud.firestore {
       }
     }
 
+    // ─── Email verification tokens ───────────────────────────────────────────
+    // Criado pelo dono (autenticado) para verificar posse de um email secundário.
+    // Leitura pública (token é o segredo). Update público para marcar como verificado.
+    match /emailVerifications/{token} {
+      allow read: if true;         // token é o segredo — quem tem o link pode ler
+      allow create: if request.auth != null; // só autenticados criam
+      allow update: if true;       // marcar verified=true após clique no link
+    }
+
     // ─── Casual matches ──────────────────────────────────────────────────────
     // Public read so anonymous QR / room-code joins work — no PII. Writes
     // require auth; the claim-slot transaction adds uid to playerUids, so
