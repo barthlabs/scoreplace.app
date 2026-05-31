@@ -1507,8 +1507,10 @@ function _maybeFinishElimination(t) {
     showNotification(_t('bui.tournamentFinished'), _finChampion ? _t('bui.tournamentFinishedChamp', { name: _finChampion }) : _t('bui.tournamentFinishedMsg'), 'success');
   }
   // Notify all participants about tournament finish (idempotent guard)
-  if (!t._finishNotified && typeof window._notifyTournamentParticipants === 'function') {
-    t._finishNotified = true;
+  // v1.8.45-beta: flag persiste no Firestore (finishNotifiedAt) para sobreviver
+  // a page reloads e snapshots que sobrescrevem o objeto em memória.
+  if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
+    t.finishNotifiedAt = new Date().toISOString();
     var _finMsg = _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio');
     if (_finChampion) _finMsg += ' ' + _finChampion + ' ' + _t('notif.isChampion');
     window._notifyTournamentParticipants(t, {
@@ -1759,8 +1761,8 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId) {
     t.status = 'finished';
     showNotification(_t('bui.swissFinishedRounds'), _t('bui.swissFinishedRoundsMsg', { n: maxRounds }), 'success');
     // Notify all participants about Swiss tournament finish
-    if (!t._finishNotified && typeof window._notifyTournamentParticipants === 'function') {
-      t._finishNotified = true;
+    if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
+      t.finishNotifiedAt = new Date().toISOString();
       window._notifyTournamentParticipants(t, {
         type: 'tournament_finished',
         message: _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio'),

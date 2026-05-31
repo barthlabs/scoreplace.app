@@ -537,9 +537,9 @@ function renderTournaments(container, tournamentId = null) {
                 if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
                   window.FirestoreDB.saveTournament(t).catch(function() {});
                 }
-                // Notify participants of season end
-                if (!t._seasonFinishNotified && typeof window._notifyTournamentParticipants === 'function') {
-                  t._seasonFinishNotified = true;
+                // Notify participants of season end (flag persistida no Firestore — v1.8.45)
+                if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
+                  t.finishNotifiedAt = new Date().toISOString();
                   window._notifyTournamentParticipants(t, {
                     type: 'tournament_finished',
                     message: _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio'),

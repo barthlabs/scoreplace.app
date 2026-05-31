@@ -769,7 +769,20 @@ window.FirestoreDB = {
   async addNotification(uid, notifData) {
     if (!this.db || !uid) return;
     try {
-      await this.db.collection('users').doc(uid).collection('notifications').add(notifData);
+      // v1.8.45-beta: ID determinístico em vez de .add() para garantir
+      // idempotência no Firestore. Múltiplas chamadas do mesmo evento
+      // (race, retry, re-render) produzem o MESMO doc — sem duplicatas.
+      // Chave: type + tournamentId + matchId (se houver) + dia UTC + uid receptor.
+      var _type = String(notifData.type || 'info');
+      var _tId  = String(notifData.tournamentId || '');
+      var _mId  = String(notifData.matchId || '');
+      var _day  = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+      var _raw  = [_type, _tId, _mId, _day, uid].join('|');
+      // Converte para ID válido (só alfanumérico + _ + -)
+      var _docId = _raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 200);
+      // .set() com merge:false sobrescreve silenciosamente doc existente.
+      // Notificações não lidas preservam read:false (campo vem no notifData).
+      await this.db.collection('users').doc(uid).collection('notifications').doc(_docId).set(notifData);
     } catch (e) {
       window._error('Erro ao criar notificação:', e);
     }

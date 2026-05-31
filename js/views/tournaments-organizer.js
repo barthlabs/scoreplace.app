@@ -91,19 +91,24 @@ window._resolveOrganizerUid = async function(t) {
 // Window de 30s: suficiente pra cobrir qualquer race sem suprimir notificações
 // legítimas de eventos separados.
 var _notifDedup = {};
-function _notifDedupKey(uid, type, tId) { return uid + '|' + type + '|' + (tId || ''); }
-function _notifDedupCheck(uid, type, tId) {
-    var key = _notifDedupKey(uid, type, tId);
+// v1.8.45-beta: chave inclui matchId (evita falso-dedup entre partidas do
+// mesmo torneio). TTL estendido para 5 minutos (era 30s) — cobre re-renders,
+// retries e double-saves sem suprimir notificações legítimas subsequentes.
+function _notifDedupKey(uid, type, tId, matchId) {
+    return uid + '|' + type + '|' + (tId || '') + '|' + (matchId || '');
+}
+function _notifDedupCheck(uid, type, tId, matchId) {
+    var key = _notifDedupKey(uid, type, tId, matchId);
     var now = Date.now();
-    if (_notifDedup[key] && now - _notifDedup[key] < 30000) return true;
+    if (_notifDedup[key] && now - _notifDedup[key] < 300000) return true; // 5 min
     _notifDedup[key] = now;
     return false;
 }
 
 window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     if (!window.FirestoreDB || !window.FirestoreDB.db || !uid) return;
-    // Dedup guard: mesma notificação pro mesmo uid dentro de 30s é silenciada.
-    if (_notifDedupCheck(uid, notifData.type || '', notifData.tournamentId || '')) {
+    // Dedup guard: mesma notificação pro mesmo uid dentro de 5 min é silenciada.
+    if (_notifDedupCheck(uid, notifData.type || '', notifData.tournamentId || '', notifData.matchId || '')) {
         window._log('[notif] dedup suprimiu', notifData.type, 'para uid', uid.substring(0, 8) + '...');
         return;
     }

@@ -8,6 +8,15 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #ef4444;border-radius:12px;padding:14px 16px;background:rgba(239,68,68,0.07);">' +
+      '<div style="font-weight:800; color:#f87171; font-size:1rem; margin-bottom:8px;">🔔 v1.8.45-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
+      '<p><b>Correção definitiva de notificações duplicadas (2–3x).</b><br><br>' +
+      '<b>Causa raiz:</b> três camadas defeituosas se somavam: (1) o guard de 30s em memória expirava e o mesmo evento re-notificava; (2) a flag <code>_finishNotified</code> existia só em memória — quando o snapshot do Firestore sobrescrevia o objeto, a flag sumia e o "torneio encerrado" era re-enviado; (3) <code>addNotification</code> usava <code>.add()</code> gerando novo doc a cada chamada, sem proteção no banco.<br><br>' +
+      '<b>Três correções em camadas:</b><br>' +
+      '(1) <b>ID determinístico no Firestore:</b> <code>addNotification</code> agora usa <code>.set()</code> com ID calculado de <code>type|tournamentId|matchId|dia|uid</code>. Chamadas duplicadas do mesmo evento no mesmo dia sobrescrevem o mesmo doc — zero duplicatas no banco.<br>' +
+      '(2) <b>Dedup em memória estendido para 5 minutos</b> (era 30s) e a chave agora inclui <code>matchId</code> — evita falso-dedup entre partidas diferentes do mesmo torneio.<br>' +
+      '(3) <b>Flags de "finish notified" persistidas no Firestore</b> como <code>finishNotifiedAt</code> (ISO string). Substitui <code>_finishNotified</code> e <code>_seasonFinishNotified</code> em memória — sobrevive a page reloads e snapshots.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">🎨 v1.8.44-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
       '<p><b>Luminosidade corrigida + lápis no logo + tamanho 1/3 real.</b><br><br>' +
