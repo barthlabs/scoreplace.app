@@ -144,15 +144,17 @@ function renderTournaments(container, tournamentId = null) {
         var newName = name1 + ' / ' + name2;
         var uid1 = typeof p1 === 'object' ? (p1.uid || '') : '';
         var uid2 = typeof p2 === 'object' ? (p2.uid || '') : '';
-        var merged;
-        if (uid1) {
-            merged = Object.assign({}, p1, { displayName: newName, name: newName });
-            if (uid2) merged.partnerUid = uid2;
-        } else if (uid2) {
-            merged = Object.assign({}, p2, { displayName: newName, name: newName });
-        } else {
-            merged = newName;
-        }
+        // Entrada LIMPA: só nome da dupla + uids dos membros.
+        // NUNCA herdar photoURL, email, phone ou qualquer dado pessoal
+        // de um dos membros — isso causaria mistura de identidades.
+        var merged = {
+            displayName: newName,
+            name: newName,
+            uid: uid1 || uid2 || '',
+            p1Name: name1, p1Uid: uid1,
+            p2Name: name2, p2Uid: uid2,
+            ligaActive: true
+        };
 
         var maxI = Math.max(i1, i2), minI = Math.min(i1, i2);
         arr.splice(maxI, 1);
@@ -175,6 +177,43 @@ function renderTournaments(container, tournamentId = null) {
             });
         }
         if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    };
+
+    // Desfazer dupla: separa "Nome1 / Nome2" de volta em dois inscritos solo
+    window._splitDupla = function(tId, teamName) {
+        var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        if (!t) return;
+        var arr = Array.isArray(t.participants) ? t.participants : [];
+
+        var idx = arr.findIndex(function(p) {
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            return n === teamName;
+        });
+        if (idx === -1) return;
+
+        var entry = arr[idx];
+        // Extrair os dois nomes e uids armazenados na entrada
+        var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
+        var parts = nm.split(' / ');
+        if (parts.length < 2) return;
+
+        var p1Name = (entry.p1Name || parts[0] || '').trim();
+        var p2Name = (entry.p2Name || parts[1] || '').trim();
+        var p1Uid  = entry.p1Uid || '';
+        var p2Uid  = entry.p2Uid || '';
+
+        // Criar entradas limpas para cada membro
+        var solo1 = p1Uid ? { displayName: p1Name, name: p1Name, uid: p1Uid, ligaActive: true } : p1Name;
+        var solo2 = p2Uid ? { displayName: p2Name, name: p2Name, uid: p2Uid, ligaActive: true } : p2Name;
+
+        arr.splice(idx, 1, solo1, solo2);
+        t.participants = arr;
+        t.updatedAt = new Date().toISOString();
+
+        window.FirestoreDB.saveTournament(t).then(function() {
+            if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', p1Name + ' e ' + p2Name + ' voltaram para Sem Dupla.', 'info');
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        });
     };
 
     // Inscrever solo em torneio de duplas (sem parceiro definido) — mantido para compat
@@ -2391,11 +2430,14 @@ function renderTournaments(container, tournamentId = null) {
               var style = draggable
                 ? 'display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);cursor:grab;transition:all 0.15s;'
                 : 'display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);transition:all 0.15s;';
+              var desfazerBtn = (!draggable && isOrg)
+                ? '<button onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;color:#f87171;font-size:0.7rem;padding:3px 8px;cursor:pointer;white-space:nowrap;flex-shrink:0;">↩️ Desfazer</button>'
+                : '';
               return '<div ' + dragAttrs + ' style="' + style + '">' +
                 avatar +
                 '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(nm) + '</div>' +
                 (draggable ? '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:1px;">Arraste para formar dupla</div>' : '<div style="font-size:0.65rem;color:#34d399;margin-top:1px;">✅ Dupla formada</div>') +
-                '</div></div>';
+                '</div>' + desfazerBtn + '</div>';
             }
             function _safeAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 
