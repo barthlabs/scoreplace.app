@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">🎨 v1.8.44-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
+      '<p><b>Luminosidade corrigida + lápis no logo + tamanho 1/3 real.</b><br><br>' +
+      '<b>Luminosidade:</b> corrigida para funcionar em Safari iOS — <code>ctx.filter</code> não é suportado em iOS < 15.4. Substituído por overlay branco (clarear) / preto (escurecer) com alpha proporcional ao slider. Funciona em todos os browsers.<br><br>' +
+      '<b>Lápis ✏️:</b> ícone de lápis aparece no canto inferior direito do logo no detalhe do torneio (só para o organizador), indicando que é clicável para edição.<br><br>' +
+      '<b>Tamanho 1/3:</b> removido o cap de 160px que limitava o logo em telas maiores. Agora usa <code>width:33%</code> sem teto, com <code>min-width:100px</code> como piso.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
       '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">🎨 v1.8.43-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
       '<p><b>Editor de logo com luminosidade + logo clicável no detalhe do torneio.</b><br><br>' +
       '<b>Luminosidade:</b> o editor de crop/zoom ganhou um segundo slider (☀−/+☀) para ajustar a luminosidade de −75% a +75%, com label de valor ao vivo. Funciona para upload de logo do torneio e foto de perfil. A luminosidade é aplicada tanto no preview quanto na imagem final exportada.<br><br>' +

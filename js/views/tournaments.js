@@ -1145,10 +1145,15 @@ function renderTournaments(container, tournamentId = null) {
             <!-- Middle Left: Nome + Logo + Favorito -->
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
             <div style="display: flex; align-items: ${t.logoData && tournamentId ? 'flex-start' : 'center'}; gap: ${t.logoData && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
-              ${t.logoData ? `<img src="${t.logoData}" alt="Logo"
-                style="width:min(33%,160px);min-width:90px;aspect-ratio:1/1;border-radius:16px;object-fit:cover;flex-shrink:0;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
-                ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
-              >` : ''}
+              ${t.logoData ? `
+                <div style="position:relative;width:33%;min-width:100px;flex-shrink:0;">
+                  <img src="${t.logoData}" alt="Logo"
+                    style="width:100%;aspect-ratio:1/1;border-radius:16px;object-fit:cover;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
+                    ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
+                  >
+                  ${tournamentId && isOrg ? `<div onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Editar logo" style="position:absolute;bottom:6px;right:6px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.85rem;border:1.5px solid rgba(255,255,255,0.25);transition:background 0.15s;" onmouseover="this.style.background='rgba(99,102,241,0.7)'" onmouseout="this.style.background='rgba(0,0,0,0.55)'">✏️</div>` : ''}
+                </div>
+              ` : ''}
               <div style="flex:1;min-width:0;">
                 <h4 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: white; line-height: 1.2; text-align: left; overflow-wrap: break-word;">
                   ${window._safeHtml(t.name)}

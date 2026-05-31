@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.43-beta';
+window.SCOREPLACE_VERSION = '1.8.44-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -1061,10 +1061,17 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     } else {
       ctx.beginPath(); ctx.roundRect(0, 0, PREV, PREV, 12); ctx.clip();
     }
-    // Luminosidade via canvas filter (1.0 = neutro; 0.25 = -75%; 1.75 = +75%)
-    ctx.filter = 'brightness(' + (1 + brightness / 100) + ')';
     ctx.drawImage(img, dx, dy, sw, sh);
-    ctx.filter = 'none';
+    // Luminosidade: overlay branco (clarear) ou preto (escurecer).
+    // ctx.filter não funciona em Safari iOS < 15.4; esta abordagem funciona
+    // em todos os browsers desde sempre.
+    if (brightness !== 0) {
+      var alpha = Math.abs(brightness) / 100 * 0.9; // 75% → alpha 0.675
+      ctx.fillStyle = brightness > 0
+        ? 'rgba(255,255,255,' + alpha + ')'
+        : 'rgba(0,0,0,' + alpha + ')';
+      ctx.fillRect(0, 0, PREV, PREV);
+    }
     ctx.restore();
     // Borda sutil
     ctx.strokeStyle = 'rgba(99,102,241,0.4)'; ctx.lineWidth = 2;
@@ -1123,9 +1130,14 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     var dy = SIZE/2 + offsetY*ratio - sh/2;
     if (SHAPE === 'circle') { octx.beginPath(); octx.arc(SIZE/2,SIZE/2,SIZE/2,0,Math.PI*2); octx.clip(); }
     else { octx.beginPath(); octx.roundRect(0,0,SIZE,SIZE,Math.round(12*ratio)); octx.clip(); }
-    octx.filter = 'brightness(' + (1 + brightness / 100) + ')';
     octx.drawImage(img, dx, dy, sw, sh);
-    octx.filter = 'none';
+    if (brightness !== 0) {
+      var oAlpha = Math.abs(brightness) / 100 * 0.9;
+      octx.fillStyle = brightness > 0
+        ? 'rgba(255,255,255,' + oAlpha + ')'
+        : 'rgba(0,0,0,' + oAlpha + ')';
+      octx.fillRect(0, 0, SIZE, SIZE);
+    }
     var result = out.toDataURL('image/jpeg', 0.88);
     overlay.remove();
     if (typeof callback === 'function') callback(result);
