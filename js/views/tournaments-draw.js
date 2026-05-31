@@ -1253,38 +1253,57 @@ window.handleDropTeam = function (e, targetIdx) {
             return;
         }
 
+        const arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+        const p1 = arr[sourceIdx];
+        const p2 = arr[targetIdx];
+
+        const uid1 = typeof p1 === 'object' && p1 ? (p1.uid || '') : '';
+        const uid2 = typeof p2 === 'object' && p2 ? (p2.uid || '') : '';
+
+        // v1.8.52: nunca mesclar dois usuários com conta. Mesclagem só é
+        // permitida entre um usuário real (uid) e um nome sem conta (sem uid).
+        if (uid1 && uid2) {
+            showAlertDialog(
+                'Mesclagem não permitida',
+                'Dois usuários com conta não podem ser mesclados. Mesclagem só funciona entre um usuário cadastrado e um nome sem conta.',
+                null, { type: 'warning' }
+            );
+            return;
+        }
+
+        const name1 = typeof p1 === 'string' ? p1 : (p1.displayName || p1.name || p1.email || '');
+        const name2 = typeof p2 === 'string' ? p2 : (p2.displayName || p2.name || p2.email || '');
+
         showConfirmDialog(
             _t('draw.groupPartsTitle'),
             _t('draw.groupPartsMsg'),
             () => {
-                let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-
-                const p1 = arr[sourceIdx];
-                const p2 = arr[targetIdx];
-
-                const name1 = typeof p1 === 'string' ? p1 : (p1.displayName || p1.name || p1.email);
-                const name2 = typeof p2 === 'string' ? p2 : (p2.displayName || p2.name || p2.email);
-
                 const newName = name1 + ' / ' + name2;
+
+                // Manter objeto do usuário com conta, atualizando o nome
+                let mergedEntry;
+                if (uid1) {
+                    mergedEntry = Object.assign({}, p1, { displayName: newName, name: newName });
+                } else if (uid2) {
+                    mergedEntry = Object.assign({}, p2, { displayName: newName, name: newName });
+                } else {
+                    mergedEntry = newName;
+                }
 
                 const maxIdx = Math.max(sourceIdx, targetIdx);
                 const minIdx = Math.min(sourceIdx, targetIdx);
-
                 arr.splice(maxIdx, 1);
                 arr.splice(minIdx, 1);
-
-                arr.splice(minIdx, 0, newName);
+                arr.splice(minIdx, 0, mergedEntry);
                 t.participants = arr;
-                // Registrar origem: equipe formada pelo organizador (drag & drop)
+
                 if (!t.teamOrigins) t.teamOrigins = {};
                 t.teamOrigins[newName] = 'formada';
 
                 window.FirestoreDB.saveTournament(t);
 
                 const container = document.getElementById('view-container');
-                if (container) {
-                    renderTournaments(container, tId);
-                }
+                if (container) renderTournaments(container, tId);
             },
             null,
             { type: 'info', confirmText: _t('btn.group'), cancelText: _t('btn.keepSeparate') }
