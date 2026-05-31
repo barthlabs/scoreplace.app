@@ -1130,8 +1130,10 @@ async function _preloadPlayerPhotos(tournament) {
     } else {
       var name = p.displayName || p.name || '';
       if (name) names.add(name);
-      // If has email and photoURL already, cache it
-      if (name && p.photoURL && p.photoURL.indexOf('dicebear.com') === -1) window._playerPhotoCache[name.toLowerCase()] = p.photoURL;
+      // v1.8.58: NÃO usar p.photoURL diretamente para popular o cache.
+      // O photoURL no objeto participante pode estar desatualizado ou
+      // pertencer a outro usuário (bug de merge). Sempre buscar do perfil
+      // real do usuário via Firestore (query por uid ou displayName abaixo).
     }
   });
 
@@ -1164,9 +1166,29 @@ async function _preloadPlayerPhotos(tournament) {
     );
   });
 
-  // Also try matching by email for participants that have email
+  // v1.8.58: buscar foto por UID (fonte mais confiável — imune a nomes trocados)
   participants.forEach(function(p) {
-    if (typeof p !== 'object' || !p.email) return;
+    if (typeof p !== 'object') return;
+    var uid  = p.uid || '';
+    var name = p.displayName || p.name || '';
+    if (!uid || !name || window._playerPhotoCache[name.toLowerCase()]) return;
+    promises.push(
+      window.FirestoreDB.db.collection('users').doc(uid).get()
+        .then(function(doc) {
+          if (doc.exists) {
+            var data = doc.data();
+            if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1 && name) {
+              window._playerPhotoCache[name.toLowerCase()] = data.photoURL;
+            }
+          }
+        })
+        .catch(function() {})
+    );
+  });
+
+  // Fallback: buscar por email para participantes sem uid
+  participants.forEach(function(p) {
+    if (typeof p !== 'object' || p.uid || !p.email) return;
     var name = p.displayName || p.name || '';
     if (!name || window._playerPhotoCache[name.toLowerCase()]) return;
     promises.push(
