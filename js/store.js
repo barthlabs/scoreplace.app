@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.46-beta';
+window.SCOREPLACE_VERSION = '1.8.47-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -1014,6 +1014,19 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   var panel = document.createElement('div');
   panel.style.cssText = 'background:var(--bg-card,#1e293b);border-radius:16px;padding:20px;max-width:320px;width:95%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.6);';
 
+  // Cores de fundo predefinidas
+  var _bgPresets = [
+    { label: 'Transparente', value: 'transparent', css: 'repeating-conic-gradient(#666 0% 25%, #999 0% 50%) 0 0/12px 12px' },
+    { label: 'Branco',       value: '#ffffff',     css: '#ffffff' },
+    { label: 'Preto',        value: '#000000',     css: '#000000' },
+    { label: 'Creme',        value: '#fffdd0',     css: '#fffdd0' },
+    { label: 'Gelo',         value: '#e8f4f8',     css: '#e8f4f8' },
+    { label: 'Cinza',        value: '#94a3b8',     css: '#94a3b8' },
+  ];
+  var _bgSwatchHtml = _bgPresets.map(function(p, i) {
+    return '<button id="crop-bg-' + i + '" title="' + p.label + '" onclick="window._cropPickBg(' + i + ')" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;flex-shrink:0;background:' + p.css + ';padding:0;"></button>';
+  }).join('');
+
   panel.innerHTML =
     '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright,#f1f5f9);margin-bottom:14px;">' + TITLE + '</div>' +
     '<canvas id="crop-canvas" width="' + PREV + '" height="' + PREV + '" style="border-radius:' + (SHAPE==='circle'?'50%':'12px') + ';cursor:move;touch-action:none;max-width:100%;"></canvas>' +
@@ -1028,7 +1041,15 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">+☀</span>' +
       '<span id="crop-brightness-label" style="font-size:0.7rem;color:#fbbf24;min-width:32px;text-align:right;">0%</span>' +
     '</div>' +
-    '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">Arraste para reposicionar · Zoom · Luminosidade</div>' +
+    '<div style="margin:6px 0 8px;">' +
+      '<div style="font-size:0.65rem;color:var(--text-muted,#94a3b8);margin-bottom:5px;text-align:left;">Fundo</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+        _bgSwatchHtml +
+        '<button id="crop-bg-eyedropper" title="Conta-gotas — capturar cor da tela" onclick="window._cropEyedropper()" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;background:rgba(255,255,255,0.08);font-size:0.8rem;padding:0;flex-shrink:0;">🩸</button>' +
+        '<input type="color" id="crop-bg-custom" title="Cor personalizada" onchange="window._cropCustomColor(this.value)" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;padding:1px;background:none;flex-shrink:0;">' +
+      '</div>' +
+    '</div>' +
+    '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">Arraste · Zoom · Luminosidade · Fundo</div>' +
     '<div style="display:flex;gap:10px;">' +
       '<button id="crop-cancel" class="btn btn-sm" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted,#94a3b8);border:1px solid rgba(255,255,255,0.1);">Cancelar</button>' +
       '<button id="crop-confirm" class="btn btn-sm btn-primary" style="flex:2;">✅ Confirmar</button>' +
@@ -1046,8 +1067,31 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   var img = new Image();
   var scale = 1.0;
   var brightness = 0; // -75 to +75
+  var bgColor = 'transparent'; // fundo do canvas
   var offsetX = 0, offsetY = 0;
   var isDragging = false, lastX = 0, lastY = 0;
+
+  function _setBg(color) {
+    bgColor = color;
+    // Destacar swatch ativo
+    _bgPresets.forEach(function(p, i) {
+      var el = document.getElementById('crop-bg-' + i);
+      if (el) el.style.border = (p.value === color) ? '2px solid #6366f1' : '2px solid rgba(255,255,255,0.3)';
+    });
+    draw();
+  }
+  // Helpers expostos globalmente para os onclick inline
+  window._cropPickBg = function(i) { if (_bgPresets[i]) _setBg(_bgPresets[i].value); };
+  window._cropCustomColor = function(v) { _setBg(v); };
+  window._cropEyedropper = function() {
+    if ('EyeDropper' in window) {
+      new window.EyeDropper().open().then(function(r) { _setBg(r.sRGBHex); }).catch(function() {});
+    } else {
+      // Fallback: abre o color picker nativo
+      var el = document.getElementById('crop-bg-custom');
+      if (el) el.click();
+    }
+  };
 
   function draw() {
     ctx.clearRect(0, 0, PREV, PREV);
@@ -1060,6 +1104,11 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       ctx.beginPath(); ctx.arc(PREV/2, PREV/2, PREV/2, 0, Math.PI*2); ctx.clip();
     } else {
       ctx.beginPath(); ctx.roundRect(0, 0, PREV, PREV, 12); ctx.clip();
+    }
+    // Preencher fundo antes de desenhar a imagem
+    if (bgColor && bgColor !== 'transparent') {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, PREV, PREV);
     }
     ctx.drawImage(img, dx, dy, sw, sh);
     // Luminosidade: overlay branco (clarear) ou preto (escurecer).
@@ -1130,6 +1179,10 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     var dy = SIZE/2 + offsetY*ratio - sh/2;
     if (SHAPE === 'circle') { octx.beginPath(); octx.arc(SIZE/2,SIZE/2,SIZE/2,0,Math.PI*2); octx.clip(); }
     else { octx.beginPath(); octx.roundRect(0,0,SIZE,SIZE,Math.round(12*ratio)); octx.clip(); }
+    if (bgColor && bgColor !== 'transparent') {
+      octx.fillStyle = bgColor;
+      octx.fillRect(0, 0, SIZE, SIZE);
+    }
     octx.drawImage(img, dx, dy, sw, sh);
     if (brightness !== 0) {
       var oAlpha = Math.abs(brightness) / 100 * 0.9;

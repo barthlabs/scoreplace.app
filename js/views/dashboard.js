@@ -515,13 +515,17 @@ function renderDashboard(container) {
                ${enrollBtnHtml}
             </div>` : ''}
 
-            <!-- Middle Left: Nome + Logo + Favorito -->
-            <div style="display: flex; align-items: center; gap: 14px; margin: 1.8rem 0 1.5rem 0;">
-              ${t.logoData ? `<img src="${t.logoData}" alt="Logo" style="width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">` : ''}
-              <h4 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: white; line-height: 1.2; text-align: left; flex: 1;">
-                ${window._safeHtml(t.name)}
-              </h4>
-              <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.5rem;cursor:pointer;flex-shrink:0;color:${_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '♥' : '♡'}</span>
+            <!-- Middle: Logo 1/3 + conteúdo 2/3 -->
+            <div style="display:flex;align-items:flex-start;gap:14px;margin:1.4rem 0 1.2rem 0;">
+              ${t.logoData ? `<div style="width:33%;min-width:80px;flex-shrink:0;"><img src="${t.logoData}" alt="Logo" style="width:100%;aspect-ratio:1/1;border-radius:12px;object-fit:cover;display:block;box-shadow:0 4px 16px rgba(0,0,0,0.4);"></div>` : ''}
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0;">
+                <div style="display:flex;align-items:flex-start;gap:6px;">
+                  <h4 style="margin:0;font-size:1.5rem;font-weight:800;color:white;line-height:1.2;flex:1;overflow-wrap:break-word;">
+                    ${window._safeHtml(t.name)}
+                  </h4>
+                  <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.4rem;cursor:pointer;flex-shrink:0;color:${_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;margin-top:2px;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '♥' : '♡'}</span>
+                </div>
+              </div>
             </div>
 
             ${t.venueName ? `
