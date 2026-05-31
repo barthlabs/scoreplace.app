@@ -1297,13 +1297,20 @@ window.handleDropTeam = function (e, targetIdx) {
 
                 if (i1 === -1 || i2 === -1 || i1 === i2) return; // segurança
 
-                // Criar entrada da dupla preservando uid e dados do usuário com conta
+                // Entrada LIMPA — nunca herdar foto/email de um dos membros
+                const p1final = arr[i1];
+                const p2final = arr[i2];
+                const fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
+                const fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
                 let mergedEntry;
-                if (uid1) {
-                    mergedEntry = Object.assign({}, arr[i1], { displayName: newName, name: newName });
-                    if (uid2) mergedEntry.partnerUid = uid2;
-                } else if (uid2) {
-                    mergedEntry = Object.assign({}, arr[i2], { displayName: newName, name: newName });
+                if (fuid1 || fuid2) {
+                    mergedEntry = {
+                        displayName: newName, name: newName,
+                        uid: fuid1 || fuid2,
+                        p1Name: name1, p1Uid: fuid1,
+                        p2Name: name2, p2Uid: fuid2,
+                        ligaActive: true
+                    };
                 } else {
                     mergedEntry = newName;
                 }

@@ -144,39 +144,34 @@ function renderTournaments(container, tournamentId = null) {
         var newName = name1 + ' / ' + name2;
         var uid1 = typeof p1 === 'object' ? (p1.uid || '') : '';
         var uid2 = typeof p2 === 'object' ? (p2.uid || '') : '';
-        // Entrada LIMPA: só nome da dupla + uids dos membros.
-        // NUNCA herdar photoURL, email, phone ou qualquer dado pessoal
-        // de um dos membros — isso causaria mistura de identidades.
-        var merged = {
-            displayName: newName,
-            name: newName,
-            uid: uid1 || uid2 || '',
-            p1Name: name1, p1Uid: uid1,
-            p2Name: name2, p2Uid: uid2,
-            ligaActive: true
-        };
 
-        var maxI = Math.max(i1, i2), minI = Math.min(i1, i2);
-        arr.splice(maxI, 1);
-        arr.splice(minI, 1);
-        arr.splice(minI, 0, merged);
-        t.participants = arr;
-        if (!t.teamOrigins) t.teamOrigins = {};
-        t.teamOrigins[newName] = 'formada';
-        t.updatedAt = new Date().toISOString();
-
-        window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
-        // Notificar parceiro
-        if (uid2 && typeof window._sendUserNotification === 'function') {
-            var cu = window.AppStore.currentUser;
-            window._sendUserNotification(uid2, {
-                type: 'enrollment_new', title: '🤝 Dupla formada!',
-                message: (cu && cu.displayName ? cu.displayName : 'O organizador') + ' formou dupla com você em ' + window._safeHtml(t.name || '') + ': ' + window._safeHtml(newName),
-                tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental'
-            });
+        function _doFormDupla() {
+            // Entrada LIMPA — sem herdar foto/email de nenhum membro
+            var arr2 = Array.isArray(t.participants) ? t.participants : [];
+            var fi1 = arr2.findIndex(function(p) { return uid1 ? (typeof p === 'object' && p.uid === uid1) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name1); });
+            var fi2 = arr2.findIndex(function(p) { return uid2 ? (typeof p === 'object' && p.uid === uid2) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name2); });
+            if (fi1 === -1 || fi2 === -1 || fi1 === fi2) return;
+            var merged = { displayName: newName, name: newName, uid: uid1 || uid2 || '', p1Name: name1, p1Uid: uid1, p2Name: name2, p2Uid: uid2, ligaActive: true };
+            var maxI = Math.max(fi1, fi2), minI = Math.min(fi1, fi2);
+            arr2.splice(maxI, 1); arr2.splice(minI, 1); arr2.splice(minI, 0, merged);
+            t.participants = arr2;
+            if (!t.teamOrigins) t.teamOrigins = {};
+            t.teamOrigins[newName] = 'formada';
+            t.updatedAt = new Date().toISOString();
+            window.FirestoreDB.saveTournament(t);
+            if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
+            if (uid2 && uid2 !== uid1 && typeof window._sendUserNotification === 'function') {
+                var cu = window.AppStore.currentUser;
+                window._sendUserNotification(uid2, { type: 'enrollment_new', title: '🤝 Dupla formada!', message: (cu && cu.displayName ? cu.displayName : 'O organizador') + ' formou dupla com você em ' + window._safeHtml(t.name || '') + ': ' + window._safeHtml(newName), tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
+            }
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
         }
-        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+
+        if (typeof showConfirmDialog === 'function') {
+            showConfirmDialog('👫 Formar dupla?', '"' + name1 + '" e "' + name2 + '" vão formar a dupla.', _doFormDupla, null, { type: 'info', confirmText: 'Formar dupla', cancelText: 'Cancelar' });
+        } else {
+            _doFormDupla();
+        }
     };
 
     // Desfazer dupla: separa "Nome1 / Nome2" de volta em dois inscritos solo
@@ -2411,7 +2406,7 @@ function renderTournaments(container, tournamentId = null) {
             </div>`;
 
             // ── Torneios de duplas: layout em duas seções ─────────────────────────
-            const _isDoublesTournament = (t.enrollmentMode === 'time' || t.enrollmentMode === 'misto') && (t.teamSize || 2) === 2;
+            const _isDoublesTournament = (t.enrollmentMode === 'time' || t.enrollmentMode === 'misto') && parseInt(t.teamSize || 2) === 2;
             const _allParts = Array.isArray(t.participants) ? t.participants : [];
             const _soloParticipants  = _isDoublesTournament ? _allParts.filter(function(p) { var n = typeof p === 'string' ? p : (p.displayName || p.name || ''); return n && !n.includes('/'); }) : [];
             const _pairedParticipants = _isDoublesTournament ? _allParts.filter(function(p) { var n = typeof p === 'string' ? p : (p.displayName || p.name || ''); return n && n.includes('/'); }) : [];
