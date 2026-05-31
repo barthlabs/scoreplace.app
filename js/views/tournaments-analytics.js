@@ -24,7 +24,7 @@ window._openPlayerProfile = function(playerName, opts) {
     var seed = encodeURIComponent(name||'?');
     var fb = 'https://api.dicebear.com/9.x/initials/svg?seed='+seed+'&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size='+sz;
     var src = (photo && photo.indexOf('dicebear.com')===-1) ? photo : fb;
-    return '<img src="'+_sh(src)+'" onerror="this.onerror=null;this.src=\''+fb+'\'" style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+    return '<img src="'+_sh(src)+'" onerror="this.onerror=null;this.src=\''+fb+'\'" style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;object-fit:cover;display:block;margin:0 auto;">';
   };
   var _pill = function(label, bg) {
     return '<span style="background:'+( bg||'rgba(99,102,241,0.15)')+';border:1px solid rgba(99,102,241,0.3);border-radius:20px;padding:2px 10px;font-size:0.72rem;color:#a5b4fc;">'+_sh(label)+'</span>';
@@ -148,8 +148,23 @@ window._openPlayerProfile = function(playerName, opts) {
       (isFriend ? '<div id="ppo-trophies" style="padding:0 16px 4px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));"><div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;padding:12px 0 8px;">🏅 Conquistas</div><div id="ppo-trophies-inner" style="font-size:0.8rem;color:var(--text-muted);">Carregando…</div></div>' : '') +
       // stats
       '<div style="padding:12px 16px 20px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));text-align:center;">' +
-        '<button onclick="document.getElementById(\'player-profile-overlay\').remove();if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\''+_sh(name).replace(/'/g,"\\'")+'\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:10px;padding:8px 20px;font-size:0.82rem;cursor:pointer;">📊 Ver estatísticas detalhadas</button>' +
+        '<button id="ppo-stats-btn" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:10px;padding:8px 20px;font-size:0.82rem;cursor:pointer;">📊 Ver estatísticas detalhadas</button>' +
       '</div>';
+
+    // Foto: popular no cache ANTES de abrir stats para aparecer corretamente
+    var _realPhoto = photo && photo.indexOf('dicebear.com') === -1 ? photo : '';
+    if (_realPhoto && name) {
+      if (!window._playerPhotoCache) window._playerPhotoCache = {};
+      window._playerPhotoCache[name.toLowerCase()] = _realPhoto;
+    }
+    var statsBtn = document.getElementById('ppo-stats-btn');
+    if (statsBtn) {
+      var _nameSafe = name;
+      statsBtn.onclick = function() {
+        document.getElementById('player-profile-overlay') && document.getElementById('player-profile-overlay').remove();
+        if (typeof window._showPlayerStats === 'function') window._showPlayerStats(_nameSafe, opts.tournamentId);
+      };
+    }
 
     // ── carregar troféus (só para amigos) ──
     if (isFriend && playerUid && cu && cu.uid) {
