@@ -1277,6 +1277,10 @@ function _completeEmailLinkSignIn() {
         window.FirestoreDB.saveUserProfile(user.uid, profileData).catch(function() {});
       }
       showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {name: user.displayName}) : _t('auth.welcome'), 'success');
+      // v1.8.65: verificar se este login é resultado de um pedido de vinculação de email
+      if (user.email && typeof window._checkEmailLinkIntent === 'function') {
+        setTimeout(function() { window._checkEmailLinkIntent(user.email); }, 1500);
+      }
       // Clean the URL (remove sign-in link parameters)
       if (window.history && window.history.replaceState) {
         window.history.replaceState(null, '', window.location.pathname + '#dashboard');
@@ -2719,6 +2723,8 @@ async function simulateLoginSuccess(user) {
     if (typeof window._applyNotifyFilterUI === 'function') window._applyNotifyFilterUI(cu.notifyLevel || 'todas');
     var curTheme = document.documentElement.getAttribute('data-theme') || 'dark';
     if (typeof window._applyProfileThemeUI === 'function') window._applyProfileThemeUI(curTheme);
+    // Renderizar emails vinculados
+    if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
   };
 
   // v1.3.5-beta: perfil agora é uma rota (#profile), não modal-overlay.
@@ -4580,6 +4586,16 @@ function setupProfileModal() {
             '</div>' +
             '<span style="font-size:0.68rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">O e-mail será salvo ao clicar em Salvar.</span>' +
           '</div>' +
+          // ── Emails vinculados ──
+          '<div style="margin:0 0 1rem 0;">' +
+            '<label class="form-label" style="font-size:0.75rem;">🔗 E-mails vinculados</label>' +
+            '<div id="profile-linked-emails" style="margin-bottom:6px;display:flex;flex-direction:column;gap:4px;"></div>' +
+            '<div style="display:flex;gap:8px;align-items:center;">' +
+              '<input type="email" id="profile-link-email-input" class="form-control" placeholder="outro@email.com" autocomplete="off" style="flex:1;min-width:0;box-sizing:border-box;font-size:0.85rem;">' +
+              '<button type="button" onclick="window._profileSendEmailLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 10px;border-radius:8px;font-size:0.78rem;cursor:pointer;white-space:nowrap;line-height:1.4;">Verificar</button>' +
+            '</div>' +
+            '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Você receberá um link de verificação nesse e-mail. Clicando, ele será vinculado à sua conta.</span>' +
+          '</div>' +
           '<form id="form-edit-profile" onsubmit="event.preventDefault(); saveUserProfile()" style="overflow: hidden;">' +
             // Telefone: País + Número
             '<div class="form-group" style="margin-bottom: 10px;">' +
@@ -5477,6 +5493,117 @@ function setupProfileModal() {
       if (display && _cu && _cu.email) display.style.display = '';
       var inp = document.getElementById('profile-edit-email');
       if (inp) inp.value = '';
+    };
+
+    // ── Emails vinculados ─────────────────────────────────────────────────
+    window._profileRenderLinkedEmails = function() {
+      var cu = window.AppStore && window.AppStore.currentUser;
+      var container = document.getElementById('profile-linked-emails');
+      if (!container || !cu) return;
+      var linked = Array.isArray(cu.linkedEmails) ? cu.linkedEmails : [];
+      container.innerHTML = linked.map(function(em) {
+        return '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);">' +
+          '<span style="flex:1;font-size:0.82rem;color:var(--text-bright);">✅ ' + window._safeHtml(em) + '</span>' +
+          '<button type="button" onclick="window._profileUnlinkEmail(\'' + em.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;padding:0 2px;" title="Remover">×</button>' +
+        '</div>';
+      }).join('');
+    };
+
+    window._profileSendEmailLink = function() {
+      var inp = document.getElementById('profile-link-email-input');
+      var cu = window.AppStore && window.AppStore.currentUser;
+      if (!inp || !cu || !cu.uid) return;
+      var email = (inp.value || '').trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        if (window.showNotification) window.showNotification('E-mail inválido', 'Digite um e-mail válido.', 'warning');
+        return;
+      }
+      if (cu.email && email === cu.email.toLowerCase()) {
+        if (window.showNotification) window.showNotification('Mesmo e-mail', 'Este já é o seu e-mail principal.', 'warning');
+        return;
+      }
+      // Salvar intenção no localStorage para detectar quando o link for clicado
+      try {
+        localStorage.setItem('scoreplace_linkEmailIntent', JSON.stringify({
+          ownerUid: cu.uid,
+          emailToLink: email,
+          requestedAt: Date.now()
+        }));
+      } catch(e) {}
+      // Enviar magic link para o email secundário
+      var sendFn = firebase.functions().httpsCallable('sendMagicLink');
+      inp.disabled = true;
+      if (window.showNotification) window.showNotification('📧 Enviando verificação...', email, 'info');
+      sendFn({ email: email })
+        .then(function() {
+          if (window.showNotification) window.showNotification('✅ Link enviado!', 'Verifique ' + email + ' e clique no link para vincular.', 'success');
+          inp.value = '';
+          inp.disabled = false;
+        })
+        .catch(function(err) {
+          inp.disabled = false;
+          if (window.showNotification) window.showNotification('Erro ao enviar', (err && err.message) || 'Tente novamente.', 'error');
+        });
+    };
+
+    window._profileUnlinkEmail = function(email) {
+      var cu = window.AppStore && window.AppStore.currentUser;
+      if (!cu || !cu.uid || !window.FirestoreDB || !window.FirestoreDB.db) return;
+      if (!confirm('Remover ' + email + ' dos seus e-mails vinculados?')) return;
+      var linked = Array.isArray(cu.linkedEmails) ? cu.linkedEmails.slice() : [];
+      var idx = linked.indexOf(email);
+      if (idx !== -1) linked.splice(idx, 1);
+      cu.linkedEmails = linked;
+      window.FirestoreDB.db.collection('users').doc(cu.uid).update({
+        linkedEmails: linked
+      }).then(function() {
+        window._profileRenderLinkedEmails();
+        if (window.showNotification) window.showNotification('E-mail removido', email, 'info');
+      }).catch(function(e) { window._warn('[LinkedEmail] unlink error:', e); });
+    };
+
+    // Detectar link de vinculação ao completar login via magic link
+    window._checkEmailLinkIntent = function(signedInEmail) {
+      try {
+        var raw = localStorage.getItem('scoreplace_linkEmailIntent');
+        if (!raw) return;
+        var intent = JSON.parse(raw);
+        // Expirado (>30 min) ou email não bate
+        if (!intent || !intent.ownerUid || !intent.emailToLink) return;
+        if (Date.now() - (intent.requestedAt || 0) > 30 * 60 * 1000) {
+          localStorage.removeItem('scoreplace_linkEmailIntent');
+          return;
+        }
+        if ((signedInEmail || '').toLowerCase() !== intent.emailToLink.toLowerCase()) return;
+        // Email confere — vincular ao ownerUid
+        localStorage.removeItem('scoreplace_linkEmailIntent');
+        var db = window.FirestoreDB && window.FirestoreDB.db;
+        if (!db) return;
+        db.collection('users').doc(intent.ownerUid).get().then(function(doc) {
+          if (!doc.exists) return;
+          var data = doc.data() || {};
+          var ownerName = data.displayName || 'Outra conta';
+          // Mostrar confirmação para o usuário
+          if (typeof showConfirmDialog === 'function') {
+            showConfirmDialog(
+              '🔗 Vincular e-mail?',
+              'O e-mail "' + signedInEmail + '" será vinculado à conta "' + ownerName + '". Confirma?',
+              function() {
+                var linked = Array.isArray(data.linkedEmails) ? data.linkedEmails.slice() : [];
+                if (linked.indexOf(signedInEmail.toLowerCase()) === -1) {
+                  linked.push(signedInEmail.toLowerCase());
+                }
+                db.collection('users').doc(intent.ownerUid).update({ linkedEmails: linked })
+                  .then(function() {
+                    if (window.showNotification) window.showNotification('✅ E-mail vinculado!', signedInEmail + ' agora faz parte da conta "' + ownerName + '".', 'success');
+                  });
+              },
+              function() { /* cancelou */ },
+              'Vincular', 'Cancelar'
+            );
+          }
+        }).catch(function(e) { window._warn('[LinkEmail] confirm error:', e); });
+      } catch(e) { window._warn('[LinkEmail] intent check error:', e); }
     };
 
     // Porque reescrever: a cadeia anterior (auth.js → currentUser → store.js

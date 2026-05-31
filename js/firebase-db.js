@@ -90,6 +90,8 @@ window.FirestoreDB = {
       });
     }
     var parts = Array.isArray(data.participants) ? data.participants : [];
+    // v1.8.65: também considerar linkedEmails de cada participante
+    // (carregados do perfil do usuário se disponíveis)
     parts.forEach(function(p) {
       if (!p) return;
       if (typeof p === 'string') {

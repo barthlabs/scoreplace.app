@@ -60,6 +60,11 @@ service cloud.firestore {
         || (data.memberUids is list && data.memberUids.size() > 0 && request.auth.uid in data.memberUids)
       );
     }
+    // v1.8.65: usuário pode gerenciar seus próprios emails vinculados
+    function isOwnLinkedEmailDiff() {
+      return request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedEmails']);
+    }
 
     // v1.8.62: admin por uid (creatorUid) — fallback para organizadores phone-only.
     function isTournamentAdminByUid(data) {
