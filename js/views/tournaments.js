@@ -1048,10 +1048,10 @@ function renderTournaments(container, tournamentId = null) {
         const standbyCount = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0)
             + (Array.isArray(t.waitlist) ? t.waitlist.length : 0);
 
-        const expectedTeammates = Math.max(0, (t.teamSize || 2) - 1);
-        // Para duplas (expectedTeammates === 1) usa o picker inteligente.
-        // Para times maiores mantém os inputs de texto simples.
-        const isDoublesTournament = expectedTeammates === 1;
+        const expectedTeammates = Math.max(0, parseInt(t.teamSize || 2) - 1);
+        // Para duplas (teamSize===2) usa o fluxo individual + partner picker.
+        // Para times maiores (teamSize>2) mantém modal com inputs de texto.
+        const isDoublesTournament = parseInt(t.teamSize || 2) === 2;
 
         // Participantes já inscritos individualmente (sem "/" = sem dupla ainda)
         const _enrolledSolo = (Array.isArray(t.participants) ? t.participants : [])
@@ -1068,7 +1068,8 @@ function renderTournaments(container, tournamentId = null) {
           })
           .filter(function(p) { return p.name; });
 
-        const teamEnrollModalHtml = `
+        // Para duplas (teamSize===2): modal suprimido — fluxo é direto (inscrição + _showPartnerPicker)
+        const teamEnrollModalHtml = isDoublesTournament ? '' : `
          <div id="team-enroll-modal-${t.id}" class="team-enroll-modal-container" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 10000; align-items: flex-start; justify-content: center; cursor: default; overflow-y: auto; padding: 2rem 0;" onclick="event.stopPropagation()">
             <div style="background: var(--bg-card); width: 90%; max-width: 450px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); margin: auto; animation: fadeIn 0.2s ease;">
 
@@ -1134,6 +1135,8 @@ function renderTournaments(container, tournamentId = null) {
             </div>
          </div>
       `;
+        // Para duplas (teamSize===2): não renderizar o modal antigo.
+        // O fluxo é: inscrever individual → _showPartnerPicker pós-inscrição.
         // Guardar lista de inscritos solo para o picker (acessada via window)
         window._partnerPickerEnrolled = window._partnerPickerEnrolled || {};
         window._partnerPickerEnrolled[t.id] = _enrolledSolo;

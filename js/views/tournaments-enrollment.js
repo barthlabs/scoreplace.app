@@ -205,10 +205,10 @@ window.enrollCurrentUser = function (tId) {
             showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
             return;
         }
-        if (t.enrollmentMode === 'time' && (t.teamSize || 2) > 1) {
+        if (t.enrollmentMode === 'time' && parseInt(t.teamSize || 2) > 1) {
             // v1.8.51: duplas — inscreve primeiro como individual,
             // depois abre a tela de formação de dupla.
-            if ((t.teamSize || 2) === 2) {
+            if (parseInt(t.teamSize || 2) === 2) {
                 window._doEnrollCurrentUser(tId, null, function() {
                     // Callback pós-inscrição: abrir picker de parceiro
                     if (typeof window._showPartnerPicker === 'function') {
