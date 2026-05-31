@@ -450,11 +450,16 @@ window.submitTeamEnroll = function (tId) {
     const inputs = document.querySelectorAll('.team-member-name-' + tId);
     let allFilled = true;
     let teamNames = [user.displayName];
+    let partnerUids = []; // v1.8.48: uids de parceiros selecionados via picker
 
     inputs.forEach(input => {
         const val = input.value.trim();
         if (!val) allFilled = false;
         teamNames.push(val);
+        // Captura uid do parceiro se selecionado via picker inteligente
+        if (input.dataset && input.dataset.partnerUid) {
+            partnerUids.push(input.dataset.partnerUid);
+        }
     });
 
     if (!allFilled) {
@@ -464,6 +469,8 @@ window.submitTeamEnroll = function (tId) {
 
     const teamString = teamNames.join(' / ');
     const participantObj = { name: teamString, email: user.email, displayName: teamString, uid: user.uid, ligaActive: true };
+    // Armazena uids dos parceiros para notificações e vinculação futura
+    if (partnerUids.length > 0) participantObj.partnerUids = partnerUids;
     // Registrar origem da equipe via extraUpdates
     var _teamOrigins = t.teamOrigins || {};
     _teamOrigins[teamString] = 'inscrita';
@@ -515,6 +522,21 @@ window.submitTeamEnroll = function (tId) {
                         });
                     }
                 }).catch(function(e) { window._warn('Notify organizer error:', e); });
+            }
+
+            // Notificar parceiro selecionado via picker (fire-and-forget)
+            if (partnerUids.length > 0 && typeof window._sendUserNotification === 'function') {
+                partnerUids.forEach(function(pUid) {
+                    if (!pUid || pUid === user.uid) return;
+                    window._sendUserNotification(pUid, {
+                        type: 'enrollment_new',
+                        title: '🎾 Você foi escolhido como parceiro(a)!',
+                        message: (user.displayName || 'Alguém') + ' formou dupla com você no torneio ' + window._safeHtml(t.name) + '.',
+                        tournamentId: String(t.id),
+                        tournamentName: t.name || '',
+                        level: 'fundamental'
+                    });
+                });
             }
 
             // Auto-amizade (fire-and-forget)

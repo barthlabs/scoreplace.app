@@ -674,26 +674,68 @@ function renderTournaments(container, tournamentId = null) {
             + (Array.isArray(t.waitlist) ? t.waitlist.length : 0);
 
         const expectedTeammates = Math.max(0, (t.teamSize || 2) - 1);
+        // Para duplas (expectedTeammates === 1) usa o picker inteligente.
+        // Para times maiores mantém os inputs de texto simples.
+        const isDoublesTournament = expectedTeammates === 1;
+
+        // Participantes já inscritos individualmente (sem "/" = sem dupla ainda)
+        const _enrolledSolo = (Array.isArray(t.participants) ? t.participants : [])
+          .filter(function(p) {
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            var cu = window.AppStore && window.AppStore.currentUser;
+            if (cu && (n === cu.displayName || (typeof p === 'object' && p.uid === cu.uid))) return false;
+            return !n.includes(' / '); // sem dupla formada
+          })
+          .map(function(p) {
+            return typeof p === 'string'
+              ? { name: p, uid: '', photo: '' }
+              : { name: p.displayName || p.name || '', uid: p.uid || '', photo: p.photoURL || '' };
+          })
+          .filter(function(p) { return p.name; });
+
         const teamEnrollModalHtml = `
          <div id="team-enroll-modal-${t.id}" class="team-enroll-modal-container" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 10000; align-items: flex-start; justify-content: center; cursor: default; overflow-y: auto; padding: 2rem 0;" onclick="event.stopPropagation()">
             <div style="background: var(--bg-card); width: 90%; max-width: 450px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); margin: auto; animation: fadeIn 0.2s ease;">
-               
+
                <div style="padding: 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                  <h3 style="margin: 0; font-size: 1.2rem; color: var(--text-bright);">👥 ${_t('enroll.team')}</h3>
+                  <h3 style="margin: 0; font-size: 1.2rem; color: var(--text-bright);">👥 ${isDoublesTournament ? 'Escolher parceiro(a)' : _t('enroll.team')}</h3>
                   <button style="background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer;" onclick="event.stopPropagation(); document.getElementById('team-enroll-modal-${t.id}').style.display='none'">&times;</button>
                </div>
-               
+
                <div style="padding: 1.5rem; color: var(--text-main); font-size: 0.9rem; text-align: left;">
-                  <p style="margin-bottom: 1rem; color: var(--text-muted);">Este torneio exige times predefinidos de <strong>${t.teamSize || 2} participantes</strong>. Como capitão, por favor informe o nome dos seus parceiros de equipe antes de concluir a sua inscrição.</p>
-                  
-                  <form id="form-team-enroll-${t.id}" onsubmit="event.stopPropagation(); event.preventDefault(); window.submitTeamEnroll('${t.id}')">
-                     <div style="margin-bottom: 1.2rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--text-muted);">1. Capitão (Você):</label>
-                        <input type="text" value="${window.AppStore.currentUser ? window.AppStore.currentUser.displayName : ''}" disabled style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: var(--text-muted); opacity: 0.8;">
+                  <div style="margin-bottom: 1.2rem;">
+                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--text-muted);">Você</label>
+                     <div style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: var(--text-muted); display:flex;align-items:center;gap:8px;">
+                       ${window._avatarHtml(window.AppStore && window.AppStore.currentUser, 24)}
+                       <span>${window.AppStore && window.AppStore.currentUser ? window._safeHtml(window.AppStore.currentUser.displayName || '') : ''}</span>
                      </div>
-                     
+                  </div>
+
+                  <form id="form-team-enroll-${t.id}" onsubmit="event.stopPropagation(); event.preventDefault(); window.submitTeamEnroll('${t.id}')">
                      <div id="team-members-inputs-${t.id}">
-                        ${Array.from({ length: expectedTeammates }).map((_, i) => `
+                        ${isDoublesTournament ? `
+                        <!-- Picker inteligente de parceiro para duplas -->
+                        <div style="margin-bottom:1rem;">
+                           <label style="display:block;margin-bottom:6px;font-weight:600;color:var(--text-muted);">Parceiro(a)</label>
+                           <div style="position:relative;">
+                              <input type="text"
+                                 id="partner-search-${t.id}"
+                                 class="team-member-name-${t.id}"
+                                 placeholder="Buscar por nome ou amigo..."
+                                 autocomplete="off"
+                                 style="width:100%;padding:10px 10px 10px 36px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-dark);color:var(--text-main);box-sizing:border-box;"
+                                 oninput="window._partnerPickerSearch('${t.id}', this.value)"
+                                 onfocus="window._partnerPickerSearch('${t.id}', this.value)"
+                                 required>
+                              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:1rem;pointer-events:none;">🔍</span>
+                              <div id="partner-chip-${t.id}" style="display:none;position:absolute;top:8px;left:8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:2px 8px 2px 6px;font-size:0.8rem;color:#a5b4fc;display:none;align-items:center;gap:5px;max-width:calc(100% - 40px);">
+                                 <span id="partner-chip-name-${t.id}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+                                 <button type="button" onclick="window._partnerPickerClear('${t.id}')" style="background:none;border:none;color:#a5b4fc;cursor:pointer;font-size:0.9rem;padding:0;line-height:1;">×</button>
+                              </div>
+                           </div>
+                           <div id="partner-dropdown-${t.id}" style="display:none;position:absolute;z-index:1000;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.4);max-height:240px;overflow-y:auto;width:min(400px,calc(90vw - 3rem));margin-top:2px;"></div>
+                        </div>
+                        ` : Array.from({ length: expectedTeammates }).map((_, i) => `
                            <div style="margin-bottom: 1rem;">
                               <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--text-muted);">${i + 2}. Nome do Integrante:</label>
                               <input type="text" class="team-member-name-${t.id}" placeholder="Ex: Maria Souza" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-dark); color: var(--text-main);" required>
@@ -703,13 +745,16 @@ function renderTournaments(container, tournamentId = null) {
 
                      <div style="display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 1.5rem; margin-top: 1rem;">
                         <button type="button" class="btn btn-outline hover-lift" onclick="event.stopPropagation(); document.getElementById('team-enroll-modal-${t.id}').style.display='none'">${_t('btn.cancel')}</button>
-                        <button type="submit" class="btn btn-success hover-lift">${_t('enroll.teamConfirm')}</button>
+                        <button type="submit" class="btn btn-success hover-lift" id="partner-confirm-${t.id}">Confirmar dupla</button>
                      </div>
                   </form>
                </div>
             </div>
          </div>
       `;
+        // Guardar lista de inscritos solo para o picker (acessada via window)
+        window._partnerPickerEnrolled = window._partnerPickerEnrolled || {};
+        window._partnerPickerEnrolled[t.id] = _enrolledSolo;
 
         // Botão inscrever/desinscrever — disponível em todos os contextos (detalhe e listagem)
         // Detect if user arrived via invite link for this tournament
@@ -2221,4 +2266,133 @@ function renderTournaments(container, tournamentId = null) {
         }
       }, 500);
     }
+}
+
+// ── Partner Picker para inscrição em duplas ───────────────────────────────
+// Mostra dropdown com: (1) já inscritos solo no torneio; (2) amigos do usuário.
+// Seleção preenche o input e mostra chip visual. Digitação livre também aceita.
+
+window._partnerPickerSelected = {}; // tId → {name, uid}
+
+window._partnerPickerSearch = function(tId, query) {
+  var dropdown = document.getElementById('partner-dropdown-' + tId);
+  var input    = document.getElementById('partner-search-' + tId);
+  if (!dropdown || !input) return;
+
+  // Se há chip selecionado, não reabrir dropdown
+  if (window._partnerPickerSelected[tId] && window._partnerPickerSelected[tId].confirmed) return;
+
+  var q = (query || '').trim().toLowerCase();
+  var cu = window.AppStore && window.AppStore.currentUser;
+
+  // 1. Já inscritos solo
+  var enrolled = (window._partnerPickerEnrolled && window._partnerPickerEnrolled[tId]) || [];
+  var filtEnrolled = enrolled.filter(function(p) {
+    return !q || p.name.toLowerCase().includes(q);
+  });
+
+  // 2. Amigos do usuário (do cache ou lista de amigos)
+  var friends = [];
+  if (cu && cu.displayName) {
+    var friendUids = Array.isArray(cu.friends) ? cu.friends : [];
+    var cache = window._friendProfilesCache || {};
+    friendUids.forEach(function(uid) {
+      if (typeof uid !== 'string' || uid.includes('@')) return; // pular emails legados
+      var prof = cache[uid];
+      if (!prof) return;
+      var nm = prof.displayName || prof.name || '';
+      if (!nm) return;
+      if (cu.uid && uid === cu.uid) return; // não sugerir a si mesmo
+      // Não duplicar inscritos já listados
+      if (enrolled.some(function(e) { return e.uid === uid || e.name === nm; })) return;
+      if (!q || nm.toLowerCase().includes(q)) {
+        friends.push({ name: nm, uid: uid, photo: prof.photoURL || '' });
+      }
+    });
+  }
+
+  if (filtEnrolled.length === 0 && friends.length === 0 && !q) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  var html = '';
+
+  if (filtEnrolled.length > 0) {
+    html += '<div style="padding:8px 12px 4px;font-size:0.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;">Já inscritos</div>';
+    filtEnrolled.forEach(function(p) {
+      html += '<div onclick="event.stopPropagation();window._partnerPickerSelect(\'' + tId + '\',\'' + _escAttr(p.name) + '\',\'' + (p.uid||'') + '\')" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-radius:6px;transition:background 0.12s;" onmouseover="this.style.background=\'rgba(99,102,241,0.12)\'" onmouseout="this.style.background=\'none\'">' +
+        (p.photo ? '<img src="' + window._safeHtml(p.photo) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">' : '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#fff;font-weight:700;flex-shrink:0;">' + window._safeHtml((p.name[0]||'?').toUpperCase()) + '</div>') +
+        '<div style="flex:1;min-width:0;"><div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(p.name) + '</div><div style="font-size:0.7rem;color:var(--text-muted);">Inscrito(a)</div></div>' +
+        '</div>';
+    });
+  }
+
+  if (friends.length > 0) {
+    html += '<div style="padding:8px 12px 4px;font-size:0.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-top:' + (filtEnrolled.length > 0 ? '1px solid var(--border-color)' : 'none') + '">Meus amigos</div>';
+    friends.forEach(function(p) {
+      html += '<div onclick="event.stopPropagation();window._partnerPickerSelect(\'' + tId + '\',\'' + _escAttr(p.name) + '\',\'' + (p.uid||'') + '\')" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-radius:6px;transition:background 0.12s;" onmouseover="this.style.background=\'rgba(99,102,241,0.12)\'" onmouseout="this.style.background=\'none\'">' +
+        (p.photo ? '<img src="' + window._safeHtml(p.photo) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">' : '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#fff;font-weight:700;flex-shrink:0;">' + window._safeHtml((p.name[0]||'?').toUpperCase()) + '</div>') +
+        '<div style="flex:1;min-width:0;"><div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(p.name) + '</div><div style="font-size:0.7rem;color:var(--text-muted);">Amigo(a)</div></div>' +
+        '</div>';
+    });
+  }
+
+  if (!html && q) {
+    // Texto livre não encontrado nas listas — permitir confirmar mesmo assim
+    html = '<div style="padding:10px 12px;font-size:0.82rem;color:var(--text-muted);">Usar "<b>' + window._safeHtml(q) + '</b>" como nome do parceiro</div>';
+  }
+
+  dropdown.innerHTML = html;
+  dropdown.style.display = html ? 'block' : 'none';
+
+  // Fechar dropdown ao clicar fora
+  setTimeout(function() {
+    document.addEventListener('click', function _close() {
+      if (dropdown) dropdown.style.display = 'none';
+      document.removeEventListener('click', _close);
+    }, { once: true });
+  }, 50);
+};
+
+window._partnerPickerSelect = function(tId, name, uid) {
+  var input   = document.getElementById('partner-search-' + tId);
+  var dropdown = document.getElementById('partner-dropdown-' + tId);
+  var chip    = document.getElementById('partner-chip-' + tId);
+  var chipName = document.getElementById('partner-chip-name-' + tId);
+  if (!input) return;
+
+  // Preenche o input (lido por submitTeamEnroll)
+  input.value = name;
+  // Armazena uid para uso futuro (notificações, vinculação de perfil)
+  input.dataset.partnerUid = uid || '';
+
+  // Mostra chip visual
+  if (chip && chipName) {
+    chipName.textContent = name;
+    chip.style.display = 'flex';
+    input.style.paddingLeft = '8px'; // empurra texto pra dar espaço ao chip
+    input.style.color = 'transparent'; // esconde texto do input atrás do chip
+  }
+
+  if (dropdown) dropdown.style.display = 'none';
+  window._partnerPickerSelected[tId] = { name: name, uid: uid, confirmed: true };
+};
+
+window._partnerPickerClear = function(tId) {
+  var input   = document.getElementById('partner-search-' + tId);
+  var chip    = document.getElementById('partner-chip-' + tId);
+  if (input) {
+    input.value = '';
+    input.style.color = '';
+    input.style.paddingLeft = '36px';
+    input.focus();
+    delete input.dataset.partnerUid;
+  }
+  if (chip) chip.style.display = 'none';
+  if (window._partnerPickerSelected) delete window._partnerPickerSelected[tId];
+};
+
+function _escAttr(s) {
+  return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 }
