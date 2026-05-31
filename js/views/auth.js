@@ -4372,13 +4372,21 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
       if (typeof p === 'object' && p !== null) {
         var isUser = (matchUid && p.uid === matchUid) || (matchEmail && p.email === matchEmail) || p.displayName === oldName || p.name === oldName;
         if (isUser) {
-          if (p.displayName === oldName) { p.displayName = newName; changed = true; }
-          if (p.name === oldName) { p.name = newName; changed = true; }
+          // v1.8.63: quando encontrado por uid, sempre atualizar para o novo
+          // nome — mesmo que o nome armazenado não seja o oldName esperado
+          // (ex: telefone formatado diferente, nome antigo de outra sessão).
+          if (matchUid && p.uid === matchUid) {
+            if (p.displayName !== newName) { p.displayName = newName; changed = true; }
+            if (p.name !== newName) { p.name = newName; changed = true; }
+          } else {
+            if (p.displayName === oldName) { p.displayName = newName; changed = true; }
+            if (p.name === oldName) { p.name = newName; changed = true; }
+          }
           if (matchUid && !p.uid) { p.uid = matchUid; changed = true; }
           if (matchEmail && !p.email) { p.email = matchEmail; changed = true; }
-          // v1.8.40-beta: propagar foto junto com o nome
-          var _newPhoto = user && user.photoURL;
-          if (_newPhoto && p.photoURL !== _newPhoto) { p.photoURL = _newPhoto; changed = true; }
+          // Não propagar photoURL diretamente — fotos são buscadas por uid
+          // em _preloadPlayerPhotos (bracket.js v1.8.58) diretamente do
+          // perfil real do usuário, sem depender do objeto participante.
         }
       }
     });
@@ -4476,11 +4484,12 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
   }
 };
 
-// v1.8.40-beta: propagar foto de perfil para todos os torneios onde o usuário
-// está inscrito como participante-objeto. Chamada quando só a foto muda (sem
-// mudança de nome — nesse caso _propagateNameChange já trata foto).
+// v1.8.63: propagar mudança de perfil (nome E/OU foto) para torneios.
+// Quando só a foto muda, garante que memberUids está atualizado (para
+// que o usuário phone-only possa salvar via regras do Firestore).
+// NÃO armazena photoURL no objeto participante — fotos são buscadas
+// diretamente de users/{uid} em _preloadPlayerPhotos (v1.8.58).
 function _propagatePhotoToTournaments(newPhotoURL) {
-  if (!newPhotoURL) return;
   if (!window.AppStore || !Array.isArray(window.AppStore.tournaments)) return;
   var user = window.AppStore.currentUser;
   if (!user) return;
@@ -4494,10 +4503,8 @@ function _propagatePhotoToTournaments(newPhotoURL) {
       if (typeof p !== 'object' || p === null) return;
       var isUser = (matchUid && p.uid === matchUid) ||
                    (matchEmail && p.email === matchEmail);
-      if (isUser && p.photoURL !== newPhotoURL) {
-        p.photoURL = newPhotoURL;
-        changed = true;
-      }
+      // Garantir que uid está setado no participante (para regras Firestore)
+      if (isUser && matchUid && !p.uid) { p.uid = matchUid; changed = true; }
     });
     if (changed) modifiedTournaments.push(t);
   });
@@ -5979,6 +5986,12 @@ function setupProfileModal() {
         } catch(e) { window._warn('[Profile] previousDisplayNames error:', e); }
 
         _propagateNameChange(_oldDisplayName, name);
+        // Invalidar cache de foto para o nome antigo E novo — força re-fetch
+        // na próxima renderização via _preloadPlayerPhotos
+        if (window._playerPhotoCache) {
+          delete window._playerPhotoCache[(_oldDisplayName || '').toLowerCase()];
+          delete window._playerPhotoCache[(name || '').toLowerCase()];
+        }
         // Update auth cache with new name
         try {
           var _ac = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
@@ -5986,7 +5999,11 @@ function setupProfileModal() {
           localStorage.setItem('scoreplace_authCache', JSON.stringify(_ac));
         } catch(e) {}
       } else if (!saveError && payload.photoURL) {
-        // v1.8.40-beta: nome não mudou mas foto mudou — propagar foto diretamente
+        // Foto mudou, nome igual — invalidar cache de foto para forçar re-fetch
+        if (window._playerPhotoCache) {
+          delete window._playerPhotoCache[(name || '').toLowerCase()];
+        }
+        // Propagar: encontrar participantes por uid e garantir memberUids atualizado
         _propagatePhotoToTournaments(payload.photoURL);
       }
 
