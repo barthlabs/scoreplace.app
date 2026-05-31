@@ -9,11 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
-      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">📍 v1.8.41-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
-      '<p><b>GPS não interrompe mais ao abrir o app.</b><br><br>' +
-      'O dialog de permissão de localização aparecia toda vez que o app era aberto, mesmo depois do usuário já ter respondido. Agora o GPS só é solicitado automaticamente se a permissão já está <b>concedida</b> (via Permissions API). Se ainda não concedida, o app usa a cidade do perfil como fallback — o usuário pode tocar em 📍 no #Place para conceder uma vez e a partir daí tudo funciona silenciosamente.<br><br>' +
-      '<b>Cache de coordenadas:</b> coordenadas GPS ficam em cache por 10 minutos no localStorage. Abrir #Place repetidamente nesse período não re-solicita GPS, tornando a tela mais rápida.<br><br>' +
-      '<b>Auto check-in</b> (presence-geo) também só roda quando permissão já está granted — nunca mais interrompe o login com dialog.</p>' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">📍 v1.8.42-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
+      '<p><b>GPS pedido apenas uma vez por sessão, nunca mais repetidamente.</b><br><br>' +
+      'O dialog de localização aparecia toda vez que o usuário abria o #Place ou entrava no app. Agora funciona assim: <b>(1)</b> Se há coordenadas em cache (< 10 min), usa sem chamar GPS. <b>(2)</b> Se não há cache mas já pediu GPS nesta sessão (sessionStorage), não pede de novo. <b>(3)</b> Se é a primeira abertura da sessão, pede GPS normalmente — o SO cuida de lembrar a resposta para as próximas sessões (iOS PWA na tela inicial, Chrome Android). O auto check-in de presença usa o mesmo cache, então o GPS funciona automaticamente sem dialog quando o usuário já concedeu.</p>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">👤 v1.8.40-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +

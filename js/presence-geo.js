@@ -168,11 +168,6 @@
 
     if (!navigator.geolocation) return;
 
-    // v1.8.41-beta: não mostrar dialog de permissão automaticamente.
-    // Só chamar GPS quando a permissão já está concedida (ou cache fresco).
-    // "prompt" = usuário ainda não decidiu → não incomodar no login.
-    // O usuário pode conceder a permissão via botão 📍 em #place, e partir
-    // daí o auto check-in passa a funcionar silenciosamente.
     function _doGeoCheck(lat, lon) {
       var me = { lat: lat, lon: lon };
       var match = findMatch(me, withCoords);
@@ -187,9 +182,13 @@
       }
     }
 
-    // 1. Tentar reusar cache de GPS (compartilhado com venues.js)
+    // v1.8.42-beta: cache compartilhado com venues.js (scoreplace_gps_cache).
+    // Se coords frescas existem (< 10 min), usar sem pedir GPS.
+    // Se não, pedir GPS uma única vez por sessão (sessionStorage _gpsRequested).
     var _GPS_CACHE_KEY = 'scoreplace_gps_cache';
     var _GPS_CACHE_TTL = 10 * 60 * 1000;
+    var _GPS_SESSION_KEY = '_gpsRequested';
+
     try {
       var _raw = localStorage.getItem(_GPS_CACHE_KEY);
       if (_raw) {
@@ -201,28 +200,17 @@
       }
     } catch(e) {}
 
-    // 2. Verificar permissão antes de chamar GPS
-    var _callGps = function() {
-      navigator.geolocation.getCurrentPosition(function(pos) {
-        _doGeoCheck(pos.coords.latitude, pos.coords.longitude);
-      }, function(err) {
-        window._log('[PresenceGeo] geolocation skipped:', err && err.message);
-      }, { timeout: 8000, maximumAge: 5 * 60 * 1000 });
-    };
+    // Já pediu nesta sessão → não re-pede (evita segundo dialog)
+    try { if (sessionStorage.getItem(_GPS_SESSION_KEY)) return; } catch(e) {}
+    try { sessionStorage.setItem(_GPS_SESSION_KEY, '1'); } catch(e) {}
 
-    if (navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({ name: 'geolocation' }).then(function(r) {
-        if (r.state === 'granted') {
-          _callGps();
-        }
-        // 'prompt' ou 'denied': não dispara automaticamente no login
-      }).catch(function() {
-        // Permissions API indisponível (iOS antigo) — não arrisca mostrar dialog
-        window._log('[PresenceGeo] Permissions API unavailable, skipping auto-check');
-      });
-    } else {
-      // Sem Permissions API: não chama GPS automaticamente
-      window._log('[PresenceGeo] Permissions API not supported, skipping auto-check');
-    }
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      var lat = pos.coords.latitude;
+      var lng = pos.coords.longitude;
+      try { localStorage.setItem(_GPS_CACHE_KEY, JSON.stringify({ lat: lat, lng: lng, ts: Date.now() })); } catch(e) {}
+      _doGeoCheck(lat, lng);
+    }, function(err) {
+      window._log('[PresenceGeo] geolocation skipped:', err && err.message);
+    }, { timeout: 8000, maximumAge: 5 * 60 * 1000 });
   };
 })();

@@ -2027,11 +2027,16 @@
   }
 
   // Ask the browser for GPS and populate state.location + state.center from
-  // ── Cache de GPS em localStorage (TTL 10 min) ────────────────────────────
-  // Evita re-pedir permissão em cada abertura do #place. Coordenadas frescas
-  // são reutilizadas sem chamar getCurrentPosition novamente.
+  // ── Cache de GPS (localStorage, TTL 10 min + sessionStorage flag) ─────────
+  // Duas camadas:
+  // 1. sessionStorage '_gpsRequested': GPS só é solicitado UMA VEZ por sessão.
+  //    Evita múltiplos dialogs quando o usuário navega pelo app e volta ao #place.
+  // 2. localStorage 'scoreplace_gps_cache': coordenadas cachadas por 10 min.
+  //    Reutiliza sem chamar getCurrentPosition mesmo em sessões novas recentes.
   var _GPS_CACHE_KEY = 'scoreplace_gps_cache';
   var _GPS_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+  var _GPS_SESSION_KEY = '_gpsRequested';
+
   function _readGpsCache() {
     try {
       var raw = localStorage.getItem(_GPS_CACHE_KEY);
@@ -2043,16 +2048,10 @@
     } catch(e) { return null; }
   }
   function _writeGpsCache(lat, lng) {
-    try { localStorage.setItem(_GPS_CACHE_KEY, JSON.stringify({ lat: lat, lng: lng, ts: Date.now() })); } catch(e) {}
-  }
-
-  // Verifica estado da permissão de geolocalização via Permissions API.
-  // Retorna Promise<'granted'|'prompt'|'denied'|'unknown'>.
-  function _checkGeoPermission() {
-    if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve('unknown');
-    return navigator.permissions.query({ name: 'geolocation' })
-      .then(function(r) { return r.state; })
-      .catch(function() { return 'unknown'; });
+    try {
+      localStorage.setItem(_GPS_CACHE_KEY, JSON.stringify({ lat: lat, lng: lng, ts: Date.now() }));
+      sessionStorage.setItem(_GPS_SESSION_KEY, '1');
+    } catch(e) {}
   }
 
   // Aplica coordenadas GPS ao estado da view e re-renderiza.
@@ -2069,9 +2068,7 @@
     refresh();
   }
 
-  // Botão 📍 explícito — sempre chama GPS independente de permissão.
-  // Flag `userTriggered` distinguishes an explicit 📍 click (we tell the
-  // user if denied) from the silent auto-try on view load.
+  // Botão 📍 explícito (userTriggered=true) ou auto-trigger silencioso.
   window._venuesUseMyLocation = function(userTriggered) {
     if (!navigator.geolocation) {
       if (userTriggered && window.showNotification) window.showNotification('GPS indisponível neste dispositivo.', '', 'error');
@@ -2080,7 +2077,7 @@
     var btn = document.getElementById('venues-geo-btn');
     if (btn && userTriggered) { btn.disabled = true; btn.textContent = '⏳'; }
 
-    // Se há cache fresco, usar sem chamar GPS (evita dialog desnecessário)
+    // Cache fresco → usa sem chamar GPS (silencioso, sem dialog)
     if (!userTriggered) {
       var cached = _readGpsCache();
       if (cached) { _applyGpsCoords(cached.lat, cached.lng, btn); return; }
@@ -2091,31 +2088,32 @@
     }, function(err) {
       if (btn) { btn.disabled = false; btn.textContent = '📍'; }
       if (userTriggered && window.showNotification) {
-        window.showNotification('Não foi possível obter sua localização.', err && err.message ? err.message : 'Verifique a permissão no navegador.', 'info');
+        window.showNotification('Não foi possível obter sua localização.',
+          err && err.message ? err.message : 'Verifique a permissão no navegador.', 'info');
       }
     }, { timeout: 8000, maximumAge: 5 * 60 * 1000 });
   };
 
   // Auto-geolocate ao abrir #place.
-  // v1.8.41-beta: só dispara GPS automaticamente se permissão já for
-  // "granted" (sem mostrar dialog) OU se há cache fresco de coords.
-  // Se permissão for "prompt" ou "denied", usa cidade do perfil como
-  // fallback — o usuário pode sempre clicar 📍 para conceder e centrar.
+  // v1.8.42-beta: GPS pedido automaticamente, mas só UMA VEZ por sessão.
+  // Cache de coords evita re-pedir dentro de 10 minutos.
+  // O dialog de permissão aparece na primeira abertura da sessão; após
+  // o usuário conceder, o iOS/Android persiste a decisão para sessões
+  // futuras (PWA home screen iOS 16.4+, Chrome Android).
   function _tryAutoGeolocate() {
-    // 1. Cache fresco — usa sem pedir GPS
+    // 1. Cache fresco de coords → usa sem pedir GPS
     var cached = _readGpsCache();
     if (cached) { _applyGpsCoords(cached.lat, cached.lng, null); return; }
 
-    // 2. Verifica permissão antes de chamar GPS
-    _checkGeoPermission().then(function(perm) {
-      if (perm === 'granted' || perm === 'unknown') {
-        // "granted": silencioso. "unknown": Permissions API indisponível
-        // (iOS antigo) — tenta e deixa o SO decidir.
-        window._venuesUseMyLocation(false);
-      }
-      // perm === "prompt" ou "denied": não dispara automaticamente.
-      // O usuário toca em 📍 se quiser conceder.
-    });
+    // 2. Já pediu GPS nesta sessão e não obteve coords (usuário negou)?
+    //    Não re-pede para não irritar durante a mesma sessão.
+    try { if (sessionStorage.getItem(_GPS_SESSION_KEY)) return; } catch(e) {}
+
+    // 3. Primeira solicitação desta sessão — dispara GPS normalmente.
+    //    Se usuário conceder: coords cacheadas por 10min, sessão marcada.
+    //    Se negar: sessionStorage marca para não re-pedir nesta sessão.
+    try { sessionStorage.setItem(_GPS_SESSION_KEY, '1'); } catch(e) {}
+    window._venuesUseMyLocation(false);
   }
 
   // ── Geocoding: center the map on the typed city (or user's profile city).
