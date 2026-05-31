@@ -141,66 +141,126 @@ window._openPlayerProfile = function(playerName, opts) {
       '</div>' +
       // histórico compartilhado
       sharedHtml +
-      // troféus
-      '<div id="ppo-trophies" style="padding:0 16px 4px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));"><div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;padding:12px 0 8px;">🏅 Troféus</div><div id="ppo-trophies-inner" style="font-size:0.8rem;color:var(--text-muted);">Carregando…</div></div>' +
+      // troféus — só para amigos
+      (isFriend ? '<div id="ppo-trophies" style="padding:0 16px 4px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));"><div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;padding:12px 0 8px;">🏅 Conquistas</div><div id="ppo-trophies-inner" style="font-size:0.8rem;color:var(--text-muted);">Carregando…</div></div>' : '') +
       // stats
       '<div style="padding:12px 16px 20px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));text-align:center;">' +
         '<button onclick="document.getElementById(\'player-profile-overlay\').remove();if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\''+_sh(name).replace(/'/g,"\\'")+'\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:10px;padding:8px 20px;font-size:0.82rem;cursor:pointer;">📊 Ver estatísticas detalhadas</button>' +
       '</div>';
 
-    // ── carregar troféus ──
-    if (playerUid && db) {
-      var cuTrophies = window._trophyCache ? (window._trophyCache.trophies && window._trophyCache.trophies[cu&&cu.uid] || {}) : {};
-      db.collection('users').doc(playerUid).collection('trophies').get()
-        .then(function(snap) {
-          var theirTrophies = {};
-          snap.forEach(function(d) { theirTrophies[d.id] = d.data(); });
+    // ── carregar troféus (só para amigos) ──
+    if (isFriend && playerUid && cu && cu.uid) {
+      var _loadFn = window._loadUserTrophies;
+      if (!_loadFn) {
+        var slot0 = document.getElementById('ppo-trophies-inner');
+        if (slot0) slot0.innerHTML = '<div style="font-size:0.75rem;color:var(--text-muted);">—</div>';
+      } else {
+      Promise.all([
+        _loadFn(cu.uid),
+        _loadFn(playerUid)
+      ]).then(function(results) {
+          var cuTrophies    = (results[0] && results[0].trophies) || {};
+          var theirTrophies = (results[1] && results[1].trophies) || {};
           var catalog = window.TROPHY_CATALOG || [];
-          var tierOrder = {platina:0,ouro:1,prata:2,bronze:3};
-          var tierColor = {platina:'#e879f9',ouro:'#fbbf24',prata:'#94a3b8',bronze:'#f97316'};
-          var tierEmoji = {platina:'✨',ouro:'🥇',prata:'🥈',bronze:'🥉'};
+          var tierColor = {platina:'#e879f9', ouro:'#fbbf24', prata:'#94a3b8', bronze:'#f97316'};
+          var tierEmoji = {platina:'✨', ouro:'🥇', prata:'🥈', bronze:'🥉'};
+          var tierOrder = {platina:0, ouro:1, prata:2, bronze:3};
 
-          // Separar troféus: só deles, só meus, de ambos
-          var both=[], onlyThem=[], onlyMe=[];
-          catalog.forEach(function(tr) {
-            var hasThem = !!theirTrophies[tr.id];
-            var hasMe   = !!(cuTrophies && cuTrophies[tr.id]);
-            if (hasThem && hasMe) both.push({tr:tr, them:theirTrophies[tr.id], me:cuTrophies[tr.id]});
-            else if (hasThem) onlyThem.push({tr:tr, them:theirTrophies[tr.id]});
-            else if (hasMe) onlyMe.push({tr:tr, me:cuTrophies[tr.id]});
-          });
+          // Contar por tier
+          var myCount   = {platina:0,ouro:0,prata:0,bronze:0,total:0};
+          var theirCount= {platina:0,ouro:0,prata:0,bronze:0,total:0};
+          Object.values(cuTrophies).forEach(function(t){var k=t.tier||'bronze'; if(myCount[k]!==undefined){myCount[k]++;myCount.total++;}});
+          Object.values(theirTrophies).forEach(function(t){var k=t.tier||'bronze'; if(theirCount[k]!==undefined){theirCount[k]++;theirCount.total++;}});
 
-          var _tCard = function(tr, t) {
+          // Troféus em comum
+          var both = catalog.filter(function(tr){return !!theirTrophies[tr.id] && !!(cuTrophies&&cuTrophies[tr.id]);});
+          // Troféus de cada um, ordenados por tier
+          var myList    = catalog.filter(function(tr){return !!(cuTrophies&&cuTrophies[tr.id]);})
+                            .sort(function(a,b){var ta=cuTrophies[a.id]&&cuTrophies[a.id].tier||'bronze', tb=cuTrophies[b.id]&&cuTrophies[b.id].tier||'bronze'; return (tierOrder[ta]||3)-(tierOrder[tb]||3);});
+          var theirList = catalog.filter(function(tr){return !!theirTrophies[tr.id];})
+                            .sort(function(a,b){var ta=theirTrophies[a.id]&&theirTrophies[a.id].tier||'bronze', tb=theirTrophies[b.id]&&theirTrophies[b.id].tier||'bronze'; return (tierOrder[ta]||3)-(tierOrder[tb]||3);});
+
+          var _tierBadge = function(tier, n) {
+            if (!n) return '';
+            return '<span style="font-size:0.7rem;color:'+tierColor[tier]+';font-weight:700;margin-right:4px;">'+tierEmoji[tier]+'×'+n+'</span>';
+          };
+          var _tRow = function(tr, t, highlight) {
             var tier = (t&&t.tier)||'bronze';
-            var col = tierColor[tier]||'#f97316';
-            return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;"><span style="font-size:1rem;">'+_sh(tr.icon||'🏆')+'</span><span style="font-size:0.75rem;color:'+col+';font-weight:700;">'+tierEmoji[tier]+' '+_sh(tr.title)+'</span></div>';
+            var col  = tierColor[tier]||'#f97316';
+            var bg   = highlight ? 'background:rgba(251,191,36,0.06);border-radius:6px;' : '';
+            return '<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;'+bg+'">' +
+              '<span style="font-size:0.9rem;line-height:1;">'+_sh(tr.icon||'🏆')+'</span>' +
+              '<span style="font-size:0.72rem;color:'+col+';font-weight:600;line-height:1.3;">'+_sh(tr.title)+'</span>' +
+            '</div>';
           };
 
-          var html = '';
-          if (!both.length && !onlyThem.length && !onlyMe.length) {
-            html = '<div style="color:var(--text-muted);font-size:0.78rem;padding:4px 0;">Nenhum troféu conquistado ainda.</div>';
-          } else {
-            html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-              '<div><div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);margin-bottom:6px;">Você</div>' +
-                [...both.map(function(x){return _tCard(x.tr,x.me);}), ...onlyMe.map(function(x){return _tCard(x.tr,x.me);})].join('') ||
-                '<div style="font-size:0.75rem;color:var(--text-muted);opacity:0.6;">—</div>' +
+          var cuName0 = (cu&&cu.displayName||'Você').split(' ')[0];
+          var theirName0 = name.split(' ')[0];
+
+          // Totais visuais
+          var totalsHtml =
+            '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:12px;padding:8px;background:rgba(255,255,255,0.03);border-radius:10px;">' +
+              '<div style="text-align:center;">' +
+                '<div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);margin-bottom:4px;">'+_sh(cuName0)+'</div>' +
+                '<div style="font-size:1.4rem;font-weight:800;color:var(--text-bright);">'+myCount.total+'</div>' +
+                '<div style="font-size:0.65rem;margin-top:2px;">' +
+                  ['platina','ouro','prata','bronze'].map(function(t){return myCount[t]?_tierBadge(t,myCount[t]):''}).join('') +
+                '</div>' +
               '</div>' +
-              '<div><div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);margin-bottom:6px;">'+_sh(name.split(' ')[0])+'</div>' +
-                [...both.map(function(x){return _tCard(x.tr,x.them);}), ...onlyThem.map(function(x){return _tCard(x.tr,x.them);})].join('') ||
-                '<div style="font-size:0.75rem;color:var(--text-muted);opacity:0.6;">—</div>' +
+              '<div style="font-size:0.8rem;color:var(--text-muted);font-weight:700;">VS</div>' +
+              '<div style="text-align:center;">' +
+                '<div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);margin-bottom:4px;">'+_sh(theirName0)+'</div>' +
+                '<div style="font-size:1.4rem;font-weight:800;color:var(--text-bright);">'+theirCount.total+'</div>' +
+                '<div style="font-size:0.65rem;margin-top:2px;">' +
+                  ['platina','ouro','prata','bronze'].map(function(t){return theirCount[t]?_tierBadge(t,theirCount[t]):''}).join('') +
+                '</div>' +
               '</div>' +
             '</div>';
+
+          // Em comum
+          var commonHtml = '';
+          if (both.length) {
+            commonHtml = '<div style="margin-bottom:10px;">' +
+              '<div style="font-size:0.65rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">⭐ Em comum ('+both.length+')</div>' +
+              both.map(function(tr){return _tRow(tr, cuTrophies[tr.id], true);}).join('') +
+            '</div>';
           }
+
+          // Lista lado a lado (só os exclusivos)
+          var myExcl    = myList.filter(function(tr){return !theirTrophies[tr.id];});
+          var theirExcl = theirList.filter(function(tr){return !cuTrophies||!cuTrophies[tr.id];});
+          var sideHtml = '';
+          if (myExcl.length || theirExcl.length) {
+            var maxRows = Math.max(myExcl.length, theirExcl.length);
+            var rows = '';
+            for (var ri=0; ri<Math.min(maxRows,8); ri++) {
+              var meTr = myExcl[ri], thTr = theirExcl[ri];
+              rows += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">' +
+                (meTr ? _tRow(meTr, cuTrophies[meTr.id], false) : '<div></div>') +
+                (thTr ? _tRow(thTr, theirTrophies[thTr.id], false) : '<div></div>') +
+              '</div>';
+            }
+            sideHtml = '<div style="margin-top:8px;">' +
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px;">' +
+                '<div style="font-size:0.65rem;font-weight:700;color:var(--text-muted);padding:0 6px;">'+_sh(cuName0)+' (exclusivos)</div>' +
+                '<div style="font-size:0.65rem;font-weight:700;color:var(--text-muted);padding:0 6px;">'+_sh(theirName0)+' (exclusivos)</div>' +
+              '</div>' + rows +
+              (maxRows > 8 ? '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;margin-top:4px;">+'+(maxRows-8)+' mais…</div>' : '') +
+            '</div>';
+          }
+
+          var html = (!myCount.total && !theirCount.total)
+            ? '<div style="color:var(--text-muted);font-size:0.78rem;padding:4px 0;text-align:center;">Nenhum troféu conquistado ainda.</div>'
+            : totalsHtml + commonHtml + sideHtml;
+
           var slot = document.getElementById('ppo-trophies-inner');
           if (slot) slot.innerHTML = html;
         }).catch(function() {
           var slot = document.getElementById('ppo-trophies-inner');
-          if (slot) slot.innerHTML = '';
-        });
-    } else {
-      var slot = document.getElementById('ppo-trophies-inner');
-      if (slot) slot.innerHTML = '<div style="font-size:0.75rem;color:var(--text-muted);opacity:0.6;">—</div>';
-    }
+          if (slot) slot.innerHTML = '<div style="font-size:0.75rem;color:var(--text-muted);">—</div>';
+        }); // end Promise.all.then
+      } // end else _loadFn
+    } // end isFriend
   };
 
   // ── buscar perfil ──
