@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.76-beta';
+window.SCOREPLACE_VERSION = '1.8.77-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -897,6 +897,30 @@ window._profileAvatarUrl = function(name, photoURL, size) {
 // identity info (empty, "Usuário", "user", "teste", etc.).
 // Also catches purely-numeric strings that were accidentally stored as names
 // in very old versions (phone number as displayName).
+// _genderWord: retorna a forma correta da palavra conforme o gênero do usuário.
+// profileOrGender: objeto de perfil com .gender, ou string ('feminino'/'masculino').
+// Se gênero não definido ou 'outro', retorna a forma neutra (com o/a).
+// Exemplos:
+//   _genderWord(p, 'inscrito', 'inscrita')        → 'inscrito' / 'inscrita' / 'inscrito(a)'
+//   _genderWord(p, 'organizador', 'organizadora') → 'organizador' / 'organizadora' / 'organizador(a)'
+window._genderWord = function(profileOrGender, masculine, feminine) {
+  var g = typeof profileOrGender === 'string'
+    ? profileOrGender
+    : (profileOrGender && profileOrGender.gender) || '';
+  g = String(g).toLowerCase().trim();
+  if (g === 'feminino' || g === 'f') return feminine;
+  if (g === 'masculino' || g === 'm') return masculine;
+  // gênero não definido: forma neutra com barra ou parênteses
+  if (masculine && feminine) {
+    // se diferem só no final (o/a, or/ora, etc.) usa parênteses na diferença
+    if (masculine.slice(0,-1) === feminine.slice(0,-1)) {
+      return masculine.slice(0,-1) + '(' + masculine.slice(-1) + '/' + feminine.slice(-1) + ')';
+    }
+    return masculine + '/' + feminine;
+  }
+  return masculine || feminine || '';
+};
+
 window._isUnfriendlyName = function(name) {
   if (!name) return true;
   var n = String(name).trim().toLowerCase();

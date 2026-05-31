@@ -1950,11 +1950,18 @@ function renderTournaments(container, tournamentId = null) {
         }
 
         // Primary organizer — always shown in Organização, regardless of self-enrollment
-        _orgCards += _buildOrgCard(_orgDisplayName, 'Organizador', _orgBgPrimary, false, '');
+        // Gênero do organizador — busca no perfil em memória se for o usuário logado
+        var _gw = typeof window._genderWord === 'function' ? window._genderWord : function(_,m){return m;};
+        var _orgGender = '';
+        var _cu2 = window.AppStore && window.AppStore.currentUser;
+        if (_cu2 && (_cu2.email === _t.organizerEmail || _cu2.uid === _t.creatorUid)) _orgGender = _cu2.gender || '';
+        var _orgRoleLabel = _gw({gender:_orgGender}, 'Organizador', 'Organizadora');
+        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '');
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
             if (ch.status !== 'active') return;
-            _orgCards += _buildOrgCard(ch.displayName || ch.email, 'Co-organizador', _orgBgCohost, _isCreatorNow, ch.email);
+            var _chLabel = _gw({gender:''}, 'Co-organizador', 'Co-organizadora');
+            _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.email);
           });
         }
         _organizersHtml = '<div style="margin-top:1.25rem;margin-bottom:0.5rem;">' +

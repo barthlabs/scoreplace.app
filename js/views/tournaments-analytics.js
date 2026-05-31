@@ -59,12 +59,15 @@ window._openPlayerProfile = function(playerName, opts) {
     var skillBySport = (profile && profile.skillBySport) || {};
 
     var isFriend = cu && playerUid && Array.isArray(cu.friends) && cu.friends.indexOf(playerUid) !== -1;
+    var _gw = typeof window._genderWord === 'function' ? window._genderWord : function(_,m,f){return m+(f?'/'+f:'');};
+    var _amigoLabel   = _gw(profile, 'Amigo',    'Amiga');
+    var _addAmigo     = '+ Adicionar ' + _gw(profile, 'amigo', 'amiga');
     var friendBtnHtml = '';
     if (playerUid && cu && cu.uid) {
       if (isFriend) {
-        friendBtnHtml = '<span style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#34d399;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;">✅ Amigo(a)</span>';
+        friendBtnHtml = '<span style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#34d399;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;">✅ '+_amigoLabel+'</span>';
       } else {
-        friendBtnHtml = '<button onclick="window._sendFriendRequest&&window._sendFriendRequest(\''+playerUid+'\');this.textContent=\'Convite enviado\';this.disabled=true;" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">+ Adicionar amigo</button>';
+        friendBtnHtml = '<button onclick="window._sendFriendRequest&&window._sendFriendRequest(\''+playerUid+'\');this.textContent=\'Convite enviado\';this.disabled=true;" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">'+_addAmigo+'</button>';
       }
     }
     var fBtn = document.getElementById('ppo-friend-btn');
@@ -194,64 +197,55 @@ window._openPlayerProfile = function(playerName, opts) {
             '</div>';
           };
 
-          var cuName0 = (cu&&cu.displayName||'Você').split(' ')[0];
+          var cuName0    = (cu&&cu.displayName||'Você').split(' ')[0];
           var theirName0 = name.split(' ')[0];
 
-          // Totais visuais
-          var totalsHtml =
-            '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:12px;padding:8px;background:rgba(255,255,255,0.03);border-radius:10px;">' +
-              '<div style="text-align:center;">' +
-                '<div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);margin-bottom:4px;">'+_sh(cuName0)+'</div>' +
-                '<div style="font-size:1.4rem;font-weight:800;color:var(--text-bright);">'+myCount.total+'</div>' +
-                '<div style="font-size:0.65rem;margin-top:2px;">' +
-                  ['platina','ouro','prata','bronze'].map(function(t){return myCount[t]?_tierBadge(t,myCount[t]):''}).join('') +
-                '</div>' +
-              '</div>' +
-              '<div style="font-size:0.8rem;color:var(--text-muted);font-weight:700;">VS</div>' +
-              '<div style="text-align:center;">' +
-                '<div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);margin-bottom:4px;">'+_sh(theirName0)+'</div>' +
-                '<div style="font-size:1.4rem;font-weight:800;color:var(--text-bright);">'+theirCount.total+'</div>' +
-                '<div style="font-size:0.65rem;margin-top:2px;">' +
-                  ['platina','ouro','prata','bronze'].map(function(t){return theirCount[t]?_tierBadge(t,theirCount[t]):''}).join('') +
-                '</div>' +
-              '</div>' +
-            '</div>';
+          // União de todos os troféus que pelo menos um possui, por tier
+          var allIds = {};
+          catalog.forEach(function(tr) {
+            var hasMe   = !!(cuTrophies    && cuTrophies[tr.id]);
+            var hasThem = !!(theirTrophies && theirTrophies[tr.id]);
+            if (hasMe || hasThem) allIds[tr.id] = tr;
+          });
+          var allTrs = Object.values(allIds).sort(function(a,b) {
+            var ta = (cuTrophies[a.id]||theirTrophies[a.id]||{}).tier||'bronze';
+            var tb = (cuTrophies[b.id]||theirTrophies[b.id]||{}).tier||'bronze';
+            return (tierOrder[ta]||3)-(tierOrder[tb]||3);
+          });
 
-          // Em comum
-          var commonHtml = '';
-          if (both.length) {
-            commonHtml = '<div style="margin-bottom:10px;">' +
-              '<div style="font-size:0.65rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">⭐ Em comum ('+both.length+')</div>' +
-              both.map(function(tr){return _tRow(tr, cuTrophies[tr.id], true);}).join('') +
-            '</div>';
+          if (!allTrs.length) {
+            var slot = document.getElementById('ppo-trophies-inner');
+            if (slot) slot.innerHTML = '<div style="color:var(--text-muted);font-size:0.78rem;padding:4px 0;text-align:center;">Nenhuma conquista ainda.</div>';
+            return;
           }
 
-          // Lista lado a lado (só os exclusivos)
-          var myExcl    = myList.filter(function(tr){return !theirTrophies[tr.id];});
-          var theirExcl = theirList.filter(function(tr){return !cuTrophies||!cuTrophies[tr.id];});
-          var sideHtml = '';
-          if (myExcl.length || theirExcl.length) {
-            var maxRows = Math.max(myExcl.length, theirExcl.length);
-            var rows = '';
-            for (var ri=0; ri<Math.min(maxRows,8); ri++) {
-              var meTr = myExcl[ri], thTr = theirExcl[ri];
-              rows += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">' +
-                (meTr ? _tRow(meTr, cuTrophies[meTr.id], false) : '<div></div>') +
-                (thTr ? _tRow(thTr, theirTrophies[thTr.id], false) : '<div></div>') +
-              '</div>';
-            }
-            sideHtml = '<div style="margin-top:8px;">' +
-              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px;">' +
-                '<div style="font-size:0.65rem;font-weight:700;color:var(--text-muted);padding:0 6px;">'+_sh(cuName0)+' (exclusivos)</div>' +
-                '<div style="font-size:0.65rem;font-weight:700;color:var(--text-muted);padding:0 6px;">'+_sh(theirName0)+' (exclusivos)</div>' +
-              '</div>' + rows +
-              (maxRows > 8 ? '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;margin-top:4px;">+'+(maxRows-8)+' mais…</div>' : '') +
+          // Cabeçalho: nome esquerda | — | nome direita
+          var headerHtml =
+            '<div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:4px;align-items:center;padding:0 4px 8px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));margin-bottom:8px;">' +
+              '<div style="font-size:0.78rem;font-weight:700;color:var(--text-bright);text-align:left;">'+_sh(cuName0)+'</div>' +
+              '<div style="font-size:0.65rem;font-weight:700;color:var(--text-muted);text-align:center;text-transform:uppercase;letter-spacing:0.5px;">Conquista</div>' +
+              '<div style="font-size:0.78rem;font-weight:700;color:var(--text-bright);text-align:right;">'+_sh(theirName0)+'</div>' +
             '</div>';
-          }
 
-          var html = (!myCount.total && !theirCount.total)
-            ? '<div style="color:var(--text-muted);font-size:0.78rem;padding:4px 0;text-align:center;">Nenhum troféu conquistado ainda.</div>'
-            : totalsHtml + commonHtml + sideHtml;
+          // Linhas: ✅/❌ | ícone nome conquista | ✅/❌
+          var rowsHtml = allTrs.map(function(tr) {
+            var hasMe   = !!(cuTrophies    && cuTrophies[tr.id]);
+            var hasThem = !!(theirTrophies && theirTrophies[tr.id]);
+            var tier    = (cuTrophies[tr.id]||theirTrophies[tr.id]||{}).tier || 'bronze';
+            var col     = tierColor[tier] || '#f97316';
+            var chk = '<span style="font-size:1rem;line-height:1;">✅</span>';
+            var xmk = '<span style="font-size:1rem;line-height:1;opacity:0.35;">❌</span>';
+            return '<div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:4px;align-items:center;padding:5px 4px;border-radius:6px;" onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'none\'">' +
+              '<div style="text-align:left;">'+(hasMe?chk:xmk)+'</div>' +
+              '<div style="text-align:center;">' +
+                '<span style="font-size:0.9rem;">'+_sh(tr.icon||'🏅')+'</span> ' +
+                '<span style="font-size:0.72rem;color:'+col+';font-weight:600;">'+_sh(tr.title)+'</span>' +
+              '</div>' +
+              '<div style="text-align:right;">'+(hasThem?chk:xmk)+'</div>' +
+            '</div>';
+          }).join('');
+
+          var html = headerHtml + rowsHtml;
 
           var slot = document.getElementById('ppo-trophies-inner');
           if (slot) slot.innerHTML = html;
