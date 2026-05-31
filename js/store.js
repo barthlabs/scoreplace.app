@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.42-beta';
+window.SCOREPLACE_VERSION = '1.8.43-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -1017,12 +1017,18 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   panel.innerHTML =
     '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright,#f1f5f9);margin-bottom:14px;">' + TITLE + '</div>' +
     '<canvas id="crop-canvas" width="' + PREV + '" height="' + PREV + '" style="border-radius:' + (SHAPE==='circle'?'50%':'12px') + ';cursor:move;touch-action:none;max-width:100%;"></canvas>' +
-    '<div style="margin:14px 0 6px;display:flex;align-items:center;gap:10px;">' +
-      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);">🔍−</span>' +
+    '<div style="margin:14px 0 4px;display:flex;align-items:center;gap:10px;">' +
+      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">🔍−</span>' +
       '<input type="range" id="crop-zoom" min="50" max="300" value="100" style="flex:1;accent-color:var(--primary-color,#6366f1);">' +
-      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);">+🔍</span>' +
+      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">+🔍</span>' +
     '</div>' +
-    '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">Arraste para reposicionar · Slider para zoom</div>' +
+    '<div style="margin:6px 0 4px;display:flex;align-items:center;gap:10px;">' +
+      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">☀−</span>' +
+      '<input type="range" id="crop-brightness" min="-75" max="75" value="0" style="flex:1;accent-color:#f59e0b;">' +
+      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">+☀</span>' +
+      '<span id="crop-brightness-label" style="font-size:0.7rem;color:#fbbf24;min-width:32px;text-align:right;">0%</span>' +
+    '</div>' +
+    '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">Arraste para reposicionar · Zoom · Luminosidade</div>' +
     '<div style="display:flex;gap:10px;">' +
       '<button id="crop-cancel" class="btn btn-sm" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted,#94a3b8);border:1px solid rgba(255,255,255,0.1);">Cancelar</button>' +
       '<button id="crop-confirm" class="btn btn-sm btn-primary" style="flex:2;">✅ Confirmar</button>' +
@@ -1034,9 +1040,12 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   var canvas = document.getElementById('crop-canvas');
   var ctx = canvas.getContext('2d');
   var zoomSlider = document.getElementById('crop-zoom');
+  var brightnessSlider = document.getElementById('crop-brightness');
+  var brightnessLabel = document.getElementById('crop-brightness-label');
 
   var img = new Image();
   var scale = 1.0;
+  var brightness = 0; // -75 to +75
   var offsetX = 0, offsetY = 0;
   var isDragging = false, lastX = 0, lastY = 0;
 
@@ -1052,7 +1061,10 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     } else {
       ctx.beginPath(); ctx.roundRect(0, 0, PREV, PREV, 12); ctx.clip();
     }
+    // Luminosidade via canvas filter (1.0 = neutro; 0.25 = -75%; 1.75 = +75%)
+    ctx.filter = 'brightness(' + (1 + brightness / 100) + ')';
     ctx.drawImage(img, dx, dy, sw, sh);
+    ctx.filter = 'none';
     ctx.restore();
     // Borda sutil
     ctx.strokeStyle = 'rgba(99,102,241,0.4)'; ctx.lineWidth = 2;
@@ -1073,6 +1085,12 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
 
   zoomSlider.addEventListener('input', function() {
     scale = parseFloat(this.value) / 100;
+    draw();
+  });
+
+  brightnessSlider.addEventListener('input', function() {
+    brightness = parseInt(this.value, 10);
+    brightnessLabel.textContent = (brightness >= 0 ? '+' : '') + brightness + '%';
     draw();
   });
 
@@ -1105,7 +1123,9 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     var dy = SIZE/2 + offsetY*ratio - sh/2;
     if (SHAPE === 'circle') { octx.beginPath(); octx.arc(SIZE/2,SIZE/2,SIZE/2,0,Math.PI*2); octx.clip(); }
     else { octx.beginPath(); octx.roundRect(0,0,SIZE,SIZE,Math.round(12*ratio)); octx.clip(); }
+    octx.filter = 'brightness(' + (1 + brightness / 100) + ')';
     octx.drawImage(img, dx, dy, sw, sh);
+    octx.filter = 'none';
     var result = out.toDataURL('image/jpeg', 0.88);
     overlay.remove();
     if (typeof callback === 'function') callback(result);

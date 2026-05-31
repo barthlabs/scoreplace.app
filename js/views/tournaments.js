@@ -1145,7 +1145,10 @@ function renderTournaments(container, tournamentId = null) {
             <!-- Middle Left: Nome + Logo + Favorito -->
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
             <div style="display: flex; align-items: ${t.logoData && tournamentId ? 'flex-start' : 'center'}; gap: ${t.logoData && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
-              ${t.logoData ? `<img src="${t.logoData}" alt="Logo" style="width:33%;aspect-ratio:1/1;border-radius:16px;object-fit:cover;flex-shrink:0;box-shadow:0 4px 20px rgba(0,0,0,0.45);">` : ''}
+              ${t.logoData ? `<img src="${t.logoData}" alt="Logo"
+                style="width:min(33%,160px);min-width:90px;aspect-ratio:1/1;border-radius:16px;object-fit:cover;flex-shrink:0;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
+                ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
+              >` : ''}
               <div style="flex:1;min-width:0;">
                 <h4 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: white; line-height: 1.2; text-align: left; overflow-wrap: break-word;">
                   ${window._safeHtml(t.name)}

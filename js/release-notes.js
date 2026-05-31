@@ -8,6 +8,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.07);">' +
+      '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">🎨 v1.8.43-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
+      '<p><b>Editor de logo com luminosidade + logo clicável no detalhe do torneio.</b><br><br>' +
+      '<b>Luminosidade:</b> o editor de crop/zoom ganhou um segundo slider (☀−/+☀) para ajustar a luminosidade de −75% a +75%, com label de valor ao vivo. Funciona para upload de logo do torneio e foto de perfil. A luminosidade é aplicada tanto no preview quanto na imagem final exportada.<br><br>' +
+      '<b>Logo clicável:</b> o organizador pode clicar diretamente no logo do torneio na tela de detalhe para trocar a imagem. Abre o seletor de arquivo → editor de crop/zoom/luminosidade → salva no Firestore e re-renderiza.<br><br>' +
+      '<b>Tamanho do logo:</b> corrigido com <code>min-width:90px</code> para garantir que o logo apareça no mínimo 90px mesmo em viewports muito estreitas.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.07);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">📍 v1.8.42-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
       '<p><b>GPS pedido apenas uma vez por sessão, nunca mais repetidamente.</b><br><br>' +

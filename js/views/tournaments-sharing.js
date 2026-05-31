@@ -1,6 +1,51 @@
 // ── Sharing & Export Functions ──
 var _t = window._t || function(k) { return k; };
 
+// v1.8.43-beta: clicar no logo do torneio na tela de detalhe abre o
+// editor de crop/zoom/luminosidade. Só disponível para o organizador.
+window._editTournamentLogoFromDetail = function(tournamentId) {
+  var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tournamentId); });
+  if (!t) return;
+  // Cria input de arquivo temporário e dispara clique
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  input.addEventListener('change', function() {
+    if (!input.files || !input.files[0]) { input.remove(); return; }
+    var file = input.files[0];
+    input.remove();
+    if (file.size > 5 * 1024 * 1024) {
+      if (window.showNotification) window.showNotification('Arquivo muito grande', 'Máximo 5 MB.', 'warning');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      if (typeof window._openImageCropEditor !== 'function') return;
+      window._openImageCropEditor(e.target.result,
+        { shape: 'square', size: 400, title: '🎨 Editar logo do torneio' },
+        function(croppedDataUrl) {
+          // Salva no torneio e re-renderiza
+          t.logoData = croppedDataUrl;
+          t.logoLocked = true;
+          t.updatedAt = new Date().toISOString();
+          if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
+            window.FirestoreDB.saveTournament(t).then(function() {
+              if (window.showNotification) window.showNotification('Logo atualizado', '', 'success');
+              if (typeof window._softRefreshView === 'function') window._softRefreshView();
+            }).catch(function(err) {
+              if (window.showNotification) window.showNotification('Erro ao salvar logo', err && err.message, 'error');
+            });
+          }
+        }
+      );
+    };
+    reader.readAsDataURL(file);
+  });
+  input.click();
+};
+
 // Abre a modal de detalhe do venue a partir de um torneio. Compõe o
 // venueKey (placeId ou slug de nome) via VenueDB, navega pra
 // #venues/<key> — o roteador já sabe abrir a modal via deep link.
