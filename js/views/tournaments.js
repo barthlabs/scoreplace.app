@@ -2412,27 +2412,51 @@ function renderTournaments(container, tournamentId = null) {
             const _pairedParticipants = _isDoublesTournament ? _allParts.filter(function(p) { var n = typeof p === 'string' ? p : (p.displayName || p.name || ''); return n && n.includes('/'); }) : [];
 
             function _duplaCard(p, draggable, tIdStr) {
-              var nm  = typeof p === 'string' ? p : (p.displayName || p.name || '');
-              var uid = typeof p === 'object' ? (p.uid || '') : '';
-              var photo = typeof p === 'object' ? (p.photoURL || '') : '';
-              var initial = window._safeHtml((nm[0]||'?').toUpperCase());
-              var avatar  = photo
-                ? '<img src="' + window._safeHtml(photo) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
-                : '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:#fff;font-weight:700;flex-shrink:0;">' + initial + '</div>';
+              var nm   = typeof p === 'string' ? p : (p.displayName || p.name || '');
+              var uid  = typeof p === 'object' ? (p.uid  || '') : '';
+              var email= typeof p === 'object' ? (p.email|| '') : '';
+              // Foto: busca do _playerPhotoCache (preloaded por uid no bracket.js)
+              var _seed = encodeURIComponent(nm);
+              var _fb   = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _seed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+              var _photo = (window._playerPhotoCache && window._playerPhotoCache[nm.toLowerCase()] && window._playerPhotoCache[nm.toLowerCase()].indexOf('dicebear.com') === -1)
+                ? window._playerPhotoCache[nm.toLowerCase()] : _fb;
+              // Coroa se for organizador
+              var _isOrgP = uid ? !!_orgUidsShared[uid] : (email && !!_orgEmailsShared[email]);
+              var _crown  = _isOrgP ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
+              // Membros da dupla (para cards formados)
+              var members = nm.includes('/') ? nm.split('/').map(function(s){return s.trim();}).filter(Boolean) : null;
+              var nameHtml;
+              if (members) {
+                nameHtml = members.map(function(n) {
+                  var ms='https://api.dicebear.com/9.x/initials/svg?seed='+encodeURIComponent(n)+'&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+                  var mp=(window._playerPhotoCache&&window._playerPhotoCache[n.toLowerCase()]&&window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com')===-1)?window._playerPhotoCache[n.toLowerCase()]:ms;
+                  return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;"><img src="'+window._safeHtml(mp)+'" onerror="this.onerror=null;this.src=\''+ms+'\'" data-player-name="'+window._safeHtml(n)+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.92rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+window._safeHtml(n)+'</span></div>';
+                }).join('');
+              } else {
+                nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="'+window._safeHtml(_photo)+'" onerror="this.onerror=null;this.src=\''+_fb+'\'" data-player-name="'+window._safeHtml(nm)+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">'+window._safeHtml(nm)+'</span>'+_crown+'</div>';
+              }
+              // Estilo igual ao card normal
+              var bgStyle = draggable
+                ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'
+                : 'background:linear-gradient(135deg,rgba(15,118,110,0.6),rgba(20,184,166,0.6));border:1px solid rgba(20,184,166,0.5);';
               var dragAttrs = draggable
-                ? 'draggable="true" ondragstart="window._duplaDragStart(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')" ondragover="event.preventDefault();this.style.outline=\'2px solid #f59e0b\'" ondragleave="this.style.outline=\'\'" ondrop="event.preventDefault();this.style.outline=\'\';window._duplaDropOn(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')"'
+                ? 'draggable="true" ondragstart="window._duplaDragStart(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')" ondragover="event.preventDefault();this.style.outline=\'3px solid #f59e0b\'" ondragleave="this.style.outline=\'\'" ondrop="event.preventDefault();this.style.outline=\'\';window._duplaDropOn(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')"'
                 : '';
-              var style = draggable
-                ? 'display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);cursor:grab;transition:all 0.15s;'
-                : 'display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);transition:all 0.15s;';
+              var labelHtml = draggable
+                ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
+                : '<div style="font-size:0.65rem;color:#34d399;margin-top:3px;">✅ Dupla formada</div>';
               var desfazerBtn = (!draggable && isOrg)
-                ? '<button onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;color:#f87171;font-size:0.7rem;padding:3px 8px;cursor:pointer;white-space:nowrap;flex-shrink:0;">↩️ Desfazer</button>'
+                ? '<button onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;color:#f87171;font-size:0.7rem;padding:3px 8px;cursor:pointer;white-space:nowrap;flex-shrink:0;margin-left:6px;">↩️ Desfazer</button>'
                 : '';
-              return '<div ' + dragAttrs + ' style="' + style + '">' +
-                avatar +
-                '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(nm) + '</div>' +
-                (draggable ? '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:1px;">Arraste para formar dupla</div>' : '<div style="font-size:0.65rem;color:#34d399;margin-top:1px;">✅ Dupla formada</div>') +
-                '</div>' + desfazerBtn + '</div>';
+              return '<div class="participant-card" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
+                ' style="' + bgStyle + 'border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+                '<div style="display:flex;flex-direction:column;gap:0;">' +
+                  nameHtml +
+                  '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+                    labelHtml +
+                    desfazerBtn +
+                  '</div>' +
+                '</div></div>';
             }
             function _safeAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 
