@@ -1,95 +1,221 @@
 // ── Analytics & Details Functions ──
 
-// _openPlayerProfile: abre perfil do jogador.
-// - Próprio usuário → navega para #profile (editável, propaga tudo)
-// - Outro jogador → overlay read-only com foto, info + stats
+// ── Perfil de jogador ─────────────────────────────────────────────────────────
+// _openPlayerProfile(name, {uid, tournamentId})
+// - Próprio usuário → #profile (editável, propaga tudo)
+// - Outro jogador → overlay com perfil, histórico compartilhado e troféus
 window._openPlayerProfile = function(playerName, opts) {
   opts = opts || {};
   var uid = opts.uid || '';
   var cu = window.AppStore && window.AppStore.currentUser;
+  if (!playerName && !uid) return;
 
-  // Verificar se é o próprio usuário (por uid ou por nome)
   var isSelf = (uid && cu && uid === cu.uid) ||
                (!uid && cu && cu.displayName &&
                 cu.displayName.toLowerCase().trim() === String(playerName || '').toLowerCase().trim());
+  if (isSelf) { window.location.hash = '#profile'; return; }
 
-  if (isSelf) {
-    // Próprio perfil → editar
-    window.location.hash = '#profile';
-    return;
-  }
-
-  // Outro jogador → buscar perfil no Firestore e mostrar overlay read-only
   var db = window.FirestoreDB && window.FirestoreDB.db;
-  if (!db) { if (typeof window._showPlayerStats === 'function') window._showPlayerStats(playerName, opts.tournamentId); return; }
 
-  var _renderProfileOverlay = function(profile) {
-    var name    = (profile && profile.displayName) || playerName || '?';
-    var photo   = (profile && profile.photoURL) || (window._playerPhotoCache && window._playerPhotoCache[String(playerName||'').toLowerCase()]) || '';
-    var city    = (profile && profile.city) || '';
-    var sports  = (profile && Array.isArray(profile.preferredSports)) ? profile.preferredSports : [];
-    var seed    = encodeURIComponent(name);
-    var fallback= 'https://api.dicebear.com/9.x/initials/svg?seed=' + seed + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=80';
-    var avatarSrc = (photo && photo.indexOf('dicebear.com') === -1) ? photo : fallback;
-
-    // Remover overlay anterior
-    var old = document.getElementById('player-profile-overlay');
-    if (old) old.remove();
-
-    var overlay = document.createElement('div');
-    overlay.id = 'player-profile-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:10050;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;';
-    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
-
-    var sportsHtml = sports.length
-      ? '<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:8px;">' +
-        sports.map(function(s) { return '<span style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:20px;padding:2px 10px;font-size:0.72rem;color:#a5b4fc;">' + window._safeHtml(s) + '</span>'; }).join('') +
-        '</div>' : '';
-
-    overlay.innerHTML =
-      '<div style="background:var(--bg-card,#1e293b);border-radius:16px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto;">' +
-        '<div style="display:flex;justify-content:flex-end;padding:12px 14px 0;">' +
-          '<button onclick="document.getElementById(\'player-profile-overlay\').remove()" style="background:none;border:none;color:var(--text-muted,#94a3b8);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>' +
-        '</div>' +
-        '<div style="padding:0 24px 20px;text-align:center;">' +
-          '<img src="' + window._safeHtml(avatarSrc) + '" onerror="this.src=\'' + fallback + '\'" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(99,102,241,0.4);margin-bottom:10px;">' +
-          '<div style="font-size:1.2rem;font-weight:800;color:var(--text-bright,#f1f5f9);">' + window._safeHtml(name) + '</div>' +
-          (city ? '<div style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-top:3px;">📍 ' + window._safeHtml(city) + '</div>' : '') +
-          sportsHtml +
-        '</div>' +
-        '<div style="border-top:1px solid var(--border-color,rgba(255,255,255,0.08));padding:12px 24px 20px;" id="player-profile-stats-slot">' +
-          '<div style="text-align:center;color:var(--text-muted);font-size:0.8rem;">Carregando estatísticas…</div>' +
-        '</div>' +
-      '</div>';
-
-    document.body.appendChild(overlay);
-
-    // Injetar stats no slot
-    setTimeout(function() {
-      var slot = document.getElementById('player-profile-stats-slot');
-      if (!slot) return;
-      if (typeof window._showPlayerStats !== 'function') { slot.innerHTML = ''; return; }
-      // Capturar o HTML das stats sem mostrar o modal — usa helper interno
-      if (typeof window._buildPlayerStatsHtml === 'function') {
-        slot.innerHTML = window._buildPlayerStatsHtml(playerName, opts.tournamentId);
-      } else {
-        // Fallback: botão para abrir o modal de stats
-        slot.innerHTML = '<div style="text-align:center;">' +
-          '<button onclick="document.getElementById(\'player-profile-overlay\').remove();window._showPlayerStats(\'' + window._safeHtml(playerName).replace(/'/g,"\\'") + '\')" class="btn btn-outline btn-sm" style="font-size:0.8rem;">📊 Ver estatísticas detalhadas</button>' +
-          '</div>';
-      }
-    }, 50);
+  // ── helpers visuais ──
+  var _sh = window._safeHtml || function(s){return String(s||'');};
+  var _avatar = function(photo, name, size) {
+    var sz = size || 72;
+    var seed = encodeURIComponent(name||'?');
+    var fb = 'https://api.dicebear.com/9.x/initials/svg?seed='+seed+'&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size='+sz;
+    var src = (photo && photo.indexOf('dicebear.com')===-1) ? photo : fb;
+    return '<img src="'+_sh(src)+'" onerror="this.onerror=null;this.src=\''+fb+'\'" style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+  };
+  var _pill = function(label, bg) {
+    return '<span style="background:'+( bg||'rgba(99,102,241,0.15)')+';border:1px solid rgba(99,102,241,0.3);border-radius:20px;padding:2px 10px;font-size:0.72rem;color:#a5b4fc;">'+_sh(label)+'</span>';
   };
 
-  // Buscar perfil: uid direto > query por displayName
+  // ── criar overlay vazio imediatamente ──
+  var old = document.getElementById('player-profile-overlay');
+  if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'player-profile-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);z-index:10050;overflow-y:auto;';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML =
+    '<div style="min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding:0 0 40px;">' +
+      '<div id="ppo-card" style="background:var(--bg-card,#1e293b);width:100%;max-width:520px;border-radius:0 0 16px 16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+        // header
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
+          '<button onclick="document.getElementById(\'player-profile-overlay\').remove()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted,#94a3b8);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:0.82rem;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Voltar</button>' +
+          '<div id="ppo-friend-btn"></div>' +
+        '</div>' +
+        '<div id="ppo-body" style="padding:0;"><div style="text-align:center;padding:32px;color:var(--text-muted);">Carregando…</div></div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  // ── buscar dados e montar ──
+  var _build = function(profile, playerUid) {
+    var name   = (profile && profile.displayName) || playerName || '?';
+    var photo  = (profile && profile.photoURL) || (window._playerPhotoCache && window._playerPhotoCache[String(playerName||'').toLowerCase()]) || '';
+    var city   = (profile && profile.city) || '';
+    var sports = (profile && Array.isArray(profile.preferredSports)) ? profile.preferredSports : [];
+    var skillBySport = (profile && profile.skillBySport) || {};
+
+    var isFriend = cu && playerUid && Array.isArray(cu.friends) && cu.friends.indexOf(playerUid) !== -1;
+    var friendBtnHtml = '';
+    if (playerUid && cu && cu.uid) {
+      if (isFriend) {
+        friendBtnHtml = '<span style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#34d399;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;">✅ Amigo(a)</span>';
+      } else {
+        friendBtnHtml = '<button onclick="window._sendFriendRequest&&window._sendFriendRequest(\''+playerUid+'\');this.textContent=\'Convite enviado\';this.disabled=true;" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">+ Adicionar amigo</button>';
+      }
+    }
+    var fBtn = document.getElementById('ppo-friend-btn');
+    if (fBtn) fBtn.innerHTML = friendBtnHtml;
+
+    // ── histórico compartilhado ──
+    var tournaments = window.AppStore && window.AppStore.tournaments || [];
+    var shared = { asPartner:[], asOpponent:[] };
+    var cuName  = cu && cu.displayName || '';
+    var _nameIn = function(str, n) { return str && n && (str.toLowerCase() === n.toLowerCase() || str.toLowerCase().indexOf(' / ') !== -1 && str.toLowerCase().split(' / ').some(function(p){return p.trim()===n.toLowerCase().trim();})); };
+    tournaments.forEach(function(t) {
+      var allParts = Array.isArray(t.participants) ? t.participants : [];
+      var cuEntry = null, plEntry = null;
+      allParts.forEach(function(p) {
+        var n = typeof p === 'string' ? p : (p.displayName||p.name||'');
+        if (_nameIn(n, cuName) || (cu&&cu.uid&&typeof p==='object'&&p.uid===cu.uid)) cuEntry = n;
+        if (_nameIn(n, name) || (playerUid&&typeof p==='object'&&p.uid===playerUid)) plEntry = n;
+      });
+      if (!cuEntry || !plEntry) return;
+      // Verificar se são no mesmo time (parceiros) ou times diferentes (adversários)
+      var isPartner = cuEntry === plEntry || (cuEntry.indexOf('/') !== -1 && _nameIn(cuEntry, name));
+      if (isPartner) { shared.asPartner.push(t); } else { shared.asOpponent.push(t); }
+    });
+
+    // Calcular W/D/L nos torneios compartilhados
+    var _wdl = function(tList, mode) {
+      var w=0,d=0,l=0;
+      tList.forEach(function(t) {
+        var allM = typeof window._collectAllMatches==='function' ? window._collectAllMatches(t) : [];
+        allM.forEach(function(m) {
+          var p1h = _nameIn(m.p1||'', mode==='partner' ? name : cuName);
+          var p2h = _nameIn(m.p2||'', mode==='partner' ? name : cuName);
+          if (!p1h && !p2h) return;
+          if (!m.winner) return;
+          var cuWon = _nameIn(m.winner, cuName) || _nameIn(m.winner, name);
+          if (mode==='partner') {
+            if (_nameIn(m.winner, name)) w++; else l++;
+          } else {
+            if (_nameIn(m.winner, cuName)) w++; else if (m.winner==='draw') d++; else l++;
+          }
+        });
+      });
+      return {w:w,d:d,l:l};
+    };
+    var partnerStats  = _wdl(shared.asPartner, 'partner');
+    var opponentStats = _wdl(shared.asOpponent, 'opponent');
+
+    var sharedHtml = '';
+    if (shared.asPartner.length || shared.asOpponent.length) {
+      sharedHtml =
+        '<div style="padding:16px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
+          '<div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">🏆 Histórico juntos</div>' +
+          (shared.asPartner.length ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.82rem;"><span style="color:#34d399;font-weight:600;">🤝 Parceiros</span><span style="color:var(--text-muted);">'+shared.asPartner.length+' torneio(s)</span><span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">'+partnerStats.w+'V '+partnerStats.l+'D juntos</span></div>' : '') +
+          (shared.asOpponent.length ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.82rem;"><span style="color:#f59e0b;font-weight:600;">⚔️ Adversários</span><span style="color:var(--text-muted);">'+shared.asOpponent.length+' torneio(s)</span><span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">'+opponentStats.w+'V '+opponentStats.d+(opponentStats.d?'E ':'')+opponentStats.l+'D (seu)</span></div>' : '') +
+        '</div>';
+    }
+
+    // ── montar body ──
+    var sportsHtml = sports.length ? '<div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:8px;">' +
+      sports.map(function(s) {
+        var sk = skillBySport[s] ? ' <span style="font-size:0.6rem;color:#fbbf24;">'+_sh(skillBySport[s])+'</span>' : '';
+        return isFriend ? _pill(s)+ sk : _pill(s);
+      }).join('') + '</div>' : '';
+
+    var body = document.getElementById('ppo-body');
+    if (!body) return;
+    body.innerHTML =
+      // hero
+      '<div style="text-align:center;padding:20px 20px 14px;">' +
+        _avatar(photo, name, 80) +
+        '<div style="font-size:1.2rem;font-weight:800;color:var(--text-bright,#f1f5f9);margin-top:10px;">' + _sh(name) + '</div>' +
+        (isFriend && city ? '<div style="font-size:0.8rem;color:var(--text-muted);margin-top:3px;">📍 '+_sh(city)+'</div>' : '') +
+        sportsHtml +
+      '</div>' +
+      // histórico compartilhado
+      sharedHtml +
+      // troféus
+      '<div id="ppo-trophies" style="padding:0 16px 4px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));"><div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;padding:12px 0 8px;">🏅 Troféus</div><div id="ppo-trophies-inner" style="font-size:0.8rem;color:var(--text-muted);">Carregando…</div></div>' +
+      // stats
+      '<div style="padding:12px 16px 20px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));text-align:center;">' +
+        '<button onclick="document.getElementById(\'player-profile-overlay\').remove();if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\''+_sh(name).replace(/'/g,"\\'")+'\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:10px;padding:8px 20px;font-size:0.82rem;cursor:pointer;">📊 Ver estatísticas detalhadas</button>' +
+      '</div>';
+
+    // ── carregar troféus ──
+    if (playerUid && db) {
+      var cuTrophies = window._trophyCache ? (window._trophyCache.trophies && window._trophyCache.trophies[cu&&cu.uid] || {}) : {};
+      db.collection('users').doc(playerUid).collection('trophies').get()
+        .then(function(snap) {
+          var theirTrophies = {};
+          snap.forEach(function(d) { theirTrophies[d.id] = d.data(); });
+          var catalog = window.TROPHY_CATALOG || [];
+          var tierOrder = {platina:0,ouro:1,prata:2,bronze:3};
+          var tierColor = {platina:'#e879f9',ouro:'#fbbf24',prata:'#94a3b8',bronze:'#f97316'};
+          var tierEmoji = {platina:'✨',ouro:'🥇',prata:'🥈',bronze:'🥉'};
+
+          // Separar troféus: só deles, só meus, de ambos
+          var both=[], onlyThem=[], onlyMe=[];
+          catalog.forEach(function(tr) {
+            var hasThem = !!theirTrophies[tr.id];
+            var hasMe   = !!(cuTrophies && cuTrophies[tr.id]);
+            if (hasThem && hasMe) both.push({tr:tr, them:theirTrophies[tr.id], me:cuTrophies[tr.id]});
+            else if (hasThem) onlyThem.push({tr:tr, them:theirTrophies[tr.id]});
+            else if (hasMe) onlyMe.push({tr:tr, me:cuTrophies[tr.id]});
+          });
+
+          var _tCard = function(tr, t) {
+            var tier = (t&&t.tier)||'bronze';
+            var col = tierColor[tier]||'#f97316';
+            return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;"><span style="font-size:1rem;">'+_sh(tr.icon||'🏆')+'</span><span style="font-size:0.75rem;color:'+col+';font-weight:700;">'+tierEmoji[tier]+' '+_sh(tr.title)+'</span></div>';
+          };
+
+          var html = '';
+          if (!both.length && !onlyThem.length && !onlyMe.length) {
+            html = '<div style="color:var(--text-muted);font-size:0.78rem;padding:4px 0;">Nenhum troféu conquistado ainda.</div>';
+          } else {
+            html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+              '<div><div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);margin-bottom:6px;">Você</div>' +
+                [...both.map(function(x){return _tCard(x.tr,x.me);}), ...onlyMe.map(function(x){return _tCard(x.tr,x.me);})].join('') ||
+                '<div style="font-size:0.75rem;color:var(--text-muted);opacity:0.6;">—</div>' +
+              '</div>' +
+              '<div><div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);margin-bottom:6px;">'+_sh(name.split(' ')[0])+'</div>' +
+                [...both.map(function(x){return _tCard(x.tr,x.them);}), ...onlyThem.map(function(x){return _tCard(x.tr,x.them);})].join('') ||
+                '<div style="font-size:0.75rem;color:var(--text-muted);opacity:0.6;">—</div>' +
+              '</div>' +
+            '</div>';
+          }
+          var slot = document.getElementById('ppo-trophies-inner');
+          if (slot) slot.innerHTML = html;
+        }).catch(function() {
+          var slot = document.getElementById('ppo-trophies-inner');
+          if (slot) slot.innerHTML = '';
+        });
+    } else {
+      var slot = document.getElementById('ppo-trophies-inner');
+      if (slot) slot.innerHTML = '<div style="font-size:0.75rem;color:var(--text-muted);opacity:0.6;">—</div>';
+    }
+  };
+
+  // ── buscar perfil ──
+  if (!db) { _build(null, uid); return; }
   if (uid) {
     db.collection('users').doc(uid).get()
-      .then(function(doc) { _renderProfileOverlay(doc.exists ? doc.data() : null); })
-      .catch(function() { _renderProfileOverlay(null); });
+      .then(function(doc) { _build(doc.exists ? doc.data() : null, uid); })
+      .catch(function() { _build(null, uid); });
   } else {
     db.collection('users').where('displayName', '==', playerName).limit(1).get()
-      .then(function(snap) { _renderProfileOverlay(!snap.empty ? snap.docs[0].data() : null); })
-      .catch(function() { _renderProfileOverlay(null); });
+      .then(function(snap) {
+        var docId = !snap.empty ? snap.docs[0].id : '';
+        _build(!snap.empty ? snap.docs[0].data() : null, docId);
+      })
+      .catch(function() { _build(null, ''); });
   }
 };
 
