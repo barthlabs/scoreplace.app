@@ -1356,6 +1356,12 @@ function _completeEmailLinkSignIn() {
       if (user.email && typeof window._checkEmailLinkIntent === 'function') {
         setTimeout(function() { window._checkEmailLinkIntent(user.email); }, 1500);
       }
+      // v1.8.74: sugerir criação de senha após login via magic link
+      if (user.email) {
+        setTimeout(function() {
+          if (typeof window._suggestCreatePassword === 'function') window._suggestCreatePassword(user.email);
+        }, 2500);
+      }
       // Clean the URL (remove sign-in link parameters)
       if (window.history && window.history.replaceState) {
         window.history.replaceState(null, '', window.location.pathname + '#dashboard');
@@ -1887,6 +1893,99 @@ function handleEmailRegister() {
       }
     });
 }
+
+// ─── Criar senha após magic link ─────────────────────────────────────────────
+// Aparece uma vez após login via link mágico para contas sem senha.
+// Permite que o browser salve email+senha para logins futuros com Face ID / Touch ID.
+window._suggestCreatePassword = function(email) {
+  if (!email) return;
+  // Só mostrar uma vez por sessão
+  try { if (sessionStorage.getItem('_passwordSuggested')) return; } catch(e) {}
+  // Verificar se já tem provider 'password'
+  var fbUser = typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser;
+  if (!fbUser) return;
+  var hasPassword = (fbUser.providerData || []).some(function(p) { return p.providerId === 'password'; });
+  if (hasPassword) return;
+  try { sessionStorage.setItem('_passwordSuggested', '1'); } catch(e) {}
+
+  // Mostrar overlay
+  var old = document.getElementById('create-password-overlay');
+  if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'create-password-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML =
+    '<div style="background:var(--bg-card,#1e293b);border-radius:16px;padding:24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+      '<div style="font-size:1.4rem;text-align:center;margin-bottom:6px;">🔑</div>' +
+      '<h3 style="margin:0 0 6px;text-align:center;color:var(--text-bright,#f1f5f9);font-size:1rem;">Entre mais fácil na próxima vez</h3>' +
+      '<p style="font-size:0.8rem;color:var(--text-muted,#94a3b8);text-align:center;margin:0 0 16px;">Crie uma senha para entrar com Face ID ou Touch ID — sem precisar de link no e-mail.</p>' +
+      // Form real para o browser detectar e oferecer "Salvar senha"
+      '<form id="create-password-form" autocomplete="on" onsubmit="event.preventDefault();window._doCreatePassword()">' +
+        '<input type="email" name="email" autocomplete="username" value="' + email.replace(/"/g,'') + '" readonly style="display:none;">' +
+        '<div style="margin-bottom:10px;">' +
+          '<input type="password" id="cp-password" name="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" class="form-control" style="font-size:0.9rem;" minlength="6" required>' +
+        '</div>' +
+        '<div style="margin-bottom:16px;">' +
+          '<input type="password" id="cp-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar senha" class="form-control" style="font-size:0.9rem;" minlength="6" required>' +
+        '</div>' +
+        '<div id="cp-error" style="font-size:0.78rem;color:#f87171;margin-bottom:10px;display:none;"></div>' +
+        '<button type="submit" id="cp-submit" class="btn btn-primary" style="width:100%;font-size:0.9rem;padding:10px;">Criar senha</button>' +
+      '</form>' +
+      '<div style="text-align:center;margin-top:12px;">' +
+        '<button onclick="document.getElementById(\'create-password-overlay\').remove()" style="background:none;border:none;color:var(--text-muted,#94a3b8);cursor:pointer;font-size:0.8rem;">Agora não</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  setTimeout(function() { var el = document.getElementById('cp-password'); if (el) el.focus(); }, 100);
+};
+
+window._doCreatePassword = function() {
+  var pwd = (document.getElementById('cp-password') || {}).value || '';
+  var confirm = (document.getElementById('cp-confirm') || {}).value || '';
+  var errEl = document.getElementById('cp-error');
+  var btn = document.getElementById('cp-submit');
+  var showErr = function(msg) { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } };
+
+  if (pwd.length < 6) { showErr('A senha precisa ter pelo menos 6 caracteres.'); return; }
+  if (pwd !== confirm) { showErr('As senhas não coincidem.'); return; }
+  if (errEl) errEl.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+
+  var fbUser = typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser;
+  if (!fbUser) { showErr('Sessão expirada. Faça login novamente.'); if (btn) { btn.disabled = false; btn.textContent = 'Criar senha'; } return; }
+
+  fbUser.updatePassword(pwd)
+    .then(function() {
+      // Submeter o form para o browser detectar e oferecer "Salvar senha"
+      var form = document.getElementById('create-password-form');
+      if (form) {
+        // Preencher campos visíveis para o browser capturar
+        var pwdInp = document.getElementById('cp-password');
+        // Disparar evento de submit nativo para acionar o gerenciador de senhas do browser
+        var submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+        // Não prevenir o default desta vez — browser precisa ver o submit
+      }
+      if (typeof showNotification !== 'undefined') {
+        showNotification('✅ Senha criada!', 'Salve no seu browser para entrar com Face ID nas próximas vezes.', 'success');
+      }
+      document.getElementById('create-password-overlay').remove();
+      // Atualizar authProvider no Firestore
+      var cu = window.AppStore && window.AppStore.currentUser;
+      if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.db) {
+        window.FirestoreDB.db.collection('users').doc(cu.uid).update({
+          authProvider: 'emailLink+password',
+          updatedAt: new Date().toISOString()
+        }).catch(function() {});
+      }
+    })
+    .catch(function(err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Criar senha'; }
+      var msg = 'Erro ao criar senha.';
+      if (err.code === 'auth/requires-recent-login') msg = 'Sessão muito antiga. Faça login de novo e tente novamente.';
+      else if (err.code === 'auth/weak-password') msg = 'Senha muito fraca. Use pelo menos 6 caracteres.';
+      showErr(msg);
+    });
+};
 
 // ─── Password Reset ──────────────────────────────────────────────────────────
 // v1.8.69: abre painel inline no modal de login com campo de email pré-preenchido.
