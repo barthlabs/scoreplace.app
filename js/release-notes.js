@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">📸 v1.8.39-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
+      '<p><b>Correção: foto de perfil não era gravada ao salvar.</b><br><br>' +
+      'O upload de foto funcionava visualmente (pré-visualização no avatar), mas ao clicar em Salvar a imagem não era persistida no Firestore — o campo <code>_pendingPhotoUpload</code> era setado em memória mas nunca incluído no payload de save. Corrigido: agora <code>photoURL</code> é incluído no payload quando há foto pendente, salvo no Firestore e o flag limpo após sucesso. Ao reabrir o perfil, a foto carrega corretamente do banco.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f43f5e;border-radius:12px;padding:14px 16px;background:rgba(244,63,94,0.07);">' +
       '<div style="font-weight:800; color:#fb7185; font-size:1rem; margin-bottom:8px;">♥ v1.8.38-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(30 de Maio, 2026)</span></div>' +
       '<p><b>Favoritos agora usam coração ♥ em vez de estrela ⭐.</b><br><br>' +

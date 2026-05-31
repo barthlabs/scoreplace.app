@@ -5692,6 +5692,12 @@ function setupProfileModal() {
       // defaultCategory removido — v1.3.98-beta (skill vive em skillBySport)
       if (preferredCeps) payload.preferredCeps = preferredCeps;
 
+      // v1.8.39-beta: foto de perfil — persiste quando usuário fez upload
+      // (flag _pendingPhotoUpload setada em _handleProfilePhotoUpload).
+      if (cu._pendingPhotoUpload) {
+        payload.photoURL = cu._pendingPhotoUpload;
+      }
+
       // Arrays: só envia se tem pelo menos 1 item
       if (sportsArr.length > 0) payload.preferredSports = sportsArr;
       if (preferredLocations.length > 0) payload.preferredLocations = preferredLocations;
@@ -5754,6 +5760,10 @@ function setupProfileModal() {
         await window.FirestoreDB.db.collection('users').doc(uid).set(payload, { merge: true });
         window._lastProfileSave.ok = true;
         window._log('[Profile v0.16.9] save ok');
+        // v1.8.39-beta: limpar flag de foto pendente após save bem-sucedido
+        if (cu._pendingPhotoUpload) {
+          delete cu._pendingPhotoUpload;
+        }
       } catch (e) {
         saveError = (e && e.message) || String(e);
         window._lastProfileSave.ok = false;
