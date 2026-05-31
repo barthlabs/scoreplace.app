@@ -530,6 +530,10 @@ if (firebase && firebase.auth) {
       clearTimeout(_pendingSignoutTimer);
       _pendingSignoutTimer = null;
     }
+    // v1.8.70: mostrar banner de retorno rápido se há cache do usuário
+    setTimeout(function() {
+      if (typeof window._showQuickReturnBanner === 'function') window._showQuickReturnBanner();
+    }, 100);
   };
 
   firebase.auth().onAuthStateChanged(async function(user) {
@@ -3322,6 +3326,76 @@ window._resetLoginGuard = function() {
   window._simulateLoginInProgressAt = 0;
 };
 
+// v1.8.70: retorno rápido — quando sessão Firebase expirou mas temos cache do usuário,
+// mostra botão de 1 clique para reenviar o link de acesso sem digitar nada.
+window._showQuickReturnBanner = function() {
+  try {
+    var cached = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
+    if (!cached || !cached.uid) return;
+    var name = cached.displayName || cached.email || 'você';
+    var email = cached.email || '';
+    var photo = cached.photoURL || '';
+
+    // Inserir banner no topo do modal de login
+    var modalBody = document.querySelector('#modal-login .modal-body');
+    if (!modalBody || document.getElementById('quick-return-banner')) return;
+
+    var initial = name ? name[0].toUpperCase() : '?';
+    var avatarHtml = photo
+      ? '<img src="' + photo + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
+      : '<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:1rem;flex-shrink:0;">' + initial + '</div>';
+
+    var banner = document.createElement('div');
+    banner.id = 'quick-return-banner';
+    banner.style.cssText = 'background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:12px 14px;margin-bottom:16px;';
+    banner.innerHTML =
+      '<div style="font-size:0.72rem;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Bem-vindo de volta!</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
+        avatarHtml +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-weight:700;font-size:0.92rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (name.length > 30 ? name.slice(0,28)+'…' : name) + '</div>' +
+          (email ? '<div style="font-size:0.72rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + email + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      '<button id="quick-return-btn" onclick="window._quickReturnLogin()" style="width:100%;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:700;font-size:0.88rem;cursor:pointer;transition:opacity 0.2s;">📩 Enviar link de acesso</button>' +
+      '<div style="text-align:center;margin-top:8px;">' +
+        '<button onclick="document.getElementById(\'quick-return-banner\').remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.75rem;text-decoration:underline;">Entrar com outra conta</button>' +
+      '</div>';
+
+    modalBody.insertBefore(banner, modalBody.firstChild);
+  } catch(e) {}
+};
+
+window._quickReturnLogin = function() {
+  try {
+    var cached = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
+    var email = cached.email || '';
+    if (!email) { document.getElementById('quick-return-banner') && document.getElementById('quick-return-banner').remove(); return; }
+
+    var btn = document.getElementById('quick-return-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+
+    var sendFn = firebase.functions().httpsCallable('sendMagicLink');
+    sendFn({ email: email })
+      .then(function() {
+        var banner = document.getElementById('quick-return-banner');
+        if (banner) {
+          banner.innerHTML =
+            '<div style="text-align:center;padding:6px 0;">' +
+              '<div style="font-size:1.3rem;margin-bottom:4px;">📩</div>' +
+              '<div style="font-weight:700;color:var(--text-bright);font-size:0.9rem;margin-bottom:3px;">Link enviado!</div>' +
+              '<div style="font-size:0.76rem;color:var(--text-muted);">Verifique <b>' + email + '</b><br>e clique no link para entrar.</div>' +
+            '</div>';
+        }
+      })
+      .catch(function(err) {
+        var btn2 = document.getElementById('quick-return-btn');
+        if (btn2) { btn2.disabled = false; btn2.textContent = '📩 Enviar link de acesso'; }
+        if (window.showNotification) window.showNotification('Erro', (err && err.message) || 'Tente novamente.', 'error');
+      });
+  } catch(e) {}
+};
+
 function setupLoginModal() {
   if (!document.getElementById('modal-login')) {
     var modalHtml = '<div class="modal-overlay" id="modal-login">' +
@@ -3489,6 +3563,10 @@ function setupLoginModal() {
   if (btnLogin) {
     btnLogin.addEventListener('click', function() {
       openModal('modal-login');
+      // v1.8.70: mostrar banner de retorno rápido se há cache do usuário
+      setTimeout(function() {
+        if (typeof window._showQuickReturnBanner === 'function') window._showQuickReturnBanner();
+      }, 80);
       // v0.17.84/v1.0.22-beta: restaura último DDI escolhido pra reabrir o
       // modal já com o país correto selecionado. Aplica em ambos os selects
       // (visível login-unified-country + hidden login-phone-country que o
