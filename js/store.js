@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.59-beta';
+window.SCOREPLACE_VERSION = '1.8.60-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -901,9 +901,10 @@ window._isUnfriendlyName = function(name) {
   if (!name) return true;
   var n = String(name).trim().toLowerCase();
   if (!n) return true;
-  // Purely numeric / phone-number shape → not a real name
-  if (/^[\d\s\+\-\(\)]+$/.test(n)) return true;
-  var BAD = ['usuário', 'usuario', 'user', 'teste', 'test', 'undefined', 'null', 'anon', 'anônimo'];
+  // v1.8.60: número de telefone (e.g. "+5511999887766") É um identificador
+  // válido para usuários phone-only — não é "unfriendly". Apenas nomes
+  // genéricos e placeholders são considerados ruins.
+  var BAD = ['usuário', 'usuario', 'user', 'teste', 'test', 'undefined', 'null', 'anon', 'anônimo', 'visitante'];
   return BAD.indexOf(n) !== -1;
 };
 

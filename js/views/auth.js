@@ -332,12 +332,15 @@ window._updateTopbarForUser = function(user) {
     var effectiveName = preferCU && cu.displayName ? cu.displayName : user.displayName;
     var effectivePhoto = preferCU && cu.photoURL ? cu.photoURL : user.photoURL;
 
-    // Fallback chain: displayName → email local-part → phone number → defaultUser
+    // Fallback chain: displayName (se não for genérico) → email → telefone → defaultUser
+    // v1.8.60: _isUnfriendlyName verifica se é "Usuário", "usuário", número puro etc.
+    var _nameIsReal = effectiveName && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(effectiveName));
     var displayFirstName;
-    if (effectiveName) {
+    if (_nameIsReal) {
       displayFirstName = effectiveName.split(' ')[0];
-    } else if (user.email) {
-      displayFirstName = user.email.split('@')[0];
+    } else if (user.email || (cu && cu.email)) {
+      var _em = user.email || (cu && cu.email) || '';
+      displayFirstName = _em.split('@')[0];
     } else if (user.phoneNumber || (cu && cu.phone)) {
       // SMS login sem nome — mostra o telefone formatado em vez de "usuário"
       // Tenta usar o número local do perfil (já com DDI stripado) quando
@@ -5639,17 +5642,32 @@ function setupProfileModal() {
         }
       }
 
-      // ── 2. NAME FALLBACK — nunca salvar displayName vazio ───────────────
+      // ── 2. NAME FALLBACK — nunca salvar displayName vazio ou genérico ──
       // Usuário apagou o campo sem querer → preserva o anterior.
-      // Se currentUser também está vazio, tenta Firebase Auth.
+      // Para phone-only: usa o telefone formatado como identificador.
       var finalName = nameIn;
-      if (!finalName) {
-        finalName = _oldDisplayName;
-        if (!finalName) {
+      if (!finalName || (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(finalName))) {
+        // Tenta o nome anterior (se não for genérico)
+        if (_oldDisplayName && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(_oldDisplayName))) {
+          finalName = _oldDisplayName;
+        } else if (phoneDigits.length >= 8) {
+          // v1.8.60: usuário phone-only sem nome real → usa telefone formatado
+          finalName = (typeof window._formatPhoneDisplay === 'function')
+            ? window._formatPhoneDisplay(phoneDigits, phoneCountry || '55')
+            : ('+' + (phoneCountry || '55') + phoneDigits);
+        } else if (cu.phone) {
+          var _phD2 = (typeof window._phoneLocalDigits === 'function')
+            ? window._phoneLocalDigits(cu.phone, cu.phoneCountry || '55')
+            : String(cu.phone).replace(/\D/g, '');
+          if (_phD2.length >= 8) {
+            finalName = (typeof window._formatPhoneDisplay === 'function')
+              ? window._formatPhoneDisplay(_phD2, cu.phoneCountry || '55')
+              : cu.phone;
+          }
+        } else {
           try {
             var fbUser = (typeof firebase !== 'undefined' && firebase.auth)
-              ? firebase.auth().currentUser
-              : null;
+              ? firebase.auth().currentUser : null;
             if (fbUser && fbUser.displayName) finalName = fbUser.displayName;
           } catch (e) {}
         }
