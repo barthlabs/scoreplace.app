@@ -104,14 +104,234 @@ function renderTournaments(container, tournamentId = null) {
     var _t = window._t || function(k) { return k; };
     let visible = window.AppStore.getVisibleTournaments() || [];
 
-    // Inscrever solo em torneio de duplas (sem parceiro definido)
+    // Inscrever solo em torneio de duplas (sem parceiro definido) — mantido para compat
     window._enrollSoloInDoubles = function(tId) {
         var mod = document.getElementById('team-enroll-modal-' + tId);
         if (mod) mod.style.display = 'none';
-        // Chama inscrição individual diretamente
         if (typeof window._doEnrollCurrentUser === 'function') {
             window._doEnrollCurrentUser(tId, null);
         }
+    };
+
+    // Overlay de formação de dupla pós-inscrição (v1.8.51)
+    window._showPartnerPicker = function(tId) {
+        var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        var cu = window.AppStore && window.AppStore.currentUser;
+        if (!t || !cu) return;
+
+        // Pré-carregar amigos
+        if (typeof window._partnerPickerInit === 'function') window._partnerPickerInit(tId);
+
+        // Atualizar lista de inscritos solo (exclui o próprio usuário e times)
+        window._partnerPickerEnrolled = window._partnerPickerEnrolled || {};
+        window._partnerPickerEnrolled[tId] = (Array.isArray(t.participants) ? t.participants : [])
+            .filter(function(p) {
+                var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+                var uid = typeof p === 'object' ? (p.uid || '') : '';
+                return n && !n.includes('/') && uid !== cu.uid && n !== cu.displayName;
+            })
+            .map(function(p) {
+                return typeof p === 'string'
+                    ? { name: p, uid: '', photo: '' }
+                    : { name: p.displayName || p.name || '', uid: p.uid || '', photo: p.photoURL || '' };
+            });
+
+        // Remover overlay anterior
+        var old = document.getElementById('partner-picker-overlay');
+        if (old) old.remove();
+
+        var overlay = document.createElement('div');
+        overlay.id = 'partner-picker-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:10100;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 0;';
+        overlay.innerHTML = `
+          <div style="background:var(--bg-card);width:90%;max-width:440px;border-radius:16px;border:1px solid var(--border-color);box-shadow:0 20px 40px rgba(0,0,0,0.5);margin:auto;">
+            <div style="padding:1.2rem 1.5rem;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="font-weight:700;font-size:1rem;color:var(--text-bright);">🤝 Formar dupla</div>
+                <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${window._safeHtml(t.name)}</div>
+              </div>
+              <button onclick="document.getElementById('partner-picker-overlay').remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;padding:4px;">×</button>
+            </div>
+            <div style="padding:1.2rem 1.5rem;">
+              <div style="margin-bottom:1rem;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:rgba(0,0,0,0.2);display:flex;align-items:center;gap:8px;">
+                ${window._avatarHtml(cu, 26)}
+                <span style="font-size:0.88rem;color:var(--text-bright);font-weight:600;">${window._safeHtml(cu.displayName || '')}</span>
+                <span style="font-size:0.7rem;color:var(--text-muted);margin-left:auto;">Você</span>
+              </div>
+              <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">Parceiro(a)</div>
+              <div style="position:relative;">
+                <input type="text" id="pp-search-${tId}"
+                  placeholder="Buscar por nome..."
+                  autocomplete="off"
+                  style="width:100%;padding:10px 10px 10px 34px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-dark);color:var(--text-main);box-sizing:border-box;font-size:0.9rem;"
+                  oninput="window._ppSearch('${tId}',this.value)"
+                  onfocus="window._ppSearch('${tId}',this.value)">
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;">🔍</span>
+              </div>
+              <div id="pp-dropdown-${tId}" style="display:none;border:1px solid var(--border-color);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;background:var(--bg-card);"></div>
+              <div id="pp-selected-${tId}" style="display:none;margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);display:none;align-items:center;gap:8px;">
+                <span id="pp-sel-name-${tId}" style="font-size:0.88rem;color:var(--text-bright);flex:1;font-weight:600;"></span>
+                <button onclick="window._ppClear('${tId}')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.9rem;padding:0;">×</button>
+              </div>
+            </div>
+            <div style="padding:1rem 1.5rem;border-top:1px solid var(--border-color);display:flex;gap:10px;flex-direction:column;">
+              <button id="pp-confirm-${tId}" onclick="window._ppConfirm('${tId}')" disabled
+                style="width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:700;font-size:0.95rem;cursor:not-allowed;opacity:0.4;transition:all 0.2s;">
+                ✅ Confirmar dupla
+              </button>
+              <button onclick="document.getElementById('partner-picker-overlay').remove()"
+                style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:none;color:var(--text-muted);font-size:0.82rem;cursor:pointer;">
+                Escolher depois — ficarei na lista de espera se não tiver dupla no sorteio
+              </button>
+            </div>
+          </div>`;
+        document.body.appendChild(overlay);
+    };
+
+    // Busca no picker pós-inscrição (reutiliza a infra do _partnerPickerSearch)
+    window._ppSearch = function(tId, query) {
+        var dropdown = document.getElementById('pp-dropdown-' + tId);
+        if (!dropdown) return;
+        var q = (query || '').trim().toLowerCase();
+        var enrolled = (window._partnerPickerEnrolled && window._partnerPickerEnrolled[tId]) || [];
+        var friends  = (window._partnerPickerFriendsCache && window._partnerPickerFriendsCache[tId]) || [];
+        var filtE = q ? enrolled.filter(function(p) { return p.name.toLowerCase().includes(q); }) : enrolled;
+        var filtF = q ? friends.filter(function(p) { return p.name.toLowerCase().includes(q); }) : friends;
+
+        function _item(p, badge) {
+            return '<div onclick="event.stopPropagation();window._ppSelect(\'' + tId + '\',\'' + _escAttr(p.name) + '\',\'' + _escAttr(p.uid||'') + '\')" ' +
+              'style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;transition:background 0.1s;" ' +
+              'onmouseover="this.style.background=\'rgba(99,102,241,0.1)\'" onmouseout="this.style.background=\'none\'">' +
+              (p.photo ? '<img src="' + window._safeHtml(p.photo) + '" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;">' :
+                '<div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#fff;font-weight:700;flex-shrink:0;">' + window._safeHtml((p.name[0]||'?').toUpperCase()) + '</div>') +
+              '<div><div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);">' + window._safeHtml(p.name) + '</div>' +
+              '<div style="font-size:0.68rem;color:var(--text-muted);">' + badge + '</div></div></div>';
+        }
+
+        var html = '';
+        if (filtE.length) html += '<div style="padding:5px 12px 3px;font-size:0.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Já inscritos</div>' + filtE.map(function(p) { return _item(p, 'Inscrito(a)'); }).join('');
+        if (filtF.length) html += (filtE.length ? '<div style="height:1px;background:var(--border-color);margin:2px 0;"></div>' : '') + '<div style="padding:5px 12px 3px;font-size:0.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Meus amigos</div>' + filtF.map(function(p) { return _item(p, 'Amigo(a)'); }).join('');
+        if (!html && q && q.length >= 1) {
+            // Também como texto livre
+            html = '<div onclick="window._ppSelect(\'' + tId + '\',\'' + _escAttr(q) + '\',\'\')" style="padding:10px 12px;cursor:pointer;font-size:0.85rem;color:var(--text-muted);" onmouseover="this.style.background=\'rgba(99,102,241,0.1)\'" onmouseout="this.style.background=\'none\'">Usar "<b>' + window._safeHtml(q) + '</b>"</div>';
+        }
+
+        dropdown.innerHTML = html;
+        dropdown.style.display = html ? 'block' : 'none';
+
+        // Busca Firestore com debounce
+        if (window._ppDebounce) clearTimeout(window._ppDebounce);
+        if (q.length >= 2) {
+            window._ppDebounce = setTimeout(function() {
+                if (!window.FirestoreDB || !window.FirestoreDB.searchUsers) return;
+                window.FirestoreDB.searchUsers(q, { limit: 8 }).then(function(results) {
+                    var cur = (document.getElementById('pp-search-' + tId) || {}).value || '';
+                    if (cur.trim().toLowerCase() !== q) return;
+                    var cu = window.AppStore && window.AppStore.currentUser;
+                    var seen = filtE.concat(filtF).map(function(p) { return p.name.toLowerCase(); });
+                    var newR = results.filter(function(r) {
+                        return r.displayName && (!cu || r._docId !== cu.uid) && !seen.includes((r.displayName||'').toLowerCase());
+                    }).map(function(r) { return { name: r.displayName, uid: r._docId||'', photo: r.photoURL||'' }; });
+                    if (newR.length) {
+                        dropdown.innerHTML += (filtE.length + filtF.length > 0 ? '<div style="height:1px;background:var(--border-color);margin:2px 0;"></div>' : '') +
+                          '<div style="padding:5px 12px 3px;font-size:0.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Usuários</div>' +
+                          newR.map(function(p) { return _item(p, 'Usuário'); }).join('');
+                    }
+                }).catch(function() {});
+            }, 280);
+        }
+
+        setTimeout(function() {
+            document.addEventListener('click', function _c() { if (dropdown) dropdown.style.display = 'none'; document.removeEventListener('click', _c); }, { once: true });
+        }, 50);
+    };
+
+    window._ppSelect = function(tId, name, uid) {
+        var sel = document.getElementById('pp-selected-' + tId);
+        var selName = document.getElementById('pp-sel-name-' + tId);
+        var inp = document.getElementById('pp-search-' + tId);
+        var btn = document.getElementById('pp-confirm-' + tId);
+        var dd  = document.getElementById('pp-dropdown-' + tId);
+        if (selName) selName.textContent = name;
+        if (sel) sel.style.display = 'flex';
+        if (inp) { inp.value = name; inp.style.display = 'none'; }
+        if (dd) dd.style.display = 'none';
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+        window._ppSelectedPartner = { name: name, uid: uid };
+    };
+
+    window._ppClear = function(tId) {
+        var sel = document.getElementById('pp-selected-' + tId);
+        var inp = document.getElementById('pp-search-' + tId);
+        var btn = document.getElementById('pp-confirm-' + tId);
+        if (sel) sel.style.display = 'none';
+        if (inp) { inp.value = ''; inp.style.display = 'block'; inp.focus(); }
+        if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; }
+        window._ppSelectedPartner = null;
+    };
+
+    window._ppConfirm = function(tId) {
+        var partner = window._ppSelectedPartner;
+        if (!partner || !partner.name) return;
+        var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        var cu = window.AppStore && window.AppStore.currentUser;
+        if (!t || !cu) return;
+
+        var parts = Array.isArray(t.participants) ? t.participants : [];
+        var myName = cu.displayName || cu.name || '';
+        var teamString = myName + ' / ' + partner.name;
+
+        // Atualizar entrada do usuário atual de solo → dupla
+        var updated = false;
+        parts.forEach(function(p, i) {
+            if (typeof p === 'object' && p.uid === cu.uid) {
+                p.displayName = teamString;
+                p.name = teamString;
+                if (partner.uid) p.partnerUid = partner.uid;
+                updated = true;
+            } else if (typeof p === 'string' && p === myName) {
+                parts[i] = teamString;
+                updated = true;
+            }
+        });
+
+        // Se o parceiro estava inscrito como solo, remover sua entrada
+        if (partner.uid || partner.name) {
+            t.participants = parts.filter(function(p) {
+                var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+                var u = typeof p === 'object' ? (p.uid || '') : '';
+                return !(n === partner.name && !n.includes('/')) || (u && u === cu.uid);
+            });
+        }
+
+        t.updatedAt = new Date().toISOString();
+
+        // Salvar no Firestore
+        if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
+            window.FirestoreDB.saveTournament(t).then(function() {
+                if (typeof showNotification !== 'undefined') {
+                    showNotification('🤝 Dupla formada!', teamString, 'success');
+                }
+                // Notificar parceiro se tiver uid
+                if (partner.uid && typeof window._sendUserNotification === 'function') {
+                    window._sendUserNotification(partner.uid, {
+                        type: 'enrollment_new',
+                        title: '🤝 Você foi indicado como parceiro(a)!',
+                        message: (cu.displayName || 'Alguém') + ' formou dupla com você em ' + window._safeHtml(t.name) + '.',
+                        tournamentId: String(t.id),
+                        tournamentName: t.name || '',
+                        level: 'fundamental'
+                    });
+                }
+                if (typeof window._softRefreshView === 'function') window._softRefreshView();
+            }).catch(function(e) {
+                window._warn('[ppConfirm] save error:', e);
+            });
+        }
+
+        var overlay = document.getElementById('partner-picker-overlay');
+        if (overlay) overlay.remove();
+        window._ppSelectedPartner = null;
     };
 
     // Auto-mover participantes solo para waitlist antes do sorteio em torneios de duplas

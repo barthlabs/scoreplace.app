@@ -206,12 +206,20 @@ window.enrollCurrentUser = function (tId) {
             return;
         }
         if (t.enrollmentMode === 'time' && (t.teamSize || 2) > 1) {
+            // v1.8.51: duplas — inscreve primeiro como individual,
+            // depois abre a tela de formação de dupla.
+            if ((t.teamSize || 2) === 2) {
+                window._doEnrollCurrentUser(tId, null, function() {
+                    // Callback pós-inscrição: abrir picker de parceiro
+                    if (typeof window._showPartnerPicker === 'function') {
+                        window._showPartnerPicker(tId);
+                    }
+                });
+                return;
+            }
+            // Times > 2 pessoas: mantém modal original
             const mod = document.getElementById('team-enroll-modal-' + tId);
             if (mod) mod.style.display = 'flex';
-            // Pré-carregar amigos para o picker de parceiro (duplas)
-            if ((t.teamSize || 2) === 2 && typeof window._partnerPickerInit === 'function') {
-                window._partnerPickerInit(tId);
-            }
             return;
         }
 
@@ -232,8 +240,8 @@ window.enrollCurrentUser = function (tId) {
     }
 };
 
-// Internal: performs actual enrollment with optional category
-window._doEnrollCurrentUser = function(tId, selectedCategories) {
+// Internal: performs actual enrollment with optional category and post-enroll callback
+window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // Mesma hidratação defensiva: se o torneio veio direto do discovery feed
     // (dashboard clicou "Inscrever" num card público), precisa estar em
     // tournaments pro push otimista de participants funcionar.
@@ -333,6 +341,8 @@ window._doEnrollCurrentUser = function(tId, selectedCategories) {
       try { if (typeof window._trophyOnTournamentEnrolled === 'function') window._trophyOnTournamentEnrolled(t); } catch(_te) {}
     }, 500);
     window._scrollToParticipant(tId, user.displayName);
+    // Post-enroll callback (ex: abrir picker de parceiro em torneios de duplas)
+    if (typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
 
     // --- Background: Firestore transaction for consistency ---
     if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {
