@@ -392,6 +392,21 @@
       return Promise.resolve(false);
     }
 
+    // v1.8.66: verificar Firestore antes de conceder — previne re-concessão
+    // quando o hook dispara antes do bootstrap terminar de carregar o cache.
+    var db = _db();
+    if (!db) { delete _pendingAwards[lockKey]; return Promise.resolve(false); }
+    return db.collection('users').doc(uid).collection('trophies').doc(trophyId).get()
+      .then(function(existingDoc) {
+        if (existingDoc.exists) {
+          // Já tem no Firestore — popular cache local e não mostrar overlay
+          if (!_cache.trophies[uid]) _cache.trophies[uid] = {};
+          _cache.trophies[uid][trophyId] = existingDoc.data();
+          delete _pendingAwards[lockKey];
+          return false;
+        }
+        // Não existe → prosseguir para concessão
+
     // Calcular tier dinâmico
     return _loadTrophyStats().then(function(tStats) {
       var tier = trophy.tier; // tier fixo
@@ -467,7 +482,13 @@
           window._warn('[trophies] award failed', trophyId, e && e.message);
           return false;
         });
-    });
+    }); // end _loadTrophyStats.then
+      }) // end .then(existingDoc)
+      .catch(function() {
+        // Erro ao ler Firestore — continuar sem a verificação extra
+        delete _pendingAwards[lockKey];
+        return false;
+      });
   };
 
   // ─── Conceder milestone de nível ─────────────────────────────────────────
