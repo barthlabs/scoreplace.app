@@ -104,6 +104,79 @@ function renderTournaments(container, tournamentId = null) {
     var _t = window._t || function(k) { return k; };
     let visible = window.AppStore.getVisibleTournaments() || [];
 
+    // ── Drag-drop para formar duplas na seção "Sem Dupla" ─────────────────
+    window._duplaDragStart = function(evt, uidOrName, tId) {
+        evt.dataTransfer.setData('text/plain', JSON.stringify({ uidOrName: uidOrName, tId: tId }));
+        evt.dataTransfer.effectAllowed = 'move';
+    };
+
+    window._duplaDropOn = function(evt, targetUidOrName, tId) {
+        var raw = evt.dataTransfer.getData('text/plain');
+        if (!raw) return;
+        var data;
+        try { data = JSON.parse(raw); } catch(e) { return; }
+        var sourceUidOrName = data.uidOrName;
+        if (!sourceUidOrName || sourceUidOrName === targetUidOrName) return;
+
+        var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        if (!t) return;
+        var arr = Array.isArray(t.participants) ? t.participants : [];
+
+        function findP(uidOrName) {
+            // Busca por uid primeiro, depois por nome
+            var byUid = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uidOrName; });
+            if (byUid !== -1) return byUid;
+            return arr.findIndex(function(p) {
+                var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+                return n === uidOrName;
+            });
+        }
+
+        var i1 = findP(sourceUidOrName);
+        var i2 = findP(targetUidOrName);
+        if (i1 === -1 || i2 === -1 || i1 === i2) return;
+
+        var p1 = arr[i1], p2 = arr[i2];
+        var name1 = typeof p1 === 'string' ? p1 : (p1.displayName || p1.name || '');
+        var name2 = typeof p2 === 'string' ? p2 : (p2.displayName || p2.name || '');
+        if (!name1 || !name2 || name1.includes('/') || name2.includes('/')) return;
+
+        var newName = name1 + ' / ' + name2;
+        var uid1 = typeof p1 === 'object' ? (p1.uid || '') : '';
+        var uid2 = typeof p2 === 'object' ? (p2.uid || '') : '';
+        var merged;
+        if (uid1) {
+            merged = Object.assign({}, p1, { displayName: newName, name: newName });
+            if (uid2) merged.partnerUid = uid2;
+        } else if (uid2) {
+            merged = Object.assign({}, p2, { displayName: newName, name: newName });
+        } else {
+            merged = newName;
+        }
+
+        var maxI = Math.max(i1, i2), minI = Math.min(i1, i2);
+        arr.splice(maxI, 1);
+        arr.splice(minI, 1);
+        arr.splice(minI, 0, merged);
+        t.participants = arr;
+        if (!t.teamOrigins) t.teamOrigins = {};
+        t.teamOrigins[newName] = 'formada';
+        t.updatedAt = new Date().toISOString();
+
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
+        // Notificar parceiro
+        if (uid2 && typeof window._sendUserNotification === 'function') {
+            var cu = window.AppStore.currentUser;
+            window._sendUserNotification(uid2, {
+                type: 'enrollment_new', title: '🤝 Dupla formada!',
+                message: (cu && cu.displayName ? cu.displayName : 'O organizador') + ' formou dupla com você em ' + window._safeHtml(t.name || '') + ': ' + window._safeHtml(newName),
+                tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental'
+            });
+        }
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    };
+
     // Inscrever solo em torneio de duplas (sem parceiro definido) — mantido para compat
     window._enrollSoloInDoubles = function(tId) {
         var mod = document.getElementById('team-enroll-modal-' + tId);
@@ -2298,48 +2371,80 @@ function renderTournaments(container, tournamentId = null) {
               ${_ligaSortBtnFinal}
             </div>`;
 
-            // Seção "Sem Dupla" — só em torneios de duplas com participantes solo
+            // ── Torneios de duplas: layout em duas seções ─────────────────────────
             const _isDoublesTournament = (t.enrollmentMode === 'time' || t.enrollmentMode === 'misto') && (t.teamSize || 2) === 2;
-            const _soloParticipants = _isDoublesTournament
-              ? (Array.isArray(t.participants) ? t.participants : []).filter(function(p) {
-                  var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-                  return n && !n.includes('/');
-                })
-              : [];
-            const _semDuplaHtml = (_isDoublesTournament && _soloParticipants.length > 0) ? `
-              <div style="margin-top:1.5rem;padding:14px 16px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);border-radius:12px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-                  <span style="font-size:1rem;">🙋</span>
-                  <span style="font-weight:700;font-size:0.9rem;color:#fbbf24;">Sem Dupla (${_soloParticipants.length})</span>
-                  <span style="font-size:0.7rem;color:var(--text-muted);flex:1;">Serão movidos para lista de espera no sorteio</span>
-                </div>
-                <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                  ${_soloParticipants.map(function(p) {
-                    var nm = typeof p === 'string' ? p : (p.displayName || p.name || '');
-                    var photo = (typeof p === 'object' && p.photoURL) ? p.photoURL : '';
-                    return '<div style="display:flex;align-items:center;gap:6px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);border-radius:20px;padding:4px 10px 4px 6px;">' +
-                      (photo ? '<img src="' + window._safeHtml(photo) + '" style="width:22px;height:22px;border-radius:50%;object-fit:cover;" onerror="this.style.display=\'none\'">' : '<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:#fff;font-weight:700;">' + window._safeHtml((nm[0]||'?').toUpperCase()) + '</div>') +
-                      '<span style="font-size:0.8rem;color:var(--text-bright);">' + window._safeHtml(nm) + '</span>' +
-                      '</div>';
-                  }).join('')}
-                </div>
-              </div>` : '';
+            const _allParts = Array.isArray(t.participants) ? t.participants : [];
+            const _soloParticipants  = _isDoublesTournament ? _allParts.filter(function(p) { var n = typeof p === 'string' ? p : (p.displayName || p.name || ''); return n && !n.includes('/'); }) : [];
+            const _pairedParticipants = _isDoublesTournament ? _allParts.filter(function(p) { var n = typeof p === 'string' ? p : (p.displayName || p.name || ''); return n && n.includes('/'); }) : [];
 
-            participantsHtml = `
-              <div class="mt-5 mb-4">
-                 <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; flex-wrap:wrap;">
-                    👥 Inscritos Confirmados <span style="font-size: 0.8rem; background: rgba(255,255,255,0.1); padding: 3px 10px; border-radius: 12px; font-weight: 600; margin-left: 5px; color: var(--text-muted);">${individualCountParts}</span>
-                    ${_sortBtns}
-                 </h3>
-                 ${checkInControls}
-                 ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
-                 <div data-merge-container="${t.id}" style="${gridStyle}">
-                    ${cardsStr}
-                 </div>
-                 ${_semDuplaHtml}
-                 ${(_hasTournCats && isOrg) ? `<div id="inline-cat-mgr-${t.id}"></div>` : ''}
-              </div>
-          `;
+            function _duplaCard(p, draggable, tIdStr) {
+              var nm  = typeof p === 'string' ? p : (p.displayName || p.name || '');
+              var uid = typeof p === 'object' ? (p.uid || '') : '';
+              var photo = typeof p === 'object' ? (p.photoURL || '') : '';
+              var initial = window._safeHtml((nm[0]||'?').toUpperCase());
+              var avatar  = photo
+                ? '<img src="' + window._safeHtml(photo) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
+                : '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:#fff;font-weight:700;flex-shrink:0;">' + initial + '</div>';
+              var dragAttrs = draggable
+                ? 'draggable="true" ondragstart="window._duplaDragStart(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')" ondragover="event.preventDefault();this.style.outline=\'2px solid #f59e0b\'" ondragleave="this.style.outline=\'\'" ondrop="event.preventDefault();this.style.outline=\'\';window._duplaDropOn(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')"'
+                : '';
+              var style = draggable
+                ? 'display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);cursor:grab;transition:all 0.15s;'
+                : 'display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);transition:all 0.15s;';
+              return '<div ' + dragAttrs + ' style="' + style + '">' +
+                avatar +
+                '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(nm) + '</div>' +
+                (draggable ? '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:1px;">Arraste para formar dupla</div>' : '<div style="font-size:0.65rem;color:#34d399;margin-top:1px;">✅ Dupla formada</div>') +
+                '</div></div>';
+            }
+            function _safeAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+            if (_isDoublesTournament && !drawDone) {
+              // Modo duplas pré-sorteio: duas seções com drag-drop
+              participantsHtml = `
+                <div class="mt-5 mb-4">
+                  <h3 style="margin-bottom:1.2rem;font-size:1.1rem;color:var(--text-bright);border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    👥 Inscritos <span style="font-size:0.8rem;background:rgba(255,255,255,0.1);padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">${individualCountParts}</span>
+                  </h3>
+
+                  ${_soloParticipants.length > 0 ? `
+                  <div style="margin-bottom:1.2rem;">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                      <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (${_soloParticipants.length})</span>
+                      <span style="font-size:0.65rem;color:var(--text-muted);">— Arraste um card sobre outro para formar a dupla</span>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                      ${_soloParticipants.map(function(p) { return _duplaCard(p, true, String(t.id)); }).join('')}
+                    </div>
+                  </div>` : '<div style="margin-bottom:1rem;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:0.82rem;color:#34d399;text-align:center;">✅ Todos com dupla formada</div>'}
+
+                  ${_pairedParticipants.length > 0 ? `
+                  <div>
+                    <div style="font-size:0.75rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas formadas (${_pairedParticipants.length})</div>
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                      ${_pairedParticipants.map(function(p) { return _duplaCard(p, false, String(t.id)); }).join('')}
+                    </div>
+                  </div>` : ''}
+
+                  ${(_hasTournCats && isOrg) ? '<div id="inline-cat-mgr-' + t.id + '"></div>' : ''}
+                </div>`;
+            } else {
+              // Modo normal (individual ou duplas pós-sorteio)
+              participantsHtml = `
+                <div class="mt-5 mb-4">
+                   <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; flex-wrap:wrap;">
+                      👥 Inscritos Confirmados <span style="font-size: 0.8rem; background: rgba(255,255,255,0.1); padding: 3px 10px; border-radius: 12px; font-weight: 600; margin-left: 5px; color: var(--text-muted);">${individualCountParts}</span>
+                      ${_sortBtns}
+                   </h3>
+                   ${checkInControls}
+                   ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
+                   <div data-merge-container="${t.id}" style="${gridStyle}">
+                      ${cardsStr}
+                   </div>
+                   ${(_hasTournCats && isOrg) ? `<div id="inline-cat-mgr-${t.id}"></div>` : ''}
+                </div>
+            `;
+            }
         }
 
         // Check if tournament has bracket content for "Só meus jogos" toggle
