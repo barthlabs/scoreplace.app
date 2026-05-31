@@ -1253,37 +1253,30 @@ window.handleDropTeam = function (e, targetIdx) {
             return;
         }
 
-        const arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-        const p1 = arr[sourceIdx];
-        const p2 = arr[targetIdx];
-
-        const uid1 = typeof p1 === 'object' && p1 ? (p1.uid || '') : '';
-        const uid2 = typeof p2 === 'object' && p2 ? (p2.uid || '') : '';
-
-        // v1.8.52: nunca mesclar dois usuários com conta. Mesclagem só é
-        // permitida entre um usuário real (uid) e um nome sem conta (sem uid).
-        if (uid1 && uid2) {
-            showAlertDialog(
-                'Mesclagem não permitida',
-                'Dois usuários com conta não podem ser mesclados. Mesclagem só funciona entre um usuário cadastrado e um nome sem conta.',
-                null, { type: 'warning' }
-            );
-            return;
-        }
-
-        const name1 = typeof p1 === 'string' ? p1 : (p1.displayName || p1.name || p1.email || '');
-        const name2 = typeof p2 === 'string' ? p2 : (p2.displayName || p2.name || p2.email || '');
-
         showConfirmDialog(
             _t('draw.groupPartsTitle'),
             _t('draw.groupPartsMsg'),
             () => {
+                const arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+                const p1 = arr[sourceIdx];
+                const p2 = arr[targetIdx];
+
+                const name1 = typeof p1 === 'string' ? p1 : (p1.displayName || p1.name || p1.email || '');
+                const name2 = typeof p2 === 'string' ? p2 : (p2.displayName || p2.name || p2.email || '');
+
+                // Não formar dupla com si mesmo ou quando nomes já estão pareados
+                if (name1 === name2 || name1.includes('/') || name2.includes('/')) return;
+
                 const newName = name1 + ' / ' + name2;
 
-                // Manter objeto do usuário com conta, atualizando o nome
+                // Preservar objeto do usuário com conta (uid, photoURL etc)
+                // Se um dos dois tem uid, usar esse objeto como base da dupla
+                const uid1 = typeof p1 === 'object' && p1 ? (p1.uid || '') : '';
+                const uid2 = typeof p2 === 'object' && p2 ? (p2.uid || '') : '';
                 let mergedEntry;
                 if (uid1) {
                     mergedEntry = Object.assign({}, p1, { displayName: newName, name: newName });
+                    if (uid2) mergedEntry.partnerUid = uid2; // ambos têm uid → registra parceiro
                 } else if (uid2) {
                     mergedEntry = Object.assign({}, p2, { displayName: newName, name: newName });
                 } else {
