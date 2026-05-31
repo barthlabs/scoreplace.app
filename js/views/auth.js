@@ -4373,6 +4373,9 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
           if (p.name === oldName) { p.name = newName; changed = true; }
           if (matchUid && !p.uid) { p.uid = matchUid; changed = true; }
           if (matchEmail && !p.email) { p.email = matchEmail; changed = true; }
+          // v1.8.40-beta: propagar foto junto com o nome
+          var _newPhoto = user && user.photoURL;
+          if (_newPhoto && p.photoURL !== _newPhoto) { p.photoURL = _newPhoto; changed = true; }
         }
       }
     });
@@ -4469,6 +4472,45 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
     window._debug('[PropageName] No tournaments needed updating');
   }
 };
+
+// v1.8.40-beta: propagar foto de perfil para todos os torneios onde o usuário
+// está inscrito como participante-objeto. Chamada quando só a foto muda (sem
+// mudança de nome — nesse caso _propagateNameChange já trata foto).
+function _propagatePhotoToTournaments(newPhotoURL) {
+  if (!newPhotoURL) return;
+  if (!window.AppStore || !Array.isArray(window.AppStore.tournaments)) return;
+  var user = window.AppStore.currentUser;
+  if (!user) return;
+  var matchUid = user.uid;
+  var matchEmail = user.email;
+  var modifiedTournaments = [];
+  window.AppStore.tournaments.forEach(function(t) {
+    var changed = false;
+    var parts = Array.isArray(t.participants) ? t.participants : [];
+    parts.forEach(function(p) {
+      if (typeof p !== 'object' || p === null) return;
+      var isUser = (matchUid && p.uid === matchUid) ||
+                   (matchEmail && p.email === matchEmail);
+      if (isUser && p.photoURL !== newPhotoURL) {
+        p.photoURL = newPhotoURL;
+        changed = true;
+      }
+    });
+    if (changed) modifiedTournaments.push(t);
+  });
+  if (modifiedTournaments.length > 0 && window.FirestoreDB && window.FirestoreDB.saveTournament) {
+    window._debug('[PropagatePhoto] Saving ' + modifiedTournaments.length + ' tournament(s)');
+    modifiedTournaments.forEach(function(t) {
+      t.updatedAt = new Date().toISOString();
+      window.FirestoreDB.saveTournament(t).catch(function(err) {
+        window._warn('[PropagatePhoto] Save error for ' + t.id + ':', err);
+      });
+    });
+    setTimeout(function() {
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }, 500);
+  }
+}
 
 // v0.17.87: exposto explicitamente em window pra _setLang poder rebuildar
 // o modal de perfil quando o usuário muda idioma com o perfil aberto.
@@ -5925,6 +5967,9 @@ function setupProfileModal() {
           _ac.displayName = name;
           localStorage.setItem('scoreplace_authCache', JSON.stringify(_ac));
         } catch(e) {}
+      } else if (!saveError && payload.photoURL) {
+        // v1.8.40-beta: nome não mudou mas foto mudou — propagar foto diretamente
+        _propagatePhotoToTournaments(payload.photoURL);
       }
 
       // Update header UI with new name and photo

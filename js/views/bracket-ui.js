@@ -4999,8 +4999,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var t2RecvPct = t2T.receivePtsPlayed > 0 ? Math.round(t2T.receivePtsWon / t2T.receivePtsPlayed * 100) : 0;
 
       // Comparative stats section — v1.7.6-beta: TIME 1 (azul) sempre direita, TIME 2 (vermelho) sempre esquerda
-      var _t1Label = p1Players.length ? (p1Players[0].split(/[\s.@_\-]/)[0] || p1Players[0]) : 'Time 1';
-      var _t2Label = p2Players.length ? (p2Players[0].split(/[\s.@_\-]/)[0] || p2Players[0]) : 'Time 2';
+      var _t1Label = p1Players.length ? p1Players[0] : 'Time 1';
+      var _t2Label = p2Players.length ? p2Players[0] : 'Time 2';
       var comparativeSection =
         '<div style="width:100%;max-width:380px;padding:clamp(12px,2.2vh,18px);border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);display:flex;flex-direction:column;gap:clamp(8px,1.6vh,14px);">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);">' +
@@ -8549,12 +8549,10 @@ window._openCasualMatch = function(restoreOpts) {
   // _hydrateStatsLastMatchesSlotFn (post-match stats screen).
   // Returns the cardsHtml string (grid content only, no wrapper).
   window._buildCasualMatchCardsHtml = function(matches, cu) {
-    function _firstToken(s) { return s ? (s.split(/[\s.@_\-]/)[0] || s) : ''; }
     function _pname(p, mDoc, isFirstT1) {
-      if (p.uid && cu.uid && p.uid === cu.uid && cu.displayName) return _firstToken(cu.displayName);
-      if (isFirstT1 && mDoc.createdBy === cu.uid && cu.displayName) return _firstToken(cu.displayName);
-      var nm = p.displayName || p.name || '';
-      return _firstToken(nm) || null;
+      if (p.uid && cu.uid && p.uid === cu.uid && cu.displayName) return cu.displayName;
+      if (isFirstT1 && mDoc.createdBy === cu.uid && cu.displayName) return cu.displayName;
+      return p.displayName || p.name || null;
     }
     function _teamBlock(st, players, score, win) {
       var nameColor = win ? '#fff' : 'rgba(255,255,255,0.72)';
@@ -9404,10 +9402,9 @@ window._openCasualMatch = function(restoreOpts) {
         // Coach mode: técnico não joga — ignorar lobby e sempre ler do input.
         // Sem _coachMode: participante logado (uid+displayName) é source of truth.
         if (!_coachMode && lp && lp.uid && lp.displayName) {
-          // Slot com participante logado — _lobbyParticipants é source of
-          // truth. Usa first name pro display (consistente com lobby).
+          // Slot com participante logado — _lobbyParticipants é source of truth.
           resolved[slotIdx] = {
-            name: lp.displayName.split(' ')[0] || lp.displayName,
+            name: lp.displayName,
             uid: lp.uid,
             photoURL: lp.photoURL || null,
             source: 'lobby'
@@ -9446,7 +9443,7 @@ window._openCasualMatch = function(restoreOpts) {
       var n1, u1, ph1;
       var n2, u2, ph2;
       if (!_coachMode && lp0 && lp0.uid && lp0.displayName) {
-        n1 = lp0.displayName.split(' ')[0] || lp0.displayName;
+        n1 = lp0.displayName;
         u1 = lp0.uid; ph1 = lp0.photoURL || null;
       } else {
         var inp1 = document.getElementById('casual-p1-name');
@@ -9458,7 +9455,7 @@ window._openCasualMatch = function(restoreOpts) {
         ph1 = (_s0Prof ? (_s0Prof.photoURL || null) : null) || ((!_coachMode && cu && cu.photoURL) || null);
       }
       if (!_coachMode && lp1 && lp1.uid && lp1.displayName) {
-        n2 = lp1.displayName.split(' ')[0] || lp1.displayName;
+        n2 = lp1.displayName;
         u2 = lp1.uid; ph2 = lp1.photoURL || null;
       } else {
         var inp2 = document.getElementById('casual-p2-name');
@@ -9736,7 +9733,7 @@ window._openCasualMatch = function(restoreOpts) {
         var isDefault1 = !p1p.name || defaultNames.indexOf(p1p.name) !== -1;
         if (_isCurrentUser(p1p)) {
           if (isDefault1 && cu && cu.displayName) {
-            p1p.name = cu.displayName.split(' ')[0];
+            p1p.name = cu.displayName;
           }
           continue;
         }
