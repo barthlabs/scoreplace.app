@@ -1151,7 +1151,6 @@ function renderTournaments(container, tournamentId = null) {
                     style="width:100%;aspect-ratio:1/1;border-radius:16px;object-fit:cover;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
                     ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
                   >
-                  ${tournamentId && isOrg ? `<div onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Editar logo" style="position:absolute;bottom:6px;right:6px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.85rem;border:1.5px solid rgba(255,255,255,0.25);transition:background 0.15s;" onmouseover="this.style.background='rgba(99,102,241,0.7)'" onmouseout="this.style.background='rgba(0,0,0,0.55)'">✏️</div>` : ''}
                 </div>
               ` : ''}
               <div style="flex:1;min-width:0;">
