@@ -725,7 +725,7 @@ function renderTournaments(container, tournamentId = null) {
                                  autocomplete="off"
                                  style="width:100%;padding:10px 10px 10px 36px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-dark);color:var(--text-main);box-sizing:border-box;"
                                  oninput="window._partnerPickerSearch('${t.id}', this.value)"
-                                 onfocus="window._partnerPickerSearch('${t.id}', this.value)"
+                                 onfocus="window._partnerPickerInit('${t.id}'); window._partnerPickerSearch('${t.id}', this.value)"
                                  required>
                               <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:1rem;pointer-events:none;">🔍</span>
                               <div id="partner-chip-${t.id}" style="display:none;position:absolute;top:8px;left:8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:2px 8px 2px 6px;font-size:0.8rem;color:#a5b4fc;display:none;align-items:center;gap:5px;max-width:calc(100% - 40px);">
@@ -2273,86 +2273,140 @@ function renderTournaments(container, tournamentId = null) {
 // Seleção preenche o input e mostra chip visual. Digitação livre também aceita.
 
 window._partnerPickerSelected = {}; // tId → {name, uid}
+window._partnerPickerFriendsCache = {}; // tId → [{name,uid,photo}]
+window._partnerPickerDebounce = {}; // tId → timer
+
+// Pré-carrega perfis dos amigos quando o modal abre
+window._partnerPickerInit = async function(tId) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !window.FirestoreDB || !window.FirestoreDB.db) return;
+  var friendUids = (Array.isArray(cu.friends) ? cu.friends : [])
+    .filter(function(id) { return typeof id === 'string' && !id.includes('@') && id !== cu.uid; });
+  if (!friendUids.length) return;
+  var cache = window._friendProfilesCache || {};
+  var toLoad = friendUids.filter(function(uid) { return !cache[uid]; });
+  // Carrega perfis ainda não em cache (em paralelo, até 10 por vez)
+  var batches = [];
+  for (var i = 0; i < toLoad.length; i += 10) batches.push(toLoad.slice(i, i + 10));
+  for (var b = 0; b < batches.length; b++) {
+    try {
+      var snap = await window.FirestoreDB.db.collection('users')
+        .where(window.firebase.firestore.FieldPath.documentId(), 'in', batches[b]).get();
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        if (!window._friendProfilesCache) window._friendProfilesCache = {};
+        window._friendProfilesCache[doc.id] = { displayName: d.displayName || '', photoURL: d.photoURL || '' };
+      });
+    } catch(e) { window._warn('[partnerPicker] load friends:', e && e.message); }
+  }
+  // Montar lista de amigos filtrada para este tId
+  var enrolled = (window._partnerPickerEnrolled && window._partnerPickerEnrolled[tId]) || [];
+  var friends = [];
+  friendUids.forEach(function(uid) {
+    var prof = (window._friendProfilesCache || {})[uid];
+    if (!prof) return;
+    var nm = prof.displayName || '';
+    if (!nm) return;
+    if (enrolled.some(function(e) { return e.uid === uid || e.name === nm; })) return;
+    friends.push({ name: nm, uid: uid, photo: prof.photoURL || '' });
+  });
+  window._partnerPickerFriendsCache[tId] = friends;
+  // Mostrar sugestões iniciais (sem query)
+  window._partnerPickerRender(tId, '', enrolled, friends, []);
+};
+
+// Renderiza o dropdown com as seções de resultados
+window._partnerPickerRender = function(tId, q, enrolled, friends, searchResults) {
+  var dropdown = document.getElementById('partner-dropdown-' + tId);
+  if (!dropdown) return;
+
+  function _item(p, badge, color) {
+    var avatar = p.photo
+      ? '<img src="' + window._safeHtml(p.photo) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
+      : '<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,' + color + ');display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#fff;font-weight:700;flex-shrink:0;">' + window._safeHtml((p.name[0]||'?').toUpperCase()) + '</div>';
+    return '<div onclick="event.stopPropagation();window._partnerPickerSelect(\'' + tId + '\',\'' + _escAttr(p.name) + '\',\'' + _escAttr(p.uid||'') + '\')" ' +
+      'style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;transition:background 0.1s;" ' +
+      'onmouseover="this.style.background=\'rgba(99,102,241,0.12)\'" onmouseout="this.style.background=\'none\'">' +
+      avatar +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(p.name) + '</div>' +
+        '<div style="font-size:0.68rem;color:var(--text-muted);">' + badge + '</div>' +
+      '</div></div>';
+  }
+
+  function _section(title, items, badge, color, sep) {
+    if (!items.length) return '';
+    return (sep ? '<div style="height:1px;background:var(--border-color);margin:2px 0;"></div>' : '') +
+      '<div style="padding:6px 12px 3px;font-size:0.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;">' + title + '</div>' +
+      items.map(function(p) { return _item(p, badge, color); }).join('');
+  }
+
+  var html = '';
+  html += _section('Já inscritos', enrolled, 'Inscrito(a)', '#3b82f6,#8b5cf6', false);
+  html += _section('Meus amigos', friends, 'Amigo(a)', '#10b981,#059669', enrolled.length > 0);
+  if (searchResults.length > 0) {
+    // Filtrar duplicatas já exibidas
+    var shownNames = enrolled.concat(friends).map(function(p) { return p.name.toLowerCase(); });
+    var newResults = searchResults.filter(function(p) { return !shownNames.includes(p.name.toLowerCase()); });
+    html += _section('Usuários', newResults, 'Usuário', '#6366f1,#4f46e5', (enrolled.length + friends.length) > 0);
+  }
+  if (!html && q) {
+    html = '<div style="padding:10px 12px;font-size:0.82rem;color:var(--text-muted);">Usar "<strong>' + window._safeHtml(q) + '</strong>" como nome</div>';
+  }
+
+  dropdown.innerHTML = html || '';
+  dropdown.style.display = html ? 'block' : 'none';
+
+  if (html) {
+    setTimeout(function() {
+      document.addEventListener('click', function _close() {
+        if (dropdown) dropdown.style.display = 'none';
+        document.removeEventListener('click', _close);
+      }, { once: true });
+    }, 50);
+  }
+};
 
 window._partnerPickerSearch = function(tId, query) {
   var dropdown = document.getElementById('partner-dropdown-' + tId);
   var input    = document.getElementById('partner-search-' + tId);
   if (!dropdown || !input) return;
-
-  // Se há chip selecionado, não reabrir dropdown
   if (window._partnerPickerSelected[tId] && window._partnerPickerSelected[tId].confirmed) return;
 
   var q = (query || '').trim().toLowerCase();
-  var cu = window.AppStore && window.AppStore.currentUser;
-
-  // 1. Já inscritos solo
   var enrolled = (window._partnerPickerEnrolled && window._partnerPickerEnrolled[tId]) || [];
-  var filtEnrolled = enrolled.filter(function(p) {
-    return !q || p.name.toLowerCase().includes(q);
-  });
+  var friends  = (window._partnerPickerFriendsCache && window._partnerPickerFriendsCache[tId]) || [];
 
-  // 2. Amigos do usuário (do cache ou lista de amigos)
-  var friends = [];
-  if (cu && cu.displayName) {
-    var friendUids = Array.isArray(cu.friends) ? cu.friends : [];
-    var cache = window._friendProfilesCache || {};
-    friendUids.forEach(function(uid) {
-      if (typeof uid !== 'string' || uid.includes('@')) return; // pular emails legados
-      var prof = cache[uid];
-      if (!prof) return;
-      var nm = prof.displayName || prof.name || '';
-      if (!nm) return;
-      if (cu.uid && uid === cu.uid) return; // não sugerir a si mesmo
-      // Não duplicar inscritos já listados
-      if (enrolled.some(function(e) { return e.uid === uid || e.name === nm; })) return;
-      if (!q || nm.toLowerCase().includes(q)) {
-        friends.push({ name: nm, uid: uid, photo: prof.photoURL || '' });
-      }
-    });
+  // Filtrar pelo query local (instantâneo)
+  var filtEnrolled = q ? enrolled.filter(function(p) { return p.name.toLowerCase().includes(q); }) : enrolled;
+  var filtFriends  = q ? friends.filter(function(p) { return p.name.toLowerCase().includes(q); }) : friends;
+
+  // Renderizar imediatamente com resultados locais
+  window._partnerPickerRender(tId, q, filtEnrolled, filtFriends, []);
+
+  // Busca remota Firestore com debounce (só quando query ≥ 2 chars)
+  if (window._partnerPickerDebounce[tId]) clearTimeout(window._partnerPickerDebounce[tId]);
+  if (q.length >= 2) {
+    // Mostrar loading no dropdown
+    if (dropdown.children.length === 0 || (filtEnrolled.length === 0 && filtFriends.length === 0)) {
+      dropdown.innerHTML = '<div style="padding:10px 12px;font-size:0.8rem;color:var(--text-muted);">🔍 Buscando…</div>';
+      dropdown.style.display = 'block';
+    }
+    window._partnerPickerDebounce[tId] = setTimeout(function() {
+      if (!window.FirestoreDB || !window.FirestoreDB.searchUsers) return;
+      window.FirestoreDB.searchUsers(q, { limit: 8 }).then(function(results) {
+        // Verificar se a query ainda é a mesma (evitar resultados obsoletos)
+        var currentQ = (document.getElementById('partner-search-' + tId) || {}).value || '';
+        if (currentQ.trim().toLowerCase() !== q) return;
+        var cu = window.AppStore && window.AppStore.currentUser;
+        var searchResults = results
+          .filter(function(r) { return !cu || r._docId !== cu.uid; })
+          .map(function(r) { return { name: r.displayName || '', uid: r._docId || '', photo: r.photoURL || '' }; })
+          .filter(function(r) { return r.name; });
+        window._partnerPickerRender(tId, q, filtEnrolled, filtFriends, searchResults);
+      }).catch(function() {});
+    }, 280); // 280ms debounce
   }
-
-  if (filtEnrolled.length === 0 && friends.length === 0 && !q) {
-    dropdown.style.display = 'none';
-    return;
-  }
-
-  var html = '';
-
-  if (filtEnrolled.length > 0) {
-    html += '<div style="padding:8px 12px 4px;font-size:0.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;">Já inscritos</div>';
-    filtEnrolled.forEach(function(p) {
-      html += '<div onclick="event.stopPropagation();window._partnerPickerSelect(\'' + tId + '\',\'' + _escAttr(p.name) + '\',\'' + (p.uid||'') + '\')" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-radius:6px;transition:background 0.12s;" onmouseover="this.style.background=\'rgba(99,102,241,0.12)\'" onmouseout="this.style.background=\'none\'">' +
-        (p.photo ? '<img src="' + window._safeHtml(p.photo) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">' : '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#fff;font-weight:700;flex-shrink:0;">' + window._safeHtml((p.name[0]||'?').toUpperCase()) + '</div>') +
-        '<div style="flex:1;min-width:0;"><div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(p.name) + '</div><div style="font-size:0.7rem;color:var(--text-muted);">Inscrito(a)</div></div>' +
-        '</div>';
-    });
-  }
-
-  if (friends.length > 0) {
-    html += '<div style="padding:8px 12px 4px;font-size:0.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-top:' + (filtEnrolled.length > 0 ? '1px solid var(--border-color)' : 'none') + '">Meus amigos</div>';
-    friends.forEach(function(p) {
-      html += '<div onclick="event.stopPropagation();window._partnerPickerSelect(\'' + tId + '\',\'' + _escAttr(p.name) + '\',\'' + (p.uid||'') + '\')" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-radius:6px;transition:background 0.12s;" onmouseover="this.style.background=\'rgba(99,102,241,0.12)\'" onmouseout="this.style.background=\'none\'">' +
-        (p.photo ? '<img src="' + window._safeHtml(p.photo) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">' : '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#fff;font-weight:700;flex-shrink:0;">' + window._safeHtml((p.name[0]||'?').toUpperCase()) + '</div>') +
-        '<div style="flex:1;min-width:0;"><div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(p.name) + '</div><div style="font-size:0.7rem;color:var(--text-muted);">Amigo(a)</div></div>' +
-        '</div>';
-    });
-  }
-
-  if (!html && q) {
-    // Texto livre não encontrado nas listas — permitir confirmar mesmo assim
-    html = '<div style="padding:10px 12px;font-size:0.82rem;color:var(--text-muted);">Usar "<b>' + window._safeHtml(q) + '</b>" como nome do parceiro</div>';
-  }
-
-  dropdown.innerHTML = html;
-  dropdown.style.display = html ? 'block' : 'none';
-
-  // Fechar dropdown ao clicar fora
-  setTimeout(function() {
-    document.addEventListener('click', function _close() {
-      if (dropdown) dropdown.style.display = 'none';
-      document.removeEventListener('click', _close);
-    }, { once: true });
-  }, 50);
 };
 
 window._partnerPickerSelect = function(tId, name, uid) {

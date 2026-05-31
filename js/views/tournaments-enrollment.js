@@ -208,6 +208,10 @@ window.enrollCurrentUser = function (tId) {
         if (t.enrollmentMode === 'time' && (t.teamSize || 2) > 1) {
             const mod = document.getElementById('team-enroll-modal-' + tId);
             if (mod) mod.style.display = 'flex';
+            // Pré-carregar amigos para o picker de parceiro (duplas)
+            if ((t.teamSize || 2) === 2 && typeof window._partnerPickerInit === 'function') {
+                window._partnerPickerInit(tId);
+            }
             return;
         }
 
