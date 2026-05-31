@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.79-beta';
+window.SCOREPLACE_VERSION = '1.8.80-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -635,7 +635,9 @@ window._dismissAllOverlays = function(opts) {
                               // sumia rápido pq sweep removia .active
     'live-scoring-overlay',   // partida casual ao vivo — ciclo de vida próprio,
                               // nunca deve ser varrido pelo sweep genérico
-    'casual-match-overlay'    // lobby/join de partida casual — idem
+    'casual-match-overlay',   // lobby/join de partida casual — idem
+    'player-profile-overlay'  // perfil de jogador — escondido (display:none)
+                              // quando stats está aberto, restaurado no Voltar
   ];
   ALWAYS_KEEP.forEach(function(id) {
     if (keep.indexOf(id) === -1) keep.push(id);
