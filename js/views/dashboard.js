@@ -194,16 +194,28 @@ function renderDashboard(container) {
   const participacoesCount = participacoes.length;
 
   // Torneios com qualquer data definida (startDate, registrationLimit ou endDate)
-  // aparecem antes dos sem datas. Dentro de cada grupo, ordena por startDate
-  // crescente; fallback para registrationLimit quando sem startDate.
+  // Torneios com data aparecem antes dos sem datas.
+  // v1.8.67: torneios EM ANDAMENTO com endDate ordenam por endDate (término);
+  // demais ordenam por startDate (início) → usuário vê "o que termina mais cedo" primeiro.
+  const _isInProgress = t => {
+    var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
+                  (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+                  (Array.isArray(t.groups) && t.groups.length > 0);
+    return hasDraw || t.status === 'active' || t.status === 'started' || t.status === 'in_progress';
+  };
   const sortByDate = (a, b) => {
     const _hasDate = t => !!(t.startDate || t.registrationLimit || t.endDate);
     const hasA = _hasDate(a), hasB = _hasDate(b);
     if (hasA && !hasB) return -1;
     if (!hasA && hasB) return 1;
-    const _time = t => t.startDate ? new Date(t.startDate).getTime()
-                     : t.registrationLimit ? new Date(t.registrationLimit).getTime()
-                     : Infinity;
+    const _time = t => {
+      // Em andamento com data de término → usa endDate
+      if (_isInProgress(t) && t.endDate) return new Date(t.endDate).getTime();
+      // Não iniciado → usa startDate
+      if (t.startDate) return new Date(t.startDate).getTime();
+      if (t.registrationLimit) return new Date(t.registrationLimit).getTime();
+      return Infinity;
+    };
     return _time(a) - _time(b);
   };
 
