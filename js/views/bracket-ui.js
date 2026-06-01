@@ -2120,8 +2120,7 @@ window._editPendingResult = function(tId, matchId) {
   sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
 
   // Troca botões do header por Cancelar + Confirmar
-  var cardEl = document.getElementById('card-' + matchId);
-  var headerBtnArea = cardEl ? cardEl.querySelector('div:first-child > div:last-child') : null;
+  var headerBtnArea = document.getElementById('header-btns-' + matchId);
   if (headerBtnArea) {
     headerBtnArea.innerHTML =
       '<button id="cancel-pending-edit-' + matchId + '" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕ Cancelar</button>' +

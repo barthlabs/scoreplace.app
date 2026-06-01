@@ -1629,7 +1629,7 @@ function renderDashboard(container) {
         '<div id="card-' + mId + '" style="background:' + cardBgStr + ';border:2px solid ' + cardBorderStr + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +
             '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _sf(matchLabel) + '</span>' +
-            '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' + finalHeaderBtns + '</div>' +
+            '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' + finalHeaderBtns + '</div>' +
           '</div>' +
           '<div style="' + rowStyle + '">' + _teamHtml(p1) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
           '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
