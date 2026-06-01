@@ -277,6 +277,22 @@ function renderBracket(container, tournamentId, isInline) {
   if ((window.location.hash || '').startsWith('#bracket')) {
     _setupFixedScrollbar(container);
   }
+
+  // Auto-editar resultado pendente quando vindo do dashboard (sp_pendingEdit)
+  try {
+    var _pe = sessionStorage.getItem('sp_pendingEdit');
+    if (_pe) {
+      var _peData = JSON.parse(_pe);
+      if (_peData && _peData.tId && String(_peData.tId) === String(tId)) {
+        sessionStorage.removeItem('sp_pendingEdit');
+        setTimeout(function() {
+          if (typeof window._editPendingResult === 'function') {
+            window._editPendingResult(_peData.tId, _peData.matchId);
+          }
+        }, 150);
+      }
+    }
+  } catch(e) {}
 }
 
 // ─── Banner de Jogos Prontos (ambos presentes) ──────────────────────────────

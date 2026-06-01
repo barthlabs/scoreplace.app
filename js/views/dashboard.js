@@ -2482,6 +2482,8 @@ function renderDashboard(container) {
       var tId = btn.getAttribute('data-tid');
       var mId = btn.getAttribute('data-mid');
       if (action === 'bracket') {
+        // Sinaliza que ao abrir o bracket deve abrir edição inline do match
+        try { sessionStorage.setItem('sp_pendingEdit', JSON.stringify({tId: tId, matchId: mId})); } catch(e) {}
         window.location.hash = '#bracket/' + tId;
       } else if (action === 'approve' && typeof window._approveResult === 'function') {
         window._approveResult(tId, mId);
