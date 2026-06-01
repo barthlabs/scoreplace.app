@@ -1631,9 +1631,9 @@ function renderDashboard(container) {
             '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _sf(matchLabel) + '</span>' +
             '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' + finalHeaderBtns + '</div>' +
           '</div>' +
-          '<div style="' + rowStyle + '">' + _teamHtml(p1) + p1ScoreHtml + '</div>' +
+          '<div style="' + rowStyle + '">' + _teamHtml(p1) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
           '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
-          '<div style="' + rowStyle + '">' + _teamHtml(p2) + p2ScoreHtml + '</div>' +
+          '<div style="' + rowStyle + '">' + _teamHtml(p2) + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
           goToBtnFooter +
         '</div>' +
       '</div>';
@@ -1650,7 +1650,7 @@ function renderDashboard(container) {
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         var mid = String(item.m.id || '');
         var btns = _pendTag +
-          '<button data-pending-action="bracket" data-tid="' + _sf(item.tId) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>' +
+          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>' +
           '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
         html += _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
@@ -1674,7 +1674,7 @@ function renderDashboard(container) {
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         var mid = String(item.m.id || '');
         var btns = _pendTag2 +
-          '<button data-pending-action="bracket" data-tid="' + _sf(item.tId) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
+          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
         html += _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
@@ -2481,10 +2481,8 @@ function renderDashboard(container) {
       var action = btn.getAttribute('data-pending-action');
       var tId = btn.getAttribute('data-tid');
       var mId = btn.getAttribute('data-mid');
-      if (action === 'bracket') {
-        // Sinaliza que ao abrir o bracket deve abrir edição inline do match
-        try { sessionStorage.setItem('sp_pendingEdit', JSON.stringify({tId: tId, matchId: mId})); } catch(e) {}
-        window.location.hash = '#bracket/' + tId;
+      if (action === 'edit' && typeof window._editPendingResult === 'function') {
+        window._editPendingResult(tId, mId);
       } else if (action === 'approve' && typeof window._approveResult === 'function') {
         window._approveResult(tId, mId);
       }

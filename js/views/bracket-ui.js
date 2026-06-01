@@ -2119,7 +2119,7 @@ window._editPendingResult = function(tId, matchId) {
   sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
   sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
 
-  // Troca botões do header por Cancelar + Propor placar
+  // Troca botões do header por Cancelar + Confirmar
   var cardEl = document.getElementById('card-' + matchId);
   var headerBtnArea = cardEl ? cardEl.querySelector('div:first-child > div:last-child') : null;
   if (headerBtnArea) {
