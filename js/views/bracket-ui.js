@@ -1686,11 +1686,14 @@ window._saveResultInline = function (tId, matchId) {
   // vai pra m.pendingResult em vez de m.winner direto. Time adversário
   // recebe notificação pra aprovar.
   var _curUser = window.AppStore && window.AppStore.currentUser;
-  // _playerEditMode: set por _editPendingResult quando um jogador (mesmo que
-  // seja também organizador) edita um placar pendente do adversário.
-  // Força o fluxo de aprovação — o placar editado vira novo pendingResult.
-  var _playerEditForced = !!m._playerEditMode;
-  if (_playerEditForced) delete m._playerEditMode;
+  // Flag persistido no sessionStorage por _editPendingResult: força o fluxo
+  // pendente mesmo quando o usuário é organizador (age como jogador adversário).
+  var _playerEditForced = false;
+  try {
+    var _peKey = 'sp_playerEdit_' + matchId;
+    _playerEditForced = sessionStorage.getItem(_peKey) === '1';
+    if (_playerEditForced) sessionStorage.removeItem(_peKey);
+  } catch(e) {}
   if (_curUser && (_playerEditForced || _resultNeedsApproval(t, m, _curUser))) {
     var _proposedWinner;
     var _proposedDraw = false;
@@ -2115,11 +2118,10 @@ window._editPendingResult = function(tId, matchId) {
   var s1 = pr && pr.scoreP1 != null ? pr.scoreP1 : '';
   var s2 = pr && pr.scoreP2 != null ? pr.scoreP2 : '';
 
-  // Marca que este é um edit de jogador (não de organizador agindo como árbitro).
-  // _saveResultInline lê esse flag e força o fluxo pendente mesmo que o usuário
-  // seja também o organizador — adversário edita → vira novo pendingResult para
-  // o time original aprovar ou contestar.
-  m._playerEditMode = true;
+  // Persiste flag "edição de jogador" no sessionStorage.
+  // m._playerEditMode seria perdido se onSnapshot substituir os objetos do AppStore
+  // antes do usuário clicar Confirmar. sessionStorage sobrevive ao re-render.
+  try { sessionStorage.setItem('sp_playerEdit_' + matchId, '1'); } catch(e) {}
 
   // Remove pendingResult da memória (não salva — só abre os inputs)
   delete m.pendingResult;
