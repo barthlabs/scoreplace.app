@@ -2481,8 +2481,15 @@ function renderDashboard(container) {
       var action = btn.getAttribute('data-pending-action');
       var tId = btn.getAttribute('data-tid');
       var mId = btn.getAttribute('data-mid');
-      if (action === 'edit' && typeof window._editPendingResult === 'function') {
-        window._editPendingResult(tId, mId);
+      if (action === 'edit') {
+        // Tenta editar in-place; se não achar os elementos (não está no bracket),
+        // seta sp_pendingEdit e navega — o bracket auto-abre o edit ao carregar
+        try { sessionStorage.setItem('sp_pendingEdit', JSON.stringify({tId: tId, matchId: mId})); } catch(e2) {}
+        if (typeof window._editPendingResult === 'function') {
+          window._editPendingResult(tId, mId);
+        } else {
+          window.location.hash = '#bracket/' + tId;
+        }
       } else if (action === 'approve' && typeof window._approveResult === 'function') {
         window._approveResult(tId, mId);
       }

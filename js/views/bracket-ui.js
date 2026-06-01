@@ -2111,8 +2111,7 @@ window._editPendingResult = function(tId, matchId) {
   var sp1 = document.getElementById('score-p1-' + matchId);
   var sp2 = document.getElementById('score-p2-' + matchId);
   if (!sp1 || !sp2) {
-    // Se o card não está visível (ex: no dashboard), navega para o bracket
-    try { sessionStorage.setItem('sp_pendingEdit', JSON.stringify({tId: tId, matchId: matchId})); } catch(e) {}
+    // Elementos não encontrados no DOM atual — navega para o bracket sem loop
     window.location.hash = '#bracket/' + tId;
     return;
   }
