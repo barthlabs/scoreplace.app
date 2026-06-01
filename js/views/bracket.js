@@ -1649,14 +1649,19 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     var _proposerName = window._safeHtml(_pr.proposedByName || 'Jogador');
     if (_pr.disputed) {
       var _disputerName = window._safeHtml(_pr.disputedByName || 'Jogador');
-      pendingBanner = `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:0.72rem;color:#f87171;display:flex;align-items:center;gap:6px;">
-        <span style="font-size:0.85rem;">🚨</span>
-        <span><b>Em disputa</b> — contestado por <b>${_disputerName}</b>. Aguardando resolução do organizador.</span>
+      pendingBanner = `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;color:#f87171;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;">
+          <span style="font-size:0.85rem;">🚨</span>
+          <span><b>Em disputa</b> — contestado por <b>${_disputerName}</b>. Aguardando resolução do organizador.</span>
+        </div>
       </div>`;
     } else {
-      pendingBanner = `<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:0.72rem;color:#fbbf24;display:flex;align-items:center;gap:6px;">
-        <span style="font-size:0.85rem;">⏳</span>
-        <span><b>Aguardando aprovação</b> — proposto por <b>${_proposerName}</b> · ${_agoLabel}</span>
+      pendingBanner = `<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;color:#fbbf24;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:${pendingActionBtns ? '8px' : '0'};">
+          <span style="font-size:0.85rem;">⏳</span>
+          <span><b>Aguardando aprovação</b> — proposto por <b>${_proposerName}</b> · ${_agoLabel}</span>
+        </div>
+        ${pendingActionBtns ? `<div style="display:flex;gap:6px;flex-wrap:wrap;">${pendingActionBtns}</div>` : ''}
       </div>`;
     }
   }
@@ -1665,7 +1670,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" style="background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};border-radius:12px;padding:14px;box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
         <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-        <div id="header-btns-${m.id}" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${liveBtn}${headerConfirmBtn}${pendingActionBtns}${headerEditBtn}</div>
+        <div id="header-btns-${m.id}" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${liveBtn}${headerConfirmBtn}${headerEditBtn}</div>
       </div>
       ${pendingBanner}
       ${p1Row}

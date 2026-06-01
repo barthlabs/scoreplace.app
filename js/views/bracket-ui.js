@@ -2172,7 +2172,7 @@ window._editPendingResult = function(tId, matchId) {
     });
   }
 
-  setTimeout(function() { var inp = document.getElementById('s1-' + matchId); if (inp) inp.focus(); }, 50);
+  // Não auto-focar no mobile — iOS scroll ao focar input causa UX confusa
 };
 
 // Internal: confirm the edit.
