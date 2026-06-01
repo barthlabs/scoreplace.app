@@ -1514,64 +1514,77 @@ function renderDashboard(container) {
         '</div>';
     }
 
-    // helper: mini bracket card estilo bracket.js — inputs de placar inline
-    // canLaunch=true: mostra inputs + Confirmar; false: só "Ir para Torneio"
+    // helper: mini bracket card — HTML idêntico ao renderMatchCard do bracket.js
+    // canLaunch=true: mostra inputs + Confirmar + Ao Vivo; false: só "Ir para Torneio"
     function _miniBracketCard(item, canLaunch) {
       var tId = _sf(item.tId);
       var mId = _sf(item.m.id || '');
       var p1 = item.m.p1 || '';
       var p2 = item.m.p2 || '';
+      var _esc = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
 
-      // Fase label correto (FINAL (R1), SEMI-FINAL (R2) etc.)
-      var t = participacoes.find(function(tt) { return tt.id === item.tId; });
-      var faseStr = t ? _elabFaseLabel(t, item.m) : (item.subLine || '');
+      // Fase label correto (Final (R1), Semifinal (R2) etc.)
+      var tRef = participacoes.find(function(tt) { return tt.id === item.tId; });
+      var faseStr = tRef ? _elabFaseLabel(tRef, item.m) : (item.subLine || '');
+      // matchLabel = "JOGO N" como no bracket
+      var matchLabel = item.m.label || ('JOGO 1');
 
-      // Avatar/iniciais compactos
+      // _teamAvatarHtml compacto: iniciais + foto se disponível
       function _initials(name) {
         return (name || '?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase();
       }
-      function _teamRow(names, isMyTeam, inputId) {
-        var parts = String(names).split(/\s*\/\s*/).filter(Boolean);
-        var rowHtml = '<div style="display:flex;align-items:center;gap:6px;padding:5px 0;">';
-        rowHtml += '<div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;">';
-        parts.forEach(function(n) {
-          var isMe = _isMe(n);
-          rowHtml += '<div style="display:flex;align-items:center;gap:5px;">';
-          rowHtml += '<div style="width:22px;height:22px;border-radius:50%;background:' + (isMe ? 'rgba(99,102,241,0.4)' : 'rgba(148,163,184,0.2)') + ';display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:700;color:' + (isMe ? '#a5b4fc' : '#94a3b8') + ';flex-shrink:0;">' + _sf(_initials(n)) + '</div>';
-          rowHtml += '<span style="font-size:0.78rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#e2e8f0' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(n) + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;">(você)</span>' : '') + '</span>';
-          rowHtml += '</div>';
-        });
-        rowHtml += '</div>';
-        if (canLaunch && inputId) {
-          rowHtml += '<input id="' + inputId + '" type="number" min="0" max="99" placeholder="0" onclick="event.stopPropagation();" style="width:44px;height:36px;text-align:center;font-size:1rem;font-weight:700;color:#f1f5f9;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:8px;-moz-appearance:textfield;flex-shrink:0;">';
-        } else {
-          rowHtml += '<div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:var(--text-muted);flex-shrink:0;">–</div>';
-        }
-        rowHtml += '</div>';
-        return rowHtml;
+      function _avatarHtml(name) {
+        var isMe = _isMe(name);
+        var photoURL = (isMe && cu && cu.photoURL) ? cu.photoURL : null;
+        var ini = _sf(_initials(name));
+        var avatarEl = photoURL
+          ? '<img src="' + photoURL + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
+          : '<div style="width:28px;height:28px;border-radius:50%;background:' + (isMe ? 'rgba(99,102,241,0.4)' : 'rgba(148,163,184,0.18)') + ';display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:800;color:' + (isMe ? '#a5b4fc' : '#94a3b8') + ';flex-shrink:0;">' + ini + '</div>';
+        var nameEl = '<span style="font-size:0.8rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(name) + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '') + '</span>';
+        return '<div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">' + avatarEl + nameEl + '</div>';
+      }
+      function _teamHtml(teamStr) {
+        var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
+        return parts.map(_avatarHtml).join('');
       }
 
-      var cardHtml = '<div style="background:rgba(15,23,42,0.6);border:1px solid rgba(99,102,241,0.3);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;">';
-      // Header da chave
-      cardHtml += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(99,102,241,0.12);border-bottom:1px solid rgba(99,102,241,0.2);">';
-      cardHtml += '<span style="font-size:0.66rem;font-weight:700;color:#818cf8;text-transform:uppercase;letter-spacing:0.05em;">' + _sf(item.tName) + '</span>';
-      cardHtml += '<span style="font-size:0.62rem;color:#64748b;font-weight:600;">' + _sf(faseStr) + '</span>';
-      cardHtml += '</div>';
-      // Corpo: times + inputs
-      cardHtml += '<div style="padding:4px 10px;">';
-      cardHtml += _teamRow(p1, item.inP1, canLaunch ? 's1-' + mId : null);
-      cardHtml += '<div style="text-align:center;font-size:0.65rem;color:#475569;font-weight:600;letter-spacing:0.05em;padding:1px 0;">VS</div>';
-      cardHtml += _teamRow(p2, !item.inP1, canLaunch ? 's2-' + mId : null);
-      cardHtml += '</div>';
-      // Footer: botões
-      cardHtml += '<div style="display:flex;gap:6px;padding:6px 10px;border-top:1px solid rgba(255,255,255,0.05);">';
-      if (canLaunch) {
-        cardHtml += '<button onclick="event.stopPropagation();window._saveResultInline(\'' + tId + '\',\'' + mId + '\')" style="flex:1;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;border-radius:7px;padding:6px 0;font-size:0.75rem;font-weight:700;cursor:pointer;">✓ Confirmar</button>';
-      }
-      cardHtml += '<button onclick="event.stopPropagation();window.location.hash=\'#bracket/' + tId + '\'" style="flex:' + (canLaunch ? '0 0 auto' : '1') + ';background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:7px;padding:6px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;">Ir para Torneio</button>';
-      cardHtml += '</div>';
-      cardHtml += '</div>';
-      return cardHtml;
+      // rowStyle igual ao bracket.js
+      var rowStyle = 'display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,0.03);margin-bottom:4px;';
+      var scoreInputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;';
+      var scorePlaceholderHtml = '<div style="width:52px;height:30px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:#475569;flex-shrink:0;">0</div>';
+
+      var p1ScoreHtml = canLaunch
+        ? '<input id="s1-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">'
+        : scorePlaceholderHtml;
+      var p2ScoreHtml = canLaunch
+        ? '<input id="s2-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">'
+        : scorePlaceholderHtml;
+
+      // Botões do header (igual ao bracket.js): Ao Vivo + Confirmar
+      var liveBtnHtml = canLaunch
+        ? '<button onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:3px;">📡 Ao Vivo</button>'
+        : '';
+      var confirmBtnHtml = canLaunch
+        ? '<button id="confirm-' + mId + '" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">✓ Confirmar</button>'
+        : '';
+      var goToBtn = '<button onclick="event.stopPropagation();window.location.hash=\'#bracket/' + _esc(tId) + '\'" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);color:#818cf8;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;">Ir para Torneio</button>';
+
+      return '<div id="card-' + mId + '" style="background:rgba(99,102,241,0.06);border:2px solid rgba(99,102,241,0.6);border-radius:12px;padding:14px;box-shadow:0 0 20px rgba(99,102,241,0.25),0 4px 12px rgba(0,0,0,0.15);">' +
+        // Header: matchLabel (esq) + botões (dir) — igual ao bracket
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +
+          '<div>' +
+            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _sf(matchLabel) + '</span>' +
+            (faseStr ? '<span style="font-size:0.62rem;color:#64748b;margin-left:8px;">' + _sf(faseStr) + '</span>' : '') +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:4px;">' + liveBtnHtml + confirmBtnHtml + goToBtn + '</div>' +
+        '</div>' +
+        // P1 row
+        '<div style="' + rowStyle + '">' + _teamHtml(p1) + p1ScoreHtml + '</div>' +
+        // VS
+        '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
+        // P2 row
+        '<div style="' + rowStyle + '">' + _teamHtml(p2) + p2ScoreHtml + '</div>' +
+      '</div>';
     }
 
     // ── Aguardando minha aprovação ──
