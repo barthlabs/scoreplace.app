@@ -1404,9 +1404,19 @@ function renderDashboard(container) {
         var inP2 = p2Names.some(_isMe) || _isMe(m.p2);
         if (!inP1 && !inP2) return;
 
+        // Fase/rodada para exibir no card (igual ao "Próximas Partidas" antigo)
+        var _phaseLabel = '';
+        if (m.label) _phaseLabel = String(m.label);
+        else if (m.roundLabel) _phaseLabel = String(m.roundLabel);
+        else if (m.round != null) _phaseLabel = 'Rodada ' + m.round;
+        var _formatLabel = m.isMonarch ? 'Rei/Rainha' : (t.format || '');
+        if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && m.isMonarch) _formatLabel = 'Liga · Rei/Rainha';
+        var _subLine = [_formatLabel, _phaseLabel].filter(Boolean).join(' · ');
+
         var matchInfo = {
           tId: t.id, tName: t.name || '', sport: t.sport || '', m: m,
-          opp: inP1 ? (m.p2 || '') : (m.p1 || '')
+          opp: inP1 ? (m.p2 || '') : (m.p1 || ''),
+          subLine: _subLine
         };
 
         if (m.winner) {
@@ -1460,11 +1470,14 @@ function renderDashboard(container) {
     function _matchCard(item, bgStyle, borderStyle, extra) {
       var nav = 'window.location.hash=\'#bracket/' + _sf(item.tId) + '\'';
       var nameLine = _formatMatchLine(item.m.p1 || '', item.m.p2 || '', item.inP1);
+      var subMeta = item.subLine
+        ? _sf(item.tName) + ' <span style="opacity:0.5;">·</span> ' + _sf(item.subLine)
+        : _sf(item.tName);
       return '<div onclick="' + nav + '" style="cursor:pointer;' + bgStyle + ';border:1px solid ' + borderStyle + ';border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:flex-start;gap:8px;">' +
         '<span style="font-size:1rem;flex-shrink:0;margin-top:2px;">' + _sportIcon(item.sport) + '</span>' +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:0.79rem;line-height:1.4;color:#f1f5f9;">' + nameLine + '</div>' +
-          '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + _sf(item.tName) + '</div>' +
+          '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + subMeta + '</div>' +
           (extra || '') +
         '</div>';
     }
