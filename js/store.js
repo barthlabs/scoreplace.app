@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.85-beta';
+window.SCOREPLACE_VERSION = '1.8.86-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -208,6 +208,35 @@ window._softRefreshView = function() {
 
   // 5. Re-render current view via router
   if (typeof initRouter === 'function') initRouter();
+
+  // v1.8.86: se o participante está no detalhe de um torneio que acabou de ter
+  // o sorteio realizado (agora tem matches/rounds), redirecionar para o bracket.
+  // Cobre o caso de alguém que ficou esperando o sorteio acontecer.
+  try {
+    var _hash = window.location.hash || '';
+    var _hParts = _hash.replace('#','').split('/');
+    if (_hParts[0] === 'tournaments' && _hParts[1]) {
+      var _tId = _hParts[1];
+      var _tNow = window.AppStore && window.AppStore.tournaments &&
+                  window.AppStore.tournaments.find(function(x){ return String(x.id) === String(_tId); });
+      if (_tNow) {
+        var _hasDraw = (Array.isArray(_tNow.matches) && _tNow.matches.length > 0) ||
+                       (Array.isArray(_tNow.rounds)  && _tNow.rounds.length  > 0) ||
+                       (Array.isArray(_tNow.groups)  && _tNow.groups.length  > 0);
+        if (_hasDraw && !window._bracketRedirectedFor) {
+          window._bracketRedirectedFor = _tId;
+          // Mostrar toast informativo antes de redirecionar
+          if (typeof showNotification === 'function') {
+            showNotification('🎲 Sorteio realizado!', 'Redirecionando para o chaveamento…', 'success');
+          }
+          setTimeout(function() {
+            window._lastActiveTournamentId = _tId;
+            window.location.hash = '#bracket/' + _tId;
+          }, 1200);
+        }
+      }
+    }
+  } catch(_e) {}
 
   // 6. Restore scroll position after render
   requestAnimationFrame(function() {

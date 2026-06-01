@@ -1315,12 +1315,14 @@ function renderTournaments(container, tournamentId = null) {
                ${inviteModalHtml}
                ${teamEnrollModalHtml}
                ${hasDraw ? `
-               <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
-                 <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 Regras</button>
-                 <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
-                 <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
-                 <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
-                 <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tvMode('${t.id}')">📺 Modo TV</button>
+               <div style="margin-top:1rem;">
+                 <button class="btn btn-primary hover-lift" style="width:100%;font-size:0.95rem;padding:12px;margin-bottom:10px;" onclick="window._lastActiveTournamentId='${t.id}';window.location.hash='#bracket/${t.id}'">🏆 Ver Chaves</button>
+                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                   <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 Regras</button>
+                   <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
+                   <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tvMode('${t.id}')">📺 Modo TV</button>
+                   <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 CSV</button>
+                 </div>
                </div>` : `
                <div class="d-flex justify-between align-center mt-4 pt-4" style="border-top: 1px solid rgba(255,255,255,0.15);">
                   <div class="d-flex gap-2">
