@@ -144,6 +144,9 @@ function renderTournaments(container, tournamentId = null) {
         var newName = name1 + ' / ' + name2;
         var uid1 = typeof p1 === 'object' ? (p1.uid || '') : '';
         var uid2 = typeof p2 === 'object' ? (p2.uid || '') : '';
+        // v1.8.88: se sourceUidOrName é um uid real (não um nome), usá-lo
+        if (!uid1 && sourceUidOrName && !sourceUidOrName.includes(' ')) uid1 = sourceUidOrName;
+        if (!uid2 && targetUidOrName && !targetUidOrName.includes(' ')) uid2 = targetUidOrName;
 
         function _doFormDupla() {
             // Entrada LIMPA — sem herdar foto/email de nenhum membro
