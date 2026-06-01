@@ -2115,6 +2115,8 @@ window._editPendingResult = function(tId, matchId) {
     window.location.hash = '#bracket/' + tId;
     return;
   }
+  // Suprime re-renders enquanto o usuário edita (evita dashboard destruir os inputs)
+  window._suppressSoftRefresh = true;
   sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
   sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
 
@@ -2130,6 +2132,7 @@ window._editPendingResult = function(tId, matchId) {
   if (cancelBtn) {
     cancelBtn.addEventListener('click', function(e) {
       e.stopPropagation();
+      window._suppressSoftRefresh = false;
       _rerenderBracket(tId, matchId);
     });
   }
@@ -2164,6 +2167,7 @@ window._editPendingResult = function(tId, matchId) {
       window.AppStore.syncImmediate(tId);
       try { _notifyPendingApproval(t, m, m.pendingResult.proposedByName); } catch(e2) {}
       showNotification('⏳ Contra-proposta enviada', 'O time adversário foi notificado para aprovar ou contestar.', 'success');
+      window._suppressSoftRefresh = false;
       _rerenderBracket(tId, matchId);
     });
   }
