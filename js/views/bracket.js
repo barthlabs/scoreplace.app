@@ -1588,12 +1588,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
         // Fase 1: adversário — Editar + Confirmar
         pendingActionBtns = _btnEdit + _btnConfirm;
       } else {
-        // Fase 2: time original — Editar + Confirmar + Contestar
-        pendingActionBtns = _btnEdit + _btnConfirm + _btnContest;
+        // Fase 3: time original vê contra-proposta — apenas Confirmar + Contestar
+        pendingActionBtns = _btnConfirm + _btnContest;
       }
     } else if (_isProposerSelf && !_isAuthorityInner) {
-      // Proponente atual (qualquer fase): só Editar para corrigir
-      pendingActionBtns = _btnEdit;
+      // Proponente atual: só Editar para corrigir (exceto se disputado — aí aguarda org)
+      if (!(_pr && _pr.disputed)) pendingActionBtns = _btnEdit;
     } else if (_isAuthorityInner) {
       pendingActionBtns = _btnEdit;
     }

@@ -438,6 +438,8 @@ function _isUserOrgOrCoHost(t, user) {
 //         (auto-approve); (e) caso contrário → precisa.
 function _resultNeedsApproval(t, m, user) {
   if (!t || !m || !user) return false;
+  // Quando em disputa, só o organizador pode lançar — participantes bloqueados
+  if (m.pendingResult && m.pendingResult.disputed) return false;
   // Só aplica quando a configuração do torneio permite participantes lançar resultado
   var _re = t.resultEntry || 'organizer';
   var _playersCanSubmit = _re === 'players' || _re === 'all' ||
@@ -2133,8 +2135,8 @@ window._editPendingResult = function(tId, matchId) {
   var headerBtnArea = document.getElementById('header-btns-' + matchId);
   if (headerBtnArea) {
     headerBtnArea.innerHTML =
-      '<button id="cancel-pending-edit-' + matchId + '" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕ Cancelar</button>' +
-      '<button id="confirm-pending-edit-' + matchId + '" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.5);color:#a78bfa;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-left:4px;">✓ Propor placar</button>';
+      '<button id="cancel-pending-edit-' + matchId + '" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕ Cancelar</button>' +
+      '<button id="confirm-pending-edit-' + matchId + '" style="background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.5);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
   }
 
   var cancelBtn = document.getElementById('cancel-pending-edit-' + matchId);
