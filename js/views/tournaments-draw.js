@@ -189,8 +189,9 @@ window.generateDrawFunction = function (tId) {
         }
     }
 
-    // ── Validação: participantes sem categoria (quando torneio tem categorias) ─
-    var _tournHasCats = Array.isArray(t.combinedCategories) && t.combinedCategories.length > 0;
+    // ── Validação: participantes sem categoria (quando torneio tem MÚLTIPLAS categorias) ─
+    // Categoria única (ex: Misto isolado) → todos participam da mesma → sem checagem.
+    var _tournHasCats = Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1;
     if (_tournHasCats) {
         var _allParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
         var _noCat = _allParts.filter(function(p) {
