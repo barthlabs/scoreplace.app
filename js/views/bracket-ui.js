@@ -373,36 +373,36 @@ function _matchSideMembers(m, side) {
 function _userTeamInMatch(t, m, user) {
   if (!t || !m || !user) return 0;
   var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var checkSide = function(side) {
-    var members = _matchSideMembers(m, side);
-    for (var i = 0; i < members.length; i++) {
-      var nm = members[i];
-      if (!nm) continue;
-      // Look up participant by name, suportando times de dupla ("Kelly / Rodrigo Barth")
-      var pp = null;
-      for (var j = 0; j < parts.length; j++) {
-        var p = parts[j];
-        var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        if (pName === nm) { pp = p; break; }
-        if (pName.indexOf('/') !== -1) {
-          if (pName.split('/').some(function(s) { return s.trim() === nm; })) { pp = p; break; }
-        }
-      }
-      if (pp && typeof pp === 'object') {
-        if (user.uid && pp.uid && pp.uid === user.uid) return true;
-        if (user.email && pp.email && pp.email === user.email) return true;
-        if (user.email && pp.email_lower && pp.email_lower === (user.email || '').toLowerCase()) return true;
-      }
-      // Fallback by displayName (substring to handle "A / B" doubles or short names)
-      if (user.displayName) {
-        var uDN = user.displayName;
-        if (nm === uDN || nm.indexOf(uDN) !== -1 || uDN.indexOf(nm) !== -1) return true;
-      }
+  // Busca o participant pelo nome completo do lado (p1 ou p2 do match).
+  // Para duplas, o participant é salvo com o nome completo do time ("Kelly / Rodrigo Barth"),
+  // idêntico ao p1/p2. Verificamos uid e email. Fallback: displayName do usuário
+  // aparece em algum trecho do nome do lado (para nomes individuais dentro de dupla).
+  var checkSide = function(sideStr) {
+    if (!sideStr || sideStr === 'TBD' || sideStr === 'BYE') return false;
+    var pp = null;
+    for (var j = 0; j < parts.length; j++) {
+      var p = parts[j];
+      var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
+      if (pName === sideStr) { pp = p; break; }
+    }
+    if (pp && typeof pp === 'object') {
+      if (user.uid && pp.uid && pp.uid === user.uid) return true;
+      if (user.email && pp.email && pp.email === user.email) return true;
+      if (user.email && pp.email_lower && pp.email_lower === (user.email || '').toLowerCase()) return true;
+    }
+    // Fallback: nome do usuário aparece no nome do lado (ex: "Rodrigo Barth" em "Kelly / Rodrigo Barth")
+    if (user.displayName) {
+      var uDN = user.displayName;
+      if (sideStr === uDN || sideStr.indexOf(uDN) !== -1) return true;
     }
     return false;
   };
-  if (checkSide(1)) return 1;
-  if (checkSide(2)) return 2;
+  if (m.isMonarch) {
+    if (Array.isArray(m.team1) && m.team1.some(function(nm) { return nm === (user.displayName || '') || (user.email && nm === user.email); })) return 1;
+    if (Array.isArray(m.team2) && m.team2.some(function(nm) { return nm === (user.displayName || '') || (user.email && nm === user.email); })) return 2;
+  }
+  if (checkSide(m.p1)) return 1;
+  if (checkSide(m.p2)) return 2;
   return 0;
 }
 
@@ -446,29 +446,13 @@ function _resultNeedsApproval(t, m, user) {
   if (_isUserOrgOrCoHost(t, user)) return false;
   var userSide = _userTeamInMatch(t, m, user);
   if (userSide === 0) return false;
-  var opposingSide = userSide === 1 ? 2 : 1;
-  var opposingMembers = _matchSideMembers(m, opposingSide);
-  if (opposingMembers.length === 0) return false;
+  var opposingSideStr = userSide === 1 ? m.p2 : m.p1;
+  if (!opposingSideStr || opposingSideStr === 'TBD' || opposingSideStr === 'BYE') return false;
   var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  // Helper: busca participante por nome, considerando times de dupla armazenados
-  // como "Kelly / Rodrigo Barth" — divide por "/" e testa cada parte.
-  function _findPartByName(nm) {
-    for (var j = 0; j < parts.length; j++) {
-      var p = parts[j];
-      var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-      if (pName === nm) return p;
-      if (pName.indexOf('/') !== -1) {
-        var pParts = pName.split('/').map(function(s) { return s.trim(); });
-        if (pParts.indexOf(nm) !== -1) return p;
-      }
-    }
-    return null;
-  }
-  for (var i = 0; i < opposingMembers.length; i++) {
-    var pp = _findPartByName(opposingMembers[i]);
-    if (pp && typeof pp === 'object' && pp.uid) return true;
-  }
-  return false;
+  var opp = parts.find(function(p) {
+    return (typeof p === 'object') && ((p.displayName || p.name || '') === opposingSideStr);
+  });
+  return !!(opp && opp.uid);
 }
 
 // Notifica o time adversário (cada player com uid) + organizador
@@ -493,45 +477,34 @@ function _notifyPendingApproval(t, m, proposerName) {
     level: 'fundamental',
     timestamp: Date.now()
   };
-  // Find proposer's side, then notify opposing team
+  // Descobre o lado do proposer e notifica o lado adversário pelo nome completo do time.
   var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  // Helper: busca participante por nome, suportando times de dupla ("Kelly / Rodrigo Barth")
-  function _findPartByNameNotify(nm) {
+  function _findPartBySide(sideStr) {
     return parts.find(function(p) {
-      var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-      if (n === nm) return true;
-      if (n.indexOf('/') !== -1) {
-        return n.split('/').some(function(s) { return s.trim() === nm; });
-      }
-      return false;
+      return typeof p === 'object' && (p.displayName || p.name || '') === sideStr;
     }) || null;
   }
-  // Build set of UIDs that are on the same team as proposer (don't notify them)
   var proposerSide = 0;
   if (pr.proposedBy || pr.proposedByEmail) {
-    var fakeUser = { uid: pr.proposedBy, email: pr.proposedByEmail };
-    proposerSide = _userTeamInMatch(t, m, fakeUser);
+    proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
   }
   var skipUids = {};
-  if (proposerSide > 0) {
-    _matchSideMembers(m, proposerSide).forEach(function(nm) {
-      var pp = _findPartByNameNotify(nm);
-      if (pp && typeof pp === 'object' && pp.uid) skipUids[pp.uid] = true;
-    });
+  var proposerSideStr = proposerSide === 1 ? m.p1 : proposerSide === 2 ? m.p2 : null;
+  if (proposerSideStr) {
+    var proposerPart = _findPartBySide(proposerSideStr);
+    if (proposerPart && proposerPart.uid) skipUids[proposerPart.uid] = true;
   } else {
     if (pr.proposedBy) skipUids[pr.proposedBy] = true;
   }
-  // Notify everyone on opposing side
-  [1, 2].forEach(function(side) {
-    if (side === proposerSide) return;
-    _matchSideMembers(m, side).forEach(function(nm) {
-      var pp = _findPartByNameNotify(nm);
-      if (pp && typeof pp === 'object' && pp.uid && !skipUids[pp.uid]) {
-        window._sendUserNotification(pp.uid, notifData);
-        skipUids[pp.uid] = true;
-      }
-    });
-  });
+  // Notifica o lado adversário
+  var opposingSideStr = proposerSide === 1 ? m.p2 : m.p1;
+  if (opposingSideStr && opposingSideStr !== 'TBD' && opposingSideStr !== 'BYE') {
+    var oppPart = _findPartBySide(opposingSideStr);
+    if (oppPart && oppPart.uid && !skipUids[oppPart.uid]) {
+      window._sendUserNotification(oppPart.uid, notifData);
+      skipUids[oppPart.uid] = true;
+    }
+  }
   // Also notify organizer if not proposer and not already notified
   // First try by uid (works even when org isn't a participant — e.g. phone-only)
   var orgUid = t.creatorUid;
