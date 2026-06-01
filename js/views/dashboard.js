@@ -1648,10 +1648,10 @@ function renderDashboard(container) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         var _e = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
-        var btns =
-          '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;">✏️ Editar</button>' +
-          '<button onclick="event.stopPropagation();window._contestResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#f87171;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">❌ Contestar</button>' +
-          '<button onclick="event.stopPropagation();window._approveResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Aprovar</button>';
+        var pendTag = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
+        var btns = pendTag +
+          '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>' +
+          '<button onclick="event.stopPropagation();window._approveResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
         html += _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
@@ -1672,8 +1672,9 @@ function renderDashboard(container) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         var _e = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
-        var btns =
-          '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;">✏️ Editar</button>';
+        var pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
+        var btns = pendTag2 +
+          '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
         html += _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
