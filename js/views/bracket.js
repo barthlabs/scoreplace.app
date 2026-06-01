@@ -1589,7 +1589,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
   // Card border color based on check-in readiness
   let cardBorder = isDecided ? 'rgba(16,185,129,0.2)' : hasTBD ? 'rgba(255,255,255,0.05)' : 'var(--border-color)';
   let readyBadge = '';
-  if (!isDecided && !isByeMatch && !hasTBD) {
+  if (hasPending) {
+    // Jogo com placar pendente: nem PRONTO nem PARCIAL — tag âmbar PENDENTE
+    readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">PENDENTE</span>`;
+  } else if (!isDecided && !isByeMatch && !hasTBD) {
     if (matchReady) {
       cardBorder = 'rgba(16,185,129,0.5)';
       readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:#10b981;background:rgba(16,185,129,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">${_t('bracket.ready')}</span>`;
@@ -1599,12 +1602,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     }
   }
 
-  // "Ao Vivo" button: shown on undecided matches to whoever is allowed to score.
-  // Organizer → always. Participant → if the 'players' rule is active and this
-  // is their match. Referee → if the 'referee' rule is active (any logged-in
-  // viewer, matching the permissive model used by canEnterResult elsewhere).
+  // "Ao Vivo": só para partidas sem placar (nem definitivo nem pendente)
   const _isOrgLocal = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
-  const _canScoreLive = !isDecided && !isByeMatch && !hasTBD && (
+  const _canScoreLive = !isDecided && !hasPending && !isByeMatch && !hasTBD && (
     _isOrgLocal ||
     (_isMyMatch && window._resultEntryIncludes(t, 'players')) ||
     (_cu && _cu.uid && window._resultEntryIncludes(t, 'referee'))
