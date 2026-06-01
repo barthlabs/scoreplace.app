@@ -206,15 +206,10 @@ window.enrollCurrentUser = function (tId) {
             return;
         }
         if (t.enrollmentMode === 'time' && parseInt(t.teamSize || 2) > 1) {
-            // v1.8.51: duplas — inscreve primeiro como individual,
-            // depois abre a tela de formação de dupla.
+            // Duplas: inscreve como individual — a dupla é formada pela
+            // seção "Sem Dupla" no torneio (arrastar e soltar).
             if (parseInt(t.teamSize || 2) === 2) {
-                window._doEnrollCurrentUser(tId, null, function() {
-                    // Callback pós-inscrição: abrir picker de parceiro
-                    if (typeof window._showPartnerPicker === 'function') {
-                        window._showPartnerPicker(tId);
-                    }
-                });
+                window._doEnrollCurrentUser(tId, null);
                 return;
             }
             // Times > 2 pessoas: mantém modal original
