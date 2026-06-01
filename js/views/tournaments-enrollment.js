@@ -654,13 +654,9 @@ window.addParticipantFunction = function (tId) {
         showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;
     }
-    var _addTitle = _closedOrDrawn ? _t('enroll.lateAddTitle') : _t('enroll.addParticipant');
-    var _addMsg = _closedOrDrawn ? _t('enroll.lateAddMsg') : _t('enroll.addParticipantMsg');
-    showInputDialog(
-        _addTitle,
-        _addMsg,
-        (pName) => {
-            if (!pName || !pName.trim()) return;
+    // Overlay com autocomplete de amigos/usuários
+    window._addParticipantWithAutocomplete(tId, _closedOrDrawn, function(pName, selectedUid, selectedPhoto) {
+        if (!pName || !pName.trim()) return;
             // Audit trail: quem adicionou manualmente e quando.
             // selfEnrolled=false distingue de inscrição própria (selfEnrolled=true).
             var _cu = window.AppStore && window.AppStore.currentUser;
@@ -671,6 +667,9 @@ window.addParticipantFunction = function (tId) {
                 addedByName: (_cu && (_cu.displayName || _cu.email)) || null,
                 addedAt:     new Date().toISOString()
             };
+            // Se foi selecionado via autocomplete, incluir uid e photo
+            if (selectedUid) participantObj.uid = selectedUid;
+            if (selectedPhoto) participantObj.photoURL = selectedPhoto;
             // If late enrollment, add to standby instead
             if (_closedOrDrawn) {
                 _enrollToStandby(t, tId, participantObj, function() {
@@ -710,9 +709,7 @@ window.addParticipantFunction = function (tId) {
                 const container = document.getElementById('view-container');
                 if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
             }
-        },
-        { placeholder: _t('enroll.participantName'), okText: _t('enroll.add') }
-    );
+    });
 };
 
 window.addTeamFunction = function (tId) {
@@ -957,3 +954,173 @@ window._buildLigaActiveToggleHtml = function(t) {
 };
 
 })();
+
+
+// Overlay "+ Participante" com autocomplete dinâmico (amigos + busca Firestore)
+window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
+  var t = window.AppStore && window.AppStore.tournaments &&
+          window.AppStore.tournaments.find(function(x){ return String(x.id)===String(tId); });
+  var _sh = window._safeHtml || function(s){return String(s||'');};
+  var title = isLate ? 'Adicionar à lista de espera' : '👤 Adicionar participante';
+
+  var old = document.getElementById('add-participant-overlay');
+  if (old) old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'add-participant-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:10200;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:4rem 1rem 2rem;';
+  overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
+
+  overlay.innerHTML =
+    '<div style="background:var(--bg-card,#1e293b);border-radius:16px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto;">' +
+      '<div style="padding:14px 16px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="font-weight:700;font-size:0.95rem;color:var(--text-bright,#f1f5f9);">'+title+'</span>' +
+        '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>' +
+      '</div>' +
+      '<div style="padding:16px;">' +
+        '<div style="position:relative;">' +
+          '<input type="text" id="ap-input" placeholder="Buscar por nome..." autocomplete="off" style="width:100%;padding:10px 10px 10px 34px;border-radius:8px;border:1px solid var(--border-color,rgba(255,255,255,0.15));background:var(--bg-dark,#0f172a);color:var(--text-main,#e2e8f0);font-size:0.9rem;box-sizing:border-box;" oninput="window._apSearch(this.value)" onfocus="window._apSearch(this.value)">' +
+          '<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;">🔍</span>' +
+        '</div>' +
+        '<div id="ap-dropdown" style="display:none;border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:8px;margin-top:4px;max-height:240px;overflow-y:auto;background:var(--bg-card,#1e293b);"></div>' +
+        '<div id="ap-selected" style="display:none;margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);align-items:center;gap:8px;">' +
+          '<span id="ap-sel-text" style="font-size:0.88rem;color:var(--text-bright);flex:1;font-weight:600;"></span>' +
+          '<button onclick="window._apClear()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.9rem;padding:0;">×</button>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:14px;">' +
+          '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+          '<button id="ap-confirm" onclick="window._apConfirm()" disabled style="flex:2;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;font-weight:700;font-size:0.88rem;cursor:not-allowed;opacity:0.4;transition:opacity 0.2s;">Adicionar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  setTimeout(function(){ var i=document.getElementById('ap-input'); if(i) i.focus(); }, 80);
+
+  window._apSelected = null;
+  window._apDebounce = null;
+
+  window._apSearch = function(query) {
+    var q = (query||'').trim().toLowerCase();
+    var dd = document.getElementById('ap-dropdown');
+    if (!dd) return;
+
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var friendUids = cu && Array.isArray(cu.friends) ? cu.friends.filter(function(f){ return typeof f==='string' && !f.includes('@'); }) : [];
+    var cache = window._friendProfilesCache || {};
+
+    // Participantes já inscritos (para evitar duplicatas)
+    var enrolled = Array.isArray(t && t.participants) ? t.participants : [];
+    var enrolledNames = enrolled.map(function(p){ return typeof p==='string' ? p.toLowerCase() : (p.displayName||p.name||'').toLowerCase(); });
+    var enrolledUids  = enrolled.filter(function(p){ return typeof p==='object' && p.uid; }).map(function(p){ return p.uid; });
+
+    var _isEnrolled = function(uid, name) {
+      if (uid && enrolledUids.indexOf(uid) !== -1) return true;
+      if (name && enrolledNames.indexOf(name.toLowerCase()) !== -1) return true;
+      return false;
+    };
+
+    // Amigos do cache
+    var friends = friendUids.map(function(uid){
+      var p = cache[uid];
+      return p ? { name: p.displayName||'', uid: uid, photo: p.photoURL||'' } : null;
+    }).filter(function(p){ return p && p.name && (!q || p.name.toLowerCase().includes(q)) && !_isEnrolled(p.uid, p.name); });
+
+    function _item(p, badge) {
+      var seed = encodeURIComponent(p.name);
+      var fb = 'https://api.dicebear.com/9.x/initials/svg?seed='+seed+'&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=32';
+      var src = (p.photo && p.photo.indexOf('dicebear.com')===-1) ? p.photo : fb;
+      var uidJs = (p.uid||'').replace(/'/g,"\\'");
+      var nameJs = (p.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      var photoJs = (p.photo||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return '<div onclick="event.stopPropagation();window._apSelect(\''+nameJs+'\',\''+uidJs+'\',\''+photoJs+'\')" '+
+        'style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;transition:background 0.1s;" '+
+        'onmouseover="this.style.background=\'rgba(99,102,241,0.1)\'" onmouseout="this.style.background=\'none\'">' +
+        '<img src="'+_sh(src)+'" onerror="this.src=\''+fb+'\'" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;">' +
+        '<div><div style="font-size:0.88rem;font-weight:600;color:var(--text-bright,#f1f5f9);">'+_sh(p.name)+'</div>' +
+        '<div style="font-size:0.68rem;color:var(--text-muted,#94a3b8);">'+badge+'</div></div></div>';
+    }
+
+    var html = '';
+    if (friends.length) {
+      html += '<div style="padding:5px 12px 3px;font-size:0.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;">Meus amigos</div>';
+      html += friends.map(function(p){ return _item(p, 'Amigo'); }).join('');
+    }
+
+    dd.innerHTML = html || (q ? '<div style="padding:10px 12px;font-size:0.82rem;color:var(--text-muted);">Buscando…</div>' : '');
+    dd.style.display = (html || q) ? 'block' : 'none';
+
+    // Busca Firestore com debounce
+    if (window._apDebounce) clearTimeout(window._apDebounce);
+    if (q.length >= 2) {
+      window._apDebounce = setTimeout(function() {
+        if (!window.FirestoreDB || !window.FirestoreDB.searchUsers) return;
+        window.FirestoreDB.searchUsers(q, { limit: 8 }).then(function(results) {
+          var cur = (document.getElementById('ap-input')||{}).value||'';
+          if (cur.trim().toLowerCase() !== q) return;
+          var shownNames = friends.map(function(p){ return p.name.toLowerCase(); });
+          var newR = results.filter(function(r){
+            return r.displayName && (!cu || r._docId !== cu.uid) &&
+                   !shownNames.includes((r.displayName||'').toLowerCase()) &&
+                   !_isEnrolled(r._docId, r.displayName);
+          }).map(function(r){ return { name: r.displayName, uid: r._docId||'', photo: r.photoURL||'' }; });
+
+          if (newR.length) {
+            var ddEl = document.getElementById('ap-dropdown');
+            if (ddEl) {
+              if (friends.length) ddEl.innerHTML += '<div style="height:1px;background:var(--border-color);margin:2px 0;"></div>';
+              ddEl.innerHTML += '<div style="padding:5px 12px 3px;font-size:0.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;">Usuários</div>';
+              ddEl.innerHTML += newR.map(function(p){ return _item(p, 'Usuário'); }).join('');
+              ddEl.style.display = 'block';
+            }
+          } else if (!friends.length && !newR.length && q) {
+            var ddEl2 = document.getElementById('ap-dropdown');
+            if (ddEl2) ddEl2.innerHTML = '<div onclick="window._apSelect(\''+q.replace(/'/g,"\\'")+ '\',\'\',\'\')" style="padding:10px 12px;cursor:pointer;font-size:0.85rem;color:var(--text-muted);" onmouseover="this.style.background=\'rgba(99,102,241,0.1)\'" onmouseout="this.style.background=\'none\'">Usar "<b>'+_sh(query.trim())+'</b>" como nome</div>';
+          }
+        }).catch(function(){});
+      }, 280);
+    } else if (!q && !friends.length) {
+      dd.style.display = 'none';
+    }
+    // Fechar ao clicar fora
+    setTimeout(function(){
+      document.addEventListener('click', function _c(){ if(dd) dd.style.display='none'; document.removeEventListener('click',_c); }, { once: true });
+    }, 50);
+  };
+
+  window._apSelect = function(name, uid, photo) {
+    window._apSelected = { name: name, uid: uid, photo: photo };
+    var inp = document.getElementById('ap-input');
+    var sel = document.getElementById('ap-selected');
+    var txt = document.getElementById('ap-sel-text');
+    var btn = document.getElementById('ap-confirm');
+    var dd  = document.getElementById('ap-dropdown');
+    if (inp)  { inp.value = name; inp.style.display = 'none'; }
+    if (txt)  txt.textContent = name;
+    if (sel)  sel.style.display = 'flex';
+    if (dd)   dd.style.display = 'none';
+    if (btn)  { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+  };
+
+  window._apClear = function() {
+    window._apSelected = null;
+    var inp = document.getElementById('ap-input');
+    var sel = document.getElementById('ap-selected');
+    var btn = document.getElementById('ap-confirm');
+    if (inp) { inp.value = ''; inp.style.display = 'block'; inp.focus(); }
+    if (sel) sel.style.display = 'none';
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; }
+  };
+
+  window._apConfirm = function() {
+    var sel = window._apSelected;
+    // Aceitar também texto livre do input
+    if (!sel) {
+      var v = (document.getElementById('ap-input')||{}).value || '';
+      if (!v.trim()) return;
+      sel = { name: v.trim(), uid: '', photo: '' };
+    }
+    document.getElementById('add-participant-overlay') && document.getElementById('add-participant-overlay').remove();
+    onConfirm(sel.name, sel.uid, sel.photo);
+  };
+};
