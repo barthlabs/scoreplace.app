@@ -1348,10 +1348,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
       : 'background:rgba(0,0,0,0.25);border-left:3px solid rgba(239,68,68,0.4);');
   };
 
-  const scoreDisplay = (score, isWinner) =>
-    score !== undefined && score !== null && score !== ''
-      ? `<span style="font-weight:800;font-size:1rem;min-width:24px;text-align:center;color:${isWinner ? '#4ade80' : 'var(--text-muted)'};">${score}</span>`
-      : '';
+  // v1.8.95: sempre mostrar placar — 0 quando ainda não lançado (não TBD, não decidido)
+  const scoreDisplay = (score, isWinner) => {
+    const val = (score !== undefined && score !== null && score !== '') ? score : (!hasTBD && !isDecided ? 0 : '');
+    if (val === '') return '';
+    return `<span style="font-weight:800;font-size:1rem;min-width:24px;text-align:center;color:${isWinner ? '#4ade80' : (val === 0 && !isDecided ? 'rgba(255,255,255,0.3)' : 'var(--text-muted)')};">${val}</span>`;
+  };
 
   // Format set scores for display
   const formatSetScores = (match, playerNum) => {
