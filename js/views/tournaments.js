@@ -996,9 +996,12 @@ function renderTournaments(container, tournamentId = null) {
         // --- Variáveis de botões do organizador (escopo global do card para evitar ReferenceError) ---
         const allowsIndividual = !t.enrollmentMode || t.enrollmentMode === 'individual' || t.enrollmentMode === 'misto';
         const allowsTeams = t.enrollmentMode === 'time' || t.enrollmentMode === 'misto';
+        // Para duplas (teamSize===2 com enrollmentMode=time): mostrar "+ Participante"
+        // pois inscrições são individuais e duplas formadas por arrastar e soltar.
+        const isDoublesMode = allowsTeams && parseInt(t.teamSize || 2) === 2;
         const addParticipantBtns = (!hasDraw && isOrg) ? `
-             ${allowsIndividual ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
-             ${allowsTeams ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
+             ${(allowsIndividual || isDoublesMode) ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
+             ${(allowsTeams && !isDoublesMode) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
         ` : '';
 
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
