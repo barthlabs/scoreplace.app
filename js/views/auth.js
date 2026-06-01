@@ -4758,9 +4758,10 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
 
     function _updateMatch(m) {
       if (!m) return;
-      if (m.p1 === oldName) { m.p1 = newName; changed = true; }
-      if (m.p2 === oldName) { m.p2 = newName; changed = true; }
-      if (m.winner === oldName) { m.winner = newName; changed = true; }
+      // v1.8.93: nunca substituir nome de dupla (com " / ") por nome individual
+      if (m.p1 === oldName && !m.p1.includes(' / ')) { m.p1 = newName; changed = true; }
+      if (m.p2 === oldName && !m.p2.includes(' / ')) { m.p2 = newName; changed = true; }
+      if (m.winner === oldName && !(m.winner||'').includes(' / ')) { m.winner = newName; changed = true; }
       if (Array.isArray(m.team1)) { var i1 = m.team1.indexOf(oldName); if (i1 !== -1) { m.team1[i1] = newName; changed = true; } }
       if (Array.isArray(m.team2)) { var i2 = m.team2.indexOf(oldName); if (i2 !== -1) { m.team2[i2] = newName; changed = true; } }
       if (m.p1 && m.p1.indexOf(oldName) !== -1 && m.p1.indexOf(' / ') !== -1) {
