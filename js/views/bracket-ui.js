@@ -1686,15 +1686,7 @@ window._saveResultInline = function (tId, matchId) {
   // vai pra m.pendingResult em vez de m.winner direto. Time adversário
   // recebe notificação pra aprovar.
   var _curUser = window.AppStore && window.AppStore.currentUser;
-  // Flag persistido no sessionStorage por _editPendingResult: força o fluxo
-  // pendente mesmo quando o usuário é organizador (age como jogador adversário).
-  var _playerEditForced = false;
-  try {
-    var _peKey = 'sp_playerEdit_' + matchId;
-    _playerEditForced = sessionStorage.getItem(_peKey) === '1';
-    if (_playerEditForced) sessionStorage.removeItem(_peKey);
-  } catch(e) {}
-  if (_curUser && (_playerEditForced || _resultNeedsApproval(t, m, _curUser))) {
+  if (_curUser && _resultNeedsApproval(t, m, _curUser)) {
     var _proposedWinner;
     var _proposedDraw = false;
     if (s1 === s2 && allowDraw) {
@@ -2084,15 +2076,10 @@ window._contestResult = function(tId, matchId) {
   );
 };
 
-// _editPendingResult: any party with launch permission (org, arbiter, proposer,
-// or opposing team) can open this overlay to edit the pending score.
-// • Authority (org / co-host / confirmed arbiter): inputs pre-filled, button
-//   says "✅ Confirmar" — on confirm the result is set directly without approval.
-// • Player (proposer or opposing): button says "✏️ Propor placar" — on confirm
-//   a new pendingResult is stored and the other side is notified to approve.
-// Editar resultado pendente: remove pendingResult da memória e abre os
-// inputs inline no card — idêntico ao fluxo normal do bracket.
-// Não salva nada no Firestore até o usuário clicar Confirmar.
+// Editar resultado pendente: modifica o card IN-PLACE sem re-renderizar.
+// Substitui os spans de placar por inputs pré-preenchidos e troca os botões
+// por Cancelar + Propor. Ao propor, cria novo pendingResult e notifica o
+// time original (que propôs primeiro) para aprovar ou contestar.
 window._editPendingResult = function(tId, matchId) {
   var t = window.AppStore && window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
   if (!t) return;
@@ -2106,38 +2093,84 @@ window._editPendingResult = function(tId, matchId) {
   if (!cu) return;
 
   var pr = m.pendingResult;
-  var isAuthority = _isUserAuthority(t, cu);
   var userSide = _userTeamInMatch(t, m, cu);
   var proposerSide = pr && (pr.proposedBy || pr.proposedByEmail)
     ? _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail }) : 0;
   var isProposerSelf = !!(pr && ((cu.uid && pr.proposedBy === cu.uid) || (cu.email && pr.proposedByEmail === cu.email)));
-  var canEdit = isAuthority || isProposerSelf || (userSide > 0 && userSide !== proposerSide);
+  var canEdit = _isUserAuthority(t, cu) || isProposerSelf || (userSide > 0 && userSide !== proposerSide);
   if (!canEdit) { showNotification('Sem permissão', 'Você não pode editar este resultado.', 'warning'); return; }
 
-  // Guarda placar atual para pré-preencher os inputs
-  var s1 = pr && pr.scoreP1 != null ? pr.scoreP1 : '';
-  var s2 = pr && pr.scoreP2 != null ? pr.scoreP2 : '';
+  // Valores do pendingResult para pré-preencher
+  var s1 = pr && pr.scoreP1 != null ? pr.scoreP1 : 0;
+  var s2 = pr && pr.scoreP2 != null ? pr.scoreP2 : 0;
 
-  // Persiste flag "edição de jogador" no sessionStorage.
-  // m._playerEditMode seria perdido se onSnapshot substituir os objetos do AppStore
-  // antes do usuário clicar Confirmar. sessionStorage sobrevive ao re-render.
-  try { sessionStorage.setItem('sp_playerEdit_' + matchId, '1'); } catch(e) {}
+  // Modifica o card IN-PLACE: substitui spans de placar por inputs
+  var inputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;' +
+    'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);' +
+    'color:var(--text-bright);border-radius:6px;padding:4px 6px;';
+  var sp1 = document.getElementById('score-p1-' + matchId);
+  var sp2 = document.getElementById('score-p2-' + matchId);
+  if (!sp1 || !sp2) {
+    // Se o card não está visível (ex: no dashboard), navega para o bracket
+    try { sessionStorage.setItem('sp_pendingEdit', JSON.stringify({tId: tId, matchId: matchId})); } catch(e) {}
+    window.location.hash = '#bracket/' + tId;
+    return;
+  }
+  sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
+  sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
 
-  // Remove pendingResult da memória (não salva — só abre os inputs)
-  delete m.pendingResult;
-  _propagateMatchUpdate(t, m);
+  // Troca botões do header por Cancelar + Propor placar
+  var cardEl = document.getElementById('card-' + matchId);
+  var headerBtnArea = cardEl ? cardEl.querySelector('div:first-child > div:last-child') : null;
+  if (headerBtnArea) {
+    headerBtnArea.innerHTML =
+      '<button id="cancel-pending-edit-' + matchId + '" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕ Cancelar</button>' +
+      '<button id="confirm-pending-edit-' + matchId + '" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.5);color:#a78bfa;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-left:4px;">✓ Propor placar</button>';
+  }
 
-  // Re-renderiza o card inline com inputs pré-preenchidos
-  _rerenderBracket(tId, matchId);
+  var cancelBtn = document.getElementById('cancel-pending-edit-' + matchId);
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _rerenderBracket(tId, matchId);
+    });
+  }
 
-  setTimeout(function() {
-    var s1El = document.getElementById('s1-' + matchId);
-    var s2El = document.getElementById('s2-' + matchId);
-    if (s1El && s1 !== '') { s1El.value = s1; }
-    if (s2El && s2 !== '') { s2El.value = s2; }
-    if (typeof window._highlightWinner === 'function') window._highlightWinner(matchId);
-    if (s1El) s1El.focus();
-  }, 80);
+  var confirmBtn = document.getElementById('confirm-pending-edit-' + matchId);
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var s1v = parseInt((document.getElementById('s1-' + matchId) || {}).value, 10);
+      var s2v = parseInt((document.getElementById('s2-' + matchId) || {}).value, 10);
+      if (isNaN(s1v) || isNaN(s2v)) { showNotification('Placar inválido', 'Preencha os dois campos.', 'warning'); return; }
+      var isGroupMatch = m.group !== undefined;
+      var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function(r) {
+        return (r.matches || []).some(function(rm) { return rm.id === matchId; });
+      }));
+      var allowDraw = isGroupMatch || isRoundMatch;
+      if (s1v === s2v && !allowDraw) { showNotification('Empate não permitido', 'Eliminatórias não permitem empate.', 'warning'); return; }
+      var winner = s1v === s2v ? 'draw' : (s1v > s2v ? m.p1 : m.p2);
+      m.pendingResult = {
+        kind: 'inline',
+        proposedBy: cu.uid || null,
+        proposedByEmail: cu.email || null,
+        proposedByName: cu.displayName || cu.email || 'Jogador',
+        proposedAt: Date.now(),
+        winner: winner,
+        draw: s1v === s2v,
+        scoreP1: s1v,
+        scoreP2: s2v
+      };
+      _propagateMatchUpdate(t, m);
+      window.AppStore.logAction(tId, 'Contra-proposta: ' + m.p1 + ' ' + s1v + ' × ' + s2v + ' ' + m.p2 + ' por ' + (cu.displayName || cu.email));
+      window.AppStore.syncImmediate(tId);
+      try { _notifyPendingApproval(t, m, m.pendingResult.proposedByName); } catch(e2) {}
+      showNotification('⏳ Contra-proposta enviada', 'O time adversário foi notificado para aprovar ou contestar.', 'success');
+      _rerenderBracket(tId, matchId);
+    });
+  }
+
+  setTimeout(function() { var inp = document.getElementById('s1-' + matchId); if (inp) inp.focus(); }, 50);
 };
 
 // Internal: confirm the edit.
