@@ -174,7 +174,13 @@ window.FirestoreDB = {
       delete cleanData.memberEmails;
       delete cleanData.adminEmails;
     } else {
-      cleanData.memberEmails = this._computeMemberEmails(cleanData);
+      // v1.8.96: nunca encolher memberEmails — merge com o que já existia
+      // em memória para não perder emails de participantes que têm uid mas
+      // não têm email no objeto participante (ex: duplas formadas por drag).
+      var _newEmails  = this._computeMemberEmails(cleanData);
+      var _prevEmails = Array.isArray(tourData.memberEmails) ? tourData.memberEmails : [];
+      var _mergedEmails = Array.from(new Set(_prevEmails.concat(_newEmails)));
+      cleanData.memberEmails = _mergedEmails;
       cleanData.adminEmails  = this._computeAdminEmails(cleanData);
       cleanData.memberUids   = this._computeMemberUids(cleanData);
     }
