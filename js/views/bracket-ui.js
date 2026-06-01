@@ -2083,10 +2083,15 @@ window._contestResult = function(tId, matchId) {
 // • Player (proposer or opposing): button says "✏️ Propor placar" — on confirm
 //   a new pendingResult is stored and the other side is notified to approve.
 window._editPendingResult = function(tId, matchId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
-  if (!t) return;
+  var t = window.AppStore && window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  if (!t) { showNotification('Erro', 'Torneio não encontrado (tId=' + tId + ')', 'warning'); return; }
   var m = _findMatch(t, matchId);
-  if (!m) return;
+  if (!m) {
+    // Fallback: busca pelo índice 0 quando matchId é vazio/undefined (match único)
+    var allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+    if (!matchId && allM.length === 1) m = allM[0];
+    if (!m) { showNotification('Erro', 'Partida não encontrada (id=' + matchId + ')', 'warning'); return; }
+  }
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
 
@@ -2105,7 +2110,7 @@ window._editPendingResult = function(tId, matchId) {
   var canEdit = isAuthority || isProposerSelf || isOpposingMember;
 
   if (!canEdit) {
-    showNotification('Sem permissão', 'Você não pode editar este resultado.', 'warning');
+    showNotification('Sem permissão', 'userSide=' + userSide + ' proposerSide=' + proposerSide + ' auth=' + isAuthority, 'warning');
     return;
   }
 
