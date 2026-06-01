@@ -4336,6 +4336,9 @@ window._autoFixStaleNames = async function(forceTournamentId) {
       if (typeof p === 'object' && p !== null) {
         var pName = p.displayName || p.name || '';
         if (!pName) return;
+        // Nomes de time de dupla ("A / B") nunca são nomes desatualizados —
+        // são o nome correto da equipe. Ignorar para não sobrescrever.
+        if (pName.indexOf(' / ') !== -1) return;
         var pUid = p.uid && p.uid.length > 0 ? p.uid : null;
         if (pUid && !uidMap[pUid]) {
           uidMap[pUid] = { storedName: pName, email: p.email || '' };
