@@ -378,12 +378,15 @@ function _userTeamInMatch(t, m, user) {
     for (var i = 0; i < members.length; i++) {
       var nm = members[i];
       if (!nm) continue;
-      // Look up participant by name
+      // Look up participant by name, suportando times de dupla ("Kelly / Rodrigo Barth")
       var pp = null;
       for (var j = 0; j < parts.length; j++) {
         var p = parts[j];
         var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
         if (pName === nm) { pp = p; break; }
+        if (pName.indexOf('/') !== -1) {
+          if (pName.split('/').some(function(s) { return s.trim() === nm; })) { pp = p; break; }
+        }
       }
       if (pp && typeof pp === 'object') {
         if (user.uid && pp.uid && pp.uid === user.uid) return true;
@@ -447,14 +450,22 @@ function _resultNeedsApproval(t, m, user) {
   var opposingMembers = _matchSideMembers(m, opposingSide);
   if (opposingMembers.length === 0) return false;
   var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  for (var i = 0; i < opposingMembers.length; i++) {
-    var nm = opposingMembers[i];
-    var pp = null;
+  // Helper: busca participante por nome, considerando times de dupla armazenados
+  // como "Kelly / Rodrigo Barth" — divide por "/" e testa cada parte.
+  function _findPartByName(nm) {
     for (var j = 0; j < parts.length; j++) {
       var p = parts[j];
       var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-      if (pName === nm) { pp = p; break; }
+      if (pName === nm) return p;
+      if (pName.indexOf('/') !== -1) {
+        var pParts = pName.split('/').map(function(s) { return s.trim(); });
+        if (pParts.indexOf(nm) !== -1) return p;
+      }
     }
+    return null;
+  }
+  for (var i = 0; i < opposingMembers.length; i++) {
+    var pp = _findPartByName(opposingMembers[i]);
     if (pp && typeof pp === 'object' && pp.uid) return true;
   }
   return false;
@@ -484,6 +495,17 @@ function _notifyPendingApproval(t, m, proposerName) {
   };
   // Find proposer's side, then notify opposing team
   var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  // Helper: busca participante por nome, suportando times de dupla ("Kelly / Rodrigo Barth")
+  function _findPartByNameNotify(nm) {
+    return parts.find(function(p) {
+      var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+      if (n === nm) return true;
+      if (n.indexOf('/') !== -1) {
+        return n.split('/').some(function(s) { return s.trim() === nm; });
+      }
+      return false;
+    }) || null;
+  }
   // Build set of UIDs that are on the same team as proposer (don't notify them)
   var proposerSide = 0;
   if (pr.proposedBy || pr.proposedByEmail) {
@@ -492,27 +514,18 @@ function _notifyPendingApproval(t, m, proposerName) {
   }
   var skipUids = {};
   if (proposerSide > 0) {
-    var sameTeamMembers = _matchSideMembers(m, proposerSide);
-    sameTeamMembers.forEach(function(nm) {
-      var pp = parts.find(function(p) {
-        var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        return n === nm;
-      });
+    _matchSideMembers(m, proposerSide).forEach(function(nm) {
+      var pp = _findPartByNameNotify(nm);
       if (pp && typeof pp === 'object' && pp.uid) skipUids[pp.uid] = true;
     });
   } else {
-    // Couldn't determine proposer side — at least skip the proposer's own uid
     if (pr.proposedBy) skipUids[pr.proposedBy] = true;
   }
   // Notify everyone on opposing side
   [1, 2].forEach(function(side) {
     if (side === proposerSide) return;
-    var members = _matchSideMembers(m, side);
-    members.forEach(function(nm) {
-      var pp = parts.find(function(p) {
-        var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        return n === nm;
-      });
+    _matchSideMembers(m, side).forEach(function(nm) {
+      var pp = _findPartByNameNotify(nm);
       if (pp && typeof pp === 'object' && pp.uid && !skipUids[pp.uid]) {
         window._sendUserNotification(pp.uid, notifData);
         skipUids[pp.uid] = true;
