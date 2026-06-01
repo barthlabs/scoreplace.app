@@ -1550,6 +1550,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
           style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;"
           onmouseover="this.style.background='rgba(16,185,129,0.32)'" onmouseout="this.style.background='rgba(16,185,129,0.18)'"
           title="Aprovar resultado">✅ Aprovar</button>`;
+      pendingActionBtns += `<button onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')"
+          style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;margin-left:4px;"
+          onmouseover="this.style.background='rgba(239,68,68,0.24)'" onmouseout="this.style.background='rgba(239,68,68,0.12)'"
+          title="Contestar — notifica o organizador">❌ Contestar</button>`;
     }
     if (_canEdit) {
       pendingActionBtns += `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
@@ -1619,14 +1623,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     var _agoMin = Math.floor(_agoMs / 60000);
     var _agoLabel = _agoMin < 1 ? 'agora' : (_agoMin < 60 ? 'há ' + _agoMin + ' min' : 'há ' + Math.floor(_agoMin / 60) + 'h');
     var _proposerName = window._safeHtml(_pr.proposedByName || 'Jogador');
-    pendingBanner = `<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:0.72rem;color:#fbbf24;display:flex;align-items:center;gap:6px;">
-      <span style="font-size:0.85rem;">⏳</span>
-      <span><b>Aguardando aprovação</b> — proposto por <b>${_proposerName}</b> · ${_agoLabel}</span>
-    </div>`;
+    if (_pr.disputed) {
+      var _disputerName = window._safeHtml(_pr.disputedByName || 'Jogador');
+      pendingBanner = `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:0.72rem;color:#f87171;display:flex;align-items:center;gap:6px;">
+        <span style="font-size:0.85rem;">🚨</span>
+        <span><b>Em disputa</b> — contestado por <b>${_disputerName}</b>. Aguardando resolução do organizador.</span>
+      </div>`;
+    } else {
+      pendingBanner = `<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:0.72rem;color:#fbbf24;display:flex;align-items:center;gap:6px;">
+        <span style="font-size:0.85rem;">⏳</span>
+        <span><b>Aguardando aprovação</b> — proposto por <b>${_proposerName}</b> · ${_agoLabel}</span>
+      </div>`;
+    }
   }
 
   return `
-    <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" style="background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};border-radius:12px;padding:14px;box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" style="background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};border-radius:12px;padding:14px;box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
         <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
         <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${liveBtn}${headerConfirmBtn}${pendingActionBtns}${headerEditBtn}</div>

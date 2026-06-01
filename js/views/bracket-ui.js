@@ -2022,6 +2022,74 @@ window._approveResult = function(tId, matchId) {
 };
 
 
+// _contestResult: time adversário discorda do placar proposto e escala ao
+// organizador. Marca m.pendingResult.disputed=true e notifica o organizador
+// para apurar e lançar o resultado definitivo (ou desclassificar uma dupla).
+window._contestResult = function(tId, matchId) {
+  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  if (!t) return;
+  var m = _findMatch(t, matchId);
+  if (!m || !m.pendingResult) {
+    showNotification('Sem proposta ativa', 'Esse jogo não tem resultado pendente.', 'warning');
+    return;
+  }
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
+
+  var pr = m.pendingResult;
+  var proposerSide = 0;
+  if (pr.proposedBy || pr.proposedByEmail) {
+    proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
+  }
+  var userSide = _userTeamInMatch(t, m, cu);
+  var isOpposing = userSide > 0 && userSide !== proposerSide;
+  if (!isOpposing) {
+    showNotification('Sem permissão', 'Só o time adversário pode contestar.', 'warning');
+    return;
+  }
+
+  showConfirmDialog(
+    '❌ Contestar resultado',
+    'O organizador será notificado para apurar e lançar o resultado definitivo. Confirma a contestação?',
+    function() {
+      m.pendingResult.disputed = true;
+      m.pendingResult.disputedBy = cu.uid || null;
+      m.pendingResult.disputedByName = cu.displayName || cu.email || 'Jogador';
+      m.pendingResult.disputedAt = Date.now();
+
+      _propagateMatchUpdate(t, m);
+      window.AppStore.logAction(tId, 'Resultado contestado por ' + (cu.displayName || cu.email) + ': ' + m.p1 + ' vs ' + m.p2);
+      window.AppStore.syncImmediate(tId);
+
+      if (typeof window._sendUserNotification === 'function') {
+        var scoreText = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
+        var notifOrg = {
+          type: 'match-disputed',
+          title: '🚨 Resultado em disputa',
+          message: m.p1 + ' vs ' + m.p2 + ' — placar ' + scoreText + ' contestado por ' + m.pendingResult.disputedByName + '. Intervenha para resolver.',
+          tournamentId: t.id,
+          tournamentName: t.name,
+          matchId: m.id,
+          level: 'fundamental',
+          timestamp: Date.now()
+        };
+        var orgUid = t.creatorUid;
+        if (orgUid) {
+          window._sendUserNotification(orgUid, notifOrg);
+        } else {
+          var orgEmail = t.organizerEmail || t.creatorEmail;
+          var parts = Array.isArray(t.participants) ? t.participants : [];
+          var orgPart = parts.find(function(p) { return typeof p === 'object' && p.email === orgEmail; });
+          if (orgPart && orgPart.uid) window._sendUserNotification(orgPart.uid, notifOrg);
+        }
+      }
+
+      showNotification('❌ Contestação enviada', 'O organizador foi notificado para resolver o resultado.', 'success');
+      _rerenderBracket(tId, matchId);
+    }
+  );
+};
+
 // _editPendingResult: any party with launch permission (org, arbiter, proposer,
 // or opposing team) can open this overlay to edit the pending score.
 // • Authority (org / co-host / confirmed arbiter): inputs pre-filled, button

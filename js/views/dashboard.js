@@ -1645,8 +1645,9 @@ function renderDashboard(container) {
         var extra = '<div style="font-size:0.68rem;color:#fbbf24;margin-top:2px;">Placar proposto: <b>' + _sf(scoreStr) + '</b> por ' + _sf(proposerName) + '</div>';
         html += _matchCard(item, 'background:rgba(251,191,36,0.08)', 'rgba(251,191,36,0.25)', extra);
         html += '<div style="display:flex;gap:4px;flex-shrink:0;margin-top:2px;">';
-        html += '<button onclick="event.stopPropagation();window._approveResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;" title="Aprovar resultado">✅</button>';
-        html += '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;" title="Editar placar">✏️</button>';
+        html += '<button onclick="event.stopPropagation();window._approveResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;" title="Aprovar resultado">✅ Aprovar</button>';
+        html += '<button onclick="event.stopPropagation();window._contestResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#f87171;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;" title="Contestar — notifica o organizador">❌ Contestar</button>';
+        html += '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;" title="Editar placar">✏️ Editar</button>';
         html += '</div></div>';
       });
       html += '</div>';
