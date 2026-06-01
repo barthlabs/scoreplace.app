@@ -1695,30 +1695,121 @@ function renderDashboard(container) {
       html += '</div>';
     }
 
-    // ── Últimos resultados confirmados ──
+    // ── Últimos resultados confirmados — estilo chave (não card flat) ──
     if (recentConfirmed.length > 0) {
       html += '<div>';
-      html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.04em;">✅ Últimos resultados (' + recentConfirmed.length + ')</p>';
+      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.04em;">✅ Últimos resultados (' + recentConfirmed.length + ')</p>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
       recentConfirmed.forEach(function(item) {
         var m2 = item.m;
-        // determina vitória/derrota: winner é o nome do time vencedor
+        var _esc2 = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
+        var tRef2 = participacoes.find(function(tt) { return tt.id === item.tId; });
+        var faseStr2 = tRef2 ? _elabFaseLabel(tRef2, m2) : (item.subLine || '');
+        var faseLower2 = faseStr2.toLowerCase();
+        var faseColor2 = faseLower2.indexOf('final') !== -1 ? '#fbbf24'
+          : faseLower2.indexOf('semi') !== -1 ? '#06b6d4'
+          : faseLower2.indexOf('quarta') !== -1 ? '#4ade80' : '#818cf8';
+
+        // vitória/derrota/empate
         var myTeamStr = item.inP1 ? (m2.p1 || '') : (m2.p2 || '');
-        var isWinner = m2.winner && (
+        var isWinner = !!m2.winner && !m2.draw && (
           m2.winner === myTeamStr ||
-          String(myTeamStr).split(/\s*\/\s*/).some(function(n) { return _isMe(n); }) && String(m2.winner).split(/\s*\/\s*/).some(function(n) { return _isMe(n); })
+          String(myTeamStr).split(/\s*\/\s*/).some(function(n) { return _isMe(n) && m2.winner.indexOf(n) !== -1; })
         );
         var resultColor = m2.draw ? '#94a3b8' : (isWinner ? '#4ade80' : '#f87171');
-        var resultLabel = m2.draw ? 'Empate' : (isWinner ? 'Vitória' : 'Derrota');
-        var scoreStr = '';
-        if (Array.isArray(m2.sets) && m2.sets.length > 0) {
-          scoreStr = m2.sets.map(function(s) { return (item.inP1 ? s.gamesP1 + '-' + s.gamesP2 : s.gamesP2 + '-' + s.gamesP1); }).join(' ');
-        } else if (m2.scoreP1 != null && m2.scoreP2 != null) {
-          scoreStr = item.inP1 ? m2.scoreP1 + ' vs. ' + m2.scoreP2 : m2.scoreP2 + ' vs. ' + m2.scoreP1;
+        var resultLabel = m2.draw ? 'Empate' : (isWinner ? '🏆 Vitória' : 'Derrota');
+
+        // placar — mostra pelo lado do usuário (p1 ou p2)
+        function _scoreDisplay(p1, p2) {
+          return '<span style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">' + _sf(String(p1)) + '</span>' +
+            '<span style="font-size:0.75rem;color:#475569;margin:0 4px;">×</span>' +
+            '<span style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">' + _sf(String(p2)) + '</span>';
         }
-        var extra = scoreStr ? '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">Placar: <b style="color:#e2e8f0;">' + _sf(scoreStr) + '</b></div>' : null;
-        html += _matchCard(item, 'background:rgba(74,222,128,0.04)', 'rgba(74,222,128,0.1)', extra);
-        html += '<span style="font-size:0.7rem;font-weight:700;color:' + resultColor + ';flex-shrink:0;margin-top:3px;">' + resultLabel + '</span></div>';
+        var scoresHtml = '';
+        if (Array.isArray(m2.sets) && m2.sets.length > 0) {
+          scoresHtml = m2.sets.map(function(s) {
+            return _scoreDisplay(item.inP1 ? s.gamesP1 : s.gamesP2, item.inP1 ? s.gamesP2 : s.gamesP1);
+          }).join('<span style="color:#334155;margin:0 6px;">·</span>');
+        } else if (m2.scoreP1 != null && m2.scoreP2 != null) {
+          scoresHtml = _scoreDisplay(item.inP1 ? m2.scoreP1 : m2.scoreP2, item.inP1 ? m2.scoreP2 : m2.scoreP1);
+        }
+
+        // mesmo estilo de coluna que _miniBracketCard
+        var matchLabel2 = m2.label || 'JOGO 1';
+        var rowStyle2 = 'display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:4px;';
+        function _teamRowResult(teamStr, isWinnerSide) {
+          var bg = isWinnerSide ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:rgba(255,255,255,0.02);';
+          var parts2 = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
+          var playersHtml = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
+          parts2.forEach(function(n) {
+            var isMe2 = _isMe(n);
+            var photo2 = (isMe2 && cu && cu.photoURL) ? cu.photoURL
+              : (window._playerPhotoCache && window._playerPhotoCache[n]) ? window._playerPhotoCache[n] : null;
+            var ini2 = _sf((n || '?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase());
+            var av2 = photo2
+              ? '<img src="' + photo2 + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
+              : '<div style="width:26px;height:26px;border-radius:50%;background:' + (isMe2 ? 'rgba(99,102,241,0.35)' : 'rgba(148,163,184,0.15)') + ';display:flex;align-items:center;justify-content:center;font-size:0.58rem;font-weight:800;color:' + (isMe2 ? '#a5b4fc' : '#94a3b8') + ';flex-shrink:0;">' + ini2 + '</div>';
+            playersHtml += '<div style="display:flex;align-items:center;gap:6px;">' + av2 +
+              '<span style="font-size:0.78rem;font-weight:' + (isMe2 ? '700' : '400') + ';color:' + (isMe2 ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(n) + (isMe2 ? ' <span style="font-size:0.62em;color:#818cf8;">(você)</span>' : '') + '</span>' +
+              '</div>';
+          });
+          playersHtml += '</div>';
+          return '<div style="' + rowStyle2 + bg + '">' + playersHtml + '</div>';
+        }
+
+        var p1IsWinner = !m2.draw && m2.winner === m2.p1;
+        var p2IsWinner = !m2.draw && m2.winner === m2.p2;
+
+        html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.6rem;">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<h4 style="color:' + faseColor2 + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + faseColor2 + ';padding-left:8px;flex:1;">' +
+              (faseLower2.indexOf('final') !== -1 ? '🏆 ' : '') + _sf(faseStr2) +
+              '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(item.tName) + '</span>' +
+            '</h4>' +
+          '</div>' +
+          '<div onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
+            // Header: label + badge resultado
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +
+              '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _sf(matchLabel2) + '</span>' +
+              '<span style="font-size:0.75rem;font-weight:800;color:' + resultColor + ';">' + resultLabel + '</span>' +
+            '</div>' +
+            // P1 row com placar
+            '<div style="' + rowStyle2 + (p1IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:rgba(255,255,255,0.02);') + 'justify-content:space-between;">' +
+              (function(){
+                var parts3 = String(m2.p1||'').split(/\s*\/\s*/).filter(Boolean);
+                var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
+                parts3.forEach(function(n){
+                  var isMe3=_isMe(n); var ph2=(isMe3&&cu&&cu.photoURL)?cu.photoURL:(window._playerPhotoCache&&window._playerPhotoCache[n])||null;
+                  var ini3=_sf((n||'?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase());
+                  var av3=ph2?'<img src="'+ph2+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;">':'<div style="width:26px;height:26px;border-radius:50%;background:'+(isMe3?'rgba(99,102,241,0.35)':'rgba(148,163,184,0.15)')+';display:flex;align-items:center;justify-content:center;font-size:0.58rem;font-weight:800;color:'+(isMe3?'#a5b4fc':'#94a3b8')+';flex-shrink:0;">'+ini3+'</div>';
+                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:'+(isMe3?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
+                });
+                ph+='</div>';
+                var sc3 = m2.scoreP1 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p1IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+m2.scoreP1+'</div>' : '';
+                return ph+sc3;
+              })() +
+            '</div>' +
+            '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
+            // P2 row com placar
+            '<div style="' + rowStyle2 + (p2IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:rgba(255,255,255,0.02);') + 'justify-content:space-between;">' +
+              (function(){
+                var parts4 = String(m2.p2||'').split(/\s*\/\s*/).filter(Boolean);
+                var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
+                parts4.forEach(function(n){
+                  var isMe4=_isMe(n); var ph2=(isMe4&&cu&&cu.photoURL)?cu.photoURL:(window._playerPhotoCache&&window._playerPhotoCache[n])||null;
+                  var ini4=_sf((n||'?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase());
+                  var av4=ph2?'<img src="'+ph2+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;">':'<div style="width:26px;height:26px;border-radius:50%;background:'+(isMe4?'rgba(99,102,241,0.35)':'rgba(148,163,184,0.15)')+';display:flex;align-items:center;justify-content:center;font-size:0.58rem;font-weight:800;color:'+(isMe4?'#a5b4fc':'#94a3b8')+';flex-shrink:0;">'+ini4+'</div>';
+                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:'+(isMe4?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
+                });
+                ph+='</div>';
+                var sc4 = m2.scoreP2 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p2IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+m2.scoreP2+'</div>' : '';
+                return ph+sc4;
+              })() +
+            '</div>' +
+          '</div>' +
+        '</div>';
       });
+      html += '</div>';
       html += '</div>';
     }
 
