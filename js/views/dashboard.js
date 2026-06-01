@@ -1327,8 +1327,8 @@ function renderDashboard(container) {
 
   // ── Meus Resultados ─────────────────────────────────────────────────────────
   // v1.8.2-beta: seção abaixo da hero box com (a) partidas pendentes de
-  // resultado ou aprovação, (b) últimos resultados confirmados. Exclusivo pra
-  // quem tem torneios ativos como participante.
+  // resultado ou aprovação, (b) próximas partidas (unificado com "Suas Próximas
+  // Partidas" em v1.9.0-beta), (c) últimos resultados confirmados.
   function _buildMyResultsHtml() {
     var cu = window.AppStore.currentUser;
     if (!cu) return '';
@@ -1336,19 +1336,39 @@ function renderDashboard(container) {
     var email = cu.email ? cu.email.toLowerCase() : '';
     var dName = (cu.displayName || '').toLowerCase();
     var uid = cu.uid || '';
+    var myFullName = cu.displayName || '';
 
     function _isMe(label) {
       if (!label) return false;
       var l = label.toLowerCase();
+      if (uid && l === uid) return true;
       if (email && l === email) return true;
       if (dName && (l === dName || l.indexOf(dName) !== -1 || dName.indexOf(l) !== -1)) return true;
-      if (uid && l === uid) return true;
       return false;
+    }
+
+    // Formata time com "(você)" no nome do usuário atual. Nomes completos, sem abreviação.
+    // Ex: "Nelson Barth (você) / Zilda Quintas vs. Kelly Barth / Rodrigo Barth"
+    function _formatMatchLine(p1raw, p2raw, inP1) {
+      var _sf = window._safeHtml || function(s) { return String(s || ''); };
+      function markMe(name) {
+        return _isMe(name)
+          ? '<b style="color:#e2e8f0;">' + _sf(name) + '</b> <span style="color:#a5b4fc;font-size:0.72em;">(você)</span>'
+          : '<span style="color:#94a3b8;">' + _sf(name) + '</span>';
+      }
+      function formatTeam(raw) {
+        var names = String(raw || '').split(/\s*\/\s*/).filter(Boolean);
+        return names.map(markMe).join(' <span style="opacity:0.4;">/</span> ');
+      }
+      var side1 = formatTeam(p1raw);
+      var side2 = formatTeam(p2raw);
+      return side1 + ' <span style="color:#64748b;margin:0 6px;font-weight:500;">vs.</span> ' + side2;
     }
 
     var pendingForMe = [];   // m.pendingResult e sou time adversário (preciso agir)
     var pendingByMe = [];    // m.pendingResult e sou o proposer (aguardando adversário)
     var noResult = [];       // match sem resultado, torneio ativo, sou participante
+    var upcoming = [];       // próximas partidas (sem resultado, resultEntry = organizer)
     var recentConfirmed = []; // últimas partidas com resultado confirmado
 
     participacoes.forEach(function(t) {
@@ -1391,20 +1411,23 @@ function renderDashboard(container) {
 
         if (m.winner) {
           // Confirmed result — up to 10 recent
-          recentConfirmed.push(Object.assign({ confirmedAt: m.updatedAt || m.proposedAt || 0 }, matchInfo));
+          recentConfirmed.push(Object.assign({ confirmedAt: m.updatedAt || m.proposedAt || 0, inP1: inP1 }, matchInfo));
         } else if (m.pendingResult) {
           var pr = m.pendingResult;
           var isProposerSelf = (uid && pr.proposedBy === uid) || (email && pr.proposedByEmail === (cu.email || '').toLowerCase());
           if (isProposerSelf) {
-            pendingByMe.push(matchInfo);
+            pendingByMe.push(Object.assign({ inP1: inP1 }, matchInfo));
           } else {
-            pendingForMe.push(matchInfo);
+            pendingForMe.push(Object.assign({ inP1: inP1 }, matchInfo));
           }
         } else if (t.status !== 'finished') {
-          // Only include if resultEntry allows players
           var re = t.resultEntry || 'organizer';
-          if (re === 'players' || re === 'all' || (Array.isArray(re) && re.indexOf('players') !== -1)) {
-            noResult.push(matchInfo);
+          var canLaunch = (re === 'players' || re === 'all' || (Array.isArray(re) && re.indexOf('players') !== -1));
+          if (canLaunch) {
+            noResult.push(Object.assign({ inP1: inP1 }, matchInfo));
+          } else {
+            // resultEntry = organizer: aparece como "próxima partida" (só ver)
+            upcoming.push(Object.assign({ inP1: inP1 }, matchInfo));
           }
         }
       });
@@ -1414,8 +1437,7 @@ function renderDashboard(container) {
     recentConfirmed.sort(function(a, b) { return (b.confirmedAt || 0) - (a.confirmedAt || 0); });
     recentConfirmed = recentConfirmed.slice(0, 5);
 
-    var totalAction = pendingForMe.length + pendingByMe.length + noResult.length;
-    var totalSection = totalAction + recentConfirmed.length;
+    var totalSection = pendingForMe.length + pendingByMe.length + noResult.length + upcoming.length + recentConfirmed.length;
     if (totalSection === 0) return '';
 
     var _sf = window._safeHtml || function(s) { return String(s || ''); };
@@ -1434,7 +1456,20 @@ function renderDashboard(container) {
     var html = '<div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
     html += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;">🏅 Meus Resultados</h3>';
 
-    // ── Aguardando minha ação ──
+    // helper: card de match com linha de nomes formatada
+    function _matchCard(item, bgStyle, borderStyle, extra) {
+      var nav = 'window.location.hash=\'#bracket/' + _sf(item.tId) + '\'';
+      var nameLine = _formatMatchLine(item.m.p1 || '', item.m.p2 || '', item.inP1);
+      return '<div onclick="' + nav + '" style="cursor:pointer;' + bgStyle + ';border:1px solid ' + borderStyle + ';border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:flex-start;gap:8px;">' +
+        '<span style="font-size:1rem;flex-shrink:0;margin-top:2px;">' + _sportIcon(item.sport) + '</span>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:0.79rem;line-height:1.4;color:#f1f5f9;">' + nameLine + '</div>' +
+          '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + _sf(item.tName) + '</div>' +
+          (extra || '') +
+        '</div>';
+    }
+
+    // ── Aguardando minha aprovação ──
     if (pendingForMe.length > 0) {
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
@@ -1444,26 +1479,20 @@ function renderDashboard(container) {
         if (pr.useSets && Array.isArray(pr.sets) && pr.sets.length > 0) {
           scoreStr = pr.sets.map(function(s) { return s.gamesP1 + '-' + s.gamesP2; }).join(' ');
         } else {
-          scoreStr = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
+          scoreStr = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' vs. ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
         }
         var proposerName = pr.proposedByName || 'Adversário';
-        html += '<div onclick="window.location.hash=\'#bracket/' + _sf(item.tId) + '\'" style="cursor:pointer;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;">';
-        html += '<span style="font-size:1rem;">' + _sportIcon(item.sport) + '</span>';
-        html += '<div style="flex:1;min-width:0;">';
-        html += '<div style="font-size:0.78rem;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sf(item.m.p1 || '') + ' <span style="color:var(--text-muted)">×</span> ' + _sf(item.m.p2 || '') + '</div>';
-        html += '<div style="font-size:0.68rem;color:#fbbf24;">Placar proposto: <b>' + _sf(scoreStr) + '</b> por ' + _sf(proposerName) + '</div>';
-        html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
-        html += '</div>';
-        html += '<div style="display:flex;gap:4px;flex-shrink:0;">';
+        var extra = '<div style="font-size:0.68rem;color:#fbbf24;margin-top:2px;">Placar proposto: <b>' + _sf(scoreStr) + '</b> por ' + _sf(proposerName) + '</div>';
+        html += _matchCard(item, 'background:rgba(251,191,36,0.08)', 'rgba(251,191,36,0.25)', extra);
+        html += '<div style="display:flex;gap:4px;flex-shrink:0;margin-top:2px;">';
         html += '<button onclick="event.stopPropagation();window._approveResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;" title="Aprovar resultado">✅</button>';
         html += '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;" title="Editar placar">✏️</button>';
-        html += '</div>';
-        html += '</div>';
+        html += '</div></div>';
       });
       html += '</div>';
     }
 
-    // ── Resultado proposto (aguardando adversário) ──
+    // ── Resultado proposto aguardando adversário ──
     if (pendingByMe.length > 0) {
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
@@ -1473,38 +1502,44 @@ function renderDashboard(container) {
         if (pr.useSets && Array.isArray(pr.sets) && pr.sets.length > 0) {
           scoreStr = pr.sets.map(function(s) { return s.gamesP1 + '-' + s.gamesP2; }).join(' ');
         } else {
-          scoreStr = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
+          scoreStr = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' vs. ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
         }
-        html += '<div onclick="window.location.hash=\'#bracket/' + _sf(item.tId) + '\'" style="cursor:pointer;background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.15);border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;">';
-        html += '<span style="font-size:1rem;">' + _sportIcon(item.sport) + '</span>';
-        html += '<div style="flex:1;min-width:0;">';
-        html += '<div style="font-size:0.78rem;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sf(item.m.p1 || '') + ' <span style="color:var(--text-muted)">×</span> ' + _sf(item.m.p2 || '') + '</div>';
-        html += '<div style="font-size:0.68rem;color:#94a3b8;">Você propôs: <b>' + _sf(scoreStr) + '</b></div>';
-        html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
-        html += '</div>';
+        var extra = '<div style="font-size:0.68rem;color:#94a3b8;margin-top:2px;">Você propôs: <b>' + _sf(scoreStr) + '</b></div>';
+        html += _matchCard(item, 'background:rgba(148,163,184,0.06)', 'rgba(148,163,184,0.15)', extra);
         html += '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _sf(item.tId) + '\',\'' + _sf(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;flex-shrink:0;" title="Editar placar proposto">✏️</button>';
         html += '</div>';
       });
       html += '</div>';
     }
 
-    // ── Partidas sem resultado que eu posso lançar ──
+    // ── Partidas que posso lançar resultado ──
     if (noResult.length > 0) {
       var capped = noResult.slice(0, 5);
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.04em;">📋 Para lançar resultado (' + noResult.length + ')</p>';
       capped.forEach(function(item) {
-        html += '<div onclick="window.location.hash=\'#bracket/' + _sf(item.tId) + '\'" style="cursor:pointer;background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.12);border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;">';
-        html += '<span style="font-size:1rem;">' + _sportIcon(item.sport) + '</span>';
-        html += '<div style="flex:1;min-width:0;">';
-        html += '<div style="font-size:0.78rem;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sf(item.m.p1 || '') + ' × ' + _sf(item.m.p2 || '') + '</div>';
-        html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
-        html += '</div>';
-        html += '<span style="font-size:0.65rem;color:#38bdf8;flex-shrink:0;">Ver →</span>';
-        html += '</div>';
+        html += _matchCard(item, 'background:rgba(56,189,248,0.05)', 'rgba(56,189,248,0.12)', null);
+        html += '<span style="font-size:0.65rem;color:#38bdf8;flex-shrink:0;margin-top:3px;">Ver →</span></div>';
       });
       if (noResult.length > 5) {
         html += '<p style="margin:2px 0 0;font-size:0.68rem;color:var(--text-muted);text-align:center;">...e mais ' + (noResult.length - 5) + '</p>';
+      }
+      html += '</div>';
+    }
+
+    // ── Próximas partidas (resultado lançado pelo organizador) ──
+    if (upcoming.length > 0) {
+      var cappedUp = upcoming.slice(0, 5);
+      html += '<div style="margin-bottom:10px;">';
+      html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#818cf8;text-transform:uppercase;letter-spacing:0.04em;">⚔️ Próximas partidas (' + upcoming.length + ')</p>';
+      cappedUp.forEach(function(item) {
+        var phaseLabel = item.m.label || item.m.roundLabel || (item.m.round != null ? 'Rodada ' + item.m.round : '');
+        var extra = phaseLabel ? '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + _sf(phaseLabel) + '</div>' : null;
+        html += _matchCard(item, 'background:rgba(129,140,248,0.04)', 'rgba(129,140,248,0.18)', extra);
+        html += '</div>';
+      });
+      if (upcoming.length > 5) {
+        html += '<p style="margin:2px 0 0;font-size:0.68rem;color:var(--text-muted);text-align:center;">...e mais ' + (upcoming.length - 5) + '</p>';
       }
       html += '</div>';
     }
@@ -1515,23 +1550,23 @@ function renderDashboard(container) {
       html += '<p style="margin:0 0 6px;font-size:0.72rem;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.04em;">✅ Últimos resultados (' + recentConfirmed.length + ')</p>';
       recentConfirmed.forEach(function(item) {
         var m2 = item.m;
-        var isWinner = (m2.winner && _isMe(m2.winner)) || (m2.winner && String(m2.p1 || '').split(/\s*\/\s*/).some(function(n) { return _isMe(n) && n === m2.winner; }));
+        // determina vitória/derrota: winner é o nome do time vencedor
+        var myTeamStr = item.inP1 ? (m2.p1 || '') : (m2.p2 || '');
+        var isWinner = m2.winner && (
+          m2.winner === myTeamStr ||
+          String(myTeamStr).split(/\s*\/\s*/).some(function(n) { return _isMe(n); }) && String(m2.winner).split(/\s*\/\s*/).some(function(n) { return _isMe(n); })
+        );
         var resultColor = m2.draw ? '#94a3b8' : (isWinner ? '#4ade80' : '#f87171');
         var resultLabel = m2.draw ? 'Empate' : (isWinner ? 'Vitória' : 'Derrota');
         var scoreStr = '';
         if (Array.isArray(m2.sets) && m2.sets.length > 0) {
-          scoreStr = m2.sets.map(function(s) { return s.gamesP1 + '-' + s.gamesP2; }).join(' ');
+          scoreStr = m2.sets.map(function(s) { return (item.inP1 ? s.gamesP1 + '-' + s.gamesP2 : s.gamesP2 + '-' + s.gamesP1); }).join(' ');
         } else if (m2.scoreP1 != null && m2.scoreP2 != null) {
-          scoreStr = m2.scoreP1 + ' × ' + m2.scoreP2;
+          scoreStr = item.inP1 ? m2.scoreP1 + ' vs. ' + m2.scoreP2 : m2.scoreP2 + ' vs. ' + m2.scoreP1;
         }
-        html += '<div onclick="window.location.hash=\'#bracket/' + _sf(item.tId) + '\'" style="cursor:pointer;background:rgba(74,222,128,0.04);border:1px solid rgba(74,222,128,0.1);border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;">';
-        html += '<span style="font-size:1rem;">' + _sportIcon(item.sport) + '</span>';
-        html += '<div style="flex:1;min-width:0;">';
-        html += '<div style="font-size:0.78rem;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sf(m2.p1 || '') + ' ' + (scoreStr ? '<b>' + _sf(scoreStr) + '</b> ' : '') + _sf(m2.p2 || '') + '</div>';
-        html += '<div style="font-size:0.65rem;color:var(--text-muted);">' + _sf(item.tName) + '</div>';
-        html += '</div>';
-        html += '<span style="font-size:0.7rem;font-weight:700;color:' + resultColor + ';flex-shrink:0;">' + resultLabel + '</span>';
-        html += '</div>';
+        var extra = scoreStr ? '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">Placar: <b style="color:#e2e8f0;">' + _sf(scoreStr) + '</b></div>' : null;
+        html += _matchCard(item, 'background:rgba(74,222,128,0.04)', 'rgba(74,222,128,0.1)', extra);
+        html += '<span style="font-size:0.7rem;font-weight:700;color:' + resultColor + ';flex-shrink:0;margin-top:3px;">' + resultLabel + '</span></div>';
       });
       html += '</div>';
     }
@@ -2105,9 +2140,6 @@ function renderDashboard(container) {
          scoreplace:profile-loaded re-injetar o nudge quando profile chega
          async (evita race condition de mostrar nudge com dados vazios). -->
     <div id="dash-profile-nudge-slot">${_buildProfileNudgeHtml()}</div>
-
-    <!-- Upcoming Matches -->
-    ${_buildUpcomingMatchesHtml()}
 
     <!-- Casual Link Request Banner (loaded async — prominent call-to-action when someone
          suggested that a guest player in a casual match is actually this user.
