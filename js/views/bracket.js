@@ -1166,11 +1166,11 @@ async function _preloadPlayerPhotos(tournament) {
       p.split(' / ').forEach(function(n) { n = n.trim(); if (n && n !== 'TBD' && n !== 'BYE') names.add(n); });
     } else {
       var name = p.displayName || p.name || '';
-      if (name) names.add(name);
-      // v1.8.58: NÃO usar p.photoURL diretamente para popular o cache.
-      // O photoURL no objeto participante pode estar desatualizado ou
-      // pertencer a outro usuário (bug de merge). Sempre buscar do perfil
-      // real do usuário via Firestore (query por uid ou displayName abaixo).
+      // Para times de dupla ("Kelly / Rodrigo Barth"), adicionar cada membro
+      // individualmente — é assim que os perfis estão no Firestore.
+      if (name) {
+        name.split(' / ').map(function(n) { return n.trim(); }).filter(Boolean).forEach(function(n) { names.add(n); });
+      }
     }
   });
 
@@ -1203,21 +1203,27 @@ async function _preloadPlayerPhotos(tournament) {
     );
   });
 
-  // v1.8.58: buscar foto por UID (fonte mais confiável — imune a nomes trocados)
+  // v1.8.58: buscar foto por UID (fonte mais confiável — imune a nomes trocados).
+  // Cacheia sob o displayName real do Firestore E sob cada membro do time.
   participants.forEach(function(p) {
     if (typeof p !== 'object') return;
     var uid  = p.uid || '';
-    var name = p.displayName || p.name || '';
-    if (!uid || !name || window._playerPhotoCache[name.toLowerCase()]) return;
+    var teamName = p.displayName || p.name || '';
+    if (!uid) return;
     promises.push(
       window.FirestoreDB.db.collection('users').doc(uid).get()
         .then(function(doc) {
-          if (doc.exists) {
-            var data = doc.data();
-            if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1 && name) {
-              window._playerPhotoCache[name.toLowerCase()] = data.photoURL;
-            }
-          }
+          if (!doc.exists) return;
+          var data = doc.data();
+          if (!data.photoURL || data.photoURL.indexOf('dicebear.com') !== -1) return;
+          var photo = data.photoURL;
+          // Cacheia sob o displayName real do usuário no Firestore
+          var realName = (data.displayName || '').trim().toLowerCase();
+          if (realName) window._playerPhotoCache[realName] = photo;
+          // Também cacheia sob cada membro do nome de time (para duplas)
+          teamName.split(' / ').map(function(n) { return n.trim().toLowerCase(); }).filter(Boolean).forEach(function(n) {
+            if (!window._playerPhotoCache[n]) window._playerPhotoCache[n] = photo;
+          });
         })
         .catch(function() {})
     );
