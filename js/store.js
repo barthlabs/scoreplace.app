@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.97-beta';
+window.SCOREPLACE_VERSION = '1.8.98-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2057,7 +2057,12 @@ window.AppStore = {
     var isFirstSnapshot = true;
     var coll = window.FirestoreDB.db.collection('tournaments');
     var norm = email ? String(email).trim().toLowerCase() : '';
-    var query = norm ? coll.where('memberEmails', 'array-contains', norm) : coll;
+    // v1.8.98: uid como fonte primária — mais confiável que email
+    var _cuNow = window.AppStore && window.AppStore.currentUser;
+    var _uid = _cuNow && _cuNow.uid ? _cuNow.uid : '';
+    var query = _uid
+      ? coll.where('memberUids', 'array-contains', _uid)
+      : (norm ? coll.where('memberEmails', 'array-contains', norm) : coll);
     this._realtimeUnsubscribe = query
       .onSnapshot(function(snap) {
         var tournaments = [];
@@ -2093,12 +2098,13 @@ window.AppStore = {
           window._autoCloseExpiredEnrollments();
           // Recupera adminEmails/memberEmails apagados pelo bug v1.6.66
           setTimeout(function() { window._recoverWipedAdminEmails(); }, 2000);
-          // v1.8.97: busca complementar por uid (participantes de duplas têm
-          // uid mas podem não ter email no memberEmails após algum save)
+          // v1.8.98: listener usa uid como primário — busca complementar
+          // por email para torneios antigos sem memberUids preenchido
           var _cu2 = window.AppStore && window.AppStore.currentUser;
-          if (_cu2 && _cu2.uid && window.FirestoreDB && window.FirestoreDB.db) {
+          if (_cu2 && _cu2.email && _cu2.uid && window.FirestoreDB && window.FirestoreDB.db) {
+            var _norm2 = String(_cu2.email).trim().toLowerCase();
             window.FirestoreDB.db.collection('tournaments')
-              .where('memberUids', 'array-contains', _cu2.uid)
+              .where('memberEmails', 'array-contains', _norm2)
               .get()
               .then(function(snap2) {
                 var existing = new Set(store.tournaments.map(function(t){ return String(t.id); }));
@@ -2799,17 +2805,27 @@ window.AppStore = {
 
   getVisibleTournaments() {
     var invitedIds = this._invitedTournamentIds || [];
+    var cu = window.AppStore.currentUser;
     return this.tournaments.filter(function(t) {
       if (t.isPublic) return true;
-      // Tournament accessed via invite link is always visible
       if (invitedIds.indexOf(String(t.id)) !== -1) return true;
-      if (!window.AppStore.currentUser) return false;
-      var pList = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-      var isPart = pList.some(function(p) {
-        var str = typeof p === 'string' ? p : (p.email || p.displayName || p.name);
-        return str && str === window.AppStore.currentUser.email;
-      });
-      return t.organizerEmail === window.AppStore.currentUser.email || isPart;
+      if (!cu) return false;
+      // v1.8.98: uid como fonte primária
+      if (cu.uid) {
+        if (t.creatorUid === cu.uid) return true;
+        if (Array.isArray(t.memberUids) && t.memberUids.indexOf(cu.uid) !== -1) return true;
+      }
+      // Fallback: email (backward compat com torneios sem memberUids)
+      if (cu.email) {
+        var email = cu.email.toLowerCase();
+        if (t.organizerEmail && t.organizerEmail.toLowerCase() === email) return true;
+        if (Array.isArray(t.memberEmails) && t.memberEmails.indexOf(email) !== -1) return true;
+        var pList = Array.isArray(t.participants) ? t.participants : [];
+        if (pList.some(function(p) {
+          return typeof p === 'object' && p && p.email && p.email.toLowerCase() === email;
+        })) return true;
+      }
+      return false;
     });
   },
 
@@ -2821,12 +2837,19 @@ window.AppStore = {
 
   getMyParticipations() {
     if (!this.currentUser) return [];
-    var email = this.currentUser.email;
+    var cu = this.currentUser;
     return this.tournaments.filter(function(t) {
+      // v1.8.98: uid first
+      if (cu.uid && Array.isArray(t.memberUids) && t.memberUids.indexOf(cu.uid) !== -1) return true;
+      if (!cu.email) return false;
+      var email = cu.email.toLowerCase();
       var pList = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
       return pList.some(function(p) {
-        var str = typeof p === 'string' ? p : (p.email || p.displayName || p.name);
-        return str && str === email;
+        if (typeof p === 'object' && p) {
+          if (cu.uid && p.uid === cu.uid) return true;
+          return p.email && p.email.toLowerCase() === email;
+        }
+        return typeof p === 'string' && p === email;
       });
     });
   },
