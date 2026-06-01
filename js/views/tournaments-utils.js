@@ -627,35 +627,70 @@ window._calcNextDrawDate = function(t) {
 window._scrollToParticipant = function(tId, participantName) {
     // Guard: participantName pode ser null para inscritos sem nome (phone-only)
     if (!participantName) return;
-    window.location.hash = '#tournaments/' + tId;
-    // Wait for render, then scroll to the participant card
+
+    // Garantir que estamos na página do torneio
+    if (window.location.hash !== '#tournaments/' + tId) {
+        window.location.hash = '#tournaments/' + tId;
+    }
+
     var _attempts = 0;
+    var _MAX = 30; // até ~6s de tentativas
+    var _pLow = participantName.toLowerCase();
+
     var _tryScroll = function() {
         _attempts++;
-        var cards = document.querySelectorAll('.participant-card[data-participant-name]');
+
+        // Buscar em todos os cards de participante (lista de inscritos e seção sem dupla)
+        var cards = document.querySelectorAll(
+            '[data-participant-name], [data-merge-name], .participant-card'
+        );
         var target = null;
         cards.forEach(function(c) {
-            var n = c.getAttribute('data-participant-name') || '';
-            if (n.toLowerCase().indexOf(participantName.toLowerCase()) !== -1 ||
-                participantName.toLowerCase().indexOf(n.toLowerCase()) !== -1) {
+            if (target) return;
+            var n = (c.getAttribute('data-participant-name') ||
+                     c.getAttribute('data-merge-name') || '').toLowerCase();
+            if (!n) return;
+            if (n.indexOf(_pLow) !== -1 || _pLow.indexOf(n) !== -1) {
                 target = c;
             }
         });
+
         if (target) {
+            // Scroll suave centralizando o card
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Highlight animation
-            target.style.transition = 'box-shadow 0.3s, transform 0.3s';
-            target.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.6), 0 0 20px rgba(16,185,129,0.3)';
-            target.style.transform = 'scale(1.03)';
-            setTimeout(function() {
-                target.style.boxShadow = '';
-                target.style.transform = '';
-            }, 2500);
-        } else if (_attempts < 15) {
+
+            // Highlight pulsante em verde para deixar claro que está inscrito
+            target.style.transition = 'box-shadow 0.3s ease, transform 0.3s ease, outline 0.3s ease';
+            target.style.outline = '2px solid rgba(16,185,129,0.9)';
+            target.style.boxShadow = '0 0 0 4px rgba(16,185,129,0.25), 0 8px 32px rgba(16,185,129,0.2)';
+            target.style.transform = 'scale(1.02)';
+
+            // Pulsar 3 vezes
+            var _pulseCount = 0;
+            var _pulse = setInterval(function() {
+                _pulseCount++;
+                if (_pulseCount % 2 === 0) {
+                    target.style.boxShadow = '0 0 0 4px rgba(16,185,129,0.25), 0 8px 32px rgba(16,185,129,0.2)';
+                } else {
+                    target.style.boxShadow = '0 0 0 8px rgba(16,185,129,0.1), 0 8px 32px rgba(16,185,129,0.1)';
+                }
+                if (_pulseCount >= 6) {
+                    clearInterval(_pulse);
+                    setTimeout(function() {
+                        target.style.outline = '';
+                        target.style.boxShadow = '';
+                        target.style.transform = '';
+                    }, 300);
+                }
+            }, 400);
+
+        } else if (_attempts < _MAX) {
             setTimeout(_tryScroll, 200);
         }
     };
-    setTimeout(_tryScroll, 300);
+
+    // Aguardar render inicial (inscrição otimista → re-render do Firestore)
+    setTimeout(_tryScroll, 400);
 };
 // ── Centralized Notification System ──
 // Notification levels: 'fundamental' (always sent), 'important', 'all'
