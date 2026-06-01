@@ -428,12 +428,18 @@ function _isUserOrgOrCoHost(t, user) {
 }
 
 // Decide se um placar lançado por `user` precisa de aprovação do adversário.
-// Regras: (a) organizador/co-host → não precisa; (b) user não está em nenhum
-// dos times do match → não precisa (referee/external); (c) time adversário
-// não tem nenhum humano (uid presente) → não precisa (auto-approve);
-// (d) caso contrário → precisa.
+// Regras: (a) torneio não permite participantes lançar → não precisa (org só);
+//         (b) organizador/co-host → não precisa; (c) user não está em nenhum
+//         dos times do match → não precisa (referee/external); (d) time
+//         adversário não tem nenhum humano (uid presente) → não precisa
+//         (auto-approve); (e) caso contrário → precisa.
 function _resultNeedsApproval(t, m, user) {
   if (!t || !m || !user) return false;
+  // Só aplica quando a configuração do torneio permite participantes lançar resultado
+  var _re = t.resultEntry || 'organizer';
+  var _playersCanSubmit = _re === 'players' || _re === 'all' ||
+    (Array.isArray(_re) && _re.indexOf('players') !== -1);
+  if (!_playersCanSubmit) return false;
   if (_isUserOrgOrCoHost(t, user)) return false;
   var userSide = _userTeamInMatch(t, m, user);
   if (userSide === 0) return false;
