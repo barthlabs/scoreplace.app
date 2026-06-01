@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.96-beta';
+window.SCOREPLACE_VERSION = '1.8.97-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2064,7 +2064,6 @@ window.AppStore = {
         var deletedIds = store._deletedTournamentIds || [];
         snap.forEach(function(doc) {
           var data = doc.data();
-          // Filter out recently deleted tournaments to prevent ghost re-appearance
           if (deletedIds.indexOf(String(data.id)) === -1) {
             tournaments.push(data);
           }
@@ -2094,6 +2093,29 @@ window.AppStore = {
           window._autoCloseExpiredEnrollments();
           // Recupera adminEmails/memberEmails apagados pelo bug v1.6.66
           setTimeout(function() { window._recoverWipedAdminEmails(); }, 2000);
+          // v1.8.97: busca complementar por uid (participantes de duplas têm
+          // uid mas podem não ter email no memberEmails após algum save)
+          var _cu2 = window.AppStore && window.AppStore.currentUser;
+          if (_cu2 && _cu2.uid && window.FirestoreDB && window.FirestoreDB.db) {
+            window.FirestoreDB.db.collection('tournaments')
+              .where('memberUids', 'array-contains', _cu2.uid)
+              .get()
+              .then(function(snap2) {
+                var existing = new Set(store.tournaments.map(function(t){ return String(t.id); }));
+                var added = 0;
+                snap2.forEach(function(doc) {
+                  var id = String(doc.id);
+                  if (!existing.has(id)) {
+                    store.tournaments.push(doc.data());
+                    added++;
+                  }
+                });
+                if (added > 0) {
+                  store._saveToCache();
+                  if (typeof window._softRefreshView === 'function') window._softRefreshView();
+                }
+              }).catch(function() {});
+          }
           return;
         }
 
