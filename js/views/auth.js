@@ -4615,6 +4615,9 @@ window._repairNullIdentityParticipants = async function() {
     parts.forEach(function(p, idx) {
       if (typeof p !== 'object' || !p || !p.uid) return;
       if (p.displayName || p.name || p.email) return; // já tem identificador
+      // v1.8.90: duplas (com ' / ') nunca precisam de repair — têm nome composto
+      var _nm = p.displayName || p.name || '';
+      if (_nm.indexOf(' / ') !== -1) return;
       if (!needsFix[p.uid]) needsFix[p.uid] = [];
       needsFix[p.uid].push({ t: t, idx: idx });
     });
@@ -4723,10 +4726,15 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
       if (typeof p === 'object' && p !== null) {
         var isUser = (matchUid && p.uid === matchUid) || (matchEmail && p.email === matchEmail) || p.displayName === oldName || p.name === oldName;
         if (isUser) {
-          // v1.8.63: quando encontrado por uid, sempre atualizar para o novo
-          // nome — mesmo que o nome armazenado não seja o oldName esperado
-          // (ex: telefone formatado diferente, nome antigo de outra sessão).
-          if (matchUid && p.uid === matchUid) {
+          // v1.8.90: NUNCA sobrescrever nomes de dupla (contêm " / ").
+          // O uid do "capitão" da dupla é o mesmo da pessoa, mas o displayName
+          // da dupla é "A / B" — propagação de nome individual não deve tocar.
+          var _curName = p.displayName || p.name || '';
+          if (_curName.indexOf(' / ') !== -1) {
+            // É uma dupla — só atualizar os campos internos p1Name/p2Name se necessário
+            if (p.p1Uid === matchUid && p.p1Name === oldName) { p.p1Name = newName; changed = true; }
+            if (p.p2Uid === matchUid && p.p2Name === oldName) { p.p2Name = newName; changed = true; }
+          } else if (matchUid && p.uid === matchUid) {
             if (p.displayName !== newName) { p.displayName = newName; changed = true; }
             if (p.name !== newName) { p.name = newName; changed = true; }
           } else {
