@@ -1420,7 +1420,7 @@ window.renderHelpPage = function (container) {
     const sportRaw = document.getElementById('quick-create-sport').value || '';
     const sportClean = sportRaw.replace(/^[^\w\u00C0-\u024F]+/u, '').trim() || 'Esportes';
     const userName = (window.AppStore.currentUser && window.AppStore.currentUser.displayName)
-      ? window.AppStore.currentUser.displayName.split(' ')[0] : 'Organizador';
+      ? window.AppStore.currentUser.displayName : 'Organizador';
     let autoName = 'Torneio Eliminatórias de ' + sportClean + ' de ' + userName;
 
     // Impede nome duplicado — adiciona sufixo numérico se necessário

@@ -408,7 +408,7 @@ window._updateTopbarForUser = function(user) {
     var _nameIsReal = effectiveName && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(effectiveName));
     var displayFirstName;
     if (_nameIsReal) {
-      displayFirstName = effectiveName.split(' ')[0];
+      displayFirstName = effectiveName;
     } else if (user.email || (cu && cu.email)) {
       var _em = user.email || (cu && cu.email) || '';
       displayFirstName = _em.split('@')[0];
@@ -6532,7 +6532,7 @@ function setupProfileModal() {
       var photoUrl = (typeof window._profileAvatarUrl === 'function')
         ? window._profileAvatarUrl(name, window.AppStore.currentUser.photoURL, 32)
         : (window.AppStore.currentUser.photoURL || ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name || '?') + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=32'));
-      var firstName = name ? name.split(' ')[0] : _t('auth.defaultUser');
+      var firstName = name || _t('auth.defaultUser');
       var btnLogin = document.getElementById('btn-login');
       if (btnLogin) {
         var avatarImg = btnLogin.querySelector('img');

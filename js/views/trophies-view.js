@@ -270,7 +270,7 @@
       var btnStyle = isActive
         ? 'display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;font-size:0.78rem;font-weight:600;cursor:pointer;'
         : 'display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-size:0.78rem;font-weight:600;cursor:pointer;';
-      var safeName = _s(window._firstToken(f.name));
+      var safeName = _s(f.name || '');
       var safeUid = _s(f.uid);
       return '<button onclick="window._trophyCompareSelectFriend(\'' + safeUid + '\')" style="' + btnStyle + '">'
         + avatarHtml
@@ -279,7 +279,7 @@
     }).join('');
 
     // Stats row
-    var friendFirstName = _s(window._firstToken(selected.name));
+    var friendFirstName = _s(selected.name || '');
     var statsHtml =
       '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin-bottom:16px;text-align:center;">' +
         '<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:12px 8px;">' +

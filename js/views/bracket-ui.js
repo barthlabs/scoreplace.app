@@ -9151,8 +9151,7 @@ window._openCasualMatch = function(restoreOpts) {
     var inputId = ids[ci];
     var inp = inputId ? document.getElementById(inputId) : null;
     if (inp) {
-      // Usa primeiro nome para exibição (consistente com lobby)
-      inp.value = (friendName || '').split(' ')[0] || friendName || '';
+      inp.value = friendName || '';
       if (window._autosizeCasualInput) window._autosizeCasualInput(inp);
     }
     // Garante que o perfil está no cache (usa os dados do dropdown como fallback imediato)
@@ -9710,8 +9709,7 @@ window._openCasualMatch = function(restoreOpts) {
       if (!p) return false;
       if (cuUid && p.uid === cuUid) return true;
       if (cu && cu.displayName && p.name) {
-        var first = cu.displayName.split(' ')[0];
-        if (p.name === cu.displayName || p.name === first) return true;
+        if (p.name === cu.displayName) return true;
       }
       return false;
     }

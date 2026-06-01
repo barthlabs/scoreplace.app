@@ -846,7 +846,7 @@ function renderDashboard(container) {
   // = phoneNumber salvo no Firestore por bug histórico).
   var _rawDn = (window.AppStore.currentUser && window.AppStore.currentUser.displayName) || '';
   var _looksLikePhone = /^\+?\d[\d\s().-]{5,}$/.test(String(_rawDn).trim());
-  const userName = (_rawDn && !_looksLikePhone) ? _rawDn.split(' ')[0] : _t('common.guest');
+  const userName = (_rawDn && !_looksLikePhone) ? _rawDn : _t('common.guest');
   const _userIsPro = typeof window._isPro === 'function' && window._isPro();
   const _proBadge = _userIsPro ? ' <span style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:0.55rem;font-weight:800;padding:2px 8px;border-radius:20px;vertical-align:middle;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(245,158,11,0.3);position:relative;top:-2px;">⭐ PRO</span>' : '';
 

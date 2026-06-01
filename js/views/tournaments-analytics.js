@@ -230,8 +230,8 @@ window._openPlayerProfile = function(playerName, opts) {
             '</div>';
           };
 
-          var cuName0    = (cu&&cu.displayName||'Você').split(' ')[0];
-          var theirName0 = name.split(' ')[0];
+          var cuName0    = (cu&&cu.displayName)||'Você';
+          var theirName0 = name;
 
           // União de todos os troféus que pelo menos um possui, por tier
           var allIds = {};
