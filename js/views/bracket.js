@@ -1569,29 +1569,17 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     var _canApprove = _isOpposingMember && !_isAuthorityInner;
     var _canEdit = _isAuthorityInner || _isProposerSelf || _isOpposingMember;
 
-    // Adversário vê proposta → Confirmar + Editar (editar = contestar com novo placar)
-    // Time original vê contra-proposta → Confirmar + Contestar (escala ao org)
+    // Adversário (canApprove): ✏️ Editar (propõe outro placar) + ✅ Confirmar
+    // Proponente (isProposerSelf): sem botões — está aguardando resposta
+    // Organizador (authority): ✏️ Editar para confirmar diretamente
     if (_canApprove) {
       pendingActionBtns += `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;"
-          title="Propor placar diferente">✏️ Editar</button>`;
+          style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;">✏️ Editar</button>`;
       pendingActionBtns += `<button onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;"
-          title="Confirmar placar">✅ Confirmar</button>`;
-    }
-    if (_isProposerSelf && !_isAuthorityInner) {
-      // Time original vê contra-proposta do adversário → pode Confirmar ou Contestar
-      pendingActionBtns += `<button onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;"
-          title="Aceitar este placar">✅ Confirmar</button>`;
-      pendingActionBtns += `<button onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#f87171;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;"
-          title="Contestar — notifica o organizador">❌ Contestar</button>`;
-    }
-    if (_isAuthorityInner) {
+          style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;margin-left:6px;">✅ Confirmar</button>`;
+    } else if (_isAuthorityInner) {
       pendingActionBtns += `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;"
-          title="Confirmar diretamente">✏️ Editar</button>`;
+          style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;">✏️ Editar</button>`;
     }
   }
   const _isMyMatch = !!(_cu && !isByeMatch && (function() {
