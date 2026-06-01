@@ -548,6 +548,15 @@ window._isUserAuthority = _isUserAuthority;
 // Uses anchor-based approach: saves the viewport-relative offset of a reference
 // element, re-renders, then scrolls so the same element is at the same offset.
 function _rerenderBracket(tId, anchorMatchId) {
+  // Se o usuário está no dashboard, re-renderizar o dashboard — não o bracket.
+  // Evita substituir a view atual por um bracket quando o resultado foi lançado
+  // a partir da dashboard ou de qualquer view que não seja o bracket.
+  var _hash = window.location.hash || '';
+  if (_hash === '#dashboard' || _hash === '' || _hash === '#') {
+    if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    return;
+  }
+
   // 1. Find anchor element — prefer the specific match card, fallback to any visible card
   var anchorEl = null;
   var anchorOffsetY = 0;
