@@ -1569,17 +1569,33 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     var _canApprove = _isOpposingMember && !_isAuthorityInner;
     var _canEdit = _isAuthorityInner || _isProposerSelf || _isOpposingMember;
 
-    // Adversário (canApprove): ✏️ Editar (propõe outro placar) + ✅ Confirmar
-    // Proponente (isProposerSelf): sem botões — está aguardando resposta
-    // Organizador (authority): ✏️ Editar para confirmar diretamente
+    // Fase 1 — Time B vê proposta do Time A: ✏️ Editar + ✅ Confirmar
+    // Fase 2 — Time A vê contra-proposta do Time B: ✅ Confirmar + ❌ Contestar
+    // Proponente atual: sem botões (aguardando)
+    // Organizador: ✏️ Editar (confirma diretamente)
+    // ✏️ Editar sempre disponível para qualquer parte (corrigir o que lançou)
+    // Adversário fase 1: + ✅ Confirmar
+    // Adversário fase 2 (vê contra-proposta): + ✅ Confirmar + ❌ Contestar
+    var _isCounterProposal = !!(_pr && _pr.isCounterProposal);
+    var _btnEdit = `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
+        style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;">✏️ Editar</button>`;
+    var _btnConfirm = `<button onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')"
+        style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;margin-left:6px;">✅ Confirmar</button>`;
+    var _btnContest = `<button onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')"
+        style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#f87171;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;margin-left:6px;">❌ Contestar</button>`;
     if (_canApprove) {
-      pendingActionBtns += `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;">✏️ Editar</button>`;
-      pendingActionBtns += `<button onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;margin-left:6px;">✅ Confirmar</button>`;
+      if (!_isCounterProposal) {
+        // Fase 1: adversário — Editar + Confirmar
+        pendingActionBtns = _btnEdit + _btnConfirm;
+      } else {
+        // Fase 2: time original — Editar + Confirmar + Contestar
+        pendingActionBtns = _btnEdit + _btnConfirm + _btnContest;
+      }
+    } else if (_isProposerSelf && !_isAuthorityInner) {
+      // Proponente atual (qualquer fase): só Editar para corrigir
+      pendingActionBtns = _btnEdit;
     } else if (_isAuthorityInner) {
-      pendingActionBtns += `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;">✏️ Editar</button>`;
+      pendingActionBtns = _btnEdit;
     }
   }
   const _isMyMatch = !!(_cu && !isByeMatch && (function() {

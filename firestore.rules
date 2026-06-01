@@ -112,7 +112,9 @@ service cloud.firestore {
           // Status — pode mudar pra 'finished' quando última partida aprovada
           'status',
           // Inscrição — overlap com isEnrollmentOnlyDiff
-          'participants', 'memberEmails', 'teamOrigins'
+          'participants', 'memberEmails', 'teamOrigins',
+          // v1.8.99: memberUids sempre recomputado em saveTournament
+          'memberUids'
         ]);
     }
 

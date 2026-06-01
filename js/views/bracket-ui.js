@@ -2160,7 +2160,8 @@ window._editPendingResult = function(tId, matchId) {
         winner: winner,
         draw: s1v === s2v,
         scoreP1: s1v,
-        scoreP2: s2v
+        scoreP2: s2v,
+        isCounterProposal: true  // marca fase 2: time original verá Confirmar + Contestar
       };
       _propagateMatchUpdate(t, m);
       window.AppStore.logAction(tId, 'Contra-proposta: ' + m.p1 + ' ' + s1v + ' × ' + s2v + ' ' + m.p2 + ' por ' + (cu.displayName || cu.email));

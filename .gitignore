@@ -11,3 +11,5 @@ node_modules/
 playwright-report/
 test-results/
 .lighthouseci/
+fix-null-participants.js
+clear-match-results.js
