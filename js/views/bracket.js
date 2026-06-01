@@ -41,9 +41,46 @@ function _applyMyMatchesFilter() {
 function renderBracket(container, tournamentId, isInline) {
   var _t = window._t || function(k) { return k; };
   const tId = tournamentId || window._lastActiveTournamentId;
-  const t = tId && window.AppStore ? window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString()) : null;
 
+  // v1.8.94: buscar em tournaments (membro/org) E publicDiscovery (torneios públicos)
+  let t = tId && window.AppStore ? window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString()) : null;
+  if (!t && tId && window.AppStore && Array.isArray(window.AppStore.publicDiscovery)) {
+    t = window.AppStore.publicDiscovery.find(tour => tour.id.toString() === tId.toString()) || null;
+  }
+
+  // Se torneio não encontrado localmente, tentar carregar do Firestore
   if (!t) {
+    const _cu = window.AppStore && window.AppStore.currentUser;
+    if (!_cu) {
+      // Visitante sem conta
+      container.innerHTML =
+        '<div style="text-align:center;padding:3rem 1rem;">' +
+          '<div style="font-size:2rem;margin-bottom:12px;">🏆</div>' +
+          '<h3 style="color:var(--text-bright);margin-bottom:8px;">Chaveamento do torneio</h3>' +
+          '<p style="color:var(--text-muted);margin-bottom:20px;">Crie uma conta gratuita para ver os placares e o chaveamento deste torneio.</p>' +
+          '<button onclick="if(typeof openModal===\'function\')openModal(\'modal-login\')" class="btn btn-primary" style="padding:12px 28px;font-size:1rem;">Criar conta / Entrar</button>' +
+        '</div>';
+      return;
+    }
+    // Logado mas torneio não carregado — tentar buscar do Firestore
+    if (window.FirestoreDB && window.FirestoreDB.db && tId) {
+      container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Carregando chaveamento…</div>';
+      window.FirestoreDB.db.collection('tournaments').doc(tId).get().then(function(doc) {
+        if (doc.exists) {
+          const tLoaded = Object.assign({ id: doc.id }, doc.data());
+          if (!window.AppStore.publicDiscovery) window.AppStore.publicDiscovery = [];
+          const existing = window.AppStore.publicDiscovery.findIndex(x => x.id.toString() === tId.toString());
+          if (existing !== -1) window.AppStore.publicDiscovery[existing] = tLoaded;
+          else window.AppStore.publicDiscovery.push(tLoaded);
+          renderBracket(container, tId, isInline);
+        } else {
+          container.innerHTML = `<div class="card" style="text-align:center;padding:3rem;"><h3>${_t('bracket.notFound')}</h3><a href="#dashboard" class="btn btn-primary" style="margin-top:1rem;display:inline-block;">Dashboard</a></div>`;
+        }
+      }).catch(function() {
+        container.innerHTML = `<div class="card" style="text-align:center;padding:3rem;"><h3>${_t('bracket.notFound')}</h3></div>`;
+      });
+      return;
+    }
     container.innerHTML = `<div class="card" style="text-align:center;padding:3rem;"><h3>${_t('bracket.notFound')}</h3><a href="#dashboard" class="btn btn-primary" style="margin-top:1rem;display:inline-block;">Dashboard</a></div>`;
     return;
   }
