@@ -1514,8 +1514,11 @@ function renderDashboard(container) {
         '</div>';
     }
 
-    // helper: mini bracket card — HTML idêntico ao renderMatchCard do bracket.js
-    // canLaunch=true: mostra inputs + Confirmar + Ao Vivo; false: só "Ir para Torneio"
+    // helper: mini bracket card — estrutura idêntica ao bracket.js:
+    //   • coluna bracket-round-column: min-width 280px, max-width 320px (não full-width!)
+    //   • título da coluna com barra colorida à esquerda (border-left) + nome da fase
+    //   • card do jogo igual ao renderMatchCard: header com label + Ao Vivo + Confirmar
+    //   • "Ir para Torneio" no footer do card (não no header)
     function _miniBracketCard(item, canLaunch) {
       var tId = _sf(item.tId);
       var mId = _sf(item.m.id || '');
@@ -1523,13 +1526,20 @@ function renderDashboard(container) {
       var p2 = item.m.p2 || '';
       var _esc = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
 
-      // Fase label correto (Final (R1), Semifinal (R2) etc.)
+      // Fase label + cor da barra (igual às colunas do bracket)
       var tRef = participacoes.find(function(tt) { return tt.id === item.tId; });
       var faseStr = tRef ? _elabFaseLabel(tRef, item.m) : (item.subLine || '');
-      // matchLabel = "JOGO N" como no bracket
-      var matchLabel = item.m.label || ('JOGO 1');
+      // Cor baseada na fase — Final=ouro, Semi=ciano, Quartas=verde, resto=primário
+      var faseColor = '#fbbf24'; // ouro por padrão (Final)
+      var faseLower = faseStr.toLowerCase();
+      if (faseLower.indexOf('semi') !== -1) faseColor = '#06b6d4';
+      else if (faseLower.indexOf('quarta') !== -1) faseColor = '#4ade80';
+      else if (faseLower.indexOf('oitava') !== -1 || faseLower.indexOf('rodada') !== -1) faseColor = '#818cf8';
 
-      // _teamAvatarHtml compacto: iniciais + foto se disponível
+      // matchLabel — JOGO N do match ou fallback
+      var matchLabel = item.m.label || 'JOGO 1';
+
+      // Avatar/nome de cada jogador
       function _initials(name) {
         return (name || '?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase();
       }
@@ -1544,46 +1554,59 @@ function renderDashboard(container) {
         return '<div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">' + avatarEl + nameEl + '</div>';
       }
       function _teamHtml(teamStr) {
-        var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
-        return parts.map(_avatarHtml).join('');
+        return String(teamStr).split(/\s*\/\s*/).filter(Boolean).map(_avatarHtml).join('');
       }
 
-      // rowStyle igual ao bracket.js
       var rowStyle = 'display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,0.03);margin-bottom:4px;';
-      var scoreInputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;';
-      var scorePlaceholderHtml = '<div style="width:52px;height:30px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:#475569;flex-shrink:0;">0</div>';
+      var scoreInputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;-moz-appearance:textfield;';
+      var scorePlaceholder = '<div style="width:52px;height:30px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:#475569;flex-shrink:0;">0</div>';
 
       var p1ScoreHtml = canLaunch
         ? '<input id="s1-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">'
-        : scorePlaceholderHtml;
+        : scorePlaceholder;
       var p2ScoreHtml = canLaunch
         ? '<input id="s2-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">'
-        : scorePlaceholderHtml;
+        : scorePlaceholder;
 
-      // Botões do header (igual ao bracket.js): Ao Vivo + Confirmar
+      // Botões do HEADER do card — Ao Vivo + Confirmar (igual ao bracket.js linha 1602-1499)
       var liveBtnHtml = canLaunch
-        ? '<button onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:3px;">📡 Ao Vivo</button>'
+        ? '<button onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:3px;" onmouseover="this.style.background=\'rgba(239,68,68,0.3)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.15)\'">📡 Ao Vivo</button>'
         : '';
       var confirmBtnHtml = canLaunch
-        ? '<button id="confirm-' + mId + '" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">✓ Confirmar</button>'
+        ? '<button id="confirm-' + mId + '" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;" onmouseover="this.style.background=\'rgba(16,185,129,0.3)\'" onmouseout="this.style.background=\'rgba(16,185,129,0.15)\'">✓ Confirmar</button>'
         : '';
-      var goToBtn = '<button onclick="event.stopPropagation();window.location.hash=\'#bracket/' + _esc(tId) + '\'" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);color:#818cf8;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;">Ir para Torneio</button>';
 
-      return '<div id="card-' + mId + '" style="background:rgba(99,102,241,0.06);border:2px solid rgba(99,102,241,0.6);border-radius:12px;padding:14px;box-shadow:0 0 20px rgba(99,102,241,0.25),0 4px 12px rgba(0,0,0,0.15);">' +
-        // Header: matchLabel (esq) + botões (dir) — igual ao bracket
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +
-          '<div>' +
-            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _sf(matchLabel) + '</span>' +
-            (faseStr ? '<span style="font-size:0.62rem;color:#64748b;margin-left:8px;">' + _sf(faseStr) + '</span>' : '') +
-          '</div>' +
-          '<div style="display:flex;align-items:center;gap:4px;">' + liveBtnHtml + confirmBtnHtml + goToBtn + '</div>' +
+      // "Ir para Torneio" fica no FOOTER do card (não no header)
+      var goToBtnFooter = '<div style="display:flex;justify-content:flex-end;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);">' +
+        '<button onclick="event.stopPropagation();window.location.hash=\'#bracket/' + _esc(tId) + '\'" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);color:#818cf8;border-radius:6px;padding:3px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;" onmouseover="this.style.background=\'rgba(99,102,241,0.2)\'" onmouseout="this.style.background=\'rgba(99,102,241,0.1)\'">Ir para Torneio →</button>' +
+        '</div>';
+
+      // Coluna estilo bracket-round-column: min-width:280px max-width:320px
+      // O título da coluna tem barra colorida à esquerda (border-left) + nome do torneio + fase
+      return '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.6rem;">' +
+        // Título da coluna = nome do torneio + fase (idêntico aos headers de round)
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<h4 style="color:' + faseColor + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + faseColor + ';padding-left:8px;flex:1;">' +
+            (faseLower.indexOf('final') !== -1 ? '🏆 ' : '') + _sf(faseStr) +
+            '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(item.tName) + '</span>' +
+          '</h4>' +
         '</div>' +
-        // P1 row
-        '<div style="' + rowStyle + '">' + _teamHtml(p1) + p1ScoreHtml + '</div>' +
-        // VS
-        '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
-        // P2 row
-        '<div style="' + rowStyle + '">' + _teamHtml(p2) + p2ScoreHtml + '</div>' +
+        // Card do jogo (igual ao renderMatchCard do bracket.js)
+        '<div id="card-' + mId + '" style="background:rgba(99,102,241,0.06);border:2px solid rgba(99,102,241,0.6);border-radius:12px;padding:14px;box-shadow:0 0 20px rgba(99,102,241,0.25),0 4px 12px rgba(0,0,0,0.15);">' +
+          // Header: JOGO N (esq) + Ao Vivo + Confirmar (dir)
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +
+            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _sf(matchLabel) + '</span>' +
+            '<div style="display:flex;align-items:center;gap:4px;">' + liveBtnHtml + confirmBtnHtml + '</div>' +
+          '</div>' +
+          // P1 row
+          '<div style="' + rowStyle + '">' + _teamHtml(p1) + p1ScoreHtml + '</div>' +
+          // VS
+          '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
+          // P2 row
+          '<div style="' + rowStyle + '">' + _teamHtml(p2) + p2ScoreHtml + '</div>' +
+          // Footer: Ir para Torneio (dir)
+          goToBtnFooter +
+        '</div>' +
       '</div>';
     }
 
@@ -1642,7 +1665,7 @@ function renderDashboard(container) {
       var shown3 = allUpcoming.slice(0, 3);
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.04em;">⚔️ Próximos jogos (' + allUpcoming.length + ')</p>';
-      html += '<div style="display:grid;grid-template-columns:repeat(' + shown3.length + ',1fr);gap:8px;">';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
       shown3.forEach(function(entry) {
         html += _miniBracketCard(entry.item, entry.canLaunch);
       });

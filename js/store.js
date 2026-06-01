@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.3-beta';
+window.SCOREPLACE_VERSION = '1.9.4-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -223,9 +223,17 @@ window._softRefreshView = function() {
         var _hasDraw = (Array.isArray(_tNow.matches) && _tNow.matches.length > 0) ||
                        (Array.isArray(_tNow.rounds)  && _tNow.rounds.length  > 0) ||
                        (Array.isArray(_tNow.groups)  && _tNow.groups.length  > 0);
-        if (_hasDraw && !window._bracketRedirectedFor) {
-          window._bracketRedirectedFor = _tId;
-          // Mostrar toast informativo antes de redirecionar
+        // v1.9.4: usa sessionStorage por torneio para garantir redirect/toast
+        // só na PRIMEIRA entrada com sorteio pronto nessa sessão do browser.
+        // Antes usava window._bracketRedirectedFor (único por sessão) — se o
+        // usuário saísse e voltasse ao mesmo torneio, a variável ainda estava
+        // setada e não reaparecia, mas ao recarregar a página disparava de novo.
+        var _ssKey = 'sp_bracketRedirected_' + _tId;
+        var _alreadyRedirected = false;
+        try { _alreadyRedirected = sessionStorage.getItem(_ssKey) === '1'; } catch(_se) {}
+        if (_hasDraw && !_alreadyRedirected) {
+          try { sessionStorage.setItem(_ssKey, '1'); } catch(_se) {}
+          window._bracketRedirectedFor = _tId; // compat
           if (typeof showNotification === 'function') {
             showNotification('🎲 Sorteio realizado!', 'Redirecionando para o chaveamento…', 'success');
           }
