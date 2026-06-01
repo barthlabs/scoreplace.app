@@ -1644,14 +1644,14 @@ function renderDashboard(container) {
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      var _pendTag = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
       pendingForMe.forEach(function(item) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
-        var _e = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
-        var pendTag = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
-        var btns = pendTag +
-          '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>' +
-          '<button onclick="event.stopPropagation();window._approveResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
+        var mid = String(item.m.id || '');
+        var btns = _pendTag +
+          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>' +
+          '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
         html += _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
@@ -1668,13 +1668,13 @@ function renderDashboard(container) {
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      var _pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
       pendingByMe.forEach(function(item) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
-        var _e = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
-        var pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
-        var btns = pendTag2 +
-          '<button onclick="event.stopPropagation();window._editPendingResult(\'' + _e(item.tId) + '\',\'' + _e(item.m.id) + '\')" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
+        var mid = String(item.m.id || '');
+        var btns = _pendTag2 +
+          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
         html += _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
@@ -2472,6 +2472,22 @@ function renderDashboard(container) {
     })()}
   `;
   container.innerHTML = html;
+
+  // Botões de resultado pendente — event listeners via JS (evita parsing issues
+  // de onclick em HTML gerado dinamicamente em mobile Safari)
+  container.querySelectorAll('[data-pending-action]').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var action = btn.getAttribute('data-pending-action');
+      var tId = btn.getAttribute('data-tid');
+      var mId = btn.getAttribute('data-mid');
+      if (action === 'edit' && typeof window._editPendingResult === 'function') {
+        window._editPendingResult(tId, mId);
+      } else if (action === 'approve' && typeof window._approveResult === 'function') {
+        window._approveResult(tId, mId);
+      }
+    });
+  });
 
   // Show/hide Pro button based on plan (element is now inside hero box)
   var proBtn = document.getElementById('btn-upgrade-pro');
