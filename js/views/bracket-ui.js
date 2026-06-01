@@ -2110,9 +2110,11 @@ window._editPendingResult = function(tId, matchId) {
   var canEdit = isAuthority || isProposerSelf || isOpposingMember;
 
   if (!canEdit) {
-    showNotification('Sem permissão', 'userSide=' + userSide + ' proposerSide=' + proposerSide + ' auth=' + isAuthority, 'warning');
+    showNotification('Sem permissão', 'Você não pode editar este resultado.', 'warning');
     return;
   }
+
+  var _esc = function(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
 
   // Pre-fill inputs with current pending values
   var prefillP1 = pr && pr.scoreP1 != null ? pr.scoreP1 : '';
