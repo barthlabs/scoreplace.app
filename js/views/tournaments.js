@@ -149,12 +149,16 @@ function renderTournaments(container, tournamentId = null) {
         if (!uid2 && targetUidOrName && !targetUidOrName.includes(' ')) uid2 = targetUidOrName;
 
         function _doFormDupla() {
-            // Entrada LIMPA — sem herdar foto/email de nenhum membro
+            // Entrada sempre objeto com p1Name/p2Name/p1Uid/p2Uid
             var arr2 = Array.isArray(t.participants) ? t.participants : [];
             var fi1 = arr2.findIndex(function(p) { return uid1 ? (typeof p === 'object' && p.uid === uid1) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name1); });
             var fi2 = arr2.findIndex(function(p) { return uid2 ? (typeof p === 'object' && p.uid === uid2) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name2); });
             if (fi1 === -1 || fi2 === -1 || fi1 === fi2) return;
-            var merged = { displayName: newName, name: newName, uid: uid1 || uid2 || '', p1Name: name1, p1Uid: uid1, p2Name: name2, p2Uid: uid2, ligaActive: true };
+            // Tentar recuperar uid dos participantes se não tínhamos no momento do drag
+            var _p1 = arr2[fi1]; var _p2 = arr2[fi2];
+            var _u1 = uid1 || (typeof _p1==='object' ? (_p1.uid||'') : '');
+            var _u2 = uid2 || (typeof _p2==='object' ? (_p2.uid||'') : '');
+            var merged = { displayName: newName, name: newName, uid: _u1 || _u2 || '', p1Name: name1, p1Uid: _u1, p2Name: name2, p2Uid: _u2, ligaActive: true };
             var maxI = Math.max(fi1, fi2), minI = Math.min(fi1, fi2);
             arr2.splice(maxI, 1); arr2.splice(minI, 1); arr2.splice(minI, 0, merged);
             t.participants = arr2;

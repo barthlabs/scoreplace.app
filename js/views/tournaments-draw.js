@@ -1303,18 +1303,16 @@ window.handleDropTeam = function (e, targetIdx) {
                 const p2final = arr[i2];
                 const fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
                 const fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
-                let mergedEntry;
-                if (fuid1 || fuid2) {
-                    mergedEntry = {
-                        displayName: newName, name: newName,
-                        uid: fuid1 || fuid2,
-                        p1Name: name1, p1Uid: fuid1,
-                        p2Name: name2, p2Uid: fuid2,
-                        ligaActive: true
-                    };
-                } else {
-                    mergedEntry = newName;
-                }
+                // v1.8.88: sempre objeto com p1Name/p2Name/p1Uid/p2Uid,
+                // mesmo quando nenhum tem uid — nunca string pura.
+                // String pura impede lookup por uid nas regras Firestore.
+                const mergedEntry = {
+                    displayName: newName, name: newName,
+                    uid: fuid1 || fuid2 || '',
+                    p1Name: name1, p1Uid: fuid1,
+                    p2Name: name2, p2Uid: fuid2,
+                    ligaActive: true
+                };
 
                 // Remover ambos e inserir dupla (índice maior primeiro)
                 const maxI = Math.max(i1, i2);

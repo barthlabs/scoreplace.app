@@ -477,9 +477,15 @@ window.submitTeamEnroll = function (tId) {
     }
 
     const teamString = teamNames.join(' / ');
-    const participantObj = { name: teamString, email: user.email, displayName: teamString, uid: user.uid, ligaActive: true };
-    // Armazena uids dos parceiros para notificações e vinculação futura
-    if (partnerUids.length > 0) participantObj.partnerUids = partnerUids;
+    const participantObj = {
+        name: teamString, displayName: teamString, ligaActive: true,
+        uid: user.uid,
+        // v1.8.88: sempre salvar p1Name/p1Uid/p2Name/p2Uid para garantir
+        // que memberUids inclua todos os membros da dupla
+        p1Name: teamNames[0] || '', p1Uid: user.uid,
+        p2Name: teamNames[1] || '', p2Uid: partnerUids[0] || ''
+    };
+    if (user.email) participantObj.email = user.email;
     // Registrar origem da equipe via extraUpdates
     var _teamOrigins = t.teamOrigins || {};
     _teamOrigins[teamString] = 'inscrita';
