@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.4-beta';
+window.SCOREPLACE_VERSION = '1.9.5-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -215,6 +215,14 @@ window._softRefreshView = function() {
   try {
     var _hash = window.location.hash || '';
     var _hParts = _hash.replace('#','').split('/');
+
+    // v1.9.5: se o user está EM #bracket/:id, marca o key imediatamente.
+    // Assim: bracket → Voltar → #tournaments/:id NÃO dispara o redirect,
+    // porque o key já está setado desde quando estava no bracket.
+    if (_hParts[0] === 'bracket' && _hParts[1]) {
+      try { sessionStorage.setItem('sp_bracketRedirected_' + _hParts[1], '1'); } catch(_bse) {}
+    }
+
     if (_hParts[0] === 'tournaments' && _hParts[1]) {
       var _tId = _hParts[1];
       var _tNow = window.AppStore && window.AppStore.tournaments &&
@@ -223,11 +231,7 @@ window._softRefreshView = function() {
         var _hasDraw = (Array.isArray(_tNow.matches) && _tNow.matches.length > 0) ||
                        (Array.isArray(_tNow.rounds)  && _tNow.rounds.length  > 0) ||
                        (Array.isArray(_tNow.groups)  && _tNow.groups.length  > 0);
-        // v1.9.4: usa sessionStorage por torneio para garantir redirect/toast
-        // só na PRIMEIRA entrada com sorteio pronto nessa sessão do browser.
-        // Antes usava window._bracketRedirectedFor (único por sessão) — se o
-        // usuário saísse e voltasse ao mesmo torneio, a variável ainda estava
-        // setada e não reaparecia, mas ao recarregar a página disparava de novo.
+        // Só redireciona se nunca esteve no bracket desse torneio nessa sessão
         var _ssKey = 'sp_bracketRedirected_' + _tId;
         var _alreadyRedirected = false;
         try { _alreadyRedirected = sessionStorage.getItem(_ssKey) === '1'; } catch(_se) {}

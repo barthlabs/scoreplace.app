@@ -1539,25 +1539,44 @@ function renderDashboard(container) {
       // matchLabel — JOGO N do match ou fallback
       var matchLabel = item.m.label || 'JOGO 1';
 
-      // Avatar/nome de cada jogador
+      // Foto real do jogador: tenta _playerPhotoCache, depois perfil do usuário
       function _initials(name) {
         return (name || '?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase();
       }
-      function _avatarHtml(name) {
+      function _photoForPlayer(name) {
+        // Próprio usuário
+        if (_isMe(name) && cu && cu.photoURL) return cu.photoURL;
+        // Cache global de fotos por nome (populado pelo bracket)
+        if (window._playerPhotoCache && window._playerPhotoCache[name]) return window._playerPhotoCache[name];
+        // Procura nos participantes do torneio referenciado
+        if (tRef && Array.isArray(tRef.participants)) {
+          var p = tRef.participants.find(function(pp) {
+            return pp && (pp.name === name || pp.displayName === name);
+          });
+          if (p && p.photoURL) return p.photoURL;
+        }
+        return null;
+      }
+      // Um jogador (linha): avatar + nome
+      function _playerRow(name) {
         var isMe = _isMe(name);
-        var photoURL = (isMe && cu && cu.photoURL) ? cu.photoURL : null;
+        var photo = _photoForPlayer(name);
         var ini = _sf(_initials(name));
-        var avatarEl = photoURL
-          ? '<img src="' + photoURL + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
+        var avatarEl = photo
+          ? '<img src="' + photo + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
           : '<div style="width:28px;height:28px;border-radius:50%;background:' + (isMe ? 'rgba(99,102,241,0.4)' : 'rgba(148,163,184,0.18)') + ';display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:800;color:' + (isMe ? '#a5b4fc' : '#94a3b8') + ';flex-shrink:0;">' + ini + '</div>';
         var nameEl = '<span style="font-size:0.8rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(name) + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '') + '</span>';
-        return '<div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">' + avatarEl + nameEl + '</div>';
+        return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl + nameEl + '</div>';
       }
+      // Time: jogadores EMPILHADOS verticalmente (um em cima do outro)
       function _teamHtml(teamStr) {
-        return String(teamStr).split(/\s*\/\s*/).filter(Boolean).map(_avatarHtml).join('');
+        var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
+        return '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">' +
+          parts.map(_playerRow).join('') +
+        '</div>';
       }
 
-      var rowStyle = 'display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,0.03);margin-bottom:4px;';
+      var rowStyle = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);margin-bottom:4px;';
       var scoreInputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;-moz-appearance:textfield;';
       var scorePlaceholder = '<div style="width:52px;height:30px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:#475569;flex-shrink:0;">0</div>';
 
