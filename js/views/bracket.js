@@ -1594,9 +1594,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     } else if (_isProposerSelf && !_isAuthorityInner) {
       // Proponente atual: só Editar para corrigir (exceto se disputado — aí aguarda org)
       if (!(_pr && _pr.disputed)) pendingActionBtns = _btnEdit;
-    } else if (_isAuthorityInner) {
+    } else if (_isAuthorityInner && !_isProposerSelf) {
+      // Organizador que não é o proponente atual: pode editar/confirmar diretamente
       pendingActionBtns = _btnEdit;
     }
+    // Se é o proponente atual (mesmo sendo org): aguardando — sem botões
   }
   const _isMyMatch = !!(_cu && !isByeMatch && (function() {
     var sides = [m.p1 || '', m.p2 || ''];
