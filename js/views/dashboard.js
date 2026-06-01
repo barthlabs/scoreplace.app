@@ -1650,7 +1650,7 @@ function renderDashboard(container) {
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         var mid = String(item.m.id || '');
         var btns = _pendTag +
-          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>' +
+          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>' +
           '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
         html += _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
@@ -1674,7 +1674,7 @@ function renderDashboard(container) {
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         var mid = String(item.m.id || '');
         var btns = _pendTag2 +
-          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
+          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
         html += _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
