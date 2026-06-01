@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.98-beta';
+window.SCOREPLACE_VERSION = '1.8.99-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2809,21 +2809,18 @@ window.AppStore = {
     return this.tournaments.filter(function(t) {
       if (t.isPublic) return true;
       if (invitedIds.indexOf(String(t.id)) !== -1) return true;
-      if (!cu) return false;
-      // v1.8.98: uid como fonte primária
-      if (cu.uid) {
-        if (t.creatorUid === cu.uid) return true;
-        if (Array.isArray(t.memberUids) && t.memberUids.indexOf(cu.uid) !== -1) return true;
-      }
-      // Fallback: email (backward compat com torneios sem memberUids)
-      if (cu.email) {
-        var email = cu.email.toLowerCase();
-        if (t.organizerEmail && t.organizerEmail.toLowerCase() === email) return true;
-        if (Array.isArray(t.memberEmails) && t.memberEmails.indexOf(email) !== -1) return true;
-        var pList = Array.isArray(t.participants) ? t.participants : [];
-        if (pList.some(function(p) {
-          return typeof p === 'object' && p && p.email && p.email.toLowerCase() === email;
-        })) return true;
+      if (!cu || !cu.uid) return false;
+      // v1.8.99: uid é a única fonte de identificação
+      if (t.creatorUid === cu.uid) return true;
+      if (Array.isArray(t.memberUids) && t.memberUids.indexOf(cu.uid) !== -1) return true;
+      // Fallback estreito: só para torneios antigos migrados antes da v1.8.99
+      // (memberUids pode estar vazio se a migração falhou)
+      if (!Array.isArray(t.memberUids) || t.memberUids.length === 0) {
+        if (cu.email) {
+          var _em = cu.email.toLowerCase();
+          if (t.organizerEmail && t.organizerEmail.toLowerCase() === _em) return true;
+          if (Array.isArray(t.memberEmails) && t.memberEmails.indexOf(_em) !== -1) return true;
+        }
       }
       return false;
     });
@@ -2831,26 +2828,29 @@ window.AppStore = {
 
   getMyOrganized() {
     if (!this.currentUser) return [];
+    var uid = this.currentUser.uid;
     var email = this.currentUser.email;
-    return this.tournaments.filter(function(t) { return t.organizerEmail === email; });
+    return this.tournaments.filter(function(t) {
+      if (uid && t.creatorUid === uid) return true;
+      // Fallback: organizerEmail para torneios antigos sem creatorUid
+      return email && t.organizerEmail === email;
+    });
   },
 
   getMyParticipations() {
-    if (!this.currentUser) return [];
-    var cu = this.currentUser;
+    if (!this.currentUser || !this.currentUser.uid) return [];
+    var uid = this.currentUser.uid;
     return this.tournaments.filter(function(t) {
-      // v1.8.98: uid first
-      if (cu.uid && Array.isArray(t.memberUids) && t.memberUids.indexOf(cu.uid) !== -1) return true;
-      if (!cu.email) return false;
-      var email = cu.email.toLowerCase();
-      var pList = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-      return pList.some(function(p) {
-        if (typeof p === 'object' && p) {
-          if (cu.uid && p.uid === cu.uid) return true;
-          return p.email && p.email.toLowerCase() === email;
-        }
-        return typeof p === 'string' && p === email;
-      });
+      // uid é a única fonte — participante inscrito aparece em memberUids
+      if (Array.isArray(t.memberUids) && t.memberUids.indexOf(uid) !== -1) return true;
+      // Fallback: torneios sem memberUids (migração pendente)
+      if (!Array.isArray(t.memberUids) || t.memberUids.length === 0) {
+        var pList = Array.isArray(t.participants) ? t.participants : [];
+        return pList.some(function(p) {
+          return typeof p === 'object' && p && p.uid === uid;
+        });
+      }
+      return false;
     });
   },
 

@@ -18,16 +18,19 @@ service cloud.firestore {
     // o campo. A recovery em background (_recoverWipedAdminEmails) repopula
     // adminEmails na próxima sessão para voltar ao caminho normal.
     function isTournamentAdmin(data) {
-      return authEmail() != ''
-        && (
-          // Caminho normal: adminEmails populado
-          (data.adminEmails is list && data.adminEmails.size() > 0
-           && authEmail() in data.adminEmails)
-          // Caminho recovery: adminEmails vazio ou não é lista → usa organizerEmail
-          || (!(data.adminEmails is list && data.adminEmails.size() > 0)
-              && data.organizerEmail is string
-              && data.organizerEmail.lower() == authEmail())
-        );
+      // v1.8.99: uid como fonte primária de autenticação
+      return request.auth != null && (
+        // Caminho uid: creatorUid (mais confiável, imutável)
+        (data.creatorUid is string && data.creatorUid == request.auth.uid)
+        // Caminho adminEmails: backward compat + co-hosts com email
+        || (authEmail() != '' && data.adminEmails is list
+            && data.adminEmails.size() > 0 && authEmail() in data.adminEmails)
+        // Recovery: adminEmails vazio → organizerEmail
+        || (authEmail() != ''
+            && !(data.adminEmails is list && data.adminEmails.size() > 0)
+            && data.organizerEmail is string
+            && data.organizerEmail.lower() == authEmail())
+      );
     }
 
     // Keys legitimately touched by the enroll/deenroll transactions when run
@@ -48,16 +51,17 @@ service cloud.firestore {
     }
 
     // Participant of the tournament.
-    // v1.8.62: verifica por email OU por uid (memberUids[]).
-    // Usuários phone-only não têm email no token — authEmail() retorna ''
-    // para eles. A verificação por uid garante que esses usuários consigam
-    // lançar/aprovar resultados, marcar check-in, etc.
+    // v1.8.99: uid é a fonte primária — funciona para todos os tipos de login.
+    // Email mantido como fallback para torneios sem memberUids (legado).
     function isTournamentParticipant(data) {
       return request.auth != null && (
-        // Caminho email (usuários com email/Google/magic-link)
-        (authEmail() != '' && data.memberEmails is list && authEmail() in data.memberEmails)
-        // Caminho uid (usuários phone-only sem email)
-        || (data.memberUids is list && data.memberUids.size() > 0 && request.auth.uid in data.memberUids)
+        // Fonte primária: uid no memberUids
+        (data.memberUids is list && data.memberUids.size() > 0
+         && request.auth.uid in data.memberUids)
+        // Fallback: email para torneios antigos sem memberUids
+        || (authEmail() != ''
+            && !(data.memberUids is list && data.memberUids.size() > 0)
+            && data.memberEmails is list && authEmail() in data.memberEmails)
       );
     }
     // v1.8.65: usuário pode gerenciar seus próprios emails vinculados
