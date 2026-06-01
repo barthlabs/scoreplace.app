@@ -204,6 +204,12 @@ function renderDashboard(container) {
     return hasDraw || t.status === 'active' || t.status === 'started' || t.status === 'in_progress';
   };
   const sortByDate = (a, b) => {
+    // v1.8.87: torneios EM ANDAMENTO sempre acima dos demais
+    const inA = _isInProgress(a) && a.status !== 'finished';
+    const inB = _isInProgress(b) && b.status !== 'finished';
+    if (inA && !inB) return -1;
+    if (!inA && inB) return 1;
+
     const _hasDate = t => !!(t.startDate || t.registrationLimit || t.endDate);
     const hasA = _hasDate(a), hasB = _hasDate(b);
     if (hasA && !hasB) return -1;
