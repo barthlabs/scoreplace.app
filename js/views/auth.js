@@ -4731,9 +4731,15 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
           // da dupla é "A / B" — propagação de nome individual não deve tocar.
           var _curName = p.displayName || p.name || '';
           if (_curName.indexOf(' / ') !== -1) {
-            // É uma dupla — só atualizar os campos internos p1Name/p2Name se necessário
-            if (p.p1Uid === matchUid && p.p1Name === oldName) { p.p1Name = newName; changed = true; }
-            if (p.p2Uid === matchUid && p.p2Name === oldName) { p.p2Name = newName; changed = true; }
+            // Dupla: atualiza p1Name/p2Name e reconstrói o displayName
+            var _teamChanged = false;
+            if (p.p1Uid === matchUid && p.p1Name === oldName) { p.p1Name = newName; _teamChanged = true; }
+            if (p.p2Uid === matchUid && p.p2Name === oldName) { p.p2Name = newName; _teamChanged = true; }
+            if (_teamChanged) {
+              var _newTeamName = [p.p1Name, p.p2Name].filter(Boolean).join(' / ');
+              if (_newTeamName) { p.displayName = _newTeamName; p.name = _newTeamName; }
+              changed = true;
+            }
           } else if (matchUid && p.uid === matchUid) {
             if (p.displayName !== newName) { p.displayName = newName; changed = true; }
             if (p.name !== newName) { p.name = newName; changed = true; }
