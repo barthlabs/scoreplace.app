@@ -540,31 +540,32 @@ function _findMatch(t, matchId) {
   // Previously missed t.groups[].matches (flat group matches, not in sub-rounds)
   // and t.rodadas entirely — causing silent failures in advance-winner and
   // result-save for those shapes.
+  var _idEq = function(a, b) { return a != null && b != null && String(a) === String(b); };
   if (typeof window._collectAllMatches === 'function') {
     const all = window._collectAllMatches(t);
     for (let i = 0; i < all.length; i++) {
-      if (all[i] && all[i].id === matchId) return all[i];
+      if (all[i] && _idEq(all[i].id, matchId)) return all[i];
     }
     return null;
   }
   // Defensive fallback: bracket-model.js not loaded.
-  if (t.thirdPlaceMatch && t.thirdPlaceMatch.id === matchId) return t.thirdPlaceMatch;
-  let m = (t.matches || []).find(m => m.id === matchId);
+  if (t.thirdPlaceMatch && _idEq(t.thirdPlaceMatch.id, matchId)) return t.thirdPlaceMatch;
+  let m = (t.matches || []).find(m => _idEq(m.id, matchId));
   if (m) return m;
   for (const round of (t.rounds || [])) {
-    m = (round.matches || []).find(m => m.id === matchId);
+    m = (round.matches || []).find(m => _idEq(m.id, matchId));
     if (m) return m;
   }
   for (const group of (t.groups || [])) {
     if (Array.isArray(group.matches)) {
-      m = group.matches.find(m => m.id === matchId);
+      m = group.matches.find(m => _idEq(m.id, matchId));
       if (m) return m;
     }
     for (const round of (group.rounds || [])) {
       if (Array.isArray(round)) {
-        m = round.find(m => m.id === matchId);
+        m = round.find(m => _idEq(m.id, matchId));
       } else {
-        m = (round.matches || []).find(m => m.id === matchId);
+        m = (round.matches || []).find(m => _idEq(m.id, matchId));
       }
       if (m) return m;
     }
