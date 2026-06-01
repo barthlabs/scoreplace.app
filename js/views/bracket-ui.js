@@ -2082,79 +2082,49 @@ window._contestResult = function(tId, matchId) {
 //   says "✅ Confirmar" — on confirm the result is set directly without approval.
 // • Player (proposer or opposing): button says "✏️ Propor placar" — on confirm
 //   a new pendingResult is stored and the other side is notified to approve.
+// Editar resultado pendente: remove pendingResult da memória e abre os
+// inputs inline no card — idêntico ao fluxo normal do bracket.
+// Não salva nada no Firestore até o usuário clicar Confirmar.
 window._editPendingResult = function(tId, matchId) {
   var t = window.AppStore && window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
-  if (!t) { showNotification('Erro', 'Torneio não encontrado (tId=' + tId + ')', 'warning'); return; }
+  if (!t) return;
   var m = _findMatch(t, matchId);
   if (!m) {
-    // Fallback: busca pelo índice 0 quando matchId é vazio/undefined (match único)
     var allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
     if (!matchId && allM.length === 1) m = allM[0];
-    if (!m) { showNotification('Erro', 'Partida não encontrada (id=' + matchId + ')', 'warning'); return; }
+    if (!m) return;
   }
   var cu = window.AppStore && window.AppStore.currentUser;
-  if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
+  if (!cu) return;
 
   var pr = m.pendingResult;
   var isAuthority = _isUserAuthority(t, cu);
   var userSide = _userTeamInMatch(t, m, cu);
-  var proposerSide = 0;
-  if (pr && (pr.proposedBy || pr.proposedByEmail)) {
-    proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
-  }
-  var isProposerSelf = !!(pr && (
-    (cu.uid && pr.proposedBy && cu.uid === pr.proposedBy) ||
-    (cu.email && pr.proposedByEmail && cu.email === pr.proposedByEmail)
-  ));
-  var isOpposingMember = userSide > 0 && userSide !== proposerSide;
-  var canEdit = isAuthority || isProposerSelf || isOpposingMember;
+  var proposerSide = pr && (pr.proposedBy || pr.proposedByEmail)
+    ? _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail }) : 0;
+  var isProposerSelf = !!(pr && ((cu.uid && pr.proposedBy === cu.uid) || (cu.email && pr.proposedByEmail === cu.email)));
+  var canEdit = isAuthority || isProposerSelf || (userSide > 0 && userSide !== proposerSide);
+  if (!canEdit) { showNotification('Sem permissão', 'Você não pode editar este resultado.', 'warning'); return; }
 
-  if (!canEdit) {
-    showNotification('Sem permissão', 'Você não pode editar este resultado.', 'warning');
-    return;
-  }
+  // Guarda placar atual para pré-preencher os inputs
+  var s1 = pr && pr.scoreP1 != null ? pr.scoreP1 : '';
+  var s2 = pr && pr.scoreP2 != null ? pr.scoreP2 : '';
 
-  var _esc = function(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+  // Remove pendingResult da memória (não salva — só abre os inputs)
+  delete m.pendingResult;
+  _propagateMatchUpdate(t, m);
 
-  // Pre-fill inputs with current pending values
-  var prefillP1 = pr && pr.scoreP1 != null ? pr.scoreP1 : '';
-  var prefillP2 = pr && pr.scoreP2 != null ? pr.scoreP2 : '';
+  // Re-renderiza o card inline com inputs pré-preenchidos
+  _rerenderBracket(tId, matchId);
 
-  var existingOverlay = document.getElementById('edit-pending-overlay');
-  if (existingOverlay) existingOverlay.remove();
-
-  var matchLabel = window._safeHtml((m.p1 || '?') + ' vs ' + (m.p2 || '?'));
-  var authorityNote = isAuthority
-    ? '<p style="margin:0 0 12px;font-size:0.75rem;color:#a5f3fc;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);border-radius:6px;padding:6px 10px;">Você tem autoridade — o placar será confirmado diretamente.</p>'
-    : '';
-  var confirmLabel = isAuthority ? '✅ Confirmar' : '✏️ Propor placar';
-
-  var overlay = document.createElement('div');
-  overlay.id = 'edit-pending-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:10060;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);padding:1rem;';
-  overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);border:1px solid rgba(99,102,241,0.4);border-radius:16px;padding:24px;width:100%;max-width:360px;box-shadow:0 0 32px rgba(99,102,241,0.18);">' +
-    '<h3 style="margin:0 0 6px;font-size:1rem;color:#a78bfa;">✏️ Editar resultado</h3>' +
-    '<p style="margin:0 0 12px;font-size:0.78rem;color:var(--text-muted,#94a3b8);">' + matchLabel + '</p>' +
-    authorityNote +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">' +
-      '<div>' +
-        '<label style="display:block;font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-bottom:4px;">' + window._safeHtml(m.p1 || 'Lado 1') + '</label>' +
-        '<input id="edit-pending-s1" type="number" min="0" max="99" value="' + prefillP1 + '" placeholder="0" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:1rem;text-align:center;box-sizing:border-box;">' +
-      '</div>' +
-      '<div>' +
-        '<label style="display:block;font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-bottom:4px;">' + window._safeHtml(m.p2 || 'Lado 2') + '</label>' +
-        '<input id="edit-pending-s2" type="number" min="0" max="99" value="' + prefillP2 + '" placeholder="0" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:1rem;text-align:center;box-sizing:border-box;">' +
-      '</div>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px;">' +
-      '<button onclick="document.getElementById(\'edit-pending-overlay\').remove()" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted,#94a3b8);border-radius:8px;padding:9px;font-size:0.82rem;cursor:pointer;">Cancelar</button>' +
-      '<button onclick="window._confirmEditPending(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\')" style="flex:2;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;border-radius:8px;padding:9px;font-size:0.85rem;font-weight:700;cursor:pointer;">' + confirmLabel + '</button>' +
-    '</div>' +
-  '</div>';
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-  var inp = document.getElementById('edit-pending-s1');
-  if (inp) inp.focus();
+  setTimeout(function() {
+    var s1El = document.getElementById('s1-' + matchId);
+    var s2El = document.getElementById('s2-' + matchId);
+    if (s1El && s1 !== '') { s1El.value = s1; }
+    if (s2El && s2 !== '') { s2El.value = s2; }
+    if (typeof window._highlightWinner === 'function') window._highlightWinner(matchId);
+    if (s1El) s1El.focus();
+  }, 80);
 };
 
 // Internal: confirm the edit.
