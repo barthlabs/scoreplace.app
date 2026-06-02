@@ -1036,6 +1036,17 @@ function renderDashboard(container) {
       var l = label.toLowerCase();
       return l === email || (dName && l === dName) || (cu.uid && l === cu.uid);
     }
+    function _isMeByUid(name, tournament) {
+      if (!cu.uid || !name || !tournament) return false;
+      var parts = Array.isArray(tournament.participants) ? tournament.participants : [];
+      for (var _i = 0; _i < parts.length; _i++) {
+        var _p = parts[_i];
+        if (!_p || typeof _p !== 'object') continue;
+        if (_p.p1Name === name && _p.p1Uid === cu.uid) return true;
+        if (_p.p2Name === name && _p.p2Uid === cu.uid) return true;
+      }
+      return false;
+    }
 
     participacoes.forEach(function(t) {
       if (t.status === 'finished') return;
@@ -1126,8 +1137,8 @@ function renderDashboard(container) {
           // Singles: m.p1/p2 são nomes; doubles: slash-separated.
           team1Names = String(m.p1 || '').split(/\s*\/\s*/).filter(Boolean);
           team2Names = String(m.p2 || '').split(/\s*\/\s*/).filter(Boolean);
-          inTeam1 = team1Names.some(_isMe) || _isMe(m.p1);
-          inTeam2 = team2Names.some(_isMe) || _isMe(m.p2);
+          inTeam1 = team1Names.some(_isMe) || _isMe(m.p1) || team1Names.some(function(n) { return _isMeByUid(n, t); });
+          inTeam2 = team2Names.some(_isMe) || _isMe(m.p2) || team2Names.some(function(n) { return _isMeByUid(n, t); });
         }
         if (!inTeam1 && !inTeam2) return;
 
@@ -1346,6 +1357,19 @@ function renderDashboard(container) {
       if (dName && (l === dName || l.indexOf(dName) !== -1 || dName.indexOf(l) !== -1)) return true;
       return false;
     }
+    // Verifica se um nome individual é membro de uma dupla do usuário corrente,
+    // usando p1Uid/p2Uid do participante — garante individualidade de duplas.
+    function _isMeByUid(name, tournament) {
+      if (!uid || !name || !tournament) return false;
+      var parts = Array.isArray(tournament.participants) ? tournament.participants : [];
+      for (var _i = 0; _i < parts.length; _i++) {
+        var _p = parts[_i];
+        if (!_p || typeof _p !== 'object') continue;
+        if (_p.p1Name === name && _p.p1Uid === uid) return true;
+        if (_p.p2Name === name && _p.p2Uid === uid) return true;
+      }
+      return false;
+    }
 
     // Formata time com "(você)" no nome do usuário atual. Nomes completos, sem abreviação.
     // Ex: "Nelson Barth (você) / Zilda Quintas vs. Kelly Barth / Rodrigo Barth"
@@ -1400,8 +1424,8 @@ function renderDashboard(container) {
         var p2Names = String(m.p2 || '').split(/\s*\/\s*/).filter(Boolean);
         if (m.isMonarch && Array.isArray(m.team1)) p1Names = m.team1.slice();
         if (m.isMonarch && Array.isArray(m.team2)) p2Names = m.team2.slice();
-        var inP1 = p1Names.some(_isMe) || _isMe(m.p1);
-        var inP2 = p2Names.some(_isMe) || _isMe(m.p2);
+        var inP1 = p1Names.some(_isMe) || _isMe(m.p1) || p1Names.some(function(n) { return _isMeByUid(n, t); });
+        var inP2 = p2Names.some(_isMe) || _isMe(m.p2) || p2Names.some(function(n) { return _isMeByUid(n, t); });
         if (!inP1 && !inP2) return;
 
         // Fase/rodada para exibir no card (igual ao "Próximas Partidas" antigo)

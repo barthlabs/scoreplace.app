@@ -387,6 +387,9 @@ function _userTeamInMatch(t, m, user) {
     }
     if (pp && typeof pp === 'object') {
       if (user.uid && pp.uid && pp.uid === user.uid) return true;
+      // Duplas: verificar p1Uid e p2Uid individualmente
+      if (user.uid && pp.p1Uid && pp.p1Uid === user.uid) return true;
+      if (user.uid && pp.p2Uid && pp.p2Uid === user.uid) return true;
       if (user.email && pp.email && pp.email === user.email) return true;
       if (user.email && pp.email_lower && pp.email_lower === (user.email || '').toLowerCase()) return true;
     }
@@ -1054,6 +1057,17 @@ window._autoSubstituteWO = function(tId, overrideReplacementName) {
           else {
             partsArr[pi].displayName = newTeamName;
             partsArr[pi].name = newTeamName;
+            // Atualiza p1Uid/p2Uid quando o membro substituído é o p1 ou p2 da dupla
+            // Garante individualidade: cada membro da dupla tem seu próprio UID
+            if (nextPresent && typeof nextPresent === 'object' && nextPresent.uid) {
+              if (partsArr[pi].p1Name === absentMemberName) {
+                partsArr[pi].p1Name = replacementName;
+                partsArr[pi].p1Uid = nextPresent.uid;
+              } else if (partsArr[pi].p2Name === absentMemberName) {
+                partsArr[pi].p2Name = replacementName;
+                partsArr[pi].p2Uid = nextPresent.uid;
+              }
+            }
             // nested .participants[] (se existir) — replica substituição individual
             if (Array.isArray(partsArr[pi].participants)) {
               partsArr[pi].participants.forEach(function(sub) {
