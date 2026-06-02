@@ -1561,10 +1561,11 @@ function renderDashboard(container) {
       function _playerRow(name) {
         var isMe = _isMe(name);
         var photo = _photoForPlayer(name);
-        var ini = _sf(_initials(name));
-        var avatarEl = photo
-          ? '<img src="' + photo + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
-          : '<div style="width:28px;height:28px;border-radius:50%;background:' + (isMe ? 'rgba(99,102,241,0.4)' : 'rgba(148,163,184,0.18)') + ';display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:800;color:' + (isMe ? '#a5b4fc' : '#94a3b8') + ';flex-shrink:0;">' + ini + '</div>';
+        // Usa _profileAvatarUrl (dicebear initials como fallback) — mesmo pipeline do bracket
+        var avatarSrc = (typeof window._profileAvatarUrl === 'function')
+          ? window._profileAvatarUrl(name, photo, 28)
+          : (photo || ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28'));
+        var avatarEl = '<img src="' + avatarSrc + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src=\'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28\'">';
         var nameEl = '<span style="font-size:0.8rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(name) + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '') + '</span>';
         return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl + nameEl + '</div>';
       }
@@ -1649,9 +1650,17 @@ function renderDashboard(container) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         var mid = String(item.m.id || '');
-        var btns = _pendTag +
-          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>' +
-          '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
+        // Fase 1: adversário vê proposta original → Editar + Confirmar
+        // Fase 3: time original vê contra-proposta → Confirmar + Contestar
+        var _isCounter = !!pr.isCounterProposal;
+        var btns = _pendTag;
+        if (_isCounter) {
+          btns += '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
+          btns += '<button data-pending-action="contest" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">❌ Contestar</button>';
+        } else {
+          btns += '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
+          btns += '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
+        }
         html += _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
@@ -2501,6 +2510,8 @@ function renderDashboard(container) {
         } else {
           window.location.hash = '#bracket/' + tId;
         }
+      } else if (action === 'contest' && typeof window._contestResult === 'function') {
+        window._contestResult(tId, mId);
       } else if (action === 'approve' && typeof window._approveResult === 'function') {
         window._approveResult(tId, mId);
       }

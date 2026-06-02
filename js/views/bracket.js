@@ -1235,13 +1235,15 @@ async function _preloadPlayerPhotos(tournament) {
           var data = doc.data();
           if (!data.photoURL || data.photoURL.indexOf('dicebear.com') !== -1) return;
           var photo = data.photoURL;
-          // Cacheia sob o displayName real do usuário no Firestore
+          // Cacheia APENAS sob o displayName real do Firestore — não contamina
+          // outros membros da dupla com a foto do capitão.
           var realName = (data.displayName || '').trim().toLowerCase();
           if (realName) window._playerPhotoCache[realName] = photo;
-          // Também cacheia sob cada membro do nome de time (para duplas)
-          teamName.split(' / ').map(function(n) { return n.trim().toLowerCase(); }).filter(Boolean).forEach(function(n) {
-            if (!window._playerPhotoCache[n]) window._playerPhotoCache[n] = photo;
-          });
+          // Também cacheia sob o teamName completo (busca direta pelo nome do time)
+          var teamKey = teamName.trim().toLowerCase();
+          if (teamKey && !window._playerPhotoCache[teamKey]) {
+            window._playerPhotoCache[teamKey] = photo;
+          }
         })
         .catch(function() {})
     );
