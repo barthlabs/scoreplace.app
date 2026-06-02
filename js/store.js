@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.44-beta';
+window.SCOREPLACE_VERSION = '1.9.45-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2144,16 +2144,7 @@ window.AppStore = {
           if (typeof window._hideBootLoader === 'function') {
             setTimeout(window._hideBootLoader, 120);
           }
-          // Auto-scroll para resultados pendentes de aprovação, uma vez por sessão.
-          // Roda após o boot loader ter sumido (150ms) para o scroll ser visível.
-          setTimeout(function() {
-            if (window._dashPendingScrolled) return;
-            var _section = document.querySelector('[data-has-pending="1"]');
-            if (_section) {
-              window._dashPendingScrolled = true;
-              _section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          }, 450);
+          // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
           // Auto-fix stale names after tournaments are loaded (no currentUser check needed)
           if (typeof window._autoFixStaleNames === 'function') {
             window._autoFixStaleNames().catch(function(e) { window._warn('Auto-fix stale names error:', e); });

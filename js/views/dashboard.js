@@ -2508,8 +2508,26 @@ function renderDashboard(container) {
   `;
   container.innerHTML = html;
 
-  // Auto-scroll tratado pelo store.js após primeiro snapshot — não fazer aqui
-  // para evitar conflito com a restauração de scroll do _softRefreshView.
+  // Auto-scroll para resultados pendentes de aprovação.
+  // 600ms = após todos os _jumpTop do router (último em 350ms) e após a
+  // restauração de scroll do _softRefreshView (RAF ~16ms).
+  // Em navegação fresca (!_isSoftRefresh) reseta o guard para que o scroll
+  // aconteça nessa visita. Em soft-refresh só rola se ainda não rolou (guard=false).
+  if (!window._isSoftRefresh) {
+    // Chegou ao dashboard via navegação — reset do guard para esta sessão de visita
+    window._dashPendingScrolled = false;
+  }
+  setTimeout(function() {
+    if (window._dashPendingScrolled) return;
+    // Confirmar que ainda estamos no dashboard
+    var _h = (window.location.hash || '').replace('#', '').split('/')[0];
+    if (_h && _h !== 'dashboard') return;
+    var _section = document.querySelector('[data-has-pending="1"]');
+    if (_section) {
+      window._dashPendingScrolled = true;
+      _section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, 600);
 
   // Botões de resultado pendente — event listeners via JS (evita parsing issues
   // de onclick em HTML gerado dinamicamente em mobile Safari)
