@@ -1391,6 +1391,7 @@ function renderDashboard(container) {
 
     var pendingForMe = [];   // m.pendingResult e sou time adversário (preciso agir)
     var pendingByMe = [];    // m.pendingResult e sou o proposer (aguardando adversário)
+    var disputedMatches = []; // m.pendingResult.disputed — aguardando organizador (Fase 4)
     var noResult = [];       // match sem resultado, torneio ativo, sou participante
     var upcoming = [];       // próximas partidas (sem resultado, resultEntry = organizer)
     var recentConfirmed = []; // últimas partidas com resultado confirmado
@@ -1448,11 +1449,16 @@ function renderDashboard(container) {
           recentConfirmed.push(Object.assign({ confirmedAt: m.updatedAt || m.proposedAt || 0, inP1: inP1 }, matchInfo));
         } else if (m.pendingResult) {
           var pr = m.pendingResult;
-          var isProposerSelf = (uid && pr.proposedBy === uid) || (email && pr.proposedByEmail === (cu.email || '').toLowerCase());
-          if (isProposerSelf) {
-            pendingByMe.push(Object.assign({ inP1: inP1 }, matchInfo));
+          if (pr.disputed) {
+            // Fase 4: já contestado — aguardando organizador. Jogador não age mais.
+            disputedMatches.push(Object.assign({ inP1: inP1 }, matchInfo));
           } else {
-            pendingForMe.push(Object.assign({ inP1: inP1 }, matchInfo));
+            var isProposerSelf = (uid && pr.proposedBy === uid) || (email && pr.proposedByEmail === (cu.email || '').toLowerCase());
+            if (isProposerSelf) {
+              pendingByMe.push(Object.assign({ inP1: inP1 }, matchInfo));
+            } else {
+              pendingForMe.push(Object.assign({ inP1: inP1 }, matchInfo));
+            }
           }
         } else if (t.status !== 'finished') {
           var re = t.resultEntry || 'organizer';
@@ -1471,7 +1477,7 @@ function renderDashboard(container) {
     recentConfirmed.sort(function(a, b) { return (b.confirmedAt || 0) - (a.confirmedAt || 0); });
     recentConfirmed = recentConfirmed.slice(0, 5);
 
-    var totalSection = pendingForMe.length + pendingByMe.length + noResult.length + upcoming.length + recentConfirmed.length;
+    var totalSection = pendingForMe.length + pendingByMe.length + disputedMatches.length + noResult.length + upcoming.length + recentConfirmed.length;
     if (totalSection === 0) return '';
 
     var _sf = window._safeHtml || function(s) { return String(s || ''); };
@@ -1487,7 +1493,7 @@ function renderDashboard(container) {
       return '🏅';
     };
 
-    var _hasPendingApproval = (pendingForMe.length + pendingByMe.length) > 0;
+    var _hasPendingApproval = (pendingForMe.length + pendingByMe.length + disputedMatches.length) > 0;
     var html = '<div id="meus-resultados-section"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
     html += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;">🏅 Meus Resultados</h3>';
 
@@ -1716,6 +1722,27 @@ function renderDashboard(container) {
           cardBorder: 'rgba(148,163,184,0.4)',
           cardBg: 'rgba(148,163,184,0.06)',
           cardShadow: '0 4px 12px rgba(0,0,0,0.15)'
+        });
+      });
+      html += '</div></div>';
+    }
+
+    // ── Em disputa — aguardando organizador (Fase 4) ──
+    if (disputedMatches.length > 0) {
+      html += '<div style="margin-bottom:10px;">';
+      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.04em;">🚨 Em disputa — aguardando organizador (' + disputedMatches.length + ')</p>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      var _dispTag = '<span style="font-size:0.6rem;font-weight:800;color:#f87171;background:rgba(239,68,68,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;">EM DISPUTA</span>';
+      disputedMatches.forEach(function(item) {
+        var pr = item.m.pendingResult || {};
+        var s1 = pr.scoreP1, s2 = pr.scoreP2;
+        // Sem botões de ação — o jogador não age mais, só o organizador (no bracket).
+        html += _miniBracketCard(item, false, {
+          pendingScores: {p1: s1, p2: s2},
+          headerBtns: _dispTag,
+          cardBorder: 'rgba(239,68,68,0.5)',
+          cardBg: 'rgba(239,68,68,0.06)',
+          cardShadow: '0 0 14px rgba(239,68,68,0.18),0 4px 12px rgba(0,0,0,0.15)'
         });
       });
       html += '</div></div>';

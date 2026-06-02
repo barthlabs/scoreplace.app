@@ -2101,18 +2101,97 @@ window._contestResult = function(tId, matchId) {
           level: 'fundamental',
           timestamp: Date.now()
         };
+        var _orgSeen = {};
         var orgUid = t.creatorUid;
         if (orgUid) {
+          _orgSeen[orgUid] = true;
           window._sendUserNotification(orgUid, notifOrg);
         } else {
           var orgEmail = t.organizerEmail || t.creatorEmail;
           var parts = Array.isArray(t.participants) ? t.participants : [];
           var orgPart = parts.find(function(p) { return typeof p === 'object' && p.email === orgEmail; });
-          if (orgPart && orgPart.uid) window._sendUserNotification(orgPart.uid, notifOrg);
+          if (orgPart && orgPart.uid) { _orgSeen[orgPart.uid] = true; window._sendUserNotification(orgPart.uid, notifOrg); }
+        }
+        // Notifica também co-organizadores ativos
+        if (Array.isArray(t.coHosts)) {
+          t.coHosts.forEach(function(ch) {
+            if (ch && ch.status === 'active' && ch.uid && !_orgSeen[ch.uid]) {
+              _orgSeen[ch.uid] = true;
+              window._sendUserNotification(ch.uid, notifOrg);
+            }
+          });
         }
       }
 
       showNotification('❌ Contestação enviada', 'O organizador foi notificado para resolver o resultado.', 'success');
+      _rerenderBracket(tId, matchId);
+    }
+  );
+};
+
+// Helper: notifica todos os UIDs individuais dos participantes de um match
+// (p1Uid + p2Uid de duplas, via _participantUids). Usado por organizador na
+// resolução de disputas (Fase 4) e refazer partida.
+function _notifyMatchParticipants(t, m, notifData) {
+  if (typeof window._sendUserNotification !== 'function') return;
+  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
+  var seen = {};
+  [m.p1, m.p2].forEach(function(side) {
+    if (!side || side === 'TBD' || side === 'BYE') return;
+    var p = parts.find(function(pp) {
+      return typeof pp === 'object' && (pp.displayName || pp.name || '') === side;
+    });
+    _allUids(p).forEach(function(u) {
+      if (u && !seen[u]) { seen[u] = true; window._sendUserNotification(u, notifData); }
+    });
+  });
+}
+
+// Fase 4 — Resolução do organizador: REFAZER partida.
+// O organizador zera o placar (volta a 0×0 / sem resultado) para que a
+// partida seja jogada novamente. Limpa pendingResult + disputed. Notifica
+// todos os participantes individuais. Só autoridade (org/co-host) pode.
+window._organizerResetMatch = function(tId, matchId) {
+  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  if (!t) return;
+  var m = _findMatch(t, matchId);
+  if (!m) { showNotification('Jogo não encontrado', '', 'warning'); return; }
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
+  if (!_isUserAuthority(t, cu)) {
+    showNotification('Sem permissão', 'Só o organizador pode refazer a partida.', 'warning');
+    return;
+  }
+  showConfirmDialog(
+    '🔄 Refazer partida',
+    'Você está atuando como ORGANIZADOR. O placar voltará para 0×0 e a partida deverá ser jogada novamente. Os participantes serão notificados. Confirma?',
+    function() {
+      // Limpa qualquer resultado/proposta/disputa
+      delete m.pendingResult;
+      delete m.winner;
+      delete m.draw;
+      delete m.scoreP1; delete m.scoreP2;
+      delete m.sets; delete m.setsWonP1; delete m.setsWonP2;
+      delete m.totalGamesP1; delete m.totalGamesP2;
+      delete m.fixedSet;
+
+      _propagateMatchUpdate(t, m);
+      window.AppStore.logAction(tId, 'Organizador refez a partida (placar zerado): ' + m.p1 + ' vs ' + m.p2);
+      window.AppStore.syncImmediate(tId);
+
+      _notifyMatchParticipants(t, m, {
+        type: 'match-reset',
+        title: '🔄 Partida reaberta pelo organizador',
+        message: m.p1 + ' vs ' + m.p2 + ' — o organizador zerou o placar. A partida deve ser jogada novamente.',
+        tournamentId: t.id,
+        tournamentName: t.name,
+        matchId: m.id,
+        level: 'fundamental',
+        timestamp: Date.now()
+      });
+
+      showNotification('🔄 Partida reaberta', 'O placar foi zerado. A partida deve ser jogada novamente.', 'success');
       _rerenderBracket(tId, matchId);
     }
   );
@@ -2244,8 +2323,23 @@ window._confirmEditPending = function(tId, matchId) {
   var winner = s1 > s2 ? m.p1 : (s2 > s1 ? m.p2 : null);
   var editorName = cu.displayName || cu.email || 'Usuário';
 
+  // Fase 4 — Organizador lança 0×0 = REFAZER partida (não é empate definitivo).
+  // User: "O organizador pode estipular um placar e esse se torna definitivo
+  // (salvo o 0 a 0)." 0×0 significa reabrir/refazer.
+  if (isAuthority && s1 === 0 && s2 === 0) {
+    var _ov0 = document.getElementById('edit-pending-overlay');
+    if (_ov0) _ov0.remove();
+    if (typeof window._organizerResetMatch === 'function') {
+      window._organizerResetMatch(tId, matchId);
+    }
+    return;
+  }
+
   if (isAuthority) {
     // ── Authority path: confirm directly (mirrors _approveResult logic) ──
+    // Detecta se está resolvendo uma DISPUTA (Fase 4) — o organizador troca
+    // de papel: atuava como jogador até a Fase 3, agora atua como organizador.
+    var _wasDisputed = !!(m.pendingResult && m.pendingResult.disputed);
     var pr = m.pendingResult || {};
     if (pr.useSets && Array.isArray(pr.sets)) {
       m.sets = pr.sets.slice();
@@ -2320,27 +2414,28 @@ window._confirmEditPending = function(tId, matchId) {
 
     if (typeof window._sendUserNotification === 'function') {
       var resultText = m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — ' + (m.draw ? _t('bui.drawResult') : _t('bui.matchWon', {winner: m.winner}));
-      var notifData = {
+      // Fase 4: se resolveu uma disputa, deixa claro que foi decisão do organizador.
+      var notifData = _wasDisputed ? {
+        type: 'result',
+        title: '⚖️ Resultado definido pelo organizador',
+        message: resultText + ' — placar definitivo lançado por ' + editorName + ' (organizador).',
+        tournamentId: tId,
+        tournamentName: t.name,
+        matchId: m.id,
+        level: 'fundamental',
+        timestamp: Date.now()
+      } : {
         type: 'result',
         title: '✅ Resultado confirmado',
         message: resultText,
         tournamentId: tId,
         tournamentName: t.name,
+        matchId: m.id,
         level: 'fundamental',
         timestamp: Date.now()
       };
-      var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-      [m.p1, m.p2].forEach(function(side) {
-        if (!side || side === 'TBD' || side === 'BYE') return;
-        var members = side.indexOf('/') !== -1 ? side.split('/').map(function(n) { return n.trim(); }) : [side];
-        members.forEach(function(nm) {
-          var p = parts.find(function(pp) {
-            var n = typeof pp === 'string' ? pp : (pp.displayName || pp.name || '');
-            return n === nm;
-          });
-          if (p && typeof p === 'object' && p.uid) window._sendUserNotification(p.uid, notifData);
-        });
-      });
+      // Notifica todos os UIDs individuais (p1Uid + p2Uid de duplas).
+      _notifyMatchParticipants(t, m, notifData);
     }
 
   } else {

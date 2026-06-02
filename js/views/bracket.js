@@ -1661,11 +1661,27 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     var _proposerName = window._safeHtml(_pr.proposedByName || 'Jogador');
     if (_pr.disputed) {
       var _disputerName = window._safeHtml(_pr.disputedByName || 'Jogador');
+      var _scoreDisp = (_pr.scoreP1 != null ? _pr.scoreP1 : '?') + ' × ' + (_pr.scoreP2 != null ? _pr.scoreP2 : '?');
+      // Fase 4 — Resolução do organizador. Mostra o painel de ação SÓ para a
+      // autoridade (org/co-host). Deixa claro que ele troca de papel: atuava
+      // como jogador (Fases 1-3), agora atua como ORGANIZADOR.
+      var _orgResolvePanel = '';
+      if (_isAuthorityInner) {
+        var _btnOrgFinal = `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
+            style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.45);color:#4ade80;border-radius:8px;padding:6px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;">⚖️ Lançar placar definitivo</button>`;
+        var _btnOrgRedo = `<button onclick="window._organizerResetMatch('${_esc(tId)}','${_esc(m.id)}')"
+            style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;margin-left:6px;">🔄 Refazer (0×0)</button>`;
+        _orgResolvePanel = `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(239,68,68,0.35);">
+          <div style="font-size:0.68rem;color:#fca5a5;font-weight:700;margin-bottom:6px;">🛠️ Você está atuando como <b>ORGANIZADOR</b> — resolva o resultado:</div>
+          <div style="display:flex;gap:0;flex-wrap:wrap;">${_btnOrgFinal}${_btnOrgRedo}</div>
+        </div>`;
+      }
       pendingBanner = `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;color:#f87171;">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;">
           <span style="font-size:0.85rem;">🚨</span>
-          <span><b>Em disputa</b> — contestado por <b>${_disputerName}</b>. Aguardando resolução do organizador.</span>
+          <span><b>Em disputa</b> — placar ${_scoreDisp} contestado por <b>${_disputerName}</b>.${_isAuthorityInner ? '' : ' Aguardando resolução do organizador.'}</span>
         </div>
+        ${_orgResolvePanel}
       </div>`;
     } else {
       pendingBanner = `<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;color:#fbbf24;">
