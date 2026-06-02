@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.62-beta';
+window.SCOREPLACE_VERSION = '1.9.63-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2552,6 +2552,8 @@ window.AppStore = {
         // never actually persisted to Firestore (save payload omitted them).
         // v0.16.5 adds save+load for these so the user's visibility/mute/auto
         // check-in choices survive app restarts.
+        // v1.9.63: preferências de tamanho do placar ao vivo (sliders).
+        if (profile.liveScorePrefs && typeof profile.liveScorePrefs === 'object') this.currentUser.liveScorePrefs = profile.liveScorePrefs;
         if (profile.presenceVisibility) this.currentUser.presenceVisibility = profile.presenceVisibility;
         if (profile.presenceMuteDays !== undefined) this.currentUser.presenceMuteDays = profile.presenceMuteDays;
         if (profile.presenceMuteUntil !== undefined) this.currentUser.presenceMuteUntil = profile.presenceMuteUntil;

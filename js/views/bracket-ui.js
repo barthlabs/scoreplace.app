@@ -5650,7 +5650,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var pn = players[ni];
         var isServing = serverInfo && !state.isFinished && serverInfo.team === team && serverInfo.name === pn;
         var fullName = window._safeHtml(pn);
-        var avatar = _liveAvatarHtml(pn, 30);
+        var avatar = '<span class="live-av-wrap">' + _liveAvatarHtml(pn, 30) + '</span>';
 
         // Serve ball: shown for the current server. Draggable when serve can still be changed.
         var servBall = '';
@@ -5677,7 +5677,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         cards += '<div' + dropAttr + ballCardAttr + ' onclick="window._liveEditName(' + team + ',' + ni + ')" style="cursor:pointer;display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);transition:transform 0.15s,background 0.15s;min-width:0;">' +
           servBall +
           avatar +
-          '<span style="flex:1;min-width:0;font-size:clamp(0.72rem,2.2vw,0.88rem);font-weight:' + (isServing ? '800' : '600') + ';color:' + (isServing ? '#fbbf24' : 'rgba(255,255,255,0.92)') + ';white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</span>' +
+          '<span style="flex:1;min-width:0;font-size:calc(clamp(0.72rem,2.2vw,0.88rem) * var(--live-name-scale,1));font-weight:' + (isServing ? '800' : '600') + ';color:' + (isServing ? '#fbbf24' : 'rgba(255,255,255,0.92)') + ';white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">' + fullName + '</span>' +
         '</div>';
       }
       // Team box wrapping all players
@@ -5688,7 +5688,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // caminho mobile-first: tap target gordo, tipografia XL, cores atuais).
     var _upBtn = function(player) {
       var clr = player === 1 ? '#3b82f6' : '#ef4444';
-      return '<button onclick="window._liveScorePoint(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:clamp(3.8rem,9vw,5rem);font-weight:900;border-radius:18px 18px 0 0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:clamp(120px,22vh,180px);box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.96)\'" ontouchend="this.style.transform=\'\'">▲</button>';
+      return '<button onclick="window._liveScorePoint(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(3.8rem,9vw,5rem) * var(--live-btn-scale,1));font-weight:900;border-radius:18px 18px 0 0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:calc(clamp(120px,22vh,180px) * var(--live-btn-scale,1));box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.96)\'" ontouchend="this.style.transform=\'\'">▲</button>';
     };
     var _downBtn = function(player) {
       return '<button onclick="window._liveScoreMinus(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.08);color:var(--text-muted);font-size:1.2rem;font-weight:700;border-radius:0 0 16px 16px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:clamp(52px,8vh,72px);border-top:1px solid rgba(255,255,255,0.06);" ontouchstart="this.style.background=\'rgba(255,255,255,0.15)\'" ontouchend="this.style.background=\'\'">▼</button>';
@@ -5725,9 +5725,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
         '<div class="live-games-box" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:clamp(12px,3vh,24px) clamp(16px,4vw,36px);">' +
           '<span style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
           '<div style="display:flex;align-items:center;gap:clamp(12px,4vw,24px);">' +
-            '<span style="font-size:clamp(4rem,14vw,7rem);font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-            '<span style="font-size:clamp(2rem,6vw,3.5rem);font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
-            '<span style="font-size:clamp(4rem,14vw,7rem);font-weight:900;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+            '<span style="font-size:calc(clamp(4rem,14vw,7rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+            '<span style="font-size:calc(clamp(2rem,6vw,3.5rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
+            '<span style="font-size:calc(clamp(4rem,14vw,7rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
           '</div>' +
         '</div>';
     }
@@ -5773,7 +5773,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       };
       var _lsUpBtn = function(player) {
         var clr = player === 1 ? '#3b82f6' : '#ef4444';
-        return '<button onclick="window._liveScorePoint(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:clamp(2.4rem,6vw,3.2rem);font-weight:900;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:clamp(72px,16vh,110px);box-shadow:0 3px 10px rgba(0,0,0,0.3);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.96)\'" ontouchend="this.style.transform=\'\'">▲</button>';
+        return '<button onclick="window._liveScorePoint(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,6vw,3.2rem) * var(--live-btn-scale,1));font-weight:900;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:calc(clamp(72px,16vh,110px) * var(--live-btn-scale,1));box-shadow:0 3px 10px rgba(0,0,0,0.3);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.96)\'" ontouchend="this.style.transform=\'\'">▲</button>';
       };
       var _lsDownBtn = function(player) {
         return '<button onclick="window._liveScoreMinus(' + player + ')" style="width:100%;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.08);color:var(--text-muted);font-size:0.95rem;font-weight:700;border-radius:0 0 12px 12px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;min-height:clamp(40px,6vh,56px);border-top:1px solid rgba(255,255,255,0.06);" ontouchstart="this.style.background=\'rgba(255,255,255,0.15)\'" ontouchend="this.style.background=\'\'">▼</button>';
@@ -5789,9 +5789,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:clamp(4px,1vh,8px) clamp(6px,1.5vw,14px);">' +
             '<span style="font-size:0.45rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
             '<div style="display:flex;align-items:center;gap:clamp(4px,1vw,8px);">' +
-              '<span style="font-size:clamp(1.1rem,3.5vw,1.8rem);font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
-              '<span style="font-size:clamp(0.7rem,1.5vw,1rem);font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
-              '<span style="font-size:clamp(1.1rem,3.5vw,1.8rem);font-weight:900;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
+              '<span style="font-size:calc(clamp(1.1rem,3.5vw,1.8rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
+              '<span style="font-size:calc(clamp(0.7rem,1.5vw,1rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
+              '<span style="font-size:calc(clamp(1.1rem,3.5vw,1.8rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesRightClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesRightStr + '</span>' +
             '</div>' +
           '</div>';
       }
@@ -7243,6 +7243,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Right: Undo + Reset + Close (Reset hidden on finish screen in
     // tournament mode; Undo permanece visível em todos os contextos)
     '<div id="live-score-header-actions" style="display:flex;gap:6px;align-items:center;flex:0 0 auto;">' +
+      // v1.9.63: engrenagem — sliders de tamanho (nome/foto/games/botões),
+      // proporcionais ao dispositivo, salvos no perfil.
+      '<button onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" title="Tamanhos do placar" aria-label="Tamanhos do placar" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 9px;font-size:0.82rem;cursor:pointer;">⚙️</button>' +
       // v1.0.36-beta: Undo global do último ponto. Funciona até depois que
       // o match foi finalizado (volta pra UI live se desfizer o ponto que
       // fechou). Útil quando o ponto vitorioso de um 40-40 é marcado pro
@@ -7256,6 +7259,107 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Content area (no info bar — sets are in header now)
   overlay.innerHTML = headerHtml +
     '<div id="live-score-content" style="flex:1;overflow:hidden;padding:0.5rem 0.5rem;display:flex;flex-direction:column;justify-content:center;"></div>';
+
+  // ── Tamanhos do placar (v1.9.63) ──────────────────────────────────────────
+  // Escalas RELATIVAS (0.5–1.5 = 50%–150%) aplicadas via CSS vars sobre os
+  // clamp() responsivos: tamanho final = clamp(device) × percentual → sempre
+  // proporcional ao dispositivo (retrato/paisagem/tablet), nunca absoluto.
+  // Fonte de verdade: users/{uid}.liveScorePrefs; cache instantâneo: localStorage.
+  function _clampLiveScale(v, d) {
+    v = parseFloat(v);
+    if (isNaN(v)) return d;
+    return Math.max(0.5, Math.min(1.5, v));
+  }
+  function _loadLiveScorePrefs() {
+    var p = {};
+    try { p = JSON.parse(localStorage.getItem('scoreplace_livescore_prefs') || '{}') || {}; } catch(e) {}
+    var _cu = window.AppStore && window.AppStore.currentUser;
+    if (_cu && _cu.liveScorePrefs && typeof _cu.liveScorePrefs === 'object') {
+      p = Object.assign({}, p, _cu.liveScorePrefs); // perfil vence o cache
+    }
+    return {
+      nameScale: _clampLiveScale(p.nameScale, 1),
+      photoScale: _clampLiveScale(p.photoScale, 1),
+      scoreScale: _clampLiveScale(p.scoreScale, 1),
+      btnScale: _clampLiveScale(p.btnScale, 1)
+    };
+  }
+  function _applyLiveScorePrefs(prefs) {
+    var ov = document.getElementById('live-scoring-overlay');
+    if (!ov) return;
+    ov.style.setProperty('--live-name-scale', prefs.nameScale);
+    ov.style.setProperty('--live-photo-scale', prefs.photoScale);
+    ov.style.setProperty('--live-score-scale', prefs.scoreScale);
+    ov.style.setProperty('--live-btn-scale', prefs.btnScale);
+  }
+  function _saveLiveScorePrefs(prefs) {
+    try { localStorage.setItem('scoreplace_livescore_prefs', JSON.stringify(prefs)); } catch(e) {}
+    var _cu = window.AppStore && window.AppStore.currentUser;
+    if (_cu) _cu.liveScorePrefs = prefs;
+    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+      try { window.FirestoreDB.saveUserProfile(_cu.uid, { liveScorePrefs: prefs }).catch(function(){}); } catch(e) {}
+    }
+  }
+  var _liveScorePrefs = _loadLiveScorePrefs();
+  _applyLiveScorePrefs(_liveScorePrefs);
+  // Style único: escala a foto/ícone do jogador (width/height/font reflowam,
+  // sem transform — não vaza pra metade do outro time).
+  if (!document.getElementById('live-photo-scale-style')) {
+    var _ps = document.createElement('style');
+    _ps.id = 'live-photo-scale-style';
+    _ps.textContent = '#live-scoring-overlay .live-av-wrap{display:inline-flex;flex-shrink:0;}'
+      + '#live-scoring-overlay .live-av-wrap > *{width:calc(30px*var(--live-photo-scale,1))!important;height:calc(30px*var(--live-photo-scale,1))!important;font-size:calc(13px*var(--live-photo-scale,1))!important;}';
+    document.head.appendChild(_ps);
+  }
+
+  // Painel de sliders (toggle). Sliders 50%–150%, oninput aplica ao vivo via
+  // CSS var (sem re-render), onchange persiste (localStorage + perfil).
+  window._liveScoreOpenSizeSettings = function() {
+    var ex = document.getElementById('live-size-settings');
+    if (ex) { ex.remove(); return; }
+    function row(key, label, cssVar) {
+      var pct = Math.round((_liveScorePrefs[key] || 1) * 100);
+      return '<div style="margin-bottom:14px;">' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--text-bright);font-weight:600;margin-bottom:6px;"><span>' + label + '</span><span id="lss-val-' + key + '" style="color:#fbbf24;font-weight:800;">' + pct + '%</span></div>' +
+        '<input type="range" min="50" max="150" step="5" value="' + pct + '" data-lss-key="' + key + '" data-lss-var="' + cssVar + '" style="width:100%;accent-color:#fbbf24;height:28px;" />' +
+      '</div>';
+    }
+    var panel = document.createElement('div');
+    panel.id = 'live-size-settings';
+    panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;';
+    panel.innerHTML = '<div style="background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px 18px 0 0;padding:18px 18px calc(26px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 30px rgba(0,0,0,0.5);">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:0.98rem;font-weight:800;color:var(--text-bright);">⚙️ Tamanhos do placar</div><button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">✕</button></div>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;line-height:1.4;">Proporcional ao seu dispositivo (50%–150%). Salvo no seu perfil.</div>' +
+      row('nameScale', 'Nome dos jogadores', '--live-name-scale') +
+      row('photoScale', 'Foto / ícone', '--live-photo-scale') +
+      row('scoreScale', 'Número dos games', '--live-score-scale') +
+      row('btnScale', 'Botões', '--live-btn-scale') +
+      '<button onclick="window._liveScoreResetSizes()" style="width:100%;margin-top:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted);border-radius:10px;padding:11px;font-size:0.8rem;font-weight:600;cursor:pointer;">Restaurar padrão (100%)</button>' +
+    '</div>';
+    panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
+    document.body.appendChild(panel);
+    panel.querySelectorAll('input[type=range]').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        var key = inp.getAttribute('data-lss-key');
+        var cssVar = inp.getAttribute('data-lss-var');
+        var scale = parseInt(inp.value, 10) / 100;
+        _liveScorePrefs[key] = scale;
+        var ov = document.getElementById('live-scoring-overlay');
+        if (ov) ov.style.setProperty(cssVar, scale);
+        var lbl = document.getElementById('lss-val-' + key);
+        if (lbl) lbl.textContent = inp.value + '%';
+      });
+      inp.addEventListener('change', function() { _saveLiveScorePrefs(_liveScorePrefs); });
+    });
+  };
+  window._liveScoreResetSizes = function() {
+    _liveScorePrefs = { nameScale: 1, photoScale: 1, scoreScale: 1, btnScale: 1 };
+    _applyLiveScorePrefs(_liveScorePrefs);
+    _saveLiveScorePrefs(_liveScorePrefs);
+    var ex = document.getElementById('live-size-settings');
+    if (ex) ex.remove();
+    window._liveScoreOpenSizeSettings();
+  };
 
   document.body.appendChild(overlay);
 
