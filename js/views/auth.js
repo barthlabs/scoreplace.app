@@ -403,41 +403,23 @@ window._updateTopbarForUser = function(user) {
     var effectiveName = preferCU && cu.displayName ? cu.displayName : user.displayName;
     var effectivePhoto = preferCU && cu.photoURL ? cu.photoURL : user.photoURL;
 
-    // Fallback chain: displayName (se não for genérico) → email → telefone → defaultUser
-    // v1.8.60: _isUnfriendlyName verifica se é "Usuário", "usuário", número puro etc.
-    var _nameIsReal = effectiveName && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(effectiveName));
-    var displayFirstName;
-    if (_nameIsReal) {
-      displayFirstName = effectiveName;
-    } else if (user.email || (cu && cu.email)) {
-      var _em = user.email || (cu && cu.email) || '';
-      displayFirstName = _em.split('@')[0];
-    } else if (user.phoneNumber || (cu && cu.phone)) {
-      // SMS login sem nome — mostra o telefone formatado em vez de "usuário"
-      // Tenta usar o número local do perfil (já com DDI stripado) quando
-      // disponível (chamada tardia pós-loadUserProfile). Na chamada antecipada
-      // (antes do Firestore retornar), cai no E.164 direto.
-      var _phD = (cu && cu.phone)
-        ? ((typeof window._phoneLocalDigits === 'function')
-            ? window._phoneLocalDigits(cu.phone, (cu && cu.phoneCountry) || '55')
-            : String(cu.phone).replace(/\D/g, ''))
-        : '';
-      if (_phD.length >= 8 && typeof _formatPhoneDisplay === 'function') {
-        displayFirstName = _formatPhoneDisplay(_phD, (cu && cu.phoneCountry) || '55');
-      } else {
-        // Chamada antecipada: perfil Firestore ainda não carregou
-        var _rawPh = (user.phoneNumber || '').replace(/^\+/, '');
-        // Formata para exibição com máscara (+55 (DDD) XXXXX-XXXX)
-        if (_rawPh && typeof window._maskBRPhone === 'function') {
-          var _localD = (_rawPh.startsWith('55') && _rawPh.length > 11) ? _rawPh.substring(2) : _rawPh;
-          displayFirstName = '+55 ' + window._maskBRPhone(_localD);
-        } else {
-          displayFirstName = (_rawPh ? '+' + _rawPh : '') || _t('auth.defaultUser');
-        }
-      }
-    } else {
-      displayFirstName = _t('auth.defaultUser');
-    }
+    // v1.9.55: nome resolvido pelo helper canônico window._friendlyUserName —
+    // MESMA fonte de verdade que a saudação do dashboard. Antes a topbar e a
+    // saudação tinham cadeias de fallback DUPLICADAS e divergentes: a topbar
+    // caía em email-prefix ("krbenini") e a saudação caía em "Visitante" pro
+    // MESMO currentUser sem displayName. Causa-raiz do bug reportado. Unificar
+    // num único helper garante que as duas nunca mais divirjam.
+    // Constrói o "usuário efetivo" mesclando o arg `user` (firebase) com o cu
+    // (AppStore, já com merge do Firestore) — preferindo cu quando o uid bate.
+    var _effUser = {
+      displayName: effectiveName,
+      email: user.email || (cu && cu.email) || '',
+      phone: (cu && cu.phone) || user.phoneNumber || '',
+      phoneCountry: (cu && cu.phoneCountry) || '55'
+    };
+    var displayFirstName = (typeof window._friendlyUserName === 'function')
+      ? (window._friendlyUserName(_effUser) || _t('auth.defaultUser'))
+      : (effectiveName || _t('auth.defaultUser'));
     // v1.0.23-beta: cartoons dicebear/notionists (que o user reclamou) trocados
     // por iniciais geradas do nome do usuário. Foto real (Google/Apple) tem
     // prioridade.
@@ -3047,7 +3029,29 @@ async function simulateLoginSuccess(user) {
   window.renderProfilePage = async function (container) {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu) {
-      // Sem login — manda pro dashboard (que abre modal-login se preciso).
+      // v1.9.55: currentUser pode estar TRANSITORIAMENTE null logo após o
+      // login (gap entre simulateLoginSuccess e o merge, ou onAuthStateChanged
+      // re-disparando) ou em Safari/iOS (ITP). Antes rebatíamos direto pro
+      // dashboard → clicar no nome "não abria o perfil". Se o Firebase confirma
+      // sessão ativa, aguardamos o currentUser materializar antes de desistir.
+      var _fbU = window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
+      if (_fbU && container) {
+        container.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;min-height:50vh;"><div style="text-align:center;color:var(--text-muted);"><div style="font-size:1.6rem;margin-bottom:0.6rem;">⏳</div><div style="font-size:0.88rem;">Carregando seu perfil…</div></div></div>';
+        var _waited = 0;
+        var _poll = setInterval(function() {
+          var cu2 = window.AppStore && window.AppStore.currentUser;
+          _waited += 200;
+          if (cu2 && cu2.uid) {
+            clearInterval(_poll);
+            if (window.location.hash === '#profile') window.renderProfilePage(container);
+          } else if (_waited >= 6000) {
+            clearInterval(_poll);
+            window.location.replace('#dashboard');
+          }
+        }, 200);
+        return;
+      }
+      // Realmente sem sessão — manda pro dashboard (que abre modal-login se preciso).
       window.location.replace('#dashboard');
       return;
     }
