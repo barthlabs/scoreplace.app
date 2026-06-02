@@ -953,13 +953,19 @@ function renderDashboard(container) {
     // que veem esse nome em partidas e classificações.
     var _dn = (cu.displayName || '').trim();
     if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(_dn)) {
-      var _phoneDisplay = _dn || (cu.phone ? (cu.phone).replace(/^\+55/, '+55 ').replace(/(\d{2})(\d{4,5})(\d{4})$/, function(m,a,b,c){return a+' '+b+'-'+c;}) : '');
+      // O usuário está identificado pelo uid (interno), mas não tem nome no
+      // perfil — então o app mostra o fallback (prefixo do email ou telefone)
+      // nos torneios/rankings. Mostra exatamente o que os outros veem hoje,
+      // via o MESMO helper canônico de exibição (_friendlyUserName).
+      var _fallbackShown = (typeof window._friendlyUserName === 'function')
+        ? (window._friendlyUserName(cu) || _dn)
+        : (_dn || (cu.email ? String(cu.email).split('@')[0] : '') || (cu.phone || ''));
       return '<div id="dash-profile-nudge" style="background:linear-gradient(135deg,rgba(239,68,68,0.13),rgba(239,68,68,0.05));border:1px solid rgba(239,68,68,0.4);border-radius:14px;padding:14px 16px;margin-bottom:1rem;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">' +
           '<span style="font-size:1.6rem;flex-shrink:0;line-height:1;">👤</span>' +
           '<div style="flex:1;min-width:220px;">' +
             '<div style="font-weight:800;color:#fca5a5;font-size:0.92rem;line-height:1.2;">Adicione seu nome ao perfil</div>' +
             '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px;line-height:1.45;">' +
-              'Seu nome aparece como <b style="color:#fca5a5;font-family:monospace;">' + window._safeHtml(_phoneDisplay || 'número de telefone') + '</b> nos torneios e rankings. ' +
+              'Sem um nome no perfil, você aparece como <b style="color:#fca5a5;font-family:monospace;">' + window._safeHtml(_fallbackShown || 'sem nome') + '</b> nos torneios e rankings. ' +
               'Coloque seu nome para que os outros jogadores te reconheçam.' +
             '</div>' +
           '</div>' +
