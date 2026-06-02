@@ -1235,15 +1235,11 @@ async function _preloadPlayerPhotos(tournament) {
           var data = doc.data();
           if (!data.photoURL || data.photoURL.indexOf('dicebear.com') !== -1) return;
           var photo = data.photoURL;
-          // Cacheia APENAS sob o displayName real do Firestore — não contamina
-          // outros membros da dupla com a foto do capitão.
+          // Princípio: cada pessoa é um indivíduo com sua própria foto/avatar.
+          // Cacheia APENAS sob o displayName real do Firestore dessa pessoa.
+          // Nunca usa o UID de um membro para preencher o avatar de outro.
           var realName = (data.displayName || '').trim().toLowerCase();
           if (realName) window._playerPhotoCache[realName] = photo;
-          // Também cacheia sob o teamName completo (busca direta pelo nome do time)
-          var teamKey = teamName.trim().toLowerCase();
-          if (teamKey && !window._playerPhotoCache[teamKey]) {
-            window._playerPhotoCache[teamKey] = photo;
-          }
         })
         .catch(function() {})
     );
