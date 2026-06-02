@@ -1248,8 +1248,6 @@ async function _preloadPlayerPhotos(tournament) {
   // Fallback: buscar por email para participantes sem uid
   participants.forEach(function(p) {
     if (typeof p !== 'object' || p.uid || !p.email) return;
-    var name = p.displayName || p.name || '';
-    if (!name || window._playerPhotoCache[name.toLowerCase()]) return;
     promises.push(
       window.FirestoreDB.db.collection('users')
         .where('email', '==', p.email)
@@ -1258,8 +1256,10 @@ async function _preloadPlayerPhotos(tournament) {
         .then(function(snap) {
           if (!snap.empty) {
             var data = snap.docs[0].data();
-            if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1 && name) {
-              window._playerPhotoCache[name.toLowerCase()] = data.photoURL;
+            if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1) {
+              // Cacheia sob o displayName real do Firestore — não sob o nome do participante
+              var realName = (data.displayName || '').trim().toLowerCase();
+              if (realName) window._playerPhotoCache[realName] = data.photoURL;
             }
           }
         })
