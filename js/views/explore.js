@@ -59,9 +59,17 @@ function renderExplore(container) {
     _searchTimer = setTimeout(doSearch, typeof delayMs === 'number' ? delayMs : 250);
   }
 
-  searchInput.addEventListener('input', function() { scheduleSearch(250); });
+  searchInput.addEventListener('input', function() {
+    // Filtra INSTANTANEAMENTE as seções já visíveis (amigos, convites
+    // pendentes, enviados) — bug reportado: a busca só mexia em
+    // #explore-results (não-amigos), então digitar não filtrava "Meus Amigos".
+    window._filterExploreVisible(searchInput.value);
+    // E busca não-amigos no Firestore (debounced).
+    scheduleSearch(250);
+  });
   searchInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
+      window._filterExploreVisible(searchInput.value);
       if (_searchTimer) clearTimeout(_searchTimer);
       doSearch();
     }
@@ -372,6 +380,29 @@ window._exploreExpandRecent = function(days) {
   var input = document.getElementById('explore-search-input');
   var q = input ? input.value.trim() : '';
   _performUserSearch(q, myUid, cu.friends || [], cu.friendRequestsSent || [], cu.friendRequestsReceived || []);
+};
+
+// Filtro instantâneo client-side das seções JÁ renderizadas (amigos, convites
+// recebidos, enviados). Casa o termo contra o texto do card (nome/cidade/
+// esporte). Esconde cards que não casam e a seção inteira quando nada casa.
+// Roda a cada tecla, sem debounce (é local, instantâneo).
+window._filterExploreVisible = function(query) {
+  var q = String(query || '').trim().toLowerCase();
+  ['explore-pending', 'explore-friends', 'explore-sent'].forEach(function(secId) {
+    var sec = document.getElementById(secId);
+    if (!sec) return;
+    var cards = sec.querySelectorAll('.card');
+    if (!cards.length) { sec.style.display = ''; return; }
+    var anyVisible = false;
+    cards.forEach(function(card) {
+      var match = !q || ((card.textContent || '').toLowerCase().indexOf(q) !== -1);
+      card.style.display = match ? '' : 'none';
+      if (match) anyVisible = true;
+    });
+    // Sem query → mostra a seção inteira. Com query e nada casando → esconde
+    // (inclui o cabeçalho "MEUS AMIGOS (N)") pra não deixar título órfão.
+    sec.style.display = (q && !anyVisible) ? 'none' : '';
+  });
 };
 
 function _performUserSearch(query, myUid, myFriends, mySent, myReceived) {
