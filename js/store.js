@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.48-beta';
+window.SCOREPLACE_VERSION = '1.9.49-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -553,14 +553,24 @@ if (document.body) {
 // .sticky-back-header lives at z-index 101, but the app creates 40+ ad-hoc
 // SVG da bola de tênis — idêntico em iOS, Android, Windows, Mac.
 // Substitui o emoji 🎾 que renderiza como raquete no Samsung/Android.
-// ~300 bytes inline, zero impacto de desempenho.
+// ~500 bytes inline, zero impacto de desempenho. Gradiente radial dá volume
+// (highlight em cima à esquerda → sombra embaixo à direita). A costura usa os
+// dois arcos clássicos (topo e base), o visual real de bola de tênis — não as
+// linhas verticais antigas que pareciam abóbora. Cores derivadas da referência.
+// Cada chamada gera um id de gradiente único para não colidir quando há vários
+// loaders na mesma página.
+window._tennisBallSeq = (window._tennisBallSeq || 0);
 window._TENNIS_BALL_SVG = function(size) {
   var s = size || '1em';
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="' + s + '" height="' + s + '" style="display:inline-block;vertical-align:-0.1em;flex-shrink:0;" aria-hidden="true">' +
-    '<circle cx="20" cy="20" r="19" fill="#c8e040"/>' +
-    '<ellipse cx="14" cy="14" rx="6" ry="4" fill="#d8f050" opacity="0.55" transform="rotate(-30,14,14)"/>' +
-    '<path d="M10,4C2,12,2,28,10,36" stroke="white" stroke-width="2.8" fill="none" stroke-linecap="round"/>' +
-    '<path d="M30,4C38,12,38,28,30,36" stroke="white" stroke-width="2.8" fill="none" stroke-linecap="round"/>' +
+  var gid = 'sptb' + (window._tennisBallSeq++);
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="' + s + '" height="' + s + '" style="display:inline-block;vertical-align:-0.12em;flex-shrink:0;" aria-hidden="true">' +
+    '<defs><radialGradient id="' + gid + '" cx="37%" cy="31%" r="80%">' +
+      '<stop offset="0" stop-color="#EFEA57"/><stop offset="46%" stop-color="#D2E000"/>' +
+      '<stop offset="86%" stop-color="#A6C614"/><stop offset="100%" stop-color="#8CA811"/>' +
+    '</radialGradient></defs>' +
+    '<circle cx="24" cy="24" r="22" fill="url(#' + gid + ')"/>' +
+    '<path d="M24,2.5 C9,15 39,33 24,45.5" fill="none" stroke="#7a9410" stroke-width="3.4" stroke-linecap="round" opacity="0.45"/>' +
+    '<path d="M24,2.5 C9,15 39,33 24,45.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity="0.97"/>' +
   '</svg>';
 };
 
