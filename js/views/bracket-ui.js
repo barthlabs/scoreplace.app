@@ -6269,8 +6269,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">' +
         photo +
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:0.78rem;font-weight:700;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(s.guestName) + ' = ' + window._safeHtml(s.friend.displayName) + '?</div>' +
-          '<div style="font-size:0.62rem;color:var(--text-muted);">Seu amigo no scoreplace</div>' +
+          // Nome digitado na partida (em cima) — pode truncar, costuma ser curto
+          '<div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(s.guestName) + ' <span style="opacity:0.65;">(na partida)</span></div>' +
+          // Nome do usuário sugerido (embaixo) — completo, quebra em 2 linhas se preciso
+          '<div style="font-size:0.84rem;font-weight:700;color:var(--text-bright);line-height:1.25;word-break:break-word;">↳ ' + window._safeHtml(s.friend.displayName) + '</div>' +
+          '<div style="font-size:0.6rem;color:var(--text-muted);margin-top:1px;">Seu amigo no scoreplace</div>' +
         '</div>' +
         btnHtml +
       '</div>';
