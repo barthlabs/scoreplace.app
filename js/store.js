@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.39-beta';
+window.SCOREPLACE_VERSION = '1.9.40-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -916,6 +916,18 @@ window._hamburgerOutsideClick = function(e) {
 
 // ─── Constantes globais ─────────────────────────────────────────────────────
 window.SCOREPLACE_URL = 'https://scoreplace.app';
+// Helper canônico: retorna TODOS os UIDs de um participante.
+// Duplas têm p1Uid/p2Uid além de uid. Garante individualidade.
+window._participantUids = function(p) {
+  if (typeof p !== 'object' || !p) return [];
+  var seen = {};
+  var uids = [];
+  function _add(u) { if (u && !seen[u]) { seen[u] = true; uids.push(u); } }
+  _add(p.uid); _add(p.p1Uid); _add(p.p2Uid);
+  if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s) _add(s.uid); });
+  return uids;
+};
+
 window._avatarUrl = function(name, size) {
     var seed = encodeURIComponent(name || '?');
     var s = size || 40;

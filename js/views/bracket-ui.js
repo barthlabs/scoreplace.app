@@ -454,7 +454,10 @@ function _resultNeedsApproval(t, m, user) {
   var opp = parts.find(function(p) {
     return (typeof p === 'object') && ((p.displayName || p.name || '') === opposingSideStr);
   });
-  return !!(opp && opp.uid);
+  // Verifica p1Uid E p2Uid — duplas têm ambos
+  if (!opp || typeof opp !== 'object') return false;
+  var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
+  return _allUids(opp).length > 0;
 }
 
 // Notifica o time adversário (cada player com uid) + organizador
@@ -491,21 +494,24 @@ function _notifyPendingApproval(t, m, proposerName) {
     proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
   }
   var skipUids = {};
+  var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
   var proposerSideStr = proposerSide === 1 ? m.p1 : proposerSide === 2 ? m.p2 : null;
   if (proposerSideStr) {
     var proposerPart = _findPartBySide(proposerSideStr);
-    if (proposerPart && proposerPart.uid) skipUids[proposerPart.uid] = true;
+    _allUids(proposerPart).forEach(function(u) { skipUids[u] = true; });
   } else {
     if (pr.proposedBy) skipUids[pr.proposedBy] = true;
   }
-  // Notifica o lado adversário
+  // Notifica TODOS os UIDs do lado adversário (p1Uid + p2Uid de duplas)
   var opposingSideStr = proposerSide === 1 ? m.p2 : m.p1;
   if (opposingSideStr && opposingSideStr !== 'TBD' && opposingSideStr !== 'BYE') {
     var oppPart = _findPartBySide(opposingSideStr);
-    if (oppPart && oppPart.uid && !skipUids[oppPart.uid]) {
-      window._sendUserNotification(oppPart.uid, notifData);
-      skipUids[oppPart.uid] = true;
-    }
+    _allUids(oppPart).forEach(function(u) {
+      if (!skipUids[u]) {
+        window._sendUserNotification(u, notifData);
+        skipUids[u] = true;
+      }
+    });
   }
   // Also notify organizer if not proposer and not already notified
   // First try by uid (works even when org isn't a participant — e.g. phone-only)
@@ -735,7 +741,16 @@ function _buildMatchPlayersList(t, m) {
       var p = parts[i];
       if (!p || typeof p === 'string') continue;
       var pn = p.displayName || p.name || '';
-      if (pn === name) { meta.uid = p.uid || null; meta.photoURL = p.photoURL || p.photoUrl || null; return meta; }
+      // Participante individual ou dupla cujo nome completo bate
+      if (pn === name) {
+        meta.uid = p.uid || null;
+        meta.photoURL = p.photoURL || p.photoUrl || null;
+        return meta;
+      }
+      // Dupla: verifica se o nome é p1Name ou p2Name
+      if (p.p1Name === name) { meta.uid = p.p1Uid || null; meta.photoURL = null; return meta; }
+      if (p.p2Name === name) { meta.uid = p.p2Uid || null; meta.photoURL = null; return meta; }
+      // Sub-participantes (formato array)
       if (Array.isArray(p.participants)) {
         for (var j = 0; j < p.participants.length; j++) {
           var sub = p.participants[j];
@@ -2002,15 +2017,17 @@ window._approveResult = function(tId, matchId) {
       timestamp: Date.now()
     };
     var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
+    var notifSeen = {};
     [m.p1, m.p2].forEach(function(side) {
       if (!side || side === 'TBD' || side === 'BYE') return;
-      var members = side.indexOf('/') !== -1 ? side.split('/').map(function(n) { return n.trim(); }) : [side];
-      members.forEach(function(nm) {
-        var p = parts.find(function(pp) {
-          var n = typeof pp === 'string' ? pp : (pp.displayName || pp.name || '');
-          return n === nm;
-        });
-        if (p && typeof p === 'object' && p.uid) window._sendUserNotification(p.uid, notifData);
+      // Busca o participante pelo nome completo do lado (funciona para duplas)
+      var p = parts.find(function(pp) {
+        return typeof pp === 'object' && (pp.displayName || pp.name || '') === side;
+      });
+      // Notifica todos os UIDs (p1Uid + p2Uid para duplas)
+      _allUids(p).forEach(function(u) {
+        if (u && !notifSeen[u]) { notifSeen[u] = true; window._sendUserNotification(u, notifData); }
       });
     });
   }

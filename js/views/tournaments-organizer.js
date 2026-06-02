@@ -215,14 +215,19 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
     var recipients = [];
     var seenUids = {};
     var seenEmails = {};
+    var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
     parts.forEach(function(p) {
-        if (typeof p === 'string') return; // string-only participants can't receive notifications
+        if (typeof p === 'string') return;
         var e = p.email || '';
-        var u = p.uid || '';
         if (e && e === excludeEmail) return;
-        // Deduplicate by uid first, then by email
-        if (u && !seenUids[u]) { seenUids[u] = true; recipients.push({ uid: u, email: e }); }
-        else if (e && !u && !seenEmails[e]) { seenEmails[e] = true; recipients.push({ uid: '', email: e }); }
+        // Notifica TODOS os UIDs do participante (p1Uid + p2Uid para duplas)
+        _allUids(p).forEach(function(u) {
+            if (u && !seenUids[u]) { seenUids[u] = true; recipients.push({ uid: u, email: e }); }
+        });
+        // Participante sem uid: fallback por email
+        if (_allUids(p).length === 0 && e && !seenEmails[e]) {
+            seenEmails[e] = true; recipients.push({ uid: '', email: e });
+        }
     });
 
     // Also notify organizer if not excluded and not already in list.
