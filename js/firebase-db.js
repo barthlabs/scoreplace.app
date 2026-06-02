@@ -1174,6 +1174,16 @@ window.FirestoreDB = {
           }
           return p;
         });
+        // Auto-dissolução (v1.9.60): a sala vive enquanto houver ≥1 usuário
+        // CADASTRADO (uid) — não importa se é o criador ou não. Quando o último
+        // uid sai (sobram só nomes digitados sem conta, ou ninguém), a sala se
+        // dissolve. Registros finalizados (status=finished) nunca são apagados
+        // aqui (são histórico). Regra do dono: "enquanto houver 1 cadastrado a
+        // sala persiste; quando todos sairem, é dissolvida".
+        if (playerUids.length === 0 && data.status !== 'finished') {
+          transaction.delete(docRef);
+          return 'dissolved';
+        }
         transaction.update(docRef, { participants: participants, playerUids: playerUids, players: players });
         return true;
       });

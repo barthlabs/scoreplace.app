@@ -7423,37 +7423,21 @@ window._openLiveScoring = function(tId, matchId, opts) {
           try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
         }
         var _matchIsComplete = state.isFinished || _resultSaved;
-        if (isCasual && isOrganizer && _casualDocId && window.FirestoreDB) {
-          _casualCancelled = true;
-          if (_matchIsComplete) {
-            // Match finished — keep the doc alive with status='finished' so
-            // guests (including late arrivals who never saw the live view)
-            // see the result/stats screen on the casual room view instead
-            // of "Partida não encontrada".
-          } else if (typeof window.FirestoreDB.cancelCasualMatch === 'function') {
-            // Host abandoned before finishing: delete the doc so every
-            // watching guest is evacuated to the dashboard.
-            try {
-              var cancelPromise = window.FirestoreDB.cancelCasualMatch(_casualDocId);
-              if (cancelPromise && typeof cancelPromise.catch === 'function') cancelPromise.catch(function(){});
-            } catch(e) {}
-          }
-        } else if (isCasual && cu && cu.uid && _casualDocId && window.FirestoreDB && typeof window.FirestoreDB.leaveCasualMatch === 'function') {
-          // v1.6.14-beta: Guest fecha o overlay — leaveCasualMatch APENAS
-          // se o match não terminou. Antes desta versão, qualquer "Voltar"
-          // do guest disparava leaveCasualMatch, que removia o uid dele de
-          // playerUids/participants no doc. Como a query de "últimas partidas"
-          // filtra por `where('playerUids', 'array-contains', uid)`, isso
-          // fazia a partida finalizada SUMIR do histórico do guest (e do
-          // criador também, se o criador deixar o doc preservado mas o guest
-          // remove a si mesmo de playerUids). Match finalizado deve manter
-          // os participantes intactos pra que o histórico funcione pra todos.
-          if (!_matchIsComplete) {
-            try {
-              var leavePromise = window.FirestoreDB.leaveCasualMatch(_casualDocId, cu.uid);
-              if (leavePromise && typeof leavePromise.catch === 'function') leavePromise.catch(function(){});
-            } catch(e) {}
-          }
+        // v1.9.60: criador E guest, ao abandonar ANTES de terminar, apenas SAEM
+        // da sala (leaveCasualMatch). A sala vive enquanto houver ≥1 usuário
+        // cadastrado (uid) e só se dissolve quando o ÚLTIMO uid sai (auto-
+        // dissolução em leaveCasualMatch). Antes o CRIADOR chamava
+        // cancelCasualMatch e matava a sala mesmo com outros jogadores dentro —
+        // contra a regra do dono ("vive enquanto houver 1 cadastrado"). Match
+        // finalizado mantém o doc intacto (status=finished) como histórico,
+        // independente de quem fecha — e os participantes não são removidos
+        // (a query de "últimas partidas" depende de playerUids).
+        if (isCasual && isOrganizer) _casualCancelled = true; // gate do reopen-setup
+        if (isCasual && !_matchIsComplete && cu && cu.uid && _casualDocId && window.FirestoreDB && typeof window.FirestoreDB.leaveCasualMatch === 'function') {
+          try {
+            var leavePromise = window.FirestoreDB.leaveCasualMatch(_casualDocId, cu.uid);
+            if (leavePromise && typeof leavePromise.catch === 'function') leavePromise.catch(function(){});
+          } catch(e) {}
         }
         // Clear activeCasualRoom from the profile + suppress resume for
         // 6s so a stale snapshot doesn't yank the user back into the

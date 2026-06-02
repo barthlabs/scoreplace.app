@@ -503,18 +503,46 @@ exports.cleanupOldNotifications = onSchedule(
 // cheap as the app grows.
 exports.cleanupOldCasualMatches = onSchedule(
   {
-    schedule: "every day 03:30",
+    // a cada 6h pra honrar o TTL de 12h das salas não-finalizadas (vida máx ~18h)
+    schedule: "every 6 hours",
     timeZone: "America/Sao_Paulo",
     region: "us-central1",
   },
   async () => {
     const db = admin.firestore();
+    // (1) Registros finalizados antigos (>30 dias) — garbage collection do histórico.
     const threshold = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const query = db.collection("casualMatches")
+    const finishedQuery = db.collection("casualMatches")
       .where("status", "==", "finished")
       .where("finishedAt", "<", threshold);
-    const deleted = await _batchDeleteQuery(query);
-    console.log(`[cleanupOldCasualMatches] deleted ${deleted} docs (threshold: ${threshold})`);
+    const deletedFinished = await _batchDeleteQuery(finishedQuery);
+
+    // (2) Salas NÃO finalizadas abandonadas (>12h) — waiting/active/setup que
+    // nunca viraram registro. Antes acumulavam pra sempre (66 salas, várias com
+    // 30+ dias). Regra do dono: finished persiste como registro; o resto é
+    // efêmero e some em 12h. Firestore não tem `!=`, então varremos a coleção
+    // (pequena) e filtramos client-side por status + createdAt. lastActivityAt
+    // quando existir vence; senão createdAt.
+    const cutoff = Date.now() - 12 * 60 * 60 * 1000;
+    let deletedStale = 0;
+    const allSnap = await db.collection("casualMatches").get();
+    let batch = db.batch();
+    let inBatch = 0;
+    for (const doc of allSnap.docs) {
+      const d = doc.data() || {};
+      if (d.status === "finished") continue; // registro — nunca apaga aqui
+      const tsRaw = d.lastActivityAt || d.updatedAt || d.createdAt || null;
+      let ts = 0;
+      if (tsRaw) { const p = new Date(tsRaw).getTime(); if (!isNaN(p)) ts = p; }
+      // Sem timestamp = legado → trata como antigo (apaga).
+      if (ts === 0 || ts < cutoff) {
+        batch.delete(doc.ref); inBatch++; deletedStale++;
+        if (inBatch >= 400) { await batch.commit(); batch = db.batch(); inBatch = 0; }
+      }
+    }
+    if (inBatch > 0) await batch.commit();
+
+    console.log(`[cleanupOldCasualMatches] finished>30d=${deletedFinished} | naoFinalizadas>12h=${deletedStale}`);
   }
 );
 
