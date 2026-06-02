@@ -2527,7 +2527,7 @@ function renderDashboard(container) {
       window._dashPendingScrolled = true;
       _section.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, 600);
+  }, 350);
 
   // Botões de resultado pendente — event listeners via JS (evita parsing issues
   // de onclick em HTML gerado dinamicamente em mobile Safari)

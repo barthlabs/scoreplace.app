@@ -119,20 +119,12 @@ function initRouter() {
     // opacity:0 inicial faria o prerender "piscar" antes da animação de fade,
     // empurrando o LCP da paint estática (~200ms) pra fim da animação (~700ms+).
     if (!window._isSoftRefresh && !_shouldPreservePrerender) {
-      // Jump to top (instant, not smooth — smooth gets cancelled by late layout
-      // shifts from the new view's render, leaving the user parked mid-page
-      // and making Voltar look broken). Repeat across rAF + setTimeouts so the
-      // jump survives any scroll-into-view calls inside the view render.
-      var _jumpTop = function() {
-        try { window.scrollTo(0, 0); } catch(e) {}
-        if (document.documentElement) document.documentElement.scrollTop = 0;
-        if (document.body) document.body.scrollTop = 0;
-      };
-      _jumpTop();
-      requestAnimationFrame(_jumpTop);
-      setTimeout(_jumpTop, 50);
-      setTimeout(_jumpTop, 150);
-      setTimeout(_jumpTop, 350);
+      // Jump to top (instant) ao navegar para nova view.
+      // Um único scrollTo síncrono é suficiente — timeouts repetidos
+      // brigavam com scrolls intencionais (ex: auto-scroll para pendentes).
+      try { window.scrollTo(0, 0); } catch(e) {}
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
 
       // Fade-in animation
       viewContainer.style.opacity = '0';
