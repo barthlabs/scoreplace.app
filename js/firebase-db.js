@@ -1100,7 +1100,13 @@ window.FirestoreDB = {
         var alreadyClaimed = players.some(function(p) { return p.uid === uid; });
         if (alreadyClaimed) return false;
         players[slotIndex] = Object.assign({}, players[slotIndex], { uid: uid, displayName: displayName });
-        transaction.update(docRef, { players: players });
+        // v1.9.61: mantém playerUids em sincronia. Antes claimCasualSlot só
+        // mexia em players → o uid não entrava em playerUids, quebrando o
+        // auto-dissolve (sala morria com gente dentro) e o histórico durante a
+        // fase ativa (a query de "últimas partidas" filtra por playerUids).
+        var playerUids = Array.isArray(data.playerUids) ? data.playerUids.slice() : [];
+        if (playerUids.indexOf(uid) === -1) playerUids.push(uid);
+        transaction.update(docRef, { players: players, playerUids: playerUids });
         return true;
       });
     } catch (e) {
@@ -1139,7 +1145,18 @@ window.FirestoreDB = {
   async cancelCasualMatch(docId) {
     if (!this.db || !docId) return false;
     try {
-      await this.db.collection('casualMatches').doc(docId).delete();
+      // v1.9.61: NUNCA apagar um registro finalizado. Bug: após "Jogar
+      // Novamente" (keepSession), _sessionDocId aponta pro doc finished; se o
+      // usuário sai do setup sem iniciar nova partida, o caminho "solo" do
+      // _casualLeaveMatch chamava cancelCasualMatch(_sessionDocId) e DELETAVA a
+      // última partida do histórico. Finished = registro permanente.
+      var ref = this.db.collection('casualMatches').doc(docId);
+      var snap = await ref.get();
+      if (snap.exists && snap.data() && snap.data().status === 'finished') {
+        window._warn('cancelCasualMatch: ignorando delete de partida finalizada', docId);
+        return false;
+      }
+      await ref.delete();
       return true;
     } catch (e) {
       window._error('Erro ao cancelar partida casual:', e);
@@ -1180,7 +1197,13 @@ window.FirestoreDB = {
         // dissolve. Registros finalizados (status=finished) nunca são apagados
         // aqui (são histórico). Regra do dono: "enquanto houver 1 cadastrado a
         // sala persiste; quando todos sairem, é dissolvida".
-        if (playerUids.length === 0 && data.status !== 'finished') {
+        // v1.9.61: conta uids de AMBAS as fontes (playerUids ∪ players[].uid) —
+        // docs legados podem ter uid só em players (claim-slot não populava
+        // playerUids), e dissolver só por playerUids mataria sala com gente.
+        var _remaining = {};
+        playerUids.forEach(function(u) { if (u) _remaining[u] = true; });
+        players.forEach(function(p) { if (p && p.uid) _remaining[p.uid] = true; });
+        if (Object.keys(_remaining).length === 0 && data.status !== 'finished') {
           transaction.delete(docRef);
           return 'dissolved';
         }
