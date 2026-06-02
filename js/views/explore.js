@@ -4,6 +4,9 @@
 
 function renderExplore(container) {
   var _t = window._t || function(k) { return k; };
+  // Invalida o cache de convidáveis a cada entrada na página — pega novos
+  // cadastros e mudanças no toggle acceptFriendRequests de outros usuários.
+  window._exploreInvitableCache = null;
   var cu = window.AppStore.currentUser;
   if (!cu) {
     container.innerHTML = '<div class="card" style="padding: 2rem; text-align: center;">' +
@@ -425,9 +428,50 @@ function _performUserSearch(query, myUid, myFriends, mySent, myReceived) {
     return;
   }
 
-  window.FirestoreDB.searchUsers(query).then(function(users) {
+  // Busca por SUBSTRING sobre todos que aceitam pedido de amizade (toggle do
+  // perfil). O searchUsers padrão só faz prefix match em displayName_lower —
+  // não acha "Vieira" em "Fabiana Vieira" nem "Cerri" em "Fernando Cerri".
+  // Carregamos a lista de convidáveis 1× (cache) e filtramos client-side por
+  // qualquer parte do nome/email/cidade/esporte. Usuário pediu: "mostrar todos
+  // que atendem a busca e aceitam pedido de amizade".
+  var _qLower = q.toLowerCase();
+  function _matchUser(u) {
+    var hay = [
+      u.displayName, u.email, u.city,
+      (Array.isArray(u.preferredSports) ? u.preferredSports.join(' ') : u.preferredSports)
+    ].filter(Boolean).join(' ').toLowerCase();
+    return hay.indexOf(_qLower) !== -1;
+  }
+  function _renderFromList(users) {
     users = _dedupeAgainstRelationships(users, myUid, myFriends, mySent, myReceived);
+    _continueSearchRender(users, query, resultsDiv, _t);
+  }
+  function _runSubstringSearch() {
+    var matched = (window._exploreInvitableCache || []).filter(_matchUser);
+    _renderFromList(matched);
+  }
+  if (Array.isArray(window._exploreInvitableCache)) {
+    _runSubstringSearch();
+  } else {
+    window.FirestoreDB.listInvitableUsers().then(function(all) {
+      window._exploreInvitableCache = all || [];
+      _runSubstringSearch();
+    }).catch(function(err) {
+      // Fallback: prefix search remoto se o load-all falhar
+      window.FirestoreDB.searchUsers(query).then(function(users) {
+        _renderFromList(users);
+      }).catch(function(e2) {
+        resultsDiv.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--danger-color);">' + _t('explore.searchError') + ': ' + window._safeHtml((err && err.message) || String(err)) + '</div>';
+      });
+    });
+  }
+  return;
+}
 
+// Render compartilhado da lista de resultados de busca (após dedupe). Extraído
+// de _performUserSearch para ser reusado pelo caminho de substring.
+function _continueSearchRender(users, query, resultsDiv, _t) {
+  {
     if (users.length === 0) {
       resultsDiv.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">' +
         _t('explore.noResultsFor') + ' "' + window._safeHtml(query) + '"' +
@@ -461,9 +505,7 @@ function _performUserSearch(query, myUid, myFriends, mySent, myReceived) {
     _sortOtrosArray(users, sortMode);
     window._otrosUsers = users;
     _renderOtrosCards(resultsDiv, users);
-  }).catch(function(err) {
-    resultsDiv.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--danger-color);">' + _t('explore.searchError') + ': ' + window._safeHtml(err.message || err.toString()) + '</div>';
-  });
+  }
 }
 
 function _renderOtrosCards(resultsDiv, users) {

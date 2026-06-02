@@ -686,6 +686,37 @@ window.FirestoreDB = {
     return Object.keys(results).map(function(k) { return results[k]; });
   },
 
+  // Carrega TODOS os usuários que aceitam pedido de amizade (toggle do perfil),
+  // sanitizados (só campos públicos). Usado pela busca da página Pessoas para
+  // filtrar por SUBSTRING client-side — o searchUsers normal só faz prefix
+  // match em displayName_lower (não acha "Vieira" em "Fabiana Vieira").
+  // Escala-ok pra base beta (dezenas/centenas). Quando crescer, migrar pra
+  // índice de busca dedicado. limit defensivo de 2000.
+  async listInvitableUsers() {
+    if (!this.db) return [];
+    var PUBLIC_FIELDS = [
+      'displayName', 'displayName_lower', 'email', 'email_lower',
+      'photoURL', 'acceptFriendRequests', 'preferredSports', 'city',
+      'createdAt', 'updatedAt', 'lastSeenAt'
+    ];
+    var out = [];
+    try {
+      var snap = await this.db.collection('users').limit(2000).get();
+      snap.forEach(function(doc) {
+        var data = doc.data();
+        if (data.acceptFriendRequests === false) return; // respeita o toggle
+        var o = { _docId: doc.id };
+        for (var i = 0; i < PUBLIC_FIELDS.length; i++) {
+          if (data[PUBLIC_FIELDS[i]] !== undefined) o[PUBLIC_FIELDS[i]] = data[PUBLIC_FIELDS[i]];
+        }
+        out.push(o);
+      });
+    } catch (e) {
+      window._warn('listInvitableUsers err', e && e.message);
+    }
+    return out;
+  },
+
   // ---- Friend Requests ----
 
   async sendFriendRequest(fromUid, toUid, fromData) {
