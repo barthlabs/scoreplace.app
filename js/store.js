@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.43-beta';
+window.SCOREPLACE_VERSION = '1.9.44-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -551,7 +551,20 @@ if (document.body) {
 
 // ─── DISMISS ALL OVERLAYS ───────────────────────────────────────────────────
 // .sticky-back-header lives at z-index 101, but the app creates 40+ ad-hoc
-// ─── Global loading spinner — 🎾 girando fixed no topo da viewport ────────
+// SVG da bola de tênis — idêntico em iOS, Android, Windows, Mac.
+// Substitui o emoji 🎾 que renderiza como raquete no Samsung/Android.
+// ~300 bytes inline, zero impacto de desempenho.
+window._TENNIS_BALL_SVG = function(size) {
+  var s = size || '1em';
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="' + s + '" height="' + s + '" style="display:inline-block;vertical-align:-0.1em;flex-shrink:0;" aria-hidden="true">' +
+    '<circle cx="20" cy="20" r="19" fill="#c8e040"/>' +
+    '<ellipse cx="14" cy="14" rx="6" ry="4" fill="#d8f050" opacity="0.55" transform="rotate(-30,14,14)"/>' +
+    '<path d="M10,4C2,12,2,28,10,36" stroke="white" stroke-width="2.8" fill="none" stroke-linecap="round"/>' +
+    '<path d="M30,4C38,12,38,28,30,36" stroke="white" stroke-width="2.8" fill="none" stroke-linecap="round"/>' +
+  '</svg>';
+};
+
+// ─── Global loading spinner — bola de tênis girando fixed no topo da viewport ────────
 // v0.17.94: helper reutilizável pra qualquer operação async que demora.
 // Stack-based — múltiplas chamadas .show() exigem mesmo número de .hide()
 // pra sumir. Usar `window._loadingSpinner.show('Carregando perfil…')`
@@ -586,7 +599,7 @@ window._loadingSpinner = (function() {
         el.setAttribute('role', 'status');
         document.body.appendChild(el);
       }
-      el.innerHTML = '<span class="ball">🎾</span><span class="label">' +
+      el.innerHTML = '<span class="ball" style="line-height:1;">' + window._TENNIS_BALL_SVG('1.1rem') + '</span><span class="label">' +
         (label ? String(label).replace(/[<>]/g, '') : 'Carregando…') + '</span>';
     },
     hide: function() {
@@ -630,7 +643,7 @@ window._renderBallLoader = function(label, opts) {
   var safeLabel = label ? String(label).replace(/[<>]/g, '') : 'Carregando…';
   return '<div class="scoreplace-ball-loader" style="display:flex;justify-content:center;align-items:center;min-height:' + minHeight + ';">' +
     '<div style="text-align:center;">' +
-      '<div aria-hidden="true" style="font-size:' + size + ';margin-bottom:0.85rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite, scoreplace-ball-pulse 1.6s ease-in-out infinite;">🎾</div>' +
+      '<div aria-hidden="true" style="width:' + size + ';height:' + size + ';margin-bottom:0.85rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite, scoreplace-ball-pulse 1.6s ease-in-out infinite;">' + window._TENNIS_BALL_SVG(size) + '</div>' +
       '<div role="status" aria-live="polite" style="color:var(--text-muted, #9ca3af);font-size:0.88rem;font-weight:600;">' + safeLabel + '</div>' +
     '</div>' +
   '</div>';
@@ -649,7 +662,7 @@ window._renderBallLoaderInline = function(label, opts) {
   var size = opts.size || '1.4rem';
   var safeLabel = label ? String(label).replace(/[<>]/g, '') : 'Carregando…';
   return '<div class="scoreplace-ball-loader-inline" style="display:inline-flex;align-items:center;gap:8px;padding:6px 0;color:var(--text-muted,#9ca3af);font-size:0.82rem;">' +
-    '<span aria-hidden="true" style="font-size:' + size + ';display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite, scoreplace-ball-pulse 1.6s ease-in-out infinite;">🎾</span>' +
+    '<span aria-hidden="true" style="width:' + size + ';height:' + size + ';display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite, scoreplace-ball-pulse 1.6s ease-in-out infinite;">' + window._TENNIS_BALL_SVG(size) + '</span>' +
     '<span role="status" aria-live="polite">' + safeLabel + '</span>' +
   '</div>';
 };
