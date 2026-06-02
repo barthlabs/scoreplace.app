@@ -50,16 +50,29 @@ window._updateStatBoxes = function(t) {
     var row = document.getElementById('stat-boxes-row');
     if (!row || !t) return;
 
-    // Recount individuals
-    var parts = Array.isArray(t.participants) ? t.participants : [];
+    // Recount individuals — usa _getCompetitors (mesma lista do render inicial,
+    // exclui org/cohost phantom solo mas mantém times) e conta MEMBROS:
+    // 1 dupla = 1 equipe = 2 inscritos. Antes contava dupla-objeto como 1.
+    var parts = (typeof window._getCompetitors === 'function')
+        ? window._getCompetitors(t)
+        : (Array.isArray(t.participants) ? t.participants : []);
     var indivCount = 0;
+    var teamCount = 0;
     parts.forEach(function(p) {
-        if (typeof p === 'object' && Array.isArray(p.participants)) {
+        if (typeof p === 'object' && p !== null && Array.isArray(p.participants) && p.participants.length > 0) {
+            teamCount++;
             indivCount += p.participants.length;
-        } else if (typeof p === 'string' && p.indexOf('/') !== -1) {
-            indivCount += p.split('/').filter(function(n) { return n.trim().length > 0; }).length;
         } else {
-            indivCount++;
+            var nm = (typeof window._pName === 'function') ? window._pName(p) : (typeof p === 'string' ? p : ((p && (p.displayName || p.name)) || ''));
+            if (nm && nm.indexOf('/') !== -1) {
+                teamCount++;
+                indivCount += nm.split('/').filter(function(n) { return n.trim().length > 0; }).length;
+            } else if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
+                teamCount++;
+                indivCount += 2;
+            } else {
+                indivCount++;
+            }
         }
     });
     if (Array.isArray(t.waitlist)) indivCount += t.waitlist.length;
@@ -67,6 +80,10 @@ window._updateStatBoxes = function(t) {
     // Update inscritos count
     var inscBox = row.querySelector('[data-stat="inscritos"] .stat-value');
     if (inscBox) inscBox.textContent = indivCount;
+
+    // Update equipes count (se o box existir)
+    var eqBox = row.querySelector('[data-stat="equipes"] .stat-value');
+    if (eqBox) eqBox.textContent = teamCount;
 
     // Waitlist count
     var wlCount = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0)

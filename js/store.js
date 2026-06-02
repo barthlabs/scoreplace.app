@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.51-beta';
+window.SCOREPLACE_VERSION = '1.9.52-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -3159,7 +3159,19 @@ window._getCompetitors = function(t) {
       email = (p.email || '').toLowerCase();
       name = (p.displayName || p.name || '').toLowerCase();
     }
-    // Exclude organizer who didn't self-enroll
+    // Times/duplas são SEMPRE competidores reais — nunca excluir por match com
+    // organizador/co-host. Uma dupla que inclui o organizador (ex: "Kelly /
+    // Rodrigo Barth", onde Rodrigo é o org) é uma equipe que joga e conta como
+    // competidor — caso contrário o programa some com 1 time inteiro e mostra
+    // "2 inscritos / 1 time" quando são 4 inscritos / 2 times.
+    var isTeam = false;
+    if (p && typeof p === 'object') {
+      if (Array.isArray(p.participants) && p.participants.length > 1) isTeam = true;
+      if (p.p1Name && p.p2Name) isTeam = true;
+    }
+    if (name.indexOf(' / ') !== -1) isTeam = true;
+    if (isTeam) return true;
+    // Exclude organizer who didn't self-enroll (apenas entradas SOLO)
     if (orgEmail && email && email === orgEmail) return false;
     if (!email && orgName && name && name === orgName) return false;
     // Exclude co-hosts who didn't self-enroll
