@@ -7276,6 +7276,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   //      quando aba fica hidden — re-pegamos ao voltar).
   var _wakeLock = null;
   var _noSleepVideo = null;
+  var _wakeHeartbeat = null;
   var _ensureNoSleepVideo = function() {
     if (_noSleepVideo) return _noSleepVideo;
     try {
@@ -7327,11 +7328,37 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var p = _noSleepVideo.play();
       if (p && typeof p.catch === 'function') p.catch(function() {});
     }
+    // Camada 3: heartbeat (v1.9.54) — a cada 12s garante que a tela continua
+    // acesa. No Android, battery-saver/data-saver podem liberar a Wake Lock ou
+    // pausar o vídeo sem disparar visibilitychange; no iOS o vídeo às vezes
+    // pausa sozinho. O heartbeat re-toca o vídeo se pausado e re-adquire a
+    // Wake Lock se foi solta — enquanto o overlay de placar ao vivo existir.
+    if (!_wakeHeartbeat) {
+      _wakeHeartbeat = setInterval(function() {
+        if (!document.getElementById('live-scoring-overlay')) {
+          clearInterval(_wakeHeartbeat); _wakeHeartbeat = null; return;
+        }
+        if (document.visibilityState !== 'visible') return;
+        if (_noSleepVideo && _noSleepVideo.paused) {
+          var pp = _noSleepVideo.play();
+          if (pp && typeof pp.catch === 'function') pp.catch(function() {});
+        }
+        if (!_wakeLock && 'wakeLock' in navigator) {
+          try {
+            navigator.wakeLock.request('screen').then(function(lock) {
+              _wakeLock = lock;
+              lock.addEventListener('release', function() { _wakeLock = null; });
+            }).catch(function() {});
+          } catch(e) {}
+        }
+      }, 12000);
+    }
   };
   var _releaseWakeLock = function() {
     try {
       if (_wakeLock) { _wakeLock.release().catch(function(){}); _wakeLock = null; }
     } catch(e) { _wakeLock = null; }
+    if (_wakeHeartbeat) { try { clearInterval(_wakeHeartbeat); } catch(e) {} _wakeHeartbeat = null; }
     _stopNoSleepVideo();
   };
   // Re-acquire on visibility change (browsers auto-release when tab hidden)
