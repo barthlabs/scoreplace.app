@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.42-beta';
+window.SCOREPLACE_VERSION = '1.9.43-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2077,6 +2077,17 @@ window.AppStore = {
     if (this._realtimeUnsubscribe) return; // Already listening
     if (!window.FirestoreDB || !window.FirestoreDB.db) return;
 
+    // v1.9.43: sinaliza que estamos aguardando o primeiro snapshot antes de
+    // esconder o boot loader. router.js respeita esse flag e não esconde antes.
+    window._waitingForFirstSnapshot = true;
+    // Fallback: se o Firestore nunca responder (offline/erro), esconde após 5s.
+    setTimeout(function() {
+      if (window._waitingForFirstSnapshot) {
+        window._waitingForFirstSnapshot = false;
+        if (typeof window._hideBootLoader === 'function') window._hideBootLoader();
+      }
+    }, 5000);
+
     var store = this;
     var isFirstSnapshot = true;
     var coll = window.FirestoreDB.db.collection('tournaments');
@@ -2114,6 +2125,22 @@ window.AppStore = {
           if (_firstSnapView !== 'novo-torneio') {
             if (typeof initRouter === 'function') initRouter();
           }
+          // v1.9.43: boot loader esperou o primeiro snapshot — agora esconde.
+          // Evita o flash de dashboard vazia seguido de re-render com dados.
+          window._waitingForFirstSnapshot = false;
+          if (typeof window._hideBootLoader === 'function') {
+            setTimeout(window._hideBootLoader, 120);
+          }
+          // Auto-scroll para resultados pendentes de aprovação, uma vez por sessão.
+          // Roda após o boot loader ter sumido (150ms) para o scroll ser visível.
+          setTimeout(function() {
+            if (window._dashPendingScrolled) return;
+            var _section = document.querySelector('[data-has-pending="1"]');
+            if (_section) {
+              window._dashPendingScrolled = true;
+              _section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }, 450);
           // Auto-fix stale names after tournaments are loaded (no currentUser check needed)
           if (typeof window._autoFixStaleNames === 'function') {
             window._autoFixStaleNames().catch(function(e) { window._warn('Auto-fix stale names error:', e); });

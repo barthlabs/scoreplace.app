@@ -397,13 +397,12 @@ function initRouter() {
   window.addEventListener('hashchange', handleRoute);
   handleRoute();
 
-  // v1.0.32-beta: sinaliza pro boot loader esconder. handleRoute renderou a
-  // primeira view; pequeno timeout pra garantir paint, depois fade out. Como
-  // o loader é HTML inline em <body>, ele aparece IMMEDIATAMENTE no parse e
-  // só some quando o app está realmente interativo — cobre a transição
-  // landing-prerender → dashboard pra usuário logado, e disfarça spin de
-  // Firebase initializing.
-  if (typeof window._hideBootLoader === 'function') {
+  // v1.0.32-beta: sinaliza pro boot loader esconder após primeiro render.
+  // v1.9.43: se estiver aguardando o primeiro snapshot do Firestore
+  // (_waitingForFirstSnapshot), o boot loader só some depois que os dados
+  // chegarem (startRealtimeListener). Para usuários não-logados ou quando
+  // Firestore não é usado, esconde aqui normalmente.
+  if (typeof window._hideBootLoader === 'function' && !window._waitingForFirstSnapshot) {
     setTimeout(window._hideBootLoader, 150);
   }
 

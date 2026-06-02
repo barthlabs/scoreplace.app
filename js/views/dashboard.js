@@ -1487,7 +1487,8 @@ function renderDashboard(container) {
       return '🏅';
     };
 
-    var html = '<div id="meus-resultados-section" style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+    var _hasPendingApproval = (pendingForMe.length + pendingByMe.length) > 0;
+    var html = '<div id="meus-resultados-section"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
     html += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;">🏅 Meus Resultados</h3>';
 
     // Calcula label de fase para eliminatórias (FINAL, SEMI-FINAL etc.)
@@ -2507,16 +2508,8 @@ function renderDashboard(container) {
   `;
   container.innerHTML = html;
 
-  // Auto-scroll para "Meus Resultados" se há placares pendentes de aprovação
-  setTimeout(function() {
-    var meusSection = document.getElementById('meus-resultados-section');
-    if (meusSection) {
-      var hasPending = meusSection.querySelector('[data-pending-action]');
-      if (hasPending) {
-        meusSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }
-  }, 300);
+  // Auto-scroll tratado pelo store.js após primeiro snapshot — não fazer aqui
+  // para evitar conflito com a restauração de scroll do _softRefreshView.
 
   // Botões de resultado pendente — event listeners via JS (evita parsing issues
   // de onclick em HTML gerado dinamicamente em mobile Safari)
