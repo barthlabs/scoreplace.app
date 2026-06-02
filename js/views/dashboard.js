@@ -844,9 +844,13 @@ function renderDashboard(container) {
   // — bug reportado: "Bem-vindo, +5511997237733!" pra users que logaram via
   // SMS antes do cross-ref por phone (e.g., users que já tinham displayName
   // = phoneNumber salvo no Firestore por bug histórico).
-  var _rawDn = (window.AppStore.currentUser && window.AppStore.currentUser.displayName) || '';
-  var _looksLikePhone = /^\+?\d[\d\s().-]{5,}$/.test(String(_rawDn).trim());
-  const userName = (_rawDn && !_looksLikePhone) ? _rawDn : _t('common.guest');
+  // v1.9.53: usa o helper canônico (mesma cadeia da topbar) — um usuário
+  // logado nunca deve aparecer como "Visitante". Só cai em guest quando NÃO
+  // há usuário/identidade alguma (visitante de verdade).
+  var _friendly = (typeof window._friendlyUserName === 'function')
+    ? window._friendlyUserName(window.AppStore.currentUser)
+    : null;
+  const userName = _friendly || _t('common.guest');
   const _userIsPro = typeof window._isPro === 'function' && window._isPro();
   const _proBadge = _userIsPro ? ' <span style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:0.55rem;font-weight:800;padding:2px 8px;border-radius:20px;vertical-align:middle;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(245,158,11,0.3);position:relative;top:-2px;">⭐ PRO</span>' : '';
 

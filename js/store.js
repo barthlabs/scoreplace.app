@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.52-beta';
+window.SCOREPLACE_VERSION = '1.9.53-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -1013,6 +1013,38 @@ window._isUnfriendlyName = function(name) {
   // genéricos e placeholders são considerados ruins.
   var BAD = ['usuário', 'usuario', 'user', 'teste', 'test', 'undefined', 'null', 'anon', 'anônimo', 'visitante'];
   return BAD.indexOf(n) !== -1;
+};
+
+// Nome amigável canônico para exibir um usuário logado. Mesma cadeia de
+// fallback da topbar (displayName real → prefixo do email → telefone) para
+// que a saudação NUNCA mostre "Visitante" pra um usuário de fato logado.
+// Retorna null quando não há usuário/identidade alguma (aí o caller decide
+// usar "Visitante"). Bug reportado: usuária krbenini logada aparecia como
+// "Bem-vindo, Visitante!" porque a saudação só olhava displayName.
+window._friendlyUserName = function(user) {
+  user = user || (window.AppStore && window.AppStore.currentUser) || null;
+  if (!user) return null;
+  var dn = (user.displayName || '').trim();
+  var looksPhone = /^\+?\d[\d\s().-]{5,}$/.test(dn);
+  var unfriendly = (typeof window._isUnfriendlyName === 'function') && window._isUnfriendlyName(dn);
+  if (dn && !looksPhone && !unfriendly) return dn;
+  // displayName ausente/genérico/telefone → prefixo do email (igual topbar)
+  if (user.email) {
+    var pref = String(user.email).split('@')[0];
+    if (pref) return pref;
+  }
+  // telefone formatado como último recurso (usuário phone-only sem nome)
+  var ph = user.phone || user.phoneNumber;
+  if (ph) {
+    var local = (typeof window._phoneLocalDigits === 'function')
+      ? window._phoneLocalDigits(ph, user.phoneCountry || '55')
+      : String(ph).replace(/\D/g, '');
+    if (local && local.length >= 8 && typeof window._formatPhoneDisplay === 'function') {
+      return window._formatPhoneDisplay(local, user.phoneCountry || '55');
+    }
+    return String(ph);
+  }
+  return null;
 };
 
 // Normalizes any phone string to E.164 format with + prefix.

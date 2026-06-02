@@ -7304,30 +7304,24 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
   };
   var _requestWakeLock = function() {
-    // Camada 1: Wake Lock API (iOS Safari 16.4+, Chrome Android, etc.)
-    // v1.6.105-beta: só aciona o vídeo NoSleep como FALLBACK quando a Wake
-    // Lock API não está disponível ou falha. Wake Lock API impede auto-sleep
-    // mas permite que o usuário bloqueie a tela manualmente (botão lateral) —
-    // comportamento correto. NoSleep vídeo impede QUALQUER sleep incluindo
-    // bloqueio manual — intrusivo demais. Usar apenas quando necessário.
+    // Camada 1: Wake Lock API nativa (Chrome Android, iOS Safari 16.4+).
     try {
       if ('wakeLock' in navigator && !_wakeLock) {
         navigator.wakeLock.request('screen').then(function(lock) {
           _wakeLock = lock;
           lock.addEventListener('release', function() { _wakeLock = null; });
-          // Wake Lock ativo — não precisa do vídeo NoSleep
-        }).catch(function() {
-          // Wake Lock falhou (ex: permissão negada) — usar vídeo como fallback
-          _ensureNoSleepVideo();
-          if (_noSleepVideo && _noSleepVideo.paused) {
-            var p = _noSleepVideo.play();
-            if (p && typeof p.catch === 'function') p.catch(function() {});
-          }
-        });
-        return; // promise em voo — não aciona vídeo agora
+        }).catch(function() {});
       }
     } catch(e) {}
-    // Wake Lock API indisponível — usar vídeo NoSleep como fallback
+    // Camada 2: vídeo NoSleep SEMPRE em paralelo (v1.9.53). No iPhone a Wake
+    // Lock API é inconsistente — versão-dependente e libera quando a tela
+    // escurece, sem disparar visibilitychange — então a tela apagava no meio
+    // do placar ao vivo (bug reportado no iPhone da amiga). Prioridade do
+    // usuário: "aberto o placar ao vivo não trava a tela, pra marcação de
+    // pontos por terceiros". O vídeo muted 1px em loop mantém o WebKit
+    // considerando a tela em uso. Roda junto com a Wake Lock API — qualquer
+    // uma das duas mantém a tela acesa. Trade-off aceito: durante o placar
+    // ao vivo a tela não bloqueia sozinha (é o comportamento desejado aqui).
     _ensureNoSleepVideo();
     if (_noSleepVideo && _noSleepVideo.paused) {
       var p = _noSleepVideo.play();
@@ -10611,6 +10605,16 @@ window._openCasualMatch = function(restoreOpts) {
 // ─── Casual Match Join Screen (route: #casual/{roomCode}) ─────────────────────
 window._renderCasualJoin = function(container, roomCode) {
   if (!container) return;
+  // v1.9.53: observabilidade do join casual. Bug reportado: "leu o código no
+  // QR (toast apareceu) mas não entrou na partida; digitar o código também
+  // não entrou". Como o fluxo é multi-device e difícil de reproduzir, logamos
+  // cada etapa para a próxima tentativa real apontar onde trava.
+  try {
+    var _cuDbg = window.AppStore && window.AppStore.currentUser;
+    var _dbg = { room: roomCode, hasUser: !!(_cuDbg && _cuDbg.uid), authResolved: !!window._authStateResolved, hasDB: !!(window.FirestoreDB && window.FirestoreDB.db) };
+    if (window._log) window._log('[CasualJoin] start', _dbg);
+    if (window._captureMessage) window._captureMessage('[CasualJoin] start ' + JSON.stringify(_dbg), 'info');
+  } catch(e) {}
   var _safe = window._safeHtml || function(s) { return s; };
   var _backHtml = typeof window._renderBackHeader === 'function'
     ? window._renderBackHeader({ href: '#dashboard', label: 'Voltar' }) : '';
@@ -10672,6 +10676,11 @@ window._renderCasualJoin = function(container, roomCode) {
   }
 
   window.FirestoreDB.loadCasualMatch(roomCode).then(function(match) {
+    try {
+      var _md = match ? { found: true, status: match.status, players: (match.players||[]).length } : { found: false };
+      if (window._log) window._log('[CasualJoin] loadCasualMatch', roomCode, _md);
+      if (window._captureMessage) window._captureMessage('[CasualJoin] loaded ' + roomCode + ' ' + JSON.stringify(_md), 'info');
+    } catch(e) {}
     if (!match) {
       _setBody(
         '<div style="text-align:center;padding:3rem 1rem;">' +
@@ -11292,6 +11301,7 @@ window._renderCasualJoin = function(container, roomCode) {
     _startLobbyRefresh();
   }).catch(function(err) {
     window._error('Error loading casual match:', err);
+    try { if (window._captureException) window._captureException(err, { area: 'renderCasualJoin', roomCode: roomCode }); } catch(e) {}
     _setBody(
       '<div style="text-align:center;padding:3rem 1rem;">' +
         '<div style="font-size:2.5rem;margin-bottom:1rem;">⚠️</div>' +
