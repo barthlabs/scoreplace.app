@@ -390,21 +390,33 @@ window._exploreExpandRecent = function(days) {
 // esporte). Esconde cards que não casam e a seção inteira quando nada casa.
 // Roda a cada tecla, sem debounce (é local, instantâneo).
 window._filterExploreVisible = function(query) {
+  // Injeta 1× a classe de ocultar. Usamos classe com display:none !important
+  // em vez de mexer em card.style.display — setar display='' apagava o
+  // display:flex INLINE dos cards, quebrando o layout (avatar/nome empilhavam
+  // verticalmente, cards ficavam altos). A classe esconde sem tocar no layout
+  // original; remover a classe restaura o flex inline intacto.
+  if (!document.getElementById('_explore-filter-style')) {
+    var st = document.createElement('style');
+    st.id = '_explore-filter-style';
+    st.textContent = '.sp-explore-hidden{display:none !important;}';
+    document.head.appendChild(st);
+  }
   var q = String(query || '').trim().toLowerCase();
   ['explore-pending', 'explore-friends', 'explore-sent'].forEach(function(secId) {
     var sec = document.getElementById(secId);
     if (!sec) return;
     var cards = sec.querySelectorAll('.card');
-    if (!cards.length) { sec.style.display = ''; return; }
+    if (!cards.length) { sec.classList.remove('sp-explore-hidden'); return; }
     var anyVisible = false;
     cards.forEach(function(card) {
       var match = !q || ((card.textContent || '').toLowerCase().indexOf(q) !== -1);
-      card.style.display = match ? '' : 'none';
-      if (match) anyVisible = true;
+      if (match) { card.classList.remove('sp-explore-hidden'); anyVisible = true; }
+      else { card.classList.add('sp-explore-hidden'); }
     });
     // Sem query → mostra a seção inteira. Com query e nada casando → esconde
     // (inclui o cabeçalho "MEUS AMIGOS (N)") pra não deixar título órfão.
-    sec.style.display = (q && !anyVisible) ? 'none' : '';
+    if (q && !anyVisible) sec.classList.add('sp-explore-hidden');
+    else sec.classList.remove('sp-explore-hidden');
   });
 };
 
