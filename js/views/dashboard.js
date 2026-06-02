@@ -1575,17 +1575,17 @@ function renderDashboard(container) {
         return (name || '?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase();
       }
       function _photoForPlayer(name) {
-        // Próprio usuário
-        if (_isMe(name) && cu && cu.photoURL) return cu.photoURL;
-        // Cache global de fotos por nome (populado pelo bracket)
-        if (window._playerPhotoCache && window._playerPhotoCache[name]) return window._playerPhotoCache[name];
-        // Procura nos participantes do torneio referenciado
-        if (tRef && Array.isArray(tRef.participants)) {
-          var p = tRef.participants.find(function(pp) {
-            return pp && (pp.name === name || pp.displayName === name);
-          });
-          if (p && p.photoURL) return p.photoURL;
+        // Próprio usuário: foto do próprio perfil em sessão
+        if (_isMe(name) && cu && cu.photoURL && cu.photoURL.indexOf('dicebear.com') === -1) return cu.photoURL;
+        // Cache global de fotos por nome (populado por _preloadPlayerPhotos —
+        // SEMPRE a foto real do perfil do usuário, por uid). Chave é lowercase.
+        if (window._playerPhotoCache) {
+          var _c = window._playerPhotoCache[(name || '').toLowerCase()];
+          if (_c && _c.indexOf('dicebear.com') === -1) return _c;
         }
+        // Sem foto de perfil em cache → null (cai em iniciais; será trocado
+        // pelo swap pós-preload). NÃO usar p.photoURL armazenado (pode estar
+        // defasado — a regra é sempre a foto do perfil real).
         return null;
       }
       // Um jogador (linha): avatar + nome
@@ -1596,7 +1596,7 @@ function renderDashboard(container) {
         var avatarSrc = (typeof window._profileAvatarUrl === 'function')
           ? window._profileAvatarUrl(name, photo, 28)
           : (photo || ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28'));
-        var avatarEl = '<img src="' + avatarSrc + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src=\'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28\'">';
+        var avatarEl = '<img src="' + avatarSrc + '" data-player-name="' + _sf(name) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src=\'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28\'">';
         var nameEl = '<span style="font-size:0.8rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(name) + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '') + '</span>';
         return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl + nameEl + '</div>';
       }
@@ -1819,12 +1819,11 @@ function renderDashboard(container) {
           var playersHtml = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
           parts2.forEach(function(n) {
             var isMe2 = _isMe(n);
-            var photo2 = (isMe2 && cu && cu.photoURL) ? cu.photoURL
-              : (window._playerPhotoCache && window._playerPhotoCache[n]) ? window._playerPhotoCache[n] : null;
-            var ini2 = _sf((n || '?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase());
-            var av2 = photo2
-              ? '<img src="' + photo2 + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
-              : '<div style="width:26px;height:26px;border-radius:50%;background:' + (isMe2 ? 'rgba(99,102,241,0.35)' : 'rgba(148,163,184,0.15)') + ';display:flex;align-items:center;justify-content:center;font-size:0.58rem;font-weight:800;color:' + (isMe2 ? '#a5b4fc' : '#94a3b8') + ';flex-shrink:0;">' + ini2 + '</div>';
+            var _pc2 = (window._playerPhotoCache && window._playerPhotoCache[(n || '').toLowerCase()]);
+            var photo2 = (_pc2 && _pc2.indexOf('dicebear.com') === -1) ? _pc2
+              : ((isMe2 && cu && cu.photoURL && cu.photoURL.indexOf('dicebear.com') === -1) ? cu.photoURL : null);
+            var _ini2url = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n || '?') + '&backgroundColor=' + (isMe2 ? '6366f1' : '94a3b8') + '&textColor=ffffff&fontSize=42&size=26';
+            var av2 = '<img src="' + (photo2 || _ini2url) + '" data-player-name="' + _sf(n) + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src=\'' + _ini2url + '\'">';
             playersHtml += '<div style="display:flex;align-items:center;gap:6px;">' + av2 +
               '<span style="font-size:0.78rem;font-weight:' + (isMe2 ? '700' : '400') + ';color:' + (isMe2 ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(n) + (isMe2 ? ' <span style="font-size:0.62em;color:#818cf8;">(você)</span>' : '') + '</span>' +
               '</div>';
@@ -1855,9 +1854,9 @@ function renderDashboard(container) {
                 var parts3 = String(m2.p1||'').split(/\s*\/\s*/).filter(Boolean);
                 var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
                 parts3.forEach(function(n){
-                  var isMe3=_isMe(n); var ph2=(isMe3&&cu&&cu.photoURL)?cu.photoURL:(window._playerPhotoCache&&window._playerPhotoCache[n])||null;
-                  var ini3=_sf((n||'?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase());
-                  var av3=ph2?'<img src="'+ph2+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;">':'<div style="width:26px;height:26px;border-radius:50%;background:'+(isMe3?'rgba(99,102,241,0.35)':'rgba(148,163,184,0.15)')+';display:flex;align-items:center;justify-content:center;font-size:0.58rem;font-weight:800;color:'+(isMe3?'#a5b4fc':'#94a3b8')+';flex-shrink:0;">'+ini3+'</div>';
+                  var isMe3=_isMe(n); var _pc3=(window._playerPhotoCache&&window._playerPhotoCache[(n||'').toLowerCase()]); var ph2=(_pc3&&_pc3.indexOf('dicebear.com')===-1)?_pc3:((isMe3&&cu&&cu.photoURL&&cu.photoURL.indexOf('dicebear.com')===-1)?cu.photoURL:null);
+                  var _ini3url='https://api.dicebear.com/9.x/initials/svg?seed='+encodeURIComponent(n||'?')+'&backgroundColor='+(isMe3?'6366f1':'94a3b8')+'&textColor=ffffff&fontSize=42&size=26';
+                  var av3='<img src="'+(ph2||_ini3url)+'" data-player-name="'+_sf(n)+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src=\''+_ini3url+'\'">';
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:'+(isMe3?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
@@ -1872,9 +1871,9 @@ function renderDashboard(container) {
                 var parts4 = String(m2.p2||'').split(/\s*\/\s*/).filter(Boolean);
                 var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
                 parts4.forEach(function(n){
-                  var isMe4=_isMe(n); var ph2=(isMe4&&cu&&cu.photoURL)?cu.photoURL:(window._playerPhotoCache&&window._playerPhotoCache[n])||null;
-                  var ini4=_sf((n||'?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase());
-                  var av4=ph2?'<img src="'+ph2+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;">':'<div style="width:26px;height:26px;border-radius:50%;background:'+(isMe4?'rgba(99,102,241,0.35)':'rgba(148,163,184,0.15)')+';display:flex;align-items:center;justify-content:center;font-size:0.58rem;font-weight:800;color:'+(isMe4?'#a5b4fc':'#94a3b8')+';flex-shrink:0;">'+ini4+'</div>';
+                  var isMe4=_isMe(n); var _pc4=(window._playerPhotoCache&&window._playerPhotoCache[(n||'').toLowerCase()]); var ph2=(_pc4&&_pc4.indexOf('dicebear.com')===-1)?_pc4:((isMe4&&cu&&cu.photoURL&&cu.photoURL.indexOf('dicebear.com')===-1)?cu.photoURL:null);
+                  var _ini4url='https://api.dicebear.com/9.x/initials/svg?seed='+encodeURIComponent(n||'?')+'&backgroundColor='+(isMe4?'6366f1':'94a3b8')+'&textColor=ffffff&fontSize=42&size=26';
+                  var av4='<img src="'+(ph2||_ini4url)+'" data-player-name="'+_sf(n)+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src=\''+_ini4url+'\'">';
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:'+(isMe4?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
@@ -2534,6 +2533,29 @@ function renderDashboard(container) {
     })()}
   `;
   container.innerHTML = html;
+
+  // Regra "sempre usar foto do perfil para usuário cadastrado": o dashboard
+  // não passa pelo bracket, então o _playerPhotoCache pode estar frio. Pré-
+  // carrega as fotos reais (por uid) dos torneios em que o usuário participa
+  // e troca os avatares iniciais pelas fotos de perfil. Mesmo padrão de
+  // participants.js (swap por data-player-name).
+  if (typeof _preloadPlayerPhotos === 'function' && typeof participacoes !== 'undefined' && Array.isArray(participacoes)) {
+    var _phTournaments = participacoes.slice(0, 20);
+    Promise.all(_phTournaments.map(function(t) {
+      try { return _preloadPlayerPhotos(t); } catch(e) { return Promise.resolve(); }
+    })).then(function() {
+      var imgs = container.querySelectorAll('img[data-player-name]');
+      imgs.forEach(function(img) {
+        var nm = img.getAttribute('data-player-name');
+        var real = window._playerPhotoCache && window._playerPhotoCache[(nm || '').toLowerCase()];
+        if (real && real.indexOf('dicebear.com') === -1 && img.src.indexOf('dicebear.com') !== -1) {
+          var fb = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28';
+          img.onerror = function() { this.onerror = null; this.src = fb; };
+          img.src = real;
+        }
+      });
+    }).catch(function() {});
+  }
 
   // Auto-scroll para resultados pendentes de aprovação.
   // 600ms = após todos os _jumpTop do router (último em 350ms) e após a
