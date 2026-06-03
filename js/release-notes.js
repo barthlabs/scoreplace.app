@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.89-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Aprovação de resultado: edição mais limpa + histórico na disputa.</b><br><br>' +
+      'Ao clicar em <b>Editar</b> um placar pendente, o bloco "Aguardando aprovação" com Editar/Confirmar agora <b>some enquanto você edita</b> — ficam só Cancelar/Confirmar. Ao cancelar ou confirmar, o Editar volta (pra corrigir de novo). E na <b>disputa</b>, o organizador agora vê o histórico: <b>quem propôs qual placar</b> e <b>quem revisou pra qual placar</b>, antes de decidir o resultado definitivo.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.87-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Place: agora dá pra EDITAR o plano de ida (não só cancelar).</b><br><br>' +
       'Enquanto você não chega ao local, é um <b>plano de ida</b> — e agora dá pra <b>✏️ Editar</b> (mudar horário/modalidade) <b>ou ❌ Cancelar</b>, mesmo depois de passada a hora marcada de chegada. O "Editar" abre o formulário já preenchido com os horários do plano; ao confirmar, substitui o plano antigo. (Ao chegar no local, vira presença, com saída automática se você sair do raio ou tocar em sair.)</p>' +

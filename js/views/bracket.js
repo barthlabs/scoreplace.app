@@ -1688,11 +1688,24 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
           <div style="display:flex;gap:6px;flex-wrap:wrap;">${_btnOrgConfirm}${_btnOrgEdit}${_btnOrgRedo}</div>
         </div>`;
       }
+      // v1.9.89: histórico da disputa — proposta original (Time A) + revisão
+      // (Time B). Pedido: o organizador precisa ver quem propôs qual placar e
+      // quem revisou pra qual placar antes de decidir.
+      var _histHtml = '';
+      var _op = _pr.originalProposal;
+      if (_op && _op.proposedByName) {
+        var _opScore = (_op.scoreP1 != null ? _op.scoreP1 : '?') + ' × ' + (_op.scoreP2 != null ? _op.scoreP2 : '?');
+        _histHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(239,68,68,0.2);font-size:0.7rem;color:#fca5a5;line-height:1.6;">
+          📝 Proposto por <b>${window._safeHtml(_op.proposedByName)}</b>: <b style="color:#fde047;">${_opScore}</b><br>
+          ✏️ Revisado por <b>${_proposerName}</b>: <b style="color:#fde047;">${_scoreDisp}</b>
+        </div>`;
+      }
       pendingBanner = `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;color:#f87171;">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;">
           <span style="font-size:0.85rem;">🚨</span>
-          <span><b>Em disputa</b> — placar ${_scoreDisp} contestado por <b>${_disputerName}</b>.${_isAuthorityInner ? '' : ' Aguardando resolução do organizador.'}</span>
+          <span><b>Em disputa</b> — contestado por <b>${_disputerName}</b>.${_isAuthorityInner ? '' : ' Aguardando resolução do organizador.'}</span>
         </div>
+        ${_histHtml}
         ${_orgResolvePanel}
       </div>`;
     } else {
@@ -1701,7 +1714,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
           <span style="font-size:0.85rem;">⏳</span>
           <span><b>Aguardando aprovação</b> — proposto por <b>${_proposerName}</b> · ${_agoLabel}</span>
         </div>
-        ${pendingActionBtns ? `<div style="display:flex;gap:6px;flex-wrap:wrap;">${pendingActionBtns}</div>` : ''}
+        ${pendingActionBtns ? `<div id="pending-banner-btns-${m.id}" style="display:flex;gap:6px;flex-wrap:wrap;">${pendingActionBtns}</div>` : ''}
       </div>`;
     }
   }

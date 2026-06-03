@@ -2248,6 +2248,12 @@ window._editPendingResult = function(tId, matchId) {
       '<button id="cancel-pending-edit-' + matchId + '" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕ Cancelar</button>' +
       '<button id="confirm-pending-edit-' + matchId + '" style="background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.5);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
   }
+  // v1.9.89: enquanto edita, esconde os botões do banner (Editar/Confirmar) —
+  // só ficam o Cancelar/Confirmar do header. O re-render (cancelar/confirmar)
+  // restaura o banner. Pedido: "enquanto estiver editando deve ficar apenas o
+  // cancelar e confirmar".
+  var _bannerBtns = document.getElementById('pending-banner-btns-' + matchId);
+  if (_bannerBtns) _bannerBtns.style.display = 'none';
 
   var cancelBtn = document.getElementById('cancel-pending-edit-' + matchId);
   if (cancelBtn) {
@@ -2300,6 +2306,14 @@ window._editPendingResult = function(tId, matchId) {
         if (typeof window._approveResult === 'function') window._approveResult(tId, matchId);
         return;
       }
+      // v1.9.89: preserva a proposta ORIGINAL (Time A) — pra o organizador ver,
+      // na disputa, "proposto por A: X" + "revisado por B: Y".
+      var _prevPending = m.pendingResult || {};
+      var _origProp = _prevPending.originalProposal || (_prevPending.proposedByName ? {
+        proposedByName: _prevPending.proposedByName,
+        scoreP1: _prevPending.scoreP1,
+        scoreP2: _prevPending.scoreP2
+      } : null);
       m.pendingResult = {
         kind: 'inline',
         proposedBy: cu.uid || null,
@@ -2310,7 +2324,8 @@ window._editPendingResult = function(tId, matchId) {
         draw: s1v === s2v,
         scoreP1: s1v,
         scoreP2: s2v,
-        isCounterProposal: true  // marca fase 2: time original verá Confirmar + Contestar
+        isCounterProposal: true,  // marca fase 2: time original verá Confirmar + Contestar
+        originalProposal: _origProp
       };
       _propagateMatchUpdate(t, m);
       window.AppStore.logAction(tId, 'Contra-proposta: ' + m.p1 + ' ' + s1v + ' × ' + s2v + ' ' + m.p2 + ' por ' + (cu.displayName || cu.email));
