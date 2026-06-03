@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.69-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Junho, 2026)</span></div>' +
+      '<p><b>Placar ao vivo: botão Configurar no cabeçalho.</b><br><br>' +
+      'O botão <b>↶ Desfazer</b> do cabeçalho (que era redundante — o undo real é a setinha ↺ ao lado do placar de games, que desfaz ponto a ponto) foi substituído pelo botão <b>⚙️ Configurar</b>. Agora o cabeçalho tem: Configurar · Resetar · Fechar.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.68-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Junho, 2026)</span></div>' +
       '<p><b>Placar ao vivo: ajustes de layout em quadra.</b><br><br>' +
       '<b>Botão Configurar visível:</b> a engrenagem discreta do cabeçalho virou um botão <b>⚙️ Configurar</b> (ícone + texto), posicionado logo abaixo do "AO VIVO", à esquerda do placar de games — fácil de achar em quadra.<br><br>' +

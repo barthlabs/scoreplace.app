@@ -5771,12 +5771,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // sacador automaticamente, então arrastar não faz sentido).
     var swapHint = (!state.isFinished && _liveScorePrefs.fixSides) ? '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted);opacity:0.5;margin-top:4px;">← arraste para trocar lado →</div>' : '';
 
-    // v1.9.68: botão "Configurar" (engrenagem + texto) ancorado no spacer
-    // esquerdo da linha do GAMES — logo abaixo do cabeçalho (AO VIVO), à
-    // esquerda do placar de games. Substitui a engrenagem discreta do header.
-    var _configBtnHtml = '<button onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" title="Ajustes do placar" aria-label="Ajustes do placar" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.18);color:var(--text-bright);border-radius:9px;padding:8px 13px;font-size:0.78rem;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;white-space:nowrap;"><span style="font-size:0.98rem;line-height:1;">⚙️</span>Configurar</button>';
-    var _configSpacerHtml = '<div style="flex:1;display:flex;align-items:center;justify-content:flex-start;padding-left:clamp(6px,2vw,14px);min-width:0;">' + _configBtnHtml + '</div>';
-
     if (isLandscape) {
       // ── LANDSCAPE: [Names+Btns Left] [Plate Left] [Games] [Plate Right] [Names+Btns Right] ──
       // Landscape-specific builders with smaller sizes to fit phone screen
@@ -5821,7 +5815,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // Games box — ABOVE the plates to keep score numbers bigger
           // v1.3.67-beta: undo button beside games box (outside), not inside it
           // v1.3.68-beta: SVG undo icon in white, games box centered via symmetric flex spacers
-          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(2px,0.6vh,6px);display:flex;align-items:center;width:100%;">' + _configSpacerHtml + lsGamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:8px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:30px;height:30px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="22" height="22" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
+          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(2px,0.6vh,6px);display:flex;align-items:center;width:100%;"><div style="flex:1;"></div>' + lsGamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:8px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:30px;height:30px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="22" height="22" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
           // Special label (TIE-BREAK, winner)
           (gameLabel ? '<div style="text-align:center;font-size:clamp(0.6rem,1.5vw,0.75rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;margin-bottom:clamp(2px,0.5vh,6px);">' + gameLabel + '</div>' : '') +
           // Main row — 4 columns: [Names+Btns Left] [Plate Left] [Plate Right] [Names+Btns Right]
@@ -5858,7 +5852,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // v1.3.67-beta: undo button beside games box (outside), not inside it
           // v1.3.68-beta: SVG undo icon in white, games box centered via symmetric flex spacers
           // v1.3.70-beta: games numbers bigger — spacer pushes court to bottom
-          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(4px,1vh,8px);display:flex;align-items:center;width:100%;">' + _configSpacerHtml + gamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:10px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:38px;height:38px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="28" height="28" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
+          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(4px,1vh,8px);display:flex;align-items:center;width:100%;"><div style="flex:1;"></div>' + gamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:10px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:38px;height:38px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="28" height="28" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
           // Flexible spacer: pushes court content toward the bottom, freeing space above for bigger games box
           '<div style="flex:1;min-height:0;"></div>' +
           // Two-column score plates with team-colored backgrounds
@@ -7275,13 +7269,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Right: Undo + Reset + Close (Reset hidden on finish screen in
     // tournament mode; Undo permanece visível em todos os contextos)
     '<div id="live-score-header-actions" style="display:flex;gap:6px;align-items:center;flex:0 0 auto;">' +
-      // v1.9.68: engrenagem movida pra botão "⚙️ Configurar" abaixo do
-      // cabeçalho (à esquerda do placar de games) — mais visível em quadra.
-      // v1.0.36-beta: Undo global do último ponto. Funciona até depois que
-      // o match foi finalizado (volta pra UI live se desfizer o ponto que
-      // fechou). Útil quando o ponto vitorioso de um 40-40 é marcado pro
-      // lado errado.
-      '<button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" aria-label="Desfazer último ponto" style="background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.4);color:#818cf8;border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:700;cursor:pointer;">↶ Desfazer</button>' +
+      // v1.9.69: botão "⚙️ Configurar" no header, no lugar do antigo "Desfazer"
+      // (que era redundante — o undo real é a setinha ↺ ao lado do placar de
+      // games, que desfaz ponto a ponto). Engrenagem + texto = visível em quadra.
+      '<button onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" title="Ajustes do placar" aria-label="Ajustes do placar" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;"><span style="font-size:0.88rem;line-height:1;">⚙️</span>Configurar</button>' +
       '<button onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
       '<button onclick="window._closeLiveScoring()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
     '</div>' +
