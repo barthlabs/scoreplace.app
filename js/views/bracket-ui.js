@@ -7184,7 +7184,27 @@ window._openLiveScoring = function(tId, matchId, opts) {
           .catch(function(e) { window._warn('[LiveScore] goToSetup setupAt write failed:', e); });
       } catch(e) {}
     }
-    _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true });
+    // v1.9.72: "Jogar"/"Jogar Novamente" deve ir DIRETO para uma nova partida
+    // (sem passar pela tela de setup), honrando o toggle "Re-sortear". O setup
+    // só é necessário pra re-compartilhar a sala em MULTIPLAYER — então só
+    // auto-iniciamos quando é solo (no máx. 1 participante registrado).
+    var _shuffleChk = document.getElementById('chk-shuffle-teams');
+    var _shouldShuffle = !!(_shuffleChk && _shuffleChk.checked);
+    var _uidSet = {};
+    try {
+      var _allNm = (p1Players || []).concat(p2Players || []);
+      for (var _ui = 0; _ui < _allNm.length; _ui++) {
+        var _mt = _playerMeta[_allNm[_ui]];
+        if (_mt && _mt.uid) _uidSet[_mt.uid] = 1;
+      }
+    } catch(e) {}
+    var _isSolo = Object.keys(_uidSet).length <= 1;
+    if (_isSolo) {
+      _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true, autoStart: true, autoShuffle: _shouldShuffle });
+    } else {
+      // Multiplayer: mantém a tela de setup pra o host re-compartilhar a sala.
+      _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true });
+    }
   };
 
   // Compartilhar resultado da partida casual — tournament match já tem o
@@ -9343,9 +9363,13 @@ window._openCasualMatch = function(restoreOpts) {
     // isInitiator=false: demais dispositivos detectaram status:'setup' via
     // Firestore listener e entraram aqui automaticamente.
     var isInitiator = !!(opts && opts.isInitiator);
+    // v1.9.72: autoStart=true → "Jogar" solo: renderiza o setup oculto e dispara
+    // _casualStart() imediatamente (nova partida direto, sem o usuário ver o
+    // setup). autoShuffle do opts honra o toggle "Re-sortear".
+    var autoStart = !!(opts && opts.autoStart);
     // Zera times para formar novos pares livremente
     _teamAssignments = {};
-    autoShuffle = true;
+    autoShuffle = (autoStart && opts && typeof opts.autoShuffle === 'boolean') ? opts.autoShuffle : true;
     if (!keepSession) {
       // Reseta sessão: próximo Iniciar cria novo doc no Firestore
       _sessionDocId = null;
@@ -9363,6 +9387,11 @@ window._openCasualMatch = function(restoreOpts) {
     }
     // Re-appenda overlay (ainda em memória no closure)
     if (!document.getElementById('casual-match-overlay')) {
+      // v1.9.72: em autoStart, mantém o overlay invisível — o usuário nunca vê
+      // a tela de setup; _casualStart() vai removê-lo e abrir o placar. Em
+      // reopen normal, SEMPRE restaura a visibilidade (o mesmo elemento pode ter
+      // ficado 'hidden' de um autoStart anterior).
+      try { overlay.style.visibility = autoStart ? 'hidden' : ''; } catch(e) {}
       document.body.appendChild(overlay);
       document.body.style.overflow = 'hidden';
       if (_metaVp) {
@@ -9373,6 +9402,20 @@ window._openCasualMatch = function(restoreOpts) {
     }
     // Renderiza setup com os jogadores já presentes
     _renderSetup();
+    if (autoStart) {
+      // v1.9.72: dispara a nova partida imediatamente (mesmo caminho do botão
+      // Iniciar), sem mostrar o setup. Restaura visibilidade se algo falhar.
+      setTimeout(function() {
+        try {
+          if (typeof window._casualStart === 'function') { window._casualStart(); }
+          else { try { overlay.style.visibility = ''; } catch(e) {} }
+        } catch(e) {
+          try { overlay.style.visibility = ''; } catch(_e) {}
+          window._warn && window._warn('[Casual] autoStart falhou:', e);
+        }
+      }, 0);
+      return;
+    }
     if (keepSession) {
       if (isInitiator) {
         // Iniciador (host) escreve gêneros/times atuais no Firestore logo que
@@ -10124,19 +10167,24 @@ window._openCasualMatch = function(restoreOpts) {
         if (players[ii].team === 1) t1List.push(players[ii]);
         else if (players[ii].team === 2) t2List.push(players[ii]);
       }
-      var partnerAssigned = false;
+      // v1.9.72: APENAS UM slot do time 1 pode ser o usuário atual. Sem essa
+      // guarda, se um segundo slot batia em _isCurrentUser (por uid herdado ou
+      // por nome já igual ao do usuário), AMBOS recebiam cu.displayName → a
+      // dupla virava "Rodrigo Barth / Rodrigo Barth". O 1º match fica como
+      // usuário; os demais do time 1 viram "Parceiro".
+      var userTaken = false;
       for (var ti = 0; ti < t1List.length; ti++) {
         var p1p = t1List[ti];
         var isDefault1 = !p1p.name || defaultNames.indexOf(p1p.name) !== -1;
-        if (_isCurrentUser(p1p)) {
+        if (!userTaken && _isCurrentUser(p1p)) {
+          userTaken = true;
           if (isDefault1 && cu && cu.displayName) {
             p1p.name = cu.displayName;
           }
           continue;
         }
-        if (isDefault1 && !partnerAssigned) {
+        if (isDefault1) {
           p1p.name = 'Parceiro';
-          partnerAssigned = true;
         }
       }
       for (var tj = 0; tj < t2List.length; tj++) {
@@ -10144,6 +10192,24 @@ window._openCasualMatch = function(restoreOpts) {
         var isDefault2 = !p2p.name || defaultNames.indexOf(p2p.name) !== -1;
         if (isDefault2) p2p.name = 'Adversário ' + (tj + 1);
       }
+      // v1.9.72: dedupe de segurança — dois jogadores do MESMO time nunca
+      // podem ter o mesmo nome (ex.: slot do parceiro carregando o nome real
+      // do usuário, não-default, que escaparia das regras acima). O duplicado
+      // é renomeado pro papel genérico.
+      function _dedupeTeam(list, isTeam1) {
+        var seen = {};
+        for (var di = 0; di < list.length; di++) {
+          var nmk = (list[di].name || '').trim().toLowerCase();
+          if (!nmk) continue;
+          if (seen[nmk]) {
+            list[di].name = isTeam1 ? 'Parceiro' : ('Adversário ' + (di + 1));
+          } else {
+            seen[nmk] = true;
+          }
+        }
+      }
+      _dedupeTeam(t1List, true);
+      _dedupeTeam(t2List, false);
     }
 
     // Sortear ON: randomly assign 4 players into 2 teams. User always stays on Team 1.

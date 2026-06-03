@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.72-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Partida casual: "Jogar" vai direto pra próxima + fim da dupla duplicada.</b><br><br>' +
+      '<b>Jogar Novamente (solo):</b> ao terminar uma partida casual solo e clicar em "Jogar", o app agora vai <b>direto para uma nova partida</b> ao vivo (sem passar pela tela de configuração). O resultado anterior é salvo no histórico e, se o toggle "Re-sortear" estiver ligado, as duplas são sorteadas de novo. Em partidas com vários jogadores registrados, a tela de setup continua aparecendo (pro host re-compartilhar a sala).<br><br>' +
+      '<b>Bug da dupla duplicada:</b> em alguns sorteios a dupla aparecia como "Rodrigo Barth / Rodrigo Barth". Causa: um segundo slot do time era reconhecido como o próprio usuário. Agora só um jogador pode ser o usuário, e há uma checagem que impede dois nomes iguais no mesmo time.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.71-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Placar ao vivo: fim do "pulo" a cada clique.</b><br><br>' +
       'As caixas de placar e os botões ▲▼ do lado direito davam um pulinho a cada ponto marcado. Causa: a equalização de altura dos nomes rodava depois do primeiro desenho, então o lado mais curto pintava curto e logo crescia. Agora a equalização é feita <b>antes</b> do desenho — os dois lados ficam alinhados e estáveis, sem pulo. O cadeado 🔒 do saque ganhou um respiro mínimo abaixo da bola.</p>' +
