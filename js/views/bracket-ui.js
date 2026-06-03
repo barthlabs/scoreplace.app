@@ -5662,7 +5662,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           var ballGlow = _canDragServe ? 'filter:drop-shadow(0 0 4px rgba(255,200,0,0.6));' : 'filter:drop-shadow(0 0 2px rgba(255,200,0,0.3));opacity:0.85;';
           // v1.9.70: cadeado ABAIXO da bola (em coluna), não ao lado — economiza
           // largura pra foto/ícone e nome dos jogadores.
-          var lockBadge = _canDragServe ? '' : '<span style="font-size:0.5rem;line-height:1;opacity:0.85;margin-top:1px;" aria-hidden="true">🔒</span>';
+          var lockBadge = _canDragServe ? '' : '<span style="font-size:0.5rem;line-height:1;opacity:0.85;margin-top:3px;" aria-hidden="true">🔒</span>';
           servBall = '<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;line-height:1;gap:0;">' +
             '<span' + dragAttr + ' title="' + ballTitle + '" style="font-size:0.85rem;line-height:1;' + dragStyle + ballGlow + '">' + _sportBall + '</span>' +
             lockBadge +
@@ -5885,16 +5885,18 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // v1.9.68: equaliza a altura dos dois name stacks (esquerdo/direito) pra
     // que placares e botões fiquem alinhados mesmo quando um lado tem nome que
     // quebra em mais linhas (ex.: "Rodrigo Barth" vs "Adversário 1").
-    setTimeout(function() {
-      try {
-        var stacks = container.querySelectorAll('.live-namestack');
-        if (stacks.length === 2) {
-          stacks[0].style.minHeight = ''; stacks[1].style.minHeight = '';
-          var h = Math.max(stacks[0].offsetHeight, stacks[1].offsetHeight);
-          if (h > 0) { stacks[0].style.minHeight = h + 'px'; stacks[1].style.minHeight = h + 'px'; }
-        }
-      } catch (e) {}
-    }, 0);
+    // v1.9.71: SÍNCRONO (não setTimeout) — mede e ajusta antes do primeiro
+    // paint, senão o lado mais curto pinta curto e depois "pula" pra altura
+    // equalizada a cada clique. offsetHeight força layout síncrono; o browser
+    // pinta uma vez só com o estado final.
+    try {
+      var _nstacks = container.querySelectorAll('.live-namestack');
+      if (_nstacks.length === 2) {
+        _nstacks[0].style.minHeight = ''; _nstacks[1].style.minHeight = '';
+        var _nh = Math.max(_nstacks[0].offsetHeight, _nstacks[1].offsetHeight);
+        if (_nh > 0) { _nstacks[0].style.minHeight = _nh + 'px'; _nstacks[1].style.minHeight = _nh + 'px'; }
+      }
+    } catch (e) {}
 
     // Attach serve ball drag-and-drop (change server inline)
     if (_canDragServe) {

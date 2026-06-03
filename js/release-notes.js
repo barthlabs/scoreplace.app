@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.71-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Placar ao vivo: fim do "pulo" a cada clique.</b><br><br>' +
+      'As caixas de placar e os botões ▲▼ do lado direito davam um pulinho a cada ponto marcado. Causa: a equalização de altura dos nomes rodava depois do primeiro desenho, então o lado mais curto pintava curto e logo crescia. Agora a equalização é feita <b>antes</b> do desenho — os dois lados ficam alinhados e estáveis, sem pulo. O cadeado 🔒 do saque ganhou um respiro mínimo abaixo da bola.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Junho, 2026)</span></div>' +
       '<p><b>Placar ao vivo: cadeado do saque abaixo da bola.</b><br><br>' +
       'Quando a ordem dos 4 sacadores fica travada (a partir do 3º saque), o cadeado 🔒 que aparecia ao lado da bola do sacador agora fica <b>abaixo</b> dela — economiza largura para a foto/ícone e o nome dos jogadores.</p>' +
