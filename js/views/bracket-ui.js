@@ -7277,7 +7277,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   function _clampLiveScale(v, d) {
     v = parseFloat(v);
     if (isNaN(v)) return d;
-    return Math.max(0.5, Math.min(1.5, v));
+    return Math.max(0.1, Math.min(4, v)); // 10%–400%
   }
   function _loadLiveScorePrefs() {
     var p = {};
@@ -7297,7 +7297,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     };
   }
   function _applyLiveScorePrefs(prefs) {
-    var ov = document.getElementById('live-scoring-overlay');
+    // v1.9.65: usa a variável `overlay` do closure (não getElementById) —
+    // _applyLiveScorePrefs roda na abertura ANTES do overlay entrar no DOM,
+    // então getElementById retornava null e as vars NUNCA eram aplicadas (os
+    // tamanhos voltavam ao padrão na partida seguinte mesmo com a pref salva).
+    var ov = overlay || document.getElementById('live-scoring-overlay');
     if (!ov) return;
     ov.style.setProperty('--live-name-scale', prefs.nameScale);
     ov.style.setProperty('--live-photo-scale', prefs.photoScale);
@@ -7333,7 +7337,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var pct = Math.round((_liveScorePrefs[key] || 1) * 100);
       return '<div style="margin-bottom:14px;">' +
         '<div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--text-bright);font-weight:600;margin-bottom:6px;"><span>' + label + '</span><span id="lss-val-' + key + '" style="color:#fbbf24;font-weight:800;">' + pct + '%</span></div>' +
-        '<input type="range" min="50" max="150" step="5" value="' + pct + '" data-lss-key="' + key + '" data-lss-var="' + cssVar + '" style="width:100%;accent-color:#fbbf24;height:28px;" />' +
+        '<input type="range" min="10" max="400" step="5" value="' + pct + '" data-lss-key="' + key + '" data-lss-var="' + cssVar + '" style="width:100%;accent-color:#fbbf24;height:28px;" />' +
       '</div>';
     }
     var panel = document.createElement('div');
@@ -7341,7 +7345,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;';
     panel.innerHTML = '<div style="background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px 18px 0 0;padding:18px 18px calc(26px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 30px rgba(0,0,0,0.5);">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:0.98rem;font-weight:800;color:var(--text-bright);">⚙️ Ajustes do placar</div><button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">✕</button></div>' +
-      '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;line-height:1.4;">Tamanhos proporcionais ao seu dispositivo (50%–150%). Salvo no seu perfil.</div>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;line-height:1.4;">Tamanhos proporcionais ao seu dispositivo (10%–400%). Salvo no seu perfil.</div>' +
       row('nameScale', 'Nome dos jogadores', '--live-name-scale') +
       row('photoScale', 'Foto / ícone', '--live-photo-scale') +
       row('scoreScale', 'Número dos games', '--live-score-scale') +
