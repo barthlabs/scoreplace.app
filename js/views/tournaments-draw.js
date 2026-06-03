@@ -2,6 +2,78 @@
 (function() {
 var _t = window._t || function(k) { return k; };
 
+// v1.9.85: forma duplas/times preservando a IDENTIDADE (uid/email/foto) de
+// cada membro. ANTES, o sorteio convertia os participantes em STRINGS de nome
+// ("A / B") via name.join(' / ') — destruindo todos os uids. Consequências
+// (bugs reportados): (1) memberUids encolhia e o torneio sumia para os
+// participantes; (2) _resultNeedsApproval não achava o adversário (era string)
+// → o placar lançado por participante ia DIRETO pra definitivo, pulando o
+// fluxo de 4 fases. Agora cada time vira um OBJETO {displayName:"A / B",
+// p1Name/p1Uid, p2Name/p2Uid, participants:[...]} — a geração do bracket já lê
+// `displayName || name`, então nada quebra, e a identidade sobrevive.
+function _formDoublesTeams(origParticipants, teamSize, teamOrigins) {
+  var origByName = {};
+  origParticipants.forEach(function(p) {
+    if (p && typeof p === 'object') {
+      var nm = p.displayName || p.name || '';
+      if (nm) origByName[nm] = p;
+    }
+  });
+  function mkTeamObj(memberNames) {
+    var displayName = memberNames.join(' / ');
+    var obj = { displayName: displayName, name: displayName };
+    var subs = [];
+    memberNames.forEach(function(nm, i) {
+      var orig = origByName[nm] || { name: nm, displayName: nm };
+      obj['p' + (i + 1) + 'Name'] = nm;
+      if (orig.uid) obj['p' + (i + 1) + 'Uid'] = orig.uid;
+      if (orig.email) obj['p' + (i + 1) + 'Email'] = orig.email;
+      if (orig.photoURL) obj['p' + (i + 1) + 'Photo'] = orig.photoURL;
+      subs.push(orig);
+    });
+    obj.participants = subs;
+    return obj;
+  }
+  var individuals = [];
+  var preFormed = [];
+  origParticipants.forEach(function(p) {
+    var name = (typeof p === 'string') ? p : (p.displayName || p.name || '');
+    if (name.indexOf(' / ') !== -1) {
+      // Já é um time pré-formado.
+      if (p && typeof p === 'object') {
+        if (!p.displayName) p.displayName = name;
+        if (!p.p1Uid && !p.p2Uid) {
+          // Objeto sem uids dos membros → enriquece a partir dos nomes.
+          preFormed.push(Object.assign({}, p, mkTeamObj(name.split(' / ').map(function(s){ return s.trim(); }))));
+        } else {
+          preFormed.push(p);
+        }
+      } else {
+        preFormed.push(mkTeamObj(name.split(' / ').map(function(s){ return s.trim(); })));
+      }
+    } else {
+      individuals.push((p && typeof p === 'object') ? p : { name: name, displayName: name });
+    }
+  });
+  // Embaralha individuais antes de agrupar
+  for (var i = individuals.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = individuals[i]; individuals[i] = individuals[j]; individuals[j] = tmp;
+  }
+  var newTeams = [];
+  while (individuals.length >= teamSize) {
+    var group = individuals.splice(0, teamSize);
+    var memberNames = group.map(function(g){ return g.displayName || g.name || ''; });
+    newTeams.push(mkTeamObj(memberNames));
+  }
+  if (teamOrigins) newTeams.forEach(function(to){ teamOrigins[to.displayName] = 'sorteada'; });
+  return {
+    participants: preFormed.concat(newTeams, individuals),
+    newTeamsCount: newTeams.length,
+    leftoverCount: individuals.length
+  };
+}
+
 window.showFinalReviewPanel = function (tId) {
     const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
     if (!t) return;
@@ -351,33 +423,13 @@ window.generateDrawFunction = function (tId) {
             _grpTeamSize = 2;
         }
         if (_grpTeamSize > 1) {
-            let _grpIndividuals = [];
-            let _grpPreFormed = [];
-            participants.forEach(p => {
-                const name = getName(p);
-                if (name.includes(' / ')) {
-                    _grpPreFormed.push(name);
-                } else {
-                    _grpIndividuals.push(name);
-                }
-            });
-            // Shuffle individuals before forming teams
-            for (let i = _grpIndividuals.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [_grpIndividuals[i], _grpIndividuals[j]] = [_grpIndividuals[j], _grpIndividuals[i]];
-            }
-            let _grpNewTeams = [];
-            while (_grpIndividuals.length >= _grpTeamSize) {
-                const group = _grpIndividuals.splice(0, _grpTeamSize);
-                _grpNewTeams.push(group.join(' / '));
-            }
+            // v1.9.85: times como OBJETOS preservando uid/email (helper compartilhado).
             if (!t.teamOrigins) t.teamOrigins = {};
-            _grpNewTeams.forEach(tn => { t.teamOrigins[tn] = 'sorteada'; });
-            // Replace participants with formed teams
-            participants = [..._grpPreFormed, ..._grpNewTeams, ..._grpIndividuals];
+            const _grpFormed = _formDoublesTeams(participants, _grpTeamSize, t.teamOrigins);
+            participants = _grpFormed.participants;
             t.participants = participants;
-            if (_grpNewTeams.length > 0) {
-                window.AppStore.logAction(tId, `Sorteio de times: ${_grpNewTeams.length} time(s) de ${_grpTeamSize} formado(s)`);
+            if (_grpFormed.newTeamsCount > 0) {
+                window.AppStore.logAction(tId, `Sorteio de times: ${_grpFormed.newTeamsCount} time(s) de ${_grpTeamSize} formado(s)`);
             }
         }
 
@@ -491,45 +543,16 @@ window.generateDrawFunction = function (tId) {
         teamSize = 2;
     }
     if (teamSize > 1) {
-        let individuals = [];
-        let preFormedTeams = [];
-
-        participants.forEach(p => {
-            const name = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            if (name.includes(' / ')) {
-                preFormedTeams.push(name);
-            } else {
-                individuals.push(name);
-            }
-        });
-
-        // Embaralha individuais antes de agrupar em times
-        for (let i = individuals.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [individuals[i], individuals[j]] = [individuals[j], individuals[i]];
-        }
-
-        let newTeams = [];
-        while (individuals.length >= teamSize) {
-            const group = individuals.splice(0, teamSize);
-            newTeams.push(group.join(' / '));
-        }
-
-        // Registrar origem: equipes sorteadas
+        // v1.9.85: times como OBJETOS preservando uid/email (helper compartilhado).
         if (!t.teamOrigins) t.teamOrigins = {};
-        newTeams.forEach(tn => { t.teamOrigins[tn] = 'sorteada'; });
-
-        // Resultado: times pré-formados + novos times sorteados + sobras
-        participants = [...preFormedTeams, ...newTeams, ...individuals];
-
-        // Salvar os times formados no torneio para referência
+        const _formed = _formDoublesTeams(participants, teamSize, t.teamOrigins);
+        participants = _formed.participants;
         t.participants = participants;
-
-        if (newTeams.length > 0) {
-            window.AppStore.logAction(tId, `Sorteio de times: ${newTeams.length} time(s) de ${teamSize} formado(s) aleatoriamente`);
+        if (_formed.newTeamsCount > 0) {
+            window.AppStore.logAction(tId, `Sorteio de times: ${_formed.newTeamsCount} time(s) de ${teamSize} formado(s) aleatoriamente`);
         }
-        if (individuals.length > 0) {
-            window.AppStore.logAction(tId, `${individuals.length} jogador(es) sem time completo (sobra)`);
+        if (_formed.leftoverCount > 0) {
+            window.AppStore.logAction(tId, `${_formed.leftoverCount} jogador(es) sem time completo (sobra)`);
         }
     }
 

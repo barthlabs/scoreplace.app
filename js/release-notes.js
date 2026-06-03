@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #ef4444;border-radius:12px;padding:14px 16px;background:rgba(239,68,68,0.07);">' +
+      '<div style="font-weight:800; color:#f87171; font-size:1rem; margin-bottom:8px;">🔴 v1.9.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Correção de raiz: sorteio de duplas preserva a identidade dos jogadores.</b><br><br>' +
+      'O sorteio que forma as duplas estava transformando os participantes em <b>texto puro</b> ("A / B"), <b>jogando fora os uid/e-mail</b> de cada um. Isso causava DOIS bugs: (1) o torneio sumia para os participantes depois do sorteio; (2) o placar lançado por um participante ia <b>direto para definitivo</b>, pulando o fluxo de aprovação de 4 fases (porque o app não conseguia identificar o time adversário). Agora cada dupla é guardada como um <b>objeto que mantém os uid/e-mail</b> dos dois jogadores — a membership e o fluxo de aprovação voltam a funcionar. Vale para Eliminatórias e Grupos.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #ef4444;border-radius:12px;padding:14px 16px;background:rgba(239,68,68,0.07);">' +
       '<div style="font-weight:800; color:#f87171; font-size:1rem; margin-bottom:8px;">🔴 v1.9.84-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Correção: torneio sumia para os participantes depois do sorteio.</b><br><br>' +
       'Depois do sorteio, o torneio desaparecia da tela dos participantes (só o organizador via). <b>Causa:</b> a lista interna de membros por <code>uid</code> era recalculada do zero a cada save e, como o sorteio reorganiza os participantes em duplas/chave, o uid às vezes se perdia — aí o torneio saía do "feed" do participante. <b>Correção:</b> essa lista agora <b>nunca encolhe</b> (igual já era com os e-mails) — um participante, uma vez membro, não é mais removido por um save. Os torneios já afetados foram reparados no banco.</p>' +
