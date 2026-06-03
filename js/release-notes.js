@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.67-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Junho, 2026)</span></div>' +
+      '<p><b>Botão "Entrar" gigante na landing + modalidades afastadas.</b><br><br>' +
+      'O botão verde de entrada da página inicial agora tem ~3x a altura, com o texto em duas linhas grandes (<b>ENTRAR</b> em cima, <b>scoreplace.app</b> embaixo do mesmo tamanho). As pílulas de modalidades (Beach Tennis, Pickleball, etc.) foram afastadas do botão e marcadas como não-clicáveis — uma usuária chegou a perguntar "clico em beach tennis?", confundindo-as com o próximo passo. Agora fica óbvio onde clicar para entrar.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #ef4444;border-radius:12px;padding:14px 16px;background:rgba(239,68,68,0.07);">' +
       '<div style="font-weight:800; color:#f87171; font-size:1rem; margin-bottom:8px;">🔔 v1.8.45-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(31 de Maio, 2026)</span></div>' +
       '<p><b>Correção definitiva de notificações duplicadas (2–3x).</b><br><br>' +

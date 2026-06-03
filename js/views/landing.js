@@ -34,14 +34,20 @@
 
   function _hero(t) {
     var ver = window.SCOREPLACE_VERSION || '';
+    // CTA em duas linhas: ação (ENTRAR) grande em cima, scoreplace.app embaixo.
+    var _cta = t('landing.cta');
+    var _sp = _cta.indexOf(' ');
+    var _ctaL1 = _sp > 0 ? _cta.slice(0, _sp) : _cta;
+    var _ctaL2 = _sp > 0 ? _cta.slice(_sp + 1) : '';
     return '<section class="landing-hero">' +
       '<div class="landing-hero-content">' +
         '<div class="landing-logo"><img src="icons/logo-podium.svg?v=0.15.95" alt="scoreplace" width="96" height="72" style="display:inline-block;filter:drop-shadow(0 4px 12px rgba(245,158,11,0.3));"></div>' +
         '<h1 class="landing-title">scoreplace<span class="landing-dot">.app</span></h1>' +
         (ver ? '<div class="landing-version" style="font-size:0.78rem;color:var(--text-muted,#9ca3af);margin-top:-4px;margin-bottom:14px;letter-spacing:0.3px;">v' + ver + '</div>' : '') +
         '<p class="landing-tagline">' + t('landing.tagline') + '</p>' +
-        '<button class="btn btn-cta btn-success landing-cta-btn" data-landing-cta onclick="if(window.openModal)window.openModal(\'modal-login\');else if(window.handleGoogleLogin)window.handleGoogleLogin();">' +
-          t('landing.cta') +
+        '<button class="btn btn-cta btn-success landing-cta-btn landing-cta-hero" data-landing-cta onclick="if(window.openModal)window.openModal(\'modal-login\');else if(window.handleGoogleLogin)window.handleGoogleLogin();">' +
+          '<span class="landing-cta-l1">' + _ctaL1 + '</span>' +
+          (_ctaL2 ? '<span class="landing-cta-l2">' + _ctaL2 + '</span>' : '') +
         '</button>' +
         '<div class="landing-sports-row">' +
           _SPORTS_LANDING.map(function(s) {
@@ -179,8 +185,14 @@
        gigante demais em casos extremos (ex: tablet em landscape). */
     '.landing-cta-btn { display: block; width: 95%; max-width: 760px; margin-left: auto; margin-right: auto; box-sizing: border-box; font-size: clamp(1.05rem, 1.4vw + 0.85rem, 1.55rem); font-weight: 800; padding: clamp(14px, 2vh + 6px, 26px) clamp(16px, 4vw, 48px); border-radius: 14px; cursor: pointer; background: #047857; letter-spacing: 0.3px; box-shadow: 0 4px 16px rgba(4,120,87,0.25); }' +
     '.landing-cta-btn:hover { background: #065f46; box-shadow: 0 6px 20px rgba(4,120,87,0.35); }' +
-    '.landing-sports-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 28px; }' +
-    '.landing-sport-pill { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 14px; font-size: 0.82rem; color: var(--text-main); }' +
+    /* Hero CTA: ~3x mais alto que o botão padrão, texto em 2 linhas grandes.
+       Uma usuária confundiu as modalidades com o próximo passo ("clico em
+       beach tennis?") — o CTA gigante deixa óbvio onde clicar. */
+    '.landing-cta-hero { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(2px, 0.4vh, 6px); padding: clamp(28px, 5.5vh + 10px, 64px) clamp(16px, 4vw, 48px); line-height: 1.04; }' +
+    '.landing-cta-hero .landing-cta-l1 { font-size: clamp(2.4rem, 5vw + 1.4rem, 4.2rem); font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; }' +
+    '.landing-cta-hero .landing-cta-l2 { font-size: clamp(2.4rem, 5vw + 1.4rem, 4.2rem); font-weight: 800; letter-spacing: 0.2px; }' +
+    '.landing-sports-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: clamp(40px, 7vh, 72px); }' +
+    '.landing-sport-pill { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 14px; font-size: 0.82rem; color: var(--text-main); cursor: default; }' +
 
     /* Features grid */
     '.landing-features { padding: 24px 0; }' +
