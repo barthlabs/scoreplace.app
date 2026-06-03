@@ -2272,6 +2272,34 @@ window._editPendingResult = function(tId, matchId) {
       var allowDraw = isGroupMatch || isRoundMatch;
       if (s1v === s2v && !allowDraw) { showNotification('Empate não permitido', 'Eliminatórias não permitem empate.', 'warning'); return; }
       var winner = s1v === s2v ? 'draw' : (s1v > s2v ? m.p1 : m.p2);
+      // v1.9.76: AUTORIDADE (organizador/co-host/árbitro) FINALIZA direto — não
+      // cria contra-proposta. Cobre a Fase 4 (resolução de disputa via "⚖️
+      // Lançar placar definitivo") e qualquer edição feita pelo organizador.
+      // BUG anterior: este handler sempre criava contra-proposta (isCounterProposal),
+      // então o organizador resolvendo a disputa só gerava NOVO pending sem botões
+      // (disputed perdido) — o jogo ficava preso pendente. 0×0 = refazer a partida.
+      if (typeof _isUserAuthority === 'function' && _isUserAuthority(t, cu)) {
+        window._suppressSoftRefresh = false;
+        if (s1v === 0 && s2v === 0) {
+          if (typeof window._organizerResetMatch === 'function') window._organizerResetMatch(tId, matchId);
+          return;
+        }
+        // Grava o placar do organizador como pending e finaliza pelo caminho
+        // comprovado _approveResult (que, sendo autoridade, aplica como definitivo).
+        m.pendingResult = {
+          kind: 'inline',
+          proposedBy: cu.uid || null,
+          proposedByEmail: cu.email || null,
+          proposedByName: cu.displayName || cu.email || 'Organizador',
+          proposedAt: Date.now(),
+          winner: winner,
+          draw: s1v === s2v,
+          scoreP1: s1v,
+          scoreP2: s2v
+        };
+        if (typeof window._approveResult === 'function') window._approveResult(tId, matchId);
+        return;
+      }
       m.pendingResult = {
         kind: 'inline',
         proposedBy: cu.uid || null,
