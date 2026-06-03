@@ -1890,9 +1890,8 @@ function handleEmailRegister() {
         // gravado depois, em _checkEmailVerified.
         window._pendingVerifyName = name;
         try {
-          user.sendEmailVerification({ url: (window.SCOREPLACE_URL || 'https://scoreplace.app') + '/' })
-            .catch(function(e) { window._warn('Email verification send error:', e); });
-        } catch(e) {}
+          _sendRichVerificationEmail(user, name);
+        } catch(e) { window._warn('Email verification send error:', e); }
         var modal = document.getElementById('modal-login');
         if (modal) modal.classList.remove('active');
         window._pendingProfileUpdate = false;
@@ -2350,6 +2349,32 @@ function _autoFriendOnInvite(inviterUid, currentUser) {
   // Auto-friendship via invite
 }
 
+// v1.9.83: envia o e-mail de verificação RICO (botão CTA, remetente
+// scoreplace.app@gmail.com) via Cloud Function sendVerificationEmail, em vez
+// do e-mail padrão do Firebase (noreply@...firebaseapp.com, que cai no spam e
+// é só um link cru). Fallback pro padrão se a função não responder.
+function _sendRichVerificationEmail(firebaseUser, name) {
+  if (!firebaseUser) return Promise.resolve(false);
+  var email = firebaseUser.email || '';
+  var nm = name || firebaseUser.displayName || '';
+  var _fallback = function() {
+    try { return firebaseUser.sendEmailVerification({ url: (window.SCOREPLACE_URL || 'https://scoreplace.app') + '/' }); }
+    catch (e) { return Promise.resolve(false); }
+  };
+  try {
+    if (firebase && firebase.functions) {
+      var fn = firebase.functions().httpsCallable('sendVerificationEmail');
+      return fn({ email: email, name: nm })
+        .then(function() { return true; })
+        .catch(function(e) {
+          window._warn('[verify] e-mail rico falhou, usando padrão:', e && (e.code || e.message));
+          return _fallback();
+        });
+    }
+  } catch (e) {}
+  return _fallback();
+}
+
 // ─── Gate de verificação de e-mail (v1.9.78) ────────────────────────────────
 // Contas e-mail/senha precisam confirmar o e-mail antes de usar o app. Enquanto
 // não confirmam, veem este gate (bloqueia tudo) e o sistema não mescla/sugere
@@ -2378,7 +2403,7 @@ window._showEmailVerificationGate = function(email, name) {
 window._resendVerifyEmail = function() {
   var u = firebase.auth().currentUser;
   if (!u) { showNotification('Sessão expirada', 'Entre novamente para reenviar.', 'warning'); return; }
-  u.sendEmailVerification({ url: (window.SCOREPLACE_URL || 'https://scoreplace.app') + '/' })
+  _sendRichVerificationEmail(u, window._pendingVerifyName || u.displayName || '')
     .then(function() { showNotification('📨 E-mail reenviado', 'Confira sua caixa de entrada e o spam.', 'success'); })
     .catch(function(e) {
       var tooMany = e && e.code === 'auth/too-many-requests';

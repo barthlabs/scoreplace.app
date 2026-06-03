@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>E-mail de confirmação bonito (com botão) e do remetente certo.</b><br><br>' +
+      'O e-mail de confirmação de conta não vem mais do remetente <code>noreply@…firebaseapp.com</code> (que caía no spam) e nem é só um link cru. Agora é enviado de <b>scoreplace.app@gmail.com</b>, com visual do app e um <b>botão verde grande "✅ Confirmar minha conta"</b>. Inclui também versão em texto e link de fallback. Bem mais difícil de cair no lixo eletrônico.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.82-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Excluir conta agora libera o e-mail de verdade.</b><br><br>' +
       'Antes, ao excluir a conta, o login (Firebase Auth) às vezes não era apagado — então o e-mail ficava "já em uso" e você não conseguia recriar a conta. Agora, se o Firebase pedir confirmação recente, o app pede sua <b>senha</b> (ou re-login Google) e <b>apaga a conta de login de vez</b>, liberando o e-mail pra recriar. Se você cancelar a confirmação, avisamos que o e-mail pode continuar reservado.</p>' +

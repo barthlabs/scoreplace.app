@@ -923,6 +923,117 @@ exports.sendMagicLink = onCall(
   }
 );
 
+// ─── sendVerificationEmail (v1.9.83) ────────────────────────────────────────
+// Substitui o e-mail de verificação PADRÃO do Firebase (remetente
+// noreply@scoreplace-app.firebaseapp.com, que cai no spam e é só um link cru)
+// por um e-mail RICO com botão CTA, enviado pelo nosso SMTP
+// (scoreplace.app@gmail.com via extension firestore-send-email). Gera o link
+// oficial de verificação via Admin SDK generateEmailVerificationLink().
+//
+// Deploy:  firebase deploy --only functions:sendVerificationEmail
+exports.sendVerificationEmail = onCall(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+  },
+  async (request) => {
+    const email = (request.data && request.data.email || "").trim().toLowerCase();
+    const name = (request.data && request.data.name || "").trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "email inválido");
+    }
+
+    // Link oficial de verificação do Firebase. Ao clicar, o e-mail é marcado
+    // como verificado e o usuário é redirecionado pro continueUrl.
+    const actionCodeSettings = {
+      url: "https://scoreplace.app/",
+      handleCodeInApp: false,
+    };
+    let link;
+    try {
+      link = await admin.auth().generateEmailVerificationLink(email, actionCodeSettings);
+    } catch (err) {
+      console.error("[sendVerificationEmail] generateEmailVerificationLink falhou:", err);
+      throw new HttpsError("internal", "não foi possível gerar o link: " + (err.code || err.message));
+    }
+
+    const greetName = name ? (", " + name) : "";
+    const html =
+      '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
+      '<title>Confirme seu e-mail — scoreplace.app</title></head>' +
+      '<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
+        '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:40px 16px;">' +
+          '<tr><td align="center">' +
+            '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:520px;background:#111827;border-radius:14px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
+              '<tr><td style="padding:20px 32px 4px;text-align:center;">' +
+                '<div style="font-size:1.4rem;line-height:1;margin-bottom:2px;">🎾</div>' +
+                '<div style="font-size:0.92rem;font-weight:700;color:#fbbf24;letter-spacing:0.2px;">scoreplace.app</div>' +
+              '</td></tr>' +
+              '<tr><td style="padding:24px 32px 8px;text-align:center;color:#e5e7eb;">' +
+                '<p style="margin:0 0 6px;font-size:1.05rem;font-weight:700;color:#fff;">Bem-vindo' + greetName.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '! 🎉</p>' +
+                '<p style="margin:0 0 18px;font-size:0.92rem;color:#cbd5e1;">Falta só confirmar seu e-mail pra começar.</p>' +
+                '<table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;">' +
+                  '<tr><td style="border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 4px 12px rgba(16,185,129,0.3);">' +
+                    '<a href="' + link.replace(/"/g, "&quot;") + '" style="display:inline-block;padding:18px 44px;color:#ffffff;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;">' +
+                      '✅ Confirmar minha conta' +
+                    '</a>' +
+                  '</td></tr>' +
+                '</table>' +
+              '</td></tr>' +
+              '<tr><td style="padding:20px 32px 28px;color:#cbd5e1;">' +
+                '<p style="margin:0 0 16px;font-size:0.84rem;line-height:1.55;color:#94a3b8;text-align:center;">' +
+                  'Depois de confirmar, volte ao app e clique em <b style="color:#cbd5e1;">"Já confirmei"</b>.' +
+                '</p>' +
+                '<p style="margin:16px 0 0;font-size:0.76rem;color:#94a3b8;line-height:1.5;border-top:1px solid #374151;padding-top:16px;">' +
+                  'Não consegue clicar no botão? Copie e cole este endereço no navegador:<br>' +
+                  '<span style="color:#cbd5e1;word-break:break-all;font-family:monospace;font-size:0.7rem;">' + link.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</span>' +
+                '</p>' +
+                '<p style="margin:16px 0 0;font-size:0.74rem;color:#94a3b8;line-height:1.5;">' +
+                  'Não criou essa conta? Pode ignorar este e-mail. ' +
+                  'Dúvidas: <a href="mailto:scoreplace.app@gmail.com" style="color:#fbbf24;">scoreplace.app@gmail.com</a>.' +
+                '</p>' +
+              '</td></tr>' +
+              '<tr><td style="padding:14px 32px;text-align:center;background:#0f172a;border-top:1px solid #1e293b;">' +
+                '<p style="margin:0;font-size:0.7rem;color:#64748b;">scoreplace.app · Jogue em outro nível · ' + new Date().getFullYear() + '</p>' +
+              '</td></tr>' +
+            '</table>' +
+          '</td></tr>' +
+        '</table>' +
+      '</body></html>';
+
+    const textBody =
+      "scoreplace.app — confirme seu e-mail\n\n" +
+      "Bem-vindo" + (name ? (", " + name) : "") + "! Falta confirmar seu e-mail.\n\n" +
+      "Confirme clicando no link abaixo (ou copie e cole no navegador):\n\n" +
+      link + "\n\n" +
+      "Depois de confirmar, volte ao app e clique em \"Já confirmei\".\n\n" +
+      "Não criou essa conta? Pode ignorar este e-mail.\n" +
+      "Dúvidas: scoreplace.app@gmail.com\n\n" +
+      "scoreplace.app · Jogue em outro nível";
+
+    try {
+      await admin.firestore().collection("mail").add({
+        to: [email],
+        replyTo: "scoreplace.app@gmail.com",
+        message: {
+          subject: "Confirme seu e-mail no scoreplace.app",
+          html: html,
+          text: textBody,
+        },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log("[sendVerificationEmail] queued for", email);
+      return { ok: true };
+    } catch (err) {
+      console.error("[sendVerificationEmail] falha ao enfileirar email:", err);
+      throw new HttpsError("internal", "não foi possível enfileirar o email: " + (err.code || err.message));
+    }
+  }
+);
+
 // ─── WhatsApp via Evolution API (self-hosted no Railway) ────────────────────
 // v1.3.37-beta: Cloud Function que consome `whatsapp_queue/{id}` (Firestore
 // trigger onCreate) e POSTa pra Evolution API (https://docs.evolution-api.com).
