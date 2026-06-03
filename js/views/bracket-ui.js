@@ -8870,7 +8870,7 @@ window._openCasualMatch = function(restoreOpts) {
 
       // Inline QR code + room code + Convidar + Join room — all in one box
       '<div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.15);border-radius:14px;padding:10px;margin-bottom:0.6rem;display:flex;gap:12px;">' +
-        '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(casualUrl) + '&bgcolor=1a1e2e&color=ffffff&margin=4" alt="QR" style="width:88px;height:88px;border-radius:10px;flex-shrink:0;align-self:center;" />' +
+        '<img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=' + encodeURIComponent(casualUrl) + '&bgcolor=1a1e2e&color=ffffff&margin=4" alt="QR" style="width:112px;height:112px;border-radius:10px;flex-shrink:0;align-self:center;" />' +
         '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;justify-content:center;">' +
           // Room code + Convidar row
           '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -9954,7 +9954,11 @@ window._openCasualMatch = function(restoreOpts) {
 
     var qrOv = document.createElement('div');
     qrOv.id = 'casual-qr-overlay';
-    qrOv.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0a0e1a;z-index:100003;display:flex;align-items:center;justify-content:center;padding:1rem;box-sizing:border-box;';
+    // v1.9.66: 100dvh + scroll interno (align-items:flex-start) — em iPhone
+    // pequeno o conteúdo (QR 280px + código + botões) passava da tela e ficava
+    // cortado com align-items:center sem overflow. overscroll-behavior:contain
+    // impede o scroll de vazar pra dashboard atrás.
+    qrOv.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:#0a0e1a;z-index:100003;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom));box-sizing:border-box;';
 
     qrOv.innerHTML =
       '<div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:400px;">' +
@@ -10301,7 +10305,11 @@ window._openCasualMatch = function(restoreOpts) {
   var overlay = document.createElement('div');
   overlay.id = 'casual-match-overlay';
   // v0.17.52: bg respeita tema (var(--bg-darker)) em vez de hardcoded #0a0e1a.
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
+  // v1.9.66: 100dvh (fallback 100vh) — no iPhone, 100vh é MAIOR que a área
+  // visível (inclui atrás da barra do Safari), então a parte de baixo do
+  // conteúdo (QR + Últimas Partidas) ficava fora da tela e o scroll interno
+  // não alcançava. 100dvh = viewport visível real → tudo cabe e scrolla.
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;background:var(--bg-darker);z-index:100002;display:flex;flex-direction:column;overflow:hidden;touch-action:manipulation;';
   // v1.6.27-beta: animação pulse pro ícone "?" de gênero indefinido —
   // chama atenção do user de que é clicável (cinza sem pulse era ignorado).
   // Append em <head> em vez de overlay div pra garantir parse como CSS
@@ -10327,7 +10335,10 @@ window._openCasualMatch = function(restoreOpts) {
       })
     : '<div></div>';
   overlay.innerHTML = _chdr +
-    '<div id="casual-setup-content" style="flex:1;overflow-y:auto;padding:1rem 0.8rem;-webkit-overflow-scrolling:touch;"></div>';
+    // v1.9.66: overscroll-behavior:contain impede o rubber-band do scroll
+    // interno de encadear pro body → a dashboard atrás não se mexe mais.
+    // padding-bottom com safe-area pra o último card não ficar sob o notch/home.
+    '<div id="casual-setup-content" style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding:1rem 0.8rem calc(1.5rem + env(safe-area-inset-bottom)) 0.8rem;-webkit-overflow-scrolling:touch;"></div>';
 
   document.body.appendChild(overlay);
   // Prevent body scroll and pinch-zoom while casual overlay is open
