@@ -9,9 +9,10 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.91-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
-      '<p><b>Torneios públicos novos aparecem sem precisar atualizar.</b><br><br>' +
-      'Quando alguém cria um torneio público, ele agora aparece para os outros usuários <b>automaticamente</b> (a cada ~25s enquanto a dashboard está aberta) — antes só aparecia depois de atualizar a página. O torneio público da pessoa <b>não some</b> nem fica invisível pros outros; era só o feed que não se atualizava sozinho.</p>' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.92-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Torneios públicos novos aparecem em tempo real (sem atualizar a página).</b><br><br>' +
+      'Quando alguém cria, abre ou altera um torneio público, ele agora aparece para os outros usuários <b>na hora</b>, sem precisar atualizar. Antes o feed de descoberta só atualizava ao recarregar a página, então um torneio recém-criado parecia "invisível" para quem já estava com a dashboard aberta — na verdade sempre esteve lá, era só o feed que não se atualizava sozinho.<br><br>' +
+      '<span style="color:var(--text-muted); font-size:0.85rem;">Por baixo: a descoberta passou a usar um índice leve em tempo real, mantido no servidor, que só dispara quando algo relevante muda — eficiente e barato (não reage a cada ponto de placar). O caminho antigo continua como rede de segurança.</span></p>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +

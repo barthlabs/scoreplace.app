@@ -119,6 +119,16 @@ service cloud.firestore {
     }
 
     // ─── Tournaments ─────────────────────────────────────────────────────────
+    // discoveryFeed: coleção leve de RESUMO dos torneios públicos, mantida
+    // exclusivamente pela Cloud Function `syncDiscoveryFeed` (Admin SDK, que
+    // ignora estas rules). Serve só como GATILHO de tempo real + resumo para a
+    // descoberta — a fonte de verdade continua sendo `tournaments`. Leitura
+    // pública (é descoberta), escrita bloqueada para clientes.
+    match /discoveryFeed/{tournamentId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /tournaments/{tournamentId} {
       // Anonymous users: only public tournaments. Authenticated users may
       // read any tournament (needed for invite links and enroll/deenroll

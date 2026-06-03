@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.91-beta';
+window.SCOREPLACE_VERSION = '1.9.92-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2259,12 +2259,53 @@ window.AppStore = {
         // Fallback to one-time load
         store.loadFromFirestore();
       });
+
+    // v1.9.92: gatilho tempo-real da descoberta pública (camada ADITIVA;
+    // se falhar, o polling de 25s da dashboard assume — nada quebra).
+    this.startDiscoveryFeedListener();
+  },
+
+  // v1.9.92: listener leve em `discoveryFeed`. NÃO é a fonte de dados — quando
+  // dispara (alguém criou/alterou/removeu um torneio público), apenas re-busca
+  // o feed real via loadPublicDiscovery() (que lê `tournaments`, caminho já
+  // comprovado) e re-renderiza a dashboard. A Cloud Function `syncDiscoveryFeed`
+  // só escreve em discoveryFeed quando campos relevantes mudam, então isto NÃO
+  // dispara em updates de placar/presença. Se este listener falhar por qualquer
+  // motivo, o polling de 25s da dashboard continua atualizando o feed.
+  startDiscoveryFeedListener() {
+    if (this._discoveryUnsub) return; // já escutando
+    if (!window.FirestoreDB || !window.FirestoreDB.db) return;
+    var store = this;
+    var isFirst = true;
+    try {
+      this._discoveryUnsub = window.FirestoreDB.db.collection('discoveryFeed')
+        .onSnapshot(function(snap) {
+          // Primeiro snapshot já está coberto pelo loadPublicDiscovery inicial.
+          if (isFirst) { isFirst = false; return; }
+          if (!store.currentUser) return;
+          store.loadPublicDiscovery().then(function() {
+            var h = window.location.hash || '';
+            if (h === '' || h === '#' || h.indexOf('#dashboard') === 0) {
+              var c = document.getElementById('view-container');
+              if (c && typeof renderDashboard === 'function') renderDashboard(c);
+            }
+          }).catch(function() {});
+        }, function(err) {
+          window._warn('discoveryFeed listener error (fallback p/ polling 25s):', err);
+        });
+    } catch (e) {
+      window._warn('discoveryFeed listener setup error:', e);
+    }
   },
 
   stopRealtimeListener() {
     if (this._realtimeUnsubscribe) {
       this._realtimeUnsubscribe();
       this._realtimeUnsubscribe = null;
+    }
+    if (this._discoveryUnsub) {
+      this._discoveryUnsub();
+      this._discoveryUnsub = null;
     }
     if (this._notifUnsubscribe) {
       this._notifUnsubscribe();

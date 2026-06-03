@@ -2744,3 +2744,63 @@ exports.scheduledAutoMergeCleanup = onSchedule(
     }
   }
 );
+
+// ═══════════════════════════════════════════════════════════════════════════
+// syncDiscoveryFeed — mantém a coleção leve `discoveryFeed` para descoberta
+// pública em tempo real. NÃO é a fonte de verdade: o frontend continua lendo de
+// `tournaments`. Este doc serve só como GATILHO (o cliente escuta discoveryFeed
+// e, ao mudar, re-busca o feed real) + resumo leve. Só escreve quando um campo
+// RELEVANTE à descoberta muda — assim updates de placar/presença/etc. (a maioria
+// esmagadora das escritas) NÃO disparam fan-out para todos os clientes.
+// ═══════════════════════════════════════════════════════════════════════════
+function _discoverySummary(t) {
+  if (!t) return null;
+  const hasDraw = !!(
+    (Array.isArray(t.matches) && t.matches.length) ||
+    (Array.isArray(t.rounds) && t.rounds.length) ||
+    (Array.isArray(t.groups) && t.groups.length)
+  );
+  return {
+    name: t.name || "",
+    sport: t.sport || "",
+    format: t.format || "",
+    status: t.status || "",
+    isPublic: t.isPublic === true,
+    startDate: t.startDate || null,
+    endDate: t.endDate || null,
+    hasDraw: hasDraw
+  };
+}
+
+exports.syncDiscoveryFeed = onDocumentWritten(
+  { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
+  async (event) => {
+    const tid = event.params.tid;
+    const after  = event.data.after.exists  ? (event.data.after.data()  || {}) : null;
+    const before = event.data.before.exists ? (event.data.before.data() || {}) : null;
+    const feedRef = admin.firestore().collection("discoveryFeed").doc(tid);
+
+    // Deletado OU deixou de ser público → remover do feed (se lá estava).
+    if (!after || after.isPublic !== true) {
+      if (before && before.isPublic === true) {
+        await feedRef.delete().catch(() => {});
+        console.log(`[syncDiscoveryFeed] removed ${tid} (deleted/private)`);
+      }
+      return;
+    }
+
+    // É público. Só escreve se algo RELEVANTE à descoberta mudou.
+    const sa = _discoverySummary(after);
+    const sb = before ? _discoverySummary(before) : null;
+    if (sb && JSON.stringify(sa) === JSON.stringify(sb)) {
+      return; // mudança irrelevante (placar/presença/etc.) — não dispara fan-out
+    }
+
+    sa.tid = tid;
+    sa.syncedAt = admin.firestore.FieldValue.serverTimestamp();
+    await feedRef.set(sa, { merge: true }).catch((e) => {
+      console.error(`[syncDiscoveryFeed] set error ${tid}:`, e);
+    });
+    console.log(`[syncDiscoveryFeed] synced ${tid} status=${sa.status}`);
+  }
+);
