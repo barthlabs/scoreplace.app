@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #ef4444;border-radius:12px;padding:14px 16px;background:rgba(239,68,68,0.07);">' +
+      '<div style="font-weight:800; color:#f87171; font-size:1rem; margin-bottom:8px;">🔴 v1.9.84-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Correção: torneio sumia para os participantes depois do sorteio.</b><br><br>' +
+      'Depois do sorteio, o torneio desaparecia da tela dos participantes (só o organizador via). <b>Causa:</b> a lista interna de membros por <code>uid</code> era recalculada do zero a cada save e, como o sorteio reorganiza os participantes em duplas/chave, o uid às vezes se perdia — aí o torneio saía do "feed" do participante. <b>Correção:</b> essa lista agora <b>nunca encolhe</b> (igual já era com os e-mails) — um participante, uma vez membro, não é mais removido por um save. Os torneios já afetados foram reparados no banco.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>E-mail de confirmação bonito (com botão) e do remetente certo.</b><br><br>' +

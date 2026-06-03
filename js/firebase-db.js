@@ -173,6 +173,10 @@ window.FirestoreDB = {
       // stale local cache.
       delete cleanData.memberEmails;
       delete cleanData.adminEmails;
+      // v1.9.84: idem memberUids — não tocar nesse path (merge:true preserva
+      // o valor do banco). Sem o delete, um memberUids stale em memória poderia
+      // ENCOLHER a lista e fazer participantes sumirem do listener deles.
+      delete cleanData.memberUids;
     } else {
       // v1.8.96: nunca encolher memberEmails — merge com o que já existia
       // em memória para não perder emails de participantes que têm uid mas
@@ -182,7 +186,17 @@ window.FirestoreDB = {
       var _mergedEmails = Array.from(new Set(_prevEmails.concat(_newEmails)));
       cleanData.memberEmails = _mergedEmails;
       cleanData.adminEmails  = this._computeAdminEmails(cleanData);
-      cleanData.memberUids   = this._computeMemberUids(cleanData);
+      // v1.9.84: memberUids TAMBÉM nunca encolhe — mesma lógica do memberEmails.
+      // BUG reportado: depois do sorteio o torneio sumia para os participantes
+      // (só aparecia pro organizador). Causa: o sorteio reconstrói
+      // t.participants em duplas/bracket e às vezes o uid não sobrevive no
+      // objeto do time → _computeMemberUids retornava só o organizador, o
+      // listener `where(memberUids array-contains uid)` parava de devolver o
+      // torneio e ele desaparecia da tela do participante. Merge prev+new
+      // garante que um uid, uma vez membro, nunca é removido por um save.
+      var _newUids  = this._computeMemberUids(cleanData);
+      var _prevUids = Array.isArray(tourData.memberUids) ? tourData.memberUids : [];
+      cleanData.memberUids = Array.from(new Set(_prevUids.concat(_newUids)));
     }
     await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
   },
