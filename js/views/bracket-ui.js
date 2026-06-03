@@ -5660,8 +5660,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
           var ballTitle = _canDragServe ? 'Arraste para trocar sacador' : 'Ordem de saque travada (após 2 jogos)';
           // Dimmer glow + subtle 🔒 badge when locked
           var ballGlow = _canDragServe ? 'filter:drop-shadow(0 0 4px rgba(255,200,0,0.6));' : 'filter:drop-shadow(0 0 2px rgba(255,200,0,0.3));opacity:0.85;';
-          var lockBadge = _canDragServe ? '' : '<span style="font-size:0.55rem;margin-left:-4px;opacity:0.85;" aria-hidden="true">🔒</span>';
-          servBall = '<span' + dragAttr + ' title="' + ballTitle + '" style="font-size:0.85rem;flex-shrink:0;' + dragStyle + ballGlow + '">' + _sportBall + '</span>' + lockBadge;
+          // v1.9.70: cadeado ABAIXO da bola (em coluna), não ao lado — economiza
+          // largura pra foto/ícone e nome dos jogadores.
+          var lockBadge = _canDragServe ? '' : '<span style="font-size:0.5rem;line-height:1;opacity:0.85;margin-top:1px;" aria-hidden="true">🔒</span>';
+          servBall = '<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;line-height:1;gap:0;">' +
+            '<span' + dragAttr + ' title="' + ballTitle + '" style="font-size:0.85rem;line-height:1;' + dragStyle + ballGlow + '">' + _sportBall + '</span>' +
+            lockBadge +
+          '</span>';
         }
 
         // Drop target: each player row is a drop target for the serve ball
