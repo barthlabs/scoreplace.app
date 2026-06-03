@@ -835,20 +835,20 @@ function handleGoogleLogin() {
         var code = (error && error.code) || 'unknown';
         var msg = _t('auth.googleErrorMsg');
         if (code === 'auth/network-request-failed') {
-          msg = 'Sem conexão estável com Google. Tente Wi-Fi ou outra rede. Ou use SMS / Link Mágico abaixo.';
+          msg = 'Sem conexão estável com Google. Tente Wi-Fi ou outra rede. Ou entre com e-mail e senha acima.';
         } else if (code === 'auth/too-many-requests') {
-          msg = 'Muitas tentativas. Aguarde alguns minutos e tente de novo. Ou use SMS / Link Mágico.';
+          msg = 'Muitas tentativas. Aguarde alguns minutos e tente de novo. Ou entre com e-mail e senha acima.';
         } else if (code === 'auth/internal-error') {
-          msg = 'Erro interno do Firebase. Tente novamente em instantes. Se persistir, use SMS / Link Mágico abaixo.';
+          msg = 'Erro interno do Firebase. Tente novamente em instantes. Se persistir, entre com e-mail e senha acima.';
         } else if (code === 'auth/unauthorized-domain') {
           msg = 'Domínio não autorizado no Firebase Auth. Reporte: scoreplace.app@gmail.com';
         } else if (code === 'auth/user-disabled') {
           msg = 'Sua conta Google está desativada. Entre em contato: scoreplace.app@gmail.com';
         } else if (code === 'auth/operation-not-allowed') {
-          msg = 'Login Google indisponível no momento. Use SMS ou Link Mágico abaixo.';
+          msg = 'Login Google indisponível no momento. Entre com e-mail e senha acima.';
         } else {
           // Genérica + código pra debug/suporte
-          msg = 'Não foi possível realizar o login com Google. Tente SMS ou Link Mágico abaixo.\n\n(código: ' + code + ')';
+          msg = 'Não foi possível realizar o login com Google. Tente entrar com e-mail e senha acima.\n\n(código: ' + code + ')';
         }
         showNotification(_t('auth.googleError'), msg, 'error');
       }
@@ -1073,7 +1073,8 @@ window._updateEmailSenhaValidity = function() {
       passLabelEl.style.color = 'var(--text-bright)';
       passLabelEl.style.fontWeight = '700';
     } else {
-      passLabelEl.textContent = 'Senha';
+      // v1.9.73: preserva a dica "(mín. 6 caracteres)" ao lado de "Senha".
+      passLabelEl.innerHTML = 'Senha <span style="font-style:italic;font-size:0.72rem;">(mín. 6 caracteres)</span>';
       passLabelEl.style.color = 'var(--text-muted)';
       passLabelEl.style.fontWeight = '400';
     }
@@ -1773,11 +1774,11 @@ function handleEmailLogin() {
           'Network blip ou bloqueio. Tente:\n' +
           '1. Trocar Wi-Fi ↔ 4G/5G\n' +
           '2. Desabilitar VPN/ad-blocker\n' +
-          '3. Usar Link Mágico por E-mail (acima)', 'error');
+          '3. Entrar com Google', 'error');
       } else {
         showNotification('Erro no Login',
           (error.message || 'Não foi possível entrar') +
-          '\n\n(código: ' + code + ')\n\nUse Link Mágico por E-mail acima.', 'error');
+          '\n\n(código: ' + code + ')\n\nTente entrar com Google ou use "Esqueci a Senha".', 'error');
       }
     });
 }
@@ -1867,11 +1868,11 @@ function handleEmailRegister() {
           'Network blip ou bloqueio. Tente:\n' +
           '1. Trocar Wi-Fi ↔ 4G/5G\n' +
           '2. Desabilitar VPN/ad-blocker\n' +
-          '3. Usar Link Mágico por E-mail (acima) — não precisa criar senha', 'error');
+          '3. Entrar com Google', 'error');
       } else {
         showNotification('Erro no Registro',
           (error.message || 'Não foi possível criar conta') +
-          '\n\n(código: ' + code + ')\n\nUse Link Mágico por E-mail acima — entrada rápida sem precisar de senha.', 'error');
+          '\n\n(código: ' + code + ')\n\nTente entrar com Google.', 'error');
       }
     });
 }
@@ -3632,7 +3633,10 @@ function setupLoginModal() {
           // O DDI dropdown só aparece quando phone detectado. Hidden inputs
           // delegam pros handlers existentes (handleEmailLinkLogin /
           // handlePhoneLogin) sem duplicar lógica.
-          '<div id="login-unified-step" style="margin-bottom:4px;background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.22);border-radius:12px;padding:14px 14px 10px 14px;transition:opacity 0.2s;">' +
+          // v1.9.73: link mágico + SMS REMOVIDOS do login. Login agora é só
+          // e-mail+senha ou Google. Bloco mantido oculto (display:none) por
+          // segurança — sua lógica não é mais acionada por nenhuma UI visível.
+          '<div id="login-unified-step" style="display:none;margin-bottom:4px;background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.22);border-radius:12px;padding:14px 14px 10px 14px;transition:opacity 0.2s;">' +
             '<div style="margin-bottom:10px;">' +
               '<div style="font-size:0.9rem;font-weight:700;color:#22d3ee;line-height:1.3;">✉️📱 Entrar com 1 clique</div>' +
               '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">(seu@email.com  ou  11 9999-8888)</div>' +
@@ -3684,57 +3688,50 @@ function setupLoginModal() {
               '<a href="#" onclick="event.preventDefault();_resetPhoneLoginUI();" style="color:var(--text-muted);font-size:0.72rem;">Voltar</a>' +
             '</div>' +
           '</div>' +
-          '<div id="recaptcha-container"></div>' +
+          '<div id="recaptcha-container" style="display:none;"></div>' +
           '<div id="login-panel-emaillink" style="display:none;"></div>' +
           '<div id="login-panel-phone" style="display:none;"></div>' +
 
-          // --- Divider ---
-          '<div style="display:flex;align-items:center;gap:12px;margin:14px 0;">' +
-            '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
-            '<span style="color:var(--text-muted);font-size:1rem;font-weight:700;letter-spacing:1px;">ou</span>' +
-            '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
-          '</div>' +
-
-          // --- 3. E-mail e Senha ---
-          '<div id="login-block-email" style="margin-bottom:4px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:14px 14px 10px 14px;transition:opacity 0.2s;">' +
-            '<div style="font-size:0.9rem;font-weight:700;color:#a5b4fc;margin-bottom:8px;">🔑 E-mail e Senha</div>' +
+          // --- E-mail e Senha (método principal) ---
+          '<div id="login-block-email" style="margin-bottom:4px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:16px 14px 12px;transition:opacity 0.2s;">' +
             '<div id="email-login-mode" style="display:block;">' +
+              '<div style="font-size:0.95rem;font-weight:800;color:#a5b4fc;margin-bottom:12px;">🔑 Entrar com e-mail e senha</div>' +
               '<form id="form-login" novalidate onsubmit="event.preventDefault(); handleEmailLogin();">' +
-                '<div style="margin-bottom:8px;">' +
-                  '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:3px;">E-mail <span style="font-style:italic;font-size:0.72rem;">(seu@email.com)</span></div>' +
-                  '<input type="email" id="login-email" class="form-control" placeholder="seu@email.com" required autocomplete="email" style="font-size:0.88rem;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
+                '<div style="margin-bottom:10px;">' +
+                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">E-mail <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(seu@email.com)</span></div>' +
+                  '<input type="email" id="login-email" class="form-control" placeholder="seu@email.com" required autocomplete="email" style="font-size:0.92rem;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
                 '</div>' +
-                '<div style="margin-bottom:8px;">' +
-                  '<div id="login-senha-label" style="font-size:0.78rem;color:var(--text-muted);margin-bottom:3px;font-weight:400;transition:color 0.2s;">Senha</div>' +
-                  '<input type="password" id="login-password" class="form-control" placeholder="" required minlength="6" autocomplete="current-password" style="font-size:0.88rem;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
+                '<div style="margin-bottom:14px;">' +
+                  '<div id="login-senha-label" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;font-weight:400;transition:color 0.2s;">Senha <span style="font-style:italic;font-size:0.72rem;">(mín. 6 caracteres)</span></div>' +
+                  '<input type="password" id="login-password" class="form-control" placeholder="sua senha" required minlength="6" autocomplete="current-password" style="font-size:0.92rem;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
                 '</div>' +
-                '<div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;">' +
-                  '<button type="submit" id="btn-email-entrar" class="btn btn-secondary" style="font-size:0.85rem;white-space:nowrap;padding:8px 16px;transition:background 0.2s,border-color 0.2s,color 0.2s;">Entrar</button>' +
-                '</div>' +
+                '<button type="submit" id="btn-email-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;transition:background 0.2s,border-color 0.2s,color 0.2s;">Entrar</button>' +
               '</form>' +
-              '<div style="text-align:center;margin-top:10px;font-size:0.88rem;">' +
-                '<a href="#" onclick="event.preventDefault();toggleEmailMode(\'register\')" style="color:var(--primary-color);font-weight:700;">Criar conta</a>' +
-                '<span style="color:var(--text-muted);margin:0 8px;">|</span>' +
-                '<a href="#" onclick="event.preventDefault();handlePasswordReset()" style="color:var(--text-muted);font-weight:500;">Esqueci a senha</a>' +
+              // Criar Conta + Esqueci a Senha como BOTÕES de destaque (v1.9.73)
+              '<div style="display:flex;gap:8px;margin-top:12px;">' +
+                '<button type="button" onclick="toggleEmailMode(\'register\')" class="btn btn-block" style="flex:1;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.5);color:#c7d2fe;font-size:0.85rem;font-weight:800;padding:11px;">✨ Criar Conta</button>' +
+                '<button type="button" onclick="handlePasswordReset()" class="btn btn-block" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.85rem;font-weight:800;padding:11px;">🔑 Esqueci a Senha</button>' +
               '</div>' +
             '</div>' +
             '<div id="email-register-mode" style="display:none;">' +
+              '<div style="font-size:0.95rem;font-weight:800;color:#a5b4fc;margin:-4px 0 12px;">✨ Criar sua conta</div>' +
               '<form id="form-register" novalidate onsubmit="event.preventDefault(); handleEmailRegister();">' +
-                '<div style="margin-bottom:6px;">' +
-                  '<input type="text" id="register-name" class="form-control" placeholder="Seu nome" required style="font-size:0.88rem;" oninput="window._loginMutualExclude && window._loginMutualExclude()">' +
+                '<div style="margin-bottom:10px;">' +
+                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Nome de exibição <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(como vão te ver no app)</span></div>' +
+                  '<input type="text" id="register-name" class="form-control" placeholder="Seu nome" required style="font-size:0.92rem;">' +
                 '</div>' +
-                '<div style="margin-bottom:6px;">' +
-                  '<input type="email" id="register-email" class="form-control" placeholder="seu@email.com" required style="font-size:0.88rem;" oninput="window._loginMutualExclude && window._loginMutualExclude()">' +
+                '<div style="margin-bottom:10px;">' +
+                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">E-mail <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(seu@email.com)</span></div>' +
+                  '<input type="email" id="register-email" class="form-control" placeholder="seu@email.com" required style="font-size:0.92rem;">' +
                 '</div>' +
-                '<div style="margin-bottom:6px;">' +
-                  '<input type="password" id="register-password" class="form-control" placeholder="Senha (mín. 6)" required minlength="6" style="font-size:0.88rem;" oninput="window._loginMutualExclude && window._loginMutualExclude()">' +
+                '<div style="margin-bottom:14px;">' +
+                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Senha <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(mín. 6 caracteres)</span></div>' +
+                  '<input type="password" id="register-password" class="form-control" placeholder="crie uma senha" required minlength="6" style="font-size:0.92rem;">' +
                 '</div>' +
-                '<div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;">' +
-                  '<button type="submit" class="btn btn-primary" style="font-size:0.8rem;white-space:nowrap;padding:8px 14px;">Criar Conta</button>' +
-                '</div>' +
+                '<button type="submit" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;">✨ Criar Conta</button>' +
               '</form>' +
-              '<div style="text-align:center;margin-top:6px;">' +
-                '<a href="#" onclick="event.preventDefault();toggleEmailMode(\'login\')" style="color:var(--primary-color);font-size:0.75rem;font-weight:600;">Ja tem conta? Entrar</a>' +
+              '<div style="margin-top:10px;">' +
+                '<button type="button" onclick="toggleEmailMode(\'login\')" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.85rem;font-weight:700;padding:10px;">← Já tenho conta · Entrar</button>' +
               '</div>' +
             '</div>' +
           '</div>' +

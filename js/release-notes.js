@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.73-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Login simplificado: e-mail e senha ou Google.</b><br><br>' +
+      'O <b>link mágico</b> e o <b>SMS</b> saíram da tela de login — estavam só complicando. Agora é direto: <b>e-mail + senha</b> ou <b>entrar com Google</b>.<br><br>' +
+      '<b>Criar Conta</b> e <b>Esqueci a Senha</b> viraram botões com destaque. Ao criar conta, o app pede o <b>nome de exibição</b> (não é pedido em logins seguintes). As dicas dos campos aparecem dentro deles e ao lado dos nomes.<br><br>' +
+      '<b>Já tinha conta por link mágico?</b> Use "Esqueci a Senha" uma vez pra definir sua senha — depois é só e-mail + senha.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.72-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Partida casual: "Jogar" vai direto pra próxima + fim da dupla duplicada.</b><br><br>' +
       '<b>Jogar Novamente (solo):</b> ao terminar uma partida casual solo e clicar em "Jogar", o app agora vai <b>direto para uma nova partida</b> ao vivo (sem passar pela tela de configuração). O resultado anterior é salvo no histórico e, se o toggle "Re-sortear" estiver ligado, as duplas são sorteadas de novo. Em partidas com vários jogadores registrados, a tela de setup continua aparecendo (pro host re-compartilhar a sala).<br><br>' +
