@@ -1576,7 +1576,8 @@
         ? '<button id="pref-checkin-btn-' + safePid + '" class="btn btn-sm hover-lift" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + String(hereCheckin._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","checkin")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:6px 10px;font-size:0.75rem;flex:1;min-width:0;" title="Você está registrado aqui · clique pra sair">❌ Cancelar presença</button>'
         : '<button id="pref-checkin-btn-' + safePid + '" class="btn btn-sm hover-lift" onclick=\'event.stopPropagation(); window._venuesQuickCheckInPreferred("' + safePid + '")\' style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:700;padding:6px 10px;font-size:0.75rem;flex:1;min-width:0;" title="Registra presença com suas modalidades preferidas neste local">📍 Estou aqui agora</button>';
       var planBtn = herePlan
-        ? '<button id="pref-plan-btn-' + safePid + '" class="btn btn-sm hover-lift" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + String(herePlan._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","planned")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:6px 10px;font-size:0.75rem;flex:1;min-width:0;" title="Você tem plano ativo aqui · clique pra remover">❌ Cancelar plano</button>'
+        ? ('<button id="pref-plan-edit-' + safePid + '" class="btn btn-sm hover-lift" onclick=\'event.stopPropagation(); window._venuesEditPlanPreferred("' + safePid + '","' + String(herePlan._id || '').replace(/"/g,'&quot;') + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:6px 10px;font-size:0.72rem;flex:0 0 auto;" title="Editar horário/modalidade do plano">✏️ Editar</button>'
+          + '<button id="pref-plan-btn-' + safePid + '" class="btn btn-sm hover-lift" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + String(herePlan._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","planned")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:6px 10px;font-size:0.72rem;flex:0 0 auto;" title="Você tem plano ativo aqui · clique pra remover">❌ Cancelar</button>')
         : '<button id="pref-plan-btn-' + safePid + '" class="btn btn-sm hover-lift" onclick=\'event.stopPropagation(); window._venuesQuickPlanPreferred("' + safePid + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:6px 10px;font-size:0.75rem;flex:1;min-width:0;" title="Planejar ida com suas modalidades preferidas neste local">🗓️ Planejar ida</button>';
       slot.innerHTML = checkinBtn + planBtn;
     });
@@ -2824,7 +2825,8 @@
       ? '<button id="venue-quickcheckin-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesCancelMyPresenceHere("' + String(hereCheckin._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","checkin")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:8px 14px;" title="Você está registrado aqui agora · clique pra sair">❌ Cancelar presença</button>'
       : '<button id="venue-quickcheckin-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesQuickCheckIn("' + safePid + '")\' style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:700;padding:8px 14px;">📍 Estou aqui agora</button>';
     var planBtn = herePlan
-      ? '<button id="venue-quickplan-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesCancelMyPresenceHere("' + String(herePlan._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","planned")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:8px 14px;" title="Você tem plano ativo aqui · clique pra remover">❌ Cancelar plano</button>'
+      ? ('<button id="venue-quickplan-edit-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesEditPlanPreferred("' + safePid + '","' + String(herePlan._id || '').replace(/"/g,'&quot;') + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:8px 12px;" title="Editar horário/modalidade do plano">✏️ Editar</button>'
+        + '<button id="venue-quickplan-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesCancelMyPresenceHere("' + String(herePlan._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","planned")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:8px 12px;" title="Você tem plano ativo aqui · clique pra remover">❌ Cancelar</button>')
       : '<button id="venue-quickplan-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesQuickPlan("' + safePid + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:8px 14px;">🗓️ Planejar ida</button>';
     slot.innerHTML = checkinBtn + planBtn;
   }
@@ -3220,14 +3222,28 @@
   // would sometimes render with a stale `state.venue` (Paineiras) instead of
   // the MatchBall the user had just clicked.
   var _pendingPlanState = null;
+  // v1.9.87: quando != null, o overlay está EDITANDO um plano existente — os
+  // horários vêm dele (pré-preenchidos) e, ao confirmar, o plano antigo é
+  // cancelado (substituído). {docId, startsAt, endsAt, sports}.
+  var _editingPlanData = null;
+
+  // v1.9.87: fecha o overlay de plano limpando o estado (inclusive edição).
+  window._venuesClosePlanOverlay = function() {
+    _editingPlanData = null;
+    _pendingPlanState = null;
+    var ov = document.getElementById('venue-plan-overlay');
+    if (ov) ov.remove();
+  };
 
   function _openInlinePlanOverlay(v, sports) {
     _pendingPlanState = { venue: v, sports: sports };
     var prev = document.getElementById('venue-plan-overlay');
     if (prev) prev.remove();
     var now = new Date();
-    var defStart = new Date(now.getTime() + 2 * 60 * 60 * 1000);
     var fmt = window._formatHHMM;
+    // v1.9.87: edição → usa os horários do plano existente como default.
+    var _editStart = (_editingPlanData && _editingPlanData.startsAt) ? new Date(_editingPlanData.startsAt) : null;
+    var defStart = _editStart || new Date(now.getTime() + 2 * 60 * 60 * 1000);
     var defStartStr = fmt(defStart);
     // v0.16.25: default de Saída = Chegada + 2h. Autofill do browser venceu todas
     // as contra-medidas pra manter vazio — melhor assumir um default útil que o
@@ -3242,7 +3258,16 @@
       if (newH >= 24) return '23:30';
       return String(newH).padStart(2,'0') + ':' + String(m).padStart(2,'0');
     };
-    var defEndStr = _plusTwoHours(defStartStr);
+    // v1.9.87: edição → fim vem do plano existente (se não for open-ended).
+    var _editEnd = (_editingPlanData && _editingPlanData.endsAt && !_editingPlanData.openEnded) ? new Date(_editingPlanData.endsAt) : null;
+    var defEndStr = _editEnd ? fmt(_editEnd) : _plusTwoHours(defStartStr);
+    // v1.9.87: dia default (hoje/amanhã) também vem do plano em edição.
+    var _editIsTomorrow = false;
+    if (_editStart) {
+      var _td = new Date(); _td.setHours(0,0,0,0);
+      var _sd = new Date(_editStart); _sd.setHours(0,0,0,0);
+      _editIsTomorrow = _sd.getTime() > _td.getTime();
+    }
     // v0.16.24: pills de modalidade SEMPRE visíveis quando há pelo menos 1 esporte
     // na interseção venue∩preferências. Com só 1 opção, a pill confirma visualmente
     // qual modalidade será registrada. Todas ativas por padrão, clique desativa.
@@ -3267,14 +3292,16 @@
     var contextLine = _safe(v.name || v.placeId);
     // v0.16.36: pills Hoje/Amanhã (excludentes) acima do horário. Permitem ao
     // usuário planejar com 1 dia de antecedência e avisar amigos. Default = Hoje.
+    var _onStyle = 'padding:6px 16px;border-radius:999px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:1px solid rgba(99,102,241,0.45);font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.15s;';
+    var _offStyle = 'padding:6px 16px;border-radius:999px;background:var(--bg-darker);color:var(--text-muted);border:1px solid var(--border-color);font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.15s;';
     var dayBlock =
       '<div style="margin-bottom:12px;">' +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quando:</div>' +
         '<div id="plan-day-pills" style="display:flex;gap:6px;">' +
-          '<button type="button" data-day="today" data-active="1" onclick="window._venuesTogglePlanDay(this)" ' +
-            'style="padding:6px 16px;border-radius:999px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:1px solid rgba(99,102,241,0.45);font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.15s;">Hoje</button>' +
-          '<button type="button" data-day="tomorrow" data-active="0" onclick="window._venuesTogglePlanDay(this)" ' +
-            'style="padding:6px 16px;border-radius:999px;background:var(--bg-darker);color:var(--text-muted);border:1px solid var(--border-color);font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.15s;">Amanhã</button>' +
+          '<button type="button" data-day="today" data-active="' + (_editIsTomorrow ? '0' : '1') + '" onclick="window._venuesTogglePlanDay(this)" ' +
+            'style="' + (_editIsTomorrow ? _offStyle : _onStyle) + '">Hoje</button>' +
+          '<button type="button" data-day="tomorrow" data-active="' + (_editIsTomorrow ? '1' : '0') + '" onclick="window._venuesTogglePlanDay(this)" ' +
+            'style="' + (_editIsTomorrow ? _onStyle : _offStyle) + '">Amanhã</button>' +
         '</div>' +
       '</div>';
     var uniqSuffix = Date.now() + '-' + Math.floor(Math.random() * 10000);
@@ -3325,7 +3352,7 @@
             '</label>' +
           '</div>' +
           '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
-            '<button type="button" class="btn btn-outline" onclick="document.getElementById(\'venue-plan-overlay\').remove()">Cancelar</button>' +
+            '<button type="button" class="btn btn-outline" onclick="window._venuesClosePlanOverlay()">Cancelar</button>' +
             '<button type="button" class="btn btn-primary" onclick="window._venuesConfirmInlinePlan()">Confirmar</button>' +
           '</div>' +
         '</form>' +
@@ -3567,6 +3594,11 @@
     };
     try {
       var docId = await window.PresenceDB.savePresence(payload);
+      // v1.9.87: se estava EDITANDO, cancela o plano antigo (substituição).
+      if (_editingPlanData && _editingPlanData.docId && _editingPlanData.docId !== docId) {
+        try { await window.PresenceDB.cancelPresence(_editingPlanData.docId); } catch (e) {}
+      }
+      _editingPlanData = null;
       var ov = document.getElementById('venue-plan-overlay');
       if (ov) ov.remove();
       _pendingPlanState = null;
@@ -4163,6 +4195,25 @@
     // lista completa de modalidades; usuário desativa as que não vai jogar.
     var SPORTS_LIST2 = ['Beach Tennis', 'Pickleball', 'Tênis', 'Tênis de Mesa', 'Padel', 'Vôlei de Praia', 'Futevôlei'];
     _openInlinePlanOverlay(v, SPORTS_LIST2);
+  };
+
+  // v1.9.87: EDITAR um plano de ida existente. Carrega os horários do plano,
+  // abre o overlay pré-preenchido e, ao confirmar, substitui o plano antigo.
+  window._venuesEditPlanPreferred = async function(placeId, docId) {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid || !window.PresenceDB) return;
+    try {
+      var active = await window.PresenceDB.loadMyActive(cu.uid);
+      var plan = (active || []).filter(function(p) { return p && p.type === 'planned' && String(p._id) === String(docId); })[0];
+      _editingPlanData = plan ? {
+        docId: docId,
+        startsAt: plan.startsAt || null,
+        endsAt: plan.endsAt || null,
+        openEnded: !!plan.openEnded,
+        sports: Array.isArray(plan.sports) ? plan.sports.slice() : null
+      } : null;
+    } catch (e) { _editingPlanData = null; }
+    window._venuesQuickPlanPreferred(placeId);
   };
 
   // Planejar ida: abre overlay inline POR CIMA da modal do venue. Mantém o
