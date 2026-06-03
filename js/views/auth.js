@@ -1801,9 +1801,15 @@ function handleEmailLogin() {
   firebase.auth().signInWithEmailAndPassword(email, password)
     .then(function(result) {
       var user = result.user;
-      // Track auth provider
+      // Track auth provider. v1.9.90: inclui email/displayName pra NUNCA criar
+      // um doc "fantasma" (sem identidade) que apareceria como "Usuário". Antes
+      // gravava só {authProvider, updatedAt} — se o doc não existia (conta
+      // recriada, perfil ainda não escrito), virava um usuário sem nome/e-mail.
       if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
-        window.FirestoreDB.saveUserProfile(user.uid, { authProvider: 'password', updatedAt: new Date().toISOString() }).catch(function() {});
+        var _loginProf = { authProvider: 'password', updatedAt: new Date().toISOString() };
+        if (user.email) _loginProf.email = user.email;
+        if (user.displayName) _loginProf.displayName = user.displayName;
+        window.FirestoreDB.saveUserProfile(user.uid, _loginProf).catch(function() {});
       }
       _tryLinkPendingCredential(result);
       showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {name: user.displayName}) : _t('auth.welcome'), 'success');
@@ -4241,6 +4247,28 @@ window._executeDeleteAccount = async function() {
       });
       if (dCount > 0) await dBatch.commit();
     } catch (e) { window._warn('Erro ao excluir torneios:', e); }
+
+    // 2c2. v1.9.90: remove este uid das listas de amizade de quem é amigo dele.
+    // Sem isso, ao excluir a conta a referência some do perfil (que é deletado),
+    // mas continua nos friends[]/requests dos AMIGOS — aparecendo como "Usuário"
+    // fantasma na lista deles. Só toca os docs dos amigos diretos (eficiente).
+    try {
+      var _myFriends = Array.isArray(user.friends) ? user.friends.slice() : [];
+      var _mySent = Array.isArray(user.friendRequestsSent) ? user.friendRequestsSent : [];
+      var _myRecv = Array.isArray(user.friendRequestsReceived) ? user.friendRequestsReceived : [];
+      var _touchUids = {};
+      _myFriends.concat(_mySent, _myRecv).forEach(function(fu) {
+        if (fu && typeof fu === 'string' && fu.indexOf('@') === -1) _touchUids[fu] = true;
+      });
+      var _arrRemove = firebase.firestore.FieldValue.arrayRemove(uid);
+      await Promise.all(Object.keys(_touchUids).map(function(fu) {
+        return db.collection('users').doc(fu).update({
+          friends: _arrRemove,
+          friendRequestsSent: _arrRemove,
+          friendRequestsReceived: _arrRemove
+        }).catch(function() {});
+      }));
+    } catch (e) { window._warn('Erro ao limpar amizades:', e); }
 
     // 2d. Delete user profile document
     try {

@@ -532,7 +532,9 @@ function showInputDialog(title, message, onSubmit, options = {}) {
 
   const input = dialog.querySelector('#input-dialog-value');
   input.focus();
-  input.select();
+  // v1.9.90: .select() lança InvalidStateError em inputs type=email/number em
+  // alguns browsers (Sentry SCOREPLACE-WEB-1X/1H). Guarda defensiva.
+  try { input.select(); } catch (e) {}
 
   const handleSubmit = () => {
     const value = input.value.trim();

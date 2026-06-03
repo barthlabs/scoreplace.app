@@ -850,7 +850,15 @@ function _renderMyFriends(myUid, friendIds) {
   });
 
   return Promise.all(promises).then(function(profiles) {
-    profiles = profiles.filter(function(p) { return p; });
+    // v1.9.90: descarta perfis-fantasma — sem nome, sem e-mail e sem telefone
+    // (contas deletadas/órfãs) apareciam como "Usuário" na lista de amigos.
+    profiles = profiles.filter(function(p) {
+      if (!p) return false;
+      var hasId = (p.displayName && String(p.displayName).trim()) ||
+                  (p.email && String(p.email).trim()) ||
+                  (p.phone && String(p.phone).trim());
+      return !!hasId;
+    });
 
     // Cache profiles for instant sheet
     profiles.forEach(function(p) {
