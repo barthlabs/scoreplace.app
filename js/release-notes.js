@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.80-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>+Participante: nome simples direto, sem perguntas.</b><br><br>' +
+      'No "+ Participante" (e ao escolher parceiro de dupla), digitar um nome que não é usuário agora <b>adiciona direto como nome</b> — acabou a pergunta "Usar X como nome". O autocomplete sugere apenas seus <b>amigos</b> (com foto, vinculando a conta). Você <b>não pode mais incluir um usuário que não é seu amigo</b>: nomes de não-amigos entram só como texto, sem vínculo de conta. O botão Adicionar habilita assim que você digita.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.79-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Torneios públicos em ordem de urgência pra todo mundo.</b><br><br>' +
       'O feed de torneios públicos agora é ordenado pelo <b>próximo evento</b> (encerramento das inscrições, início ou término) — os <b>mais urgentes primeiro</b>. Usuário novo, sem locais preferidos nem amigos, já vê os torneios públicos normalmente (e os privados pra que foi convidado). Enquanto o feed carrega, aparece "Procurando torneios…" em vez de "nenhum torneio". A cidade do perfil entra como leve desempate. <i>(Filtros "só amigos" e "só locais preferidos" virão em seguida.)</i></p>' +

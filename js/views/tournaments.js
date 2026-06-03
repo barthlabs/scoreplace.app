@@ -2638,15 +2638,10 @@ window._partnerPickerRender = function(tId, q, enrolled, friends, searchResults)
   var html = '';
   html += _section('Já inscritos', enrolled, 'Inscrito(a)', '#3b82f6,#8b5cf6', false);
   html += _section('Meus amigos', friends, 'Amigo(a)', '#10b981,#059669', enrolled.length > 0);
-  if (searchResults.length > 0) {
-    // Filtrar duplicatas já exibidas
-    var shownNames = enrolled.concat(friends).map(function(p) { return p.name.toLowerCase(); });
-    var newResults = searchResults.filter(function(p) { return !shownNames.includes(p.name.toLowerCase()); });
-    html += _section('Usuários', newResults, 'Usuário', '#6366f1,#4f46e5', (enrolled.length + friends.length) > 0);
-  }
-  if (!html && q) {
-    html = '<div style="padding:10px 12px;font-size:0.82rem;color:var(--text-muted);">Usar "<strong>' + window._safeHtml(q) + '</strong>" como nome</div>';
-  }
+  // v1.9.80: SEM busca de usuários arbitrários — você só vincula um USUÁRIO
+  // (com conta) se ele for seu AMIGO. Qualquer outro nome é usado como TEXTO
+  // simples (o input alimenta submitTeamEnroll direto). Sem a pergunta "Usar X
+  // como nome" — basta digitar e confirmar.
 
   dropdown.innerHTML = html || '';
   dropdown.style.display = html ? 'block' : 'none';
@@ -2678,29 +2673,9 @@ window._partnerPickerSearch = function(tId, query) {
   // Renderizar imediatamente com resultados locais
   window._partnerPickerRender(tId, q, filtEnrolled, filtFriends, []);
 
-  // Busca remota Firestore com debounce (só quando query ≥ 2 chars)
-  if (window._partnerPickerDebounce[tId]) clearTimeout(window._partnerPickerDebounce[tId]);
-  if (q.length >= 2) {
-    // Mostrar loading no dropdown
-    if (dropdown.children.length === 0 || (filtEnrolled.length === 0 && filtFriends.length === 0)) {
-      dropdown.innerHTML = '<div style="padding:10px 12px;font-size:0.8rem;color:var(--text-muted);">🔍 Buscando…</div>';
-      dropdown.style.display = 'block';
-    }
-    window._partnerPickerDebounce[tId] = setTimeout(function() {
-      if (!window.FirestoreDB || !window.FirestoreDB.searchUsers) return;
-      window.FirestoreDB.searchUsers(q, { limit: 8 }).then(function(results) {
-        // Verificar se a query ainda é a mesma (evitar resultados obsoletos)
-        var currentQ = (document.getElementById('partner-search-' + tId) || {}).value || '';
-        if (currentQ.trim().toLowerCase() !== q) return;
-        var cu = window.AppStore && window.AppStore.currentUser;
-        var searchResults = results
-          .filter(function(r) { return !cu || r._docId !== cu.uid; })
-          .map(function(r) { return { name: r.displayName || '', uid: r._docId || '', photo: r.photoURL || '' }; })
-          .filter(function(r) { return r.name; });
-        window._partnerPickerRender(tId, q, filtEnrolled, filtFriends, searchResults);
-      }).catch(function() {});
-    }, 280); // 280ms debounce
-  }
+  // v1.9.80: sem busca remota de usuários arbitrários — só amigos/inscritos no
+  // autocomplete. Qualquer outro nome entra como texto simples.
+  if (window._partnerPickerDebounce[tId]) { clearTimeout(window._partnerPickerDebounce[tId]); window._partnerPickerDebounce[tId] = null; }
 };
 
 window._partnerPickerSelect = function(tId, name, uid) {

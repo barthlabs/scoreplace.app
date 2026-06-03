@@ -985,7 +985,7 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
       '</div>' +
       '<div style="padding:16px;">' +
         '<div style="position:relative;">' +
-          '<input type="text" id="ap-input" placeholder="Buscar por nome..." autocomplete="off" style="width:100%;padding:10px 10px 10px 34px;border-radius:8px;border:1px solid var(--border-color,rgba(255,255,255,0.15));background:var(--bg-dark,#0f172a);color:var(--text-main,#e2e8f0);font-size:0.9rem;box-sizing:border-box;" oninput="window._apSearch(this.value)" onfocus="window._apSearch(this.value)">' +
+          '<input type="text" id="ap-input" placeholder="Digite o nome (ou escolha um amigo)" autocomplete="off" style="width:100%;padding:10px 10px 10px 34px;border-radius:8px;border:1px solid var(--border-color,rgba(255,255,255,0.15));background:var(--bg-dark,#0f172a);color:var(--text-main,#e2e8f0);font-size:0.9rem;box-sizing:border-box;" oninput="window._apSearch(this.value)" onfocus="window._apSearch(this.value)">' +
           '<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;">🔍</span>' +
         '</div>' +
         '<div id="ap-dropdown" style="display:none;border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:8px;margin-top:4px;max-height:240px;overflow-y:auto;background:var(--bg-card,#1e293b);"></div>' +
@@ -1053,42 +1053,25 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
       html += friends.map(function(p){ return _item(p, 'Amigo'); }).join('');
     }
 
-    dd.innerHTML = html || (q ? '<div style="padding:10px 12px;font-size:0.82rem;color:var(--text-muted);">Buscando…</div>' : '');
-    dd.style.display = (html || q) ? 'block' : 'none';
+    dd.innerHTML = html;
+    dd.style.display = html ? 'block' : 'none';
 
-    // Busca Firestore com debounce
-    if (window._apDebounce) clearTimeout(window._apDebounce);
-    if (q.length >= 2) {
-      window._apDebounce = setTimeout(function() {
-        if (!window.FirestoreDB || !window.FirestoreDB.searchUsers) return;
-        window.FirestoreDB.searchUsers(q, { limit: 8 }).then(function(results) {
-          var cur = (document.getElementById('ap-input')||{}).value||'';
-          if (cur.trim().toLowerCase() !== q) return;
-          var shownNames = friends.map(function(p){ return p.name.toLowerCase(); });
-          var newR = results.filter(function(r){
-            return r.displayName && (!cu || r._docId !== cu.uid) &&
-                   !shownNames.includes((r.displayName||'').toLowerCase()) &&
-                   !_isEnrolled(r._docId, r.displayName);
-          }).map(function(r){ return { name: r.displayName, uid: r._docId||'', photo: r.photoURL||'' }; });
-
-          if (newR.length) {
-            var ddEl = document.getElementById('ap-dropdown');
-            if (ddEl) {
-              if (friends.length) ddEl.innerHTML += '<div style="height:1px;background:var(--border-color);margin:2px 0;"></div>';
-              ddEl.innerHTML += '<div style="padding:5px 12px 3px;font-size:0.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;">Usuários</div>';
-              ddEl.innerHTML += newR.map(function(p){ return _item(p, 'Usuário'); }).join('');
-              ddEl.style.display = 'block';
-            }
-          } else if (!friends.length && !newR.length && q) {
-            var ddEl2 = document.getElementById('ap-dropdown');
-            if (ddEl2) ddEl2.innerHTML = '<div onclick="window._apSelect(\''+q.replace(/'/g,"\\'")+ '\',\'\',\'\')" style="padding:10px 12px;cursor:pointer;font-size:0.85rem;color:var(--text-muted);" onmouseover="this.style.background=\'rgba(99,102,241,0.1)\'" onmouseout="this.style.background=\'none\'">Usar "<b>'+_sh(query.trim())+'</b>" como nome</div>';
-          }
-        }).catch(function(){});
-      }, 280);
-    } else if (!q && !friends.length) {
-      dd.style.display = 'none';
+    // v1.9.80: NÃO busca usuários arbitrários no Firestore. Você só pode
+    // adicionar um USUÁRIO (com conta) se ele for seu AMIGO — o autocomplete
+    // sugere apenas amigos. Qualquer outro nome digitado entra como TEXTO
+    // simples (sem vínculo de conta). Acabou a pergunta "Usar X como nome":
+    // basta digitar e clicar Adicionar. O botão habilita assim que há texto.
+    if (window._apDebounce) { clearTimeout(window._apDebounce); window._apDebounce = null; }
+    if (!window._apSelected) {
+      var _btn = document.getElementById('ap-confirm');
+      if (_btn) {
+        var _hasText = !!q;
+        _btn.disabled = !_hasText;
+        _btn.style.opacity = _hasText ? '1' : '0.4';
+        _btn.style.cursor = _hasText ? 'pointer' : 'not-allowed';
+      }
     }
-    // Fechar ao clicar fora
+    // Fechar dropdown ao clicar fora
     setTimeout(function(){
       document.addEventListener('click', function _c(){ if(dd) dd.style.display='none'; document.removeEventListener('click',_c); }, { once: true });
     }, 50);
