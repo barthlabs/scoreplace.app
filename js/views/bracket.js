@@ -1581,7 +1581,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
         style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;margin-left:6px;">✅ Confirmar</button>`;
     var _btnContest = `<button onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#f87171;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;margin-left:6px;">❌ Contestar</button>`;
-    if (_canApprove) {
+    // v1.9.77: Fase 4 (em disputa) — NINGUÉM tem botão no corpo do card. Os
+    // jogadores veem só a tag PENDENTE; o organizador resolve exclusivamente
+    // pelo painel do banner (Confirmar / Editar / Refazer). Sem isso, o
+    // disputante (adversário) ainda via Confirmar/Contestar e o organizador via
+    // um Editar redundante no corpo — dois caminhos conflitantes.
+    if (_pr && _pr.disputed) {
+      pendingActionBtns = '';
+    } else if (_canApprove) {
       if (!_isCounterProposal) {
         // Fase 1: adversário — Editar + Confirmar
         pendingActionBtns = _btnEdit + _btnConfirm;
@@ -1590,8 +1597,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
         pendingActionBtns = _btnConfirm + _btnContest;
       }
     } else if (_isProposerSelf && !_isAuthorityInner) {
-      // Proponente atual: só Editar para corrigir (exceto se disputado — aí aguarda org)
-      if (!(_pr && _pr.disputed)) pendingActionBtns = _btnEdit;
+      // Proponente atual: só Editar para corrigir
+      pendingActionBtns = _btnEdit;
     } else if (_isAuthorityInner && !_isProposerSelf) {
       // Organizador que não é o proponente atual: pode editar/confirmar diretamente
       pendingActionBtns = _btnEdit;
@@ -1667,13 +1674,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
       // como jogador (Fases 1-3), agora atua como ORGANIZADOR.
       var _orgResolvePanel = '';
       if (_isAuthorityInner) {
-        var _btnOrgFinal = `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
-            style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.45);color:#4ade80;border-radius:8px;padding:6px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;">⚖️ Lançar placar definitivo</button>`;
+        // v1.9.77: caminho ÚNICO do organizador. "Confirmar placar (X × Y)"
+        // finaliza o placar atual direto (via _approveResult). "Editar" abre os
+        // campos pra lançar outro placar (e finaliza). "Refazer (0×0)" reabre.
+        var _btnOrgConfirm = `<button onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')"
+            style="background:rgba(16,185,129,0.22);border:1px solid rgba(16,185,129,0.5);color:#4ade80;border-radius:8px;padding:7px 13px;font-size:0.78rem;font-weight:800;cursor:pointer;">✅ Confirmar placar (${_scoreDisp})</button>`;
+        var _btnOrgEdit = `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
+            style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:7px 13px;font-size:0.78rem;font-weight:700;cursor:pointer;">✏️ Editar placar</button>`;
         var _btnOrgRedo = `<button onclick="window._organizerResetMatch('${_esc(tId)}','${_esc(m.id)}')"
-            style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;margin-left:6px;">🔄 Refazer (0×0)</button>`;
+            style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#fbbf24;border-radius:8px;padding:7px 13px;font-size:0.78rem;font-weight:700;cursor:pointer;">🔄 Refazer (0×0)</button>`;
         _orgResolvePanel = `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(239,68,68,0.35);">
-          <div style="font-size:0.68rem;color:#fca5a5;font-weight:700;margin-bottom:6px;">🛠️ Você está atuando como <b>ORGANIZADOR</b> — resolva o resultado:</div>
-          <div style="display:flex;gap:0;flex-wrap:wrap;">${_btnOrgFinal}${_btnOrgRedo}</div>
+          <div style="font-size:0.68rem;color:#fca5a5;font-weight:700;margin-bottom:6px;">🛠️ Você está atuando como <b>ORGANIZADOR</b> — decida o resultado definitivo:</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">${_btnOrgConfirm}${_btnOrgEdit}${_btnOrgRedo}</div>
         </div>`;
       }
       pendingBanner = `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;color:#f87171;">

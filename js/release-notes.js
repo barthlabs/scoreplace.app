@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.77-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Fase 4 (placar contestado): caminho único e claro.</b><br><br>' +
+      'Quando um resultado está <b>em disputa</b>, os jogadores agora não têm botão nenhum — só a tag <b>PENDENTE</b>. O organizador resolve por um painel único com 3 opções: <b>✅ Confirmar placar (X × Y)</b> (aceita o placar atual como definitivo), <b>✏️ Editar placar</b> (lança outro) e <b>🔄 Refazer (0×0)</b>. Antes apareciam botões conflitantes (Confirmar no corpo + Lançar definitivo no painel) e o jogo travava. Ao confirmar, a tag PENDENTE some, o resultado fica final (verde) e os envolvidos são notificados.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.76-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Fase 4 do fluxo de resultado: organizador finaliza de verdade.</b><br><br>' +
       'Quando um placar lançado pelos jogadores é editado e contestado, o organizador resolve na Fase 4. <b>Bug corrigido:</b> ao lançar o placar definitivo, o editor inline sempre criava uma nova contra-proposta em vez de finalizar — o jogo ficava preso "pendente" sem nenhum botão. Agora, quando quem confirma é o <b>organizador/co-host/árbitro</b>, o resultado é aplicado direto como definitivo (e <b>0×0</b> = refazer a partida). Edições do organizador em qualquer fase também passam a valer na hora.</p>' +
