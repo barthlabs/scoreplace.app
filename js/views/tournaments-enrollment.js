@@ -807,7 +807,9 @@ window.deleteTournamentFunction = function (tId) {
                     try {
                         window._notifyTournamentParticipants(_delTour, {
                             type: 'tournament_deleted',
+                            title: '🗑️ Torneio cancelado',
                             message: _t('notif.tournamentDeleted').replace('{name}', _delTour.name || 'Torneio'),
+                            tournamentName: _delTour.name || 'Torneio',
                             level: 'fundamental'
                         }, _cu ? _cu.email : null);
                     } catch(e) { window._warn('Delete notification error:', e); }

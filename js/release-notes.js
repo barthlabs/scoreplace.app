@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.81-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Torneio cancelado some da tela de todos na hora.</b><br><br>' +
+      'Quando o organizador apaga um torneio, os participantes recebem a notificação <b>"🗑️ Torneio cancelado"</b> e o torneio <b>desaparece da tela deles imediatamente</b> — sem precisar dar refresh. Se algum participante estava <b>vendo a página do torneio</b> (chave, inscritos, regras) na hora em que foi apagado, ele é levado de volta ao início com o aviso "Esse torneio não está mais disponível".</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.80-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>+Participante: nome simples direto, sem perguntas.</b><br><br>' +
       'No "+ Participante" (e ao escolher parceiro de dupla), digitar um nome que não é usuário agora <b>adiciona direto como nome</b> — acabou a pergunta "Usar X como nome". O autocomplete sugere apenas seus <b>amigos</b> (com foto, vinculando a conta). Você <b>não pode mais incluir um usuário que não é seu amigo</b>: nomes de não-amigos entram só como texto, sem vínculo de conta. O botão Adicionar habilita assim que você digita.</p>' +

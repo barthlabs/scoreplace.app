@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.80-beta';
+window.SCOREPLACE_VERSION = '1.9.81-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2160,6 +2160,11 @@ window.AppStore = {
       : (norm ? coll.where('memberEmails', 'array-contains', norm) : coll);
     this._realtimeUnsubscribe = query
       .onSnapshot(function(snap) {
+        // v1.9.81: IDs antes do rebuild — pra detectar torneios REMOVIDOS
+        // (deletados pelo organizador, ou usuário removido do torneio). Se o
+        // participante está vendo a página de um torneio que sumiu, redireciona
+        // pro dashboard (senão fica numa tela morta até dar refresh).
+        var _prevIds = (store.tournaments || []).map(function(t) { return String(t.id); });
         var tournaments = [];
         var deletedIds = store._deletedTournamentIds || [];
         snap.forEach(function(doc) {
@@ -2171,6 +2176,26 @@ window.AppStore = {
         store.tournaments = tournaments;
         store._saveToCache();
         store._loading = false;
+
+        // v1.9.81: detecta remoções (presente antes, ausente agora) e, se o
+        // usuário está vendo um torneio removido, tira ele da tela na hora.
+        if (!isFirstSnapshot) {
+          var _newIdSet = {};
+          tournaments.forEach(function(t) { _newIdSet[String(t.id)] = true; });
+          var _removedIds = _prevIds.filter(function(id) { return !_newIdSet[id]; });
+          if (_removedIds.length) {
+            try {
+              var _hp = (window.location.hash || '').replace('#', '').split('/');
+              var _tourViews = ['tournaments', 'bracket', 'participants', 'rules', 'pre-draw', 'analise', 'categorias'];
+              if (_tourViews.indexOf(_hp[0]) !== -1 && _hp[1] && _removedIds.indexOf(String(_hp[1])) !== -1) {
+                if (typeof showNotification === 'function') {
+                  showNotification('Torneio removido', 'Esse torneio não está mais disponível (foi removido pelo organizador).', 'warning');
+                }
+                window.location.hash = '#dashboard';
+              }
+            } catch (_e) {}
+          }
+        }
 
         // First snapshot = initial load → full render needed
         if (isFirstSnapshot) {
