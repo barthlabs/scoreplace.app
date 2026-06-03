@@ -1570,7 +1570,7 @@
       (myActive || []).forEach(function(p) {
         if (!p || p.placeId !== pid) return;
         if (p.type === 'checkin' && p.startsAt <= now && p.endsAt > now && !hereCheckin) hereCheckin = p;
-        if (p.type === 'planned' && p.startsAt > now && !herePlan) herePlan = p;
+        if (p.type === 'planned' && !herePlan) herePlan = p; // v1.9.86: loadMyActive ja filtra endsAt>now; plano ativo mesmo com inicio passado
       });
       var checkinBtn = hereCheckin
         ? '<button id="pref-checkin-btn-' + safePid + '" class="btn btn-sm hover-lift" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + String(hereCheckin._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","checkin")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:6px 10px;font-size:0.75rem;flex:1;min-width:0;" title="Você está registrado aqui · clique pra sair">❌ Cancelar presença</button>'
@@ -2817,7 +2817,7 @@
     (myActive || []).forEach(function(p) {
       if (!p || p.placeId !== v.placeId) return;
       if (p.type === 'checkin' && p.startsAt <= now && p.endsAt > now && !hereCheckin) hereCheckin = p;
-      if (p.type === 'planned' && p.startsAt > now && !herePlan) herePlan = p;
+      if (p.type === 'planned' && !herePlan) herePlan = p; // v1.9.86: loadMyActive ja filtra endsAt>now; plano ativo mesmo com inicio passado
     });
     var safePid = _safe(v.placeId);
     var checkinBtn = hereCheckin

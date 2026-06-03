@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.86-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Place: botão "Cancelar plano" aparece mesmo depois da hora marcada.</b><br><br>' +
+      'Se você planejou ir a um local às 16h e o horário já passou (mas o plano ainda não terminou), o card mostrava "Planejar ida" em vez de "Cancelar plano" — não dava pra cancelar. Causa: o app só reconhecia o plano como ativo se a hora de início ainda estivesse no futuro. Corrigido: um plano é considerado ativo até a hora de <b>término</b>, então o botão <b>"❌ Cancelar plano"</b> aparece corretamente mesmo passada a hora de chegada.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #ef4444;border-radius:12px;padding:14px 16px;background:rgba(239,68,68,0.07);">' +
       '<div style="font-weight:800; color:#f87171; font-size:1rem; margin-bottom:8px;">🔴 v1.9.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Correção de raiz: sorteio de duplas preserva a identidade dos jogadores.</b><br><br>' +
