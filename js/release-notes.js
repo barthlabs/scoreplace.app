@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.91-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Torneios públicos novos aparecem sem precisar atualizar.</b><br><br>' +
+      'Quando alguém cria um torneio público, ele agora aparece para os outros usuários <b>automaticamente</b> (a cada ~25s enquanto a dashboard está aberta) — antes só aparecia depois de atualizar a página. O torneio público da pessoa <b>não some</b> nem fica invisível pros outros; era só o feed que não se atualizava sozinho.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Fim do "Usuário" fantasma na lista de amigos.</b><br><br>' +
       'Um amigo aparecia como <b>"Usuário"</b> (sem nome) — era um resto de conta excluída cuja referência ficou na lista de amigos. Corrigido em 3 camadas: (1) o login por e-mail não cria mais perfil sem identidade; (2) ao excluir uma conta, o app remove o usuário das listas de amigos de todo mundo; (3) a lista de amigos ignora perfis-fantasma (sem nome/e-mail/telefone). O caso atual foi limpo no banco. Também blindamos um erro do Sentry em campos de e-mail.</p>' +

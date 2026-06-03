@@ -2712,6 +2712,35 @@ function renderDashboard(container) {
     }
   }
 
+  // v1.9.91: refresh PERIÓDICO do feed público de descoberta. O feed não é
+  // tempo-real (é um fetch com throttle, disparado só em render). Resultado:
+  // um torneio PÚBLICO novo criado por outra pessoa não aparecia pra quem
+  // estava parado na dashboard até atualizar. Bug reportado: "criei um torneio
+  // com o Nelson e o Rodrigo não enxerga". Agora, enquanto a dashboard está
+  // aberta, re-busca a cada 25s e re-renderiza se o nº de torneios mudou.
+  // Um único interval global (guard _discoveryPollStarted) — só age na dashboard.
+  if (!window._discoveryPollStarted) {
+    window._discoveryPollStarted = true;
+    setInterval(function() {
+      var _h = window.location.hash || '';
+      var _onDash = _h === '' || _h === '#' || _h.indexOf('#dashboard') === 0;
+      if (!_onDash) return;
+      if (!window.AppStore || typeof window.AppStore.loadPublicDiscovery !== 'function') return;
+      if (!window.AppStore.currentUser) return;
+      var _prevLen = (window.AppStore.publicDiscovery || []).length;
+      window.AppStore._publicDiscoveryLastFetch = Date.now();
+      window.AppStore.loadPublicDiscovery().then(function() {
+        var _newLen = (window.AppStore.publicDiscovery || []).length;
+        if (_newLen === _prevLen) return;
+        var _h2 = window.location.hash || '';
+        if (_h2 === '' || _h2 === '#' || _h2.indexOf('#dashboard') === 0) {
+          var _c = document.getElementById('view-container');
+          if (_c && typeof renderDashboard === 'function') renderDashboard(_c);
+        }
+      }).catch(function() {});
+    }, 25000);
+  }
+
   // v0.17.4: real-time listeners SUBSTITUEM o polling de 60s. Pedido do
   // usuário: "sempre que um amigo fizer alguma alteração nesse estado isso
   // deve imediatamente refletir para ele e para seus amigos. isso precisa
