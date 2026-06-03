@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.68-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Junho, 2026)</span></div>' +
+      '<p><b>Placar ao vivo: ajustes de layout em quadra.</b><br><br>' +
+      '<b>Botão Configurar visível:</b> a engrenagem discreta do cabeçalho virou um botão <b>⚙️ Configurar</b> (ícone + texto), posicionado logo abaixo do "AO VIVO", à esquerda do placar de games — fácil de achar em quadra.<br><br>' +
+      '<b>Placares alinhados:</b> quando um lado tem nome que quebra em mais linhas (ex.: "Rodrigo Barth" vs "Adversário 1"), os dois blocos de nome agora têm a mesma altura — as caixas de placar e os botões ▲▼ ficam alinhados entre os dois times.<br><br>' +
+      '<b>Toggle "Fixar lados" alinhado:</b> o interruptor agora fica na mesma linha do rótulo, com a descrição abaixo.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.67-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Junho, 2026)</span></div>' +
       '<p><b>Botão "Entrar" gigante na landing + modalidades afastadas.</b><br><br>' +
       'O botão verde de entrada da página inicial agora tem ~3x a altura, com o texto em duas linhas grandes (<b>ENTRAR</b> em cima, <b>scoreplace.app</b> embaixo do mesmo tamanho). As pílulas de modalidades (Beach Tennis, Pickleball, etc.) foram afastadas do botão e marcadas como não-clicáveis — uma usuária chegou a perguntar "clico em beach tennis?", confundindo-as com o próximo passo. Agora fica óbvio onde clicar para entrar.</p>' +

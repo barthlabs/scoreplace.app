@@ -5681,7 +5681,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
         '</div>';
       }
       // Team box wrapping all players
-      return '<div style="display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:8px 10px;border-radius:12px;background:' + bgClr + ';border:1px solid ' + bdrClr + ';">' + cards + '</div>';
+      // v1.9.68: classe live-namestack → equalização de altura pós-render
+      // pra os dois lados (esquerdo/direito) ficarem na mesma altura,
+      // alinhando placares e botões mesmo com nomes de tamanhos diferentes.
+      return '<div class="live-namestack" style="display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:4px;padding:8px 10px;border-radius:12px;background:' + bgClr + ';border:1px solid ' + bdrClr + ';">' + cards + '</div>';
     };
 
     // Arrow button builder — extra large for courtside tapping (passo 1 do
@@ -5768,6 +5771,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // sacador automaticamente, então arrastar não faz sentido).
     var swapHint = (!state.isFinished && _liveScorePrefs.fixSides) ? '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted);opacity:0.5;margin-top:4px;">← arraste para trocar lado →</div>' : '';
 
+    // v1.9.68: botão "Configurar" (engrenagem + texto) ancorado no spacer
+    // esquerdo da linha do GAMES — logo abaixo do cabeçalho (AO VIVO), à
+    // esquerda do placar de games. Substitui a engrenagem discreta do header.
+    var _configBtnHtml = '<button onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" title="Ajustes do placar" aria-label="Ajustes do placar" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.18);color:var(--text-bright);border-radius:9px;padding:8px 13px;font-size:0.78rem;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;white-space:nowrap;"><span style="font-size:0.98rem;line-height:1;">⚙️</span>Configurar</button>';
+    var _configSpacerHtml = '<div style="flex:1;display:flex;align-items:center;justify-content:flex-start;padding-left:clamp(6px,2vw,14px);min-width:0;">' + _configBtnHtml + '</div>';
+
     if (isLandscape) {
       // ── LANDSCAPE: [Names+Btns Left] [Plate Left] [Games] [Plate Right] [Names+Btns Right] ──
       // Landscape-specific builders with smaller sizes to fit phone screen
@@ -5812,7 +5821,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // Games box — ABOVE the plates to keep score numbers bigger
           // v1.3.67-beta: undo button beside games box (outside), not inside it
           // v1.3.68-beta: SVG undo icon in white, games box centered via symmetric flex spacers
-          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(2px,0.6vh,6px);display:flex;align-items:center;width:100%;"><div style="flex:1;"></div>' + lsGamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:8px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:30px;height:30px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="22" height="22" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
+          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(2px,0.6vh,6px);display:flex;align-items:center;width:100%;">' + _configSpacerHtml + lsGamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:8px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:30px;height:30px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="22" height="22" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
           // Special label (TIE-BREAK, winner)
           (gameLabel ? '<div style="text-align:center;font-size:clamp(0.6rem,1.5vw,0.75rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;margin-bottom:clamp(2px,0.5vh,6px);">' + gameLabel + '</div>' : '') +
           // Main row — 4 columns: [Names+Btns Left] [Plate Left] [Plate Right] [Names+Btns Right]
@@ -5849,7 +5858,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // v1.3.67-beta: undo button beside games box (outside), not inside it
           // v1.3.68-beta: SVG undo icon in white, games box centered via symmetric flex spacers
           // v1.3.70-beta: games numbers bigger — spacer pushes court to bottom
-          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(4px,1vh,8px);display:flex;align-items:center;width:100%;"><div style="flex:1;"></div>' + gamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:10px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:38px;height:38px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="28" height="28" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
+          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(4px,1vh,8px);display:flex;align-items:center;width:100%;">' + _configSpacerHtml + gamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:10px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:38px;height:38px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="28" height="28" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
           // Flexible spacer: pushes court content toward the bottom, freeing space above for bigger games box
           '<div style="flex:1;min-height:0;"></div>' +
           // Two-column score plates with team-colored backgrounds
@@ -5873,6 +5882,20 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Attach court-side drag-and-drop (swap sides)
       setTimeout(function() { _setupCourtSwapDrag(); }, 30);
     }
+
+    // v1.9.68: equaliza a altura dos dois name stacks (esquerdo/direito) pra
+    // que placares e botões fiquem alinhados mesmo quando um lado tem nome que
+    // quebra em mais linhas (ex.: "Rodrigo Barth" vs "Adversário 1").
+    setTimeout(function() {
+      try {
+        var stacks = container.querySelectorAll('.live-namestack');
+        if (stacks.length === 2) {
+          stacks[0].style.minHeight = ''; stacks[1].style.minHeight = '';
+          var h = Math.max(stacks[0].offsetHeight, stacks[1].offsetHeight);
+          if (h > 0) { stacks[0].style.minHeight = h + 'px'; stacks[1].style.minHeight = h + 'px'; }
+        }
+      } catch (e) {}
+    }, 0);
 
     // Attach serve ball drag-and-drop (change server inline)
     if (_canDragServe) {
@@ -7252,9 +7275,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Right: Undo + Reset + Close (Reset hidden on finish screen in
     // tournament mode; Undo permanece visível em todos os contextos)
     '<div id="live-score-header-actions" style="display:flex;gap:6px;align-items:center;flex:0 0 auto;">' +
-      // v1.9.63: engrenagem — sliders de tamanho (nome/foto/games/botões),
-      // proporcionais ao dispositivo, salvos no perfil.
-      '<button onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" title="Tamanhos do placar" aria-label="Tamanhos do placar" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 9px;font-size:0.82rem;cursor:pointer;">⚙️</button>' +
+      // v1.9.68: engrenagem movida pra botão "⚙️ Configurar" abaixo do
+      // cabeçalho (à esquerda do placar de games) — mais visível em quadra.
       // v1.0.36-beta: Undo global do último ponto. Funciona até depois que
       // o match foi finalizado (volta pra UI live se desfizer o ponto que
       // fechou). Útil quando o ponto vitorioso de um 40-40 é marcado pro
@@ -7350,10 +7372,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
       row('photoScale', 'Foto / ícone', '--live-photo-scale') +
       row('scoreScale', 'Número dos games', '--live-score-scale') +
       row('btnScale', 'Botões', '--live-btn-scale') +
-      // Toggle Fixar lados (v1.9.64)
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">' +
-        '<div style="min-width:0;"><div style="font-size:0.82rem;color:var(--text-bright);font-weight:600;">Fixar lados</div><div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;margin-top:2px;">Desativado: o sacador fica sempre à esquerda (inverte a cada saque). Ativado: lados fixos.</div></div>' +
-        '<button id="lss-fixsides-btn" onclick="window._liveScoreToggleFixSides()" role="switch" aria-checked="' + (_liveScorePrefs.fixSides ? 'true' : 'false') + '" style="flex-shrink:0;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;transition:background 0.2s;background:' + (_liveScorePrefs.fixSides ? '#10b981' : 'rgba(255,255,255,0.18)') + ';"><span style="position:absolute;top:3px;left:' + (_liveScorePrefs.fixSides ? '21px' : '3px') + ';width:22px;height:22px;border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></span></button>' +
+      // Toggle Fixar lados (v1.9.64) — v1.9.68: switch na mesma linha do
+      // rótulo (alinhado com ele), descrição abaixo em largura cheia.
+      '<div style="margin:6px 0 14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">' +
+          '<div style="font-size:0.82rem;color:var(--text-bright);font-weight:600;">Fixar lados</div>' +
+          '<button id="lss-fixsides-btn" onclick="window._liveScoreToggleFixSides()" role="switch" aria-checked="' + (_liveScorePrefs.fixSides ? 'true' : 'false') + '" style="flex-shrink:0;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;transition:background 0.2s;background:' + (_liveScorePrefs.fixSides ? '#10b981' : 'rgba(255,255,255,0.18)') + ';"><span style="position:absolute;top:3px;left:' + (_liveScorePrefs.fixSides ? '21px' : '3px') + ';width:22px;height:22px;border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></span></button>' +
+        '</div>' +
+        '<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;margin-top:6px;">Desativado: o sacador fica sempre à esquerda (inverte a cada saque). Ativado: lados fixos.</div>' +
       '</div>' +
       '<button onclick="window._liveScoreResetSizes()" style="width:100%;margin-top:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted);border-radius:10px;padding:11px;font-size:0.8rem;font-weight:600;cursor:pointer;">Restaurar tamanhos (100%)</button>' +
     '</div>';
