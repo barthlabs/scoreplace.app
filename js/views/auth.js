@@ -1788,6 +1788,9 @@ function handleEmailRegister() {
   var name = document.getElementById('register-name').value.trim();
   var email = document.getElementById('register-email').value.trim();
   var password = document.getElementById('register-password').value;
+  // v1.9.74: confirmação de senha (senha 2x).
+  var confirmEl = document.getElementById('register-password-confirm');
+  var passwordConfirm = confirmEl ? confirmEl.value : password;
   if (!name || !email || !password) {
     showNotification(_t('auth.requiredFields'), _t('auth.fillNameEmailPassword'), 'warning');
     return;
@@ -1799,6 +1802,11 @@ function handleEmailRegister() {
   // no onboarding > qualidade do nome cadastrado.
   if (password.length < 6) {
     showNotification(_t('auth.weakPassword'), _t('auth.weakPasswordMsg'), 'warning');
+    return;
+  }
+  // v1.9.74: senha e confirmação devem bater.
+  if (password !== passwordConfirm) {
+    showNotification('Senhas diferentes', 'A senha e a confirmação não são iguais. Digite a mesma senha nos dois campos.', 'warning');
     return;
   }
 
@@ -3612,6 +3620,24 @@ window._quickReturnLogin = function() {
   } catch(e) {}
 };
 
+// v1.9.74: toggle de visibilidade da senha (olhinho). Alterna o input entre
+// type=password e type=text e troca o ícone. tabindex=-1 pra não capturar Tab.
+window._togglePwd = function(btn, inputId) {
+  var inp = document.getElementById(inputId);
+  if (!inp) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🙈';
+    btn.setAttribute('aria-label', 'Ocultar senha');
+    btn.style.opacity = '1';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁️';
+    btn.setAttribute('aria-label', 'Mostrar senha');
+    btn.style.opacity = '0.7';
+  }
+};
+
 function setupLoginModal() {
   if (!document.getElementById('modal-login')) {
     var modalHtml = '<div class="modal-overlay" id="modal-login">' +
@@ -3703,7 +3729,10 @@ function setupLoginModal() {
                 '</div>' +
                 '<div style="margin-bottom:14px;">' +
                   '<div id="login-senha-label" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;font-weight:400;transition:color 0.2s;">Senha <span style="font-style:italic;font-size:0.72rem;">(mín. 6 caracteres)</span></div>' +
-                  '<input type="password" id="login-password" class="form-control" placeholder="sua senha" required minlength="6" autocomplete="current-password" style="font-size:0.92rem;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
+                  '<div style="position:relative;">' +
+                    '<input type="password" id="login-password" class="form-control" placeholder="sua senha" required minlength="6" autocomplete="current-password" style="font-size:0.92rem;padding-right:44px;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
+                    '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'login-password\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
+                  '</div>' +
                 '</div>' +
                 '<button type="submit" id="btn-email-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;transition:background 0.2s,border-color 0.2s,color 0.2s;">Entrar</button>' +
               '</form>' +
@@ -3724,9 +3753,19 @@ function setupLoginModal() {
                   '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">E-mail <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(seu@email.com)</span></div>' +
                   '<input type="email" id="register-email" class="form-control" placeholder="seu@email.com" required style="font-size:0.92rem;">' +
                 '</div>' +
-                '<div style="margin-bottom:14px;">' +
+                '<div style="margin-bottom:10px;">' +
                   '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Senha <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(mín. 6 caracteres)</span></div>' +
-                  '<input type="password" id="register-password" class="form-control" placeholder="crie uma senha" required minlength="6" style="font-size:0.92rem;">' +
+                  '<div style="position:relative;">' +
+                    '<input type="password" id="register-password" class="form-control" placeholder="crie uma senha" required minlength="6" style="font-size:0.92rem;padding-right:44px;">' +
+                    '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'register-password\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="margin-bottom:14px;">' +
+                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Confirmar senha <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(digite de novo)</span></div>' +
+                  '<div style="position:relative;">' +
+                    '<input type="password" id="register-password-confirm" class="form-control" placeholder="repita a senha" required minlength="6" style="font-size:0.92rem;padding-right:44px;">' +
+                    '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'register-password-confirm\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
+                  '</div>' +
                 '</div>' +
                 '<button type="submit" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;">✨ Criar Conta</button>' +
               '</form>' +

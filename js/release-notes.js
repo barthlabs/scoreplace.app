@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.74-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Criar conta: confirmação de senha + olhinho 👁️.</b><br><br>' +
+      'No "Criar Conta" agora tem <b>Senha</b> e <b>Confirmar senha</b> (digita 2x) — se não baterem, avisa antes de criar. E todo campo de senha (login e cadastro) ganhou o <b>olhinho 👁️</b> à direita pra você mostrar/ocultar e conferir o que digitou.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.73-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Login simplificado: e-mail e senha ou Google.</b><br><br>' +
       'O <b>link mágico</b> e o <b>SMS</b> saíram da tela de login — estavam só complicando. Agora é direto: <b>e-mail + senha</b> ou <b>entrar com Google</b>.<br><br>' +
