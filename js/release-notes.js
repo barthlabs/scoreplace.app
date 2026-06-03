@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.78-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Confirmação de e-mail obrigatória ao criar conta.</b><br><br>' +
+      'Ao criar conta com e-mail, agora enviamos um <b>link de confirmação</b> pro seu e-mail. Aparece uma tela avisando pra você abrir o e-mail e clicar em <b>Confirmar minha conta</b>. Enquanto não confirmar, não dá pra usar o app (e o sistema não mescla nem sugere nada). Assim que confirmar e clicar em <b>"Já confirmei"</b>, você entra direto no <b>perfil</b> pra completar seus dados. Quem entra com <b>Google</b> já vem confirmado e não precisa disso.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.77-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Fase 4 (placar contestado): caminho único e claro.</b><br><br>' +
       'Quando um resultado está <b>em disputa</b>, os jogadores agora não têm botão nenhum — só a tag <b>PENDENTE</b>. O organizador resolve por um painel único com 3 opções: <b>✅ Confirmar placar (X × Y)</b> (aceita o placar atual como definitivo), <b>✏️ Editar placar</b> (lança outro) e <b>🔄 Refazer (0×0)</b>. Antes apareciam botões conflitantes (Confirmar no corpo + Lançar definitivo no painel) e o jogo travava. Ao confirmar, a tag PENDENTE some, o resultado fica final (verde) e os envolvidos são notificados.</p>' +

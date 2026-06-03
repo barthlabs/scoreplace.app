@@ -1883,33 +1883,23 @@ function handleEmailRegister() {
       var user = result.user;
       // Update profile with display name FIRST, then let onAuthStateChanged handle login
       return user.updateProfile({ displayName: name }).then(function() {
-        // Send email verification
-        user.sendEmailVerification().then(function() {
-          showNotification(_t('auth.verifyEmail'), _t('auth.verifyEmailMsg', {email: email}), 'info');
-        }).catch(function(e) {
-          window._warn('Email verification send error:', e);
-        });
-        showNotification(_t('auth.accountCreated'), _t('auth.accountCreatedMsg', {name: name}), 'success');
+        // v1.9.78: verificação de e-mail OBRIGATÓRIA na criação. Envia o link
+        // de confirmação (com retorno pro app) e mostra o GATE de verificação.
+        // NÃO grava o perfil no Firestore nem entra no app até confirmar — assim
+        // o sistema não mescla nem sugere nada antes da verificação. O perfil é
+        // gravado depois, em _checkEmailVerified.
+        window._pendingVerifyName = name;
+        try {
+          user.sendEmailVerification({ url: (window.SCOREPLACE_URL || 'https://scoreplace.app') + '/' })
+            .catch(function(e) { window._warn('Email verification send error:', e); });
+        } catch(e) {}
         var modal = document.getElementById('modal-login');
         if (modal) modal.classList.remove('active');
-        // Save auth provider to Firestore
-        if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
-          window.FirestoreDB.saveUserProfile(user.uid, {
-            authProvider: 'password',
-            displayName: name,
-            email: email,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }).catch(function() {});
-        }
-        // Clear flag and trigger login flow via simulateLoginSuccess (onAuthStateChanged may have fired before updateProfile)
         window._pendingProfileUpdate = false;
-        return simulateLoginSuccess({
-          uid: user.uid,
-          email: user.email,
-          displayName: name,
-          photoURL: user.photoURL
-        });
+        if (typeof window._showEmailVerificationGate === 'function') {
+          window._showEmailVerificationGate(email, name);
+        }
+        return;
       });
     })
     .catch(function(error) {
@@ -2360,6 +2350,83 @@ function _autoFriendOnInvite(inviterUid, currentUser) {
   // Auto-friendship via invite
 }
 
+// ─── Gate de verificação de e-mail (v1.9.78) ────────────────────────────────
+// Contas e-mail/senha precisam confirmar o e-mail antes de usar o app. Enquanto
+// não confirmam, veem este gate (bloqueia tudo) e o sistema não mescla/sugere
+// nada. Google/telefone já entram verificados.
+window._showEmailVerificationGate = function(email, name) {
+  if (name) window._pendingVerifyName = name;
+  var existing = document.getElementById('email-verify-gate');
+  if (existing) existing.remove();
+  var ov = document.createElement('div');
+  ov.id = 'email-verify-gate';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:100050;background:var(--bg-darker,#0a0e1a);display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto;box-sizing:border-box;';
+  ov.innerHTML =
+    '<div style="max-width:420px;width:100%;text-align:center;background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:28px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+      '<div style="font-size:2.6rem;margin-bottom:8px;">📬</div>' +
+      '<div style="font-size:1.2rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">Confirme seu e-mail</div>' +
+      '<div style="font-size:0.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:6px;">Enviamos um link de confirmação para</div>' +
+      '<div style="font-size:0.95rem;font-weight:700;color:#fbbf24;margin-bottom:14px;word-break:break-all;">' + window._safeHtml(email || '') + '</div>' +
+      '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:18px;">Abra seu e-mail e clique em <b>Confirmar minha conta</b>. Enquanto não confirmar, você não pode usar o scoreplace.app. <span style="opacity:0.8;">(confira também a caixa de spam)</span></div>' +
+      '<button onclick="window._checkEmailVerified()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:10px;">✅ Já confirmei</button>' +
+      '<button onclick="window._resendVerifyEmail()" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.88rem;font-weight:700;padding:11px;margin-bottom:10px;">📨 Reenviar e-mail</button>' +
+      '<button onclick="window.handleLogout && window.handleLogout()" style="background:none;border:none;color:var(--text-muted);font-size:0.8rem;cursor:pointer;text-decoration:underline;">Sair</button>' +
+    '</div>';
+  document.body.appendChild(ov);
+};
+
+window._resendVerifyEmail = function() {
+  var u = firebase.auth().currentUser;
+  if (!u) { showNotification('Sessão expirada', 'Entre novamente para reenviar.', 'warning'); return; }
+  u.sendEmailVerification({ url: (window.SCOREPLACE_URL || 'https://scoreplace.app') + '/' })
+    .then(function() { showNotification('📨 E-mail reenviado', 'Confira sua caixa de entrada e o spam.', 'success'); })
+    .catch(function(e) {
+      var tooMany = e && e.code === 'auth/too-many-requests';
+      showNotification('Não foi possível reenviar', tooMany ? 'Aguarde alguns minutos antes de reenviar.' : 'Tente novamente em instantes.', 'warning');
+    });
+};
+
+window._checkEmailVerified = function() {
+  var u = firebase.auth().currentUser;
+  if (!u) {
+    var g0 = document.getElementById('email-verify-gate'); if (g0) g0.remove();
+    showNotification('Sessão expirada', 'Entre novamente.', 'warning');
+    return;
+  }
+  showNotification('Verificando…', 'Conferindo a confirmação do e-mail.', 'info');
+  u.reload().then(function() {
+    var u2 = firebase.auth().currentUser;
+    if (u2 && u2.emailVerified) {
+      var g = document.getElementById('email-verify-gate'); if (g) g.remove();
+      // Agora verificado: grava o perfil básico (merge/sugestão podem rodar a partir daqui).
+      if (window.FirestoreDB && window.FirestoreDB.db && u2.uid) {
+        window.FirestoreDB.saveUserProfile(u2.uid, {
+          authProvider: 'password',
+          displayName: u2.displayName || window._pendingVerifyName || '',
+          email: u2.email || '',
+          emailVerified: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }).catch(function() {});
+      }
+      window._pendingVerifyName = null;
+      // Entra no app e vai direto pro perfil sugerindo completar.
+      window._postVerifyGoToProfile = true;
+      showNotification('✅ E-mail confirmado!', 'Bem-vindo! Vamos completar seu perfil.', 'success');
+      Promise.resolve(simulateLoginSuccess({ uid: u2.uid, email: u2.email, displayName: u2.displayName, photoURL: u2.photoURL }))
+        .then(function() {
+          window.location.hash = '#profile';
+          if (typeof initRouter === 'function') initRouter();
+        });
+    } else {
+      showNotification('Ainda não confirmado', 'Não encontramos a confirmação. Abra o link no seu e-mail (e veja o spam) e clique em "Já confirmei".', 'warning');
+    }
+  }).catch(function(e) {
+    showNotification('Erro ao verificar', 'Tente novamente em instantes.', 'error');
+    window._warn('[verify] reload error:', e);
+  });
+};
+
 async function simulateLoginSuccess(user) {
   // v0.17.85: timestamp-based guard substituiu boolean. Antes era flag bool
   // _simulateLoginInProgress que só era resetado no FINAL bem-sucedido da
@@ -2396,6 +2463,27 @@ async function simulateLoginSuccess(user) {
   window._simulateLoginInProgressAt = now;
   window._simulateLoginInProgressUid = newUid || '';
   window._simulateLoginInProgress = true; // mantido pra compat com callers antigos
+
+  // v1.9.78: GATE de verificação de e-mail. Conta e-mail/senha NÃO verificada
+  // não entra no app — mostra o gate de confirmação (bloqueia tudo; sem merge/
+  // sugestão). Google e telefone já entram verificados. Roda em todo caminho de
+  // entrada (login, registro, onAuthStateChanged no load).
+  try {
+    var _fbU = (firebase && firebase.auth && firebase.auth().currentUser) || null;
+    if (_fbU && _fbU.uid === newUid && !_fbU.emailVerified) {
+      var _pd = _fbU.providerData || [];
+      var _passwordOnly = _pd.length > 0 && _pd.every(function(p) { return p && p.providerId === 'password'; });
+      if (_passwordOnly) {
+        window._simulateLoginInProgress = false;
+        window._simulateLoginInProgressAt = 0;
+        window._simulateLoginInProgressUid = '';
+        if (typeof window._showEmailVerificationGate === 'function') {
+          window._showEmailVerificationGate(_fbU.email || (user && user.email) || '');
+        }
+        return;
+      }
+    }
+  } catch (e) { window._warn('[verify] gate check failed:', e); }
 
   try {
 
