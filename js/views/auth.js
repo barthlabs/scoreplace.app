@@ -4094,6 +4094,59 @@ window._confirmDeleteAccount = function() {
   }
 };
 
+// v1.9.82: prompt de senha mascarado pra re-autenticar antes de excluir a conta.
+function _promptPasswordForDelete() {
+  return new Promise(function(resolve) {
+    var ov = document.createElement('div');
+    ov.id = 'del-reauth-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100060;background:rgba(0,0,0,0.78);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:1rem;';
+    ov.innerHTML = '<div style="background:var(--surface-color,#1e293b);border:1px solid var(--border-color,rgba(255,255,255,0.12));border-radius:16px;max-width:380px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+      '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#fff);margin-bottom:6px;">🔒 Confirme sua senha</div>' +
+      '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:14px;line-height:1.45;">Pra excluir totalmente sua conta de login (e liberar o e-mail pra uso futuro), confirme sua senha.</div>' +
+      '<input type="password" id="del-reauth-pwd" placeholder="sua senha" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:8px;border:1px solid var(--border-color,rgba(255,255,255,0.15));background:var(--bg-dark,#0f172a);color:var(--text-bright,#fff);font-size:0.92rem;margin-bottom:14px;">' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button id="del-reauth-cancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border-color);background:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+        '<button id="del-reauth-ok" style="flex:1;padding:10px;border-radius:8px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:0.85rem;">Confirmar exclusão</button>' +
+      '</div></div>';
+    document.body.appendChild(ov);
+    var inp = ov.querySelector('#del-reauth-pwd');
+    setTimeout(function() { if (inp) inp.focus(); }, 60);
+    var done = function(v) { if (ov.parentNode) ov.remove(); resolve(v); };
+    ov.querySelector('#del-reauth-cancel').onclick = function() { done(null); };
+    ov.querySelector('#del-reauth-ok').onclick = function() { done(inp.value || null); };
+    inp.addEventListener('keypress', function(e) { if (e.key === 'Enter') done(inp.value || null); });
+  });
+}
+
+// v1.9.82: re-autentica o usuário antes de excluir a conta de Auth — sem isso,
+// firebaseUser.delete() falha com auth/requires-recent-login quando a sessão é
+// antiga, deixando a conta de login órfã (e-mail preso "já em uso"). Google →
+// popup; e-mail/senha → prompt de senha. Retorna true se re-autenticou.
+async function _reauthForDelete(firebaseUser, email) {
+  var providers = (firebaseUser.providerData || []).map(function(p) { return p && p.providerId; });
+  if (providers.indexOf('google.com') !== -1) {
+    try {
+      var gp = new firebase.auth.GoogleAuthProvider();
+      try { gp.setCustomParameters({ prompt: 'select_account' }); } catch (e) {}
+      await firebaseUser.reauthenticateWithPopup(gp);
+      return true;
+    } catch (e) { window._warn('[delete] reauth google falhou:', e && e.code); return false; }
+  }
+  if (providers.indexOf('password') !== -1 && email) {
+    var pwd = await _promptPasswordForDelete();
+    if (!pwd) return false;
+    try {
+      var cred = firebase.auth.EmailAuthProvider.credential(email, pwd);
+      await firebaseUser.reauthenticateWithCredential(cred);
+      return true;
+    } catch (e) {
+      showNotification('Senha incorreta', 'Não foi possível confirmar. Sua conta de login não foi excluída.', 'warning');
+      return false;
+    }
+  }
+  return false;
+}
+
 window._executeDeleteAccount = async function() {
   var user = window.AppStore.currentUser;
   var firebaseUser = firebase.auth().currentUser;
@@ -4169,13 +4222,30 @@ window._executeDeleteAccount = async function() {
       await db.collection('users').doc(uid).delete();
     } catch (e) { window._warn('Erro ao excluir perfil:', e); }
 
-    // 3. Delete Firebase Auth account — best effort, no re-auth popup
+    // 3. Delete Firebase Auth account.
+    // v1.9.82: se falhar por requires-recent-login, re-autentica e tenta DE
+    // NOVO — senão a conta de login fica órfã e o e-mail trava "já em uso",
+    // impedindo o usuário de recriar a conta. Bug reportado: "exclui a conta e
+    // não consigo recriar com o mesmo e-mail".
     try {
       await firebaseUser.delete();
     } catch (e) {
-      // If requires-recent-login, just sign out — all data is already gone
-      // Firebase will clean up orphaned auth accounts
-      window._warn('Auth delete:', e.code || e.message);
+      if (e && e.code === 'auth/requires-recent-login') {
+        var _reauthed = false;
+        try { _reauthed = await _reauthForDelete(firebaseUser, email); } catch (re) {}
+        if (_reauthed) {
+          try {
+            await firebaseUser.delete();
+          } catch (e2) {
+            window._warn('Auth delete após reauth:', e2 && (e2.code || e2.message));
+            showNotification('Conta de login mantida', 'Seus dados foram excluídos, mas o e-mail pode continuar reservado. Contate o suporte se precisar reusá-lo.', 'warning');
+          }
+        } else {
+          showNotification('Conta de login mantida', 'Seus dados foram excluídos, mas o e-mail não foi liberado (confirmação cancelada). Pra liberar, exclua de novo e confirme a senha.', 'warning');
+        }
+      } else {
+        window._warn('Auth delete:', e.code || e.message);
+      }
       try { await firebase.auth().signOut(); } catch (so) {}
     }
 
