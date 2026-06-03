@@ -1730,6 +1730,64 @@ function _resetPhoneLoginUI() {
   window._phoneConfirmationResult = null;
 }
 
+// v1.9.75: quando o login por e-mail+senha falha, checa o provedor do e-mail.
+// Se a conta é Google (ou só link mágico, sem senha), orienta o caminho certo
+// em vez de só dizer "senha errada". fallbackFn() roda quando não há sugestão
+// melhor (mostra a mensagem de erro normal).
+function _showGoogleSuggestDialog() {
+  if (typeof showConfirmDialog !== 'function') {
+    showNotification('Conta Google', 'Esse e-mail está associado a uma conta Google. Use "Entrar com Google".', 'info');
+    return;
+  }
+  showConfirmDialog(
+    '👋 Use o Google para entrar',
+    'Esse e-mail está associado a uma conta Google (criada sem senha de e-mail). Entre com o Google — é só um clique.',
+    function() { if (typeof handleGoogleLogin === 'function') handleGoogleLogin(); },
+    null,
+    { confirmText: 'Entrar com Google', cancelText: 'Voltar', type: 'info' }
+  );
+}
+function _maybeSuggestGoogleLogin(email, fallbackFn) {
+  var emailLc = (email || '').toLowerCase();
+  var isGmail = /@(gmail|googlemail)\.com$/.test(emailLc);
+  var hasFetch = false;
+  try { hasFetch = !!(firebase && firebase.auth && firebase.auth().fetchSignInMethodsForEmail); } catch (e) {}
+  if (!emailLc || emailLc.indexOf('@') === -1 || !hasFetch) {
+    // Sem como verificar: se for gmail, ainda assim sugere Google.
+    if (isGmail) { _showGoogleSuggestDialog(); } else { fallbackFn(); }
+    return;
+  }
+  firebase.auth().fetchSignInMethodsForEmail(email)
+    .then(function(methods) {
+      methods = methods || [];
+      var hasPassword = methods.indexOf('password') !== -1;
+      var isGoogle = methods.indexOf('google.com') !== -1;
+      if (isGoogle && !hasPassword) {
+        _showGoogleSuggestDialog();
+      } else if (!hasPassword && methods.indexOf('emailLink') !== -1) {
+        // Conta só com link mágico (sem senha) → orienta a criar uma senha.
+        if (typeof showConfirmDialog === 'function') {
+          showConfirmDialog(
+            'Defina sua senha',
+            'Essa conta ainda não tem senha — você entrava por link de e-mail. Clique abaixo para criar uma senha agora.',
+            function() { if (typeof handlePasswordReset === 'function') handlePasswordReset(); },
+            null,
+            { confirmText: '🔑 Criar senha', cancelText: 'Fechar', type: 'info' }
+          );
+        } else { fallbackFn(); }
+      } else if (methods.length === 0 && isGmail) {
+        // Proteção contra enumeração de e-mail pode esconder os métodos.
+        // Como é @gmail, sugere Google (atende o pedido do usuário).
+        _showGoogleSuggestDialog();
+      } else {
+        fallbackFn();
+      }
+    })
+    .catch(function() {
+      if (isGmail) { _showGoogleSuggestDialog(); } else { fallbackFn(); }
+    });
+}
+
 // ─── Email/Password Login ────────────────────────────────────────────────────
 function handleEmailLogin() {
   var email = document.getElementById('login-email').value.trim();
@@ -1761,10 +1819,17 @@ function handleEmailLogin() {
       // beta tester travada em auth/network-request-failed sem indicação
       // de o que tentar (rede móvel, ITP iOS, ad blocker).
       var code = (error && error.code) || 'unknown';
-      if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
-        showNotification(_t('auth.invalidCreds'), _t('auth.invalidCredsMsg'), 'error');
-      } else if (code === 'auth/wrong-password') {
-        showNotification(_t('auth.wrongPassword'), _t('auth.wrongPasswordMsg'), 'error');
+      // v1.9.75: antes de dizer "senha errada", checa se a conta é Google
+      // (sem senha de e-mail) e sugere "Entrar com Google". Cobre o caso de
+      // quem criou conta com Google e tenta e-mail+senha.
+      if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+        _maybeSuggestGoogleLogin(email, function() {
+          if (code === 'auth/wrong-password') {
+            showNotification(_t('auth.wrongPassword'), _t('auth.wrongPasswordMsg'), 'error');
+          } else {
+            showNotification(_t('auth.invalidCreds'), _t('auth.invalidCredsMsg'), 'error');
+          }
+        });
       } else if (code === 'auth/too-many-requests') {
         showNotification(_t('auth.tooManyAttempts'), _t('auth.tooManyLogin'), 'warning');
       } else if (code === 'auth/operation-not-allowed') {
