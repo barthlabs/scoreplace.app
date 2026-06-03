@@ -5711,6 +5711,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var labelClr = state.isFinished ? '#10b981' : '#c084fc';
 
     // Court sides state: which team is on left vs right (swappable)
+    // v1.9.64: "fixar lados" DESATIVADO (padrão) → o time SACADOR fica sempre à
+    // esquerda e o recebedor à direita; como o sacador alterna a cada game, os
+    // lados invertem a cada novo saque (lê-se o placar: sacador primeiro). As
+    // CORES seguem o TIME (azul/vermelho), não o lado — preservadas na virada.
+    // ATIVADO → lados fixos (_courtLeft só muda por arrasto manual).
+    if (!_liveScorePrefs.fixSides && serverInfo && (serverInfo.team === 1 || serverInfo.team === 2)) {
+      _courtLeft = serverInfo.team;
+    }
     var leftTeam = _courtLeft; // 1 or 2
     var rightTeam = leftTeam === 1 ? 2 : 1;
 
@@ -5756,8 +5764,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var leftBdr = leftTeam === 1 ? 'rgba(59,130,246,0.20)' : 'rgba(239,68,68,0.20)';
     var rightBdr = rightTeam === 1 ? 'rgba(59,130,246,0.20)' : 'rgba(239,68,68,0.20)';
 
-    // Swap hint (only shown when not finished)
-    var swapHint = !state.isFinished ? '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted);opacity:0.5;margin-top:4px;">← arraste para trocar lado →</div>' : '';
+    // Swap hint — só quando lados FIXOS (com fixSides OFF os lados seguem o
+    // sacador automaticamente, então arrastar não faz sentido).
+    var swapHint = (!state.isFinished && _liveScorePrefs.fixSides) ? '<div style="text-align:center;font-size:0.55rem;color:var(--text-muted);opacity:0.5;margin-top:4px;">← arraste para trocar lado →</div>' : '';
 
     if (isLandscape) {
       // ── LANDSCAPE: [Names+Btns Left] [Plate Left] [Games] [Plate Right] [Names+Btns Right] ──
@@ -7281,7 +7290,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       nameScale: _clampLiveScale(p.nameScale, 1),
       photoScale: _clampLiveScale(p.photoScale, 1),
       scoreScale: _clampLiveScale(p.scoreScale, 1),
-      btnScale: _clampLiveScale(p.btnScale, 1)
+      btnScale: _clampLiveScale(p.btnScale, 1),
+      // v1.9.64: "fixar lados". false (padrão) = sacador sempre à esquerda,
+      // inverte a cada novo sacador. true = lados fixos (troca só manual).
+      fixSides: !!p.fixSides
     };
   }
   function _applyLiveScorePrefs(prefs) {
@@ -7328,13 +7340,18 @@ window._openLiveScoring = function(tId, matchId, opts) {
     panel.id = 'live-size-settings';
     panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;';
     panel.innerHTML = '<div style="background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px 18px 0 0;padding:18px 18px calc(26px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 30px rgba(0,0,0,0.5);">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:0.98rem;font-weight:800;color:var(--text-bright);">⚙️ Tamanhos do placar</div><button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">✕</button></div>' +
-      '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;line-height:1.4;">Proporcional ao seu dispositivo (50%–150%). Salvo no seu perfil.</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:0.98rem;font-weight:800;color:var(--text-bright);">⚙️ Ajustes do placar</div><button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">✕</button></div>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;line-height:1.4;">Tamanhos proporcionais ao seu dispositivo (50%–150%). Salvo no seu perfil.</div>' +
       row('nameScale', 'Nome dos jogadores', '--live-name-scale') +
       row('photoScale', 'Foto / ícone', '--live-photo-scale') +
       row('scoreScale', 'Número dos games', '--live-score-scale') +
       row('btnScale', 'Botões', '--live-btn-scale') +
-      '<button onclick="window._liveScoreResetSizes()" style="width:100%;margin-top:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted);border-radius:10px;padding:11px;font-size:0.8rem;font-weight:600;cursor:pointer;">Restaurar padrão (100%)</button>' +
+      // Toggle Fixar lados (v1.9.64)
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">' +
+        '<div style="min-width:0;"><div style="font-size:0.82rem;color:var(--text-bright);font-weight:600;">Fixar lados</div><div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;margin-top:2px;">Desativado: o sacador fica sempre à esquerda (inverte a cada saque). Ativado: lados fixos.</div></div>' +
+        '<button id="lss-fixsides-btn" onclick="window._liveScoreToggleFixSides()" role="switch" aria-checked="' + (_liveScorePrefs.fixSides ? 'true' : 'false') + '" style="flex-shrink:0;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;transition:background 0.2s;background:' + (_liveScorePrefs.fixSides ? '#10b981' : 'rgba(255,255,255,0.18)') + ';"><span style="position:absolute;top:3px;left:' + (_liveScorePrefs.fixSides ? '21px' : '3px') + ';width:22px;height:22px;border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></span></button>' +
+      '</div>' +
+      '<button onclick="window._liveScoreResetSizes()" style="width:100%;margin-top:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted);border-radius:10px;padding:11px;font-size:0.8rem;font-weight:600;cursor:pointer;">Restaurar tamanhos (100%)</button>' +
     '</div>';
     panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
     document.body.appendChild(panel);
@@ -7352,8 +7369,23 @@ window._openLiveScoring = function(tId, matchId, opts) {
       inp.addEventListener('change', function() { _saveLiveScorePrefs(_liveScorePrefs); });
     });
   };
+  window._liveScoreToggleFixSides = function() {
+    _liveScorePrefs.fixSides = !_liveScorePrefs.fixSides;
+    _saveLiveScorePrefs(_liveScorePrefs);
+    // Atualiza o visual do toggle no painel
+    var btn = document.getElementById('lss-fixsides-btn');
+    if (btn) {
+      btn.setAttribute('aria-checked', _liveScorePrefs.fixSides ? 'true' : 'false');
+      btn.style.background = _liveScorePrefs.fixSides ? '#10b981' : 'rgba(255,255,255,0.18)';
+      var knob = btn.querySelector('span');
+      if (knob) knob.style.left = _liveScorePrefs.fixSides ? '21px' : '3px';
+    }
+    // Re-renderiza o placar com a nova regra de lados
+    try { _render(); } catch(e) {}
+  };
   window._liveScoreResetSizes = function() {
-    _liveScorePrefs = { nameScale: 1, photoScale: 1, scoreScale: 1, btnScale: 1 };
+    // Reseta só os tamanhos — preserva a preferência fixSides.
+    _liveScorePrefs = { nameScale: 1, photoScale: 1, scoreScale: 1, btnScale: 1, fixSides: !!_liveScorePrefs.fixSides };
     _applyLiveScorePrefs(_liveScorePrefs);
     _saveLiveScorePrefs(_liveScorePrefs);
     var ex = document.getElementById('live-size-settings');
