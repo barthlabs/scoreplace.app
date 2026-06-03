@@ -225,6 +225,52 @@ function renderDashboard(container) {
     return _time(a) - _time(b);
   };
 
+  // v1.9.79: ordenação por PRÓXIMO EVENTO (encerramento de inscrição, início ou
+  // término) — o mais URGENTE (mais próximo no futuro) primeiro. Torneios sem
+  // data futura vão depois (ordenados pelo evento mais recente). Usado no feed
+  // público de descoberta, conforme pedido: "ordem cronológica do próximo
+  // evento; aparecem primeiro os mais urgentes". A cidade do usuário entra como
+  // leve desempate (mesma cidade primeiro) quando disponível.
+  const _userCity = (function() {
+    var _u = window.AppStore && window.AppStore.currentUser;
+    return _u && _u.city ? String(_u.city).trim().toLowerCase() : '';
+  })();
+  const _tMatchesCity = (t, city) => {
+    if (!city || !t) return false;
+    var hay = ((t.venueName || '') + ' ' + (t.venueAddress || '') + ' ' + (t.city || '') + ' ' + (t.venue || '')).toLowerCase();
+    return hay.indexOf(city) !== -1;
+  };
+  const _nextEventInfo = (t) => {
+    var now = Date.now();
+    var times = [];
+    ['registrationLimit', 'startDate', 'endDate'].forEach(function(k) {
+      if (t && t[k]) { var ms = new Date(t[k]).getTime(); if (!isNaN(ms)) times.push(ms); }
+    });
+    if (!times.length) return { hasFuture: false, ms: Number.MAX_SAFE_INTEGER };
+    var grace = now - 3600000; // 1h de tolerância — eventos "agora" ainda urgentes
+    var future = times.filter(function(ms) { return ms >= grace; });
+    if (future.length) return { hasFuture: true, ms: Math.min.apply(null, future) };
+    return { hasFuture: false, ms: Math.max.apply(null, times) };
+  };
+  const sortByUrgency = (a, b) => {
+    var ea = _nextEventInfo(a), eb = _nextEventInfo(b);
+    // 1) com evento futuro vêm antes dos sem evento futuro
+    if (ea.hasFuture && !eb.hasFuture) return -1;
+    if (!ea.hasFuture && eb.hasFuture) return 1;
+    // 2) ordena por data
+    if (ea.ms !== eb.ms) {
+      return ea.hasFuture ? (ea.ms - eb.ms) /* mais próximo primeiro */
+                          : (eb.ms - ea.ms) /* sem futuro: mais recente primeiro */;
+    }
+    // 3) desempate: torneio na cidade do usuário primeiro
+    if (_userCity) {
+      var ac = _tMatchesCity(a, _userCity), bc = _tMatchesCity(b, _userCity);
+      if (ac && !bc) return -1;
+      if (!ac && bc) return 1;
+    }
+    return 0;
+  };
+
   const participacoesSorted = [...participacoes].sort(sortByDate);
   const organizadosSorted = [...organizados].sort(sortByDate);
 
@@ -298,15 +344,15 @@ function renderDashboard(container) {
     const cat = _classifyDiscoveryTournament(t);
     if (cat && discoveryByCategory[cat]) discoveryByCategory[cat].push(t);
   });
-  // Ordena cada categoria por data
-  Object.keys(discoveryByCategory).forEach(k => discoveryByCategory[k].sort(sortByDate));
+  // Ordena cada categoria por urgência do próximo evento (v1.9.79)
+  Object.keys(discoveryByCategory).forEach(k => discoveryByCategory[k].sort(sortByUrgency));
   // Backwards-compat: discoveryOpen ainda alimenta `abertosParaVoce` que
   // outras partes do dashboard consomem.
   const discoveryOpen = discoveryByCategory.open;
   // União ordenada por data — próprios primeiro (já sortiráveis), depois
   // discovery. Mantida como única variável pra minimizar diff do resto
   // da dashboard que consome `abertosParaVoce`.
-  const abertosParaVoce = [...myOpenTournaments, ...discoveryOpen].sort(sortByDate);
+  const abertosParaVoce = [...myOpenTournaments, ...discoveryOpen].sort(sortByUrgency);
 
   const cleanSportName = (sport) => sport ? sport.replace(/^[^\w\u00C0-\u024F]+/u, '').trim() : '';
   // v0.17.16: delega ao resolver global em store.js (centralização).
@@ -2017,8 +2063,19 @@ function renderDashboard(container) {
     //     neutra (a antiga) porque o usuário sabe por que tá vazio.
     var _isFreshUser = allUnique.length === 0 && !curSport && !curLocation && !curFormat &&
                        (curFilter === 'todos' || !curFilter);
+    // v1.9.79: enquanto a descoberta pública ainda não terminou de carregar,
+    // NÃO mostrar "Seja bem-vindo / nenhum torneio" — mostra um estado de
+    // carregando. Evita o flash de "sem torneios" pra usuário novo (os torneios
+    // públicos aparecem assim que o feed chega e a dashboard re-renderiza).
+    var _discoveryLoaded = !!(window.AppStore && window.AppStore._publicDiscoveryLoaded);
     if (visibleItems.length > 0) {
       filteredHtml = visibleItems.map(t => renderTournamentCard(t, '')).join('');
+    } else if (_isFreshUser && !_discoveryLoaded) {
+      filteredHtml =
+        '<div style="grid-column:1/-1;text-align:center;padding:2.5rem 1rem;color:var(--text-muted);">' +
+          '<div style="display:inline-block;width:22px;height:22px;border:3px solid rgba(99,102,241,0.3);border-top-color:#818cf8;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:10px;"></div>' +
+          '<div style="font-size:0.9rem;">Procurando torneios públicos perto de você…</div>' +
+        '</div>';
     } else if (_isFreshUser) {
       filteredHtml =
         '<div style="grid-column:1/-1;background:linear-gradient(135deg, rgba(99,102,241,0.1), rgba(59,130,246,0.08));border:1px solid rgba(99,102,241,0.25);border-radius:16px;padding:2rem 1.5rem;text-align:center;">' +

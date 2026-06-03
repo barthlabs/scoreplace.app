@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.78-beta';
+window.SCOREPLACE_VERSION = '1.9.79-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2455,6 +2455,7 @@ window.AppStore = {
         : filtered;
       this._publicDiscoveryCursor = res.nextCursor;
       this._publicDiscoveryHasMore = !!res.hasMore;
+      this._publicDiscoveryLoaded = true; // v1.9.79: ao menos um load concluído
     } catch (e) {
       window._warn('Erro ao carregar descoberta pública:', e);
     }
