@@ -199,13 +199,16 @@ body.hamburger-open .topbar {
   user-select: none;
   white-space: nowrap;
   line-height: 1.3;
-  /* v2.0.5: volume 3D mais profundo — base "dura" mais alta embaixo + sombra
-     projetada maior + luz no topo. Cor-neutra (rgba) p/ qualquer cor de botão. */
+  /* v2.0.7: volume "almofadado" — o relevo NÃO vem de sombra dura embaixo, e
+     sim do BRILHO no topo (afastado da borda) + uma sombra degradê descendo do
+     brilho até a borda de baixo. Tudo inset (cor-neutro) -> aspecto inflado em
+     qualquer cor de botão. Uma sombra suave de apoio só assenta no fundo. */
   box-shadow:
-    0 7px 0 rgba(0,0,0,0.22),
-    0 11px 16px rgba(0,0,0,0.28),
-    inset 0 1px 0 rgba(255,255,255,0.32),
-    inset 0 -3px 6px rgba(0,0,0,0.16);
+    inset 0 2px 0 rgba(255,255,255,0.45),     /* fio de luz na borda de cima */
+    inset 0 6px 9px rgba(255,255,255,0.32),    /* brilho do topo, com folga da borda */
+    inset 0 -11px 14px rgba(0,0,0,0.26),       /* sombra degradê descendo */
+    inset 0 -2px 0 rgba(0,0,0,0.20),           /* assento na borda de baixo */
+    0 3px 6px rgba(0,0,0,0.22);                /* leve apoio no fundo */
 }
 
 .btn:focus-visible {
@@ -213,45 +216,49 @@ body.hamburger-open .topbar {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
 }
 
-/* v2.0.5: "afundar" ao clicar — desce a altura toda e some a base 3D */
+/* v2.0.7: "afundar" ao clicar — a almofada achata um pouco */
 .btn:active {
-  transform: translateY(7px);
+  transform: translateY(2px);
   box-shadow:
-    0 1px 0 rgba(0,0,0,0.22),
-    0 2px 5px rgba(0,0,0,0.22),
-    inset 0 1px 0 rgba(255,255,255,0.22);
+    inset 0 2px 0 rgba(255,255,255,0.34),
+    inset 0 5px 8px rgba(255,255,255,0.22),
+    inset 0 -8px 11px rgba(0,0,0,0.24),
+    0 1px 3px rgba(0,0,0,0.22);
 }
 
-/* Botões pequenos: volume 3D proporcional (menor) */
+/* Botões pequenos: almofada proporcional (offsets menores p/ não estourar) */
 .btn-micro {
   box-shadow:
-    0 3px 0 rgba(0,0,0,0.20),
-    0 3px 5px rgba(0,0,0,0.20),
-    inset 0 1px 0 rgba(255,255,255,0.25);
+    inset 0 1px 0 rgba(255,255,255,0.35),
+    inset 0 -4px 6px rgba(0,0,0,0.20),
+    0 1px 3px rgba(0,0,0,0.18);
 }
-.btn-micro:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.2); }
+.btn-micro:active { transform: translateY(1px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -3px 5px rgba(0,0,0,0.18); }
 .btn-sm, .btn-pill {
   box-shadow:
-    0 5px 0 rgba(0,0,0,0.21),
-    0 7px 11px rgba(0,0,0,0.24),
-    inset 0 1px 0 rgba(255,255,255,0.30);
+    inset 0 1px 0 rgba(255,255,255,0.40),
+    inset 0 4px 6px rgba(255,255,255,0.26),
+    inset 0 -7px 9px rgba(0,0,0,0.22),
+    0 2px 4px rgba(0,0,0,0.20);
 }
-.btn-sm:active, .btn-pill:active { transform: translateY(5px); box-shadow: 0 1px 0 rgba(0,0,0,0.21), inset 0 1px 0 rgba(255,255,255,0.2); }
+.btn-sm:active, .btn-pill:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -5px 7px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.18); }
 
-/* Botões grandes/CTA: volume EXTRA (mais profundidade ainda) */
+/* Botões grandes/CTA: almofada mais pronunciada (mais volume) */
 .btn-cta, .btn-lg {
   box-shadow:
-    0 9px 0 rgba(0,0,0,0.24),
-    0 15px 24px rgba(0,0,0,0.32),
-    inset 0 2px 0 rgba(255,255,255,0.34),
-    inset 0 -4px 8px rgba(0,0,0,0.16);
+    inset 0 3px 0 rgba(255,255,255,0.5),
+    inset 0 9px 13px rgba(255,255,255,0.38),
+    inset 0 -18px 22px rgba(0,0,0,0.30),
+    inset 0 -3px 0 rgba(0,0,0,0.22),
+    0 4px 9px rgba(0,0,0,0.24);
 }
 .btn-cta:active, .btn-lg:active {
-  transform: translateY(9px);
+  transform: translateY(3px);
   box-shadow:
-    0 1px 0 rgba(0,0,0,0.24),
-    0 3px 7px rgba(0,0,0,0.24),
-    inset 0 2px 0 rgba(255,255,255,0.30);
+    inset 0 3px 0 rgba(255,255,255,0.4),
+    inset 0 7px 11px rgba(255,255,255,0.28),
+    inset 0 -13px 17px rgba(0,0,0,0.28),
+    0 2px 5px rgba(0,0,0,0.22);
 }
 
 /* v2.0.1/v2.0.6: brilho periódico — nos CTAs (.btn-cta) e em qualquer botão

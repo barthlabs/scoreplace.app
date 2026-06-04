@@ -183,8 +183,8 @@
        com que ele tenha a largura total e altura compativel de acordo com
        a tela". Caps inferior/superior previnem que fique pequeno demais ou
        gigante demais em casos extremos (ex: tablet em landscape). */
-    '.landing-cta-btn { display: block; width: 95%; max-width: 760px; margin-left: auto; margin-right: auto; box-sizing: border-box; font-size: clamp(1.05rem, 1.4vw + 0.85rem, 1.55rem); font-weight: 800; padding: clamp(14px, 2vh + 6px, 26px) clamp(16px, 4vw, 48px); border-radius: 14px; cursor: pointer; background: #047857; letter-spacing: 0.3px; box-shadow: 0 9px 0 #035c43, 0 15px 26px rgba(4,120,87,0.35), inset 0 2px 0 rgba(255,255,255,0.4), inset 0 -4px 8px rgba(0,0,0,0.15); }' +
-    '.landing-cta-btn:active { transform: translateY(9px); box-shadow: 0 1px 0 #035c43, 0 3px 8px rgba(4,120,87,0.3), inset 0 2px 0 rgba(255,255,255,0.32); }' +
+    '.landing-cta-btn { display: block; width: 95%; max-width: 760px; margin-left: auto; margin-right: auto; box-sizing: border-box; font-size: clamp(1.05rem, 1.4vw + 0.85rem, 1.55rem); font-weight: 800; padding: clamp(14px, 2vh + 6px, 26px) clamp(16px, 4vw, 48px); border-radius: 14px; cursor: pointer; background: #047857; letter-spacing: 0.3px; box-shadow: inset 0 3px 0 rgba(255,255,255,0.5), inset 0 10px 14px rgba(255,255,255,0.30), inset 0 -20px 24px rgba(0,0,0,0.30), inset 0 -3px 0 rgba(0,0,0,0.22), 0 4px 10px rgba(0,0,0,0.25); }' +
+    '.landing-cta-btn:active { transform: translateY(3px); box-shadow: inset 0 3px 0 rgba(255,255,255,0.4), inset 0 8px 12px rgba(255,255,255,0.24), inset 0 -14px 18px rgba(0,0,0,0.28), 0 2px 5px rgba(0,0,0,0.22); }' +
     '.landing-cta-btn:hover { background: #065f46; }' +
     /* Hero CTA: ~3x mais alto que o botão padrão, texto em 2 linhas grandes.
        Uma usuária confundiu as modalidades com o próximo passo ("clico em
