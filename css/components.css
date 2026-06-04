@@ -254,26 +254,36 @@ body.hamburger-open .topbar {
     inset 0 2px 0 rgba(255,255,255,0.30);
 }
 
-/* v2.0.1: brilho periódico — SÓ nos CTAs especiais (.btn-cta). Anima apenas
-   `transform` (composto na GPU = custo desprezível). overflow:hidden recorta o
-   brilho dentro do botão. Respeita prefers-reduced-motion. */
-.btn-cta { position: relative; overflow: hidden; }
-.btn-cta::after {
+/* v2.0.1/v2.0.6: brilho periódico — nos CTAs (.btn-cta) e em qualquer botão
+   marcado com .btn-shine. Anima só `transform` (GPU, custo desprezível).
+   overflow:hidden recorta o brilho. Respeita prefers-reduced-motion.
+   v2.0.6: DESSINCRONIZADO — cada botão pode ter seu próprio atraso via
+   `--shine-delay` (inline) e, por padrão, botões irmãos do mesmo tipo recebem
+   atrasos diferentes (nth-of-type) pra não brilharem todos juntos. */
+.btn-cta, .btn-shine { position: relative; overflow: hidden; }
+.btn-cta::after, .btn-shine::after {
   content: '';
   position: absolute;
   top: 0; bottom: 0; left: 0; width: 38%;
   background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%);
   transform: translateX(-220%) skewX(-18deg);
-  animation: btnCtaShine 3.2s ease-in-out infinite;
+  animation: btnCtaShine 4s ease-in-out infinite;
+  animation-delay: var(--shine-delay, 0s);
   pointer-events: none;
 }
+/* Desync padrão entre botões irmãos (quando não há --shine-delay explícito) */
+.btn-cta:nth-of-type(2)::after, .btn-shine:nth-of-type(2)::after { animation-delay: var(--shine-delay, 0.6s); }
+.btn-cta:nth-of-type(3)::after, .btn-shine:nth-of-type(3)::after { animation-delay: var(--shine-delay, 1.2s); }
+.btn-cta:nth-of-type(4)::after, .btn-shine:nth-of-type(4)::after { animation-delay: var(--shine-delay, 1.8s); }
+.btn-cta:nth-of-type(5)::after, .btn-shine:nth-of-type(5)::after { animation-delay: var(--shine-delay, 2.4s); }
+.btn-cta:nth-of-type(6)::after, .btn-shine:nth-of-type(6)::after { animation-delay: var(--shine-delay, 3s); }
 @keyframes btnCtaShine {
   0%   { transform: translateX(-220%) skewX(-18deg); }
   22%  { transform: translateX(360%) skewX(-18deg); }
   100% { transform: translateX(360%) skewX(-18deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .btn-cta::after { animation: none; }
+  .btn-cta::after, .btn-shine::after { animation: none; }
 }
 
 /* --- Hover Lift (efeito universal) --- */

@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.0.6-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Brilho dos botões em onda (não mais todos juntos).</b><br><br>' +
+      'O brilho que passa nos botões agora é <b>dessincronizado</b> — quando há vários numa tela, eles não piscam todos ao mesmo tempo. Na caixa de atalhos da home, os <b>5 botões</b> (Partida Casual, Novo Torneio, Place, e agora também <b>Pessoas</b> e <b>Convidar</b>) brilham em <b>sequência</b>, formando uma ondinha.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.0.5-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Botões com mais volume.</b><br><br>' +
       'Aumentamos a <b>profundidade 3D</b> dos botões — mais altura e relevo, com o "afundar" ao tocar proporcional. Os botões grandes (Entrar, Inscrever-se) ganharam ainda mais volume; os pequenininhos seguem com um relevo sutil.</p>' +
