@@ -953,9 +953,18 @@ function renderSingleElimBracket(t, canEnterResult) {
     const rows = entries.map(function(e) {
       var pos = e[1];
       var name = e[0];
-      var badge = medals[pos] || pos + 'º';
+      // v1.9.99: posição numérica (1º/2º/3º/4º…) SEMPRE à esquerda; medalha
+      // (🥇🥈🥉) à DIREITA do nome, só pro top 3. Antes a medalha ficava no lugar
+      // da posição e quebrava a leitura quando havia 4º/5º/6º.
+      var posLabel = pos + 'º';
+      var medalEmoji = pos <= 3 ? medals[pos] : '';
       var color = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;"><span style="min-width:28px;text-align:center;font-size:0.9rem;">' + badge + '</span><span style="font-weight:600;color:' + color + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:2px;">' + (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(name, t) : window._safeHtml(name)) + '</span></div>';
+      var nameHtml = (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(name, t) : window._safeHtml(name));
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
+        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + color + ';">' + posLabel + '</span>' +
+        '<span style="font-weight:600;color:' + color + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;">' + nameHtml + '</span>' +
+        (medalEmoji ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medalEmoji + '</span>' : '') +
+        '</div>';
     }).join('');
     classifHtml = '<details style="margin-bottom:1rem;" ' + (t.status === 'finished' ? 'open' : '') + '><summary style="cursor:pointer;font-weight:700;font-size:0.8rem;color:var(--text-bright);padding:8px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + _t('bracket.classified', {n: entries.length}) + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + rows + '</div></details>';
   }
@@ -1123,9 +1132,16 @@ function renderDoubleElimBracket(t, canEnterResult) {
     const _rows = _entries.map(function(e) {
       var pos = e[1];
       var name = e[0];
-      var badge = _medals[pos] || pos + 'º';
+      // v1.9.99: posição numérica à esquerda; medalha à direita do nome (top 3).
+      var posLabel = pos + 'º';
+      var medalEmoji = pos <= 3 ? _medals[pos] : '';
       var color = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;"><span style="min-width:28px;text-align:center;font-size:0.9rem;">' + badge + '</span><span style="font-weight:600;color:' + color + ';font-size:0.85rem;">' + (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(name, t) : window._safeHtml(name)) + '</span></div>';
+      var nameHtml = (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(name, t) : window._safeHtml(name));
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
+        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + color + ';">' + posLabel + '</span>' +
+        '<span style="font-weight:600;color:' + color + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;">' + nameHtml + '</span>' +
+        (medalEmoji ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medalEmoji + '</span>' : '') +
+        '</div>';
     }).join('');
     _deClassifHtml = '<details style="margin-bottom:1rem;" ' + (t.status === 'finished' ? 'open' : 'open') + '><summary style="cursor:pointer;font-weight:700;font-size:0.8rem;color:var(--text-bright);padding:8px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + _t('bracket.classified', {n: _entries.length}) + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + _rows + '</div></details>';
   }

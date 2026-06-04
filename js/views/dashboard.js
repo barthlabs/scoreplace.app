@@ -1919,6 +1919,30 @@ function renderDashboard(container) {
         var p1IsWinner = !m2.draw && m2.winner === m2.p1;
         var p2IsWinner = !m2.draw && m2.winner === m2.p2;
 
+        // v1.9.99: posição final do usuário no torneio (quando a participação já
+        // está definida em t.classification — ex.: vice = 2º). Mostrada abaixo do
+        // nome do torneio e acima da chave.
+        var _finalPos = null;
+        if (tRef2 && tRef2.classification && typeof tRef2.classification === 'object') {
+          if (tRef2.classification[myTeamStr] != null) {
+            _finalPos = tRef2.classification[myTeamStr];
+          } else {
+            Object.keys(tRef2.classification).forEach(function(k) {
+              if (_finalPos == null && String(k).split(/\s*\/\s*/).some(function(n) { return _isMe(n); })) {
+                _finalPos = tRef2.classification[k];
+              }
+            });
+          }
+        }
+        var _posBadge = '';
+        if (_finalPos != null && !isNaN(Number(_finalPos))) {
+          var _fp = Number(_finalPos);
+          var _posMedal = _fp === 1 ? '🥇' : _fp === 2 ? '🥈' : _fp === 3 ? '🥉' : '🏅';
+          var _posCol = _fp === 1 ? '#fbbf24' : _fp === 2 ? '#cbd5e1' : _fp === 3 ? '#d97706' : '#94a3b8';
+          _posBadge = '<div style="font-size:0.72rem;font-weight:800;color:' + _posCol + ';margin:-2px 0 0;display:flex;align-items:center;gap:5px;">' +
+            '<span style="font-size:0.95rem;">' + _posMedal + '</span> Você terminou em ' + _fp + 'º lugar</div>';
+        }
+
         html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.6rem;">' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
             '<h4 style="color:' + faseColor2 + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + faseColor2 + ';padding-left:8px;flex:1;">' +
@@ -1926,6 +1950,7 @@ function renderDashboard(container) {
               '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(item.tName) + '</span>' +
             '</h4>' +
           '</div>' +
+          _posBadge +
           '<div onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
             // Header: label + badge resultado
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +

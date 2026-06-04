@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.99-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Posição final em destaque + classificação mais clara.</b><br><br>' +
+      'Em "Meus Resultados", quando sua participação no torneio encerra, agora aparece <b>a posição em que você terminou</b> (ex.: "🥈 Você terminou em 2º lugar") logo acima da chave. E na <b>Classificação</b> do torneio, a posição numérica (1º, 2º, 3º, 4º…) fica sempre à esquerda do nome e a <b>medalha</b> (🥇🥈🥉) passou para a <b>direita</b> da equipe — antes a medalha ocupava o lugar do número e quebrava a leitura quando havia 4º, 5º, 6º…</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.98-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Fim dos botões duplicados na página do torneio.</b><br><br>' +
       'A página do torneio tinha conjuntos de botões repetidos (um no topo e outro junto do chaveamento). Agora cada um aparece <b>uma vez só</b>: <b>participantes</b> veem <b>Ver Chaves, Inscritos e Regras</b>; <b>organizadores</b> continuam com todos os botões (Imprimir, CSV, Modo TV, Editar, Comunicar, etc.), sem repetição.</p>' +
