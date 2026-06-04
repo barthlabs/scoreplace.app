@@ -938,11 +938,20 @@ function renderSingleElimBracket(t, canEnterResult) {
 
   // Champion
   const champion = _getChampion(t, activeRounds);
+  // v2.0.4: duração do torneio (gravada em _maybeFinishElimination ao sagrar o campeão).
+  const _champDurMs = (typeof t.durationMs === 'number' && t.durationMs > 0) ? t.durationMs : null;
+  const _champDurLabel = _champDurMs ? (function(ms) {
+    var mins = Math.round(ms / 60000);
+    if (mins < 1) return 'menos de 1 min';
+    var h = Math.floor(mins / 60), m = mins % 60;
+    return h > 0 ? (h + 'h' + (m > 0 ? ' ' + m + 'min' : '')) : (m + 'min');
+  })(_champDurMs) : '';
   const championHtml = champion ? `
     <div style="text-align:center;margin-bottom:1.5rem;padding:1rem;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:12px;">
       <div style="font-size:1.5rem;">🏆</div>
       <div style="font-weight:800;color:#fbbf24;font-size:1.1rem;display:flex;align-items:center;justify-content:center;gap:4px;">${typeof window._nameWithCrown === 'function' ? window._nameWithCrown(champion, t) : window._safeHtml(champion)}</div>
       <div style="font-size:0.75rem;color:var(--text-muted);">Campeão</div>
+      ${_champDurLabel ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;border-top:1px solid rgba(251,191,36,0.15);padding-top:6px;">⏱️ Duração do torneio: <b style="color:#fbbf24;">${_champDurLabel}</b></div>` : ''}
     </div>` : '';
 
   // Progressive classification

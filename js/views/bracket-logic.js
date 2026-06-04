@@ -1460,7 +1460,13 @@ function _updateProgressiveClassification(t) {
 function _maybeFinishElimination(t) {
   if (t.status === 'finished') return;
   if (t.currentStage === 'groups') return;
-  if (t.format !== 'Eliminatória Simples' && t.format !== 'Dupla Eliminatória' && t.format !== 'Fase de Grupos') return;
+  // v2.0.4: BUG — o formato salvo é 'Eliminatórias Simples' (plural), mas aqui
+  // checava 'Eliminatória Simples' (singular) → a função saía cedo e o torneio
+  // NUNCA auto-encerrava (ficava "em andamento" mesmo com campeão definido).
+  // Agora aceita ambos (plural atual + singular legado).
+  var _emFmt = t.format || '';
+  if (_emFmt !== 'Eliminatórias Simples' && _emFmt !== 'Eliminatória Simples' &&
+      _emFmt !== 'Dupla Eliminatória' && _emFmt !== 'Fase de Grupos') return;
 
   const allMatches = t.matches || [];
   if (allMatches.length === 0) return;
@@ -1497,6 +1503,10 @@ function _maybeFinishElimination(t) {
 
   // All matches done — mark as finished
   t.status = 'finished';
+  // v2.0.4: o "relógio para" no campeão — registra fim + duração do torneio.
+  if (!t.finishedAt) t.finishedAt = new Date().toISOString();
+  var _startMs = (typeof t.tournamentStarted === 'number' && t.tournamentStarted > 0) ? t.tournamentStarted : null;
+  if (_startMs && (t.durationMs == null)) t.durationMs = Math.max(0, Date.now() - _startMs);
   var _finChampion = null;
   if (typeof showNotification === 'function') {
     var roundNums = allMatches.map(function(m) { return m.round || 0; });
