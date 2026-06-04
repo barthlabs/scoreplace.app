@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.93-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Placar pendente não cresce mais o card da chave.</b><br><br>' +
+      'Quando um resultado é lançado e fica aguardando aprovação, o aviso "⏳ Aguardando aprovação" e os botões <b>Editar/Confirmar</b> voltaram para a <b>linha do cabeçalho</b> (do lado do "JOGO 1" e da tag PENDENTE) — antes apareciam dentro de um box âmbar novo que aumentava o tamanho do card. Agora o card pendente fica do mesmo tamanho do normal.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.92-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Torneios públicos novos aparecem em tempo real (sem atualizar a página).</b><br><br>' +
       'Quando alguém cria, abre ou altera um torneio público, ele agora aparece para os outros usuários <b>na hora</b>, sem precisar atualizar. Antes o feed de descoberta só atualizava ao recarregar a página, então um torneio recém-criado parecia "invisível" para quem já estava com a dashboard aberta — na verdade sempre esteve lá, era só o feed que não se atualizava sozinho.<br><br>' +
