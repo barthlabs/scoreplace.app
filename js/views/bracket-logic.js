@@ -1483,11 +1483,15 @@ function _maybeFinishElimination(t) {
   });
   if (tbdMatches.length > 0) return;
 
-  // Check 3rd place match if enabled
-  // v1.0.92-beta: DE não usa thirdPlaceMatch (3º vem do Lower Final loser).
-  // Pra torneios velhos que tem t.thirdPlaceMatch fantasma criado por bug
-  // anterior, IGNORA esse check em DE — senão torneio nunca finaliza.
-  if (t.format !== 'Dupla Eliminatória' && t.thirdPlaceMatch && !t.thirdPlaceMatch.winner) return;
+  // v2.1.6: A FINAL encerra o evento. A disputa de 3º lugar NÃO trava mais o
+  // encerramento — quando todas as partidas da chave principal (incluindo a
+  // final) têm vencedor, o torneio é declarado encerrado (campeão + vice). A
+  // partida de 3º lugar continua podendo ser lançada depois: o resultado dela
+  // atualiza a classificação (3º/4º) via _updateProgressiveClassification, e
+  // _maybeFinishElimination sai cedo (status já 'finished') sem reabrir nada.
+  // Antes (≤v2.1.5) o check `t.thirdPlaceMatch && !winner → return` impedia o
+  // torneio de encerrar pela final — e, com inscrição tardia ligada, as
+  // inscrições ficavam abertas indefinidamente após a final.
 
   // Check group stage completion (Fase de Grupos)
   if (Array.isArray(t.groups) && t.groups.length > 0) {

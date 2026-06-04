@@ -207,7 +207,7 @@ function renderDashboard(container) {
   const torneiosPublicos = visible.filter(t => t.isPublic).length;
   const inscricoesAbertas = visible.filter(t => {
     const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado;
+    const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
     // v2.1.4: late enrollment (Fechadas OFF) — inscrições seguem abertas após o
     // sorteio (e após iniciar) até o organizador encerrar. Mesma regra do detalhe.
     const lateEnrollOpen = sorteioRealizado && t.status !== 'finished' && t.status !== 'closed' && (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
@@ -452,7 +452,7 @@ function renderDashboard(container) {
     // Inscrições fecham após sorteio (status 'active'), exceto Liga com inscrições abertas na temporada
     const isFinished = t.status === 'finished';
     const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado;
+    const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
     // v2.1.4: late enrollment (Fechadas OFF) mantém inscrições abertas após o
     // sorteio e após iniciar, até o organizador encerrar. Mesma regra do detalhe.
     const lateEnrollOpen = sorteioRealizado && !isFinished && t.status !== 'closed' && (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');

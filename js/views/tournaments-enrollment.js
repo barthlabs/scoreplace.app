@@ -201,7 +201,7 @@ window.enrollCurrentUser = function (tId) {
             return;
         }
         const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-        const ligaAberta = window._isLigaFormat(t) && t.ligaOpenEnrollment !== false && sorteioRealizado;
+        const ligaAberta = window._isLigaFormat(t) && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
         const inscricoesAbertas = (t.status !== 'closed' && !sorteioRealizado) || ligaAberta;
         if (!inscricoesAbertas) {
             if (_allowsLateEnrollment(t) && t.status !== 'finished') {

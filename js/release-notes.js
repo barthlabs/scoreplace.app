@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.6-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>A final encerra o evento (eliminatórias).</b><br><br>' +
+      'Ao lançar o resultado da <b>final</b>, o torneio agora declara campeão + vice, <b>encerra as inscrições</b> e marca o evento como <b>Encerrado</b> na hora — antes ele ficava travado esperando a disputa de 3º lugar, e com inscrição tardia ligada as inscrições continuavam abertas após a final. A disputa de 3º lugar pode ser lançada depois (preenche 3º/4º) sem reabrir o torneio. Reforço extra: torneio <b>Liga</b> encerrado também fecha a inscrição.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.5-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Lista de espera agora persiste de verdade.</b><br><br>' +
       'Quem se inscrevia <b>depois do sorteio/início</b> via "você está na lista de espera", mas a inscrição <b>não era salva no servidor</b> — o organizador nunca via a pessoa em Inscritos e o card dela continuava "Inscrever-se". Causa: as regras do banco bloqueavam (silenciosamente) o novo inscrito de se escrever na lista de espera. Corrigido: (1) regra liberada para inscrição tardia; (2) se o salvamento falhar, agora você é avisado em vez de ver um sucesso falso; (3) o card da home reconhece quem está na lista de espera e mostra a tag <b>"⏳ Lista de espera"</b> + <b>"Sair da lista de espera"</b>; (4) o botão vermelho da lista de espera deixou de mostrar texto cru.</p>' +

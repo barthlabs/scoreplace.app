@@ -816,7 +816,9 @@ function renderTournaments(container, tournamentId = null) {
         // Inscrições fecham após sorteio (status 'active'), exceto Liga/Ranking com inscrições abertas na temporada
         const isFinished = t.status === 'finished';
         const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-        const ligaAberta = window._isLigaFormat(t) && t.ligaOpenEnrollment !== false && sorteioRealizado;
+        // v2.1.6: torneio encerrado (campeão definido) SEMPRE fecha inscrição,
+        // inclusive Liga — ligaAberta nunca vale com status 'finished'.
+        const ligaAberta = !isFinished && window._isLigaFormat(t) && t.ligaOpenEnrollment !== false && sorteioRealizado;
         // v2.1.0: quando "Fechadas" está OFF (lateEnrollment 'standby'/'expand'),
         // o SORTEIO não encerra as inscrições — elas seguem abertas após o
         // sorteio e só fecham quando o organizador clica "Encerrar Inscrições"
