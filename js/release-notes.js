@@ -8,6 +8,12 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1.05rem; margin-bottom:8px;">🎉 v2.0.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Mesclar participantes (organizador) — placeholders viram pessoas reais.</b><br><br>' +
+      'Pensado pra torneios informais de fim de tarde: o organizador adiciona alguns <b>placeholders</b> (ex.: "Vaga 1") junto dos inscritos e já faz o sorteio. Conforme a galera chega, é só <b>arrastar a pessoa sobre o placeholder</b> — ao soltar, aparecem dois botões: <b>🟡 Mesclar participante</b> (a pessoa assume a vaga e entra nos jogos do placeholder na chave) e <b>🔵 Formar equipe</b> (junta os dois numa dupla, como antes). A mesclagem pede confirmação e deixa um botão <b>↩️ Desfazer</b> no card. Funciona na tela de <b>Inscritos</b>.<br><br>' +
+      '<span style="color:var(--text-muted); font-size:0.85rem;">Em breve: arrastar-pra-mesclar também durante a partida (com o torneio já iniciado).</span></p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.99-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Posição final em destaque + classificação mais clara.</b><br><br>' +

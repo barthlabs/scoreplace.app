@@ -1271,10 +1271,10 @@ window.handleDropTeam = function (e, targetIdx) {
         const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
         if (!t) return;
 
-        if (t.enrollmentMode === 'individual') {
-            showAlertDialog(_t('draw.soloModeTitle'), _t('draw.soloModeMsg'), null, { type: 'warning' });
-            return;
-        }
+        // v2.0.0: modo individual NÃO bloqueia mais o drop — a MESCLAGEM
+        // (substituir um placeholder pela pessoa real) vale em qualquer modo.
+        // A formação de equipe é que fica restrita a modo não-individual (e
+        // pré-sorteio); isso é decidido no overlay via allowTeam.
 
         // Capturar referências AGORA (antes do dialog — evita índices stale)
         const arr0 = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
@@ -1295,69 +1295,230 @@ window.handleDropTeam = function (e, targetIdx) {
         const uid2 = typeof p2snap === 'object' ? (p2snap.uid || '') : '';
         const newName = name1 + ' / ' + name2;
 
-        showConfirmDialog(
-            'Formar dupla',
-            name1 + ' e ' + name2 + ' formarão a dupla "' + newName + '". Confirmar?',
-            () => {
-                // Re-ler array no momento do confirm (pode ter mudado por snapshot)
-                const arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-
-                // Localizar por uid (mais confiável) ou por nome exato
-                const findIdx = function(snap, uid, name) {
-                    // Primeiro por uid
-                    if (uid) {
-                        const i = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uid; });
-                        if (i !== -1) return i;
-                    }
-                    // Fallback por nome
-                    return arr.findIndex(function(p) {
-                        var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-                        return n === name;
-                    });
-                };
-
-                const i1 = findIdx(p1snap, uid1, name1);
-                const i2 = findIdx(p2snap, uid2, name2);
-
-                if (i1 === -1 || i2 === -1 || i1 === i2) return; // segurança
-
-                // Entrada LIMPA — nunca herdar foto/email de um dos membros
-                const p1final = arr[i1];
-                const p2final = arr[i2];
-                const fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
-                const fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
-                // v1.8.88: sempre objeto com p1Name/p2Name/p1Uid/p2Uid,
-                // mesmo quando nenhum tem uid — nunca string pura.
-                // String pura impede lookup por uid nas regras Firestore.
-                const mergedEntry = {
-                    displayName: newName, name: newName,
-                    uid: fuid1 || fuid2 || '',
-                    p1Name: name1, p1Uid: fuid1,
-                    p2Name: name2, p2Uid: fuid2,
-                    ligaActive: true
-                };
-
-                // Remover ambos e inserir dupla (índice maior primeiro)
-                const maxI = Math.max(i1, i2);
-                const minI = Math.min(i1, i2);
-                arr.splice(maxI, 1);
-                arr.splice(minI, 1);
-                arr.splice(minI, 0, mergedEntry);
-                t.participants = arr;
-
-                if (!t.teamOrigins) t.teamOrigins = {};
-                t.teamOrigins[newName] = 'formada';
-
-                window.FirestoreDB.saveTournament(t);
-
-                const container = document.getElementById('view-container');
-                if (container) renderTournaments(container, tId);
-            },
-            null,
-            { type: 'info', confirmText: 'Formar dupla', cancelText: _t('btn.keepSeparate') }
-        );
+        // v2.0.0: em vez de ir direto pra "Formar dupla", abre o overlay com 2
+        // opções — Mesclar participante (amarelo, esquerda) e Formar equipe
+        // (azul, direita). source = quem foi arrastado (pessoa); target = onde
+        // soltou (placeholder).
+        var _hasMatchesD = (Array.isArray(t.matches) && t.matches.length) ||
+                           (Array.isArray(t.rounds) && t.rounds.length) ||
+                           (Array.isArray(t.groups) && t.groups.length);
+        var _drawDoneD = !!_hasMatchesD || t.status === 'started' || t.status === 'in_progress';
+        var _allowTeam = !_drawDoneD && t.enrollmentMode !== 'individual';
+        window._showDropChoiceOverlay({
+            tId: tId,
+            sourceName: name1, sourceUid: uid1,
+            targetName: name2, targetUid: uid2,
+            allowTeam: _allowTeam
+        });
 
     } catch (err) { window._error(err); }
+};
+
+// ── v2.0.0: overlay de escolha ao soltar um participante sobre outro ─────────
+window._showDropChoiceOverlay = function(opts) {
+    var old = document.getElementById('drop-choice-overlay');
+    if (old) old.remove();
+    var esc = function(s) { return window._safeHtml ? window._safeHtml(s) : String(s == null ? '' : s); };
+    var ov = document.createElement('div');
+    ov.id = 'drop-choice-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10045;display:flex;align-items:center;justify-content:center;padding:20px;';
+    var btnMerge = '<button id="dc-merge" style="flex:1;background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1a2e;border:none;border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;">🟡 Mesclar participante</button>';
+    var btnTeam = opts.allowTeam
+        ? '<button id="dc-team" style="flex:1;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border:none;border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;">🔵 Formar equipe</button>'
+        : '';
+    var desc = opts.allowTeam
+        ? 'O que deseja fazer com esses dois participantes?'
+        : '“' + esc(opts.sourceName) + '” vai assumir a vaga de “' + esc(opts.targetName) + '”.';
+    ov.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:20px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.4);">' +
+        '<div style="font-weight:800;color:var(--text-bright);font-size:1rem;margin-bottom:4px;">' + esc(opts.sourceName) + ' &rarr; ' + esc(opts.targetName) + '</div>' +
+        '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px;">' + desc + '</div>' +
+        '<div style="display:flex;gap:10px;">' + btnMerge + btnTeam + '</div>' +
+        '<button id="dc-cancel" style="width:100%;margin-top:10px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);border-radius:10px;padding:9px;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '</div>';
+    document.body.appendChild(ov);
+    var close = function() { ov.remove(); };
+    var cancelEl = document.getElementById('dc-cancel');
+    if (cancelEl) cancelEl.onclick = close;
+    ov.onclick = function(e) { if (e.target === ov) close(); };
+    var mergeEl = document.getElementById('dc-merge');
+    if (mergeEl) mergeEl.onclick = function() {
+        close();
+        showConfirmDialog(
+            'Mesclar participante',
+            '“' + opts.sourceName + '” vai assumir a vaga de “' + opts.targetName + '”: entra nos jogos de ' + opts.targetName + ' na chave e o card passa a ser ' + opts.sourceName + '. Você poderá desfazer depois. Confirmar?',
+            function() { window._mergeParticipantConfirm(opts.tId, opts.sourceName, opts.sourceUid, opts.targetName, opts.targetUid); },
+            null,
+            { type: 'warning', confirmText: 'Mesclar', cancelText: 'Cancelar' }
+        );
+    };
+    if (opts.allowTeam) {
+        var teamEl = document.getElementById('dc-team');
+        if (teamEl) teamEl.onclick = function() {
+            close();
+            window._formTeamConfirm(opts.tId, opts.sourceName, opts.sourceUid, opts.targetName, opts.targetUid);
+        };
+    }
+};
+
+// ── v2.0.0: formar equipe (lógica preservada da versão anterior) ─────────────
+window._formTeamConfirm = function(tId, name1, uid1, name2, uid2) {
+    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    if (!t) return;
+    var newName = name1 + ' / ' + name2;
+    showConfirmDialog(
+        'Formar dupla',
+        name1 + ' e ' + name2 + ' formarão a dupla "' + newName + '". Confirmar?',
+        function() {
+            var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+            var findIdx = function(uid, name) {
+                if (uid) {
+                    var i = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uid; });
+                    if (i !== -1) return i;
+                }
+                return arr.findIndex(function(p) {
+                    var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+                    return n === name;
+                });
+            };
+            var i1 = findIdx(uid1, name1);
+            var i2 = findIdx(uid2, name2);
+            if (i1 === -1 || i2 === -1 || i1 === i2) return;
+            var p1final = arr[i1];
+            var p2final = arr[i2];
+            var fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
+            var fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
+            var mergedEntry = {
+                displayName: newName, name: newName,
+                uid: fuid1 || fuid2 || '',
+                p1Name: name1, p1Uid: fuid1,
+                p2Name: name2, p2Uid: fuid2,
+                ligaActive: true
+            };
+            var maxI = Math.max(i1, i2);
+            var minI = Math.min(i1, i2);
+            arr.splice(maxI, 1);
+            arr.splice(minI, 1);
+            arr.splice(minI, 0, mergedEntry);
+            t.participants = arr;
+            if (!t.teamOrigins) t.teamOrigins = {};
+            t.teamOrigins[newName] = 'formada';
+            window.FirestoreDB.saveTournament(t);
+            var container = document.getElementById('view-container');
+            if (container) renderTournaments(container, tId);
+        },
+        null,
+        { type: 'info', confirmText: 'Formar dupla', cancelText: _t('btn.keepSeparate') }
+    );
+};
+
+// ── v2.0.0: substitui o nome de um participante em TODA a chave ──────────────
+// (matches/grupos/rounds), inclusive dentro de strings de dupla "A / B",
+// arrays team1/team2 e no campo winner. Mesmo padrão da substituição por W.O.
+window._replaceParticipantNameInBracket = function(t, oldName, newName) {
+    if (!t || !oldName || !newName || oldName === newName) return;
+    var matches = (typeof window._collectAllMatches === 'function')
+        ? window._collectAllMatches(t) : (t.matches || []);
+    var swap = function(s) {
+        if (typeof s !== 'string') return s;
+        if (s === oldName) return newName;
+        if (s.indexOf(' / ') !== -1) {
+            return s.split(' / ').map(function(n) {
+                return n.trim() === oldName ? newName : n.trim();
+            }).join(' / ');
+        }
+        return s;
+    };
+    matches.forEach(function(m) {
+        if (!m) return;
+        m.p1 = swap(m.p1);
+        m.p2 = swap(m.p2);
+        if (m.winner) m.winner = swap(m.winner);
+        if (Array.isArray(m.team1)) { var i1 = m.team1.indexOf(oldName); if (i1 !== -1) m.team1[i1] = newName; }
+        if (Array.isArray(m.team2)) { var i2 = m.team2.indexOf(oldName); if (i2 !== -1) m.team2[i2] = newName; }
+    });
+};
+
+// ── v2.0.0: MESCLAR — a pessoa (origem/arrastada) assume a vaga do placeholder
+// (alvo). A entrada do placeholder mantém a POSIÇÃO no array, mas a IDENTIDADE
+// vira a da pessoa; a entrada avulsa da pessoa é removida; o nome é substituído
+// na chave (placeholder → pessoa). Guarda snapshot pra desfazer.
+window._mergeParticipantConfirm = function(tId, personName, personUid, placeholderName, placeholderUid) {
+    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    if (!t) return;
+    var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+    var findIdx = function(uid, name) {
+        if (uid) {
+            var i = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uid; });
+            if (i !== -1) return i;
+        }
+        return arr.findIndex(function(p) {
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            return n === name;
+        });
+    };
+    var pIdx = findIdx(personUid, personName);          // pessoa (origem)
+    var phIdx = findIdx(placeholderUid, placeholderName); // placeholder (alvo)
+    if (pIdx === -1 || phIdx === -1 || pIdx === phIdx) return;
+    var personObj = typeof arr[pIdx] === 'object' ? arr[pIdx] : { displayName: arr[pIdx], name: arr[pIdx] };
+    var placeholderObj = typeof arr[phIdx] === 'object' ? arr[phIdx] : { displayName: arr[phIdx], name: arr[phIdx] };
+    var undo = {
+        placeholder: JSON.parse(JSON.stringify(placeholderObj)),
+        person: JSON.parse(JSON.stringify(personObj))
+    };
+    var newEntry = {
+        displayName: personName, name: personName,
+        uid: personObj.uid || '',
+        email: personObj.email || '',
+        photoURL: personObj.photoURL || '',
+        _mergedFrom: undo
+    };
+    if (personObj.category) newEntry.category = personObj.category;
+    if (personObj.gender) newEntry.gender = personObj.gender;
+    arr[phIdx] = newEntry;       // placeholder vira a pessoa (mantém posição)
+    arr.splice(pIdx, 1);         // remove a entrada avulsa da pessoa
+    t.participants = arr;
+    window._replaceParticipantNameInBracket(t, placeholderName, personName);
+    window.FirestoreDB.saveTournament(t);
+    var container = document.getElementById('view-container');
+    if (container) renderTournaments(container, tId);
+    if (typeof showNotification === 'function') showNotification('Mesclado', personName + ' assumiu a vaga de ' + placeholderName + '.', 'success');
+};
+
+// ── v2.0.0: DESFAZER MESCLAGEM — restaura o placeholder na posição e devolve a
+// pessoa como participante avulso; reverte o nome na chave (pessoa → placeholder).
+window._undoMergeParticipant = function(tId, idx) {
+    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    if (!t) return;
+    var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+    var entry = arr[idx];
+    if (!(entry && typeof entry === 'object' && entry._mergedFrom)) {
+        var fi = arr.findIndex(function(p) { return p && typeof p === 'object' && p._mergedFrom; });
+        if (fi === -1) return;
+        idx = fi; entry = arr[idx];
+    }
+    var undo = entry._mergedFrom;
+    if (!undo) return;
+    var personName = entry.displayName || entry.name;
+    var placeholderName = undo.placeholder.displayName || undo.placeholder.name;
+    showConfirmDialog(
+        'Desfazer mesclagem',
+        '“' + personName + '” voltará a ser avulso e a vaga “' + placeholderName + '” será restaurada na chave. Confirmar?',
+        function() {
+            var arr2 = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+            var mi = arr2.findIndex(function(p) { return p && typeof p === 'object' && p._mergedFrom && (p.displayName || p.name) === personName; });
+            if (mi === -1) mi = idx;
+            arr2[mi] = JSON.parse(JSON.stringify(undo.placeholder));
+            arr2.push(JSON.parse(JSON.stringify(undo.person)));
+            t.participants = arr2;
+            window._replaceParticipantNameInBracket(t, personName, placeholderName);
+            window.FirestoreDB.saveTournament(t);
+            var container = document.getElementById('view-container');
+            if (container) renderTournaments(container, tId);
+            if (typeof showNotification === 'function') showNotification('Mescla desfeita', placeholderName + ' restaurado; ' + personName + ' voltou como avulso.', 'info');
+        },
+        null,
+        { type: 'warning', confirmText: 'Desfazer', cancelText: 'Cancelar' }
+    );
 };
 
 
