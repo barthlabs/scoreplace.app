@@ -160,8 +160,7 @@ function renderBracket(container, tournamentId, isInline) {
     '</div>';
   })() : '';
 
-  const headerHtml = isInline ? `
-    <div class="mb-3">${actionBtnsHtml}</div>` : `
+  const headerHtml = isInline ? '' /* v1.9.98: inline (dentro da página de detalhes) NÃO renderiza botões de ação — já existem na página (evita duplicação). Só o standalone #bracket/:id mantém o cabeçalho completo. */ : `
     ${(typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
           href: '#tournaments/' + _tIdSafe,

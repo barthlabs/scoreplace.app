@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.98-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Fim dos botões duplicados na página do torneio.</b><br><br>' +
+      'A página do torneio tinha conjuntos de botões repetidos (um no topo e outro junto do chaveamento). Agora cada um aparece <b>uma vez só</b>: <b>participantes</b> veem <b>Ver Chaves, Inscritos e Regras</b>; <b>organizadores</b> continuam com todos os botões (Imprimir, CSV, Modo TV, Editar, Comunicar, etc.), sem repetição.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.97-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>"Ver Chaves" agora rola direto pro seu próximo jogo.</b><br><br>' +
       'Na página do torneio, o botão <b>Ver Chaves</b> não abre mais uma tela separada — ele rola até a chave (que já fica na própria página) <b>posicionada no próximo jogo</b>: se você é organizador, no próximo jogo a ser realizado; se é participante, no <b>seu</b> próximo jogo. Menos cliques, sem perder o contexto da página do torneio.</p>' +
