@@ -1939,8 +1939,11 @@ function renderDashboard(container) {
           var _fp = Number(_finalPos);
           var _posMedal = _fp === 1 ? '🥇' : _fp === 2 ? '🥈' : _fp === 3 ? '🥉' : '🏅';
           var _posCol = _fp === 1 ? '#fbbf24' : _fp === 2 ? '#cbd5e1' : _fp === 3 ? '#d97706' : '#94a3b8';
-          _posBadge = '<div style="font-size:0.72rem;font-weight:800;color:' + _posCol + ';margin:-2px 0 0;display:flex;align-items:center;gap:5px;">' +
-            '<span style="font-size:0.95rem;">' + _posMedal + '</span> Você terminou em ' + _fp + 'º lugar</div>';
+          // v2.0.3: mais destaque — "2º lugar" + medalha, sem "Você terminou em",
+          // fonte ~2x maior.
+          _posBadge = '<div style="font-size:1.45rem;font-weight:900;color:' + _posCol + ';margin:4px 0 8px;display:flex;align-items:center;gap:8px;line-height:1.1;">' +
+            '<span>' + _fp + 'º lugar</span>' +
+            '<span style="font-size:1.6rem;">' + _posMedal + '</span></div>';
         }
 
         html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.6rem;">' +

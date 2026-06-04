@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.0.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Posição final em destaque.</b><br><br>' +
+      'Em "Meus Resultados", a colocação final agora aparece <b>grande e em destaque</b> — só "<b>2º lugar 🥈</b>" (sem o "Você terminou em"), com a fonte bem maior.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.0.2-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Mesclar participantes unificado — celular e durante a partida.</b><br><br>' +
       'A mesclagem (placeholder → pessoa real) agora funciona <b>no celular</b> (arrastar com toque), inclusive <b>durante o torneio já iniciado</b>, e sempre com a escolha de <b>🟡 Mesclar</b> ou <b>🔵 Formar equipe</b> + o <b>↩️ Desfazer</b> no card. Antes, no celular, o arrastar fazia a mescla direto, sem escolha nem desfazer.</p>' +
