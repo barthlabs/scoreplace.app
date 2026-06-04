@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Inscrições tardias: sortear não fecha mais as inscrições.</b><br><br>' +
+      'Quando a opção "Fechadas" (em <i>Inscrições após o encerramento</i>) está <b>desligada</b>, fazer o sorteio <b>não encerra mais as inscrições</b> — elas seguem abertas e novos inscritos vão para a lista de espera. Agora as inscrições só fecham quando o organizador clica em <b>Encerrar Inscrições</b> (que também passa a aparecer depois do sorteio nesse modo, podendo reabrir). Com "Fechadas" ligada, nada muda — o sorteio fecha as inscrições como antes.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.0.9-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>CTA da landing sempre com margem + botões de e-mail no mesmo estilo.</b><br><br>' +
       'Na tela inicial, o botão "ENTRAR no scoreplace.app" não cola mais nas laterais em telas estreitas — o texto reduz e quebra com elegância, sempre com folga. E os <b>botões dos e-mails</b> que o app envia (entrar, confirmar conta, etc.) agora têm o mesmo aspecto 3D dos botões do app.</p>' +

@@ -2383,6 +2383,28 @@ window.toggleRegistrationStatus = function (tId) {
         }
     };
 
+    // v2.1.0: inscrição TARDIA pós-sorteio (lateEnrollment 'standby'/'expand').
+    // Aqui o "Encerrar Inscrições" apenas ALTERNA o status — sem painel de
+    // resolução (que é pré-sorteio) e sem promover a lista de espera. Encerrar
+    // = 'closed'; Reabrir = 'active'. (O sorteio NÃO encerra; só este botão.)
+    var _hasDrawNow = (Array.isArray(t.matches) && t.matches.length > 0) ||
+                      (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+                      (Array.isArray(t.groups) && t.groups.length > 0);
+    var _lateMode = (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    if (_hasDrawNow && _lateMode && t.status !== 'finished') {
+        if (t.status === 'closed') {
+            t.status = 'active';
+            if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(tId, 'Inscrições reabertas (tardias) após o sorteio');
+            if (typeof showNotification === 'function') showNotification('Inscrições reabertas', 'Novos inscritos vão para a lista de espera.', 'success');
+        } else {
+            t.status = 'closed';
+            if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(tId, 'Inscrições encerradas pelo organizador');
+            if (typeof showNotification === 'function') showNotification('Inscrições encerradas', 'Ninguém mais pode se inscrever.', 'info');
+        }
+        _saveTournament(_refreshView);
+        return;
+    }
+
     if (t.status === 'closed') {
         // Impedir reabertura se já houve sorteio
         var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);

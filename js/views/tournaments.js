@@ -804,7 +804,14 @@ function renderTournaments(container, tournamentId = null) {
         const isFinished = t.status === 'finished';
         const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
         const ligaAberta = window._isLigaFormat(t) && t.ligaOpenEnrollment !== false && sorteioRealizado;
-        const isAberto = (!isFinished && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta;
+        // v2.1.0: quando "Fechadas" está OFF (lateEnrollment 'standby'/'expand'),
+        // o SORTEIO não encerra as inscrições — elas seguem abertas após o
+        // sorteio e só fecham quando o organizador clica "Encerrar Inscrições"
+        // (que seta status='closed'). lateEnrollManaged = quando esse modo está
+        // ativo após o sorteio (pra mostrar o botão Encerrar/Reabrir).
+        const lateEnrollManaged = sorteioRealizado && !isFinished && (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+        const lateEnrollOpen = lateEnrollManaged && t.status !== 'closed';
+        const isAberto = (!isFinished && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
 
         // Auto-close: if deadline passed but status hasn't been updated yet, close it now
         if (!isAberto && !isFinished && !sorteioRealizado && t.status !== 'closed' && t.registrationLimit && new Date(t.registrationLimit) < new Date()) {
@@ -1106,7 +1113,10 @@ function renderTournaments(container, tournamentId = null) {
         const isSuicoFormat = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
         const isLigaFormat = window._isLigaFormat(t);
         const isLigaOpenEnroll = isLigaFormat && t.ligaOpenEnrollment !== false;
-        const toggleRegBtn = (!hasDraw && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${t.status === 'closed' ? 'btn-success' : 'btn-danger'} hover-lift" onclick="event.stopPropagation(); window.toggleRegistrationStatus('${t.id}')">${t.status === 'closed' ? '✅ ' + _t('org.reopenRegistration') : '🛑 ' + _t('org.closeRegistration')}</button>` : '';
+        // v2.1.0: mostra o botão Encerrar/Reabrir também APÓS o sorteio quando as
+        // inscrições tardias estão ativas (lateEnrollManaged) — é o único jeito de
+        // fechar as inscrições nesse modo (o sorteio não fecha).
+        const toggleRegBtn = ((!hasDraw || lateEnrollManaged) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${t.status === 'closed' ? 'btn-success' : 'btn-danger'} hover-lift" onclick="event.stopPropagation(); window.toggleRegistrationStatus('${t.id}')">${t.status === 'closed' ? '✅ ' + _t('org.reopenRegistration') : '🛑 ' + _t('org.closeRegistration')}</button>` : '';
 
         // v0.16.55: Liga com sorteio automático (drawManual !== true) nunca mostra
         // botão Sortear nas ferramentas — o auto-draw cuida de tudo.
