@@ -856,8 +856,8 @@ exports.sendMagicLink = onCall(
                 '<p style="margin:0 0 16px;font-size:1rem;font-weight:600;color:#fff;">Clique no botão para entrar:</p>' +
                 // Botão grande — table-based pra render consistente em Gmail/Outlook/Apple
                 '<table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;">' +
-                  '<tr><td style="border-radius:12px;background:linear-gradient(135deg,#fbbf24,#f59e0b);box-shadow:0 4px 12px rgba(251,191,36,0.3);">' +
-                    '<a href="' + link.replace(/"/g, '&quot;') + '" style="display:inline-block;padding:18px 48px;color:#1e3a5f;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;">' +
+                  '<tr><td style="background:#f59e0b;background:linear-gradient(180deg,#fcd34d 0%,#f59e0b 60%,#d97706 100%);border-bottom:4px solid #b45309;border-radius:12px;box-shadow:0 4px 12px rgba(245,158,11,0.35);">' +
+                    '<a href="' + link.replace(/"/g, '&quot;') + '" style="display:inline-block;padding:18px 48px;color:#3a2300;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;text-shadow:0 1px 0 rgba(255,255,255,0.3);">' +
                       '🎾 Entrar no scoreplace.app' +
                     '</a>' +
                   '</td></tr>' +
@@ -976,8 +976,8 @@ exports.sendVerificationEmail = onCall(
                 '<p style="margin:0 0 6px;font-size:1.05rem;font-weight:700;color:#fff;">Bem-vindo' + greetName.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '! 🎉</p>' +
                 '<p style="margin:0 0 18px;font-size:0.92rem;color:#cbd5e1;">Falta só confirmar seu e-mail pra começar.</p>' +
                 '<table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;">' +
-                  '<tr><td style="border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 4px 12px rgba(16,185,129,0.3);">' +
-                    '<a href="' + link.replace(/"/g, "&quot;") + '" style="display:inline-block;padding:18px 44px;color:#ffffff;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;">' +
+                  '<tr><td style="background:#059669;background:linear-gradient(180deg,#34d399 0%,#10b981 55%,#059669 100%);border-bottom:4px solid #047857;border-radius:12px;box-shadow:0 4px 12px rgba(16,185,129,0.35);">' +
+                    '<a href="' + link.replace(/"/g, "&quot;") + '" style="display:inline-block;padding:18px 44px;color:#ffffff;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.22);">' +
                       '✅ Confirmar minha conta' +
                     '</a>' +
                   '</td></tr>' +

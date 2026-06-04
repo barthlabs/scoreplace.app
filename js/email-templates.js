@@ -83,8 +83,13 @@
   }
 
   function _ctaButton(text, url) {
-    return '<table cellpadding="0" cellspacing="0" border="0" style="margin:24px auto 8px;"><tr><td style="background:' + BRAND_COLOR + ';border-radius:8px;padding:12px 28px;">' +
-      '<a href="' + _escape(url) + '" style="color:#fff;text-decoration:none;font-weight:600;font-size:0.92rem;">' + _escape(text) + '</a>' +
+    // v2.0.9: mesmo aspecto 3D dos botões do app, em versão email-safe — o
+    // "almofadado" (inset) não funciona em email, então o volume vem do
+    // gradiente (claro→escuro) + borda inferior mais escura (a "base"). Fallback
+    // sólido pra clientes sem gradiente (Outlook).
+    return '<table cellpadding="0" cellspacing="0" border="0" style="margin:24px auto 8px;"><tr>' +
+      '<td style="background:' + BRAND_COLOR + ';background:linear-gradient(180deg,#5b9af8 0%,#3b82f6 55%,#2563eb 100%);border-bottom:4px solid #1e40af;border-radius:12px;padding:14px 32px;box-shadow:0 4px 12px rgba(37,99,235,0.35);">' +
+      '<a href="' + _escape(url) + '" style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:800;font-size:1rem;letter-spacing:0.2px;text-shadow:0 1px 1px rgba(0,0,0,0.25);">' + _escape(text) + '</a>' +
     '</td></tr></table>';
   }
 

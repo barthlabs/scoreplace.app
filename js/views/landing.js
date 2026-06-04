@@ -189,9 +189,13 @@
     /* Hero CTA: ~3x mais alto que o botão padrão, texto em 2 linhas grandes.
        Uma usuária confundiu as modalidades com o próximo passo ("clico em
        beach tennis?") — o CTA gigante deixa óbvio onde clicar. */
-    '.landing-cta-hero { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(2px, 0.4vh, 6px); padding: clamp(28px, 5.5vh + 10px, 64px) clamp(16px, 4vw, 48px); line-height: 1.04; }' +
-    '.landing-cta-hero .landing-cta-l1 { font-size: clamp(2.4rem, 5vw + 1.4rem, 4.2rem); font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; }' +
-    '.landing-cta-hero .landing-cta-l2 { font-size: clamp(2.4rem, 5vw + 1.4rem, 4.2rem); font-weight: 800; letter-spacing: 0.2px; }' +
+    '.landing-cta-hero { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(2px, 0.4vh, 8px); padding: clamp(26px, 5vh + 10px, 60px) clamp(26px, 6vw, 56px); line-height: 1.05; }' +
+    /* v2.0.9: texto NUNCA cola nas laterais. "ENTRAR" grande (verbo da ação);
+       "no scoreplace.app" menor (linha longa) e dimensionado pra sempre caber
+       com folga — em tela estreita quebra sozinho (ENTRAR / no / scoreplace.app),
+       em tela larga fica em 2 linhas. Composição sempre uniforme. */
+    '.landing-cta-hero .landing-cta-l1 { font-size: clamp(2rem, 4.4vw + 1.2rem, 3.8rem); font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; max-width: 100%; }' +
+    '.landing-cta-hero .landing-cta-l2 { font-size: clamp(1.45rem, 3.1vw + 0.85rem, 2.9rem); font-weight: 800; letter-spacing: 0.2px; max-width: 100%; overflow-wrap: break-word; word-break: break-word; }' +
     '.landing-sports-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: clamp(40px, 7vh, 72px); }' +
     '.landing-sport-pill { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 14px; font-size: 0.82rem; color: var(--text-main); cursor: default; }' +
 
