@@ -109,6 +109,55 @@ window._updateStatBoxes = function(t) {
     }
 };
 
+// v1.9.97: "Ver Chaves" NÃO navega mais pra tela restrita (#bracket/:id) —
+// rola pra seção do chaveamento que JÁ está renderizada na página de detalhes
+// (#inline-bracket-container). Posicionamento inteligente:
+//   - Organizador → próximo jogo a ser realizado (o primeiro jogável na ordem
+//     da chave).
+//   - Participante → próximo jogo DELE (primeiro jogável em que ele está).
+// Jogável = sem vencedor, não é BYE, e ambos os lados preenchidos (não TBD).
+// Fallback seguro: se o bracket inline não existir (sem sorteio, ou chamado de
+// um contexto sem a seção), navega pra #bracket/:id como antes — nada quebra.
+window._scrollToBracketSection = function(tId) {
+  var t = window.AppStore && window.AppStore.tournaments &&
+          window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  var container = document.getElementById('inline-bracket-container');
+  if (!t || !container) {
+    window._lastActiveTournamentId = tId;
+    window.location.hash = '#bracket/' + tId;
+    return;
+  }
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+  var matches = (typeof window._collectAllMatches === 'function')
+    ? window._collectAllMatches(t) : (t.matches || []);
+  var playable = {}, mine = {};
+  matches.forEach(function(m){
+    if (!m || m.winner || m.isBye) return;
+    if (!m.p1 || m.p1 === 'TBD' || !m.p2 || m.p2 === 'TBD') return;
+    playable[String(m.id)] = true;
+    if (cu && typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, cu) > 0) {
+      mine[String(m.id)] = true;
+    }
+  });
+  // Encontra o card alvo na ORDEM do DOM (= ordem da chave: rodadas da esquerda
+  // pra direita, de cima pra baixo). Participante: 1º jogo jogável dele.
+  var cards = container.querySelectorAll('[id^="card-"]');
+  var target = null, i, id;
+  if (!isOrg) {
+    for (i = 0; i < cards.length; i++) { id = cards[i].id.slice(5); if (mine[id]) { target = cards[i]; break; } }
+  }
+  if (!target) {
+    for (i = 0; i < cards.length; i++) { id = cards[i].id.slice(5); if (playable[id]) { target = cards[i]; break; } }
+  }
+  var dest = target || container;
+  try {
+    dest.scrollIntoView({ behavior: 'smooth', block: target ? 'center' : 'start', inline: 'center' });
+  } catch (e) {
+    dest.scrollIntoView();
+  }
+};
+
 function renderTournaments(container, tournamentId = null) {
     if (!window.AppStore) return;
     // Clear one-time check flags for OTHER tournaments (keep current)
@@ -1340,7 +1389,7 @@ function renderTournaments(container, tournamentId = null) {
                ${teamEnrollModalHtml}
                ${hasDraw ? `
                <div style="margin-top:1rem;">
-                 <button class="btn btn-primary hover-lift" style="width:100%;font-size:0.95rem;padding:12px;margin-bottom:10px;" onclick="window._lastActiveTournamentId='${t.id}';window.location.hash='#bracket/${t.id}'">🏆 Ver Chaves</button>
+                 <button class="btn btn-primary hover-lift" style="width:100%;font-size:0.95rem;padding:12px;margin-bottom:10px;" onclick="window._scrollToBracketSection('${t.id}')">🏆 Ver Chaves</button>
                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
                    <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 Regras</button>
                    <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
@@ -1624,7 +1673,7 @@ function renderTournaments(container, tournamentId = null) {
             <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.12);">
               <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.35); margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._lastActiveTournamentId='${t.id}';window.location.hash='#bracket/${t.id}'">🏆 ${_t('btn.viewBracket')}</button>` : ''}
+                ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
                 ${t.status !== 'closed' ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
                 ${t.status !== 'closed' ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window._sendOrgCommunication('${t.id}')">📢 ${_t('org.communicate')}</button>` : ''}
                 ${addParticipantBtns}
