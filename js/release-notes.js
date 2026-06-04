@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.96-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Tudo liberado no beta + dicas pausadas.</b><br><br>' +
+      'Durante o beta, <b>todos os recursos estão liberados gratuitamente para todo mundo</b> — sem limite de torneios, sem limite de participantes, logo personalizada, Modo TV sem marca. O botão "Pro" e a cobrança ficam pausados por enquanto (voltam mais pra frente). Também <b>desativamos as dicas/balões contextuais</b> temporariamente, que estavam mais atrapalhando do que ajudando. Ambos voltam no futuro.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.95-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Card de placar pendente no celular: largura fixa + botões organizados.</b><br><br>' +
       'No fluxo de aprovação (ex.: revisar um placar contestado), o card da chave estava <b>esticando demais</b> no celular e cortando os botões. Agora ele mantém a largura e <b>quebra em linhas</b>: a tag PENDENTE e o "Aguardando aprovação" ficam empilhados no canto, e os botões ganham uma linha própria — sempre na ordem <b>Contestar (vermelho) à esquerda, Confirmar (verde) à direita</b>.</p>' +

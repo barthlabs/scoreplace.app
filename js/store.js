@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.95-beta';
+window.SCOREPLACE_VERSION = '1.9.96-beta';
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -1673,9 +1673,18 @@ window.BETA_TESTERS = [
 
 // ─── Plano Pro ──────────────────────────────────────────────────────────────
 // Verifica se o usuário logado tem plano Pro ativo
+// v1.9.96: MONETIZAÇÃO PAUSADA no beta. Enquanto `false`: todos com conta têm
+// acesso COMPLETO (Pro), o botão "🚀 Pro" e o modal de upgrade não aparecem, e
+// ninguém recebe o selo "⭐ PRO". Objetivo: deixar todos usarem tudo pra
+// entendermos o uso real antes de desenhar a cobrança. Reativar a cobrança =
+// trocar esta linha para `true` (a lógica de plano abaixo volta a valer).
+window._MONETIZATION_ENABLED = false;
+
 window._isPro = function() {
   var user = window.AppStore && window.AppStore.currentUser;
   if (!user) return false;
+  // Beta: monetização pausada → acesso completo (Pro) pra todos os logados.
+  if (!window._MONETIZATION_ENABLED) return true;
   // Beta testers sempre têm Pro
   if (user.email && window.BETA_TESTERS.indexOf(user.email.toLowerCase()) !== -1) return true;
   if (user.plan !== 'pro') return false;
@@ -1713,6 +1722,10 @@ window._canAddParticipant = function(tournament) {
 
 // Abre a página/modal de upgrade Pro
 window._showUpgradeModal = function(reason) {
+  // v1.9.96: monetização pausada — nenhum paywall/modal de upgrade aparece.
+  // Belt+suspenders: mesmo que algum gate chame isto, vira no-op enquanto
+  // _MONETIZATION_ENABLED for false.
+  if (!window._MONETIZATION_ENABLED) return;
   // v1.0.59-beta: GA4 — pro_upgrade_clicked (sinal forte de monetização).
   // source = reason: tournaments | participants | logo | tv | unknown
   try {

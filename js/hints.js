@@ -381,6 +381,10 @@
 
   // ── Utility ────────────────────────────────────────────────────────────────
   function _isDisabled() {
+    // v1.9.96: DICAS DESATIVADAS globalmente no beta (estavam mais atrapalhando
+    // do que ajudando). O sistema fica inerte: nenhum balão é criado/exibido.
+    // Reativar: setar window._HINTS_ENABLED = true (ou remover esta linha).
+    if (window._HINTS_ENABLED !== true) return true;
     try { return localStorage.getItem(LS_DISABLED_KEY) === '1'; } catch (e) { return false; }
   }
 

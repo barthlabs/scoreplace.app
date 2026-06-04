@@ -5410,10 +5410,14 @@ function setupProfileModal() {
                 '<button type="button" data-theme-val="ocean" onclick="window._setProfileTheme(\'ocean\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">' + _t('profile.themeOcean') + '</button>' +
               '</div>' +
             '</div>' +
-            // Visual Hints toggle
-            '<div style="margin-bottom: 1rem;">' +
-              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-hints-enabled', label: _t('profile.visualHints'), icon: '💡', checked: true, color: '#fbbf24', desc: _t('profile.hintsDesc') }) : '') +
-            '</div>' +
+            // Visual Hints toggle — v1.9.96: oculto enquanto as dicas estão
+            // desativadas globalmente (window._HINTS_ENABLED !== true). Sem isso
+            // o toggle ficaria inerte (ligar não mostraria dica nenhuma).
+            (window._HINTS_ENABLED === true
+              ? ('<div style="margin-bottom: 1rem;">' +
+                  (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-hints-enabled', label: _t('profile.visualHints'), icon: '💡', checked: true, color: '#fbbf24', desc: _t('profile.hintsDesc') }) : '') +
+                '</div>')
+              : '') +
             // Language selector — flag buttons
             '<div style="margin-bottom: 1rem;">' +
               '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
@@ -6776,7 +6780,10 @@ function setupProfileModal() {
       // ── 8. HINTS — só toggle quando state REALMENTE mudou ──────────────
       // Antes: enable/disable era chamado incondicionalmente a cada save,
       // gerando toast "Dicas ativadas" que sobrepunha o toast de diagnóstico.
-      if (window._hintSystem) {
+      // v1.9.96: com as dicas desativadas globalmente (window._HINTS_ENABLED
+      // !== true) o toggle nem é renderizado — pula o bloco pra não chamar
+      // enable() à toa (que dispararia "Dicas ativadas" a cada save).
+      if (window._HINTS_ENABLED === true && window._hintSystem) {
         var wasDisabled = window._hintSystem.isDisabled ? window._hintSystem.isDisabled() : false;
         var wantDisabled = !hintsEnabled;
         if (wasDisabled !== wantDisabled) {

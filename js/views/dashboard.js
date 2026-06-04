@@ -922,7 +922,10 @@ function renderDashboard(container) {
     ? window._friendlyUserName(window.AppStore.currentUser)
     : null;
   const userName = _friendly || _t('common.guest');
-  const _userIsPro = typeof window._isPro === 'function' && window._isPro();
+  // v1.9.96: com monetização pausada, _isPro() é true pra todos (acesso
+  // completo) — mas NÃO exibimos o selo "⭐ PRO" (senão pareceria que todos
+  // pagaram). O selo só volta quando a cobrança for reativada.
+  const _userIsPro = (window._MONETIZATION_ENABLED !== false) && typeof window._isPro === 'function' && window._isPro();
   const _proBadge = _userIsPro ? ' <span style="display:inline-flex;align-items:center;gap:3px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:0.55rem;font-weight:800;padding:2px 8px;border-radius:20px;vertical-align:middle;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(245,158,11,0.3);position:relative;top:-2px;">⭐ PRO</span>' : '';
 
   // Initialize filter state
