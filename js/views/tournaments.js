@@ -361,7 +361,20 @@ function renderTournaments(container, tournamentId = null) {
                 window.showFinalReviewPanel(tId);
             }
         };
-        if (isAberto) {
+        // v2.1.2: se "Fechadas" está OFF (lateEnrollment 'standby'/'expand'), o
+        // SORTEIO não encerra as inscrições — elas seguem abertas. Não mostra o
+        // diálogo "encerrar prematuramente"; sorteia direto SEM setar 'closed'.
+        var _tSort = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        var _lateMode = !!(_tSort && (_tSort.lateEnrollment === 'standby' || _tSort.lateEnrollment === 'expand'));
+        if (isAberto && _lateMode) {
+            showConfirmDialog(
+                'Sortear agora?',
+                'As inscrições continuarão ABERTAS após o sorteio — novos inscritos vão para a lista de espera. Você poderá encerrá-las depois em "Encerrar Inscrições". Deseja sortear agora?',
+                function() { _startDraw(); },
+                null,
+                { type: 'info', confirmText: '🎲 Sortear', cancelText: 'Cancelar' }
+            );
+        } else if (isAberto) {
             showConfirmDialog(
                 _t('org.closeRegConfirmTitle'),
                 _t('org.closeRegConfirmMsg'),
