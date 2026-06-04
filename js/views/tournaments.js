@@ -879,6 +879,23 @@ function renderTournaments(container, tournamentId = null) {
               : false;
         }
 
+        // v2.1.3: usuário está na LISTA DE ESPERA (standby/waitlist)? Inscrição
+        // tardia (pós-sorteio, Fechadas OFF) coloca o novo inscrito aqui — e o
+        // detalhe precisa mostrar "Lista de espera" + "Sair", não "Inscrever-se".
+        let _isInStandby = false;
+        if (window.AppStore.currentUser) {
+            var _cuStb = window.AppStore.currentUser;
+            var _matchStb = function(p) {
+                if (!p) return false;
+                if (typeof p === 'string') return p === _cuStb.email || p === _cuStb.displayName;
+                return (p.uid && _cuStb.uid && p.uid === _cuStb.uid) ||
+                       (p.email && _cuStb.email && p.email === _cuStb.email) ||
+                       (p.displayName && _cuStb.displayName && p.displayName === _cuStb.displayName);
+            };
+            _isInStandby = (Array.isArray(t.standbyParticipants) && t.standbyParticipants.some(_matchStb)) ||
+                           (Array.isArray(t.waitlist) && t.waitlist.some(_matchStb));
+        }
+
         // Card gradients adaptam ao tema — consistentes com dashboard.js
         // v0.17.32: paleta sincronizada com dashboard.js — dark themes
         // (Noturno/Oceano) usam deep tints pros 3 estados; Sunset agora é
@@ -1045,7 +1062,13 @@ function renderTournaments(container, tournamentId = null) {
         // Enquanto carrega, botão fica cinza desabilitado para evitar inscrições
         // com uid indefinido que gerariam participantes fantasmas no Firestore.
         const _profileReady = !!(window.AppStore.currentUser && window.AppStore.currentUser._profileLoaded);
-        const enrollBtnHtml = (isParticipating && isAberto) ? `
+        // v2.1.3: se está na LISTA DE ESPERA, mostra a tag + "Sair da lista de
+        // espera" (tem prioridade sobre o botão "Inscrever-se", que aparecia
+        // errado pra quem já entrou na espera via inscrição tardia).
+        const enrollBtnHtml = _isInStandby ? `
+             <div style="font-size: 0.6rem; font-weight: 800; color: #fbbf24; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.4px;">⏳ ${_t('enroll.onWaitlist') || 'Lista de espera'}</div>
+             <button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist') || 'Sair da lista de espera'}</button>
+          ` : (isParticipating && isAberto) ? `
              <button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>
           ` : (isAberto && !_profileReady && window.AppStore.currentUser) ? `
              <button class="btn btn-sm" disabled style="opacity:0.45;cursor:not-allowed;padding:6px 12px;font-size:0.78rem;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:8px;color:var(--text-muted);">⏳ Carregando…</button>

@@ -1137,6 +1137,21 @@ function renderParticipants(container, tournamentId) {
   let cardsStr = '';
   let gridStyle = '';
 
+  // v2.1.3: mapa nome→participante usado tanto no modo check-in quanto na GRADE
+  // (foto/perfil do jogador). Antes era declarado só dentro do if (canCheckIn),
+  // então a grade (else — torneio pré-sorteio OU sorteado-não-iniciado) dava
+  // ReferenceError ao usá-lo → tela de Inscritos ficava preta. Agora vive no
+  // escopo da função, disponível pros dois caminhos.
+  const _nameToParticipant = {};
+  (t.participants || []).forEach(function(p) {
+    if (!p) return;
+    const pn = window._pName(p);
+    if (pn) _nameToParticipant[pn] = p;
+    if (typeof p === 'object' && pn && pn.includes('/')) {
+      pn.split('/').forEach(function(nm) { const t2 = nm.trim(); if (t2) _nameToParticipant[t2] = p; });
+    }
+  });
+
   if (canCheckIn) {
     // ── Check-in mode: individual list with checkboxes ──
     gridStyle = 'display:flex;flex-direction:column;gap:6px;';
@@ -1331,18 +1346,7 @@ function renderParticipants(container, tournamentId) {
       };
     } catch (_e) {}
 
-    // Build name → participant object map for skill lookup in check-in mode
-    const _nameToParticipant = {};
-    (t.participants || []).forEach(function(p) {
-      if (!p) return;
-      const pn = window._pName(p);
-      if (pn) _nameToParticipant[pn] = p;
-      // also map individual names inside team entries (A/B style)
-      if (typeof p === 'object' && pn && pn.includes('/')) {
-        pn.split('/').forEach(function(nm) { const t2 = nm.trim(); if (t2) _nameToParticipant[t2] = p; });
-      }
-    });
-
+    // v2.1.3: _nameToParticipant agora é definido no escopo da função (acima).
     cardsStr = _dedupedIndividuals.map((ind) => {
       const mc = !!checkedIn[ind.name];
       // v0.17.34: W.O. orphan = jogador que teve W.O. decretado e foi

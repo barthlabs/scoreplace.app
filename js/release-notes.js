@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Correções na lista de espera (inscrição tardia).</b><br><br>' +
+      '(1) <b>Tela de Inscritos não fica mais preta</b> — havia um erro que travava a página de inscritos do torneio (afetava todo torneio sorteado-não-iniciado). (2) Quem entra na <b>lista de espera</b> agora vê corretamente a tag <b>"⏳ Lista de espera"</b> e o botão <b>"Sair da lista de espera"</b> — antes aparecia "Inscrever-se" como se não estivesse inscrito.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.2-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Sortear com "Fechadas" desligado não pede mais para encerrar.</b><br><br>' +
       'Complemento da v2.1.0: quando "Fechadas" está desligado, clicar em <b>Sortear</b> não mostra mais o aviso "encerrar inscrições prematuramente". Em vez disso, confirma o sorteio deixando claro que as <b>inscrições continuam abertas</b> (novos vão para a lista de espera) — e você fecha quando quiser em "Encerrar Inscrições".</p>' +

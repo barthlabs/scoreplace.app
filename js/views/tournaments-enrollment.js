@@ -579,6 +579,38 @@ window.submitTeamEnroll = function (tId) {
     }
 };
 
+// v2.1.3: sair da LISTA DE ESPERA (standby/waitlist). Inscrição tardia (pós-
+// sorteio, Fechadas OFF) coloca o usuário na espera; deenrollCurrentUser só
+// mexe em participants, então a saída da espera precisa desta função própria.
+window._leaveStandby = function (tId) {
+    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var user = (typeof window._verifiedCurrentUser === 'function') ? window._verifiedCurrentUser() : window.AppStore.currentUser;
+    if (!t || !user) return;
+    var _matchUser = function(p) {
+        if (!p) return false;
+        if (typeof p === 'string') return p === user.email || p === user.displayName;
+        return (p.uid && user.uid && p.uid === user.uid) ||
+               (p.email && user.email && p.email === user.email) ||
+               (p.displayName && user.displayName && p.displayName === user.displayName);
+    };
+    showConfirmDialog(
+        _t('enroll.leaveWaitlist') || 'Sair da lista de espera',
+        'Deseja sair da lista de espera deste torneio?',
+        function() {
+            if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(function(p) { return !_matchUser(p); });
+            if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(function(p) { return !_matchUser(p); });
+            if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+                window.FirestoreDB.saveTournament(t).catch(function(err) { window._warn('[leaveStandby] save error:', err); });
+            }
+            if (typeof showNotification !== 'undefined') showNotification('Saiu da lista de espera', 'Você não está mais na lista de espera.', 'info');
+            var c = document.getElementById('view-container');
+            if (c && typeof renderTournaments === 'function') renderTournaments(c, String(tId));
+        },
+        null,
+        { type: 'warning', confirmText: 'Sair', cancelText: 'Cancelar' }
+    );
+};
+
 window.deenrollCurrentUser = function (tId) {
     const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
     // LGPD: identidade verificada contra Firebase Auth
