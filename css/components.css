@@ -199,13 +199,13 @@ body.hamburger-open .topbar {
   user-select: none;
   white-space: nowrap;
   line-height: 1.3;
-  /* v2.0.1: volume 3D — base "dura" embaixo + sombra projetada + luz no topo.
-     Cor-neutra (rgba preto/branco) pra funcionar em qualquer cor de botão. */
+  /* v2.0.5: volume 3D mais profundo — base "dura" mais alta embaixo + sombra
+     projetada maior + luz no topo. Cor-neutra (rgba) p/ qualquer cor de botão. */
   box-shadow:
-    0 4px 0 rgba(0,0,0,0.18),
-    0 6px 10px rgba(0,0,0,0.20),
-    inset 0 1px 0 rgba(255,255,255,0.30),
-    inset 0 -2px 4px rgba(0,0,0,0.12);
+    0 7px 0 rgba(0,0,0,0.22),
+    0 11px 16px rgba(0,0,0,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.32),
+    inset 0 -3px 6px rgba(0,0,0,0.16);
 }
 
 .btn:focus-visible {
@@ -213,30 +213,46 @@ body.hamburger-open .topbar {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
 }
 
-/* v2.0.1: "afundar" ao clicar — desce e some a base 3D (efeito de pressionar) */
+/* v2.0.5: "afundar" ao clicar — desce a altura toda e some a base 3D */
 .btn:active {
-  transform: translateY(4px);
+  transform: translateY(7px);
   box-shadow:
-    0 1px 0 rgba(0,0,0,0.18),
-    0 2px 4px rgba(0,0,0,0.18),
+    0 1px 0 rgba(0,0,0,0.22),
+    0 2px 5px rgba(0,0,0,0.22),
     inset 0 1px 0 rgba(255,255,255,0.22);
 }
 
-/* Botões pequenos: volume 3D proporcional (sombra menor) */
+/* Botões pequenos: volume 3D proporcional (menor) */
 .btn-micro {
   box-shadow:
-    0 2px 0 rgba(0,0,0,0.18),
-    0 2px 4px rgba(0,0,0,0.18),
+    0 3px 0 rgba(0,0,0,0.20),
+    0 3px 5px rgba(0,0,0,0.20),
     inset 0 1px 0 rgba(255,255,255,0.25);
 }
-.btn-micro:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.2); }
+.btn-micro:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.2); }
 .btn-sm, .btn-pill {
   box-shadow:
-    0 3px 0 rgba(0,0,0,0.18),
-    0 3px 6px rgba(0,0,0,0.20),
-    inset 0 1px 0 rgba(255,255,255,0.28);
+    0 5px 0 rgba(0,0,0,0.21),
+    0 7px 11px rgba(0,0,0,0.24),
+    inset 0 1px 0 rgba(255,255,255,0.30);
 }
-.btn-sm:active, .btn-pill:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.2); }
+.btn-sm:active, .btn-pill:active { transform: translateY(5px); box-shadow: 0 1px 0 rgba(0,0,0,0.21), inset 0 1px 0 rgba(255,255,255,0.2); }
+
+/* Botões grandes/CTA: volume EXTRA (mais profundidade ainda) */
+.btn-cta, .btn-lg {
+  box-shadow:
+    0 9px 0 rgba(0,0,0,0.24),
+    0 15px 24px rgba(0,0,0,0.32),
+    inset 0 2px 0 rgba(255,255,255,0.34),
+    inset 0 -4px 8px rgba(0,0,0,0.16);
+}
+.btn-cta:active, .btn-lg:active {
+  transform: translateY(9px);
+  box-shadow:
+    0 1px 0 rgba(0,0,0,0.24),
+    0 3px 7px rgba(0,0,0,0.24),
+    inset 0 2px 0 rgba(255,255,255,0.30);
+}
 
 /* v2.0.1: brilho periódico — SÓ nos CTAs especiais (.btn-cta). Anima apenas
    `transform` (composto na GPU = custo desprezível). overflow:hidden recorta o

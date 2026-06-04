@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.0.5-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Botões com mais volume.</b><br><br>' +
+      'Aumentamos a <b>profundidade 3D</b> dos botões — mais altura e relevo, com o "afundar" ao tocar proporcional. Os botões grandes (Entrar, Inscrever-se) ganharam ainda mais volume; os pequenininhos seguem com um relevo sutil.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.0.4-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Torneio encerra sozinho ao sagrar o campeão + duração registrada.</b><br><br>' +
       'Tinha um bug: torneios de <b>Eliminatórias Simples</b> ficavam "em andamento" mesmo depois de definir o campeão — o relógio não parava. Corrigido: ao decidir a final, o torneio passa automaticamente para <b>encerrado</b>, e a <b>duração</b> (do início até o campeão) fica registrada e aparece no quadro do campeão (⏱️). Torneios que já estavam travados foram destravados.</p>' +
