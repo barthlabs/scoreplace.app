@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.0.8-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Fim da tela separada de chaveamento.</b><br><br>' +
+      'A página separada de chaveamento foi removida. Agora <b>tudo acontece na página do torneio</b>, na própria seção de chaveamento: "Ir para Torneio" (em Meus Resultados) leva direto pra <b>aquele jogo</b> na chave, e qualquer link/atalho que antes abria a tela separada já cai na seção de chaveamento do torneio. Menos telas, sem perder o contexto.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.0.7-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Botões com aspecto "almofadado" (mais volume de verdade).</b><br><br>' +
       'Trocamos o relevo: agora o volume vem do <b>brilho no topo</b> (afastado da borda) + uma <b>sombra degradê suave</b> descendo até a borda — dando aquele aspecto inflado/glossy de botão de jogo, em vez da sombra "em degrau". Os grandes ficam mais bombados; os pequenos, sutis.</p>' +

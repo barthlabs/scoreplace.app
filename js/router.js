@@ -230,7 +230,16 @@ function initRouter() {
         renderPreDraw(viewContainer, cleanParam);
         break;
       case 'bracket':
-        renderBracket(viewContainer, cleanParam);
+        // v2.0.8: a página de chaveamento standalone foi removida. Toda
+        // referência a #bracket/:id redireciona pro DETALHE do torneio
+        // (#tournaments/:id) e rola até a seção de chaveamento, que já existe
+        // inline lá. renderBracket continua existindo (usado inline no detalhe).
+        if (cleanParam) {
+          try { sessionStorage.setItem('sp_bracketScroll', JSON.stringify({ tId: String(cleanParam), matchId: null })); } catch (e) {}
+          window.location.hash = '#tournaments/' + cleanParam;
+        } else {
+          window.location.hash = '#dashboard';
+        }
         break;
       case 'participants':
         renderParticipants(viewContainer, cleanParam);

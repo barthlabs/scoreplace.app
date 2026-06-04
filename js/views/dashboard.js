@@ -1732,7 +1732,7 @@ function renderDashboard(container) {
       var finalHeaderBtns = headerBtns !== null ? headerBtns : defaultHeaderBtns;
 
       var goToBtnFooter = '<div style="display:flex;justify-content:flex-end;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);">' +
-        '<button onclick="event.stopPropagation();window.location.hash=\'#bracket/' + _esc(tId) + '\'" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);color:#818cf8;border-radius:6px;padding:3px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;" onmouseover="this.style.background=\'rgba(99,102,241,0.2)\'" onmouseout="this.style.background=\'rgba(99,102,241,0.1)\'">Ir para Torneio →</button>' +
+        '<button onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);color:#818cf8;border-radius:6px;padding:3px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;" onmouseover="this.style.background=\'rgba(99,102,241,0.2)\'" onmouseout="this.style.background=\'rgba(99,102,241,0.1)\'">Ir para Torneio →</button>' +
         '</div>';
 
       return '<div style="min-width:300px;max-width:360px;display:flex;flex-direction:column;gap:0.6rem;">' +

@@ -118,14 +118,31 @@ window._updateStatBoxes = function(t) {
 // Jogável = sem vencedor, não é BYE, e ambos os lados preenchidos (não TBD).
 // Fallback seguro: se o bracket inline não existir (sem sorteio, ou chamado de
 // um contexto sem a seção), navega pra #bracket/:id como antes — nada quebra.
-window._scrollToBracketSection = function(tId) {
+// v2.0.8: aceita matchId opcional (rola direto pra esse jogo). A página de
+// chaveamento standalone foi removida — o fallback agora navega pro DETALHE
+// (#tournaments/:id) com uma flag de scroll, nunca mais pra #bracket/:id.
+window._goToTournamentMatch = function(tId, matchId) {
+  try { sessionStorage.setItem('sp_bracketScroll', JSON.stringify({ tId: String(tId), matchId: matchId ? String(matchId) : null })); } catch(e) {}
+  window.location.hash = '#tournaments/' + tId;
+};
+
+window._scrollToBracketSection = function(tId, matchId) {
   var t = window.AppStore && window.AppStore.tournaments &&
           window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
   var container = document.getElementById('inline-bracket-container');
   if (!t || !container) {
-    window._lastActiveTournamentId = tId;
-    window.location.hash = '#bracket/' + tId;
+    // Detalhe ainda não está na tela → navega pra lá e deixa a flag pro render rolar.
+    window._goToTournamentMatch(tId, matchId);
     return;
+  }
+  // Jogo específico pedido (ex.: "Ir para Torneio" de um card de resultado).
+  if (matchId) {
+    var _specific = document.getElementById('card-' + matchId);
+    if (_specific) {
+      try { _specific.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); }
+      catch (e) { _specific.scrollIntoView(); }
+      return;
+    }
   }
   var cu = window.AppStore && window.AppStore.currentUser;
   var isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
@@ -2548,6 +2565,23 @@ function renderTournaments(container, tournamentId = null) {
             }
         }
     }
+
+    // v2.0.8: veio de #bracket/:id (redirecionado) ou de "Ir para Torneio"?
+    // Rola até a seção de chaveamento (ou o jogo específico) após o render inline.
+    try {
+        const _bs = sessionStorage.getItem('sp_bracketScroll');
+        if (_bs) {
+            const _bso = JSON.parse(_bs);
+            if (_bso && String(_bso.tId) === String(tournamentId)) {
+                sessionStorage.removeItem('sp_bracketScroll');
+                setTimeout(function() {
+                    if (typeof window._scrollToBracketSection === 'function') {
+                        window._scrollToBracketSection(tournamentId, _bso.matchId || null);
+                    }
+                }, 200);
+            }
+        }
+    } catch (_bse) {}
 
     // Build activity log
     if (tournamentId && typeof window._buildActivityLog === 'function') {
