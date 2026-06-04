@@ -199,6 +199,13 @@ body.hamburger-open .topbar {
   user-select: none;
   white-space: nowrap;
   line-height: 1.3;
+  /* v2.0.1: volume 3D — base "dura" embaixo + sombra projetada + luz no topo.
+     Cor-neutra (rgba preto/branco) pra funcionar em qualquer cor de botão. */
+  box-shadow:
+    0 4px 0 rgba(0,0,0,0.18),
+    0 6px 10px rgba(0,0,0,0.20),
+    inset 0 1px 0 rgba(255,255,255,0.30),
+    inset 0 -2px 4px rgba(0,0,0,0.12);
 }
 
 .btn:focus-visible {
@@ -206,8 +213,51 @@ body.hamburger-open .topbar {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
 }
 
+/* v2.0.1: "afundar" ao clicar — desce e some a base 3D (efeito de pressionar) */
 .btn:active {
-  transform: translateY(1px);
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 rgba(0,0,0,0.18),
+    0 2px 4px rgba(0,0,0,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.22);
+}
+
+/* Botões pequenos: volume 3D proporcional (sombra menor) */
+.btn-micro {
+  box-shadow:
+    0 2px 0 rgba(0,0,0,0.18),
+    0 2px 4px rgba(0,0,0,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.btn-micro:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.2); }
+.btn-sm, .btn-pill {
+  box-shadow:
+    0 3px 0 rgba(0,0,0,0.18),
+    0 3px 6px rgba(0,0,0,0.20),
+    inset 0 1px 0 rgba(255,255,255,0.28);
+}
+.btn-sm:active, .btn-pill:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.2); }
+
+/* v2.0.1: brilho periódico — SÓ nos CTAs especiais (.btn-cta). Anima apenas
+   `transform` (composto na GPU = custo desprezível). overflow:hidden recorta o
+   brilho dentro do botão. Respeita prefers-reduced-motion. */
+.btn-cta { position: relative; overflow: hidden; }
+.btn-cta::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 0; width: 38%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%);
+  transform: translateX(-220%) skewX(-18deg);
+  animation: btnCtaShine 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes btnCtaShine {
+  0%   { transform: translateX(-220%) skewX(-18deg); }
+  22%  { transform: translateX(360%) skewX(-18deg); }
+  100% { transform: translateX(360%) skewX(-18deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-cta::after { animation: none; }
 }
 
 /* --- Hover Lift (efeito universal) --- */
