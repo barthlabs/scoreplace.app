@@ -174,6 +174,31 @@ window._dashEnroll = function(tId) {
   window.location.hash = '#tournaments/' + tId;
 };
 
+// v1.9.94: re-render automático da dashboard SEM "pulo" de scroll. As
+// re-renderizações disparadas por fetch assíncrono (discovery re-fetch / poll
+// de 25s) chamavam renderDashboard direto — isso (a) resetava o scroll pro topo
+// (innerHTML novo) e (b) com _isSoftRefresh=false, resetava o guard
+// _dashPendingScrolled, fazendo o auto-scroll pro jogo pendente disparar de
+// novo. Resultado reportado: na entrada com jogo pendente, "ia pro jogo e
+// voltava pro topo 3x". Este helper preserva o scroll atual e marca
+// _isSoftRefresh durante o render pra NÃO re-disparar o auto-scroll.
+function _reRenderDashKeepScroll() {
+  var c = document.getElementById('view-container');
+  if (!c || typeof renderDashboard !== 'function') return;
+  var _sy = window.scrollY || window.pageYOffset || 0;
+  var _prevSR = window._isSoftRefresh;
+  window._isSoftRefresh = true; // impede reset do guard _dashPendingScrolled
+  try { renderDashboard(c); } finally { window._isSoftRefresh = _prevSR; }
+  // Só restaura se havia scroll E ele foi de fato perdido pelo novo innerHTML.
+  // Evita chamar scrollTo à toa (que poderia cortar o momentum no mobile).
+  if (_sy > 0) {
+    requestAnimationFrame(function() {
+      var _now = window.scrollY || window.pageYOffset || 0;
+      if (Math.abs(_now - _sy) > 2) window.scrollTo({ top: _sy, behavior: 'instant' });
+    });
+  }
+}
+
 function renderDashboard(container) {
   const visible = window.AppStore.getVisibleTournaments();
 
@@ -2638,10 +2663,18 @@ function renderDashboard(container) {
     // Confirmar que ainda estamos no dashboard
     var _h = (window.location.hash || '').replace('#', '').split('/')[0];
     if (_h && _h !== 'dashboard') return;
+    // v1.9.94: se o usuário JÁ começou a rolar manualmente, NÃO sequestra o
+    // scroll — respeita a ação dele. A seção pendente continua visível na
+    // página; o auto-scroll é só uma conveniência da primeira abertura.
+    var _cur = window.scrollY || window.pageYOffset || 0;
+    if (_cur > 40) { window._dashPendingScrolled = true; return; }
     var _section = document.querySelector('[data-has-pending="1"]');
     if (_section) {
       window._dashPendingScrolled = true;
-      _section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // v1.9.94: instantâneo (não 'smooth'). Com re-renders assíncronos na
+      // entrada, a animação suave era interrompida no meio e parecia "pulo".
+      // O guard + scroll preservado garantem que isto roda UMA vez e fica.
+      _section.scrollIntoView({ behavior: 'auto', block: 'start' });
     }
   }, 350);
 
@@ -2699,10 +2732,10 @@ function renderDashboard(container) {
         var newLen = (window.AppStore.publicDiscovery || []).length;
         window._log('[Discovery v0.16.60] re-fetch retornou', { newLen: newLen, oldLen: _curLen });
         // Re-render se ainda estamos no dashboard E o count mudou.
+        // v1.9.94: preserva scroll + não re-dispara auto-scroll (sem "pulo").
         if (window.location.hash === '' || window.location.hash === '#' || window.location.hash.indexOf('#dashboard') === 0) {
           if (newLen !== _curLen) {
-            var c = document.getElementById('view-container');
-            if (c && typeof renderDashboard === 'function') renderDashboard(c);
+            _reRenderDashKeepScroll();
           }
         }
       }).catch(function(e) {
@@ -2734,8 +2767,8 @@ function renderDashboard(container) {
         if (_newLen === _prevLen) return;
         var _h2 = window.location.hash || '';
         if (_h2 === '' || _h2 === '#' || _h2.indexOf('#dashboard') === 0) {
-          var _c = document.getElementById('view-container');
-          if (_c && typeof renderDashboard === 'function') renderDashboard(_c);
+          // v1.9.94: preserva scroll (poll a cada 25s não deve dar "pulo").
+          _reRenderDashKeepScroll();
         }
       }).catch(function() {});
     }, 25000);

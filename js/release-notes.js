@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.94-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
+      '<p><b>Fim do "pulo" de scroll ao abrir o app.</b><br><br>' +
+      'Ao entrar, a dashboard atualizava algumas vezes em segundos (carregando torneios e o feed público) e cada atualização <b>jogava a tela de volta pro topo</b> — atrapalhando quem tentava rolar pra baixo. Agora essas atualizações <b>preservam a sua posição de rolagem</b>. Além disso, o pulo automático para um jogo aguardando aprovação só acontece na primeira abertura e <b>não te interrompe</b> se você já começou a rolar a tela.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v1.9.93-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Junho, 2026)</span></div>' +
       '<p><b>Placar pendente não cresce mais o card da chave.</b><br><br>' +
       'Quando um resultado é lançado e fica aguardando aprovação, o aviso "⏳ Aguardando aprovação" e os botões <b>Editar/Confirmar</b> voltaram para a <b>linha do cabeçalho</b> (do lado do "JOGO 1" e da tag PENDENTE) — antes apareciam dentro de um box âmbar novo que aumentava o tamanho do card. Agora o card pendente fica do mesmo tamanho do normal.</p>' +
