@@ -57,57 +57,33 @@ window._executeMerge = function(sourceName, targetName, tId) {
     var sourceInDraw = _nameInDraw(sourceName);
     var targetInDraw = _nameInDraw(targetName);
 
-    var oldName, newName;
-    if (sourceInDraw && !targetInDraw) {
-        oldName = sourceName; newName = targetName;
-    } else if (!sourceInDraw && targetInDraw) {
-        oldName = targetName; newName = sourceName;
-    } else {
-        oldName = sourceName; newName = targetName;
-    }
+    // v2.0.2: UNIFICAÇÃO — touch (celular) e drag nativo do view de detalhe
+    // passam a usar o MESMO overlay de 2 botões (Mesclar / Formar equipe) do
+    // view de Inscritos. Auto-detecta quem é o PLACEHOLDER (o que está na chave)
+    // e quem é a PESSOA (o que não está), pra a direção do gesto não importar.
+    // "Mesclar" usa o motor novo (_mergeParticipantConfirm) que tem DESFAZER.
+    var placeholderName, personName;
+    if (sourceInDraw && !targetInDraw) { placeholderName = sourceName; personName = targetName; }
+    else if (!sourceInDraw && targetInDraw) { placeholderName = targetName; personName = sourceName; }
+    else { placeholderName = targetName; personName = sourceName; } // ambos/nenhum: assume alvo = placeholder
 
-    var msg = 'Mesclar participantes?\n\n"' + oldName + '" sera substituido por "' + newName + '" em todas as partidas, times e classificacoes.\n\nEsta acao nao pode ser desfeita.';
+    var arr = Array.isArray(t.participants) ? t.participants : [];
+    var uidOf = function(nm) {
+        var p = arr.find(function(x) { return x && typeof x === 'object' && (x.displayName || x.name) === nm; });
+        return p ? (p.uid || '') : '';
+    };
+    var hasMatches = (Array.isArray(t.matches) && t.matches.length) ||
+                     (Array.isArray(t.rounds) && t.rounds.length) ||
+                     (Array.isArray(t.groups) && t.groups.length);
+    var drawDone = !!hasMatches || t.status === 'started' || t.status === 'in_progress';
+    var allowTeam = !drawDone && t.enrollmentMode !== 'individual';
 
-    if (typeof showConfirmDialog === 'function') {
-        showConfirmDialog(_t('utils.mergePartsTitle'), msg, function() {
-            if (typeof window._propagateNameChange === 'function') {
-                window._propagateNameChange(oldName, newName);
-            }
-            // Remove phantom duplicate from participants
-            var parts = Array.isArray(t.participants) ? t.participants : [];
-            var _removeIdx = -1;
-            for (var i = parts.length - 1; i >= 0; i--) {
-                var pi = parts[i];
-                if (typeof pi === 'object' && pi) {
-                    var nm = pi.displayName || pi.name || '';
-                    if (nm === newName) {
-                        var inTeam = parts.some(function(p2) {
-                            return typeof p2 === 'string' && p2.indexOf(newName) !== -1 && p2.indexOf(' / ') !== -1;
-                        });
-                        if (inTeam) { _removeIdx = i; break; }
-                    }
-                }
-            }
-            if (_removeIdx !== -1) {
-                parts.splice(_removeIdx, 1);
-                window._debug('[Merge] Removed duplicate at index ' + _removeIdx);
-            }
-
-            t.updatedAt = new Date().toISOString();
-            if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-                window.FirestoreDB.saveTournament(t).catch(function(e) { window._warn('[Merge] Save error:', e); });
-            }
-            window.AppStore.logAction(tId, 'Participantes mesclados: "' + oldName + '" -> "' + newName + '"');
-            if (typeof showNotification === 'function') {
-                showNotification(_t('utils.partsMerged'), _t('utils.partsMergedMsg', { old: oldName, 'new': newName }), 'success');
-            }
-            setTimeout(function() {
-                if (typeof window._softRefreshView === 'function') window._softRefreshView();
-                else if (typeof renderTournaments === 'function') {
-                    var c = document.getElementById('view-container');
-                    if (c) renderTournaments(c, tId);
-                }
-            }, 300);
+    if (typeof window._showDropChoiceOverlay === 'function') {
+        window._showDropChoiceOverlay({
+            tId: tId,
+            sourceName: personName, sourceUid: uidOf(personName),
+            targetName: placeholderName, targetUid: uidOf(placeholderName),
+            allowTeam: allowTeam
         });
     }
 };

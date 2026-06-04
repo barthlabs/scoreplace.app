@@ -1675,7 +1675,7 @@ function renderParticipants(container, tournamentId) {
       // uma mesclagem (p._mergedFrom), em qualquer estado do torneio.
       let undoMergeBtn = '';
       if (isOrg && p && typeof p === 'object' && p._mergedFrom) {
-        undoMergeBtn = `<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window._undoMergeParticipant('${t.id}', ${idx});">↩️</button>`;
+        undoMergeBtn = `<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window._undoMergeParticipant('${t.id}', '${safeP}');">↩️</button>`;
       }
       if (isOrg) {
         // v2.0.0: drag habilitado pro organizador também — a MESCLAGEM funciona

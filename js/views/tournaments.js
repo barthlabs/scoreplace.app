@@ -2156,6 +2156,11 @@ function renderTournaments(container, tournamentId = null) {
 
                     let actionsHtml = '';
                     let dragProps = '';
+                    // v2.0.2: botão Desfazer mesclagem quando o card resultou de mescla.
+                    let undoMergeBtn = '';
+                    if (isOrg && p && typeof p === 'object' && p._mergedFrom) {
+                        undoMergeBtn = `<button title="Desfazer mesclagem" style="background:rgba(251,191,36,0.12);color:#fbbf24;border:1px dashed rgba(251,191,36,0.5);border-radius:6px;cursor:pointer;padding:2px 8px;font-size:0.75rem;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window._undoMergeParticipant('${t.id}', '${safeP}');">↩️</button>`;
+                    }
                     // Merge drag-and-drop: available for organizers AFTER draw (to fix duplicate names)
                     if (isOrg && drawDone) {
                         dragProps = `draggable="true" ondragstart="window._mergeDragStart(event, '${safeP}', '${t.id}')" ondragend="window._mergeDragEnd(event)" ondragover="event.preventDefault();event.dataTransfer.dropEffect='move';" ondragenter="window._mergeDragEnter(event)" ondragleave="window._mergeDragLeave(event)" ondrop="window._mergeDrop(event, '${safeP}', '${t.id}')"`;
@@ -2167,8 +2172,12 @@ function renderTournaments(container, tournamentId = null) {
                         if (pName.includes('/')) {
                             splitBtn = `<button title="Desfazer Equipe" style="background:rgba(14,165,233,0.1);color:#38bdf8;border:1px dashed #0ea5e9;border-radius:6px;cursor:pointer;padding:2px 6px;font-size:0.75rem;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
                         }
-                        actionsHtml = `<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:6px;">${vipBtn}${splitBtn}${delBtn}</div>`;
+                        actionsHtml = `<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:6px;">${vipBtn}${splitBtn}${undoMergeBtn}${delBtn}</div>`;
                         dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
+                    }
+                    // Pós-sorteio: sem o bloco de ações acima — mas se for card mesclado, mostra só o Desfazer.
+                    if (isOrg && drawDone && undoMergeBtn) {
+                        actionsHtml = `<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:6px;">${undoMergeBtn}</div>`;
                     }
 
                     const bgNum = sortedIdx + 1; // sempre número; VIP aparece inline ao lado do nome

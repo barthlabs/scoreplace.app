@@ -1486,11 +1486,19 @@ window._mergeParticipantConfirm = function(tId, personName, personUid, placehold
 
 // ── v2.0.0: DESFAZER MESCLAGEM — restaura o placeholder na posição e devolve a
 // pessoa como participante avulso; reverte o nome na chave (pessoa → placeholder).
-window._undoMergeParticipant = function(tId, idx) {
+window._undoMergeParticipant = function(tId, ref) {
     var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
     if (!t) return;
     var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-    var entry = arr[idx];
+    // v2.0.2: ref pode ser o NOME (string, robusto p/ múltiplas mesclagens) ou
+    // um índice (number). Acha a entrada mesclada certa.
+    var entry = null, idx = -1;
+    if (typeof ref === 'string') {
+        idx = arr.findIndex(function(p) { return p && typeof p === 'object' && p._mergedFrom && (p.displayName || p.name) === ref; });
+        if (idx !== -1) entry = arr[idx];
+    } else {
+        idx = ref; entry = arr[idx];
+    }
     if (!(entry && typeof entry === 'object' && entry._mergedFrom)) {
         var fi = arr.findIndex(function(p) { return p && typeof p === 'object' && p._mergedFrom; });
         if (fi === -1) return;
