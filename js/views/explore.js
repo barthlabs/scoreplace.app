@@ -324,8 +324,22 @@ function _dedupeAgainstRelationships(users, myUid, myFriends, mySent, myReceived
 // sort and card rendering work identically. Appends an "Ampliar busca" button
 // at the bottom when showing the recent-users default so the user can widen
 // the time window without retyping.
+// v2.1.1: filtra a lista de usuários convidáveis. NÃO usa filtro por nome
+// (ghosts são removidos na fonte/banco). Exclui: (a) duplicatas já mescladas
+// (mergedInto) — não são usuários ativos; (b) quem desativou "aceitar convites
+// de amizade" no perfil (acceptFriendRequests === false) — a lista é de Convidar.
+function _filterInvitableUsers(users) {
+  return (users || []).filter(function(u) {
+    if (!u) return false;
+    if (u.mergedInto) return false;
+    if (u.acceptFriendRequests === false) return false;
+    return true;
+  });
+}
+
 function _renderSearchResults(resultsDiv, users, query, recentDays) {
   var _t = window._t || function(k) { return k; };
+  users = _filterInvitableUsers(users);
   if (users.length === 0) {
     var emptyMsg = recentDays
       ? 'Nenhum usuário nos últimos ' + recentDays + ' dias.'
@@ -484,6 +498,7 @@ function _performUserSearch(query, myUid, myFriends, mySent, myReceived) {
 // de _performUserSearch para ser reusado pelo caminho de substring.
 function _continueSearchRender(users, query, resultsDiv, _t) {
   {
+    users = _filterInvitableUsers(users);
     if (users.length === 0) {
       resultsDiv.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">' +
         _t('explore.noResultsFor') + ' "' + window._safeHtml(query) + '"' +

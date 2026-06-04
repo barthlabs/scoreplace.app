@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Fim do "Usuário" fantasma no Explorar.</b><br><br>' +
+      'Aquele perfil "Usuário" sem nome que aparecia na lista de pessoas era um resto de conta excluída no banco — <b>removido na fonte</b>. Além disso, a lista de pessoas para convidar agora <b>não mostra</b> contas duplicadas (já mescladas) nem quem desativou "aceitar convites de amizade" no perfil.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Inscrições tardias: sortear não fecha mais as inscrições.</b><br><br>' +
       'Quando a opção "Fechadas" (em <i>Inscrições após o encerramento</i>) está <b>desligada</b>, fazer o sorteio <b>não encerra mais as inscrições</b> — elas seguem abertas e novos inscritos vão para a lista de espera. Agora as inscrições só fecham quando o organizador clica em <b>Encerrar Inscrições</b> (que também passa a aparecer depois do sorteio nesse modo, podendo reabrir). Com "Fechadas" ligada, nada muda — o sorteio fecha as inscrições como antes.</p>' +
