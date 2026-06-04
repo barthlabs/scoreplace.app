@@ -234,6 +234,8 @@ window._translations['pt'] = {
   'enroll.enrolled': 'Inscrito',
   'enroll.enrollBtn': 'Inscrever-se',
   'enroll.unenrollBtn': 'Desinscrever-se',
+  'enroll.onWaitlist': 'Lista de espera',
+  'enroll.leaveWaitlist': 'Sair da lista de espera',
   'enroll.processing': 'Processando…',
   'enroll.suspended': 'Inscrições suspensas durante a enquete.',
 

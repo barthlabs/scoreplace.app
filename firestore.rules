@@ -38,7 +38,13 @@ service cloud.firestore {
     // outside this set requires admin rights.
     function isEnrollmentOnlyDiff() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['participants', 'memberEmails', 'memberUids', 'status', 'teamOrigins']);
+        .hasOnly(['participants', 'memberEmails', 'memberUids', 'status', 'teamOrigins',
+          // v2.1.5: inscrição tardia (standby/expand) — um NOVO inscrito que
+          // ainda não está em participants escreve a si mesmo na lista de
+          // espera. isParticipantBracketDiff exige já-ser-participante, então
+          // sem isto a escrita era negada (permission-denied silencioso) e o
+          // inscrito via "lista de espera" localmente mas nada persistia.
+          'standbyParticipants', 'waitlist']);
     }
 
     // Participante aceita convite de co-organização (muda seu próprio status

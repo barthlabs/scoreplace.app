@@ -119,10 +119,21 @@ function _enrollToStandby(t, tId, participantObj, callback) {
     return;
   }
   t.standbyParticipants.push(participantObj);
-  window.FirestoreDB.saveTournament(t);
-  var modeLabel = (t.lateEnrollment === 'expand') ? _t('enroll.modeExpand') : _t('enroll.modeStandby');
-  if (typeof showNotification !== 'undefined') showNotification(_t('enroll.waitlistedTitle'), _t('enroll.waitlistedMsg', { name: newName, mode: modeLabel }), 'success');
-  if (callback) callback();
+  // v2.1.5: aguardar o save e tratar erro. Antes era fire-and-forget — se o
+  // Firestore rejeitasse (permission-denied), o usuário via "você está na lista
+  // de espera" mas nada persistia no servidor (organizador nunca via, e o card
+  // dele continuava "Inscrever-se"). Agora: rollback otimista + aviso real.
+  window.FirestoreDB.saveTournament(t).then(function() {
+    var modeLabel = (t.lateEnrollment === 'expand') ? _t('enroll.modeExpand') : _t('enroll.modeStandby');
+    if (typeof showNotification !== 'undefined') showNotification(_t('enroll.waitlistedTitle'), _t('enroll.waitlistedMsg', { name: newName, mode: modeLabel }), 'success');
+    if (callback) callback();
+  }).catch(function(e) {
+    // desfaz o push otimista
+    t.standbyParticipants = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []).filter(function(sp) { return getName(sp) !== newName; });
+    if (typeof showNotification !== 'undefined') showNotification('Não foi possível entrar na lista de espera', (e && e.message) ? e.message : 'Tente novamente em instantes.', 'error');
+    if (typeof window._captureException === 'function') window._captureException(e, { area: '_enrollToStandby', tournamentId: tId });
+    if (callback) callback();
+  });
 }
 
 window.enrollCurrentUser = function (tId) {

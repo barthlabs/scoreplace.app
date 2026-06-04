@@ -490,6 +490,25 @@ function renderDashboard(container) {
       }
     }
 
+    // v2.1.5: detecta se o usuário está na lista de espera (standby/waitlist)
+    let _isInStandby = false;
+    if (window.AppStore.currentUser) {
+      const _cuStb = window.AppStore.currentUser;
+      const _matchStb = function(p) {
+        if (!p) return false;
+        if (typeof p === 'string') {
+          if (p.indexOf(' / ') !== -1) return false;
+          return p === _cuStb.email || p === _cuStb.displayName;
+        }
+        if (p.uid && _cuStb.uid && p.uid === _cuStb.uid) return true;
+        if (p.email && _cuStb.email && p.email === _cuStb.email) return true;
+        if (p.displayName && _cuStb.displayName && p.displayName === _cuStb.displayName) return true;
+        return false;
+      };
+      _isInStandby = (Array.isArray(t.standbyParticipants) && t.standbyParticipants.some(_matchStb)) ||
+                     (Array.isArray(t.waitlist) && t.waitlist.some(_matchStb));
+    }
+
     // Card gradients adaptam ao tema via CSS variables
     // v0.17.32: dark themes (Noturno/Oceano) precisam de gradients DARK pros
     // 3 estados (default/participating/organizer) — antes participating/org
@@ -572,7 +591,9 @@ function renderDashboard(container) {
     const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
     const canEnroll = isAberto && !isFinished && (!hasDraw || ligaAberta || t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
     let enrollBtnHtml = '';
-    if (isParticipating && canEnroll) {
+    if (_isInStandby && !isFinished) {
+      enrollBtnHtml = `<div style="font-size: 0.6rem; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px;">⏳ ${_t('enroll.onWaitlist')}</div><button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist')}</button>`;
+    } else if (isParticipating && canEnroll) {
       enrollBtnHtml = `<button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>`;
     } else if (!isParticipating && canEnroll) {
       enrollBtnHtml = `<button class="btn btn-sm btn-success hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._dashEnroll('${t.id}')">✅ ${_t('enroll.enrollBtn')}</button>`;
