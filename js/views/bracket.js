@@ -1575,12 +1575,17 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     // Adversário fase 1: + ✅ Confirmar
     // Adversário fase 2 (vê contra-proposta): + ✅ Confirmar + ❌ Contestar
     var _isCounterProposal = !!(_pr && _pr.isCounterProposal);
+    // v1.9.95: botões com flex:1 (dividem a largura do card e quebram linha em
+    // vez de esticar o card) e SEM margin-left (espaçamento vem do gap do
+    // container, evita gap duplo / margem na borda). Regra: vermelho à esquerda,
+    // verde à direita.
+    var _pbBtn = 'flex:1 1 auto;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;';
     var _btnEdit = `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
-        style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;">✏️ Editar</button>`;
+        style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;${_pbBtn}">✏️ Editar</button>`;
     var _btnConfirm = `<button onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')"
-        style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;margin-left:6px;">✅ Confirmar</button>`;
+        style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;${_pbBtn}">✅ Confirmar</button>`;
     var _btnContest = `<button onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')"
-        style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#f87171;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;margin-left:6px;">❌ Contestar</button>`;
+        style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#f87171;${_pbBtn}">❌ Contestar</button>`;
     // v1.9.77: Fase 4 (em disputa) — NINGUÉM tem botão no corpo do card. Os
     // jogadores veem só a tag PENDENTE; o organizador resolve exclusivamente
     // pelo painel do banner (Confirmar / Editar / Refazer). Sem isso, o
@@ -1593,8 +1598,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
         // Fase 1: adversário — Editar + Confirmar
         pendingActionBtns = _btnEdit + _btnConfirm;
       } else {
-        // Fase 3: time original vê contra-proposta — apenas Confirmar + Contestar
-        pendingActionBtns = _btnConfirm + _btnContest;
+        // Fase 3: time original vê contra-proposta — Contestar (vermelho, à
+        // esquerda) + Confirmar (verde, à direita). v1.9.95.
+        pendingActionBtns = _btnContest + _btnConfirm;
       }
     } else if (_isProposerSelf && !_isAuthorityInner) {
       // Proponente atual: só Editar para corrigir
@@ -1718,32 +1724,46 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     }
   }
 
-  // v1.9.93: estado pendente não-disputado vive no CABEÇALHO (sem box que cresce
-  // o card). Status "⏳ Aguardando aprovação" à esquerda (junto do JOGO); botões
-  // Editar/Confirmar à direita (posição original, dentro de header-btns, com o
-  // mesmo id `pending-banner-btns` que _editPendingResult usa). "proposto por X"
-  // vira uma linha fina sem borda/fundo logo abaixo do cabeçalho.
+  // v1.9.95: estado pendente não-disputado tem cabeçalho próprio que QUEBRA
+  // LINHA pra preservar a largura do card (antes o conteúdo esticava a coluna
+  // do bracket porque o scroll-content é min-width:max-content). Layout:
+  //  - Esquerda: JOGO N + "proposto por X · agora" (empilhados).
+  //  - Direita: tag PENDENTE + "⏳ Aguardando aprovação" empilhados (a frase
+  //    quebra em 2 linhas → 3 linhas no total: tag / Aguardando / aprovação).
+  //  - Abaixo: linha própria com os botões (Contestar vermelho à esquerda,
+  //    Confirmar verde à direita), com flex:1 pra dividir a largura e quebrar.
+  // O card ganha max-width só quando pendente — não mexe nos demais estados.
   var _showHeaderPending = hasPending && _pr && !_pr.disputed;
-  var _pendingHeaderStatus = _showHeaderPending
-    ? `<span style="font-size:0.62rem;font-weight:800;color:#fbbf24;display:inline-flex;align-items:center;gap:3px;text-transform:uppercase;letter-spacing:0.02em;">⏳ Aguardando aprovação</span>`
-    : '';
-  var _pendingHeaderBtns = (_showHeaderPending && pendingActionBtns)
-    ? `<span id="pending-banner-btns-${m.id}" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;">${pendingActionBtns}</span>`
-    : '';
-  var _proposerLine = _showHeaderPending
-    ? `<div style="font-size:0.64rem;color:var(--text-muted);margin:-2px 0 8px 0;">proposto por <b style="color:#fbbf24;">${_proposerName}</b> · ${_agoLabel}</div>`
+  var _cardMax = hasPending ? 'max-width:280px;box-sizing:border-box;' : '';
+  var _pendingBtnsRow = (_showHeaderPending && pendingActionBtns)
+    ? `<div id="pending-banner-btns-${m.id}" style="display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${pendingActionBtns}</div>`
     : '';
 
-  return `
-    <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" style="background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};border-radius:12px;padding:14px;box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:${_proposerLine ? '6px' : '10px'};border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;">
+  var _headerHtml;
+  if (_showHeaderPending) {
+    _headerHtml = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:6px;">
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
           <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-          ${_pendingHeaderStatus}
+          <span style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;">proposto por <b style="color:#fbbf24;">${_proposerName}</b> · ${_agoLabel}</span>
         </div>
-        <div id="header-btns-${m.id}" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${liveBtn}${headerConfirmBtn}${headerEditBtn}${_pendingHeaderBtns}</div>
-      </div>
-      ${_proposerLine}
+        <div id="header-btns-${m.id}" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;">
+          ${readyBadge}
+          <span style="font-size:0.56rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.02em;line-height:1.3;text-align:right;max-width:104px;">⏳ Aguardando aprovação</span>
+        </div>
+      </div>`;
+  } else {
+    _headerHtml = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
+        <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
+        <div id="header-btns-${m.id}" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${liveBtn}${headerConfirmBtn}${headerEditBtn}</div>
+      </div>`;
+  }
+
+  return `
+    <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" style="background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+      ${_headerHtml}
+      ${_pendingBtnsRow}
       ${pendingBanner}
       ${p1Row}
       ${vsRow}
