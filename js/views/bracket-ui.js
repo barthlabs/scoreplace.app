@@ -7719,6 +7719,51 @@ window._openLiveScoring = function(tId, matchId, opts) {
 // Opens from dashboard "Escanear QR" button. Camera-based scanner with
 // manual code input fallback.
 
+// v2.1.7-beta: o leitor de QR ficou GERAL — entra em partida casual OU em
+// torneio (ou qualquer rota do scoreplace) conforme o destino do QR lido.
+// Resolve o texto cru do QR para uma rota hash de destino, ou null se não for
+// um QR do scoreplace.
+window._routeFromScannedQR = function(text) {
+  text = (text || '').trim();
+  if (!text) return null;
+  // Torneio: #tournaments/<id> ou #bracket/<id>
+  var mTour = text.match(/#(?:tournaments|bracket)\/([A-Za-z0-9_\-]+)/);
+  if (mTour) return '#tournaments/' + mTour[1];
+  // Partida casual: #casual/CODE
+  var mCasual = text.match(/#casual\/([A-Za-z0-9]{4,8})/);
+  if (mCasual) return '#casual/' + mCasual[1].toUpperCase();
+  // Convite do app
+  if (/#invite\b/.test(text)) return '#invite';
+  // Qualquer URL scoreplace.app com hash de rota → passa a rota adiante
+  if (/scoreplace\.app/i.test(text)) {
+    var hi = text.indexOf('#');
+    if (hi !== -1) { var h = text.slice(hi); if (/^#[a-z]/i.test(h)) return h; }
+    return '#dashboard';
+  }
+  // Código curto (4-8 alfanum) → assume sala casual (compat com QR antigos que
+  // só carregavam o código da sala, sem URL)
+  var plain = text.replace(/[^A-Za-z0-9]/g, '');
+  if (plain.length >= 4 && plain.length <= 8) return '#casual/' + plain.toUpperCase();
+  return null;
+};
+
+// Navega pro destino resolvido. Em casual, força re-render se já estiver na
+// rota (hashchange não dispara). Em torneio/outros, basta setar o hash.
+window._navigateToScannedRoute = function(route) {
+  if (!route) return;
+  if (window.location.hash === route) {
+    var mC = route.match(/^#casual\/([A-Za-z0-9]{4,8})$/);
+    var vc = document.getElementById('view-container');
+    if (mC && vc && typeof window._renderCasualJoin === 'function') {
+      window._renderCasualJoin(vc, mC[1].toUpperCase());
+    } else if (typeof window.handleRoute === 'function') {
+      window.handleRoute();
+    }
+  } else {
+    window.location.hash = route;
+  }
+};
+
 window._openScanQR = function() {
   // v1.6.105-beta: Chrome iOS (CriOS) não suporta getUserMedia/streaming camera.
   // Redireciona para o scanner via input de arquivo que funciona em qualquer browser iOS.
@@ -8017,10 +8062,17 @@ window._openScanQR = function() {
   function _onDetected(rawValue) {
     if (_scanFound) return;
     window._scanDebug.lastDetectionAttempt = (rawValue || '').slice(0, 80);
-    var code = _extractRoomCode(rawValue);
-    if (code) {
-      if (typeof showNotification === 'function') showNotification('QR detectado!', code, 'success');
-      _navigateToRoom(code);
+    // v2.1.7-beta: resolve geral (casual OU torneio OU outra rota).
+    var route = window._routeFromScannedQR(rawValue);
+    if (route) {
+      if (typeof showNotification === 'function') showNotification('QR detectado!', route, 'success');
+      _scanFound = true;
+      _cleanupScanner();
+      setTimeout(function() {
+        var o = document.getElementById('scan-qr-overlay');
+        if (o) o.remove();
+        window._navigateToScannedRoute(route);
+      }, 150);
     }
   }
 
@@ -8222,7 +8274,8 @@ window._openScanQRNative = function() {
             if (!window.jsQR) return callback(null);
             var qr = window.jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
             if (qr && qr.data) {
-              callback(_extractRoomCode(qr.data));
+              // v2.1.7-beta: resolve geral (casual OU torneio OU outra rota).
+              callback(window._routeFromScannedQR(qr.data));
             } else {
               callback(null);
             }
@@ -8250,9 +8303,9 @@ window._openScanQRNative = function() {
     var file = e.target.files && e.target.files[0];
     if (input.parentNode) input.parentNode.removeChild(input);
     if (!file) return; // usuário cancelou
-    _decodeQRFromFile(file, function(code) {
-      if (code) {
-        window.location.hash = '#casual/' + code;
+    _decodeQRFromFile(file, function(route) {
+      if (route) {
+        window._navigateToScannedRoute(route);
       } else {
         _showManualCodeDialog('Não consegui detectar o QR code na foto. Tente outra foto ou digite o código manualmente.');
       }

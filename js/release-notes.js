@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.7-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Leitor de QR mais geral + botão com destaque.</b><br><br>' +
+      'O leitor de QR da tela inicial agora entra em <b>partida casual</b> OU em <b>torneio</b> conforme o destino do QR lido (também reconhece convite e outras telas do app). O botão ganhou <b>mais destaque</b>: virou um botão com volume (padrão novo), maior, posicionado entre os atalhos e as estatísticas.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.6-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>A final encerra o evento (eliminatórias).</b><br><br>' +
       'Ao lançar o resultado da <b>final</b>, o torneio agora declara campeão + vice, <b>encerra as inscrições</b> e marca o evento como <b>Encerrado</b> na hora — antes ele ficava travado esperando a disputa de 3º lugar, e com inscrição tardia ligada as inscrições continuavam abertas após a final. A disputa de 3º lugar pode ser lançada depois (preenche 3º/4º) sem reabrir o torneio. Reforço extra: torneio <b>Liga</b> encerrado também fecha a inscrição.</p>' +
