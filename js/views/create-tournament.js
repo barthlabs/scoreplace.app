@@ -274,19 +274,21 @@ function setupCreateTournamentModal() {
                   <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;margin-bottom:0.5rem;">
                     <div class="form-group" style="margin:0;flex:0 0 auto;">
                       <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.dateLabel')}</label>
-                      <input type="date" class="form-control" id="liga-first-draw-date" style="width:130px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart()">
+                      <input type="date" class="form-control" id="liga-first-draw-date" style="width:130px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                     </div>
                     <div class="form-group" style="margin:0;flex:0 0 auto;">
                       <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.timeLabel')}</label>
-                      <input type="time" class="form-control" id="liga-first-draw-time" value="19:00" style="width:100px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart()">
+                      <input type="time" class="form-control" id="liga-first-draw-time" value="19:00" style="width:100px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                     </div>
                     <div class="form-group" style="margin:0;flex:0 0 auto;">
                       <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.repeatEvery')}</label>
                       <div style="display:flex;align-items:center;gap:4px;">
-                        <input type="number" class="form-control" id="liga-draw-interval" min="1" max="90" value="7" style="width:55px;padding:6px 8px;font-size:0.85rem;text-align:center;">
+                        <input type="number" class="form-control" id="liga-draw-interval" min="1" max="90" value="7" style="width:55px;padding:6px 8px;font-size:0.85rem;text-align:center;" oninput="window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                         <span style="font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">${_t('create.daysUnit')}</span>
                       </div>
                     </div>
+                    <!-- v2.1.21: tag de rodadas previstas (1º sorteio + intervalo + fim do torneio) -->
+                    <div id="liga-rounds-tag" style="flex:0 0 auto;align-self:flex-end;font-size:0.74rem;font-weight:700;color:#34d399;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:6px 10px;white-space:nowrap;display:none;"></div>
                   </div>
                   <div class="form-group" style="margin:0;">
                     <div class="toggle-row">
@@ -317,7 +319,7 @@ function setupCreateTournamentModal() {
                 <div style="flex:1; min-width:0; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
                   <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.tournamentEnd')}</div>
                   <div style="display:flex; gap:6px; align-items:center;">
-                    <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término do torneio" style="padding:4px 6px; font-size:0.82rem; flex:1; min-width:0;" required oninput="window._recalcDuration()">
+                    <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término do torneio" style="padding:4px 6px; font-size:0.82rem; flex:1; min-width:0;" required oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                     <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término do torneio" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration()">
                   </div>
                 </div>
@@ -1569,6 +1571,7 @@ function setupCreateTournamentModal() {
 
     document.getElementById('suico-fields').style.display = isSuico ? 'block' : 'none';
     document.getElementById('liga-fields').style.display = isLiga ? 'block' : 'none';
+    if (isLiga && typeof window._updateLigaRoundsTag === 'function') setTimeout(window._updateLigaRoundsTag, 0);
     document.getElementById('suico-draw-schedule-fields').style.display = isSuico ? 'block' : 'none';
     document.getElementById('elim-settings').style.display = (isElim || isGrupos) ? 'block' : 'none';
     document.getElementById('grupos-fields').style.display = isGrupos ? 'block' : 'none';
@@ -1702,6 +1705,31 @@ function setupCreateTournamentModal() {
     if (drawDate) document.getElementById('tourn-start-date').value = drawDate;
     if (drawTime) document.getElementById('tourn-start-time').value = drawTime;
     window._recalcDuration();
+  };
+
+  // v2.1.21: tag de rodadas previstas no agendamento da Liga — calcula quantos
+  // sorteios cabem do 1º sorteio até o fim do torneio, no intervalo definido.
+  // rodadas = floor((fim - 1ºsorteio) / intervalo_dias) + 1.
+  window._updateLigaRoundsTag = function() {
+    var tag = document.getElementById('liga-rounds-tag');
+    if (!tag) return;
+    var dEl = document.getElementById('liga-first-draw-date');
+    var iEl = document.getElementById('liga-draw-interval');
+    var endEl = document.getElementById('tourn-end-date');
+    var first = (dEl && dEl.value) ? new Date(dEl.value + 'T00:00:00') : null;
+    var interval = iEl ? parseInt(iEl.value, 10) : 0;
+    var end = (endEl && endEl.value) ? new Date(endEl.value + 'T23:59:59') : null;
+    if (!first || !end || !interval || interval < 1 ||
+        isNaN(first.getTime()) || isNaN(end.getTime()) || end < first) {
+      tag.style.display = 'none';
+      return;
+    }
+    var days = Math.floor((end - first) / (24 * 60 * 60 * 1000));
+    var rounds = Math.floor(days / interval) + 1;
+    if (rounds < 1) { tag.style.display = 'none'; return; }
+    tag.textContent = '≈ ' + rounds + ' rodada' + (rounds > 1 ? 's' : '');
+    tag.title = 'Do 1º sorteio até o fim do torneio, a cada ' + interval + ' dia(s)';
+    tag.style.display = 'inline-block';
   };
 
   // ─── Category management ──────────────────────────────────────────────────
@@ -3305,6 +3333,7 @@ function setupCreateTournamentModal() {
     if (t.format === 'Liga' && t.drawFirstDate) document.getElementById('liga-first-draw-date').value = t.drawFirstDate;
     if (t.format === 'Liga' && t.drawFirstTime) document.getElementById('liga-first-draw-time').value = t.drawFirstTime;
     if (t.format === 'Liga' && t.drawIntervalDays) document.getElementById('liga-draw-interval').value = t.drawIntervalDays;
+    if (t.format === 'Liga' && typeof window._updateLigaRoundsTag === 'function') setTimeout(window._updateLigaRoundsTag, 0); // v2.1.21: tag de rodadas no load
     if (t.format === 'Liga') document.getElementById('liga-manual-draw').checked = !!t.drawManual;
     // Liga round format (derive from drawMode, keep hidden field in sync)
     if (t.ligaRoundFormat) {
@@ -3492,7 +3521,10 @@ function setupCreateTournamentModal() {
             return;
           }
         }
-        if (regDateRaw && startDateRaw) {
+        // v2.1.21: Liga tem inscrições sempre abertas (temporada contínua) — o
+        // prazo de inscrição NÃO se aplica. Não valida (e o campo fica oculto pra
+        // Liga). Bug: ao trocar pra Liga, o prazo residual ainda era validado.
+        if (regDateRaw && startDateRaw && format !== 'Liga') {
           const _regD = new Date(regDateVal);
           const _startD2 = new Date(startDateVal);
           if (_regD >= _startD2) {
@@ -3508,7 +3540,8 @@ function setupCreateTournamentModal() {
           sport: sportClean,
           startDate: startDateVal,
           endDate: endDateVal,
-          registrationLimit: regDateVal,
+          // v2.1.21: Liga ignora prazo de inscrição (sempre aberta) — limpa o residual.
+          registrationLimit: (format === 'Liga' ? '' : regDateVal),
           enrollmentMode: enrollmentVal,
           teamSize: teamSizeVal,
           gameTypes: (document.getElementById('tourn-game-types') || {}).value || 'duplas',

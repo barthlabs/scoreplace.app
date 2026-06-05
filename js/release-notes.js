@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Liga: prazo de inscrição não atrapalha mais + tag de rodadas.</b><br><br>' +
+      '(1) Ao mudar um torneio pra <b>Liga</b> (inscrições sempre abertas), o app não exige mais que o prazo de inscrição seja antes do início — esse prazo não se aplica à Liga (e o valor residual é limpo). (2) No agendamento de sorteios, ao lado de "repetir a cada X dias", aparece uma tag com as <b>rodadas previstas</b> (≈ N), calculada do 1º sorteio até o fim do torneio no intervalo escolhido.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.20-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Sorteio de duplas: gênero + modo equilibrado.</b><br><br>' +
       'Em torneios de duplas com homens e mulheres no mesmo sorteio (sem categoria masc/fem separada), ao clicar em <b>Sortear</b> aparece uma tela pra: (1) definir o <b>gênero de quem está sem</b> — que também é salvo no perfil; (2) escolher <b>Livre</b> (ao acaso) ou <b>⚖️ Equilibrado</b>, que <b>evita duplas 100% masculinas</b> distribuindo as mulheres (se faltarem, faz o melhor possível e avisa).</p>' +
