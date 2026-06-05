@@ -2074,7 +2074,9 @@ function handlePasswordReset() {
   // Focar no campo e posicionar cursor no fim
   setTimeout(function() {
     var inp = document.getElementById('reset-email-input');
-    if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = inp.value.length; }
+    // v2.1.30: inputs type=email/number NÃO suportam selection — setar joga
+    // InvalidStateError no iOS Safari/Chrome. Guarda em try/catch (o focus já basta).
+    if (inp) { inp.focus(); try { var _l = inp.value.length; inp.setSelectionRange(_l, _l); } catch (e) {} }
   }, 50);
 }
 
@@ -4426,9 +4428,14 @@ function _setupPhoneMask(inputEl, countryCode) {
     this.value = _formatPhoneDisplay(raw, countryCode || '55');
   });
   inputEl.addEventListener('keydown', function(e) {
+    if (e.key !== 'Backspace') return;
+    // v2.1.30: ler selectionStart pode jogar InvalidStateError em inputs que não
+    // suportam selection (email/number) no iOS — guarda e sai sem quebrar.
+    var _selS, _selE;
+    try { _selS = this.selectionStart; _selE = this.selectionEnd; } catch (err) { return; }
     // Allow backspace to work naturally on formatted input
-    if (e.key === 'Backspace' && this.selectionStart === this.selectionEnd) {
-      var pos = this.selectionStart;
+    if (_selS === _selE) {
+      var pos = _selS;
       if (pos > 0 && /\D/.test(this.value[pos - 1])) {
         // Skip over separator chars
         e.preventDefault();
