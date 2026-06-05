@@ -261,6 +261,26 @@ body.hamburger-open .topbar {
     0 2px 5px rgba(0,0,0,0.22);
 }
 
+/* v2.1.37: mesmo "volume" almofadado dos .btn nos botões do placar ao vivo
+   (que usam estilos inline). !important pra vencer o box-shadow inline. */
+.live-vol {
+  box-shadow:
+    inset 0 3px 0 rgba(255,255,255,0.5),
+    inset 0 9px 13px rgba(255,255,255,0.38),
+    inset 0 -18px 22px rgba(0,0,0,0.30),
+    inset 0 -3px 0 rgba(0,0,0,0.22),
+    0 4px 9px rgba(0,0,0,0.24) !important;
+}
+.live-vol:active { filter: brightness(0.96); }
+.live-vol-sm {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.40),
+    inset 0 4px 6px rgba(255,255,255,0.26),
+    inset 0 -7px 9px rgba(0,0,0,0.22),
+    0 2px 4px rgba(0,0,0,0.20) !important;
+}
+.live-vol-sm:active { transform: translateY(1px); filter: brightness(0.96); }
+
 /* v2.0.1/v2.0.6: brilho periódico — nos CTAs (.btn-cta) e em qualquer botão
    marcado com .btn-shine. Anima só `transform` (GPU, custo desprezível).
    overflow:hidden recorta o brilho. Respeita prefers-reduced-motion.

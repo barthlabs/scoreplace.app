@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #818cf8;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🎚️ v2.1.37-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Botões do placar ao vivo com o mesmo "volume" do app.</b><br><br>' +
+      'Os botões do placar ao vivo (somar/diminuir ponto, Configurar, Resetar e Fechar) agora têm o mesmo relevo almofadado 3D dos botões padrão do app — brilho no topo e sombra embaixo, com o efeito de afundar ao tocar.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #fb923c;border-radius:12px;padding:14px 16px;background:rgba(249,115,22,0.08);">' +
       '<div style="font-weight:800; color:#fdba74; font-size:1rem; margin-bottom:8px;">🟠 v2.1.36-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Tag "Repescagem" no time, não no jogo.</b><br><br>' +
