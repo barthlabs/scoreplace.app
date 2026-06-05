@@ -4082,6 +4082,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       state.isFinished = true;
       state.winner = matchWinner;
       _matchEndTime = Date.now();
+      // v2.1.39: TORNEIO — grava o resultado na chave AUTOMATICAMENTE no último
+      // ponto (sem botão "Confirmar"). Idempotente via _resultSaved. keepOpen
+      // mantém o resumo/estatísticas na tela; o "Voltar" leva à chave já gravada.
+      if (!isCasual) { try { _saveResult({ keepOpen: true, silent: true }); } catch (e) {} }
       // v1.0.59-beta: GA4 — só pra partidas casuais
       if (isCasual) {
         try {
@@ -5487,8 +5491,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // toggle for doubles — both stay within thumb-reach at the top.
       var restartSection = '';
       if (!isCasual) {
+        // v2.1.39: resultado já foi salvo na chave no último ponto (auto). Aqui
+        // não há "Confirmar" — só "Voltar" (topo-esquerda), que leva ao jogo na chave.
         restartSection =
-          '<button onclick="window._liveScoreConfirmTournament()" style="width:100%;padding:15px;border-radius:14px;font-size:1.05rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">✓ Confirmar Resultado</button>';
+          '<div style="display:flex;"><button onclick="window._liveScoreBackToBracket()" class="live-vol" style="display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:14px;font-size:1.05rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;">← Voltar</button></div>';
       } else if (isDoubles) {
         // v1.6.11-beta: Rei/Rainha — botão contextual por rodada
         if (_reiRainhaMode) {
@@ -7335,6 +7341,28 @@ window._openLiveScoring = function(tId, matchId, opts) {
     try { _releaseWakeLock(); } catch(e) {}
     var ov = document.getElementById('live-scoring-overlay');
     if (ov) ov.remove();
+  };
+
+  // v2.1.39: "Voltar" do placar de torneio — o resultado JÁ foi gravado no último
+  // ponto; aqui só garante (idempotente), limpa e leva direto ao jogo na chave.
+  // Sem diálogo de confirmação (diferente do "Fechar").
+  window._liveScoreBackToBracket = function() {
+    if (isCasual) return;
+    try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
+    if (_unsubFirestore) { try { _unsubFirestore(); } catch(e) {} _unsubFirestore = null; }
+    try { window.removeEventListener('resize', _onResize); } catch(e) {}
+    try { document.removeEventListener('visibilitychange', _onVisibility); } catch(e) {}
+    try { window.removeEventListener('pagehide', _onPagehide); } catch(e) {}
+    try { _releaseWakeLock(); } catch(e) {}
+    var ov = document.getElementById('live-scoring-overlay');
+    if (ov) ov.remove();
+    var _bHash = '#bracket/' + tId;
+    if ((window.location.hash || '') === _bHash) {
+      var _vc = document.getElementById('view-container');
+      if (_vc && typeof window.renderBracket === 'function') { try { window.renderBracket(_vc); } catch(e) {} }
+    } else {
+      window.location.hash = _bHash;
+    }
   };
 
   // ── Build overlay ──
