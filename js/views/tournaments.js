@@ -391,11 +391,20 @@ function renderTournaments(container, tournamentId = null) {
             if (movedCount > 0 && typeof showNotification !== 'undefined') {
                 showNotification('🙋 ' + movedCount + ' participante(s) sem dupla', 'Movido(s) para lista de espera.', 'info');
             }
-            if (typeof window.showUnifiedResolutionPanel === 'function') {
-                window.showUnifiedResolutionPanel(tId);
-            } else if (typeof window.showFinalReviewPanel === 'function') {
-                window.showFinalReviewPanel(tId);
+            var _continueDraw = function() {
+                if (typeof window.showUnifiedResolutionPanel === 'function') {
+                    window.showUnifiedResolutionPanel(tId);
+                } else if (typeof window.showFinalReviewPanel === 'function') {
+                    window.showFinalReviewPanel(tId);
+                }
+            };
+            // v2.1.20: em duplas mistas com sorteio livre (sem categoria masc/fem),
+            // mostra o diálogo de gênero + modo (livre/equilibrado) antes do sorteio.
+            if (typeof window._maybeShowGenderDrawDialog === 'function' &&
+                window._maybeShowGenderDrawDialog(tId, _continueDraw)) {
+                return;
             }
+            _continueDraw();
         };
         // v2.1.2: se "Fechadas" está OFF (lateEnrollment 'standby'/'expand'), o
         // SORTEIO não encerra as inscrições — elas seguem abertas. Não mostra o

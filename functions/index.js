@@ -1172,6 +1172,55 @@ exports.sendVerificationEmail = onCall(
   }
 );
 
+// ─── setParticipantsGender (v2.1.20) ─────────────────────────────────────────
+// O organizador de um torneio atribui o gênero de inscritos que estavam SEM
+// gênero. As regras do Firestore só deixam a pessoa editar o próprio perfil, então
+// essa escrita em users/{uid} de OUTRA pessoa passa por aqui (Admin SDK ignora
+// rules). Verifica: caller é organizador/co-host do torneio, o alvo NÃO tinha
+// gênero ainda (não sobrescreve quem já declarou) e o valor é masculino/feminino.
+// Deploy:  firebase deploy --only functions:setParticipantsGender
+exports.setParticipantsGender = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const assignments = (request.data && request.data.assignments) || [];
+    if (!tournamentId || !Array.isArray(assignments) || assignments.length === 0) {
+      throw new HttpsError("invalid-argument", "tournamentId e assignments são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
+    if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = tSnap.data();
+    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
+    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
+      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
+      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
+      (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+    if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode atribuir gênero");
+
+    let written = 0; const skipped = [];
+    for (const a of assignments) {
+      const uid = a && a.uid ? String(a.uid) : "";
+      const g = a && a.gender ? String(a.gender) : "";
+      if (!uid || (g !== "masculino" && g !== "feminino")) { skipped.push({ uid, reason: "invalid" }); continue; }
+      const ref = db.collection("users").doc(uid);
+      const snap = await ref.get();
+      if (!snap.exists) { skipped.push({ uid, reason: "no-user" }); continue; }
+      const cur = snap.data().gender;
+      if (cur && String(cur).trim()) { skipped.push({ uid, reason: "already-set" }); continue; }
+      await ref.update({ gender: g, genderSetBy: callerUid, genderSetAt: admin.firestore.FieldValue.serverTimestamp() });
+      written++;
+    }
+    console.log("[setParticipantsGender] torneio", tournamentId, "gravados:", written, "pulados:", skipped.length);
+    return { ok: true, written, skipped };
+  }
+);
+
 // ─── WhatsApp via Evolution API (self-hosted no Railway) ────────────────────
 // v1.3.37-beta: Cloud Function que consome `whatsapp_queue/{id}` (Firestore
 // trigger onCreate) e POSTa pra Evolution API (https://docs.evolution-api.com).
