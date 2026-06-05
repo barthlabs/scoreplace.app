@@ -2603,9 +2603,6 @@ function renderDashboard(container) {
     <!-- Meus Resultados (v1.8.2-beta): pendentes de ação + últimos confirmados -->
     ${_buildMyResultsHtml()}
 
-    <!-- Filter Bar (organizer analytics moved into hero 📊 Estatísticas modal in v0.14.32) -->
-    ${filterBarHtml}
-
     <!-- Profile Completion Nudge (dismissible, smart — only when key fields missing).
          v1.0.41-beta: wrapper #dash-profile-nudge-slot pra event listener
          scoreplace:profile-loaded re-injetar o nudge quando profile chega
@@ -2623,6 +2620,11 @@ function renderDashboard(container) {
 
     <!-- Friends' Presences (loaded async) -->
     <div id="dashboard-presences-widget" style="margin-bottom:1.25rem;"></div>
+
+    <!-- v2.1.14: filtros de modalidade/formato/local movidos pra logo ACIMA do
+         toggle Cards/Lista (pedido do usuário) — antes ficavam lá em cima, longe
+         da lista que eles filtram. -->
+    ${filterBarHtml}
 
     <!-- View Toggle + Tournament Cards -->
     <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">

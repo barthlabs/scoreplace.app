@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.14-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Filtros de modalidade/formato mais perto da lista.</b><br><br>' +
+      'Na tela inicial, os filtros (Beach Tennis, Futevôlei, Eliminatórias, Rei/Rainha, etc.) foram movidos pra <b>logo acima do botão Cards/Lista</b> — coladinhos na lista de torneios que eles filtram, em vez de ficarem lá no topo.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.13-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Ferramentas do Organizador subiram no card do torneio.</b><br><br>' +
       'No card de detalhes, a seção <b>"Ferramentas do Organizador"</b> (Ver Chaves, Editar, + Participante, Encerrar, etc.) agora aparece <b>acima</b> dos botões gerais (Regras, Inscritos, Imprimir, Exportar CSV, Modo TV), que passaram pro pé do card.</p>' +
