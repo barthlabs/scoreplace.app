@@ -553,6 +553,8 @@ window._translations['pt'] = {
   // Notifications view
   'notif.title': 'Notificações',
   'notif.empty': 'Nenhuma notificação no momento',
+  'notif.unread': 'Não lidas',
+  'notif.read': 'Lidas',
   'notif.markRead': 'Marcar como lida',
   'notif.viewTournament': 'Ver Torneio',
   'notif.loginRequired': 'Faça login para ver suas notificações',

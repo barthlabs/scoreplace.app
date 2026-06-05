@@ -38,13 +38,20 @@ function renderNotifications(container) {
       return;
     }
 
-    var html = '';
-    notifs.forEach(function(n) {
+    // v2.1.17: cor por IMPORTÂNCIA (nível): 🔴 fundamental · 🟠 importante · 🟢 geral.
+    var _LEVEL_META = {
+      fundamental: { emoji: '🔴', color: '#ef4444', label: 'Fundamental' },
+      important:   { emoji: '🟠', color: '#f59e0b', label: 'Importante' },
+      all:         { emoji: '🟢', color: '#10b981', label: 'Geral' }
+    };
+    function _renderNotifCard(n) {
       var isUnread = !n.read;
-      // Use centralized notification catalog for icon/color
+      // Use centralized notification catalog for icon + IMPORTANCE (level) color.
       var _catEntry = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[n.type]) || {};
       var icon = _catEntry.icon || '🔔';
-      var accentColor = _catEntry.color || 'var(--primary-color)';
+      var _lvl = _catEntry.level || 'all';
+      var _lvlMeta = _LEVEL_META[_lvl] || _LEVEL_META.all;
+      var accentColor = _lvlMeta.color;
 
       var timeAgo = _timeAgo(n.createdAt);
       var unreadDot = isUnread ? '<div class="notif-unread-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--primary-color); flex-shrink: 0;"></div>' : '';
@@ -122,18 +129,36 @@ function renderNotifications(container) {
       var safeMessage = (n.message || _t('notif.fallback')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 
       var safeNotifIdOnclick = (n._id || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
-      html += '<div class="card" style="padding: 1rem; display: flex; align-items: flex-start; gap: 12px; cursor: pointer; ' +
-        (isUnread ? 'border-left: 3px solid ' + accentColor + '; background: rgba(37, 99, 235, 0.05);' : 'opacity: 0.7;') + '" ' +
+      // Borda esquerda colorida pela IMPORTÂNCIA (sempre visível, lida ou não).
+      return '<div class="card" style="padding: 1rem; display: flex; align-items: flex-start; gap: 12px; cursor: pointer; border-left: 4px solid ' + accentColor + ';' +
+        (isUnread ? ' background: rgba(37, 99, 235, 0.05);' : ' opacity: 0.62;') + '" ' +
         (isUnread ? 'onclick="_markNotifRead(\'' + safeNotifIdOnclick + '\', this)"' : '') + '>' +
         '<div style="font-size: 1.5rem; flex-shrink: 0; line-height: 1;">' + icon + '</div>' +
         '<div style="flex: 1; min-width: 0;">' +
           '<div style="font-size: 0.9rem; color: var(--text-bright); font-weight: ' + (isUnread ? '600' : '400') + ';">' + safeMessage + '</div>' +
-          '<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">' + timeAgo + '</div>' +
+          '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
+            '<span style="display:inline-flex;align-items:center;gap:3px;color:' + accentColor + ';font-weight:700;">' + _lvlMeta.emoji + ' ' + _lvlMeta.label + '</span>' +
+            '<span style="opacity:0.45;">·</span><span>' + timeAgo + '</span>' +
+          '</div>' +
           actionHtml +
         '</div>' +
         unreadDot +
       '</div>';
-    });
+    }
+
+    // v2.1.17: não lidas EM CIMA, separadas das lidas. Dentro de cada grupo,
+    // mantém a ordem do servidor (createdAt desc).
+    var _unread = notifs.filter(function(n){ return !n.read; });
+    var _read   = notifs.filter(function(n){ return n.read; });
+    var html = '';
+    if (_unread.length > 0) {
+      html += '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#60a5fa;margin:0 0 8px 2px;">🔵 ' + (_t('notif.unread') || 'Não lidas') + ' · ' + _unread.length + '</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">' + _unread.map(_renderNotifCard).join('') + '</div>';
+    }
+    if (_read.length > 0) {
+      html += '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);opacity:0.7;margin:0 0 8px 2px;">' + (_t('notif.read') || 'Lidas') + ' · ' + _read.length + '</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:8px;">' + _read.map(_renderNotifCard).join('') + '</div>';
+    }
 
     listDiv.innerHTML = html;
 

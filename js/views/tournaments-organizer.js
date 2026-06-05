@@ -313,6 +313,12 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
     // ── WhatsApp ──
     if (channelResult.phones && channelResult.phones.length > 0) {
         var waMsg = templateData.message || templateData.tournamentName || 'Notificação do scoreplace.app';
+        // v2.1.17: prefixo de cor por importância (WhatsApp é texto puro, então
+        // a "cor" vira emoji no início): 🔴 fundamental · 🟠 importante · 🟢 geral.
+        var _waCat = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[templateType]) || {};
+        var _waLvl = _waCat.level || 'all';
+        var _waEmoji = _waLvl === 'fundamental' ? '🔴' : (_waLvl === 'important' ? '🟠' : '🟢');
+        waMsg = _waEmoji + ' ' + waMsg;
         if (window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
             window.FirestoreDB.queueWhatsApp(channelResult.phones, waMsg);
         }

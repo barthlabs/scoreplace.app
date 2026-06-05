@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.17-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Notificações: cor por importância + não lidas em cima.</b><br><br>' +
+      'As notificações agora têm <b>código de cor por importância</b>: 🔴 fundamental · 🟠 importante · 🟢 geral — na plataforma (borda + etiqueta) e no WhatsApp (emoji no início). E na tela de notificações as <b>não lidas ficam em cima, separadas das lidas</b>. (O acúmulo/digest de e-mail por janela de tempo vem numa próxima etapa.)</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.16-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Pódio do torneio encerrado no topo, em formato de pódio.</b><br><br>' +
       'No card de um torneio encerrado, o <b>"🏆 Torneio Encerrado"</b> agora aparece <b>logo abaixo do nome</b>, com o <b>1º lugar em cima</b> (campeão, maior) e o <b>2º e 3º dividindo a linha de baixo</b> — como um pódio. Quando o torneio está encerrado, os botões <b>Convidar, Adicionar à agenda e Editar</b> deixam de aparecer (Compartilhar continua).</p>' +
