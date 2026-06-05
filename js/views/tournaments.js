@@ -109,6 +109,42 @@ window._updateStatBoxes = function(t) {
     }
 };
 
+// v2.1.16: Pódio do torneio encerrado — 1º lugar em cima (mais alto), 2º e 3º
+// dividindo a linha de baixo ao meio (quase um pódio). Usado no topo do card.
+window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3) {
+  var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
+  if (!p1) return '';
+  sub1 = sub1 || 'Campeão';
+  sub2 = sub2 || '2º Lugar';
+  sub3 = sub3 || '3º Lugar';
+  var second = p2 ? (
+    '<div style="flex:1;text-align:center;min-width:0;">' +
+      '<div style="font-size:2rem;line-height:1;">🥈</div>' +
+      '<div style="font-weight:700;color:#cbd5e1;font-size:1rem;margin-top:3px;word-break:break-word;">' + _sh(p2) + '</div>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);">' + _sh(sub2) + '</div>' +
+    '</div>'
+  ) : '';
+  var third = p3 ? (
+    '<div style="flex:1;text-align:center;min-width:0;">' +
+      '<div style="font-size:1.7rem;line-height:1;">🥉</div>' +
+      '<div style="font-weight:700;color:#cd7f32;font-size:0.95rem;margin-top:3px;word-break:break-word;">' + _sh(p3) + '</div>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);">' + _sh(sub3) + '</div>' +
+    '</div>'
+  ) : '';
+  var bottomRow = (second || third)
+    ? ('<div style="display:flex;gap:1rem;justify-content:center;align-items:flex-start;">' + second + third + '</div>')
+    : '';
+  return '<div style="text-align:center;margin:0 0 1.25rem 0;padding:1.5rem 1.25rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:16px;">' +
+    '<div style="font-size:1.35rem;font-weight:700;margin-bottom:1.1rem;color:#fff;">🏆 Torneio Encerrado</div>' +
+    '<div style="text-align:center;margin-bottom:1.1rem;">' +
+      '<div style="font-size:3rem;line-height:1;">🥇</div>' +
+      '<div style="font-weight:800;color:#fbbf24;font-size:1.3rem;margin-top:5px;word-break:break-word;">' + _sh(p1) + '</div>' +
+      '<div style="font-size:0.8rem;color:#fbbf24;font-weight:600;">' + _sh(sub1) + '</div>' +
+    '</div>' +
+    bottomRow +
+  '</div>';
+};
+
 // v1.9.97: "Ver Chaves" NÃO navega mais pra tela restrita (#bracket/:id) —
 // rola pra seção do chaveamento que JÁ está renderizada na página de detalhes
 // (#inline-bracket-container). Posicionamento inteligente:
@@ -1126,6 +1162,9 @@ function renderTournaments(container, tournamentId = null) {
 
         // Ações Específicas da tela Explore
         let actionsHtml = '';
+        // v2.1.16: pódio do torneio encerrado agora vive no TOPO do card (logo
+        // abaixo do nome), não dentro de actionsHtml. Declarado no escopo do card.
+        let podiumHtml = '';
         const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
 
         // --- Variáveis de botões do organizador (escopo global do card para evitar ReferenceError) ---
@@ -1301,7 +1340,7 @@ function renderTournaments(container, tournamentId = null) {
                 // --- Build actionsHtml based on tournament state ---
                 if (isFinished) {
                     // Torneio encerrado — mostrar pódio + Ver Chaves
-                    let podiumHtml = '';
+                    podiumHtml = '';
                     // Prefer canonical adapter: look for the last elim/grand column
                     // with a decided winner; fall back to legacy t.matches scan.
                     let _finalMatch = null;
@@ -1342,50 +1381,20 @@ function renderTournaments(container, tournamentId = null) {
                         const _1st = _finalMatch.winner;
                         const _2nd = _finalMatch.winner === _finalMatch.p1 ? _finalMatch.p2 : _finalMatch.p1;
                         const _3rd = _thirdPlace;
-                            podiumHtml = `<div style="text-align:center;margin:1.5rem 0;padding:1.5rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:16px;">
-                                <div style="font-size:1.5rem;margin-bottom:0.5rem;">🏆 Torneio Encerrado</div>
-                                <div style="display:flex;justify-content:center;align-items:flex-end;gap:1.5rem;margin-top:1rem;flex-wrap:wrap;">
-                                    <div style="text-align:center;order:1;">
-                                        <div style="font-size:1.8rem;">🥈</div>
-                                        <div style="font-weight:700;color:#94a3b8;font-size:0.95rem;">${window._safeHtml(_2nd)}</div>
-                                        <div style="font-size:0.7rem;color:var(--text-muted);">2º Lugar</div>
-                                    </div>
-                                    <div style="text-align:center;order:0;">
-                                        <div style="font-size:2.5rem;">🥇</div>
-                                        <div style="font-weight:800;color:#fbbf24;font-size:1.2rem;">${window._safeHtml(_1st)}</div>
-                                        <div style="font-size:0.75rem;color:#fbbf24;font-weight:600;">Campeão</div>
-                                    </div>
-                                    ${_3rd ? `<div style="text-align:center;order:2;">
-                                        <div style="font-size:1.5rem;">🥉</div>
-                                        <div style="font-weight:700;color:#cd7f32;font-size:0.9rem;">${window._safeHtml(_3rd)}</div>
-                                        <div style="font-size:0.7rem;color:var(--text-muted);">3º Lugar</div>
-                                    </div>` : ''}
-                                </div>
-                            </div>`;
+                            podiumHtml = window._buildPodiumHtml(_1st, _2nd, _3rd);
                     }
                     // Suíço/Liga: show standings-based podium
                     if (!podiumHtml && Array.isArray(t.rounds) && t.rounds.length > 0 && t.standings && t.standings.length > 0) {
                         const _top = t.standings.slice(0, 3);
-                        const _medals = ['🥇', '🥈', '🥉'];
-                        const _colors = ['#fbbf24', '#94a3b8', '#cd7f32'];
-                        const _sizes = ['1.2rem', '0.95rem', '0.9rem'];
-                        podiumHtml = `<div style="text-align:center;margin:1.5rem 0;padding:1.5rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:16px;">
-                            <div style="font-size:1.5rem;margin-bottom:0.5rem;">🏆 Torneio Encerrado</div>
-                            <div style="display:flex;justify-content:center;align-items:flex-end;gap:1.5rem;margin-top:1rem;flex-wrap:wrap;">
-                                ${_top.map(function(s, i) {
-                                    var order = i === 0 ? 1 : (i === 1 ? 0 : 2);
-                                    return '<div style="text-align:center;order:' + order + ';">' +
-                                        '<div style="font-size:' + (i === 0 ? '2.5rem' : '1.5rem') + ';">' + _medals[i] + '</div>' +
-                                        '<div style="font-weight:' + (i === 0 ? '800' : '700') + ';color:' + _colors[i] + ';font-size:' + _sizes[i] + ';">' + window._safeHtml(s.name || s.player) + '</div>' +
-                                        '<div style="font-size:0.7rem;color:var(--text-muted);">' + s.points + ' pts</div>' +
-                                    '</div>';
-                                }).join('')}
-                            </div>
-                        </div>`;
+                        const _nm = function(s){ return s ? (s.name || s.player || '') : ''; };
+                        const _pts = function(s){ return (s && s.points != null) ? (s.points + ' pts') : ''; };
+                        podiumHtml = window._buildPodiumHtml(
+                            _nm(_top[0]), _nm(_top[1]), _nm(_top[2]),
+                            'Campeão', _pts(_top[1]) || '2º Lugar', _pts(_top[2]) || '3º Lugar'
+                        );
                     }
                     actionsHtml = `
                    ${inviteModalHtml}
-                   ${podiumHtml}
                    <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 Regras</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
@@ -1521,10 +1530,12 @@ function renderTournaments(container, tournamentId = null) {
               </div>
               ${!tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" style="font-size:1.8rem;cursor:pointer;flex-shrink:0;color:${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '♥' : '♡'}</span>` : ''}
             </div>
+            ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
+            ${(tournamentId && isFinished) ? podiumHtml : ''}
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
-              <button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>
+              ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
-              ${t.startDate ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
+              ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
             </div>` : ''}
 
             <!-- Below Name: Calendário + Data -->
@@ -1741,7 +1752,7 @@ function renderTournaments(container, tournamentId = null) {
               <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.35); margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
-                ${t.status !== 'closed' ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
+                ${(t.status !== 'closed' && !isFinished) ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
                 ${t.status !== 'closed' ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window._sendOrgCommunication('${t.id}')">📢 ${_t('org.communicate')}</button>` : ''}
                 ${addParticipantBtns}
                 ${/* v1.9.98: CSV removido daqui — já está no grid de ações geral do organizador (Regras/Inscritos/Imprimir/CSV/Modo TV). Evita duplicação. */ ''}
