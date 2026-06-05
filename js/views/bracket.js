@@ -104,16 +104,14 @@ function renderBracket(container, tournamentId, isInline) {
   }).catch(function() {});
 
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
-  // v2.1.22 (Fase 1): jogos extras de tardios — SÓ o organizador cria (escrita de
-  // matches/extraMatches só passa nas rules pra admin). Auto ao abrir o bracket.
+  // v2.1.26: tardios entram NA chave — SÓ o organizador dispara (escrita de
+  // matches/participants só passa nas rules como admin). Auto ao abrir o bracket.
   if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {
     try {
-      var _nExtra = window._createExtraGamesFromWaitlist(t);
-      // v2.1.23: encadeia vencedores (catch-up caso um placar tenha sido salvo fora do app do org).
-      var _nCons = (typeof window._consolidateExtraGames === 'function') ? window._consolidateExtraGames(t) : 0;
-      if ((_nExtra > 0 || _nCons > 0) && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+      var _nExtra = window._createExtraGamesFromWaitlist(t); // já integra na chave + rebuild
+      if (_nExtra > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
         window.FirestoreDB.saveTournament(t);
-        if (_nExtra > 0 && typeof showNotification !== 'undefined') showNotification('⚡ ' + _nExtra + ' jogo(s) extra criado(s)', 'Duplas formadas com quem chegou depois.', 'info');
+        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + (_nExtra * 2) + ' tardios na chave', _nExtra + ' jogo(s) novo(s) na rodada 1 — chave redesenhada.', 'info');
       }
     } catch (e) {}
   }
@@ -228,13 +226,10 @@ function renderBracket(container, tournamentId, isInline) {
   const readyBannerHtml = (typeof window._renderReadyMatchesBanner === 'function') ? window._renderReadyMatchesBanner(t) : '';
   // Waitlist panel — shown at the end of every bracket view (Liga/Suíço/Grupos/Monarch/Elim)
   const standbyHtml = _renderStandbyPanel(t, isOrg);
-  // v2.1.22: seção isolada dos jogos extras (tardios). Entrada de placar só pro
-  // organizador (escrever extraMatches só passa nas Firestore rules como admin).
-  const extraGamesHtml = (typeof window._renderExtraGamesSection === 'function') ? window._renderExtraGamesSection(t, isOrg) : '';
 
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
-    container.innerHTML = headerHtml + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) + standbyHtml + extraGamesHtml;
+    container.innerHTML = headerHtml + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) + standbyHtml;
     _applyMyMatchesFilter();
     return;
   }
@@ -242,7 +237,7 @@ function renderBracket(container, tournamentId, isInline) {
   // ── Fase de Grupos ─────────────────────────────────────────────────────────
   if (isGrupos && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml + extraGamesHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml;
       _applyMyMatchesFilter();
       return;
     }
@@ -253,7 +248,7 @@ function renderBracket(container, tournamentId, isInline) {
   var isMonarch = t.format === 'Rei/Rainha da Praia';
   if (isMonarch && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + _renderMonarchStage(t, isOrg, canEnterResult) + standbyHtml + extraGamesHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + _renderMonarchStage(t, isOrg, canEnterResult) + standbyHtml;
       _applyMyMatchesFilter();
       return;
     }
@@ -278,9 +273,9 @@ function renderBracket(container, tournamentId, isInline) {
   // (see renderSingleElimBracket / renderDoubleElimBracket). No separate card.
   try {
     if (isDupla) {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult) + standbyHtml + extraGamesHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult) + standbyHtml;
     } else {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult) + standbyHtml + extraGamesHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult) + standbyHtml;
     }
   } catch (bracketErr) {
     window._error('[Bracket] Render error:', bracketErr);
@@ -464,83 +459,6 @@ window._assignMatchCourt = function(tId, matchId, court) {
   }
 };
 
-// ─── v2.1.22/23 (Fase 1+2): Seção isolada dos Jogos Extras (tardios) ─────────
-// Mini-chave de tardios: rodada 1 = duplas sorteadas (1A/1B…); rodadas seguintes
-// = vencedor-contra-vencedor (2A, 3A…). Renderizado em colunas por rodada.
-window._renderExtraGamesSection = function _renderExtraGamesSection(t, canEdit) {
-  if (!t || !Array.isArray(t.extraMatches) || t.extraMatches.length === 0) return '';
-  var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
-  var _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-
-  var _card = function(m){
-    var done = !!m.winner;
-    var consumed = !!m.advancedTo;
-    var mid = String(m.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var p1win = done && m.winner === m.p1, p2win = done && m.winner === m.p2;
-    var body;
-    if (!done && canEdit) {
-      body = '<div style="display:flex;align-items:center;gap:6px;margin-top:8px;">' +
-        '<input type="number" id="ex1-' + mid + '" min="0" placeholder="0" style="width:42px;padding:5px;border-radius:6px;border:1px solid rgba(168,85,247,0.4);background:rgba(0,0,0,0.25);color:#fff;text-align:center;font-weight:700;">' +
-        '<span style="color:rgba(255,255,255,0.4);">x</span>' +
-        '<input type="number" id="ex2-' + mid + '" min="0" placeholder="0" style="width:42px;padding:5px;border-radius:6px;border:1px solid rgba(168,85,247,0.4);background:rgba(0,0,0,0.25);color:#fff;text-align:center;font-weight:700;">' +
-        '<button onclick="window._saveExtraGameResult(\'' + _tIdSafe + '\',\'' + mid + '\',document.getElementById(\'ex1-' + mid + '\').value,document.getElementById(\'ex2-' + mid + '\').value)" style="margin-left:auto;background:#a855f7;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.76rem;cursor:pointer;">✓</button>' +
-      '</div>';
-    } else if (done) {
-      body = '<div style="margin-top:6px;font-size:0.76rem;color:#c4b5fd;font-weight:700;">' + _sh(String(m.scoreP1)) + ' x ' + _sh(String(m.scoreP2)) +
-        (consumed ? ' · <span style="color:var(--text-muted);">avançou →</span>' : ' · <span style="color:#4ade80;">vence</span>') + '</div>';
-    } else {
-      body = '<div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);">Aguardando resultado</div>';
-    }
-    var op = consumed ? '0.6' : '1';
-    return '<div style="background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.35);border-left:4px solid #a855f7;border-radius:12px;padding:9px 12px;box-sizing:border-box;opacity:' + op + ';">' +
-      '<div style="font-size:0.74rem;font-weight:800;color:#c4b5fd;letter-spacing:0.5px;margin-bottom:3px;">⚡ JOGO ' + _sh(m.extraLabel || '') + '</div>' +
-      '<div style="font-size:0.82rem;color:' + (p1win ? '#4ade80' : 'var(--text-bright,#f1f5f9)') + ';font-weight:' + (p1win ? '800' : '600') + ';">' + _sh(m.p1) + '</div>' +
-      '<div style="font-size:0.58rem;color:rgba(255,255,255,0.3);letter-spacing:2px;margin:1px 0;">VS</div>' +
-      '<div style="font-size:0.82rem;color:' + (p2win ? '#4ade80' : 'var(--text-bright,#f1f5f9)') + ';font-weight:' + (p2win ? '800' : '600') + ';">' + _sh(m.p2) + '</div>' +
-      body +
-    '</div>';
-  };
-
-  // agrupa por rodada → colunas
-  var byRound = {};
-  t.extraMatches.forEach(function(m){ var r = m.extraRound || 1; (byRound[r] = byRound[r] || []).push(m); });
-  var rounds = Object.keys(byRound).map(Number).sort(function(a,b){ return a - b; });
-  var cols = rounds.map(function(r){
-    var title = r === 1 ? 'Sorteio de duplas' : 'Vencedores · nível ' + r;
-    var cards = byRound[r].map(_card).join('');
-    return '<div style="min-width:230px;max-width:270px;flex:0 0 auto;">' +
-      '<div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">' + _sh(title) + '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:8px;">' + cards + '</div>' +
-    '</div>';
-  }).join('');
-
-  return '<div style="margin-top:1.5rem;background:var(--bg-card);border:1px solid rgba(168,85,247,0.25);border-radius:16px;padding:1.25rem;">' +
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;">' +
-      '<span style="font-size:1.2rem;">⚡</span>' +
-      '<h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Jogos extras (tardios)</h3>' +
-      '<span style="font-size:0.72rem;background:rgba(168,85,247,0.18);color:#c4b5fd;padding:2px 10px;border-radius:10px;font-weight:700;">' + t.extraMatches.length + '</span>' +
-    '</div>' +
-    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px;">Quem chegou depois joga em duplas sorteadas; os vencedores se enfrentam. Ao fechar a qualificação, os qualificados entram no chaveamento.</div>' +
-    '<div style="display:flex;gap:16px;overflow-x:auto;padding-bottom:6px;">' + cols + '</div>' +
-    _closeBtn() +
-  '</div>';
-
-  function _closeBtn() {
-    if (!canEdit) return '';
-    var pend = t.extraMatches.filter(function(m){ return m && !m.winner; }).length;
-    var quals = t.extraMatches.filter(function(m){ return m && m.winner && !m.advancedTo; });
-    if (quals.length === 0) return '';
-    if (pend > 0) {
-      return '<div style="margin-top:12px;font-size:0.74rem;color:var(--text-muted);">🔒 Conclua os ' + pend + ' jogo(s) extra pendentes pra poder fechar a qualificação.</div>';
-    }
-    return '<div style="margin-top:14px;border-top:1px solid rgba(168,85,247,0.2);padding-top:12px;">' +
-      '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:8px;">' + quals.length + ' qualificado(s) prontos pra entrar no chaveamento: <b style="color:#c4b5fd;">' + quals.map(function(m){ return _sh(m.winner); }).join(', ') + '</b></div>' +
-      '<button onclick="window._closeQualificationAndRebuild(\'' + _tIdSafe + '\')" style="background:#a855f7;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-weight:800;font-size:0.82rem;cursor:pointer;">🔒 Fechar qualificação · montar chave final</button>' +
-    '</div>';
-  }
-};
-
-// ─── Painel de Lista de Espera (Standby) ─────────────────────────────────────
 window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   var _t = window._t || function(k) { return k; };
   // Merge both waitlist sources
@@ -1832,10 +1750,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     cardBorder = 'rgba(99,102,241,0.6)';
   }
 
-  // v2.1.24: jogos de repescagem — cor própria (laranja) + badge. Só visual.
-  var _isRepechageMatch = !!(m.isRepechage || m.isRepechageR1);
-  if (_isRepechageMatch) {
-    if (!_isMyMatch) cardBorder = 'rgba(249,115,22,0.55)';
+  // v2.1.26: tardios na chave — borda ROXA (mesma apresentação, só a cor).
+  // Slots de repescagem (R2 que recebem os melhores derrotados) — borda LARANJA + selo.
+  if (m.isExtra && !_isMyMatch) cardBorder = 'rgba(168,85,247,0.6)';
+  if (m.isRepechageSlot && !_isMyMatch && !m.isExtra) {
+    cardBorder = 'rgba(249,115,22,0.55)';
     readyBadge = '<span style="font-size:0.6rem;font-weight:800;color:#fb923c;background:rgba(249,115,22,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">Repescagem</span>' + (readyBadge || '');
   }
 

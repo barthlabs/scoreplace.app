@@ -9,9 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #a855f7;border-radius:12px;padding:14px 16px;background:rgba(168,85,247,0.08);">' +
-      '<div style="font-weight:800; color:#c4b5fd; font-size:1rem; margin-bottom:8px;">⚡ v2.1.25-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
-      '<p><b>Fechar qualificação: tardios entram no chaveamento (fase 3).</b><br><br>' +
-      'Quando os jogos extras terminam, aparece o botão <b>"🔒 Fechar qualificação · montar chave final"</b> (só pro organizador). Ele leva os qualificados da mini-chave pra dentro do chaveamento principal — <b>as duplas já formadas são mantidas</b>, só a chave é redesenhada pra acomodar todo mundo, reusando o sorteio normal (com a proteção de re-sorteio de sempre, caso já haja resultados). Sugerimos testar num torneio de teste antes de usar num evento real.</p>' +
+      '<div style="font-weight:800; color:#c4b5fd; font-size:1rem; margin-bottom:8px;">⚡ v2.1.26-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Tardios entram DENTRO da chave (integração real).</b><br><br>' +
+      'Reescrevemos o fluxo de "fim de tarde": agora os jogos dos tardios entram na <b>própria chave</b> (não mais numa seção à parte). Quando 4 acumulam na espera, viram uma dupla cada e um novo jogo aparece na <b>rodada 1</b> (em roxo, com a mesma cara dos outros). A chave se <b>redesenha sozinha pra próxima potência de 2</b>: as rodadas se renomeiam (quartas vira 1ª rodada, semis viram quartas…), os vencedores (originais e tardios) vão avançando, e quando a rodada 1 termina os <b>melhores derrotados</b> (de todos os jogos) entram por <b>repescagem</b> pra fechar a potência de 2. Os tardios também aparecem na <b>lista de inscritos</b> pra marcar presença/W.O. como qualquer um.</p>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #fb923c;border-radius:12px;padding:14px 16px;background:rgba(249,115,22,0.08);">' +
       '<div style="font-weight:800; color:#fdba74; font-size:1rem; margin-bottom:8px;">🟠 v2.1.24-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +

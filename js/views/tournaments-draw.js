@@ -98,194 +98,152 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
 // v2.1.22: exposto pra reuso (jogos extras de tardios em torneios "expand").
 window._formDoublesTeams = _formDoublesTeams;
 
-// ─── v2.1.22 (Fase 1): Jogos extras de inscritos tardios ──────────────────────
-// Em torneios de eliminatória com inscrição tardia 'expand' (novos confrontos),
-// quando ≥4 pessoas acumulam na lista de espera, formamos 2 duplas (sorteio) e
-// criamos UM jogo extra (1A, 1B, 1C…). FASE 1 = ISOLADA: o jogo vive em
-// t.extraMatches[], é jogável numa seção própria e NÃO mexe na árvore/avanço do
-// bracket atual. A integração (vencedor avança + repescagem) é a Fase 2/3.
+// ─── v2.1.26: Inscritos tardios entram NA chave (integração real) ─────────────
+// Em eliminatória com inscrição tardia 'expand', quando ≥4 acumulam na espera,
+// formamos duplas (sorteio). Elas viram INSCRITOS (presença/W.O.) e cada par de
+// duplas vira um JOGO da rodada 1 (cor roxa). A chave é então RECONSTRUÍDA pra
+// próxima potência de 2: as rodadas se renomeiam sozinhas (quartas→1ª rodada,
+// semis→quartas…), vencedores avançam e, ao terminar a R1, os melhores
+// derrotados (originais + tardios) entram por repescagem pra fechar a potência
+// de 2. Reusa o motor de repescagem/avanço que já existe.
 window._createExtraGamesFromWaitlist = function(t) {
   if (!t) return 0;
-  if (t.qualificationClosed) return 0; // v2.1.25: org já fechou a qualificação
   if (t.lateEnrollment !== 'expand') return 0;
-  var drawDone = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                 (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                 (Array.isArray(t.groups) && t.groups.length > 0);
-  if (!drawDone) return 0;
-  // só pra formatos de eliminatória (Fase 1; Liga/Suíço/Grupos ficam de fora)
   var fmt = t.format || '';
-  if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples' && fmt !== 'Dupla Eliminatória') return 0;
+  if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return 0;
+  if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-categoria: fora do escopo por ora
+  if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio já feito
+  // trava: se a R2+ já tem resultado, a qualificação fechou (não cresce mais)
+  var r2HasResult = t.matches.some(function(m){ return m && m.round >= 2 && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length)); });
+  if (r2HasResult) return 0;
 
-  // pool da espera (standbyParticipants + waitlist, dedup por nome)
   var _name = function(p){ return window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name) || '')); };
   var _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
   var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
   var seen = {}; var pool = [];
   _sp.concat(_wl).forEach(function(p){ var n = _name(p); if (n && !seen[n]) { seen[n] = true; pool.push(p); } });
-  // só indivíduos (sem ' / ') — duplas já formadas não viram jogo extra aqui
-  pool = pool.filter(function(p){ return _name(p).indexOf(' / ') === -1; });
-
+  pool = pool.filter(function(p){ return _name(p).indexOf(' / ') === -1; }); // só indivíduos
   if (pool.length < 4) return 0;
-  if (!Array.isArray(t.extraMatches)) t.extraMatches = [];
-  if (!t.teamOrigins) t.teamOrigins = {};
 
+  if (!Array.isArray(t.participants)) t.participants = [];
+  if (!t.teamOrigins) t.teamOrigins = {};
+  var ts = Date.now();
   var created = 0;
   while (pool.length >= 4) {
     var four = pool.splice(0, 4);
     var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
     var teams = (formed.participants || []).filter(function(x){ return x && (x.displayName || x.name || '').indexOf(' / ') !== -1; });
     if (teams.length < 2) break;
-    var idx = t.extraMatches.filter(function(m){ return (m.extraRound || 1) === 1; }).length; // 0 → '1A', 1 → '1B'…
-    var label = '1' + String.fromCharCode(65 + (idx % 26)) + (idx >= 26 ? '·' + Math.floor(idx / 26) : '');
-    var usedNames = four.map(_name);
-    t.extraMatches.push({
-      id: 'extra-' + t.id + '-' + Date.now() + '-' + idx,
-      p1: teams[0].displayName || teams[0].name,
-      p2: teams[1].displayName || teams[1].name,
-      winner: null, isExtra: true, extraLabel: label, extraRound: 1, advancedTo: null,
-      participants: [teams[0], teams[1]],
-      createdAt: new Date().toISOString()
+    var t1 = teams[0], t2 = teams[1];
+    var n1 = t1.displayName || t1.name, n2 = t2.displayName || t2.name;
+    // tardios viram INSCRITOS (duplas) — para aparecer na lista, marcar presença/W.O.
+    [t1, t2].forEach(function(tm){
+      var nm = tm.displayName || tm.name;
+      var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
+      if (!exists) t.participants.push(tm);
+      t.teamOrigins[nm] = 'formada';
     });
     // remove os 4 da espera
-    var rm = function(arr){ return Array.isArray(arr) ? arr.filter(function(p){ return usedNames.indexOf(_name(p)) === -1; }) : arr; };
+    var used = four.map(_name);
+    var rm = function(arr){ return Array.isArray(arr) ? arr.filter(function(p){ return used.indexOf(_name(p)) === -1; }) : arr; };
     t.standbyParticipants = rm(t.standbyParticipants);
     t.waitlist = rm(t.waitlist);
+    // novo JOGO da rodada 1 (cor roxa via isExtra) — mesma apresentação dos demais
+    t.matches.push({
+      id: 'xr1-' + t.id + '-' + ts + '-' + created,
+      round: 1, p1: n1, p2: n2, winner: null, isExtra: true,
+      createdAt: new Date().toISOString()
+    });
     if (window.AppStore && typeof window.AppStore.logAction === 'function') {
-      window.AppStore.logAction(t.id, 'Jogo extra ' + label + ' criado (tardios): ' + teams[0].displayName + ' vs ' + teams[1].displayName);
+      window.AppStore.logAction(t.id, 'Tardios na chave (rodada 1): ' + n1 + ' vs ' + n2);
     }
     created++;
   }
-  return created;
-};
-
-// Salva o resultado de um jogo extra (FASE 1: só registra vencedor, NÃO avança).
-window._saveExtraGameResult = function(tId, matchId, scoreP1, scoreP2) {
-  var t = window.AppStore && window.AppStore.tournaments &&
-          window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
-  if (!t || !Array.isArray(t.extraMatches)) return;
-  var m = t.extraMatches.find(function(x){ return x && String(x.id) === String(matchId); });
-  if (!m) return;
-  var s1 = parseInt(scoreP1, 10), s2 = parseInt(scoreP2, 10);
-  if (isNaN(s1) || isNaN(s2) || s1 === s2) {
-    if (window.showNotification) window.showNotification('Placar inválido', 'Informe os dois placares (sem empate).', 'warning');
-    return;
-  }
-  m.scoreP1 = s1; m.scoreP2 = s2; m.winner = s1 > s2 ? m.p1 : m.p2;
-  if (window.AppStore && typeof window.AppStore.logAction === 'function') {
-    window.AppStore.logAction(tId, 'Jogo extra ' + (m.extraLabel || '') + ': ' + m.p1 + ' ' + s1 + ' x ' + s2 + ' ' + m.p2 + ' — vence ' + m.winner);
-  }
-  // v2.1.23 (Fase 2): vencedor-contra-vencedor — encadeia o próximo jogo extra.
-  if (typeof window._consolidateExtraGames === 'function') window._consolidateExtraGames(t);
-  if (window.AppStore && typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
-  if (window.showNotification) window.showNotification('✅ Jogo extra registrado', m.winner + ' venceu.', 'success');
-  var vc = document.getElementById('view-container');
-  if (vc && typeof window.renderBracket === 'function' && (window.location.hash || '').indexOf('#bracket') === 0) {
-    window.renderBracket(vc);
-  }
-};
-
-// ─── v2.1.23 (Fase 2): consolida vencedores dos jogos extras ──────────────────
-// Vencedor-contra-vencedor, ISOLADO em t.extraMatches[]. Quando ≥2 vencedores não
-// consumidos existem no MESMO nível (extraRound), pareia os 2 mais antigos num
-// jogo do nível seguinte (2A, 2B, 3A…). Cascata natural; vencedor sozinho aguarda
-// um par do mesmo nível. NÃO toca a árvore principal (isso é Fase 3).
-window._consolidateExtraGames = function(t) {
-  if (!t || !Array.isArray(t.extraMatches) || t.extraMatches.length < 2) return 0;
-  var created = 0, guard = 0;
-  while (guard++ < 100) {
-    var byRound = {};
-    t.extraMatches.forEach(function(m){
-      if (m && m.winner && !m.advancedTo) {
-        var r = m.extraRound || 1;
-        (byRound[r] = byRound[r] || []).push(m);
-      }
-    });
-    var rounds = Object.keys(byRound).map(Number).sort(function(a,b){ return a - b; });
-    var madeOne = false;
-    for (var i = 0; i < rounds.length && !madeOne; i++) {
-      var pool = byRound[rounds[i]];
-      if (pool.length < 2) continue;
-      pool.sort(function(a,b){ return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
-      var a = pool[0], b = pool[1];
-      var nr = rounds[i] + 1;
-      var cnt = t.extraMatches.filter(function(m){ return (m.extraRound || 1) === nr; }).length;
-      var label = nr + String.fromCharCode(65 + (cnt % 26)) + (cnt >= 26 ? '·' + Math.floor(cnt / 26) : '');
-      var nid = 'extra-' + t.id + '-' + Date.now() + '-' + nr + '-' + cnt;
-      t.extraMatches.push({
-        id: nid, p1: a.winner, p2: b.winner, winner: null,
-        isExtra: true, extraLabel: label, extraRound: nr, advancedTo: null,
-        feeders: [a.id, b.id], createdAt: new Date().toISOString()
-      });
-      a.advancedTo = nid; b.advancedTo = nid;
-      if (window.AppStore && typeof window.AppStore.logAction === 'function') {
-        window.AppStore.logAction(t.id, 'Jogo extra ' + label + ' (vencedores): ' + a.winner + ' vs ' + b.winner);
-      }
-      created++; madeOne = true;
-    }
-    if (!madeOne) break;
+  if (created > 0) {
+    window._rebuildIntegratedBracket(t);
+    if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
   }
   return created;
 };
 
-// ─── v2.1.25 (Fase 3): fecha a qualificação e monta a chave final ────────────
-// Pega os QUALIFICADOS da mini-chave (vencedores de fronteira: winner && sem
-// advancedTo), adiciona-os como times pré-formados em t.participants e REUSA o
-// fluxo de sorteio testado (generateDrawFunction) — que preserva duplas já
-// formadas e já tem a guarda de re-sorteio (confirmação extra se houver
-// resultados no mata-mata). Sem cirurgia manual de nós na árvore.
-window._closeQualificationAndRebuild = function(tId) {
-  var t = window.AppStore && window.AppStore.tournaments &&
-          window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
-  if (!t) return;
-  var qualifiers = (Array.isArray(t.extraMatches) ? t.extraMatches : []).filter(function(m){ return m && m.winner && !m.advancedTo; });
-  if (qualifiers.length === 0) {
-    if (window.showNotification) window.showNotification('Sem qualificados', 'Conclua os jogos extras antes de fechar a qualificação.', 'warning');
-    return;
+// Reconstrói R2+ a partir da R1 (originais + tardios), preservando os resultados
+// de R1. R2 = próxima potência de 2 dos vencedores de R1; a sobra vira repescagem
+// (os melhores derrotados preenchem os slots awaitsBestLoser quando a R1 acaba,
+// via _assignRepechageLosers — o mesmo motor do sorteio normal). Os nomes de
+// rodada são derivados do nº de rodadas (automático no render).
+window._rebuildIntegratedBracket = function(t) {
+  if (!t || !Array.isArray(t.matches)) return false;
+  var fmt = t.format || '';
+  if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return false;
+  // não reconstrói se a R2+ já tem resultado (qualificação travada)
+  var r2HasResult = t.matches.some(function(m){ return m && m.round >= 2 && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length)); });
+  if (r2HasResult) return false;
+  var r1 = t.matches.filter(function(m){ return m && m.round === 1; });
+  var R1count = r1.length;
+  if (R1count < 2) return false;
+  var r2Target = 1; while (r2Target < R1count) r2Target *= 2;
+  var repechage = r2Target - R1count;
+
+  // elegibilidade de repescagem (loser de qualquer jogo de R1) + limpa wiring
+  r1.forEach(function(m){
+    if (repechage > 0) m.isRepechageR1 = true; else { delete m.isRepechageR1; }
+    delete m.nextMatchId; delete m.nextSlot;
+  });
+  // remove R2+ e 3º lugar (serão reconstruídos)
+  t.matches = t.matches.filter(function(m){ return m && m.round === 1; });
+  if (t.thirdPlaceMatch) delete t.thirdPlaceMatch;
+
+  var ts = Date.now(), mc = 0;
+  // slots de R2: vencedores de R1 (na ordem) + bestloser (repescagem)
+  var slots = [];
+  r1.forEach(function(m){ slots.push({ type: 'r1winner', fromMatch: m.id }); });
+  for (var b = 0; b < repechage; b++) slots.push({ type: 'bestloser' });
+
+  var r2games = r2Target / 2;
+  var r2Matches = [];
+  for (var g = 0; g < r2games; g++) {
+    var s1 = slots[g * 2], s2 = slots[g * 2 + 1];
+    var r2m = { id: 'ir2-' + ts + '-' + (mc++), round: 2, p1: 'TBD', p2: 'TBD', winner: null };
+    var bl = [];
+    if (s1 && s1.type === 'bestloser') bl.push('p1');
+    if (s2 && s2.type === 'bestloser') bl.push('p2');
+    if (bl.length) { r2m.awaitsBestLoser = bl.join(','); r2m.isRepechageSlot = true; }
+    t.matches.push(r2m); r2Matches.push(r2m);
+    if (s1 && s1.type === 'r1winner') { var src = r1.find(function(x){ return x.id === s1.fromMatch; }); if (src) { src.nextMatchId = r2m.id; src.nextSlot = 'p1'; } }
+    if (s2 && s2.type === 'r1winner') { var src2 = r1.find(function(x){ return x.id === s2.fromMatch; }); if (src2) { src2.nextMatchId = r2m.id; src2.nextSlot = 'p2'; } }
   }
-  // jogos extras ainda sem resultado bloqueiam o fechamento (decida-os antes)
-  var pending = (Array.isArray(t.extraMatches) ? t.extraMatches : []).filter(function(m){ return m && !m.winner; });
-  if (pending.length > 0) {
-    if (window.showNotification) window.showNotification('Jogos extras pendentes', 'Há ' + pending.length + ' jogo(s) extra sem resultado. Conclua todos antes de fechar.', 'warning');
-    return;
+  // R3+ (TBD, alimentados pelos vencedores de R2)
+  var prev = r2Matches, roundNum = 3, cur = r2games;
+  while (cur > 1) {
+    var nextCount = Math.floor(cur / 2), nextRound = [];
+    for (var n = 0; n < nextCount; n++) { var nm = { id: 'ir' + roundNum + '-' + ts + '-' + (mc++), round: roundNum, p1: 'TBD', p2: 'TBD', winner: null }; t.matches.push(nm); nextRound.push(nm); }
+    for (var l = 0; l < prev.length; l++) { var tgt = Math.floor(l / 2), sl = (l % 2 === 0) ? 'p1' : 'p2'; if (tgt < nextRound.length) { prev[l].nextMatchId = nextRound[tgt].id; prev[l].nextSlot = sl; } }
+    prev = nextRound; cur = nextCount; roundNum++;
   }
-  var names = qualifiers.map(function(m){ return m.winner; }).join(', ');
-  var doIt = function() {
-    if (!Array.isArray(t.participants)) t.participants = [];
-    if (!t.teamOrigins) t.teamOrigins = {};
-    qualifiers.forEach(function(m){
-      var wname = m.winner;
-      // O time qualificado nasceu na rodada 1 (que guarda participants[] com os
-      // sub-objetos: uid/email/foto). Recupera o objeto original pelo nome — assim
-      // o time entra no chaveamento com os dados dos membros (notif/stats corretos).
-      var teamObj = null;
-      (Array.isArray(t.extraMatches) ? t.extraMatches : []).forEach(function(em){
-        if (teamObj || !em || !Array.isArray(em.participants)) return;
-        em.participants.forEach(function(po){
-          if (!teamObj && po && (po.displayName || po.name) === wname) teamObj = po;
-        });
-      });
-      if (!teamObj && Array.isArray(m.participants)) {
-        teamObj = (wname === m.p1) ? m.participants[0] : m.participants[1];
-      }
-      if (!teamObj || typeof teamObj !== 'object') teamObj = { displayName: wname, name: wname };
-      teamObj = Object.assign({}, teamObj);
-      teamObj.displayName = wname; teamObj.name = wname;
-      var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === m.winner; });
-      if (!exists) t.participants.push(teamObj);
-      t.teamOrigins[m.winner] = 'formada';
-    });
-    t.qualificationClosed = true; // trava criação de novos jogos extras
-    t.extraMatches = [];          // absorvidos no chaveamento
-    if (window.AppStore && typeof window.AppStore.logAction === 'function') {
-      window.AppStore.logAction(tId, 'Qualificação encerrada — ' + qualifiers.length + ' tardio(s) entram no chaveamento: ' + names);
+
+  if (repechage > 0) {
+    t.repechageConfig = {
+      r1MatchIds: r1.map(function(m){ return m.id; }),
+      repMatchIds: [], repParticipants: 0,
+      bestLoserCount: repechage,
+      bestLoserR2Ids: r2Matches.filter(function(m){ return m.awaitsBestLoser; }).map(function(m){ return m.id; }),
+      eliminatedCount: R1count - repechage, spotsFromRepechage: repechage, category: ''
+    };
+    t.hasRepechage = true;
+  } else { t.repechageConfig = null; t.hasRepechage = false; }
+
+  // propaga os vencedores de R1 já decididos pra R2
+  r1.forEach(function(m){
+    if (m.winner && m.nextMatchId) {
+      var nx = t.matches.find(function(x){ return x.id === m.nextMatchId; });
+      if (nx) { if (m.nextSlot === 'p2') nx.p2 = m.winner; else nx.p1 = m.winner; if (typeof _autoResolveBye === 'function') _autoResolveBye(t, nx); }
     }
-    window.generateDrawFunction(tId); // fluxo testado: guarda de re-sorteio + resolução de potência de 2
-  };
-  var _t2 = window._t || function(k){ return k; };
-  var hint = 'Vou montar a chave final incluindo ' + qualifiers.length + ' qualificado(s) dos jogos extras (' + names + '). As duplas já formadas são mantidas — só o chaveamento é redesenhado. Se o mata-mata já tiver resultados lançados, o app vai pedir uma confirmação extra antes de substituí-los.';
-  if (typeof window.showAlertDialog === 'function') {
-    window.showAlertDialog('Fechar qualificação e montar a chave?', hint, doIt, { type: 'warning', confirmText: 'Montar chave final', cancelText: _t2('btn.cancel') });
-  } else if (window.confirm(hint)) { doIt(); }
+  });
+  // se a R1 inteira já está decidida e há repescagem, preenche os melhores derrotados
+  var allR1Done = r1.every(function(m){ return !!m.winner; });
+  if (allR1Done && repechage > 0 && typeof _assignRepechageLosers === 'function') _assignRepechageLosers(t);
+  if (typeof _maybeFinishElimination === 'function') _maybeFinishElimination(t);
+  return true;
 };
 
 // ─── v2.1.20: Diálogo de gênero pré-sorteio (duplas mistas, sorteio livre) ────
