@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +
+      '<div style="font-weight:800; color:#7dd3fc; font-size:1rem; margin-bottom:8px;">🔵 v2.1.29-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Lista de Espera sem BYE (de verdade) + nome de rodada correto.</b><br><br>' +
+      '(1) Ao escolher <b>Lista de Espera</b>, toda a sobra que não fecha uma potência de 2 de duplas/times completos vai pra espera — <b>zero BYE</b>. Ex.: 19 avulsos numa dupla → 16 entram (8 duplas) e <b>3 vão pra espera</b> (antes ia só 1 e sobrava um BYE). (2) O nome da rodada agora respeita posição <b>e</b> contagem: Final (1 jogo), Semifinais (2, penúltima), Quartas (4, antepenúltima), Oitavas (8, 4ª de trás pra frente). Uma rodada antes das quartas com 4 jogos vira <b>"Rodada N"</b>, não "Quartas".</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #64748b;border-radius:12px;padding:14px 16px;background:rgba(100,116,139,0.08);">' +
       '<div style="font-weight:800; color:#cbd5e1; font-size:1rem; margin-bottom:8px;">🧪 v2.1.28-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Botão "+ Placeholders" (organizador) pra testes.</b><br><br>' +

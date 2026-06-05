@@ -554,21 +554,33 @@ window._executeRemoval = function(tId, mode, method) {
     var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
     if (!t) return;
 
-    // Re-diagnose to get current counts (avoids stale closure)
-    var currentInfo = window._diagnoseAll(t);
     var arr = Array.isArray(t.participants) ? t.participants.slice() : [];
-    // remainder is in participants; excess is in teams → use excessParticipants for correct count
-    var removeCount = currentInfo.remainder > 0 ? currentInfo.remainder : currentInfo.excessParticipants;
+    // v2.1.29: remove em PLAYERS até sobrar exatamente a maior potência de 2 de
+    // TIMES COMPLETOS — zero resto, zero BYE. Antes removia só o "remainder" (o
+    // avulso, 1), deixando nº de times fora da potência de 2 → BYE. Ex.: 19
+    // avulsos (dupla) → mantém 16 (8 duplas) e manda 3 pra espera.
+    var _ts = parseInt(t.teamSize) || 1;
+    var _enr = t.enrollmentMode || t.enrollment || 'individual';
+    if ((_enr === 'time' || _enr === 'misto') && _ts < 2) _ts = 2;
+    var _playersOf = function(p) { var nm = typeof p === 'string' ? p : (p.displayName || p.name || ''); return nm.indexOf(' / ') !== -1 ? _ts : 1; };
+    var _totalPlayers = arr.reduce(function(s, p) { return s + _playersOf(p); }, 0);
+    var _maxTeams = Math.floor(_totalPlayers / _ts);
+    var _targetTeams = _maxTeams >= 1 ? 1 : 0;
+    while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
+    var _playersToRemove = _totalPlayers - (_targetTeams * _ts);
     var removed = [];
-
+    var _removedPlayers = 0;
     if (method === 'last') {
-        removed = arr.splice(arr.length - removeCount, removeCount);
+        while (_removedPlayers < _playersToRemove && arr.length > 0) {
+            var _e = arr.pop(); removed.unshift(_e); _removedPlayers += _playersOf(_e);
+        }
     } else {
-        for (var i = 0; i < removeCount && arr.length > 0; i++) {
-            var idx = Math.floor(Math.random() * arr.length);
-            removed.push(arr.splice(idx, 1)[0]);
+        while (_removedPlayers < _playersToRemove && arr.length > 0) {
+            var _idx = Math.floor(Math.random() * arr.length);
+            var _e2 = arr.splice(_idx, 1)[0]; removed.push(_e2); _removedPlayers += _playersOf(_e2);
         }
     }
+    var removeCount = removed.length;
 
     t.participants = arr;
 
@@ -3575,10 +3587,15 @@ window._confirmP2Resolution = function (tId, option) {
         if (standbyPick === 'random') {
             for (let _i = _pool.length - 1; _i > 0; _i--) { const _j = Math.floor(Math.random() * (_i + 1)); const _tmp = _pool[_i]; _pool[_i] = _pool[_j]; _pool[_j] = _tmp; }
         }
-        // VIPs ficam sempre; excesso sai dos não-VIPs
-        const slotsForNonVip = info.lo - vipEntries.length;
-        const kept = _pool.slice(0, Math.max(0, slotsForNonVip));
-        const standbyOverflow = _pool.slice(Math.max(0, slotsForNonVip));
+        // v2.1.29: conta em PLAYERS (indivíduo=1, time pré-formado=teamSize) e mantém
+        // exatamente info.lo*teamSize jogadores → info.lo times completos, sem BYE.
+        const _ts = info.teamSize || 1;
+        const _playersOf = (e) => { const nm = typeof e === 'string' ? e : (e.displayName || e.name || ''); return nm.indexOf(' / ') !== -1 ? _ts : 1; };
+        const _targetPlayers = info.lo * _ts;
+        let _used = vipEntries.reduce((s, e) => s + _playersOf(e), 0);
+        const kept = [];
+        const standbyOverflow = [];
+        _pool.forEach((e) => { const s = _playersOf(e); if (_used + s <= _targetPlayers) { kept.push(e); _used += s; } else { standbyOverflow.push(e); } });
         t.standbyParticipants = (t.standbyParticipants || []).concat(standbyOverflow);
         t.participants = [...vipEntries, ...kept];
         t.standbyPick = standbyPick;
@@ -3586,7 +3603,7 @@ window._confirmP2Resolution = function (tId, option) {
         const modeRadio = document.querySelector('input[name="standby-mode"]:checked');
         t.standbyMode = modeRadio ? modeRadio.value : 'teams';
         const pickLabel = standbyPick === 'random' ? 'sorteio livre' : 'últimos a se inscrever';
-        actionMsg = `Movidos ${info.excess} para Lista de Espera (${pickLabel}) — chave de ${info.lo}, sem BYE`;
+        actionMsg = `Movidos ${standbyOverflow.length} para Lista de Espera (${pickLabel}) — chave de ${info.lo}, sem BYE`;
     } else if (option === 'swiss') {
         t.p2Resolution = 'swiss';
         t.classifyFormat = 'swiss';

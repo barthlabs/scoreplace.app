@@ -782,13 +782,19 @@ function renderSingleElimBracket(t, canEnterResult) {
   const getRoundLabel = (roundNum, roundIndex) => {
     if (roundNum === 0) return _t('bracket.playIn');
     if (roundNum < 0) return _t('bracket.lowerBracket') + (Math.abs(roundNum) > 1 ? ' ' + Math.abs(roundNum) : '');
-    // v2.1.27: rótulo pelo NÚMERO DE JOGOS da rodada (não pela posição na árvore).
-    // 1 jogo = Final · 2 = Semifinais · 4 = Quartas · 8 = Oitavas · senão "Rodada N".
+    // v2.1.29: nome canônico = POSIÇÃO de trás pra frente + CONTAGEM exata.
+    // Final (última, 1 jogo) · Semifinais (2ª de trás, 2 jogos) · Quartas (3ª, 4
+    // jogos) · Oitavas (4ª, 8 jogos). Se a posição não bate OU a contagem não
+    // bate, é "Rodada N" — assim uma rodada ANTES das quartas com 4 jogos NÃO
+    // vira "quartas" (a quartas já é a 3ª de trás pra frente), e uma 4ª de trás
+    // com nº ≠ 8 não vira "oitavas".
+    var posIdx = positiveRounds.indexOf(roundNum);
+    var fromEnd = positiveRounds.length - posIdx;
     var gamesInRound = (roundsMap[roundNum] || []).length;
-    if (gamesInRound === 1) return _t('bracket.final');
-    if (gamesInRound === 2) return _t('bracket.semiFinal');
-    if (gamesInRound === 4) return _t('bracket.quarterFinal');
-    if (gamesInRound === 8) return _t('bracket.roundOf16');
+    if (fromEnd === 1) return _t('bracket.final');
+    if (fromEnd === 2 && gamesInRound === 2) return _t('bracket.semiFinal');
+    if (fromEnd === 3 && gamesInRound === 4) return _t('bracket.quarterFinal');
+    if (fromEnd === 4 && gamesInRound === 8) return _t('bracket.roundOf16');
     return _t('bracket.round', {n: roundNum});
   };
 
