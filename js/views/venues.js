@@ -3235,7 +3235,12 @@
     if (ov) ov.remove();
   };
 
-  function _openInlinePlanOverlay(v, sports) {
+  function _openInlinePlanOverlay(v, sports, editData) {
+    // v2.1.8: contexto de edição vem SEMPRE explícito por parâmetro — fresh
+    // (Planejar ida) passa undefined → null. Evita que uma edição anterior que
+    // não fechou pelo handler (ex: re-render removeu o overlay) "vaze" para um
+    // plano novo e acabe sobrescrevendo o plano antigo.
+    _editingPlanData = editData || null;
     _pendingPlanState = { venue: v, sports: sports };
     var prev = document.getElementById('venue-plan-overlay');
     if (prev) prev.remove();
@@ -3593,10 +3598,23 @@
       createdAt: Date.now()
     };
     try {
-      var docId = await window.PresenceDB.savePresence(payload);
-      // v1.9.87: se estava EDITANDO, cancela o plano antigo (substituição).
-      if (_editingPlanData && _editingPlanData.docId && _editingPlanData.docId !== docId) {
-        try { await window.PresenceDB.cancelPresence(_editingPlanData.docId); } catch (e) {}
+      var docId;
+      if (_editingPlanData && _editingPlanData.docId) {
+        // v2.1.8: EDITANDO um plano existente — atualiza o doc direto. Antes
+        // chamava savePresence(payload), mas o dedup de savePresence devolvia
+        // o doc antigo (mesma venue/horário sobreposto) SEM gravar as
+        // alterações → a edição se perdia. updatePresence grava de verdade.
+        docId = _editingPlanData.docId;
+        var _ok = await window.PresenceDB.updatePresence(docId, payload);
+        if (!_ok) {
+          // Fallback raro: se o update falhar, cria novo e cancela o antigo.
+          docId = await window.PresenceDB.savePresence(payload);
+          if (docId && String(docId) !== String(_editingPlanData.docId)) {
+            try { await window.PresenceDB.cancelPresence(_editingPlanData.docId); } catch (e) {}
+          }
+        }
+      } else {
+        docId = await window.PresenceDB.savePresence(payload);
       }
       _editingPlanData = null;
       var ov = document.getElementById('venue-plan-overlay');
@@ -4170,7 +4188,7 @@
 
   // Plano rápido no card preferido — mesma lógica: usa todos os preferidos
   // que o venue oferece sem abrir picker.
-  window._venuesQuickPlanPreferred = async function(placeId) {
+  window._venuesQuickPlanPreferred = async function(placeId, editData) {
     var v = await _resolvePreferredVenue(placeId);
     if (!v) return;
     var cu = window.AppStore && window.AppStore.currentUser;
@@ -4184,17 +4202,17 @@
       ? venueSports.filter(function(s) { return prefSports.indexOf(s) !== -1; })
       : (venueSports.length === 0 ? prefSports : []);
     if (picks.length > 0) {
-      _openInlinePlanOverlay(v, picks);
+      _openInlinePlanOverlay(v, picks, editData);
       return;
     }
     if (placeId && placeId.indexOf('pref_') !== 0) {
-      window._venuesQuickPlan(placeId);
+      window._venuesQuickPlan(placeId, editData);
       return;
     }
     // v0.16.41: sem interseção venue×preferidos — abre overlay multi-pill com a
     // lista completa de modalidades; usuário desativa as que não vai jogar.
     var SPORTS_LIST2 = ['Beach Tennis', 'Pickleball', 'Tênis', 'Tênis de Mesa', 'Padel', 'Vôlei de Praia', 'Futevôlei'];
-    _openInlinePlanOverlay(v, SPORTS_LIST2);
+    _openInlinePlanOverlay(v, SPORTS_LIST2, editData);
   };
 
   // v1.9.87: EDITAR um plano de ida existente. Carrega os horários do plano,
@@ -4202,18 +4220,20 @@
   window._venuesEditPlanPreferred = async function(placeId, docId) {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu || !cu.uid || !window.PresenceDB) return;
+    var editData = null;
     try {
       var active = await window.PresenceDB.loadMyActive(cu.uid);
       var plan = (active || []).filter(function(p) { return p && p.type === 'planned' && String(p._id) === String(docId); })[0];
-      _editingPlanData = plan ? {
+      editData = plan ? {
         docId: docId,
         startsAt: plan.startsAt || null,
         endsAt: plan.endsAt || null,
         openEnded: !!plan.openEnded,
         sports: Array.isArray(plan.sports) ? plan.sports.slice() : null
       } : null;
-    } catch (e) { _editingPlanData = null; }
-    window._venuesQuickPlanPreferred(placeId);
+    } catch (e) { editData = null; }
+    // v2.1.8: passa o contexto de edição explícito — só esta rota edita.
+    window._venuesQuickPlanPreferred(placeId, editData);
   };
 
   // Planejar ida: abre overlay inline POR CIMA da modal do venue. Mantém o
@@ -4223,7 +4243,7 @@
   // repetido em v0.15.92 com Paineiras). Inline elimina a dependência do
   // state cross-view e garante que a venue planejada é sempre a que está
   // visível na tela.
-  window._venuesQuickPlan = async function(placeId) {
+  window._venuesQuickPlan = async function(placeId, editData) {
     var v = await window.VenueDB.loadVenue(placeId);
     if (!v) return;
     var cu = window.AppStore && window.AppStore.currentUser;
@@ -4243,7 +4263,7 @@
     } else {
       planSports = ['Beach Tennis', 'Pickleball', 'Tênis', 'Tênis de Mesa', 'Padel', 'Vôlei de Praia', 'Futevôlei'];
     }
-    _openInlinePlanOverlay(v, planSports);
+    _openInlinePlanOverlay(v, planSports, editData);
   };
 
   // Public entry point. `deepLinkPlaceId` (optional, from #venues/<placeId>)

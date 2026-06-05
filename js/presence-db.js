@@ -159,6 +159,31 @@ window.PresenceDB = {
     return p;
   },
 
+  // Update own presence in place (edição de um plano/check-in existente).
+  // v2.1.8: usado ao EDITAR um "planejar ida" — atualiza o doc direto em vez de
+  // criar um novo via savePresence (cujo dedup devolvia o doc antigo sem gravar
+  // as alterações, fazendo a edição se perder). Só campos seguros são tocados.
+  async updatePresence(docId, partial) {
+    if (!this.db || !docId || !partial) return false;
+    var ALLOWED = ['sports', 'startsAt', 'endsAt', 'openEnded', 'dayKey',
+      'venueName', 'venueLat', 'venueLon', 'visibility', 'type'];
+    var patch = {};
+    ALLOWED.forEach(function(k) { if (partial[k] !== undefined) patch[k] = partial[k]; });
+    patch.cancelled = false;       // garante que continua ativo após editar
+    patch.updatedAt = Date.now();
+    try {
+      var clean = window.FirestoreDB._cleanUndefined(patch);
+      await this.db.collection('presences').doc(docId).update(clean);
+      return true;
+    } catch (e) {
+      window._error('Erro ao editar presença:', e);
+      if (typeof window._captureException === 'function') {
+        window._captureException(e, { area: 'updatePresence', code: e && e.code });
+      }
+      return false;
+    }
+  },
+
   // Soft-cancel own presence.
   async cancelPresence(docId) {
     if (!this.db || !docId) return false;
