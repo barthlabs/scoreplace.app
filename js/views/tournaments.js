@@ -621,6 +621,52 @@ function renderTournaments(container, tournamentId = null) {
         window.addBotsFunctionSetup = true;
     }
 
+    if (!window.addPlaceholdersFunctionSetup) {
+        // v2.1.28: botão de teste do organizador — cria N inscritos "placeholder".
+        // Antes do sorteio: vão pra INSCRITOS. Depois do sorteio: vão pra LISTA DE
+        // ESPERA (o pool de tardios), útil pra testar o fluxo de inscrição tardia.
+        window.addPlaceholdersFunction = function (id) {
+            var raw = prompt('➕ Placeholders\nQuantos inscritos placeholder deseja incluir?', '8');
+            if (raw === null) return;
+            var qtd = parseInt(raw, 10);
+            if (isNaN(qtd) || qtd <= 0) { showNotification('Número inválido', 'Informe um número maior que zero.', 'warning'); return; }
+            if (qtd > 200) qtd = 200;
+            var t = window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === id.toString(); });
+            if (!t) return;
+            if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
+            var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
+            // evita nomes duplicados em qualquer lista
+            var existingNames = {};
+            (t.participants || []).concat(t.standbyParticipants || [], t.waitlist || []).forEach(function (p) { var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); if (n) existingNames[n] = true; });
+            var made = [];
+            var k = (t.participants || []).length + (t.standbyParticipants || []).length + (t.waitlist || []).length;
+            for (var i = 0; i < qtd; i++) {
+                var numStr, nm;
+                do { k++; numStr = String(k).padStart(2, '0'); nm = 'Placeholder ' + numStr; } while (existingNames[nm]);
+                existingNames[nm] = true;
+                made.push({ name: nm, displayName: nm, email: 'placeholder' + numStr + '@scoreplace.app', uid: 'ph_' + numStr + '_' + Date.now() + '_' + i, isPlaceholder: true });
+            }
+            var dest;
+            if (hasDraw) {
+                if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+                t.standbyParticipants = t.standbyParticipants.concat(made);
+                dest = 'lista de espera';
+            } else {
+                t.participants = t.participants.concat(made);
+                dest = 'inscritos';
+            }
+            if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
+            if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+                window.FirestoreDB.saveTournament(t).then(function () {
+                    showNotification('Placeholders adicionados', qtd + ' placeholder(s) em ' + dest + '.', 'success');
+                }).catch(function (err) { if (window._error) window._error('Erro ao salvar placeholders:', err); showNotification('Erro', 'Não foi possível salvar.', 'error'); });
+            }
+            var container = document.getElementById('view-container');
+            if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); }
+        };
+        window.addPlaceholdersFunctionSetup = true;
+    }
+
     if (!window.editModalSetupDone) {
         window.openEditModal = function (id) {
             if (typeof window.openEditTournamentModal === 'function') {
@@ -1191,6 +1237,7 @@ function renderTournaments(container, tournamentId = null) {
         const addParticipantBtns = isOrg ? `
              ${((allowsIndividual || isDoublesMode) && isAberto) ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
              ${((allowsTeams && !isDoublesMode) && !hasDraw) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
+             <button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window.addPlaceholdersFunction('${t.id}')">➕ Placeholders</button>
         ` : '';
 
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
