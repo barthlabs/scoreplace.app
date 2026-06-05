@@ -1727,8 +1727,6 @@ function renderTournaments(container, tournamentId = null) {
               return _html;
             })()}
 
-            ${actionsHtml}
-
             ${(tournamentId && isOrg) ? (function() {
               // v1.6.1-beta: Árbitros button — só aparece quando resultEntry inclui 'referee'
               var _refEntry = t.resultEntry;
@@ -1759,6 +1757,11 @@ function renderTournaments(container, tournamentId = null) {
               </div>
             </div>`;
             })() : ''}
+
+            ${/* v2.1.13: ações gerais (Regras/Inscritos/Imprimir/CSV/Modo TV + pódio
+                  quando encerrado) movidas pra DEPOIS das Ferramentas do Organizador,
+                  ficando no pé do card. */ ''}
+            ${actionsHtml}
 
           </div>
           ${isOrg ? `<div style="position:absolute;bottom:6px;right:8px;opacity:0.9;pointer-events:none;" title="Organizador">

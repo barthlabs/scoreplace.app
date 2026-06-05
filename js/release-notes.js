@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.13-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Ferramentas do Organizador subiram no card do torneio.</b><br><br>' +
+      'No card de detalhes, a seção <b>"Ferramentas do Organizador"</b> (Ver Chaves, Editar, + Participante, Encerrar, etc.) agora aparece <b>acima</b> dos botões gerais (Regras, Inscritos, Imprimir, Exportar CSV, Modo TV), que passaram pro pé do card.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.12-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Torneio encerrado fica visível por 24h antes de ir pra "Encerrados".</b><br><br>' +
       'Quando um torneio encerra, ele agora <b>continua na lista principal por 24h</b> — pra todo mundo ver o resultado/pódio fresquinho. Só depois disso ele vai pra seção colapsada <b>"Encerrados"</b>. Vale pra encerramento automático (final) e manual.</p>' +
