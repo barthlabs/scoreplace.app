@@ -857,12 +857,19 @@ window.FirestoreDB = {
       // v1.8.45-beta: ID determinístico em vez de .add() para garantir
       // idempotência no Firestore. Múltiplas chamadas do mesmo evento
       // (race, retry, re-render) produzem o MESMO doc — sem duplicatas.
-      // Chave: type + tournamentId + matchId (se houver) + dia UTC + uid receptor.
+      // v2.1.15: BUG — a chave (type+tournament+match+dia+uid) era grossa demais:
+      // eventos DIFERENTES do mesmo tipo/torneio no mesmo dia colapsavam no MESMO
+      // doc, e o 2º .set() virava UPDATE (doc já existe) que a regra só permite
+      // pro DONO → quem dispara (organizador) era NEGADO e a notificação sumia.
+      // Agora incluímos um hash da mensagem: evento distinto → doc distinto (é
+      // CREATE, permitido); duplicata real (mesma mensagem) → mesmo doc (idempotente).
       var _type = String(notifData.type || 'info');
       var _tId  = String(notifData.tournamentId || '');
       var _mId  = String(notifData.matchId || '');
       var _day  = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
-      var _raw  = [_type, _tId, _mId, _day, uid].join('|');
+      var _msg  = String(notifData.message || '');
+      var _msgHash = (function(s){ var h = 0; for (var i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; } return (h >>> 0).toString(36); })(_msg);
+      var _raw  = [_type, _tId, _mId, _day, _msgHash, uid].join('|');
       // Converte para ID válido (só alfanumérico + _ + -)
       var _docId = _raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 200);
       // .set() com merge:false sobrescreve silenciosamente doc existente.

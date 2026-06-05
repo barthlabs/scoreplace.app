@@ -261,6 +261,17 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
+    // ─── WhatsApp queue (Cloud Function processWhatsAppQueue → Evolution API) ──
+    // v2.1.15: FALTAVA esta regra — sem ela, toda escrita em whatsapp_queue era
+    // NEGADA (default deny), e queueWhatsApp falhava silencioso no try/catch.
+    // Resultado: notificação por WhatsApp nunca era enfileirada (fila vazia
+    // desde 08/mai), enquanto e-mail (mail/) funcionava. Mesmo modelo do mail/:
+    // qualquer autenticado pode enfileirar; o envio é feito pela Cloud Function.
+    match /whatsapp_queue/{id} {
+      allow read: if false;
+      allow write: if request.auth != null;
+    }
+
     // ─── Magic Links wrapper (v1.0.30-beta) ──────────────────────────────────
     // Cloud Function `sendMagicLink` cria docs aqui com o link Firebase
     // assinado. Usuário NÃO autenticado clica no email, abre /?ml=TOKEN no
