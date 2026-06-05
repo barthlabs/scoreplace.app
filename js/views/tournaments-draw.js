@@ -106,6 +106,7 @@ window._formDoublesTeams = _formDoublesTeams;
 // bracket atual. A integração (vencedor avança + repescagem) é a Fase 2/3.
 window._createExtraGamesFromWaitlist = function(t) {
   if (!t) return 0;
+  if (t.qualificationClosed) return 0; // v2.1.25: org já fechou a qualificação
   if (t.lateEnrollment !== 'expand') return 0;
   var drawDone = (Array.isArray(t.matches) && t.matches.length > 0) ||
                  (Array.isArray(t.rounds) && t.rounds.length > 0) ||
@@ -224,6 +225,67 @@ window._consolidateExtraGames = function(t) {
     if (!madeOne) break;
   }
   return created;
+};
+
+// ─── v2.1.25 (Fase 3): fecha a qualificação e monta a chave final ────────────
+// Pega os QUALIFICADOS da mini-chave (vencedores de fronteira: winner && sem
+// advancedTo), adiciona-os como times pré-formados em t.participants e REUSA o
+// fluxo de sorteio testado (generateDrawFunction) — que preserva duplas já
+// formadas e já tem a guarda de re-sorteio (confirmação extra se houver
+// resultados no mata-mata). Sem cirurgia manual de nós na árvore.
+window._closeQualificationAndRebuild = function(tId) {
+  var t = window.AppStore && window.AppStore.tournaments &&
+          window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  if (!t) return;
+  var qualifiers = (Array.isArray(t.extraMatches) ? t.extraMatches : []).filter(function(m){ return m && m.winner && !m.advancedTo; });
+  if (qualifiers.length === 0) {
+    if (window.showNotification) window.showNotification('Sem qualificados', 'Conclua os jogos extras antes de fechar a qualificação.', 'warning');
+    return;
+  }
+  // jogos extras ainda sem resultado bloqueiam o fechamento (decida-os antes)
+  var pending = (Array.isArray(t.extraMatches) ? t.extraMatches : []).filter(function(m){ return m && !m.winner; });
+  if (pending.length > 0) {
+    if (window.showNotification) window.showNotification('Jogos extras pendentes', 'Há ' + pending.length + ' jogo(s) extra sem resultado. Conclua todos antes de fechar.', 'warning');
+    return;
+  }
+  var names = qualifiers.map(function(m){ return m.winner; }).join(', ');
+  var doIt = function() {
+    if (!Array.isArray(t.participants)) t.participants = [];
+    if (!t.teamOrigins) t.teamOrigins = {};
+    qualifiers.forEach(function(m){
+      var wname = m.winner;
+      // O time qualificado nasceu na rodada 1 (que guarda participants[] com os
+      // sub-objetos: uid/email/foto). Recupera o objeto original pelo nome — assim
+      // o time entra no chaveamento com os dados dos membros (notif/stats corretos).
+      var teamObj = null;
+      (Array.isArray(t.extraMatches) ? t.extraMatches : []).forEach(function(em){
+        if (teamObj || !em || !Array.isArray(em.participants)) return;
+        em.participants.forEach(function(po){
+          if (!teamObj && po && (po.displayName || po.name) === wname) teamObj = po;
+        });
+      });
+      if (!teamObj && Array.isArray(m.participants)) {
+        teamObj = (wname === m.p1) ? m.participants[0] : m.participants[1];
+      }
+      if (!teamObj || typeof teamObj !== 'object') teamObj = { displayName: wname, name: wname };
+      teamObj = Object.assign({}, teamObj);
+      teamObj.displayName = wname; teamObj.name = wname;
+      var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === m.winner; });
+      if (!exists) t.participants.push(teamObj);
+      t.teamOrigins[m.winner] = 'formada';
+    });
+    t.qualificationClosed = true; // trava criação de novos jogos extras
+    t.extraMatches = [];          // absorvidos no chaveamento
+    if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+      window.AppStore.logAction(tId, 'Qualificação encerrada — ' + qualifiers.length + ' tardio(s) entram no chaveamento: ' + names);
+    }
+    window.generateDrawFunction(tId); // fluxo testado: guarda de re-sorteio + resolução de potência de 2
+  };
+  var _t2 = window._t || function(k){ return k; };
+  var hint = 'Vou montar a chave final incluindo ' + qualifiers.length + ' qualificado(s) dos jogos extras (' + names + '). As duplas já formadas são mantidas — só o chaveamento é redesenhado. Se o mata-mata já tiver resultados lançados, o app vai pedir uma confirmação extra antes de substituí-los.';
+  if (typeof window.showAlertDialog === 'function') {
+    window.showAlertDialog('Fechar qualificação e montar a chave?', hint, doIt, { type: 'warning', confirmText: 'Montar chave final', cancelText: _t2('btn.cancel') });
+  } else if (window.confirm(hint)) { doIt(); }
 };
 
 // ─── v2.1.20: Diálogo de gênero pré-sorteio (duplas mistas, sorteio livre) ────

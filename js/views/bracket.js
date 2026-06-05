@@ -520,9 +520,24 @@ window._renderExtraGamesSection = function _renderExtraGamesSection(t, canEdit) 
       '<h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Jogos extras (tardios)</h3>' +
       '<span style="font-size:0.72rem;background:rgba(168,85,247,0.18);color:#c4b5fd;padding:2px 10px;border-radius:10px;font-weight:700;">' + t.extraMatches.length + '</span>' +
     '</div>' +
-    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px;">Quem chegou depois joga em duplas sorteadas; os vencedores se enfrentam. (A entrada no chaveamento principal vem em seguida.)</div>' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px;">Quem chegou depois joga em duplas sorteadas; os vencedores se enfrentam. Ao fechar a qualificação, os qualificados entram no chaveamento.</div>' +
     '<div style="display:flex;gap:16px;overflow-x:auto;padding-bottom:6px;">' + cols + '</div>' +
+    _closeBtn() +
   '</div>';
+
+  function _closeBtn() {
+    if (!canEdit) return '';
+    var pend = t.extraMatches.filter(function(m){ return m && !m.winner; }).length;
+    var quals = t.extraMatches.filter(function(m){ return m && m.winner && !m.advancedTo; });
+    if (quals.length === 0) return '';
+    if (pend > 0) {
+      return '<div style="margin-top:12px;font-size:0.74rem;color:var(--text-muted);">🔒 Conclua os ' + pend + ' jogo(s) extra pendentes pra poder fechar a qualificação.</div>';
+    }
+    return '<div style="margin-top:14px;border-top:1px solid rgba(168,85,247,0.2);padding-top:12px;">' +
+      '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:8px;">' + quals.length + ' qualificado(s) prontos pra entrar no chaveamento: <b style="color:#c4b5fd;">' + quals.map(function(m){ return _sh(m.winner); }).join(', ') + '</b></div>' +
+      '<button onclick="window._closeQualificationAndRebuild(\'' + _tIdSafe + '\')" style="background:#a855f7;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-weight:800;font-size:0.82rem;cursor:pointer;">🔒 Fechar qualificação · montar chave final</button>' +
+    '</div>';
+  }
 };
 
 // ─── Painel de Lista de Espera (Standby) ─────────────────────────────────────
