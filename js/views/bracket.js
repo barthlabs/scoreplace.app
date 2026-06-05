@@ -782,13 +782,13 @@ function renderSingleElimBracket(t, canEnterResult) {
   const getRoundLabel = (roundNum, roundIndex) => {
     if (roundNum === 0) return _t('bracket.playIn');
     if (roundNum < 0) return _t('bracket.lowerBracket') + (Math.abs(roundNum) > 1 ? ' ' + Math.abs(roundNum) : '');
-    // For repechage tournaments, count from the last positive round
-    var posIdx = positiveRounds.indexOf(roundNum);
-    var fromEnd = positiveRounds.length - posIdx;
-    if (fromEnd === 1) return _t('bracket.final');
-    if (fromEnd === 2) return _t('bracket.semiFinal');
-    if (fromEnd === 3) return _t('bracket.quarterFinal');
-    if (fromEnd === 4) return _t('bracket.roundOf16');
+    // v2.1.27: rótulo pelo NÚMERO DE JOGOS da rodada (não pela posição na árvore).
+    // 1 jogo = Final · 2 = Semifinais · 4 = Quartas · 8 = Oitavas · senão "Rodada N".
+    var gamesInRound = (roundsMap[roundNum] || []).length;
+    if (gamesInRound === 1) return _t('bracket.final');
+    if (gamesInRound === 2) return _t('bracket.semiFinal');
+    if (gamesInRound === 4) return _t('bracket.quarterFinal');
+    if (gamesInRound === 8) return _t('bracket.roundOf16');
     return _t('bracket.round', {n: roundNum});
   };
 

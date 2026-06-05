@@ -3027,6 +3027,36 @@ window.showResolutionSimulationPanel = function (tId, option) {
             </div>
         `;
 
+        // v2.1.27: QUEM vai para a lista de espera — últimos a se inscrever (padrão)
+        // ou sorteio livre entre todos. Não há BYE: a sobra inteira vai pra espera.
+        const standbyPickOptions = `
+            <div style="margin-bottom:1.5rem;">
+                <h4 style="color:#94a3b8;font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0 0 1rem;">📋 Quem vai para a lista de espera?</h4>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <label id="standby-pick-last" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;background:rgba(245,158,11,0.08);border:2px solid rgba(245,158,11,0.4);border-radius:12px;padding:12px;transition:all 0.2s;" onclick="document.getElementById('standby-pick-last-rb').checked=true;window._updateStandbyPickViz('last')">
+                        <input type="radio" name="standby-pick" id="standby-pick-last-rb" value="last" checked style="margin-top:3px;accent-color:#f59e0b;flex-shrink:0;" />
+                        <div>
+                            <div style="color:#e2e8f0;font-weight:700;font-size:0.9rem;">Os últimos a se inscrever</div>
+                            <div style="color:#64748b;font-size:0.78rem;margin-top:3px;line-height:1.4;">Quem entrou por último na inscrição é quem espera. Os primeiros já entram na chave.</div>
+                        </div>
+                    </label>
+                    <label id="standby-pick-random" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;background:rgba(255,255,255,0.03);border:2px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;transition:all 0.2s;" onclick="document.getElementById('standby-pick-random-rb').checked=true;window._updateStandbyPickViz('random')">
+                        <input type="radio" name="standby-pick" id="standby-pick-random-rb" value="random" style="margin-top:3px;accent-color:#f59e0b;flex-shrink:0;" />
+                        <div>
+                            <div style="color:#e2e8f0;font-weight:700;font-size:0.9rem;">Sorteio livre entre todos</div>
+                            <div style="color:#64748b;font-size:0.78rem;margin-top:3px;line-height:1.4;">Um sorteio aleatório entre todos os inscritos decide quem vai para a espera.</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        `;
+        window._updateStandbyPickViz = function(pick) {
+            var lastOpt = document.getElementById('standby-pick-last');
+            var randOpt = document.getElementById('standby-pick-random');
+            if (lastOpt) { lastOpt.style.background = pick === 'last' ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.03)'; lastOpt.style.borderColor = pick === 'last' ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.08)'; }
+            if (randOpt) { randOpt.style.background = pick === 'random' ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.03)'; randOpt.style.borderColor = pick === 'random' ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.08)'; }
+        };
+
         // Build match card with optional yellow accent for standby entries
         const matchCardTeams = (num, t1, t2) => `
             <div style="background:rgba(15,23,42,0.8);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;box-shadow:0 4px 12px rgba(0,0,0,0.2);margin-bottom:10px;">
@@ -3165,6 +3195,7 @@ window.showResolutionSimulationPanel = function (tId, option) {
                 ${window._buildStandbyVizHtml ? window._buildStandbyVizHtml('teams') : ''}
             </div>
 
+            ${standbyPickOptions}
             ${standbyModeOptions}
         `;
     } else if (option === 'swiss') {
@@ -3535,17 +3566,27 @@ window._confirmP2Resolution = function (tId, option) {
             if (isVip) vipEntries.push(entry);
             else nonVipEntries.push(entry);
         });
+        // v2.1.27: QUEM espera — 'last' (últimos a se inscrever, padrão) ou 'random'
+        // (sorteio livre). NUNCA gera BYE: a sobra inteira vai pra lista de espera e
+        // o bracket fica com info.lo (potência de 2 exata).
+        const pickRadio = document.querySelector('input[name="standby-pick"]:checked');
+        const standbyPick = pickRadio ? pickRadio.value : 'last';
+        let _pool = nonVipEntries.slice();
+        if (standbyPick === 'random') {
+            for (let _i = _pool.length - 1; _i > 0; _i--) { const _j = Math.floor(Math.random() * (_i + 1)); const _tmp = _pool[_i]; _pool[_i] = _pool[_j]; _pool[_j] = _tmp; }
+        }
         // VIPs ficam sempre; excesso sai dos não-VIPs
         const slotsForNonVip = info.lo - vipEntries.length;
-        const kept = nonVipEntries.slice(0, Math.max(0, slotsForNonVip));
-        const standbyOverflow = nonVipEntries.slice(Math.max(0, slotsForNonVip));
-        t.standbyParticipants = standbyOverflow;
+        const kept = _pool.slice(0, Math.max(0, slotsForNonVip));
+        const standbyOverflow = _pool.slice(Math.max(0, slotsForNonVip));
+        t.standbyParticipants = (t.standbyParticipants || []).concat(standbyOverflow);
         t.participants = [...vipEntries, ...kept];
+        t.standbyPick = standbyPick;
         // Save standby substitution mode
         const modeRadio = document.querySelector('input[name="standby-mode"]:checked');
         t.standbyMode = modeRadio ? modeRadio.value : 'teams';
-        const modeLabels = { teams: 'Times formados na espera', individual: 'Jogadores avulsos completam times' };
-        actionMsg = `Movidos ${info.excess} participantes para Lista de Espera (${modeLabels[t.standbyMode] || t.standbyMode})`;
+        const pickLabel = standbyPick === 'random' ? 'sorteio livre' : 'últimos a se inscrever';
+        actionMsg = `Movidos ${info.excess} para Lista de Espera (${pickLabel}) — chave de ${info.lo}, sem BYE`;
     } else if (option === 'swiss') {
         t.p2Resolution = 'swiss';
         t.classifyFormat = 'swiss';

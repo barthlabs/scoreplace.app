@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +
+      '<div style="font-weight:800; color:#7dd3fc; font-size:1rem; margin-bottom:8px;">🔵 v2.1.27-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Nome das rodadas por nº de jogos + Lista de Espera sem BYE.</b><br><br>' +
+      '(1) A rodada agora se chama pelo <b>número de jogos</b>: 8 jogos = Oitavas, 4 = Quartas, 2 = Semifinais, 1 = Final — qualquer outro número vira "Rodada N" (antes uma rodada com 7 jogos aparecia errada como "Oitavas"). (2) Na resolução de potência de 2, a opção <b>Lista de Espera</b> nunca gera BYE: toda a sobra vai pra espera e a chave fica exata. O organizador escolhe <b>quem espera</b> — os <b>últimos a se inscrever</b> ou um <b>sorteio livre</b> entre todos os inscritos.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #a855f7;border-radius:12px;padding:14px 16px;background:rgba(168,85,247,0.08);">' +
       '<div style="font-weight:800; color:#c4b5fd; font-size:1rem; margin-bottom:8px;">⚡ v2.1.26-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Tardios entram DENTRO da chave (integração real).</b><br><br>' +
