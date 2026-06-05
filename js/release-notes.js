@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +
+      '<div style="font-weight:800; color:#7dd3fc; font-size:1rem; margin-bottom:8px;">🔵 v2.1.31-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Painel do "resto" anuncia o número certo.</b><br><br>' +
+      'O painel de resolução já <b>agia</b> certo (mandando todos os que sobram pra lista de espera), mas <b>anunciava</b> o número errado (só o avulso). Agora mostra o total real: ex. 19 inscritos numa dupla → <b>8 times, 3 na espera</b> (antes dizia "1 resto"). Contagem consistente em todas as opções (Lista de Espera / Exclusão).</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🟢 v2.1.30-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Correção de erro no login (iOS).</b><br><br>' +

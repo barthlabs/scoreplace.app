@@ -379,8 +379,18 @@ window._showRemainderPanel = function(tId, info, t) {
     if (existing) existing.remove();
 
     var tIdSafe = String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var teamsFormed = info.effectiveTeams;
-    var remCount = info.remainder;
+    // v2.1.31: anuncia o SURPLUS REAL (resto + excesso de times) que vai pra
+    // espera/exclusão, igual à ação em _executeRemoval — não só o "remainder" (1
+    // avulso). Ex.: 19 avulsos (dupla) → 8 times jogam, 3 vão pra espera.
+    var _tObj = t || (window.AppStore && window.AppStore.tournaments.find(function(x) { return x.id.toString() === tId.toString(); }));
+    var _ts = info.teamSize || 1;
+    var _arr = (_tObj && Array.isArray(_tObj.participants)) ? _tObj.participants : [];
+    var _playersOf = function(p) { var nm = typeof p === 'string' ? p : (p.displayName || p.name || ''); return nm.indexOf(' / ') !== -1 ? _ts : 1; };
+    var _totalPlayers = _arr.reduce(function(s, p) { return s + _playersOf(p); }, 0) || (info.effectiveTeams * _ts + info.remainder);
+    var _maxTeams = Math.floor(_totalPlayers / _ts);
+    var _targetTeams = _maxTeams >= 1 ? 1 : 0; while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
+    var teamsFormed = _targetTeams;
+    var remCount = _totalPlayers - (_targetTeams * _ts);
     var remLabel = remCount + ' ' + (remCount > 1 ? _t('predraw.unitParticipants') : _t('predraw.unitParticipantSingular'));
     var teamLabel = teamsFormed + ' ' + (teamsFormed > 1 ? _t('predraw.unitTeams') : _t('predraw.unitTeamSingular'));
 

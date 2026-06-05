@@ -1856,7 +1856,7 @@ window._translations['en'] = {
   'predraw.legendMixed': '🟡 Mixed groups',
   // Draw-prep: remainder panel
   'predraw.remainderTitle': 'Remaining Participants',
-  'predraw.remainderSubtitle': '{label} cannot{p} form a complete team',
+  'predraw.remainderSubtitle': '{label} left over to close the bracket',
   'predraw.teamsFormed': 'Teams formed',
   'predraw.remainderLabel': 'Remainder',
   'predraw.totalEnrolled': 'Total enrolled',

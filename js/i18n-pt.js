@@ -1868,7 +1868,7 @@ window._translations['pt'] = {
   'predraw.legendMixed': '🟡 Grupos mistos',
   // Draw-prep: remainder panel
   'predraw.remainderTitle': 'Participantes Restantes',
-  'predraw.remainderSubtitle': '{label} não forma{p} time completo',
+  'predraw.remainderSubtitle': '{label} sobra{p} pra fechar a chave',
   'predraw.teamsFormed': 'Times formados',
   'predraw.remainderLabel': 'Resto',
   'predraw.totalEnrolled': 'Total inscritos',
