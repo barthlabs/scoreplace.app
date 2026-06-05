@@ -76,6 +76,15 @@ function renderNotifications(container) {
           '<button class="btn btn-sm" style="background: var(--success-color); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 600;" onclick="event.stopPropagation(); _acceptFriend(\'' + safeFromUid + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.accept') + '</button>' +
           '<button class="btn btn-sm" style="background: transparent; color: var(--danger-color); border: 1px solid var(--danger-color); padding: 4px 14px; font-size: 0.75rem;" onclick="event.stopPropagation(); _rejectFriend(\'' + safeFromUid + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.reject') + '</button>' +
         '</div>';
+      } else if (n.type === 'match-pending-approval' && n.tournamentId) {
+        // v2.1.18: resultado pendente — botões Confirmar (verde) e Editar/Contestar
+        // (âmbar) levam direto pra chave, onde a ação real acontece com o card
+        // do jogo (Confirmar/Editar/Contestar bem testados). A mensagem já mostra
+        // o placar quebrado em linhas, então a escolha é informada.
+        actionHtml = '<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap:wrap;">' +
+          '<button class="btn btn-sm" style="background:#10b981;color:#fff;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✅ ' + (_t('notif.confirm') || 'Confirmar') + '</button>' +
+          '<button class="btn btn-sm" style="background:#f59e0b;color:#1a1a2e;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✏️ ' + (_t('notif.editContest') || 'Editar / Contestar') + '</button>' +
+        '</div>';
       } else if (n.tournamentId && n.type !== 'tournament_deleted') {
         // For draw/result/new_round: navigate to bracket; for others: tournament detail
         var _navTarget = (n.type === 'draw' || n.type === 'new_round' || n.type === 'result' || n.type === 'tournament_finished') ? '#bracket/' : '#tournaments/';
@@ -135,7 +144,7 @@ function renderNotifications(container) {
         (isUnread ? 'onclick="_markNotifRead(\'' + safeNotifIdOnclick + '\', this)"' : '') + '>' +
         '<div style="font-size: 1.5rem; flex-shrink: 0; line-height: 1;">' + icon + '</div>' +
         '<div style="flex: 1; min-width: 0;">' +
-          '<div style="font-size: 0.9rem; color: var(--text-bright); font-weight: ' + (isUnread ? '600' : '400') + ';">' + safeMessage + '</div>' +
+          '<div style="font-size: 0.9rem; color: var(--text-bright); font-weight: ' + (isUnread ? '600' : '400') + '; white-space: pre-line;">' + safeMessage + '</div>' +
           '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
             '<span style="display:inline-flex;align-items:center;gap:3px;color:' + accentColor + ';font-weight:700;">' + _lvlMeta.emoji + ' ' + _lvlMeta.label + '</span>' +
             '<span style="opacity:0.45;">·</span><span>' + timeAgo + '</span>' +
@@ -163,7 +172,7 @@ function renderNotifications(container) {
     listDiv.innerHTML = html;
 
     // Mark all as read after viewing (skip notifications with pending actions)
-    var _actionTypes = ['host_transfer_invite', 'cohost_invite', 'host_transfer_sent', 'cohost_invite_sent', 'friend_request', 'casual_link_request'];
+    var _actionTypes = ['host_transfer_invite', 'cohost_invite', 'host_transfer_sent', 'cohost_invite_sent', 'friend_request', 'casual_link_request', 'match-pending-approval'];
     notifs.forEach(function(n) {
       if (!n.read && _actionTypes.indexOf(n.type) === -1) {
         window.FirestoreDB.markNotificationRead(uid, n._id);

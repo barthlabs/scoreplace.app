@@ -468,17 +468,24 @@ function _resultNeedsApproval(t, m, user) {
 function _notifyPendingApproval(t, m, proposerName) {
   if (typeof window._sendUserNotification !== 'function') return;
   var pr = m.pendingResult || {};
-  var scoreText = '';
+  // v2.1.18: placar por TIME (cada time com a sua pontuação), pra montar a
+  // mensagem quebrada em linhas (melhor leitura em e-mail/WhatsApp/plataforma).
+  var sA, sB;
   if (pr.useSets && Array.isArray(pr.sets) && pr.sets.length > 0) {
-    scoreText = pr.sets.map(function(s) { return s.gamesP1 + '-' + s.gamesP2; }).join(' ');
+    sA = pr.sets.map(function(s) { return s.gamesP1; }).join(' ');
+    sB = pr.sets.map(function(s) { return s.gamesP2; }).join(' ');
   } else {
-    scoreText = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
+    sA = (pr.scoreP1 != null ? pr.scoreP1 : '?');
+    sB = (pr.scoreP2 != null ? pr.scoreP2 : '?');
   }
-  var matchLabel = (m.p1 || '?') + ' vs ' + (m.p2 || '?');
+  // Mensagem em linhas: "Fulano lançou: \n TimeA X \n vs \n TimeB Y"
   var notifData = {
     type: 'match-pending-approval',
     title: '⏳ Resultado precisa de aprovação',
-    message: (proposerName || 'Alguém') + ' lançou: ' + matchLabel + ' — ' + scoreText + '. Aprove ou rejeite.',
+    message: (proposerName || 'Alguém') + ' lançou:\n' +
+             (m.p1 || '?') + ' ' + sA + '\n' +
+             'vs\n' +
+             (m.p2 || '?') + ' ' + sB,
     tournamentId: t.id,
     tournamentName: t.name,
     matchId: m.id,

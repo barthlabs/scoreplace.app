@@ -542,6 +542,8 @@ window._translations['en'] = {
   'notif.empty': 'No notifications at the moment',
   'notif.unread': 'Unread',
   'notif.read': 'Read',
+  'notif.confirm': 'Confirm',
+  'notif.editContest': 'Edit / Contest',
   'notif.markRead': 'Mark as read',
   'notif.viewTournament': 'View Tournament',
   'notif.loginRequired': 'Log in to see your notifications',

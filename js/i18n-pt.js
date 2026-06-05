@@ -555,6 +555,8 @@ window._translations['pt'] = {
   'notif.empty': 'Nenhuma notificação no momento',
   'notif.unread': 'Não lidas',
   'notif.read': 'Lidas',
+  'notif.confirm': 'Confirmar',
+  'notif.editContest': 'Editar / Contestar',
   'notif.markRead': 'Marcar como lida',
   'notif.viewTournament': 'Ver Torneio',
   'notif.loginRequired': 'Faça login para ver suas notificações',
