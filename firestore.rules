@@ -261,6 +261,17 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
+    // ─── Notif email digest queue (v2.1.19) ──────────────────────────────────
+    // E-mails de NOTIFICAÇÃO entram aqui (janela por importância 5/15/30 min) e
+    // a Cloud Function flushNotifEmailDigest consolida num e-mail por pessoa.
+    // Qualquer autenticado enfileira (mesmo modelo do mail/); leitura/exclusão
+    // só pela função (Admin SDK ignora rules).
+    match /notif_email_queue/{id} {
+      allow read: if false;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+
     // ─── WhatsApp queue (Cloud Function processWhatsAppQueue → Evolution API) ──
     // v2.1.15: FALTAVA esta regra — sem ela, toda escrita em whatsapp_queue era
     // NEGADA (default deny), e queueWhatsApp falhava silencioso no try/catch.

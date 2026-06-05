@@ -493,6 +493,124 @@ exports.cleanupOldNotifications = onSchedule(
   }
 );
 
+// ─── Notif email digest flush (v2.1.19) ──────────────────────────────────────
+// E-mails de notificação são acumulados em `notif_email_queue` com janela por
+// importância (5/15/30 min via flushAtMs). Esta função roda a cada 5 min: pega
+// os itens vencidos, agrupa por destinatário, CONSOLIDA todos os itens pendentes
+// daquela pessoa (mesmo os não vencidos) num ÚNICO e-mail, e limpa a fila.
+// Assim um item fundamental (5 min) "puxa" o resto, reduzindo o número de e-mails.
+function _digestEscape(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function _digestLevelMeta(level) {
+  if (level === "fundamental") return { emoji: "🔴", color: "#ef4444", label: "Fundamental" };
+  if (level === "important") return { emoji: "🟠", color: "#f59e0b", label: "Importante" };
+  return { emoji: "🟢", color: "#10b981", label: "Geral" };
+}
+function _buildDigestHtml(items) {
+  const rows = items.map((it) => {
+    const meta = _digestLevelMeta(it.level);
+    const msgHtml = _digestEscape(it.message).replace(/\n/g, "<br>");
+    const tName = it.tournamentName ? ('<div style="font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">🏆 ' + _digestEscape(it.tournamentName) + "</div>") : "";
+    const link = it.tournamentUrl ? ('<div style="margin-top:8px;"><a href="' + _digestEscape(it.tournamentUrl) + '" style="color:#fbbf24;font-size:0.78rem;text-decoration:none;font-weight:600;">Ver no scoreplace.app →</a></div>') : "";
+    return (
+      '<tr><td style="padding:0 0 14px;">' +
+        '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#111827;border-left:4px solid ' + meta.color + ';border-radius:10px;">' +
+          '<tr><td style="padding:14px 16px;color:#e5e7eb;">' +
+            '<div style="font-size:0.68rem;font-weight:800;color:' + meta.color + ';margin-bottom:6px;">' + meta.emoji + " " + meta.label + "</div>" +
+            tName +
+            '<div style="font-size:0.92rem;color:#f1f5f9;line-height:1.5;">' + msgHtml + "</div>" +
+            link +
+          "</td></tr>" +
+        "</table>" +
+      "</td></tr>"
+    );
+  }).join("");
+  return (
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>' +
+    '<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
+      '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:32px 16px;"><tr><td align="center">' +
+        '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:540px;">' +
+          '<tr><td style="padding:0 4px 16px;text-align:center;">' +
+            '<div style="font-size:1.3rem;">🔔</div>' +
+            '<div style="font-size:1rem;font-weight:800;color:#fff;margin-top:2px;">' + (items.length === 1 ? "Você tem 1 novidade" : ("Você tem " + items.length + " novidades")) + "</div>" +
+            '<div style="font-size:0.8rem;color:#94a3b8;">scoreplace.app</div>' +
+          "</td></tr>" +
+          "<tr><td>" + '<table cellspacing="0" cellpadding="0" border="0" width="100%">' + rows + "</table>" + "</td></tr>" +
+          '<tr><td style="padding:8px 4px 0;text-align:center;border-top:1px solid #1e293b;">' +
+            '<p style="margin:14px 0 0;font-size:0.7rem;color:#64748b;">scoreplace.app · Jogue em outro nível</p>' +
+            '<p style="margin:6px 0 0;font-size:0.68rem;color:#64748b;">Pra ajustar a frequência/canais, abra o app → seu perfil → Canais de notificação.</p>' +
+          "</td></tr>" +
+        "</table>" +
+      "</td></tr></table>" +
+    "</body></html>"
+  );
+}
+function _buildDigestText(items) {
+  return (
+    "scoreplace.app — " + (items.length === 1 ? "1 novidade" : items.length + " novidades") + "\n\n" +
+    items.map((it) => {
+      const meta = _digestLevelMeta(it.level);
+      return meta.emoji + " " + (it.tournamentName ? "[" + it.tournamentName + "] " : "") + "\n" + it.message + (it.tournamentUrl ? "\n" + it.tournamentUrl : "");
+    }).join("\n\n") +
+    "\n\nscoreplace.app · Jogue em outro nível"
+  );
+}
+
+exports.flushNotifEmailDigest = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: "us-central1",
+  },
+  async () => {
+    const db = admin.firestore();
+    const now = Date.now();
+    // Itens vencidos → descobre quais destinatários têm algo pronto pra sair.
+    const dueSnap = await db.collection("notif_email_queue").where("flushAtMs", "<=", now).get();
+    if (dueSnap.empty) {
+      console.log("[flushNotifEmailDigest] nada vencido");
+      return;
+    }
+    const dueEmails = new Set();
+    dueSnap.forEach((d) => { const e = d.data().email; if (e) dueEmails.add(e); });
+
+    let sent = 0;
+    for (const email of dueEmails) {
+      // Consolida TODOS os itens pendentes dessa pessoa (vencidos ou não).
+      const allSnap = await db.collection("notif_email_queue").where("email", "==", email).get();
+      const items = [];
+      allSnap.forEach((d) => items.push(Object.assign({ _id: d.id }, d.data())));
+      if (items.length === 0) continue;
+      items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      try {
+        const subject = items.length === 1
+          ? ("scoreplace.app — " + (items[0].tournamentName || "Notificação"))
+          : ("scoreplace.app — " + items.length + " novidades");
+        await db.collection("mail").add({
+          to: [email],
+          replyTo: "scoreplace.app@gmail.com",
+          message: { subject, html: _buildDigestHtml(items), text: _buildDigestText(items) },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        // Limpa os itens consolidados.
+        let batch = db.batch();
+        let n = 0;
+        for (const it of items) {
+          batch.delete(db.collection("notif_email_queue").doc(it._id));
+          if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+        }
+        if (n % 400 !== 0) await batch.commit();
+        sent++;
+      } catch (err) {
+        console.error("[flushNotifEmailDigest] falha pra", email, err);
+      }
+    }
+    console.log("[flushNotifEmailDigest] digests enviados:", sent, "| destinatários vencidos:", dueEmails.size);
+  }
+);
+
 // ─── Scheduled cleanup: old casual matches ───────────────────────────────────
 // Finished casual match docs live in the top-level `casualMatches` collection.
 // Each has `status: 'finished'` and `finishedAt` (ISO string) set the moment

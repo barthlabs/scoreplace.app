@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>E-mails de notificação agrupados (menos mensagens).</b><br><br>' +
+      'Pra evitar excesso de e-mails, as notificações agora <b>acumulam e saem juntas num e-mail só</b>, por janela de importância: <b>fundamental ~5 min · importante ~15 min · geral ~30 min</b>. Cada item no e-mail vem com a cor da importância (🔴/🟠/🟢). E-mails de <b>verificação de conta</b> continuam imediatos. Uma notificação mais urgente "puxa" as demais pendentes pro mesmo e-mail.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.18-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Notificação de placar mais legível.</b><br><br>' +
       'O aviso de resultado pendente agora vem <b>quebrado em linhas</b>: "Fulano lançou:" / Time A · placar / vs / Time B · placar — em e-mail, WhatsApp e plataforma. Na plataforma, dois botões: <b>✅ Confirmar</b> (verde) e <b>✏️ Editar / Contestar</b> (âmbar), levando direto à chave pra responder. Esses avisos ficam como não-lidos até você responder.</p>' +

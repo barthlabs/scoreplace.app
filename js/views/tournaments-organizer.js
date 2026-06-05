@@ -303,10 +303,22 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
     if (!channelResult) return;
     templateData = templateData || {};
     // ── Email ──
-    if (channelResult.emails && channelResult.emails.length > 0 && typeof window._emailTemplate === 'function') {
-        var html = window._emailTemplate(templateType, templateData);
-        var subject = templateData.subject || 'scoreplace.app — ' + (templateData.tournamentName || 'Notificação');
-        if (window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
+    // v2.1.19: e-mails de notificação agora vão pra fila de DIGEST (janela por
+    // importância 5/15/30 min) em vez de um e-mail por evento. A Cloud Function
+    // flushNotifEmailDigest consolida num e-mail só por pessoa. Mantém fallback
+    // pro envio individual antigo se queueNotifEmail não existir.
+    if (channelResult.emails && channelResult.emails.length > 0) {
+        var _emCat = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[templateType]) || {};
+        var _emLvl = _emCat.level || 'all';
+        var _emMsg = templateData.message || templateData.tournamentName || 'Notificação';
+        if (window.FirestoreDB && typeof window.FirestoreDB.queueNotifEmail === 'function') {
+            window.FirestoreDB.queueNotifEmail(channelResult.emails, _emLvl, _emMsg, {
+                tournamentName: templateData.tournamentName || '',
+                tournamentUrl: templateData.tournamentUrl || ''
+            });
+        } else if (typeof window._emailTemplate === 'function' && window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
+            var html = window._emailTemplate(templateType, templateData);
+            var subject = templateData.subject || 'scoreplace.app — ' + (templateData.tournamentName || 'Notificação');
             window.FirestoreDB.queueEmail(channelResult.emails, subject, html);
         }
     }

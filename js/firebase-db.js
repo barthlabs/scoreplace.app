@@ -936,6 +936,34 @@ window.FirestoreDB = {
     }
   },
 
+  // v2.1.19: e-mails de NOTIFICAÇÃO entram numa fila com janela por importância
+  // (5/15/30 min). A Cloud Function flushNotifEmailDigest agrupa por destinatário
+  // e manda UM e-mail consolidado por pessoa, evitando excesso de mensagens.
+  // E-mails transacionais (verificação) NÃO passam por aqui — vão direto pro mail/.
+  async queueNotifEmail(emails, level, message, opts) {
+    if (!this.db || !emails || !emails.length) return;
+    var WINDOWS = { fundamental: 5, important: 15, all: 30 }; // minutos
+    var mins = (WINDOWS[level] != null) ? WINDOWS[level] : 30;
+    var now = Date.now();
+    opts = opts || {};
+    try {
+      for (var i = 0; i < emails.length; i++) {
+        if (!emails[i]) continue;
+        await this.db.collection('notif_email_queue').add({
+          email: emails[i],
+          level: level || 'all',
+          message: message || '',
+          tournamentName: opts.tournamentName || '',
+          tournamentUrl: opts.tournamentUrl || '',
+          createdAt: now,
+          flushAtMs: now + mins * 60 * 1000
+        });
+      }
+    } catch (e) {
+      window._warn('Erro ao enfileirar notif email:', e);
+    }
+  },
+
   // ---- WhatsApp Queue (for future Cloud Function integration) ----
 
   async queueWhatsApp(phones, message) {
