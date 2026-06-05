@@ -1048,6 +1048,19 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
   document.body.appendChild(overlay);
   setTimeout(function(){ var i=document.getElementById('ap-input'); if(i) i.focus(); }, 80);
 
+  // v2.1.10: hidrata o cache de perfis dos amigos (MESMO cache da Partida
+  // Casual: _loadFriendProfilesCached) e re-renderiza o dropdown quando os
+  // perfis chegam. Antes o autocomplete lia _friendProfilesCache que podia
+  // estar VAZIO se o usuário não tivesse aberto casual/bracket antes — então
+  // nenhum amigo aparecia. Agora os amigos surgem dinâmico já na abertura.
+  if (typeof window._loadFriendProfilesCached === 'function') {
+    window._loadFriendProfilesCached().then(function() {
+      if (!document.getElementById('add-participant-overlay')) return;
+      var i = document.getElementById('ap-input');
+      if (i && typeof window._apSearch === 'function') window._apSearch(i.value || '');
+    }).catch(function(){});
+  }
+
   window._apSelected = null;
   window._apDebounce = null;
 

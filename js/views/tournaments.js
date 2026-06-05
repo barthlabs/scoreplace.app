@@ -1134,9 +1134,15 @@ function renderTournaments(container, tournamentId = null) {
         // Para duplas (teamSize===2 com enrollmentMode=time): mostrar "+ Participante"
         // pois inscrições são individuais e duplas formadas por arrastar e soltar.
         const isDoublesMode = allowsTeams && parseInt(t.teamSize || 2) === 2;
-        const addParticipantBtns = (!hasDraw && isOrg) ? `
-             ${(allowsIndividual || isDoublesMode) ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
-             ${(allowsTeams && !isDoublesMode) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
+        // v2.1.10: "+ Participante" fica disponível enquanto a INSCRIÇÃO não
+        // estiver encerrada (isAberto já respeita late enrollment standby/expand
+        // e Liga) — antes era só `!hasDraw`, então sumia após o sorteio mesmo
+        // com inscrição aberta. O "+ Time" continua só antes do sorteio (o fluxo
+        // de time não trata lista de espera). addParticipantFunction já roteia
+        // pra lista de espera quando o sorteio já saiu.
+        const addParticipantBtns = isOrg ? `
+             ${((allowsIndividual || isDoublesMode) && isAberto) ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
+             ${((allowsTeams && !isDoublesMode) && !hasDraw) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
         ` : '';
 
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
