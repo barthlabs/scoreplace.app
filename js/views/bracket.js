@@ -1817,6 +1817,13 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     cardBorder = 'rgba(99,102,241,0.6)';
   }
 
+  // v2.1.24: jogos de repescagem — cor própria (laranja) + badge. Só visual.
+  var _isRepechageMatch = !!(m.isRepechage || m.isRepechageR1);
+  if (_isRepechageMatch) {
+    if (!_isMyMatch) cardBorder = 'rgba(249,115,22,0.55)';
+    readyBadge = '<span style="font-size:0.6rem;font-weight:800;color:#fb923c;background:rgba(249,115,22,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">Repescagem</span>' + (readyBadge || '');
+  }
+
   // v0.17.1: pending banner exibido entre o header e p1Row quando há
   // proposta aguardando aprovação. Mostra quem propôs + a quanto tempo.
   let pendingBanner = '';

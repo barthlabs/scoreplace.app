@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #fb923c;border-radius:12px;padding:14px 16px;background:rgba(249,115,22,0.08);">' +
+      '<div style="font-weight:800; color:#fdba74; font-size:1rem; margin-bottom:8px;">🟠 v2.1.24-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Jogos de repescagem com cor própria.</b><br><br>' +
+      'Os jogos de repescagem (quando o número de inscritos não fecha a potência de 2 e os melhores derrotados disputam uma vaga) agora aparecem destacados em <b>laranja</b> com um selo "Repescagem" — fica fácil distinguir do chaveamento principal. Só mudança visual.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #a855f7;border-radius:12px;padding:14px 16px;background:rgba(168,85,247,0.08);">' +
       '<div style="font-weight:800; color:#c4b5fd; font-size:1rem; margin-bottom:8px;">⚡ v2.1.23-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Jogos extras: vencedores contra vencedores (fase 2).</b><br><br>' +
