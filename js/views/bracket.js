@@ -359,17 +359,41 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
     return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${dots}</div>`;
   };
 
+  // v2.1.11: quadras disponíveis (definidas pelo organizador na criação do
+  // torneio). Usa courtNames se houver; senão gera "Quadra 1..N" a partir de
+  // courtCount. Só o organizador escolhe a quadra de cada jogo pronto.
+  const _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
+  const _isOrg = (window.AppStore && typeof window.AppStore.isOrganizer === 'function') ? window.AppStore.isOrganizer(t) : false;
+  const _courts = (Array.isArray(t.courtNames) && t.courtNames.length > 0)
+    ? t.courtNames.slice()
+    : (function(){ var n = parseInt(t.courtCount) || 0; var a = []; for (var i = 1; i <= n; i++) a.push('Quadra ' + i); return a; })();
+  const _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
   const renderCard = (e) => {
     const isReady = e.p1s === 'full' && e.p2s === 'full';
     const bg = isReady ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.08)';
     const border = isReady ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.2)';
     const labelColor = isReady ? '#4ade80' : '#fbbf24';
+    // Seletor de quadra — só em jogo PRONTO (todos presentes). Organizador vê
+    // dropdown editável; demais veem a quadra como etiqueta (quando já definida).
+    let courtHtml = '';
+    const _mid = String(e.match.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    if (isReady && _isOrg && _courts.length > 0 && e.match.id) {
+      const cur = e.match.court || '';
+      const opts = '<option value="">📍 Definir quadra…</option>' +
+        _courts.map(function(c){ return '<option value="' + _sh(c) + '"' + (cur === c ? ' selected' : '') + '>' + _sh(c) + '</option>'; }).join('');
+      courtHtml = '<select onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _tIdSafe + '\',\'' + _mid + '\',this.value)" ' +
+        'style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 8px;border-radius:8px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.4);color:#bbf7d0;font-size:0.78rem;font-weight:700;cursor:pointer;">' + opts + '</select>';
+    } else if (e.match.court) {
+      courtHtml = '<div style="margin-top:4px;font-size:0.74rem;font-weight:800;color:#34d399;display:flex;align-items:center;gap:4px;">📍 ' + _sh(e.match.court) + '</div>';
+    }
     return `
     <div style="padding:10px 14px;background:${bg};border:1px solid ${border};border-radius:10px;display:flex;flex-direction:column;gap:4px;">
       <div style="font-size:0.8rem;font-weight:800;color:${labelColor};letter-spacing:0.5px;">${_t('bracket.matchNum', {n: e.friendlyNum})}</div>
       ${renderSideRow(e.match.p1)}
       <div style="font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.2);letter-spacing:2px;padding:0 2px;">VS</div>
       ${renderSideRow(e.match.p2)}
+      ${courtHtml}
     </div>`;
   };
 
@@ -394,6 +418,34 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
       ${readySection}
       ${partialSection}
     </div>`;
+};
+
+// v2.1.11: organizador atribui a quadra de um jogo pronto. Persiste m.court.
+// Só o organizador vê o dropdown, então só ele chama esta função. O <select>
+// já reflete a escolha na hora; persistimos sem re-render pra não perder scroll.
+window._assignMatchCourt = function(tId, matchId, court) {
+  var t = window.AppStore && Array.isArray(window.AppStore.tournaments)
+    ? window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); }) : null;
+  if (!t) return;
+  var all = (typeof window._collectAllMatches === 'function')
+    ? window._collectAllMatches(t)
+    : (Array.isArray(t.matches) ? t.matches.slice() : []);
+  var m = all.find(function(x){ return x && String(x.id) === String(matchId); });
+  if (!m) return;
+  if (court) m.court = court; else { try { delete m.court; } catch (e) {} }
+  try {
+    if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+      window.AppStore.logAction(tId, court ? ('Quadra definida: ' + court) : 'Quadra removida de um jogo');
+    }
+  } catch (e) {}
+  if (window.AppStore && typeof window.AppStore.syncImmediate === 'function') {
+    window.AppStore.syncImmediate(tId);
+  } else if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+    window.FirestoreDB.saveTournament(t);
+  }
+  if (typeof showNotification === 'function') {
+    showNotification('📍 Quadra ' + (court ? 'definida' : 'removida'), court || '', 'success');
+  }
 };
 
 // ─── Painel de Lista de Espera (Standby) ─────────────────────────────────────
