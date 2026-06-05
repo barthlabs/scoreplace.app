@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #64748b;border-radius:12px;padding:14px 16px;background:rgba(100,116,139,0.08);">' +
+      '<div style="font-weight:800; color:#cbd5e1; font-size:1rem; margin-bottom:8px;">🧪 v2.1.34-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Placeholders não repetem mais o número.</b><br><br>' +
+      'No botão de teste ➕ Placeholders, a numeração agora considera os nomes que já viraram duplas (ex. "Placeholder 19 / Placeholder 08") e os que estão nos jogos — numerando a partir do maior já usado. Antes, em levas diferentes, recriava nomes repetidos (Placeholder 19 duas vezes).</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #818cf8;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">⭐ v2.1.33-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Datas em branco + template não duplica nome.</b><br><br>' +

@@ -635,11 +635,28 @@ function renderTournaments(container, tournamentId = null) {
             if (!t) return;
             if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
             var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-            // evita nomes duplicados em qualquer lista
+            // v2.1.34: coleta TODOS os nomes individuais já usados — inclusive os
+            // embutidos em duplas ("Placeholder 19 / Placeholder 08") e nos jogos do
+            // bracket — e numera a partir do MAIOR número existente. Antes o contador
+            // por length quebrava quando placeholders viravam duplas (o nome individual
+            // sumia das listas), recriando "Placeholder 19" em levas diferentes.
             var existingNames = {};
-            (t.participants || []).concat(t.standbyParticipants || [], t.waitlist || []).forEach(function (p) { var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); if (n) existingNames[n] = true; });
+            var _addName = function (n) {
+                if (!n) return;
+                String(n).split(' / ').forEach(function (part) { var pn = part.trim(); if (pn) existingNames[pn] = true; });
+            };
+            (t.participants || []).concat(t.standbyParticipants || [], t.waitlist || []).forEach(function (p) {
+                _addName(typeof p === 'string' ? p : (p && (p.displayName || p.name)));
+            });
+            var _allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+            (_allM || []).forEach(function (m) { if (m) { _addName(m.p1); _addName(m.p2); } });
+            var maxNum = 0;
+            Object.keys(existingNames).forEach(function (nm) {
+                var mt = nm.match(/^Placeholder\s+(\d+)$/i);
+                if (mt) { var v = parseInt(mt[1], 10); if (v > maxNum) maxNum = v; }
+            });
             var made = [];
-            var k = (t.participants || []).length + (t.standbyParticipants || []).length + (t.waitlist || []).length;
+            var k = maxNum;
             for (var i = 0; i < qtd; i++) {
                 var numStr, nm;
                 do { k++; numStr = String(k).padStart(2, '0'); nm = 'Placeholder ' + numStr; } while (existingNames[nm]);
