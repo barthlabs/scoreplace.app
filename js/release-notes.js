@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.9-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>E-mail de confirmação no cadastro: fim das falhas silenciosas.</b><br><br>' +
+      'Algumas pessoas que criavam conta por e-mail+senha <b>não recebiam o e-mail de confirmação</b>. Causa: um erro interno transitório do Firebase ao gerar o link fazia o e-mail nunca ser enviado, sem retry. Agora o envio tenta novamente (com espera crescente) tanto no servidor quanto no app, e qualquer falha residual fica registrada para monitoramento.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.8-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Editar plano de ida agora grava.</b><br><br>' +
       'No Place, ao editar um "Planejar ida" já criado, as alterações <b>não eram salvas</b> — o sistema reaproveitava o plano antigo (mesmo local/horário sobreposto) sem gravar a edição. Agora a edição atualiza o plano direto. Reforço: o contexto de edição é isolado, então um plano novo nunca sobrescreve um plano antigo por engano.</p>' +

@@ -2363,19 +2363,40 @@ function _sendRichVerificationEmail(firebaseUser, name) {
   if (!firebaseUser) return Promise.resolve(false);
   var email = firebaseUser.email || '';
   var nm = name || firebaseUser.displayName || '';
-  var _fallback = function() {
+  var _fallback = function(reasonErr) {
+    // v2.1.9: o caminho rico (Cloud Function → mail/ via SMTP scoreplace.app)
+    // é o ÚNICO confiável. O fallback do Firebase (sendEmailVerification) sai
+    // de noreply@…firebaseapp.com e na prática NÃO chega (caso Elide). Só é
+    // usado em último caso, e registramos no Sentry pra termos visibilidade
+    // quando isso acontecer.
+    if (typeof window._captureException === 'function') {
+      try {
+        window._captureException(reasonErr || new Error('verification rich path failed'),
+          { area: 'sendRichVerificationEmail.fallback', email: email });
+      } catch (e) {}
+    }
     try { return firebaseUser.sendEmailVerification({ url: (window.SCOREPLACE_URL || 'https://scoreplace.app') + '/' }); }
     catch (e) { return Promise.resolve(false); }
   };
+  // v2.1.9: retry no cliente também (até 3x) — cobre soluço de rede / cold start
+  // da função antes de degradar pro fallback. A função em si já faz retry no
+  // generateEmailVerificationLink; aqui cobrimos a CHAMADA.
+  function _callRich(attempt) {
+    var fn = firebase.functions().httpsCallable('sendVerificationEmail');
+    return fn({ email: email, name: nm })
+      .then(function() { return true; })
+      .catch(function(e) {
+        window._warn('[verify] e-mail rico tentativa ' + attempt + ' falhou:', e && (e.code || e.message));
+        if (attempt < 3) {
+          return new Promise(function(res) { setTimeout(res, attempt * 800); })
+            .then(function() { return _callRich(attempt + 1); });
+        }
+        return _fallback(e);
+      });
+  }
   try {
     if (firebase && firebase.functions) {
-      var fn = firebase.functions().httpsCallable('sendVerificationEmail');
-      return fn({ email: email, name: nm })
-        .then(function() { return true; })
-        .catch(function(e) {
-          window._warn('[verify] e-mail rico falhou, usando padrão:', e && (e.code || e.message));
-          return _fallback();
-        });
+      return _callRich(1);
     }
   } catch (e) {}
   return _fallback();

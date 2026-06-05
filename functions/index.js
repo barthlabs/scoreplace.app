@@ -951,12 +951,32 @@ exports.sendVerificationEmail = onCall(
       url: "https://scoreplace.app/",
       handleCodeInApp: false,
     };
-    let link;
-    try {
-      link = await admin.auth().generateEmailVerificationLink(email, actionCodeSettings);
-    } catch (err) {
-      console.error("[sendVerificationEmail] generateEmailVerificationLink falhou:", err);
-      throw new HttpsError("internal", "não foi possível gerar o link: " + (err.code || err.message));
+    // v2.1.9: RETRY com backoff. generateEmailVerificationLink às vezes retorna
+    // "internal error" transitório do backend do Firebase Auth — sem retry, o
+    // soluço fazia o e-mail de confirmação NUNCA ser enviado (caso real: Elide
+    // Luccas, 2026-06-04 20:11, 5 falhas seguidas → e-mail perdido). Tentamos
+    // até 4x com espera crescente; quase todo erro transitório some em 1-2s.
+    let link = null;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        link = await admin.auth().generateEmailVerificationLink(email, actionCodeSettings);
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.error(
+          "[sendVerificationEmail] generateEmailVerificationLink tentativa " +
+            attempt + "/4 falhou:", (err && (err.code || err.message)) || err);
+        if (attempt < 4) {
+          await new Promise((r) => setTimeout(r, attempt * 700));
+        }
+      }
+    }
+    if (!link) {
+      throw new HttpsError("internal",
+        "não foi possível gerar o link após 4 tentativas: " +
+        (lastErr && (lastErr.code || lastErr.message)));
     }
 
     const greetName = name ? (", " + name) : "";
