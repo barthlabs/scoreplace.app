@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #818cf8;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">⭐ v2.1.33-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Datas em branco + template não duplica nome.</b><br><br>' +
+      '(1) Ao criar um torneio novo (ou usar template), os campos de <b>data e horário ficam em branco</b> — nada é sugerido, evitando confusão. (2) Ao <b>Salvar Template</b> com um nome que já existe, o app pergunta se quer <b>substituir</b> o template existente; se cancelar, não grava duplicado.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #818cf8;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">⭐ v2.1.32-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Template salva TUDO + local preferido com 1 clique.</b><br><br>' +
       '(1) O <b>Salvar Template</b> agora grava <b>todas</b> as configurações — inclusive inscrições abertas após o sorteio, novos confrontos, lançamento de resultado, W.O., categorias por idade, agendamento de Liga, tempos, local completo e logo. Antes deixava várias de fora. (2) Ao criar um torneio, se você tem <b>locais preferidos</b> no perfil, eles aparecem como atalhos abaixo do campo de local — um clique preenche tudo.</p>' +

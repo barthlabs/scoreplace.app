@@ -1494,6 +1494,8 @@ window.renderHelpPage = function (container) {
     // Reset formulário completo
     const form = document.getElementById('form-create-tournament');
     if (form) form.reset();
+    // v2.1.33: datas/horários sempre em branco num torneio novo (sem sugestão).
+    if (typeof window._blankTournamentDates === 'function') window._blankTournamentDates();
     const editId = document.getElementById('edit-tournament-id');
     if (editId) editId.value = '';
     const title = document.getElementById('create-modal-title');

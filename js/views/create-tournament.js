@@ -3863,6 +3863,16 @@ function setupCreateTournamentModal() {
   if (btnSave) btnSave.addEventListener('click', window._saveTournamentClickHandler);
 }
 
+// ─── v2.1.33: datas/horários NUNCA são sugeridos — ficam em branco por padrão.
+// Limpa os 6 campos de data/hora. Chamado ao abrir torneio NOVO e ao aplicar
+// template (templates não carregam datas — são específicas de cada evento).
+window._blankTournamentDates = function() {
+  ['tourn-reg-date', 'tourn-reg-time', 'tourn-start-date', 'tourn-start-time', 'tourn-end-date', 'tourn-end-time'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+};
+
 // ─── v2.1.32: Locais preferidos do organizador (1 clique no Criar Torneio) ──
 // Se o usuário tem locais preferidos no perfil, mostra chips abaixo do campo de
 // local — clicar preenche todos os campos do local de uma vez.
@@ -4475,6 +4485,10 @@ window._onSportChange = function() {
 window._prefillFromTemplate = function(tpl) {
   if (!tpl) return;
 
+  // v2.1.33: template não traz datas — garante campos de data/hora em branco
+  // (evita herdar datas de um torneio editado antes nesta mesma sessão).
+  if (typeof window._blankTournamentDates === 'function') window._blankTournamentDates();
+
   // Sport
   var sportSel = document.getElementById('select-sport');
   if (sportSel && tpl.sport) {
@@ -4851,8 +4865,9 @@ window._saveCurrentFormAsTemplate = function() {
   if (typeof showInputDialog !== 'function') return;
   showInputDialog(_t('template.namePrompt') || 'Nome do template', defaultName, function(templateName) {
     if (!templateName || !templateName.trim()) return;
+    var tname = templateName.trim();
     var template = {
-      name: templateName.trim(),
+      name: tname,
       sport: sportClean,
       format: format,
       drawMode: drawModeValue || 'sorteio',
@@ -4890,15 +4905,42 @@ window._saveCurrentFormAsTemplate = function() {
       drawManual: getChecked('liga-draw-manual') || getChecked('suico-draw-manual')
     };
     if (typeof window._saveTemplate !== 'function') return;
-    window._saveTemplate(template).then(function(result) {
-      if (result === 'ok') {
-        if (typeof showNotification === 'function') showNotification(_t('template.saved') || 'Template salvo', template.name, 'success');
-      } else if (result === 'limit') {
-        if (typeof showNotification === 'function') showNotification(_t('template.limitFree') || 'Limite de templates atingido', '', 'warning');
-      } else {
-        if (typeof showNotification === 'function') showNotification(_t('template.saveError') || 'Erro ao salvar', '', 'error');
-      }
+    var _doSave = function() {
+      window._saveTemplate(template).then(function(result) {
+        if (result === 'ok') {
+          if (typeof showNotification === 'function') showNotification(_t('template.saved') || 'Template salvo', template.name, 'success');
+        } else if (result === 'limit') {
+          if (typeof showNotification === 'function') showNotification(_t('template.limitFree') || 'Limite de templates atingido', '', 'warning');
+        } else {
+          if (typeof showNotification === 'function') showNotification(_t('template.saveError') || 'Erro ao salvar', '', 'error');
+        }
+      });
+    };
+    // v2.1.33: nome duplicado → confirma substituir (atualiza por cima) ou cancela.
+    var _existing = (typeof window._getTemplates === 'function' ? window._getTemplates() : []).find(function(x) {
+      return x && (x.name || '').trim().toLowerCase() === tname.toLowerCase();
     });
+    if (_existing) {
+      var _overwrite = function() {
+        // remove o antigo e grava o novo no lugar
+        if (typeof window._deleteTemplate === 'function' && _existing._id) {
+          var _p = window._deleteTemplate(_existing._id);
+          if (_p && typeof _p.then === 'function') _p.then(_doSave); else _doSave();
+        } else { _doSave(); }
+      };
+      if (typeof showConfirmDialog === 'function') {
+        showConfirmDialog(
+          'Atualizar template?',
+          'Já existe um template chamado "' + tname + '". Deseja substituí-lo pelas configurações atuais?',
+          _overwrite,
+          { confirmText: 'Atualizar', cancelText: 'Cancelar', type: 'warning' }
+        );
+      } else if (window.confirm('Já existe um template "' + tname + '". Substituir?')) {
+        _overwrite();
+      }
+      return;
+    }
+    _doSave();
   });
 };
 
