@@ -3385,6 +3385,22 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   var sc = isCasual ? (opts.scoring || {}) : (t.scoring || {});
   var useSets = sc.type === 'sets';
+  // v2.1.35: se o torneio não tem GSM configurado mas o ESPORTE tem padrão
+  // (Beach Tennis, Tênis, Padel, Pickleball, Vôlei de Praia, Futevôlei…), usa o
+  // padrão do esporte — o placar ao vivo passa a contar games/sets/tiebreak em
+  // vez de pontos soltos. Persiste em t.scoring pra o card do bracket bater.
+  if (!isCasual && !useSets && window._sportScoringDefaults) {
+    var _sportKey = String(t.sport || '').replace(/^[^\wÀ-ɏ]+/u, '').trim();
+    var _sportDef = window._sportScoringDefaults[_sportKey];
+    if (_sportDef && _sportDef.type === 'sets') {
+      sc = Object.assign({}, _sportDef);
+      useSets = true;
+      t.scoring = sc;
+      if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+      }
+    }
+  }
   var p1Name = isCasual ? (opts.p1Name || '') : (m.p1 || '');
   var p2Name = isCasual ? (opts.p2Name || '') : (m.p2 || '');
   var casualTitle = isCasual ? (opts.title || (typeof _t === 'function' ? _t('casual.title') : 'Partida Casual')) : '';

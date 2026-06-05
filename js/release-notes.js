@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🟢 v2.1.35-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Placar ao vivo usa a pontuação certa (games/sets).</b><br><br>' +
+      'No placar ao vivo, se o torneio não tinha um sistema de pontuação configurado, ele agora usa o <b>padrão do esporte</b> — Beach Tennis, Tênis, Padel, Pickleball etc. passam a contar <b>games, sets e tiebreak</b> e mostram o placar de games, em vez de pontos soltos. Se o torneio tem regras próprias configuradas, elas são respeitadas.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #64748b;border-radius:12px;padding:14px 16px;background:rgba(100,116,139,0.08);">' +
       '<div style="font-weight:800; color:#cbd5e1; font-size:1rem; margin-bottom:8px;">🧪 v2.1.34-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Placeholders não repetem mais o número.</b><br><br>' +
