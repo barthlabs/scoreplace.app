@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #fb923c;border-radius:12px;padding:14px 16px;background:rgba(249,115,22,0.08);">' +
+      '<div style="font-weight:800; color:#fdba74; font-size:1rem; margin-bottom:8px;">🟠 v2.1.36-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Tag "Repescagem" no time, não no jogo.</b><br><br>' +
+      'A tag de repescagem agora aparece ao lado do <b>time que entrou por repescagem</b> (só na rodada em que ele entrou), em vez de marcar o jogo inteiro. Quem avançou por vitória <b>não</b> recebe a tag — mesmo que tenha passado por repescagem numa rodada anterior.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🟢 v2.1.35-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Placar ao vivo usa a pontuação certa (games/sets).</b><br><br>' +

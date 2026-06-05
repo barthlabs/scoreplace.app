@@ -1560,11 +1560,16 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
   var _byeTag = '<span style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">BYE</span>';
   var _p1ByeBadge = m.p1FromBye ? _byeTag : '';
   var _p2ByeBadge = m.p2FromBye ? _byeTag : '';
+  // v2.1.36: tag "Repescagem" no TIME que entrou por repescagem NESTA rodada
+  // (preenchido via melhor-derrotado). Quem avança por vitória NÃO recebe a tag.
+  var _repTag = '<span style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:#fb923c;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">Repescagem</span>';
+  var _p1RepBadge = m.p1FromRepechage ? _repTag : '';
+  var _p2RepBadge = m.p2FromRepechage ? _repTag : '';
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
       ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1)}</div>
-      ${_p1ByeBadge}
+      ${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p1Score : (p1ScoreVal || '')}
       </div>
@@ -1573,7 +1578,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
       ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2)}</div>
-      ${_p2ByeBadge}
+      ${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p2Score : (p2ScoreVal || '')}
       </div>
@@ -1757,12 +1762,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
   }
 
   // v2.1.26: tardios na chave — borda ROXA (mesma apresentação, só a cor).
-  // Slots de repescagem (R2 que recebem os melhores derrotados) — borda LARANJA + selo.
+  // v2.1.36: a tag de repescagem NÃO vai mais no jogo — vai no TIME que entrou
+  // por repescagem (slot p1/pX FromRepechage), renderizado na linha do jogador.
   if (m.isExtra && !_isMyMatch) cardBorder = 'rgba(168,85,247,0.6)';
-  if (m.isRepechageSlot && !_isMyMatch && !m.isExtra) {
-    cardBorder = 'rgba(249,115,22,0.55)';
-    readyBadge = '<span style="font-size:0.6rem;font-weight:800;color:#fb923c;background:rgba(249,115,22,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">Repescagem</span>' + (readyBadge || '');
-  }
 
   // v0.17.1: pending banner exibido entre o header e p1Row quando há
   // proposta aguardando aprovação. Mostra quem propôs + a quanto tempo.

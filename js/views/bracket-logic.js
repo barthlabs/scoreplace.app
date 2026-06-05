@@ -848,6 +848,9 @@ function _assignRepechageLosers(t) {
         var slots = String(m.awaitsBestLoser).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
         for (var si = 0; si < slots.length && blIdx < bestLosers.length; si++) {
           m[slots[si]] = bestLosers[blIdx].name;
+          // v2.1.36: marca o SLOT como "entrou por repescagem" (tag no time, só
+          // nesta rodada). Quem avança por vitória depois NÃO herda a tag.
+          m[slots[si] + 'FromRepechage'] = true;
           blIdx++;
         }
         delete m.awaitsBestLoser;
@@ -911,6 +914,7 @@ function _advanceBestLoser(t) {
     if (m.awaitsBestLoser) {
       var slot = m.awaitsBestLoser; // 'p1' or 'p2'
       m[slot] = bestLosersToAdvance[blIdx].name;
+      m[slot + 'FromRepechage'] = true; // v2.1.36: tag no time que entrou por repescagem
       delete m.awaitsBestLoser;
       blIdx++;
       _autoResolveBye(t, m);
