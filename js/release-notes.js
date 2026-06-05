@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.12-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
+      '<p><b>Torneio encerrado fica visível por 24h antes de ir pra "Encerrados".</b><br><br>' +
+      'Quando um torneio encerra, ele agora <b>continua na lista principal por 24h</b> — pra todo mundo ver o resultado/pódio fresquinho. Só depois disso ele vai pra seção colapsada <b>"Encerrados"</b>. Vale pra encerramento automático (final) e manual.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.11-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Quadra por jogo: defina onde cada partida acontece.</b><br><br>' +
       'Quando um jogo fica <b>pronto para chamar</b> (todos presentes), o organizador agora vê um <b>seletor de quadra</b> com as quadras configuradas no torneio (campo "Quadras / nomes" na criação). Assim já dá pra dizer em qual quadra cada jogo vai. A quadra escolhida aparece marcada (📍) também pra quem está acompanhando.</p>' +

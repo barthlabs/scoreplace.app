@@ -2331,6 +2331,9 @@ window.finishTournament = function(tId) {
         msg,
         function() {
             t.status = 'finished';
+            // v2.1.12: marca o instante do encerramento — usado pela regra de
+            // "vai pra seção Encerrados depois de 24h" no dashboard.
+            if (!t.finishedAt) t.finishedAt = new Date().toISOString();
             // Compute final standings for Swiss/Liga
             if (Array.isArray(t.rounds) && t.rounds.length > 0 && typeof window._computeStandings === 'function') {
                 t.standings = window._computeStandings(t);

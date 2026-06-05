@@ -421,6 +421,7 @@ function renderDashboard(container) {
           _seasonEnd.setMonth(_seasonEnd.getMonth() + parseInt(_seasonMonths));
           if (new Date() >= _seasonEnd) {
             t.status = 'finished';
+            if (!t.finishedAt) t.finishedAt = new Date().toISOString(); // v2.1.12: regra 24h
             if (!t.standings || !t.standings.length) {
               if (typeof window._computeStandings === 'function') {
                 var _cats = (t.combinedCategories && t.combinedCategories.length) ? t.combinedCategories : ['default'];
@@ -2081,8 +2082,18 @@ function renderDashboard(container) {
   // Separate active and finished when showing "Todos"
   let filteredHtml = '';
   if (curFilter === 'todos' && !curSport && !curLocation && !curFormat && encerradosCount > 0) {
-    const activeList = filtered.filter(t => t.status !== 'finished');
-    const finishedList = filtered.filter(t => t.status === 'finished');
+    // v2.1.12: torneio encerrado só vai pra seção "Encerrados" depois de 24h.
+    // Nas primeiras 24h após encerrar, ele continua na lista principal (pra
+    // todo mundo ver o resultado/pódio fresquinho). finishedAt é setado em
+    // todos os caminhos de encerramento; se faltar (legado), trata como antigo.
+    const _isRecentlyFinished = function(t) {
+      if (!t || t.status !== 'finished') return false;
+      var fa = t.finishedAt ? new Date(t.finishedAt).getTime() : 0;
+      if (!fa || isNaN(fa)) return false;
+      return (Date.now() - fa) < 24 * 60 * 60 * 1000;
+    };
+    const activeList = filtered.filter(t => t.status !== 'finished' || _isRecentlyFinished(t));
+    const finishedList = filtered.filter(t => t.status === 'finished' && !_isRecentlyFinished(t));
     const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
     filteredHtml = visibleActive.length > 0
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
