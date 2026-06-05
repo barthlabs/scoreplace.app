@@ -365,6 +365,7 @@ function setupCreateTournamentModal() {
                       <button type="button" onclick="window._venueLocateMe()" class="btn btn-sm" style="background:var(--primary-color);color:#fff;border:none;white-space:nowrap;font-size:0.75rem;padding:6px 10px;" title="Usar minha localização">📍</button>
                       <div id="venue-suggestions" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:9999; background:var(--bg-card);border:1px solid var(--border-color); border-radius:10px; margin-top:4px; max-height:220px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.5);"></div>
                     </div>
+                    ${typeof window._venuePrefChipsHtml === 'function' ? window._venuePrefChipsHtml() : ''}
                     <div id="venue-create-map" style="display:none;width:100%;height:180px;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);margin-bottom:8px;background:#1a1a2e;"></div>
                     <div id="venue-osm-info" style="display:none; margin-top:5px; font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:5px;"></div>
                     <div style="margin-top:8px;">
@@ -3862,6 +3863,46 @@ function setupCreateTournamentModal() {
   if (btnSave) btnSave.addEventListener('click', window._saveTournamentClickHandler);
 }
 
+// ─── v2.1.32: Locais preferidos do organizador (1 clique no Criar Torneio) ──
+// Se o usuário tem locais preferidos no perfil, mostra chips abaixo do campo de
+// local — clicar preenche todos os campos do local de uma vez.
+window._venuePrefChipsHtml = function() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var locs = (cu && Array.isArray(cu.preferredLocations)) ? cu.preferredLocations : [];
+  if (!locs.length) return '';
+  var _sh = window._safeHtml || function(s) { return String(s == null ? '' : s); };
+  var chips = locs.map(function(loc, i) {
+    var name = (loc && (loc.label || loc.name)) || ('Local ' + (i + 1));
+    return '<button type="button" data-pref-chip="' + i + '" onclick="window._venuePickPreferred(' + i + ')" ' +
+      'style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#34d399;border-radius:999px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;white-space:nowrap;">⭐ ' + _sh(name) + '</button>';
+  }).join('');
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">' +
+    '<span style="font-size:0.72rem;color:var(--text-muted);">Preferidos:</span>' + chips +
+  '</div>';
+};
+window._venuePickPreferred = function(idx) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var locs = (cu && Array.isArray(cu.preferredLocations)) ? cu.preferredLocations : [];
+  var loc = locs[idx];
+  if (!loc) return;
+  var name = loc.label || loc.name || '';
+  var lon = (loc.lng != null) ? loc.lng : (loc.lon != null ? loc.lon : '');
+  var _set = function(id, v) { var el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+  _set('tourn-venue', name);
+  _set('tourn-venue-lat', loc.lat != null ? loc.lat : '');
+  _set('tourn-venue-lon', lon);
+  _set('tourn-venue-address', loc.address || loc.label || '');
+  _set('tourn-venue-place-id', loc.placeId || '');
+  // realça o chip escolhido
+  var chips = document.querySelectorAll('[data-pref-chip]');
+  Array.prototype.forEach.call(chips, function(c) {
+    var on = c.getAttribute('data-pref-chip') === String(idx);
+    c.style.background = on ? 'rgba(16,185,129,0.28)' : 'rgba(16,185,129,0.08)';
+    c.style.borderColor = on ? '#34d399' : 'rgba(16,185,129,0.25)';
+  });
+  if (typeof showNotification === 'function') showNotification('📍 Local definido', name, 'success');
+};
+
 // ── GSM Config Modal and Functions ──
 // ─── Preset-based scoring format system ───────────────────────────────────
 // Presets define common match formats. Each preset maps to hidden field values.
@@ -4497,13 +4538,56 @@ window._prefillFromTemplate = function(tpl) {
     if (typeof window._syncLateEnrollment === 'function') window._syncLateEnrollment();
   }
 
+  // v2.1.32: restaura ABSOLUTAMENTE TODAS as configs salvas no template.
+  var _setV = function(id, v) { var el = document.getElementById(id); if (el && v !== undefined && v !== null && v !== '') el.value = v; };
+  var _setC = function(id, v) { var el = document.getElementById(id); if (el) el.checked = !!v; };
+
+  // Modo de sorteio (Sorteio vs Rei/Rainha)
+  if (tpl.drawMode) {
+    _setV('draw-mode', tpl.drawMode);
+    if (typeof window._selectDrawMode === 'function') { try { window._selectDrawMode(tpl.drawMode); } catch (e) {} }
+  }
+  // Público/privado
+  if (tpl.isPublic !== undefined) {
+    _setV('tourn-public', tpl.isPublic ? 'true' : 'false');
+    if (typeof window._syncPublicToggle === 'function') { try { window._syncPublicToggle(); } catch (e) {} }
+  }
+  // Tipo de jogo, lotação, lançamento de resultado, W.O. já tratado, encerrar ao lotar
+  _setV('tourn-game-types', tpl.gameTypes);
+  _setV('select-result-entry', tpl.resultEntry);
+  if (typeof window._syncResultEntryUI === 'function') { try { window._syncResultEntryUI(); } catch (e) {} }
+  if (tpl.autoCloseOnFull !== undefined) _setC('tourn-auto-close', tpl.autoCloseOnFull);
+  // Tempos
+  _setV('tourn-call-time', tpl.callTime);
+  _setV('tourn-warmup-time', tpl.warmupTime);
+  _setV('tourn-court-names', tpl.courtNames);
+  // Local (todos os campos ocultos)
+  _setV('tourn-venue-access', tpl.venueAccess);
+  _setV('tourn-venue-lat', tpl.venueLat);
+  _setV('tourn-venue-lon', tpl.venueLon);
+  _setV('tourn-venue-address', tpl.venueAddress);
+  _setV('tourn-venue-place-id', tpl.venuePlaceId);
+  _setV('tourn-venue-photo-url', tpl.venuePhotoUrl);
+  // Logo
+  if (tpl.logoData) { _setV('tourn-logo-data', tpl.logoData); _setV('tourn-logo-locked', tpl.logoLocked ? '1' : '0'); if (typeof window._renderLogoPreview === 'function') { try { window._renderLogoPreview(); } catch (e) {} } }
+  // Liga / Suíço — formato de rodada, temporada, intervalo de sorteio, manual
+  _setV('liga-round-format', tpl.ligaRoundFormat);
+  _setV('liga-season-months', tpl.ligaSeasonMonths);
+  _setV('liga-draw-interval', tpl.drawIntervalDays);
+  _setV('suico-draw-interval', tpl.drawIntervalDays);
+  if (tpl.drawManual !== undefined) { _setC('liga-draw-manual', tpl.drawManual); _setC('suico-draw-manual', tpl.drawManual); }
+  if (typeof window._updateLigaRoundsTag === 'function') { try { window._updateLigaRoundsTag(); } catch (e) {} }
+
   // Categories (store in hidden data for save function to pick up)
-  if (tpl.genderCategories && tpl.genderCategories.length > 0) {
+  if ((tpl.genderCategories && tpl.genderCategories.length > 0) || (tpl.skillCategories && tpl.skillCategories.length > 0) || (tpl.ageCategories && tpl.ageCategories.length > 0)) {
     window._templateCategories = {
-      gender: tpl.genderCategories,
+      gender: tpl.genderCategories || [],
       skill: tpl.skillCategories || [],
+      age: tpl.ageCategories || [],
       combined: tpl.combinedCategories || []
     };
+    _setV('tourn-age-categories', (tpl.ageCategories || []).join(','));
+    if (tpl.ageCategories && tpl.ageCategories.length && typeof window._applyAgeCatUI === 'function') { try { window._applyAgeCatUI(tpl.ageCategories); } catch (e) {} }
   }
 };
 
@@ -4757,8 +4841,13 @@ window._saveCurrentFormAsTemplate = function() {
     superTiebreak: get('gsm-superTiebreak') === 'true',
     superTiebreakPoints: parseInt(get('gsm-superTiebreakPoints')) || 10,
     countingType: get('gsm-countingType') || 'numeric',
-    advantageRule: get('gsm-advantageRule') === 'true'
+    advantageRule: get('gsm-advantageRule') === 'true',
+    fixedSet: get('gsm-fixedSet') === 'true',
+    fixedSetGames: parseInt(get('gsm-fixedSetGames')) || 6
   };
+  // v2.1.32: o template grava ABSOLUTAMENTE TODAS as configs (menos dados de
+  // instância: nome do torneio, datas, organizador, inscritos, logo gerada).
+  var ageCats = (get('tourn-age-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
   if (typeof showInputDialog !== 'function') return;
   showInputDialog(_t('template.namePrompt') || 'Nome do template', defaultName, function(templateName) {
     if (!templateName || !templateName.trim()) return;
@@ -4766,19 +4855,39 @@ window._saveCurrentFormAsTemplate = function() {
       name: templateName.trim(),
       sport: sportClean,
       format: format,
+      drawMode: drawModeValue || 'sorteio',
+      isPublic: get('tourn-public') === 'true',
       scoring: scoring,
       genderCategories: genderCats,
       skillCategories: skillCats,
+      ageCategories: ageCats,
       combinedCategories: combinedCats,
       enrollmentMode: get('select-inscricao') || 'individual',
+      teamSize: parseInt(get('tourn-team-size')) || 1,
+      gameTypes: get('tourn-game-types') || 'duplas',
       maxParticipants: parseInt(get('tourn-max-participants')) || '',
+      autoCloseOnFull: getChecked('tourn-auto-close'),
+      resultEntry: get('select-result-entry') || 'organizer',
+      woScope: get('wo-scope') || 'individual',
+      lateEnrollment: get('late-enrollment') || 'closed',
       courtCount: parseInt(get('tourn-court-count')) || '',
+      courtNames: (get('tourn-court-names') || '').trim(),
+      callTime: parseInt(get('tourn-call-time')) || 0,
+      warmupTime: parseInt(get('tourn-warmup-time')) || 0,
       gameDuration: parseInt(get('tourn-game-duration')) || '',
       venue: (get('tourn-venue') || '').trim(),
+      venueAccess: get('tourn-venue-access') || '',
       venueLat: get('tourn-venue-lat') || null,
       venueLon: get('tourn-venue-lon') || null,
       venueAddress: get('tourn-venue-address') || '',
-      teamSize: parseInt(get('tourn-team-size')) || 1
+      venuePlaceId: get('tourn-venue-place-id') || '',
+      venuePhotoUrl: get('tourn-venue-photo-url') || '',
+      logoData: get('tourn-logo-data') || '',
+      logoLocked: get('tourn-logo-locked') === '1',
+      ligaRoundFormat: get('liga-round-format') || '',
+      ligaSeasonMonths: get('liga-season-months') || '',
+      drawIntervalDays: get('liga-draw-interval') || get('suico-draw-interval') || '',
+      drawManual: getChecked('liga-draw-manual') || getChecked('suico-draw-manual')
     };
     if (typeof window._saveTemplate !== 'function') return;
     window._saveTemplate(template).then(function(result) {
