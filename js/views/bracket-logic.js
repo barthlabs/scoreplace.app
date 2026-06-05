@@ -1460,6 +1460,8 @@ function _updateProgressiveClassification(t) {
 function _maybeFinishElimination(t) {
   if (t.status === 'finished') return;
   if (t.currentStage === 'groups') return;
+  // v2.1.22: não encerra enquanto houver jogos extras (tardios) sem resultado.
+  if (Array.isArray(t.extraMatches) && t.extraMatches.some(function(m){ return m && !m.winner; })) return;
   // v2.0.4: BUG — o formato salvo é 'Eliminatórias Simples' (plural), mas aqui
   // checava 'Eliminatória Simples' (singular) → a função saía cedo e o torneio
   // NUNCA auto-encerrava (ficava "em andamento" mesmo com campeão definido).

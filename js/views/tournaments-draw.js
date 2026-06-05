@@ -95,6 +95,91 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
     allMaleCount: allMaleCount
   };
 }
+// v2.1.22: exposto pra reuso (jogos extras de tardios em torneios "expand").
+window._formDoublesTeams = _formDoublesTeams;
+
+// ─── v2.1.22 (Fase 1): Jogos extras de inscritos tardios ──────────────────────
+// Em torneios de eliminatória com inscrição tardia 'expand' (novos confrontos),
+// quando ≥4 pessoas acumulam na lista de espera, formamos 2 duplas (sorteio) e
+// criamos UM jogo extra (1A, 1B, 1C…). FASE 1 = ISOLADA: o jogo vive em
+// t.extraMatches[], é jogável numa seção própria e NÃO mexe na árvore/avanço do
+// bracket atual. A integração (vencedor avança + repescagem) é a Fase 2/3.
+window._createExtraGamesFromWaitlist = function(t) {
+  if (!t) return 0;
+  if (t.lateEnrollment !== 'expand') return 0;
+  var drawDone = (Array.isArray(t.matches) && t.matches.length > 0) ||
+                 (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+                 (Array.isArray(t.groups) && t.groups.length > 0);
+  if (!drawDone) return 0;
+  // só pra formatos de eliminatória (Fase 1; Liga/Suíço/Grupos ficam de fora)
+  var fmt = t.format || '';
+  if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples' && fmt !== 'Dupla Eliminatória') return 0;
+
+  // pool da espera (standbyParticipants + waitlist, dedup por nome)
+  var _name = function(p){ return window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name) || '')); };
+  var _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
+  var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
+  var seen = {}; var pool = [];
+  _sp.concat(_wl).forEach(function(p){ var n = _name(p); if (n && !seen[n]) { seen[n] = true; pool.push(p); } });
+  // só indivíduos (sem ' / ') — duplas já formadas não viram jogo extra aqui
+  pool = pool.filter(function(p){ return _name(p).indexOf(' / ') === -1; });
+
+  if (pool.length < 4) return 0;
+  if (!Array.isArray(t.extraMatches)) t.extraMatches = [];
+  if (!t.teamOrigins) t.teamOrigins = {};
+
+  var created = 0;
+  while (pool.length >= 4) {
+    var four = pool.splice(0, 4);
+    var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
+    var teams = (formed.participants || []).filter(function(x){ return x && (x.displayName || x.name || '').indexOf(' / ') !== -1; });
+    if (teams.length < 2) break;
+    var idx = t.extraMatches.length; // 0 → '1A', 1 → '1B'…
+    var label = '1' + String.fromCharCode(65 + (idx % 26)) + (idx >= 26 ? '·' + Math.floor(idx / 26) : '');
+    var usedNames = four.map(_name);
+    t.extraMatches.push({
+      id: 'extra-' + t.id + '-' + Date.now() + '-' + idx,
+      p1: teams[0].displayName || teams[0].name,
+      p2: teams[1].displayName || teams[1].name,
+      winner: null, isExtra: true, extraLabel: label,
+      participants: [teams[0], teams[1]],
+      createdAt: new Date().toISOString()
+    });
+    // remove os 4 da espera
+    var rm = function(arr){ return Array.isArray(arr) ? arr.filter(function(p){ return usedNames.indexOf(_name(p)) === -1; }) : arr; };
+    t.standbyParticipants = rm(t.standbyParticipants);
+    t.waitlist = rm(t.waitlist);
+    if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+      window.AppStore.logAction(t.id, 'Jogo extra ' + label + ' criado (tardios): ' + teams[0].displayName + ' vs ' + teams[1].displayName);
+    }
+    created++;
+  }
+  return created;
+};
+
+// Salva o resultado de um jogo extra (FASE 1: só registra vencedor, NÃO avança).
+window._saveExtraGameResult = function(tId, matchId, scoreP1, scoreP2) {
+  var t = window.AppStore && window.AppStore.tournaments &&
+          window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  if (!t || !Array.isArray(t.extraMatches)) return;
+  var m = t.extraMatches.find(function(x){ return x && String(x.id) === String(matchId); });
+  if (!m) return;
+  var s1 = parseInt(scoreP1, 10), s2 = parseInt(scoreP2, 10);
+  if (isNaN(s1) || isNaN(s2) || s1 === s2) {
+    if (window.showNotification) window.showNotification('Placar inválido', 'Informe os dois placares (sem empate).', 'warning');
+    return;
+  }
+  m.scoreP1 = s1; m.scoreP2 = s2; m.winner = s1 > s2 ? m.p1 : m.p2;
+  if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+    window.AppStore.logAction(tId, 'Jogo extra ' + (m.extraLabel || '') + ': ' + m.p1 + ' ' + s1 + ' x ' + s2 + ' ' + m.p2 + ' — vence ' + m.winner);
+  }
+  if (window.AppStore && typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
+  if (window.showNotification) window.showNotification('✅ Jogo extra registrado', m.winner + ' venceu.', 'success');
+  var vc = document.getElementById('view-container');
+  if (vc && typeof window.renderBracket === 'function' && (window.location.hash || '').indexOf('#bracket') === 0) {
+    window.renderBracket(vc);
+  }
+};
 
 // ─── v2.1.20: Diálogo de gênero pré-sorteio (duplas mistas, sorteio livre) ────
 // Mostra ANTES do sorteio quando: duplas (teamSize 2) formadas por pareamento de

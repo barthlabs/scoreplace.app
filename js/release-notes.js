@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #a855f7;border-radius:12px;padding:14px 16px;background:rgba(168,85,247,0.08);">' +
+      '<div style="font-weight:800; color:#c4b5fd; font-size:1rem; margin-bottom:8px;">⚡ v2.1.22-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Jogos extras pra quem chega depois (fase 1).</b><br><br>' +
+      'Em torneios de eliminatória com inscrição aberta após o sorteio (toggle "novos confrontos"), quando <b>4 pessoas juntam na lista de espera</b>, o app sorteia 2 duplas e cria automaticamente um <b>jogo extra</b> — numerado <b>1A, 1B, 1C…</b> e destacado em roxo numa seção própria do chaveamento. As duplas já sorteadas antes são mantidas. Por enquanto os jogos extras são jogáveis numa área dedicada; a integração ao chaveamento (vencedor avança + repescagem dos melhores derrotados pra recompor a potência de 2) vem nas próximas etapas.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #10b981;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#34d399; font-size:1rem; margin-bottom:8px;">🟢 v2.1.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(4 de Junho, 2026)</span></div>' +
       '<p><b>Liga: prazo de inscrição não atrapalha mais + tag de rodadas.</b><br><br>' +

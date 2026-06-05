@@ -104,6 +104,17 @@ function renderBracket(container, tournamentId, isInline) {
   }).catch(function() {});
 
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
+  // v2.1.22 (Fase 1): jogos extras de tardios — SÓ o organizador cria (escrita de
+  // matches/extraMatches só passa nas rules pra admin). Auto ao abrir o bracket.
+  if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {
+    try {
+      var _nExtra = window._createExtraGamesFromWaitlist(t);
+      if (_nExtra > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + _nExtra + ' jogo(s) extra criado(s)', 'Duplas formadas com quem chegou depois.', 'info');
+      }
+    } catch (e) {}
+  }
   const canEnterResult = isOrg || window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee');
   const isLiga = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
   // Note: after Swiss-as-p2 transitions to elimination, currentStage becomes 'elimination'
@@ -215,10 +226,12 @@ function renderBracket(container, tournamentId, isInline) {
   const readyBannerHtml = (typeof window._renderReadyMatchesBanner === 'function') ? window._renderReadyMatchesBanner(t) : '';
   // Waitlist panel — shown at the end of every bracket view (Liga/Suíço/Grupos/Monarch/Elim)
   const standbyHtml = _renderStandbyPanel(t, isOrg);
+  // v2.1.22: seção isolada dos jogos extras (tardios).
+  const extraGamesHtml = (typeof window._renderExtraGamesSection === 'function') ? window._renderExtraGamesSection(t, canEnterResult) : '';
 
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
-    container.innerHTML = headerHtml + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) + standbyHtml;
+    container.innerHTML = headerHtml + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) + standbyHtml + extraGamesHtml;
     _applyMyMatchesFilter();
     return;
   }
@@ -226,7 +239,7 @@ function renderBracket(container, tournamentId, isInline) {
   // ── Fase de Grupos ─────────────────────────────────────────────────────────
   if (isGrupos && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml + extraGamesHtml;
       _applyMyMatchesFilter();
       return;
     }
@@ -237,7 +250,7 @@ function renderBracket(container, tournamentId, isInline) {
   var isMonarch = t.format === 'Rei/Rainha da Praia';
   if (isMonarch && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + _renderMonarchStage(t, isOrg, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + _renderMonarchStage(t, isOrg, canEnterResult) + standbyHtml + extraGamesHtml;
       _applyMyMatchesFilter();
       return;
     }
@@ -262,9 +275,9 @@ function renderBracket(container, tournamentId, isInline) {
   // (see renderSingleElimBracket / renderDoubleElimBracket). No separate card.
   try {
     if (isDupla) {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult) + standbyHtml + extraGamesHtml;
     } else {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult) + standbyHtml + extraGamesHtml;
     }
   } catch (bracketErr) {
     window._error('[Bracket] Render error:', bracketErr);
@@ -446,6 +459,47 @@ window._assignMatchCourt = function(tId, matchId, court) {
   if (typeof showNotification === 'function') {
     showNotification('📍 Quadra ' + (court ? 'definida' : 'removida'), court || '', 'success');
   }
+};
+
+// ─── v2.1.22 (Fase 1): Seção isolada dos Jogos Extras (tardios) ──────────────
+window._renderExtraGamesSection = function _renderExtraGamesSection(t, canEnterResult) {
+  if (!t || !Array.isArray(t.extraMatches) || t.extraMatches.length === 0) return '';
+  var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
+  var _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var cards = t.extraMatches.map(function(m){
+    var done = !!m.winner;
+    var mid = String(m.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var p1win = done && m.winner === m.p1, p2win = done && m.winner === m.p2;
+    var inputs;
+    if (!done && canEnterResult) {
+      inputs = '<div style="display:flex;align-items:center;gap:6px;margin-top:8px;">' +
+        '<input type="number" id="ex1-' + mid + '" min="0" placeholder="0" style="width:46px;padding:5px;border-radius:6px;border:1px solid rgba(168,85,247,0.4);background:rgba(0,0,0,0.25);color:#fff;text-align:center;font-weight:700;">' +
+        '<span style="color:rgba(255,255,255,0.4);">x</span>' +
+        '<input type="number" id="ex2-' + mid + '" min="0" placeholder="0" style="width:46px;padding:5px;border-radius:6px;border:1px solid rgba(168,85,247,0.4);background:rgba(0,0,0,0.25);color:#fff;text-align:center;font-weight:700;">' +
+        '<button onclick="window._saveExtraGameResult(\'' + _tIdSafe + '\',\'' + mid + '\',document.getElementById(\'ex1-' + mid + '\').value,document.getElementById(\'ex2-' + mid + '\').value)" style="margin-left:auto;background:#a855f7;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-weight:700;font-size:0.78rem;cursor:pointer;">✓ Salvar</button>' +
+      '</div>';
+    } else if (done) {
+      inputs = '<div style="margin-top:6px;font-size:0.78rem;color:#c4b5fd;font-weight:700;">' + _sh(String(m.scoreP1)) + ' x ' + _sh(String(m.scoreP2)) + ' · vence ' + _sh(m.winner) + '</div>';
+    } else {
+      inputs = '<div style="margin-top:6px;font-size:0.74rem;color:var(--text-muted);">Aguardando resultado</div>';
+    }
+    return '<div style="min-width:240px;max-width:300px;flex:1;background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.35);border-left:4px solid #a855f7;border-radius:12px;padding:10px 14px;box-sizing:border-box;">' +
+      '<div style="font-size:0.78rem;font-weight:800;color:#c4b5fd;letter-spacing:0.5px;margin-bottom:4px;">⚡ JOGO ' + _sh(m.extraLabel || '') + '</div>' +
+      '<div style="font-size:0.85rem;color:' + (p1win ? '#4ade80' : 'var(--text-bright,#f1f5f9)') + ';font-weight:' + (p1win ? '800' : '600') + ';">' + _sh(m.p1) + '</div>' +
+      '<div style="font-size:0.6rem;color:rgba(255,255,255,0.3);letter-spacing:2px;margin:1px 0;">VS</div>' +
+      '<div style="font-size:0.85rem;color:' + (p2win ? '#4ade80' : 'var(--text-bright,#f1f5f9)') + ';font-weight:' + (p2win ? '800' : '600') + ';">' + _sh(m.p2) + '</div>' +
+      inputs +
+    '</div>';
+  }).join('');
+  return '<div style="margin-top:1.5rem;background:var(--bg-card);border:1px solid rgba(168,85,247,0.25);border-radius:16px;padding:1.25rem;">' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;">' +
+      '<span style="font-size:1.2rem;">⚡</span>' +
+      '<h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Jogos extras (tardios)</h3>' +
+      '<span style="font-size:0.72rem;background:rgba(168,85,247,0.18);color:#c4b5fd;padding:2px 10px;border-radius:10px;font-weight:700;">' + t.extraMatches.length + '</span>' +
+    '</div>' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;">Duplas formadas por sorteio com quem chegou depois do sorteio principal.</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + cards + '</div>' +
+  '</div>';
 };
 
 // ─── Painel de Lista de Espera (Standby) ─────────────────────────────────────
