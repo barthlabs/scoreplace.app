@@ -10,8 +10,9 @@
   border-bottom: 1px solid rgba(255,255,255,0.06);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  max-width: 1400px;
-  margin: 0 auto;
+  /* v2.1.40: barra ocupa a largura TODA (igual topbar/.view-container, padding
+     2rem) — antes tinha max-width:1400 + margin:auto e ficava centralizada,
+     deixando vãos nas laterais por onde o conteúdo (ex.: bracket) vazava. */
   box-sizing: border-box;
 }
 /* No z-index lowering needed — hamburger dropdown is OUTSIDE the topbar
