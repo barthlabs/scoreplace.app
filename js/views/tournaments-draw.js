@@ -134,14 +134,14 @@ window._createExtraGamesFromWaitlist = function(t) {
     var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
     var teams = (formed.participants || []).filter(function(x){ return x && (x.displayName || x.name || '').indexOf(' / ') !== -1; });
     if (teams.length < 2) break;
-    var idx = t.extraMatches.length; // 0 → '1A', 1 → '1B'…
+    var idx = t.extraMatches.filter(function(m){ return (m.extraRound || 1) === 1; }).length; // 0 → '1A', 1 → '1B'…
     var label = '1' + String.fromCharCode(65 + (idx % 26)) + (idx >= 26 ? '·' + Math.floor(idx / 26) : '');
     var usedNames = four.map(_name);
     t.extraMatches.push({
       id: 'extra-' + t.id + '-' + Date.now() + '-' + idx,
       p1: teams[0].displayName || teams[0].name,
       p2: teams[1].displayName || teams[1].name,
-      winner: null, isExtra: true, extraLabel: label,
+      winner: null, isExtra: true, extraLabel: label, extraRound: 1, advancedTo: null,
       participants: [teams[0], teams[1]],
       createdAt: new Date().toISOString()
     });
@@ -173,12 +173,57 @@ window._saveExtraGameResult = function(tId, matchId, scoreP1, scoreP2) {
   if (window.AppStore && typeof window.AppStore.logAction === 'function') {
     window.AppStore.logAction(tId, 'Jogo extra ' + (m.extraLabel || '') + ': ' + m.p1 + ' ' + s1 + ' x ' + s2 + ' ' + m.p2 + ' — vence ' + m.winner);
   }
+  // v2.1.23 (Fase 2): vencedor-contra-vencedor — encadeia o próximo jogo extra.
+  if (typeof window._consolidateExtraGames === 'function') window._consolidateExtraGames(t);
   if (window.AppStore && typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
   if (window.showNotification) window.showNotification('✅ Jogo extra registrado', m.winner + ' venceu.', 'success');
   var vc = document.getElementById('view-container');
   if (vc && typeof window.renderBracket === 'function' && (window.location.hash || '').indexOf('#bracket') === 0) {
     window.renderBracket(vc);
   }
+};
+
+// ─── v2.1.23 (Fase 2): consolida vencedores dos jogos extras ──────────────────
+// Vencedor-contra-vencedor, ISOLADO em t.extraMatches[]. Quando ≥2 vencedores não
+// consumidos existem no MESMO nível (extraRound), pareia os 2 mais antigos num
+// jogo do nível seguinte (2A, 2B, 3A…). Cascata natural; vencedor sozinho aguarda
+// um par do mesmo nível. NÃO toca a árvore principal (isso é Fase 3).
+window._consolidateExtraGames = function(t) {
+  if (!t || !Array.isArray(t.extraMatches) || t.extraMatches.length < 2) return 0;
+  var created = 0, guard = 0;
+  while (guard++ < 100) {
+    var byRound = {};
+    t.extraMatches.forEach(function(m){
+      if (m && m.winner && !m.advancedTo) {
+        var r = m.extraRound || 1;
+        (byRound[r] = byRound[r] || []).push(m);
+      }
+    });
+    var rounds = Object.keys(byRound).map(Number).sort(function(a,b){ return a - b; });
+    var madeOne = false;
+    for (var i = 0; i < rounds.length && !madeOne; i++) {
+      var pool = byRound[rounds[i]];
+      if (pool.length < 2) continue;
+      pool.sort(function(a,b){ return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
+      var a = pool[0], b = pool[1];
+      var nr = rounds[i] + 1;
+      var cnt = t.extraMatches.filter(function(m){ return (m.extraRound || 1) === nr; }).length;
+      var label = nr + String.fromCharCode(65 + (cnt % 26)) + (cnt >= 26 ? '·' + Math.floor(cnt / 26) : '');
+      var nid = 'extra-' + t.id + '-' + Date.now() + '-' + nr + '-' + cnt;
+      t.extraMatches.push({
+        id: nid, p1: a.winner, p2: b.winner, winner: null,
+        isExtra: true, extraLabel: label, extraRound: nr, advancedTo: null,
+        feeders: [a.id, b.id], createdAt: new Date().toISOString()
+      });
+      a.advancedTo = nid; b.advancedTo = nid;
+      if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+        window.AppStore.logAction(t.id, 'Jogo extra ' + label + ' (vencedores): ' + a.winner + ' vs ' + b.winner);
+      }
+      created++; madeOne = true;
+    }
+    if (!madeOne) break;
+  }
+  return created;
 };
 
 // ─── v2.1.20: Diálogo de gênero pré-sorteio (duplas mistas, sorteio livre) ────

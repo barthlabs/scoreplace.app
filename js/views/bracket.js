@@ -109,9 +109,11 @@ function renderBracket(container, tournamentId, isInline) {
   if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {
     try {
       var _nExtra = window._createExtraGamesFromWaitlist(t);
-      if (_nExtra > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+      // v2.1.23: encadeia vencedores (catch-up caso um placar tenha sido salvo fora do app do org).
+      var _nCons = (typeof window._consolidateExtraGames === 'function') ? window._consolidateExtraGames(t) : 0;
+      if ((_nExtra > 0 || _nCons > 0) && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
         window.FirestoreDB.saveTournament(t);
-        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + _nExtra + ' jogo(s) extra criado(s)', 'Duplas formadas com quem chegou depois.', 'info');
+        if (_nExtra > 0 && typeof showNotification !== 'undefined') showNotification('⚡ ' + _nExtra + ' jogo(s) extra criado(s)', 'Duplas formadas com quem chegou depois.', 'info');
       }
     } catch (e) {}
   }
@@ -226,8 +228,9 @@ function renderBracket(container, tournamentId, isInline) {
   const readyBannerHtml = (typeof window._renderReadyMatchesBanner === 'function') ? window._renderReadyMatchesBanner(t) : '';
   // Waitlist panel — shown at the end of every bracket view (Liga/Suíço/Grupos/Monarch/Elim)
   const standbyHtml = _renderStandbyPanel(t, isOrg);
-  // v2.1.22: seção isolada dos jogos extras (tardios).
-  const extraGamesHtml = (typeof window._renderExtraGamesSection === 'function') ? window._renderExtraGamesSection(t, canEnterResult) : '';
+  // v2.1.22: seção isolada dos jogos extras (tardios). Entrada de placar só pro
+  // organizador (escrever extraMatches só passa nas Firestore rules como admin).
+  const extraGamesHtml = (typeof window._renderExtraGamesSection === 'function') ? window._renderExtraGamesSection(t, isOrg) : '';
 
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
@@ -461,44 +464,64 @@ window._assignMatchCourt = function(tId, matchId, court) {
   }
 };
 
-// ─── v2.1.22 (Fase 1): Seção isolada dos Jogos Extras (tardios) ──────────────
-window._renderExtraGamesSection = function _renderExtraGamesSection(t, canEnterResult) {
+// ─── v2.1.22/23 (Fase 1+2): Seção isolada dos Jogos Extras (tardios) ─────────
+// Mini-chave de tardios: rodada 1 = duplas sorteadas (1A/1B…); rodadas seguintes
+// = vencedor-contra-vencedor (2A, 3A…). Renderizado em colunas por rodada.
+window._renderExtraGamesSection = function _renderExtraGamesSection(t, canEdit) {
   if (!t || !Array.isArray(t.extraMatches) || t.extraMatches.length === 0) return '';
   var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
   var _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var cards = t.extraMatches.map(function(m){
+
+  var _card = function(m){
     var done = !!m.winner;
+    var consumed = !!m.advancedTo;
     var mid = String(m.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var p1win = done && m.winner === m.p1, p2win = done && m.winner === m.p2;
-    var inputs;
-    if (!done && canEnterResult) {
-      inputs = '<div style="display:flex;align-items:center;gap:6px;margin-top:8px;">' +
-        '<input type="number" id="ex1-' + mid + '" min="0" placeholder="0" style="width:46px;padding:5px;border-radius:6px;border:1px solid rgba(168,85,247,0.4);background:rgba(0,0,0,0.25);color:#fff;text-align:center;font-weight:700;">' +
+    var body;
+    if (!done && canEdit) {
+      body = '<div style="display:flex;align-items:center;gap:6px;margin-top:8px;">' +
+        '<input type="number" id="ex1-' + mid + '" min="0" placeholder="0" style="width:42px;padding:5px;border-radius:6px;border:1px solid rgba(168,85,247,0.4);background:rgba(0,0,0,0.25);color:#fff;text-align:center;font-weight:700;">' +
         '<span style="color:rgba(255,255,255,0.4);">x</span>' +
-        '<input type="number" id="ex2-' + mid + '" min="0" placeholder="0" style="width:46px;padding:5px;border-radius:6px;border:1px solid rgba(168,85,247,0.4);background:rgba(0,0,0,0.25);color:#fff;text-align:center;font-weight:700;">' +
-        '<button onclick="window._saveExtraGameResult(\'' + _tIdSafe + '\',\'' + mid + '\',document.getElementById(\'ex1-' + mid + '\').value,document.getElementById(\'ex2-' + mid + '\').value)" style="margin-left:auto;background:#a855f7;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-weight:700;font-size:0.78rem;cursor:pointer;">✓ Salvar</button>' +
+        '<input type="number" id="ex2-' + mid + '" min="0" placeholder="0" style="width:42px;padding:5px;border-radius:6px;border:1px solid rgba(168,85,247,0.4);background:rgba(0,0,0,0.25);color:#fff;text-align:center;font-weight:700;">' +
+        '<button onclick="window._saveExtraGameResult(\'' + _tIdSafe + '\',\'' + mid + '\',document.getElementById(\'ex1-' + mid + '\').value,document.getElementById(\'ex2-' + mid + '\').value)" style="margin-left:auto;background:#a855f7;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.76rem;cursor:pointer;">✓</button>' +
       '</div>';
     } else if (done) {
-      inputs = '<div style="margin-top:6px;font-size:0.78rem;color:#c4b5fd;font-weight:700;">' + _sh(String(m.scoreP1)) + ' x ' + _sh(String(m.scoreP2)) + ' · vence ' + _sh(m.winner) + '</div>';
+      body = '<div style="margin-top:6px;font-size:0.76rem;color:#c4b5fd;font-weight:700;">' + _sh(String(m.scoreP1)) + ' x ' + _sh(String(m.scoreP2)) +
+        (consumed ? ' · <span style="color:var(--text-muted);">avançou →</span>' : ' · <span style="color:#4ade80;">vence</span>') + '</div>';
     } else {
-      inputs = '<div style="margin-top:6px;font-size:0.74rem;color:var(--text-muted);">Aguardando resultado</div>';
+      body = '<div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);">Aguardando resultado</div>';
     }
-    return '<div style="min-width:240px;max-width:300px;flex:1;background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.35);border-left:4px solid #a855f7;border-radius:12px;padding:10px 14px;box-sizing:border-box;">' +
-      '<div style="font-size:0.78rem;font-weight:800;color:#c4b5fd;letter-spacing:0.5px;margin-bottom:4px;">⚡ JOGO ' + _sh(m.extraLabel || '') + '</div>' +
-      '<div style="font-size:0.85rem;color:' + (p1win ? '#4ade80' : 'var(--text-bright,#f1f5f9)') + ';font-weight:' + (p1win ? '800' : '600') + ';">' + _sh(m.p1) + '</div>' +
-      '<div style="font-size:0.6rem;color:rgba(255,255,255,0.3);letter-spacing:2px;margin:1px 0;">VS</div>' +
-      '<div style="font-size:0.85rem;color:' + (p2win ? '#4ade80' : 'var(--text-bright,#f1f5f9)') + ';font-weight:' + (p2win ? '800' : '600') + ';">' + _sh(m.p2) + '</div>' +
-      inputs +
+    var op = consumed ? '0.6' : '1';
+    return '<div style="background:rgba(168,85,247,0.10);border:1px solid rgba(168,85,247,0.35);border-left:4px solid #a855f7;border-radius:12px;padding:9px 12px;box-sizing:border-box;opacity:' + op + ';">' +
+      '<div style="font-size:0.74rem;font-weight:800;color:#c4b5fd;letter-spacing:0.5px;margin-bottom:3px;">⚡ JOGO ' + _sh(m.extraLabel || '') + '</div>' +
+      '<div style="font-size:0.82rem;color:' + (p1win ? '#4ade80' : 'var(--text-bright,#f1f5f9)') + ';font-weight:' + (p1win ? '800' : '600') + ';">' + _sh(m.p1) + '</div>' +
+      '<div style="font-size:0.58rem;color:rgba(255,255,255,0.3);letter-spacing:2px;margin:1px 0;">VS</div>' +
+      '<div style="font-size:0.82rem;color:' + (p2win ? '#4ade80' : 'var(--text-bright,#f1f5f9)') + ';font-weight:' + (p2win ? '800' : '600') + ';">' + _sh(m.p2) + '</div>' +
+      body +
+    '</div>';
+  };
+
+  // agrupa por rodada → colunas
+  var byRound = {};
+  t.extraMatches.forEach(function(m){ var r = m.extraRound || 1; (byRound[r] = byRound[r] || []).push(m); });
+  var rounds = Object.keys(byRound).map(Number).sort(function(a,b){ return a - b; });
+  var cols = rounds.map(function(r){
+    var title = r === 1 ? 'Sorteio de duplas' : 'Vencedores · nível ' + r;
+    var cards = byRound[r].map(_card).join('');
+    return '<div style="min-width:230px;max-width:270px;flex:0 0 auto;">' +
+      '<div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">' + _sh(title) + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;">' + cards + '</div>' +
     '</div>';
   }).join('');
+
   return '<div style="margin-top:1.5rem;background:var(--bg-card);border:1px solid rgba(168,85,247,0.25);border-radius:16px;padding:1.25rem;">' +
     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;">' +
       '<span style="font-size:1.2rem;">⚡</span>' +
       '<h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Jogos extras (tardios)</h3>' +
       '<span style="font-size:0.72rem;background:rgba(168,85,247,0.18);color:#c4b5fd;padding:2px 10px;border-radius:10px;font-weight:700;">' + t.extraMatches.length + '</span>' +
     '</div>' +
-    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;">Duplas formadas por sorteio com quem chegou depois do sorteio principal.</div>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + cards + '</div>' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:12px;">Quem chegou depois joga em duplas sorteadas; os vencedores se enfrentam. (A entrada no chaveamento principal vem em seguida.)</div>' +
+    '<div style="display:flex;gap:16px;overflow-x:auto;padding-bottom:6px;">' + cols + '</div>' +
   '</div>';
 };
 
