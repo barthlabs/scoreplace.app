@@ -65,6 +65,25 @@ window._openVenueFromTournament = function(tournamentId) {
     window.location.hash = '#venues/' + encodeURIComponent(key);
 };
 
+// v2.1.83: texto de convite de torneio — NOME + DATA/HORA + LOCAL, em vez de só
+// o nome. Usado no compartilhamento e no modal de convite. `url` opcional: quando
+// passado, anexa a linha "Inscreva-se" (clipboard/WhatsApp); no navigator.share a
+// url vai no campo próprio, então chamamos SEM url. Parse da data por regex
+// (startDate = "2026-06-14T18:30", hora local) — evita ambiguidade de fuso.
+window._tournamentInviteText = function(t, url) {
+    if (!t) return '';
+    var lines = ['🏆 Convite para o torneio:', (t.name || 'Torneio')];
+    var m = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+    if (m) {
+        var dateStr = m[3] + '/' + m[2] + '/' + m[1];
+        if (m[4]) dateStr += ' às ' + m[4] + ':' + m[5];
+        lines.push('📅 ' + dateStr);
+    }
+    if (t.venue) lines.push('📍 ' + t.venue);
+    if (url) { lines.push(''); lines.push('👉 Inscreva-se: ' + url); }
+    return lines.join('\n');
+};
+
 // Copy tournament link to clipboard (with native share fallback on mobile)
 window._shareTournament = function(tournamentId) {
     var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
@@ -77,37 +96,27 @@ window._shareTournament = function(tournamentId) {
     }
     var title = t.name;
     var text = '\uD83C\uDFC6 ' + t.name + ' — scoreplace.app';
-    // Try native share API first (mobile)
-    if (navigator.share) {
-        navigator.share({ title: title, text: text, url: url }).catch(function() {
-            // Fallback to clipboard
-            navigator.clipboard.writeText(url).then(function() {
-                if (typeof showNotification === 'function') showNotification(_t('share.copied'), _t('share.copiedMsg'), 'success');
-            }).catch(function() {
-                // Clipboard also blocked (browser policy / user denied) — execCommand fallback
-                try {
-                    var inp = document.createElement('input');
-                    inp.value = url; document.body.appendChild(inp); inp.select();
-                    document.execCommand('copy'); document.body.removeChild(inp);
-                    if (typeof showNotification === 'function') showNotification(_t('share.copied'), _t('share.copiedMsg'), 'success');
-                } catch (_e) {
-                    if (typeof showNotification === 'function') showNotification('Link', url, 'info');
-                }
-            });
-        });
-    } else {
-        navigator.clipboard.writeText(url).then(function() {
+    // v2.1.83: texto rico (nome + data/hora + local) em vez de só o link.
+    text = window._tournamentInviteText(t);              // SEM url (vai no campo url do share)
+    var copyText = window._tournamentInviteText(t, url); // COM url (pra colar)
+    var _copyFallback = function() {
+        navigator.clipboard.writeText(copyText).then(function() {
             if (typeof showNotification === 'function') showNotification(_t('share.copied'), _t('share.copiedMsg'), 'success');
         }).catch(function() {
-            // Very old browser fallback
-            var inp = document.createElement('input');
-            inp.value = url;
-            document.body.appendChild(inp);
-            inp.select();
-            document.execCommand('copy');
-            document.body.removeChild(inp);
-            if (typeof showNotification === 'function') showNotification(_t('share.copied'), _t('share.copiedMsg'), 'success');
+            try {
+                var inp = document.createElement('textarea');
+                inp.value = copyText; document.body.appendChild(inp); inp.select();
+                document.execCommand('copy'); document.body.removeChild(inp);
+                if (typeof showNotification === 'function') showNotification(_t('share.copied'), _t('share.copiedMsg'), 'success');
+            } catch (_e) {
+                if (typeof showNotification === 'function') showNotification('Link', url, 'info');
+            }
         });
+    };
+    if (navigator.share) {
+        navigator.share({ title: title, text: text, url: url }).catch(function() { _copyFallback(); });
+    } else {
+        _copyFallback();
     }
 };
 

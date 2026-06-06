@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Convite de torneio com nome, data, hora e local.</b> Ao compartilhar/convidar para um torneio, a mensagem agora mostra o nome do torneio, a data e o horário e o local — não só o link. Convite de partida casual continua deixando claro que é casual, e o convite genérico do app segue genérico.</li>' +
+        '<li><b>Reset de senha mais resiliente.</b> Quando o gerador de link do Firebase tem um soluço transitório, o pedido de redefinição passa a ser enfileirado e reenviado sozinho em até 2 min — não fica mais sem chegar.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.81-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Templates guardam todas as categorias.</b> Salvar como template agora preserva — e ao aplicar restaura — gênero, habilidade, idade e as personalizadas. (Antes só a idade voltava ao carregar um template.)</li>' +
