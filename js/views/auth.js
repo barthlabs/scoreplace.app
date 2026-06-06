@@ -4740,6 +4740,7 @@ window._autoFixStaleNames = async function(forceTournamentId) {
       var batch = uids.slice(i, i + 10);
       var snap = await window.FirestoreDB.db.collection('users')
         .where(firebase.firestore.FieldPath.documentId(), 'in', batch).get();
+      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'autofix-uid'); } catch (e) {}
       snap.forEach(function(doc) {
         var data = doc.data();
         if (data.displayName) {
@@ -4753,6 +4754,7 @@ window._autoFixStaleNames = async function(forceTournamentId) {
       var emailBatch = emailsToFetch.slice(j, j + 10);
       var esnap = await window.FirestoreDB.db.collection('users')
         .where('email', 'in', emailBatch).get();
+      try { if (window._noteFsReads) window._noteFsReads(esnap.size, 'autofix-email'); } catch (e) {}
       esnap.forEach(function(doc) {
         var data = doc.data();
         if (data.displayName && data.email) {
@@ -4981,6 +4983,7 @@ window._repairNullIdentityParticipants = async function() {
       var batch = uids.slice(i, i + 10);
       var snap = await window.FirestoreDB.db.collection('users')
         .where(firebase.firestore.FieldPath.documentId(), 'in', batch).get();
+      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'autofix-uid'); } catch (e) {}
       snap.forEach(function(doc) {
         var d = doc.data();
         profileMap[doc.id] = {

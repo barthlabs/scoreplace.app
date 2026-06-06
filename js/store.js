@@ -1,4 +1,36 @@
-window.SCOREPLACE_VERSION = '2.1.42-beta';
+window.SCOREPLACE_VERSION = '2.1.43-beta';
+
+// ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
+// Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
+// do limite, manda UMA mensagem ao Sentry (throttle 60s) com a taxa, as fontes
+// que mais leem e a rota. Complementa o alerta do Cloud Monitoring (>10/s) — dá
+// visibilidade no digest diário do Sentry de QUANDO/ONDE os picos acontecem.
+(function() {
+  var _reads = [];        // [{t, n, label}]
+  var _lastReport = 0;
+  var WINDOW_MS = 10000;
+  var RATE_THRESHOLD = 15; // leituras/s no cliente (acima do alerta GCP de 10/s)
+  window._noteFsReads = function(n, label) {
+    try {
+      n = parseInt(n, 10) || 0;
+      if (n <= 0) return;
+      var now = Date.now();
+      _reads.push({ t: now, n: n, label: label || 'read' });
+      var cutoff = now - WINDOW_MS;
+      while (_reads.length && _reads[0].t < cutoff) _reads.shift();
+      var total = 0, byLabel = {};
+      for (var i = 0; i < _reads.length; i++) { total += _reads[i].n; byLabel[_reads[i].label] = (byLabel[_reads[i].label] || 0) + _reads[i].n; }
+      var rate = total / (WINDOW_MS / 1000);
+      if (rate >= RATE_THRESHOLD && (now - _lastReport) > 60000) {
+        _lastReport = now;
+        var tops = Object.keys(byLabel).sort(function(a, b) { return byLabel[b] - byLabel[a]; }).slice(0, 5).map(function(k) { return k + '=' + byLabel[k]; }).join(', ');
+        var msg = 'Firestore read spike (client): ~' + rate.toFixed(1) + '/s em 10s (' + total + ' reads) — ' + tops + ' · rota=' + (window.location.hash || '');
+        if (typeof window._captureMessage === 'function') window._captureMessage(msg, 'warning');
+        if (typeof window._warn === 'function') window._warn('[FSReadSpike]', msg);
+      }
+    } catch (e) {}
+  };
+})();
 
 // ─── One-time beta cleanup ─────────────────────────────────────────────────
 // v1.0.0-beta: Firestore foi zerado na transição alpha→beta. MAS caches
@@ -2173,6 +2205,7 @@ window.AppStore = {
       : (norm ? coll.where('memberEmails', 'array-contains', norm) : coll);
     this._realtimeUnsubscribe = query
       .onSnapshot(function(snap) {
+        try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-tournaments'); } catch (e) {}
         // v1.9.81: IDs antes do rebuild — pra detectar torneios REMOVIDOS
         // (deletados pelo organizador, ou usuário removido do torneio). Se o
         // participante está vendo a página de um torneio que sumiu, redireciona
@@ -2293,6 +2326,7 @@ window.AppStore = {
     try {
       this._discoveryUnsub = window.FirestoreDB.db.collection('discoveryFeed')
         .onSnapshot(function(snap) {
+          try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-discovery'); } catch (e) {}
           // Primeiro snapshot já está coberto pelo loadPublicDiscovery inicial.
           if (isFirst) { isFirst = false; return; }
           if (!store.currentUser) return;
@@ -2342,6 +2376,7 @@ window.AppStore = {
       .collection('users').doc(cu.uid).collection('notifications')
       .orderBy('createdAt', 'desc').limit(20)
       .onSnapshot(function(snap) {
+        try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-snap'); } catch (e) {}
         // Skip the initial snapshot (already loaded via polling)
         if (isFirst) { isFirst = false; return; }
 

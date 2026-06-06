@@ -351,6 +351,7 @@ window.FirestoreDB = {
     if (!this.db) return [];
     try {
       var snap = await this.db.collection('tournaments').get();
+      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-tourns'); } catch (e) {}
       var tournaments = [];
       snap.forEach(function(doc) {
         var d = doc.data();
@@ -425,6 +426,7 @@ window.FirestoreDB = {
       // encerrados/fechados — evita que o primeiro page fique quase vazio.
       q = q.limit((limit + 1) * 3);
       var snap = await q.get();
+      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-public-open'); } catch (e) {}
       var tournaments = [];
       var lastDoc = null;
       var kept = 0;
@@ -489,6 +491,7 @@ window.FirestoreDB = {
         .where('isPublic', '==', true)
         .limit(limit + 1);
       var snap = await q.get();
+      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-public'); } catch (e) {}
       var tournaments = [];
       snap.forEach(function(doc) {
         var d = doc.data();
@@ -529,6 +532,7 @@ window.FirestoreDB = {
       // memória. Em collection com milhares de docs isso fica caro; mas o
       // call site único (notifier) já era uma varredura full anyway.
       var snap = await this.db.collection('tournaments').get();
+      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-tourns2'); } catch (e) {}
       var tournaments = [];
       snap.forEach(function(doc) {
         var d = doc.data();
@@ -716,6 +720,7 @@ window.FirestoreDB = {
     var out = [];
     try {
       var snap = await this.db.collection('users').limit(2000).get();
+      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'searchUsers-scan'); } catch (e) {}
       snap.forEach(function(doc) {
         var data = doc.data();
         if (data.acceptFriendRequests === false) return; // respeita o toggle
