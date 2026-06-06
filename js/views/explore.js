@@ -1254,7 +1254,7 @@ window._cancelFriendRequest = function(toUid) {
       showNotification((window._t||function(k){return k;})('explore.notifInviteCancelled'), (window._t||function(k){return k;})('explore.notifInviteCancelledMsg'), 'info');
     }
     var container = document.getElementById('view-container');
-    if (container) renderExplore(container);
+    if (container) window._exploreScrollSafeRender(container);
   });
 };
 
@@ -1283,8 +1283,19 @@ window._cancelFriendRequestMulti = function(toUids) {
       showNotification((window._t||function(k){return k;})('explore.notifInviteCancelled'), (window._t||function(k){return k;})('explore.notifInviteCancelledMsg'), 'info');
     }
     var container = document.getElementById('view-container');
-    if (container) renderExplore(container);
+    if (container) window._exploreScrollSafeRender(container);
   });
+};
+
+// v2.1.42: re-render mantendo a posição de scroll — ações de amizade (reenviar,
+// aceitar, recusar, remover) re-renderizam a tela toda; sem isto o usuário perde
+// onde estava (volta pro topo). Restaura o scrollY após o render.
+window._exploreScrollSafeRender = function(container) {
+  if (!container) return;
+  var _sy = window.scrollY || document.documentElement.scrollTop || 0;
+  renderExplore(container);
+  window.scrollTo(0, _sy);
+  requestAnimationFrame(function() { window.scrollTo(0, _sy); });
 };
 
 window._sendFriendRequest = function(toUid) {
@@ -1320,7 +1331,7 @@ window._sendFriendRequest = function(toUid) {
       }
     }
     var container = document.getElementById('view-container');
-    if (container) renderExplore(container);
+    if (container) window._exploreScrollSafeRender(container);
   });
 };
 
@@ -1346,7 +1357,7 @@ window._acceptFriend = function(friendUid) {
     }
     if (typeof _updateNotificationBadge === 'function') _updateNotificationBadge();
     var container = document.getElementById('view-container');
-    if (container) renderExplore(container);
+    if (container) window._exploreScrollSafeRender(container);
   });
 };
 
@@ -1362,7 +1373,7 @@ window._rejectFriend = function(friendUid) {
       showNotification((window._t||function(k){return k;})('explore.notifInviteRejected'), (window._t||function(k){return k;})('explore.notifInviteRejectedMsg'), 'info');
     }
     var container = document.getElementById('view-container');
-    if (container) renderExplore(container);
+    if (container) window._exploreScrollSafeRender(container);
   });
 };
 
@@ -1382,7 +1393,7 @@ window._removeFriend = function(friendUid) {
           showNotification((window._t||function(k){return k;})('explore.notifUnfriended'), (window._t||function(k){return k;})('explore.notifUnfriendedMsg'), 'info');
         }
         var container = document.getElementById('view-container');
-        if (container) renderExplore(container);
+        if (container) window._exploreScrollSafeRender(container);
       });
     }, { type: 'warning', confirmText: (window._t||function(k){return k;})('explore.unfriendYes'), cancelText: (window._t||function(k){return k;})('explore.cancel') });
   } else {
@@ -1390,7 +1401,7 @@ window._removeFriend = function(friendUid) {
     cu.friends = (cu.friends || []).filter(function(id) { return id !== friendUid; });
     window.FirestoreDB.removeFriend(myUid, friendUid).then(function() {
       var container = document.getElementById('view-container');
-      if (container) renderExplore(container);
+      if (container) window._exploreScrollSafeRender(container);
     });
   }
 };
