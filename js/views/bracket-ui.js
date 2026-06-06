@@ -7520,7 +7520,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Content area (no info bar — sets are in header now)
   overlay.innerHTML = headerHtml +
-    '<div id="live-score-content" style="flex:1;overflow:hidden;padding:0.5rem 0.5rem;display:flex;flex-direction:column;justify-content:center;"></div>';
+    // v2.1.85: scroll-safe — antes era overflow:hidden + justify-content:center,
+    // que CORTAVA o topo e a base quando o conteúdo não cabia (Android). Agora
+    // `safe center` centraliza quando cabe e alinha ao topo (rolável) quando não
+    // cabe — nada é cortado e os botões/placar sempre ficam alcançáveis.
+    '<div id="live-score-content" style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:0.5rem 0.5rem;display:flex;flex-direction:column;justify-content:safe center;"></div>';
 
   // ── Tamanhos do placar (v1.9.63) ──────────────────────────────────────────
   // Escalas RELATIVAS (0.5–1.5 = 50%–150%) aplicadas via CSS vars sobre os
@@ -7656,6 +7660,24 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   document.body.appendChild(overlay);
 
+  // v2.1.85: trava a altura do overlay no viewport VISÍVEL real. Android Chrome/
+  // WebView sem suporte a 100dvh cai pra 100vh, que é MAIOR que a tela visível
+  // (barra de URL/sistema) → sobra espaço no topo e o placar/botões estouram
+  // embaixo. visualViewport.height (fallback innerHeight) é a altura visível em
+  // TODOS os browsers; o px explícito vence o 100dvh do cssText. Re-ajusta em
+  // resize/rotação. iOS já estava ok — isto não o atrapalha (mesmo valor que dvh).
+  var _fitLiveOverlay = function() {
+    var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
+    if (h > 0) overlay.style.height = Math.round(h) + 'px';
+  };
+  _fitLiveOverlay();
+  if (window.visualViewport && window.visualViewport.addEventListener) {
+    window.visualViewport.addEventListener('resize', _fitLiveOverlay);
+  }
+  window.addEventListener('resize', _fitLiveOverlay);
+  window.addEventListener('orientationchange', _fitLiveOverlay);
+  overlay._fitLiveOverlay = _fitLiveOverlay; // pra remover no _closeLiveScoring
+
   // ── Screen Wake Lock ──
   // Keep screen on while live scoring is open so the device doesn't sleep
   // mid-match. v1.3.29-beta: agora com fallback NoSleep-style pra iOS
@@ -7789,6 +7811,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
       window.removeEventListener('resize', _onResize);
       document.removeEventListener('visibilitychange', _onVisibility);
       try { window.removeEventListener('pagehide', _onPagehide); } catch(e) {}
+      // v2.1.85: remove os listeners do fit de viewport (Android)
+      try {
+        window.removeEventListener('resize', _fitLiveOverlay);
+        window.removeEventListener('orientationchange', _fitLiveOverlay);
+        if (window.visualViewport && window.visualViewport.removeEventListener) window.visualViewport.removeEventListener('resize', _fitLiveOverlay);
+      } catch(e) {}
       _releaseWakeLock();
       var ov = document.getElementById('live-scoring-overlay');
       if (ov) ov.remove();
