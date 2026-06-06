@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🐛 v2.1.73-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>FIX: inscrição por link de convite agora vincula a conta.</b><br><br>' +
+      'Quem se inscrevia num torneio <b>clicando no link de convite</b> entrava <b>sem o uid</b> (só nome+email) — aparecia como "sem conta" mesmo estando logado. Corrigido: a inscrição via convite agora grava <b>uid + foto</b>, igual ao botão "Inscrever-se" normal.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔗 v2.1.72-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Participante adicionado por nome vincula à conta do amigo.</b><br><br>' +
       'Ao adicionar um participante digitando o nome, se ele bater <b>exatamente</b> com um <b>amigo seu</b>, a conta (uid) é <b>vinculada automaticamente</b> — antes ficava como "texto solto" e o app não o reconhecia. Nos locais, amigos sem uid também passam a ser <b>reconhecidos pelo nome</b> (aparecem nomeados em vez de cair no "+N"), e o <b>gráfico conta todos os inscritos do torneio</b>.</p>' +

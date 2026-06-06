@@ -3607,7 +3607,16 @@ async function simulateLoginSuccess(user) {
         }
 
         var _u = window.AppStore.currentUser;
-        var participantObj = { name: _u.displayName, email: _u.email, displayName: _u.displayName };
+        // v2.1.73 FIX: a inscrição via LINK DE CONVITE criava o participante SEM
+        // uid (só name+email+displayName) — então a pessoa entrava "sem conta
+        // vinculada" mesmo estando logada. Agora inclui uid/photoURL/selfEnrolled
+        // igual à auto-inscrição normal (tournaments-enrollment.js).
+        var participantObj = {
+          name: _u.displayName, email: _u.email, displayName: _u.displayName,
+          uid: _u.uid, selfEnrolled: true, ligaActive: true,
+          addedAt: new Date().toISOString()
+        };
+        if (_u.photoURL) participantObj.photoURL = _u.photoURL;
 
         // Include gender if available (needed for category auto-assignment)
         if (_u.gender) participantObj.gender = _u.gender;
