@@ -231,8 +231,25 @@ function renderDashboard(container) {
                   (Array.isArray(t.groups) && t.groups.length > 0);
     return hasDraw || t.status === 'active' || t.status === 'started' || t.status === 'in_progress';
   };
+  // v2.1.52: "rodando" = EFETIVAMENTE iniciado (não só sorteado). Liga com
+  // sorteio = rodadas em andamento. Usado pra colocar os em andamento no topo,
+  // acima dos que ainda não começaram (mesmo que já tenham sorteio).
+  const _isRunning = t => {
+    if (!t || t.status === 'finished') return false;
+    if (t.tournamentStarted || t.status === 'in_progress' || t.status === 'started' || t.status === 'active') return true;
+    var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
+                  (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+                  (Array.isArray(t.groups) && t.groups.length > 0);
+    if (hasDraw && window._isLigaFormat && window._isLigaFormat(t)) return true;
+    return false;
+  };
   const sortByDate = (a, b) => {
-    // v1.8.87: torneios EM ANDAMENTO sempre acima dos demais
+    // v2.1.52: torneios EFETIVAMENTE em andamento (iniciados) sempre no topo,
+    // acima dos que ainda não começaram.
+    const runA = _isRunning(a), runB = _isRunning(b);
+    if (runA && !runB) return -1;
+    if (!runA && runB) return 1;
+    // v1.8.87: entre os não-iniciados, os com sorteio feito vêm antes
     const inA = _isInProgress(a) && a.status !== 'finished';
     const inB = _isInProgress(b) && b.status !== 'finished';
     if (inA && !inB) return -1;
@@ -789,21 +806,12 @@ function renderDashboard(container) {
             })()}
 
             ${(() => {
+              // v2.1.52: box de progresso COMPLETO (mesmo do card de detalhes) no
+              // lugar do pill simples de "tempo decorrido".
               if (!sorteioRealizado || isFinished) return '';
-              // Liga: não mostrar tempo decorrido (usa countdowns de próximo sorteio / fim de temporada)
+              // Liga: usa os countdowns próprios (próximo sorteio / fim de temporada)
               if (window._isLigaFormat && window._isLigaFormat(t)) return '';
-              // Determine start time: startDate or first match/round creation
-              var _startTs = 0;
-              if (t.startDate) {
-                _startTs = new Date(t.startDate).getTime();
-              }
-              if (!_startTs || isNaN(_startTs) || _startTs > Date.now()) return '';
-              var _elapsedText = window._formatCountdown ? window._formatCountdown(Date.now() - _startTs) : '';
-              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:12px;">' +
-                '<span style="font-size:1.3rem;">⏱️</span>' +
-                '<span style="font-size:0.85rem;font-weight:700;color:#10b981;">' + _t('dashboard.inProgress') + '</span>' +
-                '<span data-elapsed-since="' + _startTs + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:#10b981;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _elapsedText + '</span>' +
-              '</div>';
+              return (typeof window._renderTournamentProgress === 'function') ? window._renderTournamentProgress(t) : '';
             })()}
 
             <!-- Linha separadora -->

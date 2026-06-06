@@ -729,15 +729,20 @@ window._renderTournamentProgress = function(t) {
   if (!prog.total) return '';
   window._ensureProgressTicker();
   var _id = String((t && t.id) || '').replace(/"/g, '&quot;');
-  return '<div class="info-box" style="margin-top:1rem;"><div id="tourn-progress-live" data-tid="' + _id + '">' + window._buildProgressInner(t) + '</div></div>';
+  // v2.1.52: classe (não id) — o box pode existir em vários cards da dashboard
+  // E no detalhe ao mesmo tempo; o ticker atualiza todas as instâncias.
+  return '<div class="info-box" style="margin-top:1rem;"><div class="tourn-progress-live" data-tid="' + _id + '">' + window._buildProgressInner(t) + '</div></div>';
 };
 window._progressTick = function() {
-  var el = document.getElementById('tourn-progress-live');
-  if (!el) return;
-  var tid = el.getAttribute('data-tid');
-  var t = window.AppStore && window.AppStore.tournaments && window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tid); });
-  if (!t) return;
-  try { el.innerHTML = window._buildProgressInner(t); } catch (e) {}
+  var els = document.querySelectorAll('.tourn-progress-live');
+  if (!els || !els.length) return;
+  var tours = (window.AppStore && window.AppStore.tournaments) || [];
+  Array.prototype.forEach.call(els, function(el) {
+    var tid = el.getAttribute('data-tid');
+    var t = tours.find(function(x) { return String(x.id) === String(tid); });
+    if (!t) return;
+    try { el.innerHTML = window._buildProgressInner(t); } catch (e) {}
+  });
 };
 window._ensureProgressTicker = function() {
   if (window._progressTickerOn) return;
