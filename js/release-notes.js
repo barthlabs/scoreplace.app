@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">📊 v2.1.68-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Locais: amigos com nome/foto + gráfico mostra o torneio.</b><br><br>' +
+      'Na ocupação de torneio em "Próximas horas", os <b>amigos</b> aparecem com <b>nome e foto reais</b> (antes vinham como "Amigo" genérico); o <b>"+N"</b> são os <b>não-amigos</b> (sem revelar identidade). E o <b>gráfico hora-a-hora</b> voltou a aparecer mesmo quando a atividade é só um <b>torneio à noite</b> — a faixa de horas se estende pra incluí-lo e o torneio entra no gráfico (você + amigos).</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🗓️ v2.1.67-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Plano de ida acompanha o torneio.</b><br><br>' +
       'O "Planejar ida" criado na inscrição agora é <b>cancelado</b> se você se <b>desinscrever</b>, e <b>atualizado</b> se o organizador mudar a <b>data, hora ou local</b> (cada participante sincroniza o próprio plano ao abrir o torneio).</p>' +

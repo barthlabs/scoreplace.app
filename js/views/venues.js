@@ -620,9 +620,13 @@
     var count = Math.max(parts.length, 1);
     for (var i = 0; i < count; i++) {
       var p = parts[i] || {};
+      // v2.1.68: carrega displayName + photoURL do participante pra que AMIGOS
+      // apareçam com nome/foto reais (antes vinham só com uid → fallback "Amigo").
       out.push({
         _virtual: true,
         uid: p.uid || null,
+        displayName: p.displayName || p.name || '',
+        photoURL: p.photoURL || p.photo || '',
         startsAt: start.getTime(),
         endsAt: endMs,
         type: 'tournament'
@@ -685,10 +689,18 @@
     // estará presente naquela hora, **incluindo o próprio usuário**. Mantém
     // dedup por uid (v0.16.33) pra evitar contar múltiplos docs da mesma pessoa
     // + filtro stale (v0.16.34) pra ignorar docs não encerrados.
+    // v2.1.68: além das presenças reais, conta a ocupação virtual de torneios
+    // (1 por participante) — mas só pra VOCÊ e AMIGOS (strangers continuam fora).
+    // Assim o torneio do dia aparece no gráfico (ex.: barras às 17h). Dedup por
+    // uid/hora (abaixo) evita contar 2x quem tem plano real + ocupação.
+    var _chartSource = (presences || []).slice();
+    (tournaments || []).forEach(function(tt) {
+      try { _tournamentOccupancy(tt, dayKeyStr).forEach(function(op) { _chartSource.push(op); }); } catch (e) {}
+    });
     var nowMs = Date.now();
     var seenInBucket = {};
     for (var ih = 0; ih < 24; ih++) seenInBucket[ih] = {};
-    (presences || []).forEach(function(p) {
+    _chartSource.forEach(function(p) {
       var klass = _classifyPresence(p);
       if (klass !== 'me' && klass !== 'friend') return;
       // Drop stale: presença já terminou
@@ -714,6 +726,25 @@
       }
     });
 
+    // v2.1.68: a janela default é 13h centrada em AGORA. Mas se houver atividade
+    // fora dela (ex.: torneio à noite às 17h enquanto agora são 9h), estende a
+    // faixa de horas exibida pra incluí-la — assim o gráfico mostra o torneio.
+    // O container tem overflow-x:auto, então a largura extra rola horizontalmente.
+    var displayHours = win.hours.slice();
+    var _actMin = null, _actMax = null;
+    for (var _ah = 0; _ah < 24; _ah++) {
+      if (buckets[_ah] && (buckets[_ah].friends + buckets[_ah].me) > 0) {
+        if (_actMin === null) _actMin = _ah;
+        _actMax = _ah;
+      }
+    }
+    if (_actMin !== null) {
+      var _lo = Math.min(displayHours[0], _actMin);
+      var _hi = Math.max(displayHours[displayHours.length - 1], _actMax);
+      displayHours = [];
+      for (var _dh = _lo; _dh <= _hi; _dh++) displayHours.push(_dh);
+    }
+
     // v0.16.49 / v1.0.8-beta: escala muda dependendo de ter capacidade do venue.
     //   - Com capacidade (courts cadastrados): denominador = capacidade fixa.
     //     1 pessoa em venue de 36 vagas = barra ~3% (visualmente "vazio").
@@ -732,7 +763,7 @@
       // Quando observamos pico maior que o baseline (raro, venue de fato
       // movimentado mas sem courts cadastrados), expande pra acomodar — o
       // pico fica em 100% e os demais escalonam proporcionalmente.
-      win.hours.forEach(function(slot) {
+      displayHours.forEach(function(slot) {
         if (slot < 0 || slot > 23) return;
         var b = buckets[slot];
         var total = b.friends + b.me;
@@ -741,7 +772,7 @@
     }
 
     var bars = '';
-    win.hours.forEach(function(slot) {
+    displayHours.forEach(function(slot) {
       var inDay = slot >= 0 && slot <= 23;
       var labelH = ((slot % 24) + 24) % 24;
       var b = inDay ? buckets[slot] : { friends: 0, me: 0 };
