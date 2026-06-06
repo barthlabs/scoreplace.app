@@ -2153,6 +2153,27 @@ function renderDashboard(container) {
     }
   }
 
+  // v2.1.56: logo ABAIXO da faixa "Em andamento (esta semana)" do topo, os
+  // FAVORITOS (coração acionado) que ainda não estão em andamento. Removidos da
+  // lista principal pra não duplicar. Só no filtro 'todos' sem filtros secundários.
+  let favoritesBandHtml = '';
+  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat) {
+    const _favIds = (typeof window._getFavorites === 'function') ? window._getFavorites() : [];
+    if (_favIds && _favIds.length) {
+      const _favSet = new Set(_favIds.map(String));
+      const _favList = filtered.filter(function(t) { return _favSet.has(String(t.id)) && t.status !== 'finished'; });
+      if (_favList.length) {
+        _favList.sort(sortByDate);
+        filtered = filtered.filter(function(t) { return !(_favSet.has(String(t.id)) && t.status !== 'finished'); });
+        favoritesBandHtml =
+          '<div style="margin-bottom:1.25rem;">' +
+            '<div style="font-weight:800;font-size:0.95rem;color:#fb7185;margin-bottom:0.6rem;border-left:3px solid #fb7185;padding-left:10px;">❤️ Favoritos <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + _favList.length + ')</span></div>' +
+            '<div class="cards-grid">' + _favList.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>' +
+          '</div>';
+      }
+    }
+  }
+
   // Pagination — show N items initially, with "load more" button
   const PAGE_SIZE = 12;
   const pageNum = window._dashPage || 1;
@@ -2177,7 +2198,7 @@ function renderDashboard(container) {
     const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
     filteredHtml = visibleActive.length > 0
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
-      : ((runningBandHtml || runningBottomHtml) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
+      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
     if (activeList.length > visibleActive.length) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;var c=document.getElementById(\'view-container\');if(c&&typeof renderDashboard===\'function\')renderDashboard(c);" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
     }
@@ -2265,7 +2286,7 @@ function renderDashboard(container) {
           '<div style="margin-top:1.25rem;font-size:0.78rem;color:var(--text-muted);">Dica: se já existe um torneio público na sua cidade, ele vai aparecer aqui automaticamente.</div>' +
         '</div>';
     } else {
-      filteredHtml = (runningBandHtml || runningBottomHtml) ? '' : '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
+      filteredHtml = (runningBandHtml || runningBottomHtml || favoritesBandHtml) ? '' : '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
     }
     if (_sortedFiltered.length > visibleItems.length) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;var c=document.getElementById(\'view-container\');if(c&&typeof renderDashboard===\'function\')renderDashboard(c);" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: _sortedFiltered.length - visibleItems.length}) + '</button></div>';
@@ -2715,6 +2736,7 @@ function renderDashboard(container) {
     </div>
     <div class="dashboard-list" style="margin-bottom: 2rem;">
       ${runningBandHtml}
+      ${favoritesBandHtml}
       ${(window._dashView === 'compact') ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : '<div class="cards-grid">' + filteredHtml + '</div>'}
     </div>
     ${runningBottomHtml}
