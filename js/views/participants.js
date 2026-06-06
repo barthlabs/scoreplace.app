@@ -332,6 +332,160 @@ window._resetCheckIn = function (tId) {
   if (typeof showNotification === 'function') showNotification(_t('participants.resetCheckin'), _t('participants.resetCheckinMsg'), 'info');
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// v2.1.86: CHAMADA pré-sorteio → sortear apenas entre os presentes.
+// Fluxo: organizador marca presença na lista de inscritos, clica "Sortear entre
+// os presentes". Os que não confirmaram presença (ausentes/aguardando) são
+// resolvidos via diálogo de 3 opções: enviar à lista de espera, desclassificar
+// ou cancelar. Em seguida o pipeline normal de sorteio roda só com os presentes.
+// ════════════════════════════════════════════════════════════════════════════
+window._drawPresentOnly = function (tId) {
+  const t = window.AppStore.tournaments.find(tour => String(tour.id) === String(tId));
+  if (!t) return;
+  if (!t.checkedIn) t.checkedIn = {};
+  const parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  const present = [];
+  const absentees = [];
+  parts.forEach(function (p) {
+    const en = window._pName(p);
+    if (en && t.checkedIn[en]) present.push(p);
+    else absentees.push(p);
+  });
+
+  if (present.length === 0) {
+    if (typeof showAlertDialog === 'function') {
+      showAlertDialog('Nenhum presente confirmado',
+        'Marque ao menos um inscrito como <b>Presente</b> antes de sortear entre os presentes.',
+        null, { type: 'warning' });
+    }
+    return;
+  }
+
+  // proceed: encerra inscrições (exceto modos de inscrição tardia) e dispara o
+  // pipeline de sorteio normal (potência de 2, resto, grupos, etc.) sobre a
+  // lista já filtrada. isAberto=false → vai direto pro _startDraw sem 2º diálogo.
+  const proceed = function () {
+    const t2 = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
+    if (t2) {
+      const lateMode = (t2.lateEnrollment === 'standby' || t2.lateEnrollment === 'expand');
+      if (!lateMode && t2.status !== 'closed' && t2.status !== 'finished') t2.status = 'closed';
+    }
+    if (typeof window._handleSortearClick === 'function') {
+      window._handleSortearClick(tId, false);
+    } else if (typeof window.showUnifiedResolutionPanel === 'function') {
+      window.showUnifiedResolutionPanel(tId);
+    }
+  };
+
+  if (absentees.length === 0) { proceed(); return; }
+
+  window._showAbsenteeResolutionDialog(tId, present, absentees, proceed);
+};
+
+// Diálogo de 3 opções para o destino dos ausentes.
+window._showAbsenteeResolutionDialog = function (tId, present, absentees, proceed) {
+  const existing = document.getElementById('absentee-resolution-dialog');
+  if (existing) existing.remove();
+
+  const names = absentees.map(function (p) { return window._pName(p, '?'); });
+  const _safe = (window._safeHtml || function (s) { return s; });
+  const preview = names.slice(0, 8).map(function (n) { return _safe(n); }).join(', ') +
+    (names.length > 8 ? ' e mais ' + (names.length - 8) : '');
+
+  const dialog = document.createElement('div');
+  dialog.id = 'absentee-resolution-dialog';
+  dialog.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:100012;padding:16px;';
+  dialog.innerHTML =
+    '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:16px;max-width:440px;width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+      '<div style="background:rgba(245,158,11,0.1);border-bottom:1px solid var(--border-color);padding:1.1rem 1.25rem;display:flex;align-items:center;gap:12px;">' +
+        '<span style="font-size:1.8rem;">📋</span>' +
+        '<div style="font-size:1.05rem;font-weight:800;color:var(--text-color);">Sortear entre os presentes</div>' +
+      '</div>' +
+      '<div style="padding:1.1rem 1.25rem;color:var(--text-muted);font-size:0.9rem;line-height:1.55;">' +
+        '<p style="margin:0 0 8px;"><b style="color:#4ade80;">' + present.length + '</b> presente(s) entrarão no sorteio.</p>' +
+        '<p style="margin:0 0 6px;"><b style="color:#f87171;">' + absentees.length + '</b> não confirmaram presença:</p>' +
+        '<p style="margin:0;font-size:0.82rem;opacity:0.85;">' + preview + '</p>' +
+        '<p style="margin:12px 0 0;font-weight:700;color:var(--text-color);">O que fazer com os ausentes?</p>' +
+      '</div>' +
+      '<div style="padding:0 1.25rem 1.25rem;display:flex;flex-direction:column;gap:8px;">' +
+        '<button id="absres-waitlist" class="btn hover-lift" style="background:rgba(251,191,36,0.18);color:#fbbf24;border:1px solid rgba(251,191,36,0.5);font-weight:800;padding:11px;border-radius:10px;">🕐 Enviar à Lista de Espera</button>' +
+        '<button id="absres-dq" class="btn hover-lift" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.5);font-weight:800;padding:11px;border-radius:10px;">🚫 Desclassificar</button>' +
+        '<button id="absres-cancel" class="btn" style="background:rgba(255,255,255,0.08);color:var(--text-muted);border:1px solid var(--border-color);padding:10px;border-radius:10px;">Cancelar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(dialog);
+
+  const close = function () { dialog.remove(); };
+  dialog.addEventListener('click', function (e) { if (e.target === dialog) close(); });
+  const _cancel = document.getElementById('absres-cancel');
+  const _wl = document.getElementById('absres-waitlist');
+  const _dq = document.getElementById('absres-dq');
+  if (_cancel) _cancel.onclick = close;
+  if (_wl) _wl.onclick = function () { close(); window._resolveAbsenteesThenDraw(tId, 'waitlist', proceed); };
+  if (_dq) _dq.onclick = function () { close(); window._resolveAbsenteesThenDraw(tId, 'disqualify', proceed); };
+};
+
+// Aplica o destino dos ausentes (lista de espera ou desclassificação), filtra
+// t.participants para os presentes, persiste e dispara `proceed` (o sorteio).
+window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
+  const t = window.AppStore.tournaments.find(function (tour) { return String(tour.id) === String(tId); });
+  if (!t) return;
+  if (!t.checkedIn) t.checkedIn = {};
+  if (!t.absent) t.absent = {};
+  const parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  const present = [];
+  const absentees = [];
+  parts.forEach(function (p) {
+    const en = window._pName(p);
+    if (en && t.checkedIn[en]) present.push(p);
+    else absentees.push(p);
+  });
+
+  if (mode === 'waitlist') {
+    if (!Array.isArray(t.waitlist)) t.waitlist = [];
+    absentees.forEach(function (p) {
+      const en = window._pName(p);
+      const exists = t.waitlist.some(function (w) { return window._pName(w) === en; });
+      if (!exists) t.waitlist.push(p);
+      // Estado neutro na lista de espera (pode ser chamado depois p/ substituir W.O.)
+      delete t.checkedIn[en];
+      delete t.absent[en];
+    });
+  } else { // disqualify
+    if (!Array.isArray(t.disqualified)) t.disqualified = [];
+    absentees.forEach(function (p) {
+      const en = window._pName(p);
+      const exists = t.disqualified.some(function (w) { return window._pName(w) === en; });
+      if (!exists) t.disqualified.push(p);
+      delete t.checkedIn[en];
+      delete t.absent[en];
+    });
+  }
+
+  t.participants = present;
+
+  if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+    window.AppStore.logAction(tId, 'Chamada pré-sorteio: ' + present.length + ' presente(s), ' +
+      absentees.length + (mode === 'waitlist' ? ' à lista de espera' : ' desclassificado(s)'));
+  }
+
+  const savePromise = (window.AppStore && typeof window.AppStore.syncImmediate === 'function')
+    ? window.AppStore.syncImmediate(tId)
+    : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve());
+
+  Promise.resolve(savePromise).then(function () {
+    if (typeof showNotification === 'function') {
+      showNotification('✅ Chamada concluída',
+        present.length + ' no sorteio · ' + absentees.length +
+        (mode === 'waitlist' ? ' na lista de espera' : ' desclassificado(s)'), 'success');
+    }
+    if (typeof proceed === 'function') proceed();
+  }).catch(function (e) {
+    if (window._warn) window._warn('[rollcall] save failed:', e);
+    if (typeof proceed === 'function') proceed();
+  });
+};
+
 // ── Inline name editing for organizers ──
 window._editParticipantName = function(tId, oldName) {
   var span = event.target;
@@ -692,10 +846,14 @@ window._declareAbsent = function (tId, playerName) {
               }
               if (_woMatch) {
                 const _opp = _woSlot === 'p1' ? 'p2' : 'p1';
-                _woMatch.scoreP1 = _woSlot === 'p1' ? 0 : 'W.O.';
-                _woMatch.scoreP2 = _woSlot === 'p2' ? 0 : 'W.O.';
+                // v2.1.86: o marcador 'W.O.' vai no lado AUSENTE (perdedor); o
+                // vencedor é o oponente. Antes o 'W.O.' ficava no lado vencedor,
+                // dando a impressão de que o time que levou W.O. tinha vencido.
+                _woMatch.scoreP1 = _woSlot === 'p1' ? 'W.O.' : 0;
+                _woMatch.scoreP2 = _woSlot === 'p2' ? 'W.O.' : 0;
                 _woMatch.winner = _woMatch[_opp];
                 _woMatch.wo = true;
+                _woMatch.woAbsentSide = _woSlot;
                 if (typeof window._advanceWinner === 'function') {
                   try { window._advanceWinner(tF, _woMatch); } catch (_e) {}
                 }
@@ -816,10 +974,12 @@ window._declareAbsent = function (tId, playerName) {
         }
         // Cenário (b): waitlist vazia → escala pra W.O. de time
         const _opponentSide = matchSide === 'p1' ? 'p2' : 'p1';
-        matchEntry.scoreP1 = matchSide === 'p1' ? 0 : 'W.O.';
-        matchEntry.scoreP2 = matchSide === 'p2' ? 0 : 'W.O.';
+        // v2.1.86: 'W.O.' no lado AUSENTE (perdedor); vencedor é o oponente.
+        matchEntry.scoreP1 = matchSide === 'p1' ? 'W.O.' : 0;
+        matchEntry.scoreP2 = matchSide === 'p2' ? 'W.O.' : 0;
         matchEntry.winner = matchEntry[_opponentSide];
         matchEntry.wo = true;
+        matchEntry.woAbsentSide = matchSide;
         if (typeof window._advanceWinner === 'function') {
           try { window._advanceWinner(t, matchEntry); } catch (_e) {}
         } else if (matchEntry.nextMatchId) {
@@ -1011,10 +1171,12 @@ window._declareAbsent = function (tId, playerName) {
 
     } else if (matchEntry) {
       // W.O. — adversário vence (no standby, team scope)
-      matchEntry.scoreP1 = matchSide === 'p1' ? 0 : 'W.O.';
-      matchEntry.scoreP2 = matchSide === 'p2' ? 0 : 'W.O.';
+      // v2.1.86: 'W.O.' no lado AUSENTE (perdedor); vencedor é o oponente.
+      matchEntry.scoreP1 = matchSide === 'p1' ? 'W.O.' : 0;
+      matchEntry.scoreP2 = matchSide === 'p2' ? 'W.O.' : 0;
       matchEntry.winner = matchEntry[opponentSide];
       matchEntry.wo = true;
+      matchEntry.woAbsentSide = matchSide;
 
       if (typeof _advanceWinner === 'function') {
         _advanceWinner(t, matchEntry);
@@ -1097,6 +1259,14 @@ function renderParticipants(container, tournamentId) {
   const drawDone = hasMatches || t.status === 'started' || t.status === 'in_progress';
   const canCheckIn = drawDone && !!t.tournamentStarted;
 
+  // v2.1.86: CHAMADA pré-sorteio (roll-call). O organizador acessa os inscritos
+  // ANTES do sorteio, marca quem está presente e decide o destino dos ausentes
+  // (desclassificar ou enviar à lista de espera). O sorteio roda só entre os
+  // presentes. Diferente do check-in pós-início (canCheckIn), aqui a presença é
+  // marcada por ENTRY (time ou individual) — a unidade que entra no sorteio.
+  const isFinished = t.status === 'finished';
+  const canRollCall = isOrg && !drawDone && !isFinished;
+
   if (!t.checkedIn) t.checkedIn = {};
   if (!t.absent) t.absent = {};
   const checkedIn = t.checkedIn;
@@ -1130,6 +1300,19 @@ function renderParticipants(container, tournamentId) {
   };
   countIndividuals(parts);
   if (canCheckIn) countIndividuals(standbyParts);
+
+  // ── Contagem da CHAMADA pré-sorteio (por entry: time/individual) ──
+  let rcTotal = 0, rcPresent = 0, rcAbsent = 0;
+  if (canRollCall) {
+    parts.forEach(p => {
+      const en = window._pName(p);
+      if (!en) return;
+      rcTotal++;
+      if (checkedIn[en]) rcPresent++;
+      else if (absent[en]) rcAbsent++;
+    });
+  }
+  const rcPending = rcTotal - rcPresent - rcAbsent;
 
   const currentFilter = window._checkInFilter || 'all';
 
@@ -1595,6 +1778,16 @@ function renderParticipants(container, tournamentId) {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
       const isTeam = pName.includes('/');
 
+      // v2.1.86: estado da CHAMADA pré-sorteio (por entry) + filtro presente/ausente/aguardando
+      const rcMc = canRollCall && !!checkedIn[pName];
+      const rcAbs = canRollCall && !!absent[pName];
+      const rcPend = canRollCall && !rcMc && !rcAbs;
+      if (canRollCall) {
+        if (currentFilter === 'present' && !rcMc) return '';
+        if (currentFilter === 'absent' && !rcAbs) return '';
+        if (currentFilter === 'pending' && !rcPend) return '';
+      }
+
       const vipsMap = t.vips || {};
       const isVipEarly = !!vipsMap[pName];
       let cardStyle = '';
@@ -1699,9 +1892,26 @@ function renderParticipants(container, tournamentId) {
         }
       }
 
+      // v2.1.86: linha de presença da CHAMADA pré-sorteio (só organizador, antes do sorteio).
+      // Reusa _toggleCheckIn / _markAbsent, que já gravam em t.checkedIn / t.absent
+      // pela chave do entry (time "A / B" ou individual). Pré-sorteio não há matches,
+      // então _processWoSubstitutions é no-op e _markAbsent só alterna o flag.
+      let rollCallRow = '';
+      if (canRollCall) {
+        const _rcEntry = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const _rcLabel = rcMc ? 'Presente' : rcAbs ? 'Ausente' : 'Aguardando';
+        const _rcColor = rcMc ? '#4ade80' : rcAbs ? '#f87171' : '#cbd5e1';
+        rollCallRow = `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.14);" onclick="event.stopPropagation();">
+          <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>
+          <span style="flex:1;font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span>
+          <button class="btn btn-micro" onclick="event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');" style="border:1px solid ${rcAbs ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.35)'};background:${rcAbs ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.1)'};color:${rcAbs ? '#60a5fa' : '#f87171'};font-weight:800;font-size:0.68rem;">${rcAbs ? 'Reverter' : 'Ausente'}</button>
+        </div>`;
+      }
+      const _rcCardExtra = canRollCall ? (rcMc ? 'box-shadow:0 0 0 2px rgba(16,185,129,0.55),0 4px 10px rgba(0,0,0,0.1);' : rcAbs ? 'opacity:0.55;' : '') : '';
+
       const bgNum = isVip ? '⭐' : idx + 1;
       return `
-        <div class="participant-card" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+        <div class="participant-card" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
             <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(bgNum).length > 2 ? '2.8rem' : '3.5rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${bgNum}</div>
             <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:0;">
                 <div style="display:flex;align-items:center;gap:12px;">
@@ -1712,6 +1922,7 @@ function renderParticipants(container, tournamentId) {
                     </div>
                 </div>
                 ${actionsDiv}
+                ${rollCallRow}
             </div>
         </div>`;
     }).join('');
@@ -1733,6 +1944,36 @@ function renderParticipants(container, tournamentId) {
         <span style="font-size:0.8rem;color:#94a3b8;font-weight:700;">${pctPresent}%</span>
     </div>
   ` : '';
+
+  // ── Filtros da CHAMADA pré-sorteio (por entry) ──
+  const rcPct = rcTotal > 0 ? Math.round(rcPresent / rcTotal * 100) : 0;
+  const rollCallControls = canRollCall ? `
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;margin-bottom:4px;flex-wrap:wrap;">
+        <button class="btn btn-pill btn-sm" onclick="window._setCheckInFilter('${tId}', 'all')" style="border:1px solid ${currentFilter === 'all' ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'all' ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'all' ? '#a5b4fc' : 'var(--text-muted)'};">Todos (${rcTotal})</button>
+        <button class="btn btn-pill btn-sm" onclick="window._setCheckInFilter('${tId}', 'present')" style="border:1px solid ${currentFilter === 'present' ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'present' ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'present' ? '#4ade80' : 'var(--text-muted)'};">Presentes (${rcPresent})</button>
+        <button class="btn btn-pill btn-sm" onclick="window._setCheckInFilter('${tId}', 'absent')" style="border:1px solid ${currentFilter === 'absent' ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'absent' ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'absent' ? '#f87171' : 'var(--text-muted)'};">Ausentes (${rcAbsent})</button>
+        <button class="btn btn-pill btn-sm" onclick="window._setCheckInFilter('${tId}', 'pending')" style="border:1px solid ${currentFilter === 'pending' ? 'rgba(148,163,184,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'pending' ? 'rgba(148,163,184,0.15)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'pending' ? '#cbd5e1' : 'var(--text-muted)'};">Aguardando (${rcPending})</button>
+        <div style="flex:1;min-width:80px;background:rgba(255,255,255,0.06);border-radius:6px;height:8px;">
+            <div style="width:${rcPct}%;height:100%;background:linear-gradient(90deg,#10b981,#4ade80);border-radius:6px;transition:width 0.3s;"></div>
+        </div>
+        <span style="font-size:0.8rem;color:#94a3b8;font-weight:700;">${rcPct}%</span>
+    </div>
+  ` : '';
+
+  // ── Banner da CHAMADA pré-sorteio: instrução + "Sortear entre os presentes" ──
+  const rollCallBanner = (canRollCall && parts.length > 0) ? `
+    <div style="margin-bottom:1.25rem;padding:16px 18px;background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(79,70,229,0.1));border:2px solid rgba(99,102,241,0.4);border-radius:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="font-size:1.3rem;">📋</span>
+            <span style="font-size:1rem;font-weight:800;color:var(--text-bright);">Chamada antes do sorteio</span>
+        </div>
+        <p style="color:#94a3b8;font-size:0.83rem;line-height:1.5;margin:0 0 12px;">
+            Marque quem está <b style="color:#4ade80;">presente</b>. Ao sortear, você decide o que fazer com os ausentes — <b style="color:#fbbf24;">enviar à lista de espera</b> ou <b style="color:#f87171;">desclassificar</b> — e o sorteio roda só entre os presentes.
+        </p>
+        <button class="btn btn-cta hover-lift" onclick="event.stopPropagation(); window._drawPresentOnly('${tId}')" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;padding:13px;border-radius:12px;border:none;font-size:0.95rem;">
+            🎲 Sortear entre os presentes (${rcPresent})
+        </button>
+    </div>` : '';
 
   // ── "Iniciar Torneio" banner (after draw, before start) ──
   const startBanner = (isOrg && drawDone && !t.tournamentStarted) ? `
@@ -1770,9 +2011,10 @@ function renderParticipants(container, tournamentId) {
             '<span class="badge badge-info" style="font-size:0.65rem;">' + (t.format || _t('participants.defaultFormat')) + '</span>' +
             '<span class="badge" style="background:rgba(255,255,255,0.1);color:var(--text-muted);font-size:0.65rem;">' + individualCount + '</span>' +
           '</div>',
-          belowHtml: checkInControls
+          belowHtml: (checkInControls || rollCallControls)
         })
       : ''}
+    ${rollCallBanner}
     ${startBanner}
     ${startedBadge}
     ${readyBannerHtml}

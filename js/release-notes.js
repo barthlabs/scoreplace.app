@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.86-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Correção do W.O.: quem leva W.O. é o perdedor.</b> O marcador “W.O.” agora aparece no lado do time <b>ausente</b> (que perde), e o adversário é corretamente o vencedor que avança. Antes o “W.O.” ficava no lado do vencedor, dando a impressão de que o time que levou o W.O. tinha vencido — e isso atrapalhava o andamento do torneio. Agora o torneio segue normalmente com os demais participantes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Reverter W.O. em partidas de torneio.</b> Quando um jogador/dupla é declarado ausente e o adversário vence por W.O. (sem substituto na lista de espera), agora o organizador pode <b>desfazer o W.O.</b> direto na chave: aparece o botão “↩️ Reverter W.O.” no jogo. Ele reabre a partida (placar volta a 0×0), cancela o avanço do vencedor para a próxima fase e libera os jogadores que estavam marcados como ausentes. A vitória por W.O. passa a aparecer marcada com “· por W.O.” no card.</li>' +

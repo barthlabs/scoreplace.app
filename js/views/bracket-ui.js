@@ -285,7 +285,7 @@ window._suggestFriendsForGuestName = function(typedName, excludeUids) {
 // Lista de campos cobre o que `_saveResultInline` e `_editResult` mexem.
 function _propagateMatchUpdate(t, m) {
   if (!t || !m || !m.id) return;
-  var FIELDS = ['winner', 'draw', 'scoreP1', 'scoreP2', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'isBye', 'pendingResult'];
+  var FIELDS = ['winner', 'draw', 'scoreP1', 'scoreP2', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'isBye', 'pendingResult', 'wo', 'woAbsentSide'];
   var updateRef = function(ref) {
     if (!ref || ref === m) return; // skip self (already mutated)
     if (ref.id !== m.id) return;
@@ -2260,6 +2260,7 @@ window._revertWO = function(tId, matchId) {
 
       // 4. Zera o resultado + flag W.O. → partida volta a indecisa (jogável).
       delete m.wo;
+      delete m.woAbsentSide;
       m.winner = null;
       m.draw = undefined;
       m.scoreP1 = undefined; m.scoreP2 = undefined;
