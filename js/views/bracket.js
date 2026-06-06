@@ -1605,7 +1605,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     : '';
 
   const winnerBadge = isDecided && !isByeMatch
-    ? `<div style="text-align:center;font-size:0.75rem;color:#4ade80;font-weight:700;margin-top:6px;padding:4px;background:rgba(16,185,129,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;gap:4px;">🏆 ${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(m.winner, window._currentBracketTournament) : window._safeHtml(m.winner)}</div>${setsDisplay}`
+    // v2.1.41: NÃO repete o placar embaixo do vencedor — as linhas dos jogadores
+    // já mostram o placar (games/sets). Padroniza todos os cards igual.
+    ? `<div style="text-align:center;font-size:0.75rem;color:#4ade80;font-weight:700;margin-top:6px;padding:4px;background:rgba(16,185,129,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;gap:4px;">🏆 ${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(m.winner, window._currentBracketTournament) : window._safeHtml(m.winner)}</div>`
     : isByeMatch
     ? `<div style="text-align:center;font-size:0.72rem;color:#4ade80;font-weight:700;margin-top:6px;">BYE — Avança Direto</div>`
     : '';

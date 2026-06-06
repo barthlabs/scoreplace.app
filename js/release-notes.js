@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🟢 v2.1.41-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Card de jogo sem placar repetido.</b><br><br>' +
+      'Em alguns jogos (lançados pelo placar ao vivo) o placar aparecia duas vezes — ao lado dos jogadores e de novo embaixo do vencedor. Removemos a repetição: agora todos os cards mostram o placar só uma vez (ao lado dos jogadores) + o nome do vencedor. Tudo padronizado.</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #818cf8;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
       '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🧭 v2.1.40-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Barra do "Voltar" alinhada de ponta a ponta.</b><br><br>' +
