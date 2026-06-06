@@ -1254,10 +1254,12 @@ window.FirestoreDB = {
         // v1.9.61: conta uids de AMBAS as fontes (playerUids ∪ players[].uid) —
         // docs legados podem ter uid só em players (claim-slot não populava
         // playerUids), e dissolver só por playerUids mataria sala com gente.
-        var _remaining = {};
-        playerUids.forEach(function(u) { if (u) _remaining[u] = true; });
-        players.forEach(function(p) { if (p && p.uid) _remaining[p.uid] = true; });
-        if (Object.keys(_remaining).length === 0 && data.status !== 'finished') {
+        // v2.1.76: a sala vive enquanto houver ≥1 PESSOA DE VERDADE no lobby —
+        // um slot OCUPADO (players[].uid). Antes contava também `playerUids`, que
+        // dessincroniza (sala-fantasma com players=[] mas playerUids=[uid] ficava
+        // viva pra sempre). Agora dissolve assim que o último slot ocupado some.
+        var _hasOccupant = players.some(function(p) { return p && p.uid; });
+        if (!_hasOccupant && data.status !== 'finished') {
           transaction.delete(docRef);
           return 'dissolved';
         }

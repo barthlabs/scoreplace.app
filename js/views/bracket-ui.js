@@ -11103,6 +11103,41 @@ window._renderCasualJoin = function(container, roomCode) {
     }
 
     var players = Array.isArray(match.players) ? match.players : [];
+
+    // v2.1.76: só ENTRA/PUXA se houver pelo menos 1 PESSOA de verdade no lobby
+    // (slot ocupado com uid). Sala "fantasma" (players=[] ou todos os slots
+    // vazios, ainda que playerUids tenha uid solto) NÃO deve puxar ninguém.
+    // Self-heal: limpa o ponteiro do perfil + sessionStorage, APAGA a sala vazia
+    // (best-effort) e manda pra dashboard. Pedido do dono: "só puxa se tem pelo
+    // menos 1 pessoa na sala".
+    var _occupied = players.some(function(p) { return p && p.uid; });
+    if (!_occupied && match.status !== 'active' && match.status !== 'finished') {
+      try { sessionStorage.removeItem('_activeCasualRoom'); } catch (e) {}
+      try {
+        var _cuE = window.AppStore && window.AppStore.currentUser;
+        if (_cuE && _cuE.uid) {
+          var _acrE = _cuE.activeCasualRoom;
+          if (_acrE && String(_acrE).toUpperCase() === String(roomCode).toUpperCase()) {
+            window._suppressCasualResumeUntil = Date.now() + 8000;
+            if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+              window.FirestoreDB.saveUserProfile(_cuE.uid, { activeCasualRoom: null }).catch(function () {});
+            }
+            _cuE.activeCasualRoom = null;
+          }
+        }
+      } catch (e) {}
+      // apaga a sala fantasma (best-effort — ignora erro de permissão)
+      try {
+        if (match._docId && window.FirestoreDB && typeof window.FirestoreDB.cancelCasualMatch === 'function') {
+          var _pdel = window.FirestoreDB.cancelCasualMatch(match._docId);
+          if (_pdel && typeof _pdel.catch === 'function') _pdel.catch(function () {});
+        }
+      } catch (e) {}
+      if (typeof showNotification === 'function') showNotification('Sala vazia', 'Essa partida casual não tem ninguém — encerrada.', 'info');
+      try { window.location.replace('#dashboard'); } catch (e) { window.location.hash = '#dashboard'; }
+      return;
+    }
+
     var sportName = match.sport || _t('casual.title');
     var creatorName = match.createdByName || _t('casual.someone');
     var docId = match._docId;
