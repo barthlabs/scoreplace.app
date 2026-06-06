@@ -1607,7 +1607,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
   const winnerBadge = isDecided && !isByeMatch
     // v2.1.41: NÃO repete o placar embaixo do vencedor — as linhas dos jogadores
     // já mostram o placar (games/sets). Padroniza todos os cards igual.
-    ? `<div style="text-align:center;font-size:0.75rem;color:#4ade80;font-weight:700;margin-top:6px;padding:4px;background:rgba(16,185,129,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;gap:4px;">🏆 ${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(m.winner, window._currentBracketTournament) : window._safeHtml(m.winner)}</div>`
+    ? `<div style="text-align:center;font-size:0.75rem;color:#4ade80;font-weight:700;margin-top:6px;padding:4px;background:rgba(16,185,129,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;gap:4px;">🏆 ${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(m.winner, window._currentBracketTournament) : window._safeHtml(m.winner)}${m.wo ? '<span style="color:#fbbf24;font-weight:800;font-size:0.68rem;">· por W.O.</span>' : ''}</div>`
     : isByeMatch
     ? `<div style="text-align:center;font-size:0.72rem;color:#4ade80;font-weight:700;margin-top:6px;">BYE — Avança Direto</div>`
     : '';
@@ -1620,8 +1620,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
         onmouseover="this.style.background='rgba(16,185,129,0.3)'" onmouseout="this.style.background='rgba(16,185,129,0.15)'">✓ ${_t('bracket.confirm')}</button>`
     : '';
 
-  // Edit button: for decided matches — opens inline inputs for editing
-  const headerEditBtn = isDecided && !isByeMatch && canEnterResult
+  // Edit button: for decided matches — opens inline inputs for editing.
+  // v2.1.85: NÃO aparece em partidas decididas por W.O. de time (m.wo) — nelas
+  // não há placar real pra editar; o caminho é "Reverter W.O." (headerWoRevertBtn).
+  const headerEditBtn = isDecided && !isByeMatch && canEnterResult && !m.wo
     ? `<button onclick="window._editResultInline('${_esc(tId)}','${_esc(m.id)}')"
           style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#fbbf24;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:3px;"
           onmouseover="this.style.background='rgba(245,158,11,0.2)'" onmouseout="this.style.background='rgba(245,158,11,0.1)'"
@@ -1634,6 +1636,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
   const _cu = window.AppStore && window.AppStore.currentUser;
   const _cuName = _cu ? (_cu.displayName || '') : '';
   const _cuEmail = _cu ? (_cu.email || '') : '';
+
+  // v2.1.85: Reverter W.O. — partidas decididas por W.O. de time (m.wo) ganham
+  // um botão pra autoridade desfazer o W.O. (reabre o jogo + libera ausentes).
+  const _isAuthorityCard = (typeof window._isUserAuthority === 'function')
+    ? window._isUserAuthority(t, _cu)
+    : (window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+  const headerWoRevertBtn = (m.wo && isDecided && _isAuthorityCard)
+    ? `<button onclick="window._revertWO('${_esc(tId)}','${_esc(m.id)}')"
+          style="background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.4);color:#60a5fa;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:3px;"
+          onmouseover="this.style.background='rgba(96,165,250,0.25)'" onmouseout="this.style.background='rgba(96,165,250,0.12)'"
+          title="Desfazer o W.O. e reabrir a partida">↩️ Reverter W.O.</button>`
+    : '';
 
   // v0.17.26: bloco de Approve/Reject/Cancel MOVIDO pra depois das const
   // _cu/_cuEmail. Antes ficava entre headerConfirmBtn e headerEditBtn —
@@ -1860,7 +1874,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     _headerHtml = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
         <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-        <div id="header-btns-${m.id}" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${liveBtn}${headerConfirmBtn}${headerEditBtn}</div>
+        <div id="header-btns-${m.id}" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
       </div>`;
   }
 

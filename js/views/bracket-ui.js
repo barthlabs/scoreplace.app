@@ -2204,6 +2204,124 @@ window._organizerResetMatch = function(tId, matchId) {
   );
 };
 
+// Reverter / desfazer um W.O. de partida de torneio.
+// Aplica-se SÓ quando a partida foi decidida por W.O. de TIME (m.wo === true) —
+// isto é, o adversário venceu por ausência sem substituto disponível. (W.O. com
+// substituição da lista de espera é revertido pelo botão "Reverter" do painel
+// de Lista de Espera, via _markAbsent.) Esta função:
+//  1. Desfaz o avanço do vencedor (próximo jogo) e do perdedor (chave inferior).
+//  2. Limpa a classificação progressiva dos dois lados.
+//  3. Zera o resultado e a flag m.wo → partida volta a 0×0 (jogável de novo).
+//  4. Remove os jogadores do estado de ausência (t.absent) e do histórico de
+//     W.O. (t.woHistory) — voltam a ficar disponíveis.
+//  5. Recalcula a classificação (Liga/Suíço) e reabre o torneio se estava
+//     encerrado por esse jogo.
+// Só autoridade (organizador/co-host) pode reverter.
+window._revertWO = function(tId, matchId) {
+  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  if (!t) return;
+  var m = _findMatch(t, matchId);
+  if (!m) { showNotification('Jogo não encontrado', '', 'warning'); return; }
+  if (!m.wo) { showNotification('Não é um W.O.', 'Esta partida não foi decidida por W.O.', 'warning'); return; }
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
+  if (typeof _isUserAuthority === 'function' && !_isUserAuthority(t, cu)) {
+    showNotification('Sem permissão', 'Só o organizador pode reverter um W.O.', 'warning');
+    return;
+  }
+  showConfirmDialog(
+    '↩️ Reverter W.O.',
+    'O W.O. de "' + m.p1 + ' vs ' + m.p2 + '" será desfeito. O placar volta a 0×0, o avanço do vencedor é cancelado e os jogadores marcados como ausentes voltam a ficar disponíveis. A partida deverá ser jogada novamente. Confirma?',
+    function() {
+      var prevWinner = m.winner;
+      var oldLoser = m.winner === m.p1 ? m.p2 : m.p1;
+
+      // 1. Desfaz avanço do vencedor (próximo jogo) — só se ainda não decidido.
+      if (m.nextMatchId) {
+        var next = _findMatch(t, m.nextMatchId);
+        if (next && !next.winner) {
+          if (next.p1 === prevWinner) { next.p1 = 'TBD'; delete next.p1FromBye; }
+          if (next.p2 === prevWinner) { next.p2 = 'TBD'; delete next.p2FromBye; }
+        }
+      }
+      // 2. Desfaz avanço do perdedor (chave inferior, Dupla Eliminatória).
+      if (m.loserMatchId) {
+        var lm = _findMatch(t, m.loserMatchId);
+        if (lm && !lm.winner) {
+          if (lm.p1 === oldLoser) lm.p1 = 'TBD';
+          if (lm.p2 === oldLoser) lm.p2 = 'TBD';
+        }
+      }
+      // 3. Limpa classificação progressiva dos dois lados.
+      if (t.classification) {
+        delete t.classification[prevWinner];
+        delete t.classification[oldLoser];
+      }
+
+      // 4. Zera o resultado + flag W.O. → partida volta a indecisa (jogável).
+      delete m.wo;
+      m.winner = null;
+      m.draw = undefined;
+      m.scoreP1 = undefined; m.scoreP2 = undefined;
+      m.sets = undefined; m.setsWonP1 = undefined; m.setsWonP2 = undefined;
+      m.totalGamesP1 = undefined; m.totalGamesP2 = undefined;
+      m.fixedSet = undefined;
+      delete m.pendingResult;
+
+      // 5. Remove ausência + histórico de W.O. dos jogadores deste jogo (ambos
+      //    os lados, desmembrando duplas). Voltam a ficar disponíveis.
+      var _clearAbsenceFor = function(side) {
+        if (!side || side === 'TBD' || side === 'BYE') return;
+        var members = side.indexOf(' / ') !== -1 ? side.split(' / ')
+          : (side.indexOf('/') !== -1 ? side.split('/') : [side]);
+        members.forEach(function(n) {
+          var nm = (n || '').trim();
+          if (!nm) return;
+          if (t.absent) delete t.absent[nm];
+          if (t.woHistory) delete t.woHistory[nm];
+        });
+      };
+      _clearAbsenceFor(m.p1);
+      _clearAbsenceFor(m.p2);
+
+      // 6. Liga/Suíço: reabre a rodada e recalcula a classificação.
+      if (m.roundIndex !== undefined && Array.isArray(t.rounds) && t.rounds[m.roundIndex]) {
+        t.rounds[m.roundIndex].status = 'active';
+      }
+      if (typeof window._computeStandings === 'function' && Array.isArray(t.rounds) && t.rounds.length) {
+        try { t.standings = window._computeStandings(t); } catch (_e) {}
+      }
+      // Reabre o torneio se este jogo o havia encerrado.
+      if (t.status === 'finished') {
+        t.status = 'active';
+        delete t.finishedAt;
+      }
+
+      _propagateMatchUpdate(t, m);
+      window.AppStore.logAction(tId, 'W.O. revertido: ' + m.p1 + ' vs ' + m.p2 + ' (vitória por W.O. de ' + prevWinner + ' desfeita) — partida reaberta');
+      window.AppStore.syncImmediate(tId);
+
+      if (typeof _notifyMatchParticipants === 'function') {
+        _notifyMatchParticipants(t, m, {
+          type: 'match-reset',
+          title: '↩️ W.O. revertido pelo organizador',
+          message: m.p1 + ' vs ' + m.p2 + ' — o organizador desfez o W.O. A partida está reaberta e deve ser jogada.',
+          tournamentId: t.id,
+          tournamentName: t.name,
+          matchId: m.id,
+          level: 'fundamental',
+          timestamp: Date.now()
+        });
+      }
+
+      showNotification('↩️ W.O. revertido', 'A partida foi reaberta (0×0). Os jogadores voltam a ficar disponíveis.', 'success');
+      _rerenderBracket(tId, matchId);
+    },
+    null,
+    { type: 'warning', confirmText: 'Reverter W.O.', cancelText: 'Cancelar' }
+  );
+};
+
 // Editar resultado pendente: modifica o card IN-PLACE sem re-renderizar.
 // Substitui os spans de placar por inputs pré-preenchidos e troca os botões
 // por Cancelar + Propor. Ao propor, cria novo pendingResult e notifica o
