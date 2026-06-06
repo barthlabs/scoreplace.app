@@ -1073,11 +1073,115 @@ exports.sendMagicLink = onCall(
 // oficial de verificação via Admin SDK generateEmailVerificationLink().
 //
 // Deploy:  firebase deploy --only functions:sendVerificationEmail
+//
+// v2.1.79: o endpoint generateEmailVerificationLink do Auth tem JANELAS de
+// indisponibilidade transitória (~10s) maiores que a janela de retry antiga
+// (~4,2s). Caso real (logs 2026-06-06 13:23:52→13:24:02): 5+ invocações
+// concorrentes de contas DIFERENTES falharam todas com auth/internal-error na
+// mesma janela de ~10s, e minutos depois voltou a funcionar. Como o gate de
+// verificação é obrigatório, o usuário ficava PRESO sem e-mail. Fix em 2 camadas:
+//   (1) janela de retry in-request alargada p/ ~13,5s (_genVerificationLink);
+//   (2) na falha final NÃO joga erro — enfileira em pendingEmailVerifications,
+//       que drainPendingVerifications drena assim que o Auth volta (≤2 min).
+
+// Gera o link oficial de verificação com retry (cobre soluço transitório do
+// backend do Auth). Retorna o link ou null se falhar todas as tentativas.
+async function _genVerificationLink(email) {
+  const actionCodeSettings = { url: "https://scoreplace.app/", handleCodeInApp: false };
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    try {
+      return await admin.auth().generateEmailVerificationLink(email, actionCodeSettings);
+    } catch (err) {
+      console.error("[verifyLink] tentativa " + attempt + "/6 falhou:",
+        (err && (err.code || err.message)) || err);
+      if (attempt < 6) await new Promise((r) => setTimeout(r, attempt * 900));
+    }
+  }
+  return null;
+}
+
+// Monta o HTML + texto do e-mail RICO de confirmação de conta.
+function _buildVerificationEmailContent(link, name) {
+  const greetName = name ? (", " + name) : "";
+  const safeGreet = greetName.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const safeLinkAttr = link.replace(/"/g, "&quot;");
+  const safeLinkText = link.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const html =
+    '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
+    '<title>Confirme seu e-mail — scoreplace.app</title></head>' +
+    '<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
+      '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:40px 16px;">' +
+        '<tr><td align="center">' +
+          '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:520px;background:#111827;border-radius:14px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
+            '<tr><td style="padding:20px 32px 4px;text-align:center;">' +
+              '<div style="font-size:1.4rem;line-height:1;margin-bottom:2px;">🎾</div>' +
+              '<div style="font-size:0.92rem;font-weight:700;color:#fbbf24;letter-spacing:0.2px;">scoreplace.app</div>' +
+            '</td></tr>' +
+            '<tr><td style="padding:24px 32px 8px;text-align:center;color:#e5e7eb;">' +
+              '<p style="margin:0 0 6px;font-size:1.05rem;font-weight:700;color:#fff;">Bem-vindo' + safeGreet + '! 🎉</p>' +
+              '<p style="margin:0 0 18px;font-size:0.92rem;color:#cbd5e1;">Falta só confirmar seu e-mail pra começar.</p>' +
+              '<table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;">' +
+                '<tr><td style="background:#059669;background:linear-gradient(180deg,#34d399 0%,#10b981 55%,#059669 100%);border-bottom:4px solid #047857;border-radius:12px;box-shadow:0 4px 12px rgba(16,185,129,0.35);">' +
+                  '<a href="' + safeLinkAttr + '" style="display:inline-block;padding:18px 44px;color:#ffffff;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.22);">' +
+                    '✅ Confirmar minha conta' +
+                  '</a>' +
+                '</td></tr>' +
+              '</table>' +
+            '</td></tr>' +
+            '<tr><td style="padding:20px 32px 28px;color:#cbd5e1;">' +
+              '<p style="margin:0 0 16px;font-size:0.84rem;line-height:1.55;color:#94a3b8;text-align:center;">' +
+                'Depois de confirmar, volte ao app e clique em <b style="color:#cbd5e1;">"Já confirmei"</b>.' +
+              '</p>' +
+              '<p style="margin:16px 0 0;font-size:0.76rem;color:#94a3b8;line-height:1.5;border-top:1px solid #374151;padding-top:16px;">' +
+                'Não consegue clicar no botão? Copie e cole este endereço no navegador:<br>' +
+                '<span style="color:#cbd5e1;word-break:break-all;font-family:monospace;font-size:0.7rem;">' + safeLinkText + '</span>' +
+              '</p>' +
+              '<p style="margin:16px 0 0;font-size:0.74rem;color:#94a3b8;line-height:1.5;">' +
+                'Não criou essa conta? Pode ignorar este e-mail. ' +
+                'Dúvidas: <a href="mailto:scoreplace.app@gmail.com" style="color:#fbbf24;">scoreplace.app@gmail.com</a>.' +
+              '</p>' +
+            '</td></tr>' +
+            '<tr><td style="padding:14px 32px;text-align:center;background:#0f172a;border-top:1px solid #1e293b;">' +
+              '<p style="margin:0;font-size:0.7rem;color:#64748b;">scoreplace.app · Jogue em outro nível · ' + new Date().getFullYear() + '</p>' +
+            '</td></tr>' +
+          '</table>' +
+        '</td></tr>' +
+      '</table>' +
+    '</body></html>';
+  const text =
+    "scoreplace.app — confirme seu e-mail\n\n" +
+    "Bem-vindo" + (name ? (", " + name) : "") + "! Falta confirmar seu e-mail.\n\n" +
+    "Confirme clicando no link abaixo (ou copie e cole no navegador):\n\n" +
+    link + "\n\n" +
+    "Depois de confirmar, volte ao app e clique em \"Já confirmei\".\n\n" +
+    "Não criou essa conta? Pode ignorar este e-mail.\n" +
+    "Dúvidas: scoreplace.app@gmail.com\n\n" +
+    "scoreplace.app · Jogue em outro nível";
+  return { html, text };
+}
+
+// Enfileira o e-mail rico de verificação na coleção mail/ (SMTP via extensão
+// firestore-send-email). Lança se o add falhar.
+async function _queueVerificationEmail(db, email, link, name) {
+  const { html, text } = _buildVerificationEmailContent(link, name);
+  await db.collection("mail").add({
+    to: [email],
+    replyTo: "scoreplace.app@gmail.com",
+    message: {
+      subject: "Confirme seu e-mail no scoreplace.app",
+      html: html,
+      text: text,
+    },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
 exports.sendVerificationEmail = onCall(
   {
     region: "us-central1",
     memory: "256MiB",
-    timeoutSeconds: 30,
+    timeoutSeconds: 60,
     cors: ["https://scoreplace.app", "http://localhost:9876"],
   },
   async (request) => {
@@ -1087,112 +1191,94 @@ exports.sendVerificationEmail = onCall(
       throw new HttpsError("invalid-argument", "email inválido");
     }
 
-    // Link oficial de verificação do Firebase. Ao clicar, o e-mail é marcado
-    // como verificado e o usuário é redirecionado pro continueUrl.
-    const actionCodeSettings = {
-      url: "https://scoreplace.app/",
-      handleCodeInApp: false,
-    };
-    // v2.1.9: RETRY com backoff. generateEmailVerificationLink às vezes retorna
-    // "internal error" transitório do backend do Firebase Auth — sem retry, o
-    // soluço fazia o e-mail de confirmação NUNCA ser enviado (caso real: Elide
-    // Luccas, 2026-06-04 20:11, 5 falhas seguidas → e-mail perdido). Tentamos
-    // até 4x com espera crescente; quase todo erro transitório some em 1-2s.
-    let link = null;
-    let lastErr = null;
-    for (let attempt = 1; attempt <= 4; attempt++) {
+    const db = admin.firestore();
+    // Tenta gerar o link AGORA (retry ~13,5s cobre a maioria dos soluços).
+    const link = await _genVerificationLink(email);
+    if (link) {
       try {
-        link = await admin.auth().generateEmailVerificationLink(email, actionCodeSettings);
-        lastErr = null;
-        break;
+        await _queueVerificationEmail(db, email, link, name);
+        console.log("[sendVerificationEmail] queued for", email);
+        return { ok: true };
       } catch (err) {
-        lastErr = err;
-        console.error(
-          "[sendVerificationEmail] generateEmailVerificationLink tentativa " +
-            attempt + "/4 falhou:", (err && (err.code || err.message)) || err);
-        if (attempt < 4) {
-          await new Promise((r) => setTimeout(r, attempt * 700));
-        }
+        console.error("[sendVerificationEmail] falha ao enfileirar email:", err);
+        throw new HttpsError("internal", "não foi possível enfileirar o email: " + (err.code || err.message));
       }
     }
-    if (!link) {
-      throw new HttpsError("internal",
-        "não foi possível gerar o link após 4 tentativas: " +
-        (lastErr && (lastErr.code || lastErr.message)));
-    }
-
-    const greetName = name ? (", " + name) : "";
-    const html =
-      '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-      '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
-      '<title>Confirme seu e-mail — scoreplace.app</title></head>' +
-      '<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
-        '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:40px 16px;">' +
-          '<tr><td align="center">' +
-            '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:520px;background:#111827;border-radius:14px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
-              '<tr><td style="padding:20px 32px 4px;text-align:center;">' +
-                '<div style="font-size:1.4rem;line-height:1;margin-bottom:2px;">🎾</div>' +
-                '<div style="font-size:0.92rem;font-weight:700;color:#fbbf24;letter-spacing:0.2px;">scoreplace.app</div>' +
-              '</td></tr>' +
-              '<tr><td style="padding:24px 32px 8px;text-align:center;color:#e5e7eb;">' +
-                '<p style="margin:0 0 6px;font-size:1.05rem;font-weight:700;color:#fff;">Bem-vindo' + greetName.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '! 🎉</p>' +
-                '<p style="margin:0 0 18px;font-size:0.92rem;color:#cbd5e1;">Falta só confirmar seu e-mail pra começar.</p>' +
-                '<table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;">' +
-                  '<tr><td style="background:#059669;background:linear-gradient(180deg,#34d399 0%,#10b981 55%,#059669 100%);border-bottom:4px solid #047857;border-radius:12px;box-shadow:0 4px 12px rgba(16,185,129,0.35);">' +
-                    '<a href="' + link.replace(/"/g, "&quot;") + '" style="display:inline-block;padding:18px 44px;color:#ffffff;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.22);">' +
-                      '✅ Confirmar minha conta' +
-                    '</a>' +
-                  '</td></tr>' +
-                '</table>' +
-              '</td></tr>' +
-              '<tr><td style="padding:20px 32px 28px;color:#cbd5e1;">' +
-                '<p style="margin:0 0 16px;font-size:0.84rem;line-height:1.55;color:#94a3b8;text-align:center;">' +
-                  'Depois de confirmar, volte ao app e clique em <b style="color:#cbd5e1;">"Já confirmei"</b>.' +
-                '</p>' +
-                '<p style="margin:16px 0 0;font-size:0.76rem;color:#94a3b8;line-height:1.5;border-top:1px solid #374151;padding-top:16px;">' +
-                  'Não consegue clicar no botão? Copie e cole este endereço no navegador:<br>' +
-                  '<span style="color:#cbd5e1;word-break:break-all;font-family:monospace;font-size:0.7rem;">' + link.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</span>' +
-                '</p>' +
-                '<p style="margin:16px 0 0;font-size:0.74rem;color:#94a3b8;line-height:1.5;">' +
-                  'Não criou essa conta? Pode ignorar este e-mail. ' +
-                  'Dúvidas: <a href="mailto:scoreplace.app@gmail.com" style="color:#fbbf24;">scoreplace.app@gmail.com</a>.' +
-                '</p>' +
-              '</td></tr>' +
-              '<tr><td style="padding:14px 32px;text-align:center;background:#0f172a;border-top:1px solid #1e293b;">' +
-                '<p style="margin:0;font-size:0.7rem;color:#64748b;">scoreplace.app · Jogue em outro nível · ' + new Date().getFullYear() + '</p>' +
-              '</td></tr>' +
-            '</table>' +
-          '</td></tr>' +
-        '</table>' +
-      '</body></html>';
-
-    const textBody =
-      "scoreplace.app — confirme seu e-mail\n\n" +
-      "Bem-vindo" + (name ? (", " + name) : "") + "! Falta confirmar seu e-mail.\n\n" +
-      "Confirme clicando no link abaixo (ou copie e cole no navegador):\n\n" +
-      link + "\n\n" +
-      "Depois de confirmar, volte ao app e clique em \"Já confirmei\".\n\n" +
-      "Não criou essa conta? Pode ignorar este e-mail.\n" +
-      "Dúvidas: scoreplace.app@gmail.com\n\n" +
-      "scoreplace.app · Jogue em outro nível";
-
+    // v2.1.79: link indisponível (janela de outage do Auth > retry). Em vez de
+    // jogar erro e deixar o usuário PRESO no gate sem e-mail, enfileira um pedido
+    // pendente que drainPendingVerifications drena assim que o Auth volta (≤2 min).
+    // Dedup por e-mail pra não acumular pendentes/duplicar envio.
     try {
-      await admin.firestore().collection("mail").add({
-        to: [email],
-        replyTo: "scoreplace.app@gmail.com",
-        message: {
-          subject: "Confirme seu e-mail no scoreplace.app",
-          html: html,
-          text: textBody,
-        },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      console.log("[sendVerificationEmail] queued for", email);
-      return { ok: true };
-    } catch (err) {
-      console.error("[sendVerificationEmail] falha ao enfileirar email:", err);
-      throw new HttpsError("internal", "não foi possível enfileirar o email: " + (err.code || err.message));
+      const dup = await db.collection("pendingEmailVerifications")
+        .where("email", "==", email).where("status", "==", "pending").limit(1).get();
+      if (dup.empty) {
+        await db.collection("pendingEmailVerifications").add({
+          email: email,
+          name: name || "",
+          status: "pending",
+          attempts: 0,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      console.error("[sendVerificationEmail] falha ao enfileirar pendente:", e);
     }
+    console.warn("[sendVerificationEmail] generateEmailVerificationLink indisponível; deferido p/ fila:", email);
+    return { ok: true, deferred: true };
+  }
+);
+
+// ─── drainPendingVerifications (v2.1.79) ─────────────────────────────────────
+// Drena a fila pendingEmailVerifications: re-tenta gerar o link de verificação
+// (que falhou na hora por outage transitório do Auth) e enfileira o e-mail rico
+// assim que o backend volta. Roda a cada 2 min → entrega garantida sem deixar o
+// usuário preso no gate. GC de docs sent/failed com >2 dias.
+exports.drainPendingVerifications = onSchedule(
+  {
+    schedule: "every 2 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: "us-central1",
+  },
+  async () => {
+    const db = admin.firestore();
+    const snap = await db.collection("pendingEmailVerifications")
+      .where("status", "==", "pending").limit(50).get();
+    for (const doc of snap.docs) {
+      const d = doc.data() || {};
+      const email = (d.email || "").trim().toLowerCase();
+      if (!email) { await doc.ref.update({ status: "failed", reason: "no-email" }); continue; }
+      const link = await _genVerificationLink(email);
+      if (link) {
+        try {
+          await _queueVerificationEmail(db, email, link, d.name || "");
+          await doc.ref.update({ status: "sent", sentAt: admin.firestore.FieldValue.serverTimestamp() });
+          console.log("[drainPendingVerifications] enviado:", email);
+        } catch (e) {
+          await doc.ref.update({ attempts: (d.attempts || 0) + 1, lastError: (e.code || e.message || "queue-fail") });
+        }
+      } else {
+        const attempts = (d.attempts || 0) + 1;
+        const upd = { attempts: attempts };
+        // 15 tentativas (~30 min de outage) sem sucesso → desiste e marca falha.
+        if (attempts >= 15) { upd.status = "failed"; upd.reason = "auth-internal-error-persistente"; }
+        await doc.ref.update(upd);
+      }
+    }
+    // GC: remove sent/failed antigos (>2 dias).
+    const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const oldSnap = await db.collection("pendingEmailVerifications")
+      .where("status", "in", ["sent", "failed"]).get();
+    let batch = db.batch();
+    let n = 0;
+    for (const doc of oldSnap.docs) {
+      const ca = doc.get("createdAt");
+      const t = ca && ca.toDate ? ca.toDate() : null;
+      if (!t || t < cutoff) {
+        batch.delete(doc.ref); n++;
+        if (n >= 400) { await batch.commit(); batch = db.batch(); n = 0; }
+      }
+    }
+    if (n > 0) await batch.commit();
   }
 );
 

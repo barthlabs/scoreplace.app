@@ -328,21 +328,35 @@
       // atribuiu manualmente.
       // v1.3.6-beta: prioriza profile.skillBySport[t.sport] (habilidade
       // específica daquela modalidade). Fallback pra defaultCategory legacy.
-      var profileSkill = null;
+      // v2.1.79: a habilidade do perfil SÓ vale se for categoria existente
+      // (A/B/C/D/FUN). defaultCategory legado era texto livre — "Intermediario",
+      // "D/C" etc. — e sem normalização o relatório mostrava "categorias" que não
+      // existem (caso real: Silvia M. Ferreira = "Intermediario" no Confra 2026).
+      // Split em "/" recupera legados compostos ("D/C" → D e C). Token sem match
+      // (ex.: "Intermediario") é descartado → habilidade conta como faltando.
+      var VALID_SKILLS = { A: 1, B: 1, C: 1, D: 1, FUN: 1 };
+      var _validSkillTokens = function (raw) {
+        if (!raw) return [];
+        return String(raw).split('/')
+          .map(function (s) { return s.trim().toUpperCase(); })
+          .filter(function (s) { return VALID_SKILLS[s]; });
+      };
+      var profileSkills = [];
       if (profile && profile.skillBySport && typeof profile.skillBySport === 'object') {
         var tSport = t && t.sport ? String(t.sport).trim() : null;
         if (tSport && profile.skillBySport[tSport]) {
-          profileSkill = String(profile.skillBySport[tSport]).trim();
+          profileSkills = _validSkillTokens(profile.skillBySport[tSport]);
         }
       }
-      if (!profileSkill && profile && profile.defaultCategory) {
-        profileSkill = String(profile.defaultCategory).trim();
+      if (profileSkills.length === 0 && profile && profile.defaultCategory) {
+        profileSkills = _validSkillTokens(profile.defaultCategory);
       }
+      var profileSkill = profileSkills.length > 0 ? profileSkills[0] : null;
 
       // Skill efetivo: usa atribuição do org se houver, senão cai pro perfil
       var effectiveSkills = assignedSkills.length > 0
         ? assignedSkills
-        : (profileSkill ? [profileSkill] : []);
+        : profileSkills;
 
       // v1.3.20-beta: missing[] reporta SEMPRE qualquer campo de perfil que
       // está vazio — não só os que o org configurou em t.ageCategories /
