@@ -11081,14 +11081,24 @@ window._renderCasualJoin = function(container, roomCode) {
       if (window._captureMessage) window._captureMessage('[CasualJoin] loaded ' + roomCode + ' ' + JSON.stringify(_md), 'info');
     } catch(e) {}
     if (!match) {
-      _setBody(
-        '<div style="text-align:center;padding:3rem 1rem;">' +
-          '<div style="font-size:2.5rem;margin-bottom:1rem;">❌</div>' +
-          '<div style="font-size:1.1rem;font-weight:700;color:var(--text-bright);margin-bottom:0.5rem;">' + _t('casual.notFound') + '</div>' +
-          '<p style="color:var(--text-muted);font-size:0.85rem;">' + _t('casual.notFoundMsg', {code: _safe(roomCode)}) + '</p>' +
-          '<button class="btn btn-primary" onclick="window.location.hash=\'#dashboard\';" style="margin-top:1rem;">' + _t('casual.goToDashboard') + '</button>' +
-        '</div>'
-      );
+      // v2.1.75: sala não existe (dissolvida por inatividade 12h, cancelada, ou
+      // ponteiro pendurado). SELF-HEAL pra TODO MUNDO: limpa o activeCasualRoom
+      // do perfil + sessionStorage (senão o usuário é puxado pra cá toda vez) e
+      // manda pra dashboard — fallback seguro, sem ficar preso numa tela morta.
+      try { sessionStorage.removeItem('_activeCasualRoom'); } catch (e) {}
+      try {
+        var _cuNF = window.AppStore && window.AppStore.currentUser;
+        var _acr = _cuNF && _cuNF.activeCasualRoom;
+        if (_cuNF && _cuNF.uid && _acr && String(_acr).toUpperCase() === String(roomCode).toUpperCase()) {
+          window._suppressCasualResumeUntil = Date.now() + 8000;
+          if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+            window.FirestoreDB.saveUserProfile(_cuNF.uid, { activeCasualRoom: null }).catch(function () {});
+          }
+          _cuNF.activeCasualRoom = null;
+        }
+      } catch (e) {}
+      if (typeof showNotification === 'function') showNotification('Sala encerrada', 'Essa partida casual não existe mais.', 'info');
+      try { window.location.replace('#dashboard'); } catch (e) { window.location.hash = '#dashboard'; }
       return;
     }
 

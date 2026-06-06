@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🧹 v2.1.75-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Sala casual dissolvida não puxa mais ninguém.</b><br><br>' +
+      'Quando uma partida casual é <b>dissolvida</b> (12h de inatividade) ou cancelada, o app deixava um <b>ponteiro pendurado</b> no perfil — e o usuário era jogado numa sala morta ao abrir. Agora: ao cair numa sala inexistente, o app <b>limpa o ponteiro</b> e vai pra <b>dashboard</b> (vale pra todos), e a limpeza automática zera os ponteiros pendurados na fonte.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔗 v2.1.74-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>FIX: link de convite caía em partida casual.</b><br><br>' +
       'Quem tinha uma <b>partida casual pendente</b> e abria um <b>link de torneio</b> (ou outro deep link) era jogado na partida casual em vez de ir ao destino. Agora a partida casual só é retomada quando o app abre na <b>dashboard/raiz</b> — deep links de torneio, convite e local têm prioridade.</p>' +

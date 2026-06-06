@@ -660,7 +660,31 @@ exports.cleanupOldCasualMatches = onSchedule(
     }
     if (inBatch > 0) await batch.commit();
 
-    console.log(`[cleanupOldCasualMatches] finished>30d=${deletedFinished} | naoFinalizadas>12h=${deletedStale}`);
+    // (3) v2.1.75: limpa ponteiros `activeCasualRoom` PENDURADOS — perfis que
+    // apontam pra uma sala que não existe mais (dissolvida acima) ou finalizada.
+    // Sem isso, ao abrir o app o usuário era puxado pra uma partida casual morta.
+    // Conjunto de roomCodes VIVOS (não-finished) APÓS as deleções acima.
+    const liveRooms = new Set();
+    const liveSnap = await db.collection("casualMatches").get();
+    liveSnap.forEach((doc) => {
+      const d = doc.data() || {};
+      if (d.roomCode && d.status !== "finished") liveRooms.add(String(d.roomCode).toUpperCase());
+    });
+    let clearedPointers = 0;
+    const usersSnap = await db.collection("users").get();
+    let pBatch = db.batch();
+    let pIn = 0;
+    for (const doc of usersSnap.docs) {
+      const acr = (doc.data() || {}).activeCasualRoom;
+      if (acr && !liveRooms.has(String(acr).toUpperCase())) {
+        pBatch.update(doc.ref, { activeCasualRoom: null });
+        pIn++; clearedPointers++;
+        if (pIn >= 400) { await pBatch.commit(); pBatch = db.batch(); pIn = 0; }
+      }
+    }
+    if (pIn > 0) await pBatch.commit();
+
+    console.log(`[cleanupOldCasualMatches] finished>30d=${deletedFinished} | naoFinalizadas>12h=${deletedStale} | ponteirosLimpos=${clearedPointers}`);
   }
 );
 
