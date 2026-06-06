@@ -846,21 +846,48 @@ window._declareAbsent = function (tId, playerName) {
               }
               if (_woMatch) {
                 const _opp = _woSlot === 'p1' ? 'p2' : 'p1';
-                // v2.1.86: o marcador 'W.O.' vai no lado AUSENTE (perdedor); o
-                // vencedor é o oponente. Antes o 'W.O.' ficava no lado vencedor,
-                // dando a impressão de que o time que levou W.O. tinha vencido.
-                _woMatch.scoreP1 = _woSlot === 'p1' ? 'W.O.' : 0;
-                _woMatch.scoreP2 = _woSlot === 'p2' ? 'W.O.' : 0;
-                _woMatch.winner = _woMatch[_opp];
-                _woMatch.wo = true;
-                _woMatch.woAbsentSide = _woSlot;
-                if (typeof window._advanceWinner === 'function') {
-                  try { window._advanceWinner(tF, _woMatch); } catch (_e) {}
+                const _oppName = _woMatch[_opp];
+                // Bug 3 fix (v2.1.89): adversário ainda TBD — não aplica W.O. para
+                // evitar m.winner='TBD' propagando para rodadas seguintes.
+                if (!_oppName || _oppName === 'TBD' || _oppName === 'BYE') {
+                  window.AppStore.syncImmediate(tId);
+                  showNotification('⚠️ Ausente registrado',
+                    `${playerName} marcado ausente. Adversário ainda não definido — W.O. será aplicado quando o jogo estiver completo.`,
+                    'warning');
+                } else {
+                  // Bug 1 fix (v2.1.89): W.O. individual de dupla sem substituto →
+                  // parceiro vai para a lista de espera para novo emparelhamento.
+                  const _absentEntry = _woMatch[_woSlot] || '';
+                  if (_absentEntry.includes('/')) {
+                    const _sepC = _absentEntry.includes(' / ') ? ' / ' : '/';
+                    const _partnerC = _absentEntry.split(_sepC).map(function(n) { return n.trim(); }).find(function(n) { return n !== playerName; });
+                    if (_partnerC) {
+                      if (!Array.isArray(tF.standbyParticipants)) tF.standbyParticipants = [];
+                      if (!tF.standbyParticipants.some(function(p) {
+                        return (typeof p === 'string' ? p : (p.displayName || p.name || '')) === _partnerC;
+                      })) {
+                        tF.standbyParticipants.push(_partnerC);
+                      }
+                      showNotification('🔄 Parceiro na lista de espera',
+                        `${_partnerC} foi adicionado à lista de espera para encontrar novo parceiro.`, 'info');
+                    }
+                  }
+                  // v2.1.86: o marcador 'W.O.' vai no lado AUSENTE (perdedor); o
+                  // vencedor é o oponente. Antes o 'W.O.' ficava no lado vencedor,
+                  // dando a impressão de que o time que levou W.O. tinha vencido.
+                  _woMatch.scoreP1 = _woSlot === 'p1' ? 'W.O.' : 0;
+                  _woMatch.scoreP2 = _woSlot === 'p2' ? 'W.O.' : 0;
+                  _woMatch.winner = _woMatch[_opp];
+                  _woMatch.wo = true;
+                  _woMatch.woAbsentSide = _woSlot;
+                  if (typeof window._advanceWinner === 'function') {
+                    try { window._advanceWinner(tF, _woMatch); } catch (_e) {}
+                  }
+                  window.AppStore.syncImmediate(tId);
+                  showNotification('🏆 W.O. — oponente vence',
+                    `${_woMatch.winner} vence por W.O. (lista de espera vazia).`,
+                    'warning');
                 }
-                window.AppStore.syncImmediate(tId);
-                showNotification('🏆 W.O. — oponente vence',
-                  `${_woMatch.winner} vence por W.O. (lista de espera vazia).`,
-                  'warning');
               } else {
                 showNotification('⚠️ Sem jogo pendente', `${playerName} marcado ausente.`, 'warning');
               }
@@ -974,6 +1001,33 @@ window._declareAbsent = function (tId, playerName) {
         }
         // Cenário (b): waitlist vazia → escala pra W.O. de time
         const _opponentSide = matchSide === 'p1' ? 'p2' : 'p1';
+        const _opponentName = matchEntry[_opponentSide];
+        // Bug 3 fix (v2.1.89): adversário ainda TBD — não aplica W.O. para
+        // evitar m.winner='TBD' propagando para rodadas seguintes como "TBD · por W.O.".
+        if (!_opponentName || _opponentName === 'TBD' || _opponentName === 'BYE') {
+          window.AppStore.logAction(tId, `Ausência marcada: ${playerName} (${teamName}) — adversário TBD, W.O. não aplicado automaticamente.`);
+          window.AppStore.sync();
+          if (typeof showNotification === 'function') showNotification('⚠️ Ausente registrado',
+            `${playerName} marcado ausente. Adversário ainda não definido — verifique quando o jogo estiver completo.`, 'warning');
+          _reRenderParticipants();
+          return;
+        }
+        // Bug 1 fix (v2.1.89): W.O. individual de dupla sem substituto →
+        // parceiro presente vai para a lista de espera para novo emparelhamento futuro.
+        if (isIndividualWO) {
+          const _sep2 = teamName.includes(' / ') ? ' / ' : '/';
+          const _partnerN = teamName.split(_sep2).map(function(n) { return n.trim(); }).find(function(n) { return n !== playerName; });
+          if (_partnerN) {
+            if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+            if (!t.standbyParticipants.some(function(p) {
+              return (typeof p === 'string' ? p : (p.displayName || p.name || '')) === _partnerN;
+            })) {
+              t.standbyParticipants.push(_partnerN);
+            }
+            if (typeof showNotification === 'function') showNotification('🔄 Parceiro na lista de espera',
+              `${_partnerN} foi adicionado à lista de espera para encontrar novo parceiro.`, 'info');
+          }
+        }
         // v2.1.86: 'W.O.' no lado AUSENTE (perdedor); vencedor é o oponente.
         matchEntry.scoreP1 = matchSide === 'p1' ? 'W.O.' : 0;
         matchEntry.scoreP2 = matchSide === 'p2' ? 'W.O.' : 0;

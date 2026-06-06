@@ -1526,9 +1526,19 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
         oninput="window._highlightWinner('${_esc(m.id)}')">${p1TbInput}`
     : null;
   // v0.17.1: quando pending, lê scoreP1/scoreP2 (ou sets) do _pr em vez do m.
+  // v2.1.89: para partidas W.O., deriva o lado ausente de woAbsentSide (ou do
+  // winner quando woAbsentSide não está salvo — dados anteriores à v2.1.86)
+  // e exibe 'W.O.' no lado perdedor, '' no lado vencedor, independente de como
+  // scoreP1/scoreP2 foram gravados. Corrige bug em que 'W.O.' aparecia em verde
+  // no lado do vencedor quando partida foi salva no formato antigo.
+  const _woAbsent = m.wo
+    ? (m.woAbsentSide || (isDecided ? (p1IsWinner ? 'p2' : 'p1') : null))
+    : null;
   const _p1Display = hasPending
     ? (_pr.useSets && Array.isArray(_pr.sets) ? _pr.sets.map(function(s) { return s.gamesP1; }).join(' ') : _pr.scoreP1)
-    : (useSets && isDecided ? formatSetScores(m, 1) : m.scoreP1);
+    : _woAbsent
+      ? (_woAbsent === 'p1' ? 'W.O.' : '')
+      : (useSets && isDecided ? formatSetScores(m, 1) : m.scoreP1);
   const _pendingP1Win = hasPending && _pr.winner === m.p1 && !_pr.draw;
   const _scorePendingStyle = function(isWin) {
     return 'font-weight:800;font-size:1rem;min-width:24px;text-align:center;color:' + (isWin ? '#fbbf24' : 'rgba(251,191,36,0.55)') + ';font-style:italic;';
@@ -1546,7 +1556,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     : null;
   const _p2Display = hasPending
     ? (_pr.useSets && Array.isArray(_pr.sets) ? _pr.sets.map(function(s) { return s.gamesP2; }).join(' ') : _pr.scoreP2)
-    : (useSets && isDecided ? formatSetScores(m, 2) : m.scoreP2);
+    : _woAbsent
+      ? (_woAbsent === 'p2' ? 'W.O.' : '')
+      : (useSets && isDecided ? formatSetScores(m, 2) : m.scoreP2);
   const _pendingP2Win = hasPending && _pr.winner === m.p2 && !_pr.draw;
   const p2ScoreVal = (!showInputs)
     ? (hasPending
