@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.84-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Legibilidade no tema Claro.</b> Vários botões e textos (como “Criar Conta” na tela de login) usavam cores claras pensadas pro tema escuro e ficavam difíceis ou impossíveis de ler no tema Claro. Agora essas cores são escurecidas automaticamente no tema Claro em todo o app, mantendo o tema escuro intacto.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Convite de torneio com nome, data, hora e local.</b> Ao compartilhar/convidar para um torneio, a mensagem agora mostra o nome do torneio, a data e o horário e o local — não só o link. Convite de partida casual continua deixando claro que é casual, e o convite genérico do app segue genérico.</li>' +

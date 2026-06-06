@@ -543,3 +543,275 @@ body, .topbar, .card {
   white-space: nowrap;
   border: 0;
 }
+/* ── v2.1.84: Contraste de TEXTO no TEMA CLARO ──────────────────────────
+   Pastéis e cinzas-claros (desenhados pro tema escuro, em estilos inline)
+   viram texto ilegível sobre branco no tema claro. Remapeia cada família
+   pra um tom escuro de mesma cor. SÓ afeta o tema claro; o escuro fica
+   intacto. Os seletores casam SÓ `color:` standalone (início, `;color:` ou
+   ` color:`), nas duas convenções (com e sem espaço após os dois-pontos) —
+   nunca `background-color:`/`border-color:`, pra não quebrar botão sólido de
+   texto branco (#10b981, #fbbf24, #3b82f6 etc. também são usados como bg). */
+/* Indigo / índigo claro */
+[data-theme="light"] [style^="color:#a5b4fc"],
+[data-theme="light"] [style*=";color:#a5b4fc"],
+[data-theme="light"] [style*=" color:#a5b4fc"],
+[data-theme="light"] [style^="color: #a5b4fc"],
+[data-theme="light"] [style*=";color: #a5b4fc"],
+[data-theme="light"] [style*=" color: #a5b4fc"],
+[data-theme="light"] [style^="color:#818cf8"],
+[data-theme="light"] [style*=";color:#818cf8"],
+[data-theme="light"] [style*=" color:#818cf8"],
+[data-theme="light"] [style^="color: #818cf8"],
+[data-theme="light"] [style*=";color: #818cf8"],
+[data-theme="light"] [style*=" color: #818cf8"],
+[data-theme="light"] [style^="color:#c7d2fe"],
+[data-theme="light"] [style*=";color:#c7d2fe"],
+[data-theme="light"] [style*=" color:#c7d2fe"],
+[data-theme="light"] [style^="color: #c7d2fe"],
+[data-theme="light"] [style*=";color: #c7d2fe"],
+[data-theme="light"] [style*=" color: #c7d2fe"] {
+  color: #4338ca !important;
+}
+/* Violeta */
+[data-theme="light"] [style^="color:#a78bfa"],
+[data-theme="light"] [style*=";color:#a78bfa"],
+[data-theme="light"] [style*=" color:#a78bfa"],
+[data-theme="light"] [style^="color: #a78bfa"],
+[data-theme="light"] [style*=";color: #a78bfa"],
+[data-theme="light"] [style*=" color: #a78bfa"],
+[data-theme="light"] [style^="color:#c4b5fd"],
+[data-theme="light"] [style*=";color:#c4b5fd"],
+[data-theme="light"] [style*=" color:#c4b5fd"],
+[data-theme="light"] [style^="color: #c4b5fd"],
+[data-theme="light"] [style*=";color: #c4b5fd"],
+[data-theme="light"] [style*=" color: #c4b5fd"],
+[data-theme="light"] [style^="color:#8b5cf6"],
+[data-theme="light"] [style*=";color:#8b5cf6"],
+[data-theme="light"] [style*=" color:#8b5cf6"],
+[data-theme="light"] [style^="color: #8b5cf6"],
+[data-theme="light"] [style*=";color: #8b5cf6"],
+[data-theme="light"] [style*=" color: #8b5cf6"] {
+  color: #6d28d9 !important;
+}
+/* Roxo */
+[data-theme="light"] [style^="color:#d8b4fe"],
+[data-theme="light"] [style*=";color:#d8b4fe"],
+[data-theme="light"] [style*=" color:#d8b4fe"],
+[data-theme="light"] [style^="color: #d8b4fe"],
+[data-theme="light"] [style*=";color: #d8b4fe"],
+[data-theme="light"] [style*=" color: #d8b4fe"],
+[data-theme="light"] [style^="color:#c084fc"],
+[data-theme="light"] [style*=";color:#c084fc"],
+[data-theme="light"] [style*=" color:#c084fc"],
+[data-theme="light"] [style^="color: #c084fc"],
+[data-theme="light"] [style*=";color: #c084fc"],
+[data-theme="light"] [style*=" color: #c084fc"],
+[data-theme="light"] [style^="color:#a855f7"],
+[data-theme="light"] [style*=";color:#a855f7"],
+[data-theme="light"] [style*=" color:#a855f7"],
+[data-theme="light"] [style^="color: #a855f7"],
+[data-theme="light"] [style*=";color: #a855f7"],
+[data-theme="light"] [style*=" color: #a855f7"] {
+  color: #7e22ce !important;
+}
+/* Verde */
+[data-theme="light"] [style^="color:#4ade80"],
+[data-theme="light"] [style*=";color:#4ade80"],
+[data-theme="light"] [style*=" color:#4ade80"],
+[data-theme="light"] [style^="color: #4ade80"],
+[data-theme="light"] [style*=";color: #4ade80"],
+[data-theme="light"] [style*=" color: #4ade80"],
+[data-theme="light"] [style^="color:#86efac"],
+[data-theme="light"] [style*=";color:#86efac"],
+[data-theme="light"] [style*=" color:#86efac"],
+[data-theme="light"] [style^="color: #86efac"],
+[data-theme="light"] [style*=";color: #86efac"],
+[data-theme="light"] [style*=" color: #86efac"],
+[data-theme="light"] [style^="color:#22c55e"],
+[data-theme="light"] [style*=";color:#22c55e"],
+[data-theme="light"] [style*=" color:#22c55e"],
+[data-theme="light"] [style^="color: #22c55e"],
+[data-theme="light"] [style*=";color: #22c55e"],
+[data-theme="light"] [style*=" color: #22c55e"] {
+  color: #15803d !important;
+}
+/* Esmeralda / teal */
+[data-theme="light"] [style^="color:#34d399"],
+[data-theme="light"] [style*=";color:#34d399"],
+[data-theme="light"] [style*=" color:#34d399"],
+[data-theme="light"] [style^="color: #34d399"],
+[data-theme="light"] [style*=";color: #34d399"],
+[data-theme="light"] [style*=" color: #34d399"],
+[data-theme="light"] [style^="color:#6ee7b7"],
+[data-theme="light"] [style*=";color:#6ee7b7"],
+[data-theme="light"] [style*=" color:#6ee7b7"],
+[data-theme="light"] [style^="color: #6ee7b7"],
+[data-theme="light"] [style*=";color: #6ee7b7"],
+[data-theme="light"] [style*=" color: #6ee7b7"],
+[data-theme="light"] [style^="color:#10b981"],
+[data-theme="light"] [style*=";color:#10b981"],
+[data-theme="light"] [style*=" color:#10b981"],
+[data-theme="light"] [style^="color: #10b981"],
+[data-theme="light"] [style*=";color: #10b981"],
+[data-theme="light"] [style*=" color: #10b981"],
+[data-theme="light"] [style^="color:#5eead4"],
+[data-theme="light"] [style*=";color:#5eead4"],
+[data-theme="light"] [style*=" color:#5eead4"],
+[data-theme="light"] [style^="color: #5eead4"],
+[data-theme="light"] [style*=";color: #5eead4"],
+[data-theme="light"] [style*=" color: #5eead4"],
+[data-theme="light"] [style^="color:#2dd4bf"],
+[data-theme="light"] [style*=";color:#2dd4bf"],
+[data-theme="light"] [style*=" color:#2dd4bf"],
+[data-theme="light"] [style^="color: #2dd4bf"],
+[data-theme="light"] [style*=";color: #2dd4bf"],
+[data-theme="light"] [style*=" color: #2dd4bf"] {
+  color: #047857 !important;
+}
+/* Azul */
+[data-theme="light"] [style^="color:#60a5fa"],
+[data-theme="light"] [style*=";color:#60a5fa"],
+[data-theme="light"] [style*=" color:#60a5fa"],
+[data-theme="light"] [style^="color: #60a5fa"],
+[data-theme="light"] [style*=";color: #60a5fa"],
+[data-theme="light"] [style*=" color: #60a5fa"],
+[data-theme="light"] [style^="color:#93c5fd"],
+[data-theme="light"] [style*=";color:#93c5fd"],
+[data-theme="light"] [style*=" color:#93c5fd"],
+[data-theme="light"] [style^="color: #93c5fd"],
+[data-theme="light"] [style*=";color: #93c5fd"],
+[data-theme="light"] [style*=" color: #93c5fd"],
+[data-theme="light"] [style^="color:#3b82f6"],
+[data-theme="light"] [style*=";color:#3b82f6"],
+[data-theme="light"] [style*=" color:#3b82f6"],
+[data-theme="light"] [style^="color: #3b82f6"],
+[data-theme="light"] [style*=";color: #3b82f6"],
+[data-theme="light"] [style*=" color: #3b82f6"] {
+  color: #1d4ed8 !important;
+}
+/* Sky */
+[data-theme="light"] [style^="color:#38bdf8"],
+[data-theme="light"] [style*=";color:#38bdf8"],
+[data-theme="light"] [style*=" color:#38bdf8"],
+[data-theme="light"] [style^="color: #38bdf8"],
+[data-theme="light"] [style*=";color: #38bdf8"],
+[data-theme="light"] [style*=" color: #38bdf8"],
+[data-theme="light"] [style^="color:#7dd3fc"],
+[data-theme="light"] [style*=";color:#7dd3fc"],
+[data-theme="light"] [style*=" color:#7dd3fc"],
+[data-theme="light"] [style^="color: #7dd3fc"],
+[data-theme="light"] [style*=";color: #7dd3fc"],
+[data-theme="light"] [style*=" color: #7dd3fc"] {
+  color: #0369a1 !important;
+}
+/* Ciano */
+[data-theme="light"] [style^="color:#67e8f9"],
+[data-theme="light"] [style*=";color:#67e8f9"],
+[data-theme="light"] [style*=" color:#67e8f9"],
+[data-theme="light"] [style^="color: #67e8f9"],
+[data-theme="light"] [style*=";color: #67e8f9"],
+[data-theme="light"] [style*=" color: #67e8f9"],
+[data-theme="light"] [style^="color:#22d3ee"],
+[data-theme="light"] [style*=";color:#22d3ee"],
+[data-theme="light"] [style*=" color:#22d3ee"],
+[data-theme="light"] [style^="color: #22d3ee"],
+[data-theme="light"] [style*=";color: #22d3ee"],
+[data-theme="light"] [style*=" color: #22d3ee"],
+[data-theme="light"] [style^="color:#06b6d4"],
+[data-theme="light"] [style*=";color:#06b6d4"],
+[data-theme="light"] [style*=" color:#06b6d4"],
+[data-theme="light"] [style^="color: #06b6d4"],
+[data-theme="light"] [style*=";color: #06b6d4"],
+[data-theme="light"] [style*=" color: #06b6d4"] {
+  color: #0e7490 !important;
+}
+/* Âmbar / laranja */
+[data-theme="light"] [style^="color:#fbbf24"],
+[data-theme="light"] [style*=";color:#fbbf24"],
+[data-theme="light"] [style*=" color:#fbbf24"],
+[data-theme="light"] [style^="color: #fbbf24"],
+[data-theme="light"] [style*=";color: #fbbf24"],
+[data-theme="light"] [style*=" color: #fbbf24"],
+[data-theme="light"] [style^="color:#f59e0b"],
+[data-theme="light"] [style*=";color:#f59e0b"],
+[data-theme="light"] [style*=" color:#f59e0b"],
+[data-theme="light"] [style^="color: #f59e0b"],
+[data-theme="light"] [style*=";color: #f59e0b"],
+[data-theme="light"] [style*=" color: #f59e0b"],
+[data-theme="light"] [style^="color:#fb923c"],
+[data-theme="light"] [style*=";color:#fb923c"],
+[data-theme="light"] [style*=" color:#fb923c"],
+[data-theme="light"] [style^="color: #fb923c"],
+[data-theme="light"] [style*=";color: #fb923c"],
+[data-theme="light"] [style*=" color: #fb923c"] {
+  color: #b45309 !important;
+}
+/* Vermelho */
+[data-theme="light"] [style^="color:#f87171"],
+[data-theme="light"] [style*=";color:#f87171"],
+[data-theme="light"] [style*=" color:#f87171"],
+[data-theme="light"] [style^="color: #f87171"],
+[data-theme="light"] [style*=";color: #f87171"],
+[data-theme="light"] [style*=" color: #f87171"],
+[data-theme="light"] [style^="color:#fca5a5"],
+[data-theme="light"] [style*=";color:#fca5a5"],
+[data-theme="light"] [style*=" color:#fca5a5"],
+[data-theme="light"] [style^="color: #fca5a5"],
+[data-theme="light"] [style*=";color: #fca5a5"],
+[data-theme="light"] [style*=" color: #fca5a5"],
+[data-theme="light"] [style^="color:#ef4444"],
+[data-theme="light"] [style*=";color:#ef4444"],
+[data-theme="light"] [style*=" color:#ef4444"],
+[data-theme="light"] [style^="color: #ef4444"],
+[data-theme="light"] [style*=";color: #ef4444"],
+[data-theme="light"] [style*=" color: #ef4444"] {
+  color: #b91c1c !important;
+}
+/* Cinza quase-branco (corpo) -> escuro legível */
+[data-theme="light"] [style^="color:#e2e8f0"],
+[data-theme="light"] [style*=";color:#e2e8f0"],
+[data-theme="light"] [style*=" color:#e2e8f0"],
+[data-theme="light"] [style^="color: #e2e8f0"],
+[data-theme="light"] [style*=";color: #e2e8f0"],
+[data-theme="light"] [style*=" color: #e2e8f0"],
+[data-theme="light"] [style^="color:#cbd5e1"],
+[data-theme="light"] [style*=";color:#cbd5e1"],
+[data-theme="light"] [style*=" color:#cbd5e1"],
+[data-theme="light"] [style^="color: #cbd5e1"],
+[data-theme="light"] [style*=";color: #cbd5e1"],
+[data-theme="light"] [style*=" color: #cbd5e1"],
+[data-theme="light"] [style^="color:#f1f5f9"],
+[data-theme="light"] [style*=";color:#f1f5f9"],
+[data-theme="light"] [style*=" color:#f1f5f9"],
+[data-theme="light"] [style^="color: #f1f5f9"],
+[data-theme="light"] [style*=";color: #f1f5f9"],
+[data-theme="light"] [style*=" color: #f1f5f9"],
+[data-theme="light"] [style^="color:#f3f4f6"],
+[data-theme="light"] [style*=";color:#f3f4f6"],
+[data-theme="light"] [style*=" color:#f3f4f6"],
+[data-theme="light"] [style^="color: #f3f4f6"],
+[data-theme="light"] [style*=";color: #f3f4f6"],
+[data-theme="light"] [style*=" color: #f3f4f6"],
+[data-theme="light"] [style^="color:#ede9fe"],
+[data-theme="light"] [style*=";color:#ede9fe"],
+[data-theme="light"] [style*=" color:#ede9fe"],
+[data-theme="light"] [style^="color: #ede9fe"],
+[data-theme="light"] [style*=";color: #ede9fe"],
+[data-theme="light"] [style*=" color: #ede9fe"],
+[data-theme="light"] [style^="color:#dbeafe"],
+[data-theme="light"] [style*=";color:#dbeafe"],
+[data-theme="light"] [style*=" color:#dbeafe"],
+[data-theme="light"] [style^="color: #dbeafe"],
+[data-theme="light"] [style*=";color: #dbeafe"],
+[data-theme="light"] [style*=" color: #dbeafe"] {
+  color: #334155 !important;
+}
+/* Cinza-azulado muito claro (muted fraco) */
+[data-theme="light"] [style^="color:#94a3b8"],
+[data-theme="light"] [style*=";color:#94a3b8"],
+[data-theme="light"] [style*=" color:#94a3b8"],
+[data-theme="light"] [style^="color: #94a3b8"],
+[data-theme="light"] [style*=";color: #94a3b8"],
+[data-theme="light"] [style*=" color: #94a3b8"] {
+  color: #64748b !important;
+}
