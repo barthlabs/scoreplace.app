@@ -232,12 +232,27 @@ window._resolveEnrollmentCategory = function(tId, callback) {
         profileSkill = String(user.defaultCategory).trim().toUpperCase();
     }
     if (profileSkill) {
-        // Tokens de cada categoria que são habilidade (não são prefixo de gênero nem faixa etária)
-        var skillFiltered = eligible.filter(function(cat) {
-            var tokens = cat.split(' ');
-            return tokens.some(function(tok) { return tok.toUpperCase() === profileSkill; });
-        });
-        if (skillFiltered.length > 0) eligible = skillFiltered;
+        // v2.1.80: o filtro de habilidade só pode estreitar entre categorias que
+        // TÊM token de habilidade (A/B/C/D/FUN). Categorias sem token de skill —
+        // personalizadas ("Fem Pro") e de idade ("Fem 40+") — precisam SOBREVIVER
+        // pro picker, senão a pessoa nunca conseguiria escolhê-las quando tem
+        // habilidade no perfil. Antes o filtro descartava tudo que não casasse o
+        // skill, sumindo com as personalizadas.
+        var skillSet = {};
+        var skillRef = (Array.isArray(t.skillCategories) && t.skillCategories.length > 0) ? t.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
+        skillRef.forEach(function(s) { skillSet[String(s).toUpperCase()] = 1; });
+        var hasSkillTok = function(cat) {
+            return cat.split(' ').some(function(tok) { return skillSet[tok.toUpperCase()]; });
+        };
+        var skillBearing = eligible.filter(hasSkillTok);
+        var nonSkill = eligible.filter(function(c) { return !hasSkillTok(c); });
+        if (skillBearing.length > 0) {
+            var matched = skillBearing.filter(function(cat) {
+                return cat.split(' ').some(function(tok) { return tok.toUpperCase() === profileSkill; });
+            });
+            var keptSkill = matched.length > 0 ? matched : skillBearing;
+            eligible = keptSkill.concat(nonSkill);
+        }
     }
     if (eligible.length === 1) { if (callback) callback(eligible[0]); return; }
 
@@ -325,9 +340,10 @@ window._getTournamentCategories = function(t) {
     if (!t) return [];
     if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 0) return t.combinedCategories;
     // Backward compat: compute from gender/skill arrays if they exist
+    // v2.1.80: custom categories são "skill-like" — entram junto da habilidade.
     var combined = [];
     var genders = t.genderCategories || [];
-    var skills = t.skillCategories || [];
+    var skills = (t.skillCategories || []).concat(t.customCategories || []);
     if (genders.length === 0 && skills.length === 0) return combined;
     if (genders.length === 0) {
         for (var s = 0; s < skills.length; s++) {

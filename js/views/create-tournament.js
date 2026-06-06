@@ -595,6 +595,17 @@ function setupCreateTournamentModal() {
                   <small class="text-muted" style="display:block;margin-top:6px;">Sub-bracket por faixa etária. Inscritos podem competir na categoria de habilidade, na de idade, ou em ambas. Sub-bracket também é separado por gênero.</small>
                 </div>
 
+                <!-- v2.1.80-beta: Categorias personalizadas (livres) — funcionam como a
+                     habilidade: cruzam com gênero e viram sub-bracket. O inscrito escolhe
+                     na inscrição; o organizador atribui/reatribui no gerenciador. -->
+                <div style="margin-top:0.75rem;">
+                  <label class="form-label" style="margin-bottom:6px;">Categorias personalizadas</label>
+                  <div id="custom-cat-chips" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;"></div>
+                  <button type="button" id="btn-add-custom-cat" onclick="window._addCustomCat()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px dashed rgba(20,184,166,0.5); background:rgba(20,184,166,0.08); color:#5eead4; font-weight:600;"><span style="line-height:1;">＋</span> Adicionar categoria</button>
+                  <input type="hidden" id="tourn-custom-categories" value="">
+                  <small class="text-muted" style="display:block;margin-top:6px;">Categoria livre (ex.: Estreante, Profissional). Cruza com gênero como a habilidade e gera sub-bracket próprio. O inscrito escolhe na inscrição; você pode reatribuir no gerenciador de categorias.</small>
+                </div>
+
                 <div id="category-preview" style="display:none; margin-top:0.75rem; padding:8px 12px; background:rgba(168,85,247,0.08); border:1px solid rgba(168,85,247,0.2); border-radius:8px;">
                   <div style="font-size:0.7rem; color:#a855f7; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.catPreview')}</div>
                   <div id="category-preview-list" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
@@ -1887,6 +1898,65 @@ function setupCreateTournamentModal() {
     window._applySkillCatUI();
   };
 
+  // ─── Categorias personalizadas (v2.1.80-beta) ───────────────────────────────
+  // Valores livres digitados pelo organizador. Canônico vive no hidden
+  // #tourn-custom-categories (CSV); os chips são renderizados a partir dele.
+  // Cruzam com gênero IGUAL à habilidade (ver _getCreateFormCategoryData).
+  window._getCustomCatList = function() {
+    var h = document.getElementById('tourn-custom-categories');
+    if (!h || !h.value) return [];
+    return h.value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  };
+  window._setCustomCatList = function(list) {
+    var h = document.getElementById('tourn-custom-categories');
+    if (h) h.value = (list || []).join(',');
+    window._renderCustomCatChips();
+    window._updateCategoryPreview();
+  };
+  window._addCustomCat = function() {
+    if (typeof showInputDialog !== 'function') return;
+    showInputDialog('Nova categoria personalizada', '', function(val) {
+      if (!val) return;
+      // vírgula é separador do CSV e "/" é separador de merge — troca por espaço.
+      var label = String(val).replace(/[,\/]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!label) return;
+      if (label.length > 24) label = label.slice(0, 24).trim();
+      var cur = window._getCustomCatList();
+      var exists = cur.some(function(c) { return c.toLowerCase() === label.toLowerCase(); });
+      if (exists) { if (window.showNotification) showNotification('Categoria já existe', label, 'warning'); return; }
+      cur.push(label);
+      window._setCustomCatList(cur);
+    });
+  };
+  window._removeCustomCat = function(label) {
+    var cur = window._getCustomCatList().filter(function(c) { return c !== label; });
+    window._setCustomCatList(cur);
+  };
+  window._renderCustomCatChips = function() {
+    var wrap = document.getElementById('custom-cat-chips');
+    if (!wrap) return;
+    var list = window._getCustomCatList();
+    if (list.length === 0) {
+      wrap.innerHTML = '<span style="font-size:0.75rem;color:var(--text-muted);opacity:0.7;">Nenhuma categoria personalizada ainda.</span>';
+      return;
+    }
+    var _esc = window._safeHtml || function(s) { return s; };
+    wrap.innerHTML = list.map(function(label) {
+      var escAttr = String(label).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return '<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;font-size:0.8rem;border:2px solid #14b8a6;background:rgba(20,184,166,0.18);color:#5eead4;font-weight:700;">' +
+        _esc(label) +
+        '<button type="button" title="Remover" onclick="window._removeCustomCat(\'' + escAttr + '\')" style="background:none;border:none;color:#5eead4;cursor:pointer;font-size:1rem;line-height:1;padding:0;font-weight:900;">×</button>' +
+        '</span>';
+    }).join('');
+  };
+  window._loadCustomCategoriesFromArray = function(values) {
+    if (!Array.isArray(values)) values = [];
+    var clean = values.map(function(s) { return String(s).trim(); }).filter(Boolean);
+    var h = document.getElementById('tourn-custom-categories');
+    if (h) h.value = clean.join(',');
+    window._renderCustomCatChips();
+  };
+
   window._applyGenderCatUI = function(values) {
     if (!values) {
       var h = document.getElementById('tourn-gender-categories');
@@ -1902,9 +1972,15 @@ function setupCreateTournamentModal() {
   };
 
   window._updateCategoryPreview = function() {
+    // v2.1.80: chips de categorias personalizadas re-renderizam junto do preview
+    // (cobre abertura do form, edição e mudança de game type — todos chamam aqui).
+    if (typeof window._renderCustomCatChips === 'function') window._renderCustomCatChips();
     var genderVals = ((document.getElementById('tourn-gender-categories') || {}).value || '').split(',').filter(Boolean);
     var skillText = ((document.getElementById('tourn-skill-categories') || {}).value || '').trim();
     var skillCats = skillText ? skillText.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    // v2.1.80: categorias personalizadas — entram como "skill-like" (cruzam com gênero igual à habilidade).
+    var customCats = ((document.getElementById('tourn-custom-categories') || {}).value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    var skillLike = skillCats.concat(customCats);
 
     // v1.2.0-beta: ler ageCategories
     var ageText = (document.getElementById('tourn-age-categories') || {}).value || '';
@@ -1924,16 +2000,16 @@ function setupCreateTournamentModal() {
     var genderLabels = { fem: 'Fem', masc: 'Masc', misto_aleatorio: 'Misto Aleat.', misto_obrigatorio: 'Misto Obrig.' };
     var baseCats = [];
 
-    if (genderVals.length > 0 && skillCats.length > 0) {
+    if (genderVals.length > 0 && skillLike.length > 0) {
       genderVals.forEach(function(g) {
-        skillCats.forEach(function(s) {
+        skillLike.forEach(function(s) {
           baseCats.push((genderLabels[g] || g) + ' ' + s);
         });
       });
     } else if (genderVals.length > 0) {
       genderVals.forEach(function(g) { baseCats.push(genderLabels[g] || g); });
-    } else if (skillCats.length > 0) {
-      skillCats.forEach(function(s) { baseCats.push(s); });
+    } else if (skillLike.length > 0) {
+      skillLike.forEach(function(s) { baseCats.push(s); });
     }
 
     // Cross with game types only if both types selected AND there are gender/skill categories
@@ -2030,6 +2106,9 @@ function setupCreateTournamentModal() {
     var genderVals = (document.getElementById('tourn-gender-categories').value || '').split(',').filter(Boolean);
     var skillText = (document.getElementById('tourn-skill-categories').value || '').trim();
     var skillCats = skillText ? skillText.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    // v2.1.80: categorias personalizadas — "skill-like" (cruzam com gênero igual à habilidade).
+    var customCats = (document.getElementById('tourn-custom-categories').value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    var skillLike = skillCats.concat(customCats);
     var genderLabels = { fem: 'Fem', masc: 'Masc', misto_aleatorio: 'Misto Aleat.', misto_obrigatorio: 'Misto Obrig.' };
 
     // Game type dimension
@@ -2038,14 +2117,14 @@ function setupCreateTournamentModal() {
     if (gameTypesVal === 'simples,duplas') { gameTypes = ['Simples', 'Duplas']; }
 
     var baseCats = [];
-    if (genderVals.length > 0 && skillCats.length > 0) {
+    if (genderVals.length > 0 && skillLike.length > 0) {
       genderVals.forEach(function(g) {
-        skillCats.forEach(function(s) { baseCats.push((genderLabels[g] || g) + ' ' + s); });
+        skillLike.forEach(function(s) { baseCats.push((genderLabels[g] || g) + ' ' + s); });
       });
     } else if (genderVals.length > 0) {
       genderVals.forEach(function(g) { baseCats.push(genderLabels[g] || g); });
-    } else if (skillCats.length > 0) {
-      baseCats = skillCats.slice();
+    } else if (skillLike.length > 0) {
+      baseCats = skillLike.slice();
     }
 
     // Cross with game types only if both types selected AND there are categories
@@ -2061,7 +2140,7 @@ function setupCreateTournamentModal() {
     // v1.2.0-beta: ler ageCategories também
     var ageCats = (document.getElementById('tourn-age-categories') || {}).value || '';
     ageCats = ageCats ? ageCats.split(',').filter(Boolean) : [];
-    return { genderCategories: genderVals, skillCategories: skillCats, ageCategories: ageCats, combinedCategories: combined };
+    return { genderCategories: genderVals, skillCategories: skillCats, ageCategories: ageCats, customCategories: customCats, combinedCategories: combined };
   };
 
   window._onInscricaoChange = function () {
@@ -3462,6 +3541,10 @@ function setupCreateTournamentModal() {
       if (_ageHidden) _ageHidden.value = t.ageCategories.join(',');
       if (typeof window._applyAgeCatUI === 'function') window._applyAgeCatUI(t.ageCategories);
     }
+    // v2.1.80: load custom categories
+    if (typeof window._loadCustomCategoriesFromArray === 'function') {
+      window._loadCustomCategoriesFromArray(t.customCategories || []);
+    }
     window._updateCategoryPreview();
 
     window._onFormatoChange();
@@ -3798,6 +3881,7 @@ function setupCreateTournamentModal() {
         tourData.genderCategories = catData.genderCategories || [];
         tourData.skillCategories = catData.skillCategories || [];
         tourData.ageCategories = catData.ageCategories || []; // v1.2.0
+        tourData.customCategories = catData.customCategories || []; // v2.1.80
         tourData.combinedCategories = catData.combinedCategories || [];
 
         if (editId) {
@@ -4867,15 +4951,18 @@ window._prefillFromTemplate = function(tpl) {
   if (typeof window._updateLigaRoundsTag === 'function') { try { window._updateLigaRoundsTag(); } catch (e) {} }
 
   // Categories (store in hidden data for save function to pick up)
-  if ((tpl.genderCategories && tpl.genderCategories.length > 0) || (tpl.skillCategories && tpl.skillCategories.length > 0) || (tpl.ageCategories && tpl.ageCategories.length > 0)) {
+  if ((tpl.genderCategories && tpl.genderCategories.length > 0) || (tpl.skillCategories && tpl.skillCategories.length > 0) || (tpl.ageCategories && tpl.ageCategories.length > 0) || (tpl.customCategories && tpl.customCategories.length > 0)) {
     window._templateCategories = {
       gender: tpl.genderCategories || [],
       skill: tpl.skillCategories || [],
       age: tpl.ageCategories || [],
+      custom: tpl.customCategories || [],
       combined: tpl.combinedCategories || []
     };
     _setV('tourn-age-categories', (tpl.ageCategories || []).join(','));
     if (tpl.ageCategories && tpl.ageCategories.length && typeof window._applyAgeCatUI === 'function') { try { window._applyAgeCatUI(tpl.ageCategories); } catch (e) {} }
+    // v2.1.80: restaura categorias personalizadas do template
+    if (typeof window._loadCustomCategoriesFromArray === 'function') { try { window._loadCustomCategoriesFromArray(tpl.customCategories || []); } catch (e) {} }
   }
 };
 
@@ -5123,11 +5210,14 @@ window._saveCurrentFormAsTemplate = function() {
   else format = formatMap[formatValue] || 'Eliminatórias Simples';
   var genderCats = (get('tourn-gender-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
   var skillCats = (get('tourn-skill-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  // v2.1.80: categorias personalizadas — "skill-like".
+  var customCats = (get('tourn-custom-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var skillLike = skillCats.concat(customCats);
   var combinedCats = [];
-  if (genderCats.length && skillCats.length) {
-    genderCats.forEach(function(g) { skillCats.forEach(function(s) { combinedCats.push(g + ' ' + s); }); });
+  if (genderCats.length && skillLike.length) {
+    genderCats.forEach(function(g) { skillLike.forEach(function(s) { combinedCats.push(g + ' ' + s); }); });
   } else if (genderCats.length) combinedCats = genderCats.slice();
-  else if (skillCats.length) combinedCats = skillCats.slice();
+  else if (skillLike.length) combinedCats = skillLike.slice();
   var scoring = {
     type: get('gsm-type') || 'simple',
     setsToWin: parseInt(get('gsm-setsToWin')) || 1,
@@ -5159,6 +5249,7 @@ window._saveCurrentFormAsTemplate = function() {
       genderCategories: genderCats,
       skillCategories: skillCats,
       ageCategories: ageCats,
+      customCategories: customCats,
       combinedCategories: combinedCats,
       enrollmentMode: get('select-inscricao') || 'individual',
       teamSize: parseInt(get('tourn-team-size')) || 1,
