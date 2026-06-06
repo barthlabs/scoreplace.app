@@ -864,7 +864,12 @@ function renderDashboard(container) {
               // Progress bar for active tournaments
               if (typeof window._getTournamentProgress === 'function') {
                 var _prog = window._getTournamentProgress(t);
-                if (_prog.total > 0) {
+                // v2.1.55: quando o box de progresso COMPLETO já aparece (em
+                // andamento, não-Liga, não encerrado), não mostrar a barra simples
+                // — evita as duas barras duplicadas no mesmo card.
+                var _fullBoxShown = sorteioRealizado && !isFinished &&
+                  !(window._isLigaFormat && window._isLigaFormat(t)) && _prog.total > 0;
+                if (_prog.total > 0 && !_fullBoxShown) {
                   var _barColor = _prog.pct === 100 ? '#10b981' : (_prog.pct > 50 ? '#3b82f6' : '#f59e0b');
                   _html += '<div class="info-box" style="margin-top: 10px; padding: 8px 12px;">';
                   _html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">';

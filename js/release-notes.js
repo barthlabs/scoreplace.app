@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🧹 v2.1.55-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Card sem barra de progresso duplicada.</b><br><br>' +
+      'No card do torneio em andamento que mostra o <b>box de progresso completo</b>, a <b>barra simples</b> que aparecia mais embaixo foi removida — fica só a completa. (Torneios encerrados e Liga, que não usam o box completo, mantêm a barra simples.)</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔝 v2.1.54-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Topo da dashboard só com o que acontece esta semana.</b><br><br>' +
       'A faixa do topo agora mostra <b>só os em andamento desta semana</b> — que <b>começaram nos últimos 7 dias</b> ou <b>terminam nos próximos 7 dias</b> (inclui hoje). Os demais em andamento (ex.: rodando há semanas, sem término próximo) ficam numa seção <b>"Em andamento" no rodapé</b>, sem sumir.</p>' +
