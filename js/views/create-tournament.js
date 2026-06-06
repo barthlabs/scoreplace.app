@@ -270,11 +270,12 @@ function setupCreateTournamentModal() {
                   </div>
                 </div>
                 <div id="liga-draw-schedule" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(16,185,129,0.15);">
-                  <p style="margin: 0 0 0.5rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.drawSchedule')}</p>
-                  <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;margin-bottom:0.5rem;">
+                  <p style="margin: 0 0 0.35rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.drawSchedule')}</p>
+                  <p style="margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-bright); font-weight: 600;">Primeiro Sorteio</p>
+                  <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:0.5rem;">
                     <div class="form-group" style="margin:0;flex:0 0 auto;">
                       <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.dateLabel')}</label>
-                      <input type="date" class="form-control" id="liga-first-draw-date" style="width:130px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="date" class="form-control" id="liga-first-draw-date" style="width:175px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                     </div>
                     <div class="form-group" style="margin:0;flex:0 0 auto;">
                       <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.timeLabel')}</label>
@@ -284,11 +285,11 @@ function setupCreateTournamentModal() {
                       <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.repeatEvery')}</label>
                       <div style="display:flex;align-items:center;gap:4px;">
                         <input type="number" class="form-control" id="liga-draw-interval" min="1" max="90" value="7" style="width:55px;padding:6px 8px;font-size:0.85rem;text-align:center;" oninput="window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                        <span style="font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">${_t('create.daysUnit')}</span>
+                        <span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">${_t('create.daysUnit')}</span>
                       </div>
                     </div>
                     <!-- v2.1.21: tag de rodadas previstas (1º sorteio + intervalo + fim do torneio) -->
-                    <div id="liga-rounds-tag" style="flex:0 0 auto;align-self:flex-end;font-size:0.74rem;font-weight:700;color:#34d399;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:6px 10px;white-space:nowrap;display:none;"></div>
+                    <div id="liga-rounds-tag" style="flex:0 0 auto;align-self:flex-end;font-size:0.85rem;font-weight:700;color:#34d399;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:5px 10px;white-space:nowrap;display:none;"></div>
                   </div>
                   <div class="form-group" style="margin:0;">
                     <div class="toggle-row">

@@ -2,7 +2,8 @@
    (no iOS, type=date e type=time têm alturas intrínsecas diferentes). */
 #tourn-reg-date, #tourn-reg-time,
 #tourn-start-date, #tourn-start-time,
-#tourn-end-date, #tourn-end-time {
+#tourn-end-date, #tourn-end-time,
+#liga-first-draw-date, #liga-first-draw-time, #liga-draw-interval {
   box-sizing: border-box;
   height: 36px;
   line-height: 1.2;
