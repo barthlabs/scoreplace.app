@@ -3331,6 +3331,32 @@ function _hydrateFriendsPresenceWidget() {
     // Cache compartilhado pra outros consumidores (myactive widget) re-usarem.
     window._dashPresenceCache = { own: ownList, friends: friendsList, ts: Date.now() };
     var list = friendsList.concat(ownList);
+    // v2.1.71: inclui torneios de HOJE em que VOCÊ (ou um amigo) está inscrito —
+    // aparecem como "idas planejadas" mesmo sem presença real registrada (ex.:
+    // inscrito antes do plano automático existir). Só adiciona o venue à lista;
+    // o card hidrata o movimento, que já mostra o box do torneio + inscritos
+    // (amigos nomeados, não-amigos no "+N") sem revelar estranhos.
+    (function() {
+      try {
+        var todayKey = window.PresenceDB.dayKey(new Date());
+        var fSet = {}; friends.forEach(function(u) { fSet[u] = true; });
+        var tours = (window.AppStore && window.AppStore.tournaments) || [];
+        tours.forEach(function(t) {
+          if (!t || !t.startDate) return;
+          var d = new Date(t.startDate);
+          if (isNaN(d.getTime()) || window.PresenceDB.dayKey(d) !== todayKey) return;
+          var pid = window.PresenceDB.venueKey(t.venuePlaceId || '', t.venue || '');
+          if (!pid) return;
+          var parts = Array.isArray(t.participants) ? t.participants : [];
+          var meIn = parts.some(function(p) { return p && p.uid === cu.uid; });
+          var frIn = parts.some(function(p) { return p && p.uid && fSet[p.uid]; });
+          if (!meIn && !frIn) return;
+          if (list.some(function(p) { return p && p.placeId === pid; })) return; // já há presença nesse venue
+          var frP = frIn ? parts.find(function(p) { return p && p.uid && fSet[p.uid]; }) : null;
+          list.push({ uid: meIn ? cu.uid : (frP && frP.uid) || null, placeId: pid, venueName: t.venue || 'Local', venueLat: t.venueLat, venueLon: t.venueLon, _fromTournament: true });
+        });
+      } catch (e) {}
+    })();
     if (list.length === 0) {
       // Empty state diferenciado: sem amigos vs sem movimento.
       var hasFriends = friendsRaw.length > 0;

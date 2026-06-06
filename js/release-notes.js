@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🗓️ v2.1.71-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Movimento da dashboard mostra torneios do dia.</b><br><br>' +
+      'O bloco "Movimento nos seus locais" agora considera os <b>torneios de hoje</b> em que <b>você ou um amigo</b> está inscrito — o local aparece com o box do torneio e os inscritos (amigos nomeados, não-amigos no "+N"), mesmo sem presença registrada manualmente.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">📊 v2.1.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Ficha do local com gráfico e amigos nomeados.</b><br><br>' +
       'O detalhe do local agora mostra o <b>gráfico hora-a-hora</b> e a seção de presenças futuras com os <b>nomes/fotos dos amigos</b> (e "+N" dos não-amigos), inclusive o <b>box do torneio</b> com os inscritos — o mesmo dos cards de locais preferidos.</p>' +
