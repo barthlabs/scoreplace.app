@@ -3819,6 +3819,13 @@ function setupCreateTournamentModal() {
             // Aplica cada campo explicitamente
             Object.keys(tourData).forEach(k => { t[k] = tourData[k]; });
             window.AppStore.logAction(editId, `Regras atualizadas: formato ${format}, lançamento por ${resultEntryVal}`);
+            // v2.1.67: se a data/hora/local mudou, sincroniza o "Planejar ida" do
+            // próprio organizador (os demais participantes sincronizam ao abrir o
+            // torneio). Só atualiza a própria presença — respeita as regras.
+            try {
+              var _cuEdit = window.AppStore && window.AppStore.currentUser;
+              if (_cuEdit && _cuEdit.uid && typeof window._syncTournamentPresencePlan === 'function') window._syncTournamentPresencePlan(t, _cuEdit);
+            } catch (_se) {}
 
             // Notify enrolled participants about changes
             if (_changes.length > 0 && window._notifyTournamentParticipants) {

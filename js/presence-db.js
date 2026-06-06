@@ -166,7 +166,7 @@ window.PresenceDB = {
   async updatePresence(docId, partial) {
     if (!this.db || !docId || !partial) return false;
     var ALLOWED = ['sports', 'startsAt', 'endsAt', 'openEnded', 'dayKey',
-      'venueName', 'venueLat', 'venueLon', 'visibility', 'type'];
+      'placeId', 'venueName', 'venueLat', 'venueLon', 'visibility', 'type'];
     var patch = {};
     ALLOWED.forEach(function(k) { if (partial[k] !== undefined) patch[k] = partial[k]; });
     patch.cancelled = false;       // garante que continua ativo após editar

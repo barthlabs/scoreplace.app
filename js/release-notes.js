@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🗓️ v2.1.67-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Plano de ida acompanha o torneio.</b><br><br>' +
+      'O "Planejar ida" criado na inscrição agora é <b>cancelado</b> se você se <b>desinscrever</b>, e <b>atualizado</b> se o organizador mudar a <b>data, hora ou local</b> (cada participante sincroniza o próprio plano ao abrir o torneio).</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🗓️ v2.1.66-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Inscrição já cria o "Planejar ida".</b><br><br>' +
       'Ao se inscrever num torneio que tem <b>data, hora e local</b>, o app cria automaticamente um <b>plano de presença</b> cobrindo a <b>duração estimada</b> do torneio — seus amigos já veem que você vai. (Liga/temporada contínua não cria.)</p>' +

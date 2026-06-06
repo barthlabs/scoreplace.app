@@ -2688,6 +2688,13 @@ function renderTournaments(container, tournamentId = null) {
         if (_nt && window._checkPollNotifications) {
             window._checkPollNotifications(_nt);
         }
+        // v2.1.67: sincroniza o "Planejar ida" do usuário com a data/hora/local
+        // atuais do torneio — propaga mudanças feitas pelo organizador (cada um
+        // atualiza o próprio plano ao abrir o torneio).
+        if (_nt && typeof window._syncTournamentPresencePlan === 'function') {
+            var _cuSync = window.AppStore && window.AppStore.currentUser;
+            if (_cuSync && _cuSync.uid) { try { window._syncTournamentPresencePlan(_nt, _cuSync); } catch (_sp) {} }
+        }
     }
 
     // Init merge touch drag for mobile (after DOM is ready)

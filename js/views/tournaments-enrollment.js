@@ -100,56 +100,105 @@ function _allowsLateEnrollment(t) {
   return le === 'standby' || le === 'expand';
 }
 
-// v2.1.66: ao se inscrever num torneio com DATA+HORA e LOCAL, cria automaticamente
-// um "Planejar ida" (presença planejada) cobrindo a duração do torneio.
+// v2.1.66/67: plano de presença ("Planejar ida") vinculado ao torneio.
+// Calcula a janela desejada (início + duração estimada do torneio) a partir do
+// torneio atual. Retorna null se não há DATA+HORA+LOCAL (ou é Liga). Fonte única
+// usada por criar/sincronizar — garante consistência.
+window._computeTournamentPlanWindow = function(t) {
+  if (!t || !window.PresenceDB) return null;
+  if (window._isLigaFormat && window._isLigaFormat(t)) return null;          // temporada contínua
+  if (!t.startDate || String(t.startDate).indexOf('T') === -1) return null;  // exige hora
+  var startsAt = new Date(t.startDate).getTime();
+  if (isNaN(startsAt)) return null;
+  var venueName = t.venue || t.venueName || '';
+  var placeId = window.PresenceDB.venueKey(t.venuePlaceId || '', venueName);
+  if (!placeId) return null;                                                 // exige local
+  var endsAt = null;
+  if (typeof window._estimateTournamentMinutes === 'function') {
+    var mins = window._estimateTournamentMinutes(t);
+    if (mins > 0) endsAt = startsAt + mins * 60000;
+  }
+  if (!endsAt && t.endDate) { var e = new Date(t.endDate).getTime(); if (!isNaN(e) && e > startsAt) endsAt = e; }
+  if (!endsAt) endsAt = startsAt + 3 * 3600000;
+  var MAX = 12 * 3600000;
+  if (endsAt - startsAt > MAX) endsAt = startsAt + MAX;                       // cap 1 sessão
+  var sport = window.PresenceDB.normalizeSport(t.sport || '');
+  var w = { startsAt: startsAt, endsAt: endsAt, placeId: placeId, venueName: venueName, sports: sport ? [sport] : [] };
+  if (t.venueLat) { var la = parseFloat(t.venueLat); if (!isNaN(la)) w.venueLat = la; }
+  if (t.venueLon) { var lo = parseFloat(t.venueLon); if (!isNaN(lo)) w.venueLon = lo; }
+  return w;
+};
+
+// Acha o plano de presença do usuário vinculado a ESTE torneio (ativo).
+window._findTournamentPresencePlan = function(uid, tId) {
+  if (!window.PresenceDB || typeof window.PresenceDB.loadMyActive !== 'function' || !uid) return Promise.resolve(null);
+  return window.PresenceDB.loadMyActive(uid).then(function(list) {
+    return (list || []).find(function(p) {
+      return p && p.type === 'planned' && String(p.tournamentId) === String(tId);
+    }) || null;
+  }).catch(function() { return null; });
+};
+
+// Cria o "Planejar ida" ao se inscrever (dedup do PresenceDB evita duplicar).
 window._maybeCreateTournamentPresencePlan = function(t, user) {
   try {
-    if (!t || !user || !user.uid) return;
-    if (!window.PresenceDB || typeof window.PresenceDB.savePresence !== 'function') return;
-    // Liga/Ranking são temporadas contínuas (meses) — não faz sentido um plano de presença.
-    if (window._isLigaFormat && window._isLigaFormat(t)) return;
-    // Exige DATA + HORA de início (o startDate vira "YYYY-MM-DDTHH:MM" quando há hora).
-    if (!t.startDate || String(t.startDate).indexOf('T') === -1) return;
-    var startsAt = new Date(t.startDate).getTime();
-    if (isNaN(startsAt)) return;
-    // Exige LOCAL (placeId do Google OU nome do local).
-    var venueName = t.venue || t.venueName || '';
-    var placeId = window.PresenceDB.venueKey(t.venuePlaceId || '', venueName);
-    if (!placeId) return;
-    // Fim = duração estimada do torneio; senão endDate; senão +3h. Cap em 12h (1 sessão).
-    var endsAt = null;
-    if (typeof window._estimateTournamentMinutes === 'function') {
-      var mins = window._estimateTournamentMinutes(t);
-      if (mins > 0) endsAt = startsAt + mins * 60000;
-    }
-    if (!endsAt && t.endDate) { var e = new Date(t.endDate).getTime(); if (!isNaN(e) && e > startsAt) endsAt = e; }
-    if (!endsAt) endsAt = startsAt + 3 * 3600000;
-    var MAX = 12 * 3600000;
-    if (endsAt - startsAt > MAX) endsAt = startsAt + MAX;
-    var sport = window.PresenceDB.normalizeSport(t.sport || '');
-    var payload = {
+    if (!t || !user || !user.uid || !window.PresenceDB || typeof window.PresenceDB.savePresence !== 'function') return;
+    var w = window._computeTournamentPlanWindow(t);
+    if (!w) return;
+    var payload = Object.assign({
       uid: user.uid,
       email_lower: (user.email || '').toLowerCase(),
       displayName: user.displayName || user.name || '',
       photoURL: user.photoURL || '',
-      placeId: placeId,
-      venueName: venueName,
-      sports: sport ? [sport] : [],
       type: 'planned',
-      startsAt: startsAt,
-      endsAt: endsAt,
       visibility: (user.presenceVisibility === 'public' ? 'public' : 'friends'),
       source: 'tournament',
       tournamentId: t.id
-    };
-    if (t.venueLat) { var la = parseFloat(t.venueLat); if (!isNaN(la)) payload.venueLat = la; }
-    if (t.venueLon) { var lo = parseFloat(t.venueLon); if (!isNaN(lo)) payload.venueLon = lo; }
+    }, w);
     window.PresenceDB.savePresence(payload).then(function() {
       if (typeof showNotification !== 'undefined') {
         var _hh = function(ms){ var d = new Date(ms); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
-        showNotification('🗓️ Ida planejada', (venueName || 'Local') + ' · ' + _hh(startsAt) + '–' + _hh(endsAt), 'info');
+        showNotification('🗓️ Ida planejada', (w.venueName || 'Local') + ' · ' + _hh(w.startsAt) + '–' + _hh(w.endsAt), 'info');
       }
     }).catch(function(){});
+  } catch (e) {}
+};
+
+// (1) Cancela o plano de presença ao DESINSCREVER do torneio.
+window._cancelTournamentPresencePlan = function(t, user) {
+  try {
+    if (!t || !user || !user.uid || !window.PresenceDB) return;
+    window._findTournamentPresencePlan(user.uid, t.id).then(function(plan) {
+      var id = plan && (plan._id || plan.id);
+      if (id && typeof window.PresenceDB.cancelPresence === 'function') window.PresenceDB.cancelPresence(id);
+    });
+  } catch (e) {}
+};
+
+// (2) Sincroniza o plano do usuário com o torneio atual — propaga mudanças de
+// DATA/HORA/LOCAL feitas pelo organizador (cada usuário atualiza o PRÓPRIO plano
+// quando abre o torneio; só o dono pode escrever a própria presença). Cria se
+// não existir e o usuário está inscrito.
+window._syncTournamentPresencePlan = function(t, user) {
+  try {
+    if (!t || !user || !user.uid || !window.PresenceDB) return;
+    var enrolled = (typeof window._isUserEnrolledInTournament === 'function') ? window._isUserEnrolledInTournament(user, t) : true;
+    if (!enrolled) return;
+    var w = window._computeTournamentPlanWindow(t);
+    if (!w) return; // torneio sem data/hora/local atualmente — não mexe
+    window._findTournamentPresencePlan(user.uid, t.id).then(function(plan) {
+      if (!plan) { window._maybeCreateTournamentPresencePlan(t, user); return; }
+      var id = plan._id || plan.id;
+      var changed = (plan.startsAt !== w.startsAt) || (plan.endsAt !== w.endsAt) || (plan.placeId !== w.placeId);
+      if (id && changed && typeof window.PresenceDB.updatePresence === 'function') {
+        window.PresenceDB.updatePresence(id, {
+          startsAt: w.startsAt, endsAt: w.endsAt,
+          dayKey: window.PresenceDB.dayKey(new Date(w.startsAt)),
+          placeId: w.placeId, venueName: w.venueName, sports: w.sports,
+          venueLat: w.venueLat, venueLon: w.venueLon
+        });
+      }
+    });
   } catch (e) {}
 };
 
@@ -701,6 +750,8 @@ window.deenrollCurrentUser = function (tId) {
 
                 // Show success and re-render immediately (no wait for network)
                 if (typeof showNotification !== 'undefined') showNotification(_t('enroll.cancelledTitle'), _t('enroll.cancelledMsg', { name: window._safeHtml(t.name) }), 'info');
+                // v2.1.67: cancela também o "Planejar ida" criado na inscrição.
+                try { if (typeof window._cancelTournamentPresencePlan === 'function') window._cancelTournamentPresencePlan(t, user); } catch (_cp) {}
                 const container = document.getElementById('view-container');
                 if (container) renderTournaments(container, window.location.hash.split('/')[1]);
 
