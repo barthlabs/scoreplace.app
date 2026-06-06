@@ -1791,28 +1791,7 @@ function renderTournaments(container, tournamentId = null) {
                </div>
             </div>
 
-            ${(() => {
-              if (!tournamentId) return '';
-              var _prog = window._getTournamentProgress(t);
-              var _html = '';
-              // Progress bar — only show after draw
-              if (_prog.total > 0) {
-                var _barColor = _prog.pct === 100 ? '#10b981' : (_prog.pct > 50 ? '#3b82f6' : '#f59e0b');
-                _html += '<div class="info-box" style="margin-top: 1rem;">';
-                _html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">';
-                _html += '<span style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8;">Progresso do Torneio</span>';
-                _html += '<span style="font-size: 0.8rem; font-weight: 700;">' + _prog.completed + '/' + _prog.total + ' partidas (' + _prog.pct + '%)</span>';
-                _html += '</div>';
-                _html += '<div style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">';
-                _html += '<div style="width: ' + _prog.pct + '%; height: 100%; background: ' + _barColor + '; border-radius: 4px; transition: width 0.5s ease;"></div>';
-                _html += '</div>';
-                if (_prog.pct === 100 && !isFinished) {
-                  _html += '<div style="margin-top: 6px; font-size: 0.75rem; color: #10b981; font-weight: 600;">✅ Todas as partidas concluídas!</div>';
-                }
-                _html += '</div>';
-              }
-              return _html;
-            })()}
+            ${(tournamentId && typeof window._renderTournamentProgress === 'function') ? window._renderTournamentProgress(t) : ''}
 
             ${(tournamentId && isOrg) ? (function() {
               // v1.6.1-beta: Árbitros button — só aparece quando resultEntry inclui 'referee'

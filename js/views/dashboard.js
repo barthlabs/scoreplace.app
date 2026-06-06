@@ -601,7 +601,19 @@ function renderDashboard(container) {
     } else if (isParticipating && !canEnroll && !isFinished) {
       enrollBtnHtml = `<div style="font-size: 0.65rem; font-weight: 700; color: #fef08a; text-transform: uppercase; letter-spacing: 0.5px;">${_t('enroll.enrolled')} ✓</div>`;
     } else if (isFinished && (isParticipating || isOrg)) {
-      enrollBtnHtml = `<div style="font-size: 0.65rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(251,191,36,0.12); padding: 3px 10px; border-radius: 10px; border: 1px solid rgba(251,191,36,0.25);">🏆 ${isOrg ? _t('dashboard.youOrganized') : _t('dashboard.youParticipated')}</div>`;
+      // v2.1.47: tempo que o torneio durou (início real → encerramento).
+      var _finDurStr = '';
+      if (t.tournamentStarted) {
+        var _fEnd = t.finishedAt ? (typeof t.finishedAt === 'number' ? t.finishedAt : new Date(t.finishedAt).getTime()) : null;
+        if (_fEnd && !isNaN(_fEnd)) {
+          var _fd = _fEnd - (+t.tournamentStarted);
+          if (_fd > 0 && typeof window._tProgFmtDur === 'function') _finDurStr = window._tProgFmtDur(_fd).replace(/\s\d+s$/, '');
+        }
+      }
+      enrollBtnHtml = `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">` +
+        `<div style="font-size: 0.65rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(251,191,36,0.12); padding: 3px 10px; border-radius: 10px; border: 1px solid rgba(251,191,36,0.25);">🏆 ${isOrg ? _t('dashboard.youOrganized') : _t('dashboard.youParticipated')}</div>` +
+        (_finDurStr ? `<div style="font-size:0.6rem;color:var(--text-muted);font-weight:600;">⏱️ durou ${_finDurStr}</div>` : '') +
+      `</div>`;
     }
 
     const _isFav = typeof window._isFavorite === 'function' && window._isFavorite(t.id);

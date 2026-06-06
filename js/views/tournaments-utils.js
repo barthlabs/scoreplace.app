@@ -582,6 +582,140 @@ window._getTournamentProgress = function(t) {
     var pct = total > 0 ? Math.round((completed.length / total) * 100) : 0;
     return { total: total, completed: completed.length, pct: pct };
 };
+
+// ─── v2.1.47: Progresso do Torneio com RITMO (verde/amarelo/vermelho) + barra
+// azul de progresso PREVISTO (tempo) + rótulos vivos (início real, fim estimado
+// pelo ritmo, tempo decorrido). Atualiza a cada segundo via _progressTick. ─────
+window._tProgParseMs = function(s) {
+  if (s == null || s === '') return null;
+  if (typeof s === 'number') return s;
+  var str = String(s);
+  var d = new Date(str.indexOf('T') !== -1 ? str : (str + 'T12:00'));
+  var ms = d.getTime();
+  return isNaN(ms) ? null : ms;
+};
+window._tProgFmtClock = function(ms) {
+  if (ms == null) return '—';
+  var d = new Date(ms);
+  var hh = String(d.getHours()).padStart(2, '0');
+  var mm = String(d.getMinutes()).padStart(2, '0');
+  var today = new Date();
+  var sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+  if (sameDay) return hh + ':' + mm;
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + hh + ':' + mm;
+};
+window._tProgFmtDur = function(ms) {
+  if (ms == null || ms < 0) ms = 0;
+  var s = Math.floor(ms / 1000);
+  var d = Math.floor(s / 86400); s -= d * 86400;
+  var h = Math.floor(s / 3600); s -= h * 3600;
+  var m = Math.floor(s / 60); s -= m * 60;
+  var out = [];
+  if (d > 0) out.push(d + 'd');
+  if (d > 0 || h > 0) out.push(h + 'h');
+  out.push(m + 'm');
+  out.push(s + 's');
+  return out.join(' ');
+};
+window._estimateTournamentMinutes = function(t) {
+  var prog = window._getTournamentProgress(t);
+  var totalMatches = prog.total || 0;
+  if (totalMatches < 1) return 0;
+  var gameDur = parseInt(t.gameDuration) || 30;
+  var callTime = parseInt(t.callTime) || 0;
+  var warmupTime = parseInt(t.warmupTime) || 0;
+  var courts = Math.max(parseInt(t.courtCount) || 1, 1);
+  var timePerSlot = gameDur + callTime + warmupTime + 5;
+  var slots = Math.ceil(totalMatches / courts);
+  return slots * timePerSlot;
+};
+// HTML interno (recomputado a cada tick).
+window._buildProgressInner = function(t) {
+  var prog = window._getTournamentProgress(t);
+  if (!prog.total) return '';
+  var isFinished = t.status === 'finished' || !!t.finishedAt;
+  var now = Date.now();
+  var actualStart = t.tournamentStarted ? (+t.tournamentStarted) : null;
+  var schedStart = window._tProgParseMs(t.startDate);
+  var plannedEnd = window._tProgParseMs(t.endDate);
+  if (!plannedEnd) {
+    var estMin = window._estimateTournamentMinutes(t);
+    var base = schedStart || actualStart;
+    if (base && estMin > 0) plannedEnd = base + estMin * 60000;
+  }
+  if (!schedStart) schedStart = actualStart;
+  var progFrac = prog.total > 0 ? (prog.completed / prog.total) : 0;
+
+  var head = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+    '<span style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;opacity:0.8;">Progresso do Torneio</span>' +
+    '<span style="font-size:0.8rem;font-weight:700;">' + prog.completed + '/' + prog.total + ' partidas (' + prog.pct + '%)</span>' +
+  '</div>';
+
+  // Sem timeline confiável → barra simples (comportamento antigo).
+  if (!actualStart || !schedStart || !plannedEnd || plannedEnd <= schedStart) {
+    var c = prog.pct === 100 ? '#10b981' : (prog.pct > 50 ? '#3b82f6' : '#f59e0b');
+    return head +
+      '<div style="width:100%;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">' +
+        '<div style="width:' + prog.pct + '%;height:100%;background:' + c + ';border-radius:4px;transition:width 0.5s ease;"></div>' +
+      '</div>' +
+      (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ Todas as partidas concluídas!</div>' : '');
+  }
+
+  var endForElapsed = isFinished ? (+t.finishedAt || now) : now;
+  var elapsedMs = endForElapsed - actualStart;
+  var expectedFrac = (now - schedStart) / (plannedEnd - schedStart);
+  if (expectedFrac < 0) expectedFrac = 0;
+  if (expectedFrac > 1) expectedFrac = 1;
+  if (isFinished) expectedFrac = Math.max(expectedFrac, progFrac);
+
+  var diff = expectedFrac - progFrac;
+  var color;
+  if (isFinished || diff <= 0.02) color = '#10b981';
+  else if (diff <= 0.12) color = '#f59e0b';
+  else color = '#ef4444';
+
+  var estEndMs;
+  if (isFinished) estEndMs = (+t.finishedAt || now);
+  else if (progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
+  else estEndMs = plannedEnd;
+
+  var topRow = '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;font-size:0.7rem;gap:8px;">' +
+    '<span style="color:var(--text-muted);white-space:nowrap;">início <b style="color:var(--text-bright);">' + window._tProgFmtClock(actualStart) + '</b></span>' +
+    '<span style="color:' + color + ';font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
+    '<span style="color:var(--text-muted);white-space:nowrap;">' + (isFinished ? 'fim ' : 'fim est. ') + '<b style="color:var(--text-bright);">' + window._tProgFmtClock(estEndMs) + '</b></span>' +
+  '</div>';
+  var realBar = '<div style="width:100%;height:9px;background:rgba(255,255,255,0.1);border-radius:5px 5px 0 0;overflow:hidden;">' +
+    '<div style="width:' + Math.round(progFrac * 100) + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' +
+  '</div>';
+  var blueBar = '<div style="width:100%;height:6px;background:rgba(255,255,255,0.06);border-radius:0 0 5px 5px;overflow:hidden;">' +
+    '<div style="width:' + Math.round(expectedFrac * 100) + '%;height:100%;background:#3b82f6;transition:width 0.9s linear;"></div>' +
+  '</div>';
+  var botRow = '<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:0.66rem;color:#60a5fa;">' +
+    '<span>programado ' + window._tProgFmtClock(schedStart) + '</span>' +
+    '<span>previsto ' + window._tProgFmtClock(plannedEnd) + '</span>' +
+  '</div>';
+  return head + topRow + realBar + blueBar + botRow;
+};
+window._renderTournamentProgress = function(t) {
+  var prog = window._getTournamentProgress(t);
+  if (!prog.total) return '';
+  window._ensureProgressTicker();
+  var _id = String((t && t.id) || '').replace(/"/g, '&quot;');
+  return '<div class="info-box" style="margin-top:1rem;"><div id="tourn-progress-live" data-tid="' + _id + '">' + window._buildProgressInner(t) + '</div></div>';
+};
+window._progressTick = function() {
+  var el = document.getElementById('tourn-progress-live');
+  if (!el) return;
+  var tid = el.getAttribute('data-tid');
+  var t = window.AppStore && window.AppStore.tournaments && window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tid); });
+  if (!t) return;
+  try { el.innerHTML = window._buildProgressInner(t); } catch (e) {}
+};
+window._ensureProgressTicker = function() {
+  if (window._progressTickerOn) return;
+  window._progressTickerOn = true;
+  setInterval(window._progressTick, 1000);
+};
 // Calculate next automatic draw date for Ranking/Suíço tournaments
 window._calcNextDrawDate = function(t) {
     if (!t || !t.drawFirstDate) return null;
