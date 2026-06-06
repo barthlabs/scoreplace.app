@@ -100,6 +100,59 @@ function _allowsLateEnrollment(t) {
   return le === 'standby' || le === 'expand';
 }
 
+// v2.1.66: ao se inscrever num torneio com DATA+HORA e LOCAL, cria automaticamente
+// um "Planejar ida" (presença planejada) cobrindo a duração do torneio.
+window._maybeCreateTournamentPresencePlan = function(t, user) {
+  try {
+    if (!t || !user || !user.uid) return;
+    if (!window.PresenceDB || typeof window.PresenceDB.savePresence !== 'function') return;
+    // Liga/Ranking são temporadas contínuas (meses) — não faz sentido um plano de presença.
+    if (window._isLigaFormat && window._isLigaFormat(t)) return;
+    // Exige DATA + HORA de início (o startDate vira "YYYY-MM-DDTHH:MM" quando há hora).
+    if (!t.startDate || String(t.startDate).indexOf('T') === -1) return;
+    var startsAt = new Date(t.startDate).getTime();
+    if (isNaN(startsAt)) return;
+    // Exige LOCAL (placeId do Google OU nome do local).
+    var venueName = t.venue || t.venueName || '';
+    var placeId = window.PresenceDB.venueKey(t.venuePlaceId || '', venueName);
+    if (!placeId) return;
+    // Fim = duração estimada do torneio; senão endDate; senão +3h. Cap em 12h (1 sessão).
+    var endsAt = null;
+    if (typeof window._estimateTournamentMinutes === 'function') {
+      var mins = window._estimateTournamentMinutes(t);
+      if (mins > 0) endsAt = startsAt + mins * 60000;
+    }
+    if (!endsAt && t.endDate) { var e = new Date(t.endDate).getTime(); if (!isNaN(e) && e > startsAt) endsAt = e; }
+    if (!endsAt) endsAt = startsAt + 3 * 3600000;
+    var MAX = 12 * 3600000;
+    if (endsAt - startsAt > MAX) endsAt = startsAt + MAX;
+    var sport = window.PresenceDB.normalizeSport(t.sport || '');
+    var payload = {
+      uid: user.uid,
+      email_lower: (user.email || '').toLowerCase(),
+      displayName: user.displayName || user.name || '',
+      photoURL: user.photoURL || '',
+      placeId: placeId,
+      venueName: venueName,
+      sports: sport ? [sport] : [],
+      type: 'planned',
+      startsAt: startsAt,
+      endsAt: endsAt,
+      visibility: (user.presenceVisibility === 'public' ? 'public' : 'friends'),
+      source: 'tournament',
+      tournamentId: t.id
+    };
+    if (t.venueLat) { var la = parseFloat(t.venueLat); if (!isNaN(la)) payload.venueLat = la; }
+    if (t.venueLon) { var lo = parseFloat(t.venueLon); if (!isNaN(lo)) payload.venueLon = lo; }
+    window.PresenceDB.savePresence(payload).then(function() {
+      if (typeof showNotification !== 'undefined') {
+        var _hh = function(ms){ var d = new Date(ms); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
+        showNotification('🗓️ Ida planejada', (venueName || 'Local') + ' · ' + _hh(startsAt) + '–' + _hh(endsAt), 'info');
+      }
+    }).catch(function(){});
+  } catch (e) {}
+};
+
 // Helper: add participant to standby/waitlist instead of main roster
 function _enrollToStandby(t, tId, participantObj, callback) {
   if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
@@ -347,6 +400,9 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
       try { if (typeof window._trophyOnTournamentEnrolled === 'function') window._trophyOnTournamentEnrolled(t); } catch(_te) {}
     }, 500);
     window._scrollToParticipant(tId, user.displayName);
+    // v2.1.66: cria automaticamente um "Planejar ida" cobrindo a duração do
+    // torneio quando ele tem data+hora e local. Dedup do PresenceDB evita duplicar.
+    try { if (typeof window._maybeCreateTournamentPresencePlan === 'function') window._maybeCreateTournamentPresencePlan(t, user); } catch (_pp) {}
     // Post-enroll callback (ex: abrir picker de parceiro em torneios de duplas)
     if (typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
 
