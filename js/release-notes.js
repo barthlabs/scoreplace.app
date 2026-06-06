@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🎯 v2.1.77-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Raiz da sala-fantasma: corrigida na origem.</b><br><br>' +
+      'Investigação concluída: abrir o setup da partida casual <b>setava o "retomar em outro dispositivo"</b> cedo demais — se você abrisse e abandonasse (fechar aba/reload/app cair), virava sala-fantasma que te puxava de volta. Agora esse marcador é gravado <b>só quando a partida inicia de verdade</b>. A sala ainda é criada pro QR/código funcionar; sem ninguém, ela se dissolve sozinha.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🛡️ v2.1.76-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Sala casual fantasma: raiz resolvida.</b><br><br>' +
       'O app <b>só entra/puxa</b> pra uma partida casual se houver <b>pelo menos 1 pessoa de verdade no lobby</b> — sala vazia é encerrada na hora (limpa o ponteiro + vai pra dashboard). E a sala se <b>dissolve assim que o último jogador sai</b> (passa a contar o lobby real, não um índice que dessincronizava). Acaba o problema de cair numa partida casual vazia.</p>' +

@@ -10506,6 +10506,17 @@ window._openCasualMatch = function(restoreOpts) {
       } catch(e) {}
     }
 
+    // v2.1.77 ROOT FIX: ponteiro activeCasualRoom setado AQUI — a partida iniciou
+    // de verdade (status:active, com jogadores). É o caso real de "retomar em
+    // outro dispositivo" (o celular cai durante o placar ao vivo). Movido do
+    // abrir-setup pra cá pra não criar fantasmas em setups abandonados.
+    try {
+      if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+        window.FirestoreDB.saveUserProfile(cu.uid, { activeCasualRoom: _sessionRoomCode }).catch(function() {});
+      }
+      sessionStorage.setItem('_activeCasualRoom', _sessionRoomCode);
+    } catch (e) {}
+
     // Save typed player names before destroying setup DOM so that if the user
     // unlinks/re-pairs after this match, _casualReopenSetup → _renderSetup can
     // restore them via the existing _savedPlayerNames fallback (slot index 0-3).
@@ -10635,13 +10646,13 @@ window._openCasualMatch = function(restoreOpts) {
         window._captureException(e, { area: 'casualMatchAutoSave', roomCode: _sessionRoomCode, code: e && e.code });
       }
     });
-    // Save active room to user profile so other devices can join
-    window.FirestoreDB.saveUserProfile(cu.uid, { activeCasualRoom: _sessionRoomCode }).catch(function() {});
-    // v0.17.48: backup síncrono em sessionStorage — sobrevive ao reload
-    // do auto-update mesmo se o saveUserProfile acima estiver em flight.
-    // Profile listener (store.js) prioriza activeCasualRoom do Firestore;
-    // mas se ele vier null por race, fallback no boot check pega aqui.
-    try { sessionStorage.setItem('_activeCasualRoom', _sessionRoomCode); } catch(e) {}
+    // v2.1.77 ROOT FIX: NÃO seta mais o ponteiro activeCasualRoom aqui (ao ABRIR
+    // o setup). Antes, abrir o setup e abandonar (fechar aba / navegar / reload /
+    // app cair) deixava o ponteiro apontando pra uma sala AINDA VAZIA (players=[]),
+    // e o "resume" puxava o usuário pra esse fantasma. O ponteiro agora é setado
+    // só quando a partida REALMENTE INICIA (window._casualStart) — que é o caso
+    // real de retomar em outro dispositivo. O doc da sala continua criado aqui
+    // pra o QR/código funcionar; sem ninguém, ele é dissolvido (12h ou ao sair).
   }
 
   // Start polling for new participants joining the room
@@ -11103,40 +11114,11 @@ window._renderCasualJoin = function(container, roomCode) {
     }
 
     var players = Array.isArray(match.players) ? match.players : [];
-
-    // v2.1.76: só ENTRA/PUXA se houver pelo menos 1 PESSOA de verdade no lobby
-    // (slot ocupado com uid). Sala "fantasma" (players=[] ou todos os slots
-    // vazios, ainda que playerUids tenha uid solto) NÃO deve puxar ninguém.
-    // Self-heal: limpa o ponteiro do perfil + sessionStorage, APAGA a sala vazia
-    // (best-effort) e manda pra dashboard. Pedido do dono: "só puxa se tem pelo
-    // menos 1 pessoa na sala".
-    var _occupied = players.some(function(p) { return p && p.uid; });
-    if (!_occupied && match.status !== 'active' && match.status !== 'finished') {
-      try { sessionStorage.removeItem('_activeCasualRoom'); } catch (e) {}
-      try {
-        var _cuE = window.AppStore && window.AppStore.currentUser;
-        if (_cuE && _cuE.uid) {
-          var _acrE = _cuE.activeCasualRoom;
-          if (_acrE && String(_acrE).toUpperCase() === String(roomCode).toUpperCase()) {
-            window._suppressCasualResumeUntil = Date.now() + 8000;
-            if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-              window.FirestoreDB.saveUserProfile(_cuE.uid, { activeCasualRoom: null }).catch(function () {});
-            }
-            _cuE.activeCasualRoom = null;
-          }
-        }
-      } catch (e) {}
-      // apaga a sala fantasma (best-effort — ignora erro de permissão)
-      try {
-        if (match._docId && window.FirestoreDB && typeof window.FirestoreDB.cancelCasualMatch === 'function') {
-          var _pdel = window.FirestoreDB.cancelCasualMatch(match._docId);
-          if (_pdel && typeof _pdel.catch === 'function') _pdel.catch(function () {});
-        }
-      } catch (e) {}
-      if (typeof showNotification === 'function') showNotification('Sala vazia', 'Essa partida casual não tem ninguém — encerrada.', 'info');
-      try { window.location.replace('#dashboard'); } catch (e) { window.location.hash = '#dashboard'; }
-      return;
-    }
+    // v2.1.77: o guard "sala vazia" do v2.1.76 foi REMOVIDO daqui — após mover o
+    // ponteiro activeCasualRoom pra o INÍCIO da partida, o "resume" nunca aponta
+    // pra um setup vazio, então não há o que barrar. E barrar aqui quebrava quem
+    // entra por QR num setup ainda em montagem. Salas vazias abandonadas (sem
+    // ponteiro) são dissolvidas pelo cleanup de 12h.
 
     var sportName = match.sport || _t('casual.title');
     var creatorName = match.createdByName || _t('casual.someone');
