@@ -1513,10 +1513,17 @@ function renderTournaments(container, tournamentId = null) {
                    </div>
                  `;
                 } else {
-                    // Antes do sorteio
+                    // Antes do sorteio — Inscritos disponível pra fazer a CHAMADA
+                    // (marcar presença) antes de sortear. v2.1.86: o organizador
+                    // acessa a lista, marca quem está presente e decide o que
+                    // fazer com os ausentes (desclassificar ou lista de espera).
                     actionsHtml = `
                    ${inviteModalHtml}
                    ${teamEnrollModalHtml}
+                   <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
+                     <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window.location.hash='#rules/${t.id}'">📋 Regras</button>
+                     <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window.location.hash='#participants/${t.id}'">👥 Inscritos / Chamada</button>
+                   </div>
                    ${autoDrawCountdownHtml ? `<div style="margin-top:1rem;text-align:center;">${autoDrawCountdownHtml}</div>` : ''}
                  `;
                 }
