@@ -1791,8 +1791,6 @@ function renderTournaments(container, tournamentId = null) {
                </div>
             </div>
 
-            ${(tournamentId && typeof window._renderTournamentProgress === 'function') ? window._renderTournamentProgress(t) : ''}
-
             ${(tournamentId && isOrg) ? (function() {
               // v1.6.1-beta: Árbitros button — só aparece quando resultEntry inclui 'referee'
               var _refEntry = t.resultEntry;
@@ -1823,6 +1821,11 @@ function renderTournaments(container, tournamentId = null) {
               </div>
             </div>`;
             })() : ''}
+
+            ${/* v2.1.51: box de progresso movido pra logo acima do badge
+                  "Torneio em andamento" (topo do actionsHtml), abaixo das
+                  Ferramentas do Organizador. */ ''}
+            ${(tournamentId && typeof window._renderTournamentProgress === 'function') ? window._renderTournamentProgress(t) : ''}
 
             ${/* v2.1.13: ações gerais (Regras/Inscritos/Imprimir/CSV/Modo TV + pódio
                   quando encerrado) movidas pra DEPOIS das Ferramentas do Organizador,
