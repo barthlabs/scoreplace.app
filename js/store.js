@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.73-beta';
+window.SCOREPLACE_VERSION = '2.1.74-beta';
 
 // ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
 // Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
@@ -2458,7 +2458,14 @@ window.AppStore = {
             // and this branch fires before activeCasualRoom=null lands.
             var hasOverlay = !!document.getElementById('casual-match-overlay') ||
                              !!document.getElementById('live-scoring-overlay');
-            if (!alreadyInMatch && !hasOverlay) {
+            // v2.1.74: SÓ resume a partida casual se o app abriu numa página
+            // NEUTRA (dashboard/raiz). Se o usuário abriu um DEEP LINK explícito
+            // — torneio (link de convite!), #invite, #place, etc. — respeita o
+            // destino e NÃO sequestra pra casual. Bug: link da Confra caía na
+            // partida casual de quem tinha activeCasualRoom pendente.
+            var _hLow = (hash || '').toLowerCase();
+            var isNeutralHash = !_hLow || _hLow === '#' || _hLow === '#dashboard' || _hLow.indexOf('#dashboard') === 0;
+            if (!alreadyInMatch && !hasOverlay && isNeutralHash) {
               window.location.hash = expected;
             }
           }
