@@ -606,11 +606,11 @@ function setupCreateTournamentModal() {
                 <label class="form-label">${_t('create.enrollMode')}</label>
                 <input type="hidden" id="select-inscricao" value="individual">
                 <div id="enroll-mode-buttons" style="display:flex;flex-direction:column;gap:8px;">
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                  <div class="toggle-row" id="enroll-row-individual" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
                     <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">👤</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.enrollIndividual')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.enrollIndividualDesc')}</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="enroll-toggle-individual" aria-label="Inscrição individual" checked onchange="window._syncEnrollToggles()"><span class="toggle-slider"></span></label>
                   </div>
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                  <div class="toggle-row" id="enroll-row-team" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
                     <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">👥</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.enrollTeam')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.enrollTeamDesc')}</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="enroll-toggle-team" aria-label="Inscrição em times" onchange="window._syncEnrollToggles()"><span class="toggle-slider"></span></label>
                   </div>
@@ -1029,6 +1029,36 @@ function setupCreateTournamentModal() {
     if (sel) sel.value = value;
     var descEl = document.getElementById('enroll-mode-desc');
     if (descEl) descEl.textContent = _enrollModeDescs[value] || '';
+  };
+
+  // v2.1.64: avisa que o torneio "Times Montados" não tem nenhum time formado e
+  // leva pra edição do Modo de Inscrição com os boxes brilhando.
+  window._warnTeamsNotFormed = function(tId) {
+    var msg = 'Este torneio está no modo "Times Montados": os jogadores se inscrevem já em duplas/times. ' +
+      'Ainda não há nenhum time formado — só jogadores individuais. ' +
+      'Os times precisam ser montados (por você ou pelos próprios participantes ao se inscreverem em dupla). ' +
+      'Se preferir, mude o Modo de Inscrição para "Individual" e o sorteio forma as duplas automaticamente.';
+    var _go = function() {
+      if (typeof window.openEditModal === 'function') window.openEditModal(tId);
+      setTimeout(function() { if (typeof window._glowEnrollModeBoxes === 'function') window._glowEnrollModeBoxes(); }, 700);
+    };
+    if (typeof showConfirmDialog === 'function') {
+      showConfirmDialog('👥 Faltam montar os times', msg, _go, null,
+        { type: 'warning', confirmText: '✏️ Ajustar inscrição', cancelText: 'Fechar' });
+    } else { _go(); }
+  };
+  // Brilho nos boxes do Modo de Inscrição + scroll até eles.
+  window._glowEnrollModeBoxes = function() {
+    var box = document.getElementById('enroll-mode-buttons');
+    if (box && box.scrollIntoView) { try { box.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }
+    ['enroll-row-team', 'enroll-row-individual'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('enroll-glow');
+      void el.offsetWidth; // reinicia a animação
+      el.classList.add('enroll-glow');
+      setTimeout(function() { el.classList.remove('enroll-glow'); }, 6000);
+    });
   };
   // Legacy compat: _selectEnrollMode still works for game-type sync
   window._selectEnrollMode = function(btn) {

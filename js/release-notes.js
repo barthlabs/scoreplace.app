@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">👥 v2.1.64-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Sorteio sem times montados: aviso claro em vez de painel confuso.</b><br><br>' +
+      'Num torneio no modo <b>"Times Montados"</b> em que ninguém formou time (só jogadores individuais), o sorteio não abre mais o painel de "potência de 2" com 0 times. Agora mostra um <b>aviso</b> explicando que os times precisam ser montados (por você ou pelos participantes) e, ao confirmar, leva direto pra <b>edição do Modo de Inscrição</b> com os boxes <b>brilhando</b>.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">💾 v2.1.63-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Ícones de template corrigidos.</b><br><br>' +
       'No criar/editar torneio, o <b>💾 disquete salva</b> o template e a <b>⭐ estrela acessa</b> os templates salvos — estavam invertidos.</p>' +

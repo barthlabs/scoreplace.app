@@ -387,6 +387,20 @@ function renderTournaments(container, tournamentId = null) {
         var _startDraw = function() {
             // Auto-mover solos para waitlist em torneios de duplas
             var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+            // v2.1.64: modo "Times Montados" SEM nenhum time formado (ex.: só
+            // jogadores individuais). Não adianta abrir o painel de potência de 2
+            // (que mostraria "0 times"). Avisa que os times precisam ser montados
+            // (pelo organizador ou pelos participantes) e leva pra edição do Modo
+            // de Inscrição. Intercepta ANTES de mover solos pra lista de espera.
+            if (t) {
+                var _enrM = t.enrollmentMode || t.enrollment || 'individual';
+                if (_enrM === 'time' && typeof window._diagnoseAll === 'function') {
+                    var _diagTeams = window._diagnoseAll(t);
+                    if (_diagTeams.preFormedTeams === 0) {
+                        if (typeof window._warnTeamsNotFormed === 'function') { window._warnTeamsNotFormed(tId); return; }
+                    }
+                }
+            }
             var movedCount = t ? window._autoMoveSoloToWaitlist(t) : 0;
             if (movedCount > 0 && typeof showNotification !== 'undefined') {
                 showNotification('🙋 ' + movedCount + ' participante(s) sem dupla', 'Movido(s) para lista de espera.', 'info');

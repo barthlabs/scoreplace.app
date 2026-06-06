@@ -39,6 +39,17 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   max-height: 40px !important;
 }
 
+/* v2.1.64: brilho pulsante nos boxes do Modo de Inscrição quando o sorteio é
+   barrado por falta de times montados — chama a atenção pra a regra. */
+@keyframes enrollGlowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); border-color: rgba(167,139,250,0.45); }
+  50% { box-shadow: 0 0 16px 3px rgba(167,139,250,0.65); border-color: #a78bfa; }
+}
+.enroll-glow {
+  animation: enrollGlowPulse 1.2s ease-in-out 4;
+  border-color: #a78bfa !important;
+}
+
 /* ==== FIXED BACK HEADER ==== */
 .sticky-back-header {
   position: fixed;
