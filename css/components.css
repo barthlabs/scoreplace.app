@@ -1,11 +1,15 @@
-/* v2.1.57: PADRÃO ÚNICO de altura pra TODOS os campos de data e hora do app.
-   - Mesma altura entre type=date e type=time (no iOS têm alturas intrínsecas
-     diferentes) e em qualquer tela.
-   - Altura suficiente pra fonte + margem elegante (texto não cola nas bordas).
-   - !important pra vencer paddings/font inline e o .form-control mobile
-     (min-height:44px), que deixavam o date crescer e desalinhar do time.
-   - Campos da mesma linha alinham pelo flex (align-items) do container. */
+/* v2.1.58: PADRÃO ÚNICO de altura pra TODOS os campos de data e hora do app.
+   CHAVE DO FIX → -webkit-appearance:none. No iOS Safari, type=date e type=time
+   são controles NATIVOS com altura intrínseca própria (o date, com texto maior,
+   fica MAIS ALTO que o time). Nesse modo nativo, height/min-height/max-height —
+   mesmo com !important — NÃO são respeitados: o WebKit dimensiona o widget pela
+   altura interna. appearance:none remove o chrome nativo e transforma o campo
+   numa caixa comum que finalmente OBEDECE o height → date e time ficam iguais.
+   Campos da mesma linha alinham pelo flex (align-items) do container. */
 input[type="date"], input[type="time"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
   box-sizing: border-box !important;
   height: 40px !important;
   min-height: 40px !important;
@@ -13,6 +17,18 @@ input[type="date"], input[type="time"] {
   padding: 4px 10px !important;
   font-size: 0.9rem !important;
   line-height: 1.2 !important;
+}
+/* o indicador de calendário/relógio do WebKit também pode forçar altura — neutraliza */
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  margin: 0 !important;
+  text-align: left !important;
+  line-height: 32px !important; /* 40px - 2*4 padding → centraliza o valor na vertical */
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 /* "Repetir a cada [N] dias" (número) e a tag "≈ N rodadas" acompanham a mesma
    altura pra alinhar na linha do agendamento de sorteios. */
