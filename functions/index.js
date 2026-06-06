@@ -1221,6 +1221,69 @@ exports.setParticipantsGender = onCall(
   }
 );
 
+// ─── setParticipantsProfile (v2.1.46) ────────────────────────────────────────
+// O organizador, pela Análise de Inscritos, atribui GÊNERO e CATEGORIA (skill por
+// modalidade) aos participantes. Diferente de setParticipantsGender (que só grava
+// se vazio), aqui SOBRESCREVE o perfil global em users/{uid} — o organizador está
+// atribuindo, e o jogador pode reajustar depois no próprio perfil. Verifica que o
+// caller é organizador/co-host. Admin SDK ignora as rules (escrita em perfil alheio).
+// Deploy:  firebase deploy --only functions:setParticipantsProfile
+exports.setParticipantsProfile = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const sport = String((request.data && request.data.sport) || "").trim();
+    const assignments = (request.data && request.data.assignments) || [];
+    if (!tournamentId || !Array.isArray(assignments) || assignments.length === 0) {
+      throw new HttpsError("invalid-argument", "tournamentId e assignments são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
+    if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = tSnap.data();
+    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
+    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
+      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
+      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
+      (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+    if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode atribuir perfil");
+
+    let written = 0; const skipped = [];
+    for (const a of assignments) {
+      const uid = a && a.uid ? String(a.uid) : "";
+      if (!uid) { skipped.push({ uid, reason: "no-uid" }); continue; }
+      const ref = db.collection("users").doc(uid);
+      const snap = await ref.get();
+      if (!snap.exists) { skipped.push({ uid, reason: "no-user" }); continue; }
+      const upd = {};
+      const g = a && a.gender ? String(a.gender) : "";
+      if (g === "masculino" || g === "feminino" || g === "outro") {
+        upd.gender = g;
+        upd.genderSetBy = callerUid;
+      }
+      const cat = a && a.category ? String(a.category).trim() : "";
+      if (cat && sport) {
+        const curData = snap.data() || {};
+        const sbs = (curData.skillBySport && typeof curData.skillBySport === "object") ? Object.assign({}, curData.skillBySport) : {};
+        sbs[sport] = cat;
+        upd.skillBySport = sbs;
+        upd.skillSetBy = callerUid;
+      }
+      if (Object.keys(upd).length === 0) { skipped.push({ uid, reason: "nothing" }); continue; }
+      upd.profileSetAt = admin.firestore.FieldValue.serverTimestamp();
+      await ref.update(upd);
+      written++;
+    }
+    console.log("[setParticipantsProfile] torneio", tournamentId, "sport", sport, "gravados:", written, "pulados:", skipped.length);
+    return { ok: true, written, skipped };
+  }
+);
+
 // ─── WhatsApp via Evolution API (self-hosted no Railway) ────────────────────
 // v1.3.37-beta: Cloud Function que consome `whatsapp_queue/{id}` (Firestore
 // trigger onCreate) e POSTa pra Evolution API (https://docs.evolution-api.com).
