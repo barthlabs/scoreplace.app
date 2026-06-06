@@ -4950,7 +4950,11 @@ window._prefillFromTemplate = function(tpl) {
   if (tpl.drawManual !== undefined) { _setC('liga-draw-manual', tpl.drawManual); _setC('suico-draw-manual', tpl.drawManual); }
   if (typeof window._updateLigaRoundsTag === 'function') { try { window._updateLigaRoundsTag(); } catch (e) {} }
 
-  // Categories (store in hidden data for save function to pick up)
+  // Categorias do template — restaura TODAS as 4 dimensões (gênero, habilidade,
+  // idade, personalizadas) nos hidden inputs E nos pills/chips, igual ao caminho
+  // de edição de torneio. v2.1.81: antes só idade era restaurada — gênero e
+  // habilidade do template eram silenciosamente perdidos (o save recomputava
+  // combinedCategories sem eles). _templateCategories ficou só como snapshot.
   if ((tpl.genderCategories && tpl.genderCategories.length > 0) || (tpl.skillCategories && tpl.skillCategories.length > 0) || (tpl.ageCategories && tpl.ageCategories.length > 0) || (tpl.customCategories && tpl.customCategories.length > 0)) {
     window._templateCategories = {
       gender: tpl.genderCategories || [],
@@ -4959,10 +4963,19 @@ window._prefillFromTemplate = function(tpl) {
       custom: tpl.customCategories || [],
       combined: tpl.combinedCategories || []
     };
+    // Gênero: hidden + pills
+    var _tplGender = tpl.genderCategories || [];
+    _setV('tourn-gender-categories', _tplGender.join(','));
+    if (typeof window._applyGenderCatUI === 'function') { try { window._applyGenderCatUI(_tplGender); } catch (e) {} }
+    // Habilidade: hidden + pills (loader cuida de ambos)
+    if (typeof window._loadSkillCategoriesFromArray === 'function') { try { window._loadSkillCategoriesFromArray(tpl.skillCategories || []); } catch (e) {} }
+    // Idade: hidden + pills
     _setV('tourn-age-categories', (tpl.ageCategories || []).join(','));
-    if (tpl.ageCategories && tpl.ageCategories.length && typeof window._applyAgeCatUI === 'function') { try { window._applyAgeCatUI(tpl.ageCategories); } catch (e) {} }
-    // v2.1.80: restaura categorias personalizadas do template
+    if (typeof window._applyAgeCatUI === 'function') { try { window._applyAgeCatUI(tpl.ageCategories || []); } catch (e) {} }
+    // Personalizadas: hidden + chips
     if (typeof window._loadCustomCategoriesFromArray === 'function') { try { window._loadCustomCategoriesFromArray(tpl.customCategories || []); } catch (e) {} }
+    // Recalcula o preview com tudo restaurado
+    if (typeof window._updateCategoryPreview === 'function') { try { window._updateCategoryPreview(); } catch (e) {} }
   }
 };
 
