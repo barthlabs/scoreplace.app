@@ -3881,10 +3881,18 @@ window._blankTournamentDates = function() {
 // ─── v2.1.32: Locais preferidos do organizador (1 clique no Criar Torneio) ──
 // Se o usuário tem locais preferidos no perfil, mostra chips abaixo do campo de
 // local — clicar preenche todos os campos do local de uma vez.
+// v2.1.50: o container é SEMPRE renderizado no build do form (mesmo vazio); o
+// conteúdo é preenchido por _hydrateVenuePrefChips() depois que o perfil carrega
+// (preferredLocations pode chegar async → antes ficava vazio "pra sempre").
 window._venuePrefChipsHtml = function() {
+  return '<div id="venue-pref-chips" style="margin-bottom:8px;"></div>';
+};
+window._hydrateVenuePrefChips = function() {
+  var box = document.getElementById('venue-pref-chips');
+  if (!box) return;
   var cu = window.AppStore && window.AppStore.currentUser;
   var locs = (cu && Array.isArray(cu.preferredLocations)) ? cu.preferredLocations : [];
-  if (!locs.length) return '';
+  if (!locs.length) { box.innerHTML = ''; return; }
   var _sh = window._safeHtml || function(s) { return String(s == null ? '' : s); };
   var chips = locs.map(function(loc, i) {
     var full = (loc && (loc.label || loc.name)) || ('Local ' + (i + 1));
@@ -3892,7 +3900,7 @@ window._venuePrefChipsHtml = function() {
     return '<button type="button" data-pref-chip="' + i + '" onclick="window._venuePickPreferred(' + i + ')" ' +
       'style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#34d399;border-radius:999px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;">⭐ ' + _sh(nm) + '</button>';
   }).join('');
-  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;max-width:100%;overflow:hidden;">' +
+  box.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;max-width:100%;overflow:hidden;">' +
     '<span style="font-size:0.72rem;color:var(--text-muted);flex-shrink:0;">Preferidos:</span>' + chips +
   '</div>';
 };
@@ -3942,6 +3950,11 @@ window._pullRegisteredVenueData = async function(placeId, name) {
   try {
     var key = (typeof window.VenueDB.venueKey === 'function') ? window.VenueDB.venueKey(placeId || '', name || '') : (placeId || '');
     var v = await window.VenueDB.loadVenue(key);
+    // Fallback: local salvo sob a chave de nome-slug (custom:<slug>) em vez do placeId
+    if (!v && placeId && name && typeof window.VenueDB.venueKey === 'function') {
+      var altKey = window.VenueDB.venueKey('', name);
+      if (altKey && altKey !== key) v = await window.VenueDB.loadVenue(altKey);
+    }
     if (!v) return;
     var count = (typeof v.courtCount === 'number' && v.courtCount > 0) ? v.courtCount : (Array.isArray(v.courts) ? v.courts.length : 0);
     if (count > 0) {
@@ -4728,7 +4741,13 @@ window.renderCreateTournamentPage = function (container) {
     else if (typeof window._updateGSMSummaryFromHidden === 'function') window._updateGSMSummaryFromHidden();
     if (typeof window._initPlacesAutocomplete === 'function') window._initPlacesAutocomplete();
     if (typeof window._autoShowVenueMap === 'function') window._autoShowVenueMap();
+    if (typeof window._hydrateVenuePrefChips === 'function') window._hydrateVenuePrefChips();
   }, 50);
+  // v2.1.50: o perfil (preferredLocations) pode chegar async depois do render —
+  // re-hidrata os chips de locais preferidos quando ele tiver carregado.
+  setTimeout(function () {
+    if (typeof window._hydrateVenuePrefChips === 'function') window._hydrateVenuePrefChips();
+  }, 900);
 
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
 };

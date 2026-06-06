@@ -5,7 +5,9 @@
 #tourn-end-date, #tourn-end-time,
 #liga-first-draw-date, #liga-first-draw-time, #liga-draw-interval {
   box-sizing: border-box;
-  height: 36px;
+  height: 44px;
+  min-height: 44px; /* anula o .form-control{min-height:44px} do mobile, que deixava o date crescer */
+  max-height: 44px; /* trava o type=date do iOS (altura intrínseca > type=time) */
   line-height: 1.2;
 }
 

@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">📍 v2.1.50-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Campos de data/hora alinhados + locais preferidos no Criar Torneio.</b><br><br>' +
+      'Os campos de <b>data e hora</b> (inscrições, início e fim) agora têm a <b>mesma altura</b> de verdade no iPhone — o <code>date</code> não estica mais que o <code>time</code>. Os <b>locais preferidos</b> do seu perfil voltaram a aparecer como atalhos abaixo do campo de local (eram perdidos quando o perfil carregava depois da tela). E ao escolher um local <b>cadastrado na plataforma</b>, o nº de <b>quadras</b> e a <b>política de acesso</b> são puxados automaticamente (com busca extra por nome se a chave não bater).</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">📅 v2.1.49-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Agendamento de sorteios da Liga mais legível.</b><br><br>' +
       'A seção <b>Agendamento de Sorteios</b> ganhou o rótulo <b>Primeiro Sorteio</b> e o campo de data ficou maior pra a data caber em <b>uma única linha</b>. Data e hora agora têm a <b>mesma altura</b>, e a previsão de rodadas usa a <b>mesma fonte</b> dos demais números.</p>' +
