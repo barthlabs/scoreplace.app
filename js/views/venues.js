@@ -2343,124 +2343,55 @@
   // Build a compact timeline slice for the venue detail modal: friends'
   // avatars who are here now + "+N outros", plus a one-line summary for
   // next hours. Uses the same classification rules as the presence view.
+  // v2.1.70: detalhe do local usa os MESMOS renderers dos cards preferidos —
+  // gráfico hora-a-hora + "Agora no local" + "Próximas horas" (com box do
+  // torneio + amigos nomeados). _buildMovimentoHtml virou wrapper: hidrata os
+  // slots e retorna '' (os call sites antigos não sobrescrevem).
   async function _buildMovimentoHtml(venue) {
-    if (!window.PresenceDB) return '';
+    await _hydrateDetailMovement(venue);
+    return '';
+  }
+
+  async function _hydrateDetailMovement(venue) {
+    var slot = document.getElementById('venue-movimento-slot');
+    if (!slot || !window.PresenceDB || !venue) return;
+    slot.innerHTML =
+      '<div id="venue-chart-slot"></div>' +
+      '<div id="venue-now-slot"></div>' +
+      '<div id="venue-upcoming-slot"></div>';
     var dayKey = window.PresenceDB.dayKey(new Date());
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var myUid = cu && cu.uid;
+    var friends = (cu && Array.isArray(cu.friends)) ? cu.friends : [];
     var presences = [];
     try { presences = await window.PresenceDB.loadForVenueDay(venue.placeId, dayKey); } catch (e) {}
-    // Tournaments happening today at this venue (all sports) — from AppStore cache.
+    presences = (presences || []).filter(function(p) {
+      if (!p) return false;
+      if (p.visibility === 'friends') {
+        if (myUid && p.uid === myUid) return true;
+        return p.uid && friends.indexOf(p.uid) !== -1;
+      }
+      return true;
+    });
     var tournaments = (window.AppStore && window.AppStore.tournaments) || [];
+    var pKey = window.PresenceDB.venueKey(venue.placeId, venue.name);
     var tHere = tournaments.filter(function(t) {
       if (!t || !t.startDate) return false;
-      if (window.VenueDB.venueKey(t.venuePlaceId, t.venue) !== venue.placeId) return false;
+      var tKey = window.PresenceDB.venueKey(t.venuePlaceId || '', t.venue || '');
+      if (tKey !== pKey) return false;
       var d = new Date(t.startDate);
       return !isNaN(d.getTime()) && window.PresenceDB.dayKey(d) === dayKey;
     });
-
-    if (presences.length === 0 && tHere.length === 0) {
-      return '<div style="background:var(--bg-darker);border:1px solid var(--border-color);border-radius:10px;padding:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">Ninguém registrou presença ou torneio hoje neste local.</div>';
-    }
-
-    var cu = window.AppStore && window.AppStore.currentUser;
-    var myUid = cu && cu.uid;
-    var friendsUids = {};
-    (cu && cu.friends ? cu.friends : []).forEach(function(u) { friendsUids[u] = true; });
-
-    var now = Date.now();
-    var activeNow = presences.filter(function(p) { return p.type === 'checkin' && p.startsAt <= now && p.endsAt > now; });
-    var planned = presences.filter(function(p) { return p.type === 'planned' && p.startsAt > now; });
-
-    // Split active into friends (chip c/ avatar + nome) e outros (contador).
-    // Antes só avatares sobrepostos com nome só em tooltip — em mobile onde
-    // não há hover o usuário via "ícone distorcido sem nome". Agora cada
-    // presença vira chip visível: avatar 32px + nome ao lado, em linha própria
-    // para eliminar confusão visual.
-    var friendChips = [];
-    var seen = {};
-    var otherNow = 0;
-    activeNow.forEach(function(p) {
-      var mine = (p.uid === myUid);
-      var fr = p.uid && friendsUids[p.uid];
-      if (mine || fr) {
-        var k = p.uid || p.displayName;
-        if (seen[k]) return;
-        seen[k] = true;
-        var name = p.displayName || 'Amigo';
-        var initials = name.trim().split(/\s+/).map(function(s){return s.charAt(0);}).join('').substring(0,2).toUpperCase();
-        var border = mine ? '#10b981' : '#fbbf24';
-        var chipBg = mine ? 'rgba(16,185,129,0.14)' : 'rgba(251,191,36,0.12)';
-        var chipBorder = mine ? 'rgba(16,185,129,0.35)' : 'rgba(251,191,36,0.30)';
-        var avatar = p.photoURL
-          ? '<img alt="' + _safe(name) + '" src="' + _safe(p.photoURL) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid ' + border + ';flex-shrink:0;">'
-          : '<div style="width:28px;height:28px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.72rem;border:2px solid ' + border + ';flex-shrink:0;">' + _safe(initials) + '</div>';
-        var label = mine ? 'Você' : name;
-        friendChips.push(
-          '<div style="display:inline-flex;align-items:center;gap:6px;background:' + chipBg + ';border:1px solid ' + chipBorder + ';border-radius:999px;padding:3px 10px 3px 3px;">' +
-            avatar +
-            '<span style="font-size:0.78rem;font-weight:600;color:var(--text-bright);white-space:nowrap;">' + _safe(label) + '</span>' +
-          '</div>'
-        );
-      } else if (p.visibility === 'public') {
-        otherNow += 1;
-      }
+    var capacity = _calcVenueCapacity(venue);
+    try { _renderPreferredChart('venue-chart-slot', presences, tHere, dayKey, capacity, { venueName: venue.name, realPid: venue.placeId, lat: venue.lat != null ? Number(venue.lat) : null, lon: venue.lon != null ? Number(venue.lon) : null }); } catch (e) {}
+    try { _renderNowAtVenueBox('venue-now-slot', presences, venue.placeId); } catch (e) {}
+    try { _renderUpcomingBox('venue-upcoming-slot', presences, tHere, dayKey, venue.placeId); } catch (e) {}
+    var anyContent = ['venue-chart-slot', 'venue-now-slot', 'venue-upcoming-slot'].some(function(id) {
+      var e = document.getElementById(id); return e && e.innerHTML.trim() !== '';
     });
-
-    // Also fold tournaments into the "now" count for UX consistency.
-    tHere.forEach(function(t) {
-      var start = new Date(t.startDate);
-      var end = t.endDate ? new Date(t.endDate) : new Date(start.getTime() + 3 * 3600 * 1000);
-      if (start.getTime() <= now && end.getTime() > now) {
-        otherNow += Math.max(1, (Array.isArray(t.participants) ? t.participants.length : 1));
-      }
-    });
-
-    var html = '<div style="background:var(--bg-darker);border:1px solid var(--border-color);border-radius:10px;padding:12px;">';
-    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-weight:700;color:var(--text-bright);font-size:0.85rem;">' +
-      '<span style="width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;"></span>' +
-      'Agora no local' +
-    '</div>';
-    if (friendChips.length === 0 && otherNow === 0) {
-      html += '<div style="font-size:0.78rem;color:var(--text-muted);">Ninguém registrou presença agora.</div>';
-    } else {
-      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
-      if (friendChips.length > 0) html += friendChips.join('');
-      if (otherNow > 0) html += '<span style="background:rgba(107,114,128,0.2);border:1px solid rgba(107,114,128,0.3);color:var(--text-bright);font-size:0.72rem;font-weight:600;padding:2px 10px;border-radius:999px;">👥 +' + otherNow + '</span>';
-      html += '</div>';
+    if (!anyContent) {
+      slot.innerHTML = '<div style="background:var(--bg-darker);border:1px solid var(--border-color);border-radius:10px;padding:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">Ninguém registrou presença ou torneio hoje neste local.</div>';
     }
-
-    // Upcoming today: group by hour bucket
-    if (planned.length > 0 || tHere.some(function(t){ return new Date(t.startDate).getTime() > now; })) {
-      html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color);font-weight:700;color:var(--text-bright);font-size:0.82rem;margin-bottom:6px;">🗓️ Mais tarde hoje</div>';
-      var allUpcoming = [];
-      planned.forEach(function(p) { allUpcoming.push({ ts: p.startsAt, kind: 'presence', item: p }); });
-      tHere.forEach(function(t) {
-        var ts = new Date(t.startDate).getTime();
-        if (ts > now) allUpcoming.push({ ts: ts, kind: 'tournament', item: t });
-      });
-      allUpcoming.sort(function(a, b) { return a.ts - b.ts; });
-      allUpcoming.slice(0, 5).forEach(function(row) {
-        var d = new Date(row.ts);
-        var hhmm = window._formatHHMM(d);
-        if (row.kind === 'tournament') {
-          html += '<div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-bright);margin-bottom:4px;">' +
-            '<span style="min-width:44px;font-weight:600;">' + hhmm + '</span>' +
-            '<span style="background:rgba(251,191,36,0.18);border:1px solid rgba(251,191,36,0.35);color:#fbbf24;padding:2px 8px;border-radius:999px;font-size:0.7rem;cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(row.item.id) + '\'">🏆 ' + _safe(row.item.name || 'Torneio') + '</span>' +
-          '</div>';
-        } else {
-          var p = row.item;
-          var who = (p.uid === myUid) ? 'Você' : (friendsUids[p.uid] ? (p.displayName || 'Amigo') : null);
-          if (who) {
-            html += '<div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-bright);margin-bottom:4px;">' +
-              '<span style="min-width:44px;font-weight:600;">' + hhmm + '</span>' +
-              '<span>' + _safe(who) + (p.sport ? ' · ' + _safe(p.sport) : '') + '</span>' +
-            '</div>';
-          }
-        }
-      });
-    }
-
-    html += '</div>';
-    return html;
   }
 
   // List of tournaments at this venue — upcoming + past (last 6 months).

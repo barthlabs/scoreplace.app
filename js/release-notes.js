@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">📊 v2.1.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Ficha do local com gráfico e amigos nomeados.</b><br><br>' +
+      'O detalhe do local agora mostra o <b>gráfico hora-a-hora</b> e a seção de presenças futuras com os <b>nomes/fotos dos amigos</b> (e "+N" dos não-amigos), inclusive o <b>box do torneio</b> com os inscritos — o mesmo dos cards de locais preferidos.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏆 v2.1.69-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Inscritos do torneio agrupados num box.</b><br><br>' +
       'Em "Próximas horas", quem vai <b>atender o torneio</b> agora aparece dentro de um <b>box com o nome do torneio</b> (amigos com nome/foto, não-amigos no "+N"). Presenças <b>avulsas</b> (quem planejou ir mas não está inscrito) ficam <b>fora do box</b>. Sem duplicar quem está inscrito.</p>' +
