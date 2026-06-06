@@ -977,79 +977,95 @@
     var html =
       '<div style="margin-top:10px;background:var(--bg-darker);border:1px solid rgba(99,102,241,0.25);border-radius:12px;padding:10px 12px;">' +
         '<div style="font-weight:700;color:var(--text-bright);margin-bottom:8px;font-size:0.88rem;">🗓️ Próximas horas</div>';
+    // chip de uma pessoa (você/amigo) — mesma marcação usada antes.
+    var _personChip = function(p, klass) {
+      var name = klass === 'me' ? 'Você' : (p.displayName || 'Amigo');
+      var borderColor = klass === 'me' ? '#10b981' : '#fbbf24';
+      var avatar = p.photoURL
+        ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:26px;height:26px;display:block;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';box-sizing:border-box;flex-shrink:0;">'
+        : '<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.68rem;border:2px solid ' + borderColor + ';box-sizing:border-box;flex-shrink:0;">' + _safe(_initials(name)) + '</div>';
+      var cancelBtn = '';
+      var pidForCancel = p.placeId || realPid || '';
+      if (klass === 'me' && p._id) {
+        var upDocIdSafe = String(p._id).replace(/"/g, '&quot;');
+        var upPidSafe = String(pidForCancel).replace(/"/g, '&quot;');
+        cancelBtn = '<button onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + upDocIdSafe + '","' + upPidSafe + '","planned")\' style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Cancelar plano de ir">✕</button>';
+      }
+      var chipSports = Array.isArray(p.sports) ? p.sports : [];
+      var iconStr = _sportsIcons(chipSports);
+      return '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:999px;padding:3px 10px 3px 6px;min-width:0;height:36px;box-sizing:border-box;line-height:1;">' +
+        (iconStr ? '<span title="' + _safe(chipSports.join(', ')) + '" style="font-size:0.88rem;line-height:1;flex-shrink:0;">' + iconStr + '</span>' : '') +
+        avatar +
+        '<span style="font-size:0.76rem;color:var(--text-bright);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;">' + _safe(name) + '</span>' +
+        cancelBtn +
+      '</div>';
+    };
+    var _plusPill = function(n) {
+      return '<span style="background:rgba(107,114,128,0.18);border:1px solid rgba(107,114,128,0.3);color:var(--text-bright);font-size:0.72rem;font-weight:600;padding:2px 10px;border-radius:999px;">+' + n + '</span>';
+    };
     var renderedAny = false;
     hours.forEach(function(h) {
       var list = groups[h];
-      var friendsSet = {};
-      var friendChips = [];
-      var otherCount = 0;
-      var tournamentBadge = '';
+      // v2.1.69: separa quem está ATENDENDO O TORNEIO (ocupação virtual) — que
+      // vai DENTRO de um box com o nome do torneio — de quem tem presença avulsa
+      // (não inscrita), que aparece FORA do box.
+      var byTournament = {}; var tOrder = []; var enrolledUids = {};
+      var loose = { chips: [], seen: {}, other: 0 };
+      // 1ª passada: inscritos (presenças do torneio), agrupados por torneio
       list.forEach(function(p) {
-        if (p.type === 'tournament' && !tournamentBadge) {
-          var tid = _safe(p._tournamentName || 'torneio');
-          tournamentBadge = '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;background:rgba(251,191,36,0.18);border:1px solid rgba(251,191,36,0.35);color:#fbbf24;padding:2px 8px;border-radius:999px;' +
-            (p._tournamentId ? 'cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(p._tournamentId) + '\'' : '') +
-            '">🏆 ' + tid + '</span>';
-        }
+        if (p.type !== 'tournament') return;
+        var tk = String(p._tournamentId || p._tournamentName || 'torneio');
+        if (!byTournament[tk]) { byTournament[tk] = { name: p._tournamentName || 'torneio', id: p._tournamentId || '', chips: [], seen: {}, other: 0 }; tOrder.push(tk); }
+        var grp = byTournament[tk];
+        if (p.uid) enrolledUids[p.uid] = true;
         var klass = _classifyPresence(p);
         if (klass === 'me' || klass === 'friend') {
           var key = p.uid || p.displayName;
-          if (friendsSet[key]) return;
-          friendsSet[key] = true;
-          var name = klass === 'me' ? 'Você' : (p.displayName || 'Amigo');
-          var borderColor = klass === 'me' ? '#10b981' : '#fbbf24';
-          // v0.17.9: box-sizing:border-box pra que avatar e initial-circle
-          // tenham EXATAMENTE 26px total (border inclusa). Antes,
-          // content-box default + border 2px = 30px effective. Inconsistência
-          // entre img (object-fit cover) e div initial gerava chips de
-          // alturas diferentes em "Você" vs Nelson.
-          var avatar = p.photoURL
-            ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:26px;height:26px;display:block;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';box-sizing:border-box;flex-shrink:0;">'
-            : '<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.68rem;border:2px solid ' + borderColor + ';box-sizing:border-box;flex-shrink:0;">' + _safe(_initials(name)) + '</div>';
-          // v0.16.32: botão "Cancelar" discreto, bold, maior, inline logo
-          // depois do nome "Você" — sem círculo, sem sobreposição na foto.
-          // v0.16.65: o placeId vem do PRÓPRIO doc da presença (sempre existe
-          // quando salvo via savePresence), com fallback pra realPid do slot.
-          // Antes a guard estrita `&& realPid` escondia o ✕ em preferidos
-          // label-only/comunitários sem Google placeId no card — apesar do
-          // doc da presença ter o placeId perfeitamente válido pro cancel.
-          var cancelBtn = '';
-          var pidForCancel = p.placeId || realPid || '';
-          if (klass === 'me' && p._id) {
-            var upDocIdSafe = String(p._id).replace(/"/g, '&quot;');
-            var upPidSafe = String(pidForCancel).replace(/"/g, '&quot;');
-            cancelBtn = '<button onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + upDocIdSafe + '","' + upPidSafe + '","planned")\' style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Cancelar plano de ir">✕</button>';
-          }
-          var chipSports = Array.isArray(p.sports) ? p.sports : [];
-          var iconStr = _sportsIcons(chipSports);
-          // v0.17.9: HEIGHT fixo (36px) substitui min-height — força altura
-          // idêntica entre chips com ✕ e sem ✕. Avatar (26px com box-sizing
-          // border-box) + padding 3+3 = 32px max, dentro do height 36px.
-          // Todos os spans com line-height:1 pra evitar overflow vertical.
-          // Pedido do usuário: cards na "Próximas horas" têm que ter MESMA
-          // altura — bug reportado várias vezes, finalmente forçado.
-          friendChips.push(
-            '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:999px;padding:3px 10px 3px 6px;min-width:0;height:36px;box-sizing:border-box;line-height:1;">' +
-              (iconStr ? '<span title="' + _safe(chipSports.join(', ')) + '" style="font-size:0.88rem;line-height:1;flex-shrink:0;">' + iconStr + '</span>' : '') +
-              avatar +
-              '<span style="font-size:0.76rem;color:var(--text-bright);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;">' + _safe(name) + '</span>' +
-              cancelBtn +
-            '</div>'
-          );
-        } else if (p.visibility === 'public' || p.type === 'tournament') {
-          otherCount += 1;
-        }
+          if (grp.seen[key]) return;
+          grp.seen[key] = true;
+          grp.chips.push(_personChip(p, klass));
+        } else { grp.other += 1; }
       });
-      if (friendChips.length === 0 && otherCount === 0 && !tournamentBadge) return;
+      // 2ª passada: presenças avulsas (não-torneio), pulando quem já está inscrito
+      list.forEach(function(p) {
+        if (p.type === 'tournament') return;
+        if (p.uid && enrolledUids[p.uid]) return; // já aparece no box do torneio
+        var klass = _classifyPresence(p);
+        if (klass === 'me' || klass === 'friend') {
+          var key = p.uid || p.displayName;
+          if (loose.seen[key]) return;
+          loose.seen[key] = true;
+          loose.chips.push(_personChip(p, klass));
+        } else if (p.visibility === 'public') { loose.other += 1; }
+      });
+      var hasLoose = loose.chips.length > 0 || loose.other > 0;
+      if (tOrder.length === 0 && !hasLoose) return;
       renderedAny = true;
+      var inner = '';
+      tOrder.forEach(function(tk) {
+        var grp = byTournament[tk];
+        var titleAttr = grp.id
+          ? ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:#fbbf24;margin-bottom:6px;cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(grp.id) + '\'"'
+          : ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:#fbbf24;margin-bottom:6px;"';
+        inner += '<div style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:8px 10px;">' +
+          '<div' + titleAttr + '>🏆 ' + _safe(grp.name) + '</div>' +
+          '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">' +
+            grp.chips.join('') +
+            (grp.other > 0 ? _plusPill(grp.other) : '') +
+            (grp.chips.length === 0 && grp.other === 0 ? '<span style="font-size:0.72rem;color:var(--text-muted);">Inscritos</span>' : '') +
+          '</div>' +
+        '</div>';
+      });
+      if (hasLoose) {
+        inner += '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">' +
+          loose.chips.join('') +
+          (loose.other > 0 ? _plusPill(loose.other) : '') +
+        '</div>';
+      }
       html +=
         '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--border-color);">' +
           '<div style="min-width:36px;font-weight:700;color:var(--text-bright);font-size:0.88rem;flex-shrink:0;padding-top:2px;">' + h + 'h</div>' +
-          '<div style="flex:1;display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0;">' +
-            friendChips.join('') +
-            (otherCount > 0 ? '<span style="background:rgba(107,114,128,0.18);border:1px solid rgba(107,114,128,0.3);color:var(--text-bright);font-size:0.72rem;font-weight:600;padding:2px 10px;border-radius:999px;">+' + otherCount + '</span>' : '') +
-            tournamentBadge +
-          '</div>' +
+          '<div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0;">' + inner + '</div>' +
         '</div>';
     });
     html += '</div>';
