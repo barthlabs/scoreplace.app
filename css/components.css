@@ -1,3 +1,13 @@
+/* v2.1.44: inputs de data e hora do criar/editar torneio com a MESMA altura
+   (no iOS, type=date e type=time têm alturas intrínsecas diferentes). */
+#tourn-reg-date, #tourn-reg-time,
+#tourn-start-date, #tourn-start-time,
+#tourn-end-date, #tourn-end-time {
+  box-sizing: border-box;
+  height: 36px;
+  line-height: 1.2;
+}
+
 /* ==== FIXED BACK HEADER ==== */
 .sticky-back-header {
   position: fixed;

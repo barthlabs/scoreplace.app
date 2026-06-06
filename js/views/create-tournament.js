@@ -2283,6 +2283,10 @@ function setupCreateTournamentModal() {
 
       window._checkWeather();
 
+      // v2.1.44: se o local está cadastrado na plataforma, puxa nº de quadras e
+      // acesso reais (sobrepõe o acesso inferido pelos tipos do Google acima).
+      if (typeof window._pullRegisteredVenueData === 'function') window._pullRegisteredVenueData(place.id || '', name);
+
       // Show map with the selected venue
       window._initVenueCreateMap(place.location.lat(), place.location.lng(), name);
     } catch (err) {
@@ -3882,27 +3886,44 @@ window._venuePrefChipsHtml = function() {
   if (!locs.length) return '';
   var _sh = window._safeHtml || function(s) { return String(s == null ? '' : s); };
   var chips = locs.map(function(loc, i) {
-    var name = (loc && (loc.label || loc.name)) || ('Local ' + (i + 1));
+    var full = (loc && (loc.label || loc.name)) || ('Local ' + (i + 1));
+    var nm = window._venueNameOnly(full); // v2.1.44: só o nome, sem endereço
     return '<button type="button" data-pref-chip="' + i + '" onclick="window._venuePickPreferred(' + i + ')" ' +
-      'style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#34d399;border-radius:999px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;white-space:nowrap;">⭐ ' + _sh(name) + '</button>';
+      'style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#34d399;border-radius:999px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;">⭐ ' + _sh(nm) + '</button>';
   }).join('');
-  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">' +
-    '<span style="font-size:0.72rem;color:var(--text-muted);">Preferidos:</span>' + chips +
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;max-width:100%;overflow:hidden;">' +
+    '<span style="font-size:0.72rem;color:var(--text-muted);flex-shrink:0;">Preferidos:</span>' + chips +
   '</div>';
+};
+// v2.1.44: extrai só o NOME do local (descarta o endereço após " — "/" - ").
+window._venueNameOnly = function(label) {
+  var s = String(label == null ? '' : label).trim();
+  var m = s.split(/\s+[—–-]\s+/);
+  return (m && m[0] ? m[0] : s).trim();
+};
+// v2.1.44: extrai o ENDEREÇO (parte após o separador), se houver.
+window._venueAddrOnly = function(label) {
+  var s = String(label == null ? '' : label).trim();
+  var idx = s.search(/\s+[—–-]\s+/);
+  return idx >= 0 ? s.slice(idx).replace(/^\s+[—–-]\s+/, '').trim() : '';
 };
 window._venuePickPreferred = function(idx) {
   var cu = window.AppStore && window.AppStore.currentUser;
   var locs = (cu && Array.isArray(cu.preferredLocations)) ? cu.preferredLocations : [];
   var loc = locs[idx];
   if (!loc) return;
-  var name = loc.label || loc.name || '';
+  var full = loc.label || loc.name || '';
+  var name = window._venueNameOnly(full);
+  var addr = loc.address || window._venueAddrOnly(full) || '';
   var lon = (loc.lng != null) ? loc.lng : (loc.lon != null ? loc.lon : '');
   var _set = function(id, v) { var el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
-  _set('tourn-venue', name);
+  _set('tourn-venue', name);              // só o nome no campo
   _set('tourn-venue-lat', loc.lat != null ? loc.lat : '');
   _set('tourn-venue-lon', lon);
-  _set('tourn-venue-address', loc.address || loc.label || '');
+  _set('tourn-venue-address', addr);
   _set('tourn-venue-place-id', loc.placeId || '');
+  var vEl = document.getElementById('tourn-venue');
+  if (vEl) vEl._lastSelectedVenue = name;
   // realça o chip escolhido
   var chips = document.querySelectorAll('[data-pref-chip]');
   Array.prototype.forEach.call(chips, function(c) {
@@ -3911,6 +3932,31 @@ window._venuePickPreferred = function(idx) {
     c.style.borderColor = on ? '#34d399' : 'rgba(16,185,129,0.25)';
   });
   if (typeof showNotification === 'function') showNotification('📍 Local definido', name, 'success');
+  // puxa quadras + acesso do cadastro (se o local estiver registrado)
+  if (typeof window._pullRegisteredVenueData === 'function') window._pullRegisteredVenueData(loc.placeId || '', name);
+};
+// v2.1.44: se o local está cadastrado na plataforma, puxa nº de quadras e acesso.
+window._pullRegisteredVenueData = async function(placeId, name) {
+  if (!window.VenueDB || typeof window.VenueDB.loadVenue !== 'function') return;
+  try {
+    var key = (typeof window.VenueDB.venueKey === 'function') ? window.VenueDB.venueKey(placeId || '', name || '') : (placeId || '');
+    var v = await window.VenueDB.loadVenue(key);
+    if (!v) return;
+    var count = (typeof v.courtCount === 'number' && v.courtCount > 0) ? v.courtCount : (Array.isArray(v.courts) ? v.courts.length : 0);
+    if (count > 0) {
+      var ccEl = document.getElementById('tourn-court-count');
+      if (ccEl) { ccEl.value = count; if (typeof window._onCourtCountChange === 'function') { try { window._onCourtCountChange(); } catch (e) {} } }
+    }
+    if (v.accessPolicy) {
+      var arr = (v.accessPolicy === 'public') ? ['public'] : ['members'];
+      var accessEl = document.getElementById('tourn-venue-access');
+      if (accessEl) accessEl.value = arr.join(',');
+      if (typeof window._applyVenueAccessUI === 'function') { try { window._applyVenueAccessUI(arr); } catch (e) {} }
+    }
+    if ((count > 0 || v.accessPolicy) && typeof showNotification === 'function') {
+      showNotification('🏟️ Local cadastrado', (count > 0 ? count + ' quadra(s)' : '') + (v.accessPolicy ? (count > 0 ? ' · ' : '') + (v.accessPolicy === 'public' ? 'aberto' : 'restrito') : '') + ' — preenchido do cadastro.', 'info');
+    }
+  } catch (e) {}
 };
 
 // ── GSM Config Modal and Functions ──
