@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔝 v2.1.53-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Faixa "Em andamento" no topo absoluto da dashboard.</b><br><br>' +
+      'Qualquer torneio <b>em andamento</b> — seu OU público de descoberta — agora aparece numa <b>faixa única no topo</b> da dashboard, acima de tudo. Antes, os públicos em andamento ficavam numa seção separada lá embaixo e o ajuste de ordenação não os alcançava. Os cards saem das posições normais pra não duplicar.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🟢 v2.1.52-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Dashboard: em andamento no topo + box de progresso completo no card.</b><br><br>' +
       'Os torneios <b>em andamento</b> (efetivamente iniciados) agora aparecem <b>acima</b> dos que ainda não começaram. E o card de cada torneio em andamento mostra o <b>box de progresso completo</b> — início real, decorrido, fim estimado, barras de ritmo e horários programados — o mesmo da tela de detalhes, atualizado ao vivo.</p>' +
