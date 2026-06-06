@@ -2093,32 +2093,58 @@ function renderDashboard(container) {
   if (curLocation) filtered = filtered.filter(t => t.venueName === curLocation);
   if (curFormat) filtered = filtered.filter(t => t.format === curFormat);
 
-  // v2.1.53: faixa única "Em andamento" no TOPO absoluto da dashboard, juntando
-  // os em andamento do usuário (lista principal) E os públicos de descoberta —
-  // pedido do usuário: "qualquer em andamento no topo". Os cards são REMOVIDOS
-  // das suas posições normais (lista principal + seção de descoberta) pra não
-  // duplicar. Só no filtro 'todos' sem filtros secundários.
+  // v2.1.54: torneios EM ANDAMENTO (seus + públicos de descoberta) saem das suas
+  // posições normais e viram duas faixas:
+  //   • TOPO  → só os que "acontecem esta semana": começaram nos últimos 7 dias
+  //             OU terminam nos próximos 7 dias (inclui hoje).
+  //   • RODAPÉ → os demais em andamento (ex.: rodando há 25 dias, sem término
+  //             próximo) ficam numa seção "Em andamento" lá embaixo.
+  // Só no filtro 'todos' sem filtros secundários. Removidos da lista principal e
+  // da seção de descoberta pra não duplicar.
   let runningBandHtml = '';
+  let runningBottomHtml = '';
   if (curFilter === 'todos' && !curSport && !curLocation && !curFormat) {
+    const _WK_MS = 7 * 86400000;
+    const _nowMsBand = Date.now();
+    const _runsThisWeek = function(t) {
+      // começou nos últimos 7 dias?
+      var st = t.tournamentStarted ? (+t.tournamentStarted) : null;
+      if (st != null && !isNaN(st)) {
+        var sinceStart = _nowMsBand - st;
+        if (sinceStart >= 0 && sinceStart <= _WK_MS) return true;
+      }
+      // termina nos próximos 7 dias (inclui hoje)?
+      if (t.endDate) {
+        var et = new Date(t.endDate).getTime();
+        if (!isNaN(et)) {
+          var untilEnd = et - _nowMsBand;
+          if (untilEnd >= 0 && untilEnd <= _WK_MS) return true;
+        }
+      }
+      return false;
+    };
     const _bandSeen = new Set();
-    const _band = [];
+    const _allRunning = [];
     filtered.forEach(function(t) {
-      if (_isRunning(t) && !_bandSeen.has(String(t.id))) { _bandSeen.add(String(t.id)); _band.push(t); }
+      if (_isRunning(t) && !_bandSeen.has(String(t.id))) { _bandSeen.add(String(t.id)); _allRunning.push(t); }
     });
     (discoveryByCategory.inProgress || []).forEach(function(t) {
-      if (!_bandSeen.has(String(t.id))) { _bandSeen.add(String(t.id)); _band.push(t); }
+      if (!_bandSeen.has(String(t.id))) { _bandSeen.add(String(t.id)); _allRunning.push(t); }
     });
-    if (_band.length) {
-      _band.sort(sortByDate);
-      // remove os em andamento da lista principal e zera a seção de descoberta
+    if (_allRunning.length) {
+      // remove TODOS os em andamento da lista principal e zera a seção de descoberta
       filtered = filtered.filter(function(t) { return !(_isRunning(t) && _bandSeen.has(String(t.id))); });
       discoveryByCategory.inProgress = [];
-      const _bandTitle = (window._t && window._t('dashboard.inProgress')) || 'Em andamento';
-      runningBandHtml =
-        '<div style="margin-bottom:1.25rem;">' +
-          '<div style="font-weight:800;font-size:0.95rem;color:#10b981;margin-bottom:0.6rem;border-left:3px solid #10b981;padding-left:10px;">🟢 ' + _bandTitle + ' <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + _band.length + ')</span></div>' +
-          '<div class="cards-grid">' + _band.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>' +
-        '</div>';
+      const _top = _allRunning.filter(_runsThisWeek).sort(sortByDate);
+      const _bottom = _allRunning.filter(function(t) { return !_runsThisWeek(t); }).sort(sortByDate);
+      const _sectionHtml = function(title, items, marginTop) {
+        return '<div style="' + (marginTop ? 'margin-top:1.25rem;' : 'margin-bottom:1.25rem;') + '">' +
+            '<div style="font-weight:800;font-size:0.95rem;color:#10b981;margin-bottom:0.6rem;border-left:3px solid #10b981;padding-left:10px;">' + title + ' <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + items.length + ')</span></div>' +
+            '<div class="cards-grid">' + items.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>' +
+          '</div>';
+      };
+      if (_top.length) runningBandHtml = _sectionHtml('🟢 Em andamento (esta semana)', _top, false);
+      if (_bottom.length) runningBottomHtml = _sectionHtml('🟢 Em andamento', _bottom, true);
     }
   }
 
@@ -2146,7 +2172,7 @@ function renderDashboard(container) {
     const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
     filteredHtml = visibleActive.length > 0
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
-      : (runningBandHtml ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
+      : ((runningBandHtml || runningBottomHtml) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
     if (activeList.length > visibleActive.length) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;var c=document.getElementById(\'view-container\');if(c&&typeof renderDashboard===\'function\')renderDashboard(c);" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
     }
@@ -2234,7 +2260,7 @@ function renderDashboard(container) {
           '<div style="margin-top:1.25rem;font-size:0.78rem;color:var(--text-muted);">Dica: se já existe um torneio público na sua cidade, ele vai aparecer aqui automaticamente.</div>' +
         '</div>';
     } else {
-      filteredHtml = runningBandHtml ? '' : '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
+      filteredHtml = (runningBandHtml || runningBottomHtml) ? '' : '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
     }
     if (_sortedFiltered.length > visibleItems.length) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;var c=document.getElementById(\'view-container\');if(c&&typeof renderDashboard===\'function\')renderDashboard(c);" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: _sortedFiltered.length - visibleItems.length}) + '</button></div>';
@@ -2686,6 +2712,7 @@ function renderDashboard(container) {
       ${runningBandHtml}
       ${(window._dashView === 'compact') ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : '<div class="cards-grid">' + filteredHtml + '</div>'}
     </div>
+    ${runningBottomHtml}
     ${(() => {
       // v0.16.60: diag SEMPRE visível, independente de filtro — usuário
       // reportou "nelson ainda nao ve torneio algum" mas o diag da v0.16.59
