@@ -652,16 +652,16 @@ function renderTournaments(container, tournamentId = null) {
             (_allM || []).forEach(function (m) { if (m) { _addName(m.p1); _addName(m.p2); } });
             var maxNum = 0;
             Object.keys(existingNames).forEach(function (nm) {
-                var mt = nm.match(/^Placeholder\s+(\d+)$/i);
+                var mt = nm.match(/^(?:Jogador|Placeholder)\s+(\d+)$/i);
                 if (mt) { var v = parseInt(mt[1], 10); if (v > maxNum) maxNum = v; }
             });
             var made = [];
             var k = maxNum;
             for (var i = 0; i < qtd; i++) {
                 var numStr, nm;
-                do { k++; numStr = String(k).padStart(2, '0'); nm = 'Placeholder ' + numStr; } while (existingNames[nm]);
+                do { k++; numStr = String(k).padStart(2, '0'); nm = 'Jogador ' + numStr; } while (existingNames[nm]);
                 existingNames[nm] = true;
-                made.push({ name: nm, displayName: nm, email: 'placeholder' + numStr + '@scoreplace.app', uid: 'ph_' + numStr + '_' + Date.now() + '_' + i, isPlaceholder: true });
+                made.push({ name: nm, displayName: nm, email: 'jogador' + numStr + '@scoreplace.app', uid: 'jog_' + numStr + '_' + Date.now() + '_' + i, isPlaceholder: true });
             }
             var dest;
             if (hasDraw) {
@@ -1251,10 +1251,12 @@ function renderTournaments(container, tournamentId = null) {
         // com inscrição aberta. O "+ Time" continua só antes do sorteio (o fluxo
         // de time não trata lista de espera). addParticipantFunction já roteia
         // pra lista de espera quando o sorteio já saiu.
+        // v2.1.45: +Participante/+Time/+Placeholders disponíveis mesmo com inscrições
+        // ENCERRADAS, mas OMITIDOS depois do sorteio (!sorteioRealizado).
         const addParticipantBtns = isOrg ? `
-             ${((allowsIndividual || isDoublesMode) && isAberto) ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
-             ${((allowsTeams && !isDoublesMode) && !hasDraw) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
-             <button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window.addPlaceholdersFunction('${t.id}')">➕ Placeholders</button>
+             ${((allowsIndividual || isDoublesMode) && !sorteioRealizado) ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
+             ${((allowsTeams && !isDoublesMode) && !sorteioRealizado) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
+             ${!sorteioRealizado ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window.addPlaceholdersFunction('${t.id}')">➕ Placeholders</button>` : ''}
         ` : '';
 
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
@@ -1264,7 +1266,8 @@ function renderTournaments(container, tournamentId = null) {
         // sem inscritos — modal trata empty state. User: 'Essa função de
         // relatório de inscritos deve estar entre os botoes ferramentas do
         // organizador no card de detalhe do torneio.'
-        const enrollmentReportBtn = isOrg ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">📊 Análise</button>` : '';
+        // v2.1.45: Análise omitida depois do sorteio.
+        const enrollmentReportBtn = (isOrg && !sorteioRealizado) ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">📊 Análise</button>` : '';
 
         const isSuicoFormat = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
         const isLigaFormat = window._isLigaFormat(t);
@@ -1825,7 +1828,7 @@ function renderTournaments(container, tournamentId = null) {
               <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.35); margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
-                ${(t.status !== 'closed' && !isFinished) ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
+                ${(!sorteioRealizado && !isFinished) ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
                 ${t.status !== 'closed' ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window._sendOrgCommunication('${t.id}')">📢 ${_t('org.communicate')}</button>` : ''}
                 ${addParticipantBtns}
                 ${/* v1.9.98: CSV removido daqui — já está no grid de ações geral do organizador (Regras/Inscritos/Imprimir/CSV/Modo TV). Evita duplicação. */ ''}

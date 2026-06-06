@@ -8,6 +8,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #818cf8;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
+      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🛠️ v2.1.45-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
+      '<p><b>Ferramentas do organizador antes do sorteio.</b><br><br>' +
+      '+ Participante, + Time e + Placeholders (que agora criam "Jogador 01, 02…") ficam disponíveis mesmo com as inscrições encerradas — e somem depois do sorteio, junto com Editar e Análise (que não fazem mais sentido com a chave já formada).</p>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🟢 v2.1.44-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Junho, 2026)</span></div>' +
       '<p><b>Criar torneio: local cadastrado preenche quadras e acesso.</b><br><br>' +
