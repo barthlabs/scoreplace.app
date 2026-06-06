@@ -1031,19 +1031,39 @@ function setupCreateTournamentModal() {
     if (descEl) descEl.textContent = _enrollModeDescs[value] || '';
   };
 
-  // v2.1.64: avisa que o torneio "Times Montados" não tem nenhum time formado e
-  // leva pra edição do Modo de Inscrição com os boxes brilhando.
+  // v2.1.65: avisa que faltam montar os times e leva pra edição do Modo de
+  // Inscrição com os boxes brilhando. Mostra inscritos / equipes / sem equipe.
   window._warnTeamsNotFormed = function(tId) {
-    var msg = 'Este torneio está no modo "Times Montados": os jogadores se inscrevem já em duplas/times. ' +
-      'Ainda não há nenhum time formado — só jogadores individuais. ' +
-      'Os times precisam ser montados (por você ou pelos próprios participantes ao se inscreverem em dupla). ' +
-      'Se preferir, mude o Modo de Inscrição para "Individual" e o sorteio forma as duplas automaticamente.';
+    var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+    var arr = t ? (Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : [])) : [];
+    var equipes = 0, semEquipe = 0, pessoas = 0;
+    arr.forEach(function(p) {
+      var nm = typeof p === 'string' ? p : (p.displayName || p.name || '');
+      if (String(nm).indexOf('/') !== -1) {
+        var members = String(nm).split('/').map(function(m) { return m.trim(); }).filter(function(m) { return m.length > 0; });
+        equipes++; pessoas += members.length;
+      } else { semEquipe++; pessoas++; }
+    });
+    var _pill = function(label, n, color) {
+      return '<div style="flex:1;min-width:86px;background:rgba(255,255,255,0.04);border:1px solid ' + color + '55;border-radius:10px;padding:8px 6px;text-align:center;">' +
+        '<div style="font-size:1.35rem;font-weight:800;color:' + color + ';line-height:1;">' + n + '</div>' +
+        '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:3px;text-transform:uppercase;letter-spacing:0.3px;">' + label + '</div>' +
+      '</div>';
+    };
+    var msg =
+      '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">' +
+        _pill('Inscritos', pessoas, '#a5b4fc') +
+        _pill('Equipes formadas', equipes, '#34d399') +
+        _pill('Sem equipe', semEquipe, '#fbbf24') +
+      '</div>' +
+      '<div>As inscrições são <b>individuais</b>. As duplas/times são formados <b>arrastando o card de um jogador sobre o de outro</b> — isso pode ser feito por <b>você</b> ou pelos <b>próprios participantes</b>.</div>' +
+      '<div style="margin-top:8px;">Se preferir, mude o <b>Modo de Inscrição</b> para <b>"Individual"</b> e o sorteio forma as duplas automaticamente.</div>';
     var _go = function() {
       if (typeof window.openEditModal === 'function') window.openEditModal(tId);
       setTimeout(function() { if (typeof window._glowEnrollModeBoxes === 'function') window._glowEnrollModeBoxes(); }, 700);
     };
     if (typeof showConfirmDialog === 'function') {
-      showConfirmDialog('👥 Faltam montar os times', msg, _go, null,
+      showConfirmDialog('👥 Falta montar os times', msg, _go, null,
         { type: 'warning', confirmText: '✏️ Ajustar inscrição', cancelText: 'Fechar' });
     } else { _go(); }
   };

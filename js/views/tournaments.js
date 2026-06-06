@@ -396,7 +396,9 @@ function renderTournaments(container, tournamentId = null) {
                 var _enrM = t.enrollmentMode || t.enrollment || 'individual';
                 if (_enrM === 'time' && typeof window._diagnoseAll === 'function') {
                     var _diagTeams = window._diagnoseAll(t);
-                    if (_diagTeams.preFormedTeams === 0) {
+                    // dispara quando há jogadores SEM equipe (individuais soltos)
+                    // ou nenhum time formado — em ambos não dá pra sortear os times.
+                    if (_diagTeams.individuals > 0 || _diagTeams.preFormedTeams === 0) {
                         if (typeof window._warnTeamsNotFormed === 'function') { window._warnTeamsNotFormed(tId); return; }
                     }
                 }
