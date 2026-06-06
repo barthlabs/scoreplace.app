@@ -1,14 +1,26 @@
-/* v2.1.44: inputs de data e hora do criar/editar torneio com a MESMA altura
-   (no iOS, type=date e type=time têm alturas intrínsecas diferentes). */
-#tourn-reg-date, #tourn-reg-time,
-#tourn-start-date, #tourn-start-time,
-#tourn-end-date, #tourn-end-time,
-#liga-first-draw-date, #liga-first-draw-time, #liga-draw-interval {
-  box-sizing: border-box;
-  height: 44px;
-  min-height: 44px; /* anula o .form-control{min-height:44px} do mobile, que deixava o date crescer */
-  max-height: 44px; /* trava o type=date do iOS (altura intrínseca > type=time) */
-  line-height: 1.2;
+/* v2.1.57: PADRÃO ÚNICO de altura pra TODOS os campos de data e hora do app.
+   - Mesma altura entre type=date e type=time (no iOS têm alturas intrínsecas
+     diferentes) e em qualquer tela.
+   - Altura suficiente pra fonte + margem elegante (texto não cola nas bordas).
+   - !important pra vencer paddings/font inline e o .form-control mobile
+     (min-height:44px), que deixavam o date crescer e desalinhar do time.
+   - Campos da mesma linha alinham pelo flex (align-items) do container. */
+input[type="date"], input[type="time"] {
+  box-sizing: border-box !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
+  padding: 4px 10px !important;
+  font-size: 0.9rem !important;
+  line-height: 1.2 !important;
+}
+/* "Repetir a cada [N] dias" (número) e a tag "≈ N rodadas" acompanham a mesma
+   altura pra alinhar na linha do agendamento de sorteios. */
+#liga-draw-interval, #liga-rounds-tag {
+  box-sizing: border-box !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
 }
 
 /* ==== FIXED BACK HEADER ==== */

@@ -289,7 +289,7 @@ function setupCreateTournamentModal() {
                       </div>
                     </div>
                     <!-- v2.1.21: tag de rodadas previstas (1º sorteio + intervalo + fim do torneio) -->
-                    <div id="liga-rounds-tag" style="flex:0 0 auto;align-self:flex-end;font-size:0.85rem;font-weight:700;color:#34d399;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:5px 10px;white-space:nowrap;display:none;"></div>
+                    <div id="liga-rounds-tag" style="flex:0 0 auto;align-self:flex-end;font-size:0.85rem;font-weight:700;color:#34d399;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:0 12px;white-space:nowrap;align-items:center;justify-content:center;display:none;"></div>
                   </div>
                   <div class="form-group" style="margin:0;">
                     <div class="toggle-row">
@@ -1731,7 +1731,7 @@ function setupCreateTournamentModal() {
     if (rounds < 1) { tag.style.display = 'none'; return; }
     tag.textContent = '≈ ' + rounds + ' rodada' + (rounds > 1 ? 's' : '');
     tag.title = 'Do 1º sorteio até o fim do torneio, a cada ' + interval + ' dia(s)';
-    tag.style.display = 'inline-block';
+    tag.style.display = 'inline-flex';
   };
 
   // ─── Category management ──────────────────────────────────────────────────

@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">📐 v2.1.57-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Campos de data e hora padronizados no app inteiro.</b><br><br>' +
+      'Todos os campos de <b>data e hora</b> agora têm a <b>mesma altura</b> (com margem elegante, sem a fonte colada nas bordas), em qualquer tela — inscrições, início, fim e agendamento de sorteios. Data e hora na mesma linha ficam <b>alinhadas</b>, e a previsão "≈ N rodadas" alinha com o campo "Repetir a cada".</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">❤️ v2.1.56-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Favoritos logo abaixo do topo.</b><br><br>' +
       'Os torneios <b>favoritados</b> (coração acionado) agora aparecem numa faixa <b>logo abaixo</b> da de "Em andamento (esta semana)", no topo da dashboard. Os que já estão em andamento ficam só na faixa de em andamento (não duplicam).</p>' +
