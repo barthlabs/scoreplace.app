@@ -424,6 +424,24 @@ a:hover {
   color: var(--text-muted) !important;
 }
 
+/* ─── v2.1.91: Dimensionamento global proporcional + configurável ──────────
+ * Quase todo o app usa `rem` (3400+ font-sizes), então controlar o font-size
+ * da RAIZ escala TUDO junto e proporcionalmente, em qualquer aparelho.
+ *
+ *  font-size = BASE_FLUIDA  ×  var(--ui-scale)
+ *
+ * BASE_FLUIDA = clamp(min, base + termo-por-largura, max) → "auto por tela":
+ *   telefone pequeno (~320px) ≈ 15.8px · telefone comum (~390px) ≈ 16px (=hoje,
+ *   nada muda no padrão) · tablet/desktop ≈ 17.5px. Faixa gentil pra não estourar
+ *   layouts afinados em 16px.
+ * --ui-scale = controle do USUÁRIO (slider no perfil, 0.8–1.3). Padrão 1 = hoje.
+ *   Persistido em localStorage (instantâneo) + perfil (vale em todo dispositivo).
+ * O zoom do placar ao vivo / da chave é um sistema SEPARADo, em cima disto.
+ * O fix de auto-zoom do iOS (inputs em 16px) fica intacto — não usa rem. */
+html {
+  font-size: calc(clamp(15px, 14.7px + 0.33vw, 17px) * var(--ui-scale, 1));
+}
+
 /* Smooth theme transition */
 html {
   transition: background-color 0.3s ease, color 0.3s ease;

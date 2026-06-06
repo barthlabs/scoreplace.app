@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.90-beta';
+window.SCOREPLACE_VERSION = '2.1.91-beta';
 
 // ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
 // Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
@@ -1967,6 +1967,44 @@ window._themeOrder = ['dark', 'light', 'sunset', 'ocean'];
 window._themeIcons = { dark: '🌙', light: '☀️', sunset: '🌅', ocean: '🌊' };
 window._themeNames = { dark: 'Noturno', light: 'Claro', sunset: 'Pôr do Sol', ocean: 'Oceano' };
 
+// ─── Tamanho da interface (v2.1.91) ─────────────────────────────────────────
+// --ui-scale multiplica o font-size da raiz (html), que é a base de quase todo
+// o app (rem). Escala TUDO junto e proporcionalmente. Padrão 1 = aparência de
+// hoje. Persiste em localStorage (instantâneo) + perfil (cross-device).
+window._UI_SCALE_MIN = 0.8;
+window._UI_SCALE_MAX = 1.3;
+window._clampUiScale = function(v) {
+  v = parseFloat(v);
+  if (isNaN(v)) return 1;
+  return Math.max(window._UI_SCALE_MIN, Math.min(window._UI_SCALE_MAX, v));
+};
+window._getUiScale = function() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (cu && cu.uiScale != null) return window._clampUiScale(cu.uiScale);
+  try { var raw = localStorage.getItem('scoreplace_ui_scale'); if (raw != null) return window._clampUiScale(raw); } catch (e) {}
+  return 1;
+};
+// Aplica ao vivo (só o CSS var) — sem persistir. Pra preview do slider.
+window._applyUiScale = function(scale) {
+  var s = window._clampUiScale(scale);
+  try { document.documentElement.style.setProperty('--ui-scale', s); } catch (e) {}
+  return s;
+};
+// Aplica + persiste (localStorage + currentUser + Firestore).
+window._setUiScale = function(scale) {
+  var s = window._applyUiScale(scale);
+  try { localStorage.setItem('scoreplace_ui_scale', String(s)); } catch (e) {}
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (cu) cu.uiScale = s;
+  try {
+    var uid = cu && (cu.uid || cu.email);
+    if (uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+      window.FirestoreDB.saveUserProfile(uid, { uiScale: s }).catch(function() {});
+    }
+  } catch (e) {}
+  return s;
+};
+
 window._toggleTheme = function() {
   var html = document.documentElement;
   var current = html.getAttribute('data-theme') || 'dark';
@@ -2483,6 +2521,15 @@ window.AppStore = {
             if (store.currentUser) store.currentUser.theme = data.theme;
           }
         }
+        // v2.1.91: sincroniza o tamanho da interface (--ui-scale) entre dispositivos
+        if (data.uiScale != null && typeof window._applyUiScale === 'function') {
+          var _s = window._clampUiScale(data.uiScale);
+          if (store.currentUser) store.currentUser.uiScale = _s;
+          try { localStorage.setItem('scoreplace_ui_scale', String(_s)); } catch (e) {}
+          window._applyUiScale(_s);
+          var _sl = document.getElementById('profile-ui-scale');
+          if (_sl) { _sl.value = Math.round(_s * 100); var _lbl = document.getElementById('profile-ui-scale-val'); if (_lbl) _lbl.textContent = Math.round(_s * 100) + '%'; }
+        }
         // Sync active casual room — navigate other devices to the same match
         // BUT only when the value transitioned (not on every unrelated save).
         var newRoom = data.activeCasualRoom || null;
@@ -2637,6 +2684,12 @@ window.AppStore = {
       } catch (_e) {}
       if (profile && this.currentUser) {
         // Merge saved profile data into currentUser
+        // v2.1.91: tamanho da interface — aplica o valor salvo do perfil
+        if (profile.uiScale != null && typeof window._applyUiScale === 'function') {
+          this.currentUser.uiScale = window._clampUiScale(profile.uiScale);
+          try { localStorage.setItem('scoreplace_ui_scale', String(this.currentUser.uiScale)); } catch (e) {}
+          window._applyUiScale(this.currentUser.uiScale);
+        }
         if (profile.gender) this.currentUser.gender = profile.gender;
         if (profile.preferredSports) this.currentUser.preferredSports = profile.preferredSports;
         if (profile.defaultCategory) this.currentUser.defaultCategory = profile.defaultCategory;

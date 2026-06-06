@@ -23,6 +23,18 @@ function applyTheme(themeValue) {
   }
 })();
 
+// v2.1.91: aplica o tamanho da interface (--ui-scale) ANTES do body renderizar,
+// pra não dar flash de tamanho errado. Lê o cache local; o perfil sincroniza
+// depois (loadUserProfile). Clamp 0.7–1.6 por segurança.
+(function applyInitialUiScale() {
+  var s = 1;
+  try {
+    var raw = localStorage.getItem('scoreplace_ui_scale');
+    if (raw != null) { var v = parseFloat(raw); if (!isNaN(v)) s = Math.max(0.7, Math.min(1.6, v)); }
+  } catch (e) {}
+  document.documentElement.style.setProperty('--ui-scale', s);
+})();
+
 // v0.17.70: REVERTIDA a injeção dinâmica do dict i18n da v0.17.68. A teoria
 // (script-inserted async=false executa antes dos parser-defers) NÃO funcionou
 // na prática — em alguns casos o dict carregava DEPOIS de IIFEs como

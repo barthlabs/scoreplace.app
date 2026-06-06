@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.91-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Tamanho da interface ajustável.</b> Novo controle no perfil (🔎 Tamanho da interface) que aumenta/diminui textos e botões em todo o app, do seu jeito — salvo no seu perfil e válido em todos os aparelhos. O padrão é a aparência de sempre.</li>' +
+        '<li><b>Apresentação proporcional ao aparelho.</b> O app agora ajusta o tamanho base de forma sutil conforme o tamanho da tela (telas maiores ficam um pouco maiores, telas bem pequenas um pouco menores), pra melhor aproveitamento em cada dispositivo. O zoom do placar ao vivo e da chave continua separado, como antes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Tema Claro mais confiável em qualquer aparelho.</b> A correção de contraste agora reconhece a cor tanto em hex quanto em rgb. Alguns textos coloridos definidos via código eram gravados pelo navegador como rgb e escapavam do ajuste — agora são escurecidos corretamente, deixando o tema Claro legível de forma consistente entre iPhone e Android.</li>' +
