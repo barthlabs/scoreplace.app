@@ -1290,51 +1290,35 @@ exports.drainPendingVerifications = onSchedule(
 // generatePasswordResetLink gera o link e clicar permite DEFINIR a senha.
 //
 // Deploy:  firebase deploy --only functions:sendPasswordReset
-exports.sendPasswordReset = onCall(
-  {
-    region: "us-central1",
-    memory: "256MiB",
-    timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
-  },
-  async (request) => {
-    const email = (request.data && request.data.email || "").trim().toLowerCase();
-    const name = (request.data && request.data.name || "").trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new HttpsError("invalid-argument", "email inválido");
-    }
+//
+// v2.1.82: MESMA blindagem da verificação de e-mail (SCOREPLACE-WEB-22).
+// generatePasswordResetLink sofre o mesmo outage transitório (~10s) do Auth —
+// caso real (logs 2026-06-06 15:57 e 16:03): 4 tentativas falharam com
+// auth/internal-error e a função jogava erro → e-mail de reset NUNCA saía
+// (usuária Vero sem receber). Fix: retry alargado (~13,5s) + na falha de outage
+// enfileira em pendingPasswordResets, drenado por drainPendingPasswordResets.
 
-    const actionCodeSettings = {
-      url: "https://scoreplace.app/",
-      handleCodeInApp: false,
-    };
-    // RETRY (mesmo soluço transitório do generateEmailVerificationLink).
-    let link = null;
-    let lastErr = null;
-    let userNotFound = false;
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      try {
-        link = await admin.auth().generatePasswordResetLink(email, actionCodeSettings);
-        lastErr = null;
-        break;
-      } catch (err) {
-        // Conta não existe → não revela (proteção contra enumeração). Retorna ok.
-        if (err && err.code === "auth/user-not-found") { userNotFound = true; break; }
-        lastErr = err;
-        console.error("[sendPasswordReset] generatePasswordResetLink tentativa " +
-          attempt + "/4 falhou:", (err && (err.code || err.message)) || err);
-        if (attempt < 4) await new Promise((r) => setTimeout(r, attempt * 700));
-      }
+// Gera o link de reset com retry. Retorna: o link (sucesso), "USER_NOT_FOUND"
+// (conta não existe — silencioso por enumeração) ou null (outage após retries).
+async function _genPasswordResetLink(email) {
+  const acs = { url: "https://scoreplace.app/", handleCodeInApp: false };
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    try {
+      return await admin.auth().generatePasswordResetLink(email, acs);
+    } catch (err) {
+      if (err && err.code === "auth/user-not-found") return "USER_NOT_FOUND";
+      console.error("[resetLink] tentativa " + attempt + "/6 falhou:",
+        (err && (err.code || err.message)) || err);
+      if (attempt < 6) await new Promise((r) => setTimeout(r, attempt * 900));
     }
-    if (userNotFound) return { ok: true }; // silencioso de propósito
-    if (!link) {
-      throw new HttpsError("internal",
-        "não foi possível gerar o link após 4 tentativas: " +
-        (lastErr && (lastErr.code || lastErr.message)));
-    }
+  }
+  return null;
+}
 
-    const greetName = name ? (", " + name.replace(/&/g, "&amp;").replace(/</g, "&lt;")) : "";
-    const html =
+// Monta o HTML + texto do e-mail de redefinição de senha.
+function _buildPasswordResetEmail(link, name) {
+  const greetName = name ? (", " + name.replace(/&/g, "&amp;").replace(/</g, "&lt;")) : "";
+  const html =
       '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
       '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
       '<title>Redefinir senha — scoreplace.app</title></head>' +
@@ -1388,23 +1372,124 @@ exports.sendPasswordReset = onCall(
       "Dúvidas: scoreplace.app@gmail.com\n\n" +
       "scoreplace.app · Jogue em outro nível";
 
-    try {
-      await admin.firestore().collection("mail").add({
-        to: [email],
-        replyTo: "scoreplace.app@gmail.com",
-        message: {
-          subject: "Redefinir sua senha no scoreplace.app",
-          html: html,
-          text: textBody,
-        },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      console.log("[sendPasswordReset] queued for", email);
-      return { ok: true };
-    } catch (err) {
-      console.error("[sendPasswordReset] falha ao enfileirar email:", err);
-      throw new HttpsError("internal", "não foi possível enfileirar o email: " + (err.code || err.message));
+    return { html: html, text: textBody };
+}
+
+// Enfileira o e-mail de redefinição de senha na coleção mail/ (SMTP). Lança se falhar.
+async function _queuePasswordResetEmail(db, email, link, name) {
+  const built = _buildPasswordResetEmail(link, name);
+  await db.collection("mail").add({
+    to: [email],
+    replyTo: "scoreplace.app@gmail.com",
+    message: {
+      subject: "Redefinir sua senha no scoreplace.app",
+      html: built.html,
+      text: built.text,
+    },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+exports.sendPasswordReset = onCall(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 60,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+  },
+  async (request) => {
+    const email = (request.data && request.data.email || "").trim().toLowerCase();
+    const name = (request.data && request.data.name || "").trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "email inválido");
     }
+
+    const db = admin.firestore();
+    const linkResult = await _genPasswordResetLink(email);
+    if (linkResult === "USER_NOT_FOUND") return { ok: true }; // silencioso (enumeração)
+    if (linkResult) {
+      try {
+        await _queuePasswordResetEmail(db, email, linkResult, name);
+        console.log("[sendPasswordReset] queued for", email);
+        return { ok: true };
+      } catch (err) {
+        console.error("[sendPasswordReset] falha ao enfileirar email:", err);
+        throw new HttpsError("internal", "não foi possível enfileirar o email: " + (err.code || err.message));
+      }
+    }
+    // v2.1.82: link indisponível (outage do Auth > retry). Em vez de jogar erro
+    // (e o usuário nunca receber o reset), enfileira pendente — drenado em ≤2 min.
+    try {
+      const dup = await db.collection("pendingPasswordResets")
+        .where("email", "==", email).where("status", "==", "pending").limit(1).get();
+      if (dup.empty) {
+        await db.collection("pendingPasswordResets").add({
+          email: email,
+          name: name || "",
+          status: "pending",
+          attempts: 0,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      console.error("[sendPasswordReset] falha ao enfileirar pendente:", e);
+    }
+    console.warn("[sendPasswordReset] generatePasswordResetLink indisponível; deferido p/ fila:", email);
+    return { ok: true, deferred: true };
+  }
+);
+
+// ─── drainPendingPasswordResets (v2.1.82) ────────────────────────────────────
+// Drena pendingPasswordResets: re-tenta gerar o link de reset (que falhou na hora
+// por outage do Auth) e enfileira o e-mail assim que o backend volta. A cada 2 min.
+exports.drainPendingPasswordResets = onSchedule(
+  {
+    schedule: "every 2 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: "us-central1",
+  },
+  async () => {
+    const db = admin.firestore();
+    const snap = await db.collection("pendingPasswordResets")
+      .where("status", "==", "pending").limit(50).get();
+    for (const doc of snap.docs) {
+      const d = doc.data() || {};
+      const email = (d.email || "").trim().toLowerCase();
+      if (!email) { await doc.ref.update({ status: "failed", reason: "no-email" }); continue; }
+      const linkResult = await _genPasswordResetLink(email);
+      if (linkResult === "USER_NOT_FOUND") {
+        // Conta sumiu/não existe — encerra silenciosamente (sem e-mail).
+        await doc.ref.update({ status: "sent", reason: "user-not-found", sentAt: admin.firestore.FieldValue.serverTimestamp() });
+      } else if (linkResult) {
+        try {
+          await _queuePasswordResetEmail(db, email, linkResult, d.name || "");
+          await doc.ref.update({ status: "sent", sentAt: admin.firestore.FieldValue.serverTimestamp() });
+          console.log("[drainPendingPasswordResets] enviado:", email);
+        } catch (e) {
+          await doc.ref.update({ attempts: (d.attempts || 0) + 1, lastError: (e.code || e.message || "queue-fail") });
+        }
+      } else {
+        const attempts = (d.attempts || 0) + 1;
+        const upd = { attempts: attempts };
+        if (attempts >= 15) { upd.status = "failed"; upd.reason = "auth-internal-error-persistente"; }
+        await doc.ref.update(upd);
+      }
+    }
+    // GC: remove sent/failed antigos (>2 dias).
+    const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const oldSnap = await db.collection("pendingPasswordResets")
+      .where("status", "in", ["sent", "failed"]).get();
+    let batch = db.batch();
+    let n = 0;
+    for (const doc of oldSnap.docs) {
+      const ca = doc.get("createdAt");
+      const t = ca && ca.toDate ? ca.toDate() : null;
+      if (!t || t < cutoff) {
+        batch.delete(doc.ref); n++;
+        if (n >= 400) { await batch.commit(); batch = db.batch(); n = 0; }
+      }
+    }
+    if (n > 0) await batch.commit();
   }
 );
 
