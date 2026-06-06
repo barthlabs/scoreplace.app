@@ -591,6 +591,19 @@
     if (myUid && p.uid === myUid) return 'me';
     var friends = (cu && Array.isArray(cu.friends)) ? cu.friends : [];
     if (p.uid && friends.indexOf(p.uid) !== -1) return 'friend';
+    // v2.1.72: rede de segurança — participante/presença SEM uid (ex.: inscrito
+    // no torneio só pelo nome, antes do auto-vínculo) casa pelo NOME contra os
+    // perfis de amigos cacheados. Resolve "amigo cai no +N por falta de uid".
+    var dn = p.displayName || p.name || '';
+    if (dn && window._friendProfilesCache) {
+      var norm = window._normalizeName ? window._normalizeName(dn) : String(dn).trim().toLowerCase();
+      var cache = window._friendProfilesCache;
+      for (var i = 0; i < friends.length; i++) {
+        var prof = cache[friends[i]];
+        var fn = prof && prof.displayName;
+        if (fn && (window._normalizeName ? window._normalizeName(fn) : String(fn).trim().toLowerCase()) === norm) return 'friend';
+      }
+    }
     return 'other';
   }
 
@@ -702,7 +715,10 @@
     for (var ih = 0; ih < 24; ih++) seenInBucket[ih] = {};
     _chartSource.forEach(function(p) {
       var klass = _classifyPresence(p);
-      if (klass !== 'me' && klass !== 'friend') return;
+      // v2.1.72: presença de TORNEIO conta sempre (todos os inscritos são
+      // presença confirmada e conhecida — não são "estranhos"). Presença avulsa
+      // de não-amigo continua fora.
+      if (klass !== 'me' && klass !== 'friend' && p.type !== 'tournament') return;
       // Drop stale: presença já terminou
       var endTs = null;
       try {
@@ -1083,6 +1099,9 @@
   async function _hydrateAllPreferredMovement() {
     var cards = document.querySelectorAll('[data-pref-pid]');
     if (!cards || cards.length === 0) return;
+    // v2.1.72: garante o cache de perfis de amigos (uid→nome) pra o match por
+    // NOME funcionar em participantes de torneio sem uid (_classifyPresence).
+    try { if (typeof window._loadFriendProfilesCached === 'function') await window._loadFriendProfilesCached(); } catch (e) {}
     var todayKey = window.PresenceDB && window.PresenceDB.dayKey
       ? window.PresenceDB.dayKey(new Date())
       : '';
@@ -2355,6 +2374,9 @@
   async function _hydrateDetailMovement(venue) {
     var slot = document.getElementById('venue-movimento-slot');
     if (!slot || !window.PresenceDB || !venue) return;
+    // v2.1.72: cache de perfis de amigos pro match por NOME (participante de
+    // torneio sem uid).
+    try { if (typeof window._loadFriendProfilesCached === 'function') await window._loadFriendProfilesCached(); } catch (e) {}
     slot.innerHTML =
       '<div id="venue-chart-slot"></div>' +
       '<div id="venue-now-slot"></div>' +

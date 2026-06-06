@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔗 v2.1.72-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Participante adicionado por nome vincula à conta do amigo.</b><br><br>' +
+      'Ao adicionar um participante digitando o nome, se ele bater <b>exatamente</b> com um <b>amigo seu</b>, a conta (uid) é <b>vinculada automaticamente</b> — antes ficava como "texto solto" e o app não o reconhecia. Nos locais, amigos sem uid também passam a ser <b>reconhecidos pelo nome</b> (aparecem nomeados em vez de cair no "+N"), e o <b>gráfico conta todos os inscritos do torneio</b>.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🗓️ v2.1.71-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Movimento da dashboard mostra torneios do dia.</b><br><br>' +
       'O bloco "Movimento nos seus locais" agora considera os <b>torneios de hoje</b> em que <b>você ou um amigo</b> está inscrito — o local aparece com o box do torneio e os inscritos (amigos nomeados, não-amigos no "+N"), mesmo sem presença registrada manualmente.</p>' +

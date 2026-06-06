@@ -1273,6 +1273,29 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
       var v = (document.getElementById('ap-input')||{}).value || '';
       if (!v.trim()) return;
       sel = { name: v.trim(), uid: '', photo: '' };
+      // v2.1.72: se o nome digitado bate EXATAMENTE (e de forma ÚNICA) com um
+      // amigo, vincula a conta (uid) automaticamente — evita inscrever um amigo
+      // como "texto solto" só porque o organizador não clicou na sugestão.
+      // Nome que não bate com ninguém continua entrando como convidado de fora.
+      try {
+        var _cu = window.AppStore && window.AppStore.currentUser;
+        var _fr = (_cu && Array.isArray(_cu.friends)) ? _cu.friends : [];
+        var _cache = window._friendProfilesCache || {};
+        var _norm = function(s) { return window._normalizeName ? window._normalizeName(s) : String(s || '').trim().toLowerCase(); };
+        var _target = _norm(sel.name);
+        var _matches = [];
+        _fr.forEach(function(u) {
+          var pr = _cache[u];
+          var nm = pr && pr.displayName;
+          if (nm && _norm(nm) === _target) _matches.push({ uid: u, photo: (pr.photoURL || ''), name: nm });
+        });
+        if (_matches.length === 1) {
+          sel.uid = _matches[0].uid;
+          sel.photo = _matches[0].photo;
+          sel.name = _matches[0].name;
+          if (typeof showNotification !== 'undefined') showNotification('🔗 Conta vinculada', sel.name + ' foi reconhecido(a) como seu amigo e vinculado à conta dele(a).', 'info');
+        }
+      } catch (e) {}
     }
     document.getElementById('add-participant-overlay') && document.getElementById('add-participant-overlay').remove();
     onConfirm(sel.name, sel.uid, sel.photo);
