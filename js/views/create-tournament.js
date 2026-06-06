@@ -3910,6 +3910,13 @@ window._venueNameOnly = function(label) {
   var m = s.split(/\s+[—–-]\s+/);
   return (m && m[0] ? m[0] : s).trim();
 };
+// v2.1.59: detecta label tipo "−23.6021, −46.7124" (coordenadas) — o usuário
+// prefere nome/endereço, então esses são substituídos no backfill.
+window._looksLikeCoordsLabel = function(label) {
+  var s = String(label == null ? '' : label).trim();
+  if (!s) return true; // vazio também é candidato a receber nome
+  return /^-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+$/.test(s);
+};
 // v2.1.44: extrai o ENDEREÇO (parte após o separador), se houver.
 window._venueAddrOnly = function(label) {
   var s = String(label == null ? '' : label).trim();
@@ -3941,21 +3948,71 @@ window._venuePickPreferred = function(idx) {
     c.style.borderColor = on ? '#34d399' : 'rgba(16,185,129,0.25)';
   });
   if (typeof showNotification === 'function') showNotification('📍 Local definido', name, 'success');
-  // puxa quadras + acesso do cadastro (se o local estiver registrado)
-  if (typeof window._pullRegisteredVenueData === 'function') window._pullRegisteredVenueData(loc.placeId || '', name);
+  // puxa quadras + acesso do cadastro (resolve por placeId OU nome) e, se o
+  // preferido estava sem placeId, grava de volta no perfil (corrige o banco).
+  if (typeof window._pullRegisteredVenueData === 'function') window._pullRegisteredVenueData(loc.placeId || '', name, idx);
 };
-// v2.1.44: se o local está cadastrado na plataforma, puxa nº de quadras e acesso.
-window._pullRegisteredVenueData = async function(placeId, name) {
-  if (!window.VenueDB || typeof window.VenueDB.loadVenue !== 'function') return;
+
+// v2.1.59: cache único da lista de venues (1 read por abertura do form).
+window._allVenuesCache = null;
+window._loadAllVenuesOnce = async function() {
+  if (Array.isArray(window._allVenuesCache)) return window._allVenuesCache;
+  if (!window.VenueDB || typeof window.VenueDB.listVenues !== 'function') { window._allVenuesCache = []; return []; }
+  try { window._allVenuesCache = (await window.VenueDB.listVenues({}, { limit: 1000 })) || []; }
+  catch (e) { window._allVenuesCache = []; }
+  return window._allVenuesCache;
+};
+
+// v2.1.59: resolve o DOC do venve cadastrado por placeId OU por NOME (sem usar
+// coordenadas). Cobre o caso em que o preferido do perfil não tem placeId mas o
+// local está cadastrado na plataforma sob o placeId do Google (ou custom:slug).
+window._resolveRegisteredVenueDoc = async function(placeId, name) {
+  if (!window.VenueDB || typeof window.VenueDB.loadVenue !== 'function') return null;
   try {
-    var key = (typeof window.VenueDB.venueKey === 'function') ? window.VenueDB.venueKey(placeId || '', name || '') : (placeId || '');
-    var v = await window.VenueDB.loadVenue(key);
-    // Fallback: local salvo sob a chave de nome-slug (custom:<slug>) em vez do placeId
-    if (!v && placeId && name && typeof window.VenueDB.venueKey === 'function') {
-      var altKey = window.VenueDB.venueKey('', name);
-      if (altKey && altKey !== key) v = await window.VenueDB.loadVenue(altKey);
+    // 1) chave por placeId
+    if (placeId && typeof window.VenueDB.venueKey === 'function') {
+      var v = await window.VenueDB.loadVenue(window.VenueDB.venueKey(placeId, name || ''));
+      if (v) return v;
     }
-    if (!v) return;
+    // 2) chave por nome-slug (custom:<slug>)
+    if (name && typeof window.VenueDB.venueKey === 'function') {
+      var k = window.VenueDB.venueKey('', name);
+      if (k) { var v2 = await window.VenueDB.loadVenue(k); if (v2) return v2; }
+    }
+    // 3) varredura por NOME limpo: exato primeiro, depois "contém" (com guarda
+    //    de tamanho ≥6 pra evitar match frouxo).
+    var target = (window._cleanVenueName ? window._cleanVenueName(name || '') : String(name || '')).trim().toLowerCase();
+    if (target) {
+      var all = await window._loadAllVenuesOnce();
+      var _cn = function(v) { return (window._cleanVenueName ? window._cleanVenueName(v.name || '') : String(v.name || '')).trim().toLowerCase(); };
+      for (var i = 0; i < all.length; i++) { if (_cn(all[i]) === target) return all[i]; }
+      if (target.length >= 6) {
+        for (var j = 0; j < all.length; j++) {
+          var cn = _cn(all[j]);
+          if (cn && cn.length >= 6 && (cn.indexOf(target) !== -1 || target.indexOf(cn) !== -1)) return all[j];
+        }
+      }
+    }
+  } catch (e) {}
+  return null;
+};
+
+// Persiste preferredLocations corrigidos no perfil (Firestore).
+window._persistPreferredLocations = async function() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid || !window.FirestoreDB || !window.FirestoreDB.db) return;
+  try {
+    await window.FirestoreDB.db.collection('users').doc(cu.uid).update({ preferredLocations: cu.preferredLocations || [] });
+  } catch (e) { window._warn && window._warn('[pref backfill] persist falhou:', e && e.message); }
+};
+
+// v2.1.59: se o local está cadastrado, puxa nº de quadras e acesso. Resolve por
+// placeId OU nome. Se o preferido (prefIdx) estava sem placeId, grava o
+// placeId/_id + endereço de volta no perfil — corrige o banco.
+window._pullRegisteredVenueData = async function(placeId, name, prefIdx) {
+  try {
+    var v = await window._resolveRegisteredVenueDoc(placeId, name);
+    if (!v) return null;
     var count = (typeof v.courtCount === 'number' && v.courtCount > 0) ? v.courtCount : (Array.isArray(v.courts) ? v.courts.length : 0);
     if (count > 0) {
       var ccEl = document.getElementById('tourn-court-count');
@@ -3970,7 +4027,50 @@ window._pullRegisteredVenueData = async function(placeId, name) {
     if ((count > 0 || v.accessPolicy) && typeof showNotification === 'function') {
       showNotification('🏟️ Local cadastrado', (count > 0 ? count + ' quadra(s)' : '') + (v.accessPolicy ? (count > 0 ? ' · ' : '') + (v.accessPolicy === 'public' ? 'aberto' : 'restrito') : '') + ' — preenchido do cadastro.', 'info');
     }
-  } catch (e) {}
+    // backfill: grava placeId/_id + endereço no preferido que estava sem
+    var realId = v.placeId || v._id || '';
+    if (realId && (prefIdx != null) && !placeId) {
+      var cu = window.AppStore && window.AppStore.currentUser;
+      var loc = (cu && Array.isArray(cu.preferredLocations)) ? cu.preferredLocations[prefIdx] : null;
+      if (loc && !loc.placeId) {
+        loc.placeId = realId;
+        if (v.address && !loc.address) loc.address = v.address;
+        if (v.name && !loc.name) loc.name = v.name;
+        if (v.name && window._looksLikeCoordsLabel(loc.label)) loc.label = v.name + (v.address ? ' — ' + v.address : '');
+        var hid = document.getElementById('tourn-venue-place-id'); if (hid) hid.value = realId;
+        await window._persistPreferredLocations();
+      }
+    }
+    return v;
+  } catch (e) { return null; }
+};
+
+// v2.1.59: percorre TODOS os preferidos do perfil; pra cada um sem placeId,
+// resolve o venve cadastrado por nome e grava placeId/_id + endereço de volta
+// (corrige o banco de uma vez). Roda ao abrir o form de criar/editar torneio.
+window._backfillPreferredVenueIds = async function() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid || !Array.isArray(cu.preferredLocations) || !cu.preferredLocations.length) return;
+  var changed = false;
+  for (var i = 0; i < cu.preferredLocations.length; i++) {
+    var loc = cu.preferredLocations[i];
+    if (!loc || loc.placeId) continue; // já tem placeId
+    var nm = window._venueNameOnly ? window._venueNameOnly(loc.label || loc.name || '') : (loc.name || loc.label || '');
+    if (!nm) continue;
+    var v = await window._resolveRegisteredVenueDoc('', nm);
+    var realId = v && (v.placeId || v._id);
+    if (realId) {
+      loc.placeId = realId;
+      if (v.address && !loc.address) loc.address = v.address;
+      if (v.name && !loc.name) loc.name = v.name;
+      if (v.name && window._looksLikeCoordsLabel(loc.label)) loc.label = v.name + (v.address ? ' — ' + v.address : '');
+      changed = true;
+    }
+  }
+  if (changed) {
+    await window._persistPreferredLocations();
+    if (typeof window._hydrateVenuePrefChips === 'function') window._hydrateVenuePrefChips();
+  }
 };
 
 // ── GSM Config Modal and Functions ──
@@ -4745,8 +4845,11 @@ window.renderCreateTournamentPage = function (container) {
   }, 50);
   // v2.1.50: o perfil (preferredLocations) pode chegar async depois do render —
   // re-hidrata os chips de locais preferidos quando ele tiver carregado.
+  // v2.1.59: e corrige no banco os preferidos sem placeId (match por nome com
+  // os locais cadastrados na plataforma).
   setTimeout(function () {
     if (typeof window._hydrateVenuePrefChips === 'function') window._hydrateVenuePrefChips();
+    if (typeof window._backfillPreferredVenueIds === 'function') { try { window._backfillPreferredVenueIds(); } catch (e) {} }
   }, 900);
 
   if (typeof window._reflowChrome === 'function') window._reflowChrome();

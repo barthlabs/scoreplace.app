@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏟️ v2.1.59-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Local preferido cadastrado puxa quadras e acesso de verdade.</b><br><br>' +
+      'Ao escolher um <b>local preferido</b> que está cadastrado na plataforma (ex.: Clube Paineiras com 9 quadras e acesso restrito), o app agora <b>preenche automaticamente</b> o nº de quadras e a política de acesso — encontrando o cadastro por placeId <b>ou pelo nome</b>. E os preferidos antigos que estavam <b>sem placeId</b> são <b>corrigidos no banco</b> (recebem o identificador + endereço do cadastro, substituindo rótulos de coordenada).</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">📐 v2.1.58-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Data e hora finalmente com a MESMA altura (fix iOS).</b><br><br>' +
       'No iPhone, o campo de <b>data</b> ficava mais alto que o de <b>hora</b> porque são controles nativos do iOS que ignoram a altura definida por CSS. A correção foi remover o estilo nativo (<code>appearance:none</code>), o que faz os campos obedecerem à altura — agora data e hora ficam <b>idênticas</b> e alinhadas em todo o app.</p>' +
