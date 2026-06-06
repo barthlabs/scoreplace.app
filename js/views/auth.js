@@ -2138,35 +2138,59 @@ function _sendPasswordResetEmail(email) {
   var btn = document.querySelector('#reset-password-panel .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
 
-  firebase.auth().sendPasswordResetEmail(email, {
-    url: 'https://scoreplace.app/#dashboard',
-    handleCodeInApp: false
-  })
-    .then(function() {
-      var panel = document.getElementById('reset-password-panel');
-      if (panel) {
-        panel.innerHTML =
-          '<div style="text-align:center;padding:8px 0;">' +
-            '<div style="font-size:1.4rem;margin-bottom:6px;">✅</div>' +
-            '<div style="font-weight:700;color:var(--text-bright);font-size:0.9rem;margin-bottom:4px;">Link enviado!</div>' +
-            '<div style="font-size:0.78rem;color:var(--text-muted);">Verifique <b>' + email + '</b>.<br>Clique no link do e-mail para criar sua nova senha.</div>' +
-            '<button onclick="document.getElementById(\'reset-password-panel\').remove()" style="margin-top:10px;background:none;border:none;color:var(--primary-color);cursor:pointer;font-size:0.8rem;text-decoration:underline;">Fechar</button>' +
-          '</div>';
-      }
-    })
-    .catch(function(error) {
-      window._error('Password reset error:', error);
-      var statusEl2 = document.getElementById('reset-status');
-      var btn2 = document.querySelector('#reset-password-panel .btn-primary');
-      if (btn2) { btn2.disabled = false; btn2.textContent = 'Enviar link'; }
-      var msg = 'Erro ao enviar. Tente novamente.';
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email') {
-        msg = 'E-mail não encontrado. Verifique e tente novamente.';
-      } else if (error.code === 'auth/too-many-requests') {
-        msg = 'Muitas tentativas. Aguarde alguns minutos.';
-      }
-      if (statusEl2) statusEl2.innerHTML = '<span style="color:#f87171;">' + msg + '</span>';
+  var _showSent = function() {
+    var panel = document.getElementById('reset-password-panel');
+    if (panel) {
+      panel.innerHTML =
+        '<div style="text-align:center;padding:8px 0;">' +
+          '<div style="font-size:1.4rem;margin-bottom:6px;">✅</div>' +
+          '<div style="font-weight:700;color:var(--text-bright);font-size:0.9rem;margin-bottom:4px;">Link enviado!</div>' +
+          '<div style="font-size:0.78rem;color:var(--text-muted);">Verifique <b>' + email + '</b> (e a caixa de <b>spam/lixo eletrônico</b>).<br>Clique no link do e-mail para criar sua nova senha.</div>' +
+          '<button onclick="document.getElementById(\'reset-password-panel\').remove()" style="margin-top:10px;background:none;border:none;color:var(--primary-color);cursor:pointer;font-size:0.8rem;text-decoration:underline;">Fechar</button>' +
+        '</div>';
+    }
+  };
+  var _showError = function(error) {
+    window._error && window._error('Password reset error:', error);
+    var statusEl2 = document.getElementById('reset-status');
+    var btn2 = document.querySelector('#reset-password-panel .btn-primary');
+    if (btn2) { btn2.disabled = false; btn2.textContent = 'Enviar link'; }
+    var msg = 'Erro ao enviar. Tente novamente.';
+    var code = error && error.code;
+    if (code === 'auth/user-not-found' || code === 'auth/invalid-email') {
+      msg = 'E-mail não encontrado. Verifique e tente novamente.';
+    } else if (code === 'auth/too-many-requests') {
+      msg = 'Muitas tentativas. Aguarde alguns minutos.';
+    }
+    if (statusEl2) statusEl2.innerHTML = '<span style="color:#f87171;">' + msg + '</span>';
+  };
+  // Fallback: remetente padrão do Firebase (pode cair no spam de Hotmail/Outlook).
+  var _nativeReset = function() {
+    firebase.auth().sendPasswordResetEmail(email, {
+      url: 'https://scoreplace.app/#dashboard', handleCodeInApp: false
+    }).then(_showSent).catch(_showError);
+  };
+
+  // v2.1.78: envia o reset pelo NOSSO SMTP (Cloud Function sendPasswordReset),
+  // que NÃO cai no spam como o remetente default do Firebase. Cobre também
+  // ex-usuários do magic link (provider 'password' sem senha setada). Se a
+  // function falhar/indisponível, cai no envio nativo do Firebase.
+  var _name = '';
+  try { var _cu = window.AppStore && window.AppStore.currentUser; _name = (_cu && _cu.displayName) || ''; } catch (e) {}
+  var _fnCall = null;
+  try {
+    if (typeof firebase !== 'undefined' && firebase.functions) {
+      _fnCall = firebase.functions().httpsCallable('sendPasswordReset')({ email: email, name: _name });
+    }
+  } catch (e) {}
+  if (_fnCall && typeof _fnCall.then === 'function') {
+    _fnCall.then(function() { _showSent(); }).catch(function(err) {
+      window._warn && window._warn('[reset] sendPasswordReset fn falhou, fallback nativo:', err && (err.message || err.code));
+      _nativeReset();
     });
+  } else {
+    _nativeReset();
+  }
 }
 
 // ─── Toggle between login and register mode ──────────────────────────────────

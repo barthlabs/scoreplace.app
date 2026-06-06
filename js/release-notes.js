@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🔑 v2.1.78-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Reset de senha não cai mais no spam.</b><br><br>' +
+      'O e-mail de "esqueci a senha" passou a ser enviado pelo <b>nosso servidor</b> (mesmo dos outros e-mails) em vez do remetente padrão do Firebase — que Hotmail/Outlook jogavam no spam/bloqueavam. Também funciona pra quem entrou pelo login antigo sem senha (define a senha pela primeira vez). A tela agora lembra de checar o spam.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🎯 v2.1.77-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Raiz da sala-fantasma: corrigida na origem.</b><br><br>' +
       'Investigação concluída: abrir o setup da partida casual <b>setava o "retomar em outro dispositivo"</b> cedo demais — se você abrisse e abandonasse (fechar aba/reload/app cair), virava sala-fantasma que te puxava de volta. Agora esse marcador é gravado <b>só quando a partida inicia de verdade</b>. A sala ainda é criada pro QR/código funcionar; sem ninguém, ela se dissolve sozinha.</p>' +

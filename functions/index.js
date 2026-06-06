@@ -1196,6 +1196,132 @@ exports.sendVerificationEmail = onCall(
   }
 );
 
+// ─── sendPasswordReset (v2.1.78) ─────────────────────────────────────────────
+// Reset de senha enviado pelo NOSSO SMTP (extensão firestore-send-email) em vez
+// do remetente padrão do Firebase (noreply@…firebaseapp.com), que Hotmail/Outlook
+// jogam no spam/bloqueiam. Caso real: Marisa Roriz (hotmail) nunca recebia o reset.
+// Também cobre ex-usuários do magic link (provider 'password' SEM senha setada):
+// generatePasswordResetLink gera o link e clicar permite DEFINIR a senha.
+//
+// Deploy:  firebase deploy --only functions:sendPasswordReset
+exports.sendPasswordReset = onCall(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+  },
+  async (request) => {
+    const email = (request.data && request.data.email || "").trim().toLowerCase();
+    const name = (request.data && request.data.name || "").trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError("invalid-argument", "email inválido");
+    }
+
+    const actionCodeSettings = {
+      url: "https://scoreplace.app/",
+      handleCodeInApp: false,
+    };
+    // RETRY (mesmo soluço transitório do generateEmailVerificationLink).
+    let link = null;
+    let lastErr = null;
+    let userNotFound = false;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        link = await admin.auth().generatePasswordResetLink(email, actionCodeSettings);
+        lastErr = null;
+        break;
+      } catch (err) {
+        // Conta não existe → não revela (proteção contra enumeração). Retorna ok.
+        if (err && err.code === "auth/user-not-found") { userNotFound = true; break; }
+        lastErr = err;
+        console.error("[sendPasswordReset] generatePasswordResetLink tentativa " +
+          attempt + "/4 falhou:", (err && (err.code || err.message)) || err);
+        if (attempt < 4) await new Promise((r) => setTimeout(r, attempt * 700));
+      }
+    }
+    if (userNotFound) return { ok: true }; // silencioso de propósito
+    if (!link) {
+      throw new HttpsError("internal",
+        "não foi possível gerar o link após 4 tentativas: " +
+        (lastErr && (lastErr.code || lastErr.message)));
+    }
+
+    const greetName = name ? (", " + name.replace(/&/g, "&amp;").replace(/</g, "&lt;")) : "";
+    const html =
+      '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
+      '<title>Redefinir senha — scoreplace.app</title></head>' +
+      '<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
+        '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:40px 16px;">' +
+          '<tr><td align="center">' +
+            '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:520px;background:#111827;border-radius:14px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
+              '<tr><td style="padding:20px 32px 4px;text-align:center;">' +
+                '<div style="font-size:1.4rem;line-height:1;margin-bottom:2px;">🎾</div>' +
+                '<div style="font-size:0.92rem;font-weight:700;color:#fbbf24;letter-spacing:0.2px;">scoreplace.app</div>' +
+              '</td></tr>' +
+              '<tr><td style="padding:24px 32px 8px;text-align:center;color:#e5e7eb;">' +
+                '<p style="margin:0 0 6px;font-size:1.05rem;font-weight:700;color:#fff;">Redefinir sua senha 🔑</p>' +
+                '<p style="margin:0 0 18px;font-size:0.92rem;color:#cbd5e1;">Olá' + greetName + '! Clique no botão para criar uma nova senha de acesso.</p>' +
+                '<table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;">' +
+                  '<tr><td style="background:#2563eb;background:linear-gradient(180deg,#60a5fa 0%,#3b82f6 55%,#2563eb 100%);border-bottom:4px solid #1d4ed8;border-radius:12px;box-shadow:0 4px 12px rgba(37,99,235,0.35);">' +
+                    '<a href="' + link.replace(/"/g, "&quot;") + '" style="display:inline-block;padding:18px 44px;color:#ffffff;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.22);">' +
+                      '🔑 Criar nova senha' +
+                    '</a>' +
+                  '</td></tr>' +
+                '</table>' +
+              '</td></tr>' +
+              '<tr><td style="padding:20px 32px 28px;color:#cbd5e1;">' +
+                '<p style="margin:0 0 16px;font-size:0.84rem;line-height:1.55;color:#94a3b8;text-align:center;">' +
+                  'O link vale por 1 hora. Depois de definir a senha, é só entrar com seu e-mail e a nova senha.' +
+                '</p>' +
+                '<p style="margin:16px 0 0;font-size:0.76rem;color:#94a3b8;line-height:1.5;border-top:1px solid #374151;padding-top:16px;">' +
+                  'Não consegue clicar no botão? Copie e cole este endereço no navegador:<br>' +
+                  '<span style="color:#cbd5e1;word-break:break-all;font-family:monospace;font-size:0.7rem;">' + link.replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</span>' +
+                '</p>' +
+                '<p style="margin:16px 0 0;font-size:0.74rem;color:#94a3b8;line-height:1.5;">' +
+                  'Não pediu pra redefinir a senha? Pode ignorar este e-mail — sua senha continua a mesma. ' +
+                  'Dúvidas: <a href="mailto:scoreplace.app@gmail.com" style="color:#fbbf24;">scoreplace.app@gmail.com</a>.' +
+                '</p>' +
+              '</td></tr>' +
+              '<tr><td style="padding:14px 32px;text-align:center;background:#0f172a;border-top:1px solid #1e293b;">' +
+                '<p style="margin:0;font-size:0.7rem;color:#64748b;">scoreplace.app · Jogue em outro nível · ' + new Date().getFullYear() + '</p>' +
+              '</td></tr>' +
+            '</table>' +
+          '</td></tr>' +
+        '</table>' +
+      '</body></html>';
+
+    const textBody =
+      "scoreplace.app — redefinir senha\n\n" +
+      "Olá" + (name ? (", " + name) : "") + "! Recebemos um pedido para redefinir sua senha.\n\n" +
+      "Crie uma nova senha clicando no link abaixo (ou copie e cole no navegador):\n\n" +
+      link + "\n\n" +
+      "O link vale por 1 hora.\n\n" +
+      "Não pediu isso? Pode ignorar este e-mail — sua senha continua a mesma.\n" +
+      "Dúvidas: scoreplace.app@gmail.com\n\n" +
+      "scoreplace.app · Jogue em outro nível";
+
+    try {
+      await admin.firestore().collection("mail").add({
+        to: [email],
+        replyTo: "scoreplace.app@gmail.com",
+        message: {
+          subject: "Redefinir sua senha no scoreplace.app",
+          html: html,
+          text: textBody,
+        },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log("[sendPasswordReset] queued for", email);
+      return { ok: true };
+    } catch (err) {
+      console.error("[sendPasswordReset] falha ao enfileirar email:", err);
+      throw new HttpsError("internal", "não foi possível enfileirar o email: " + (err.code || err.message));
+    }
+  }
+);
+
 // ─── setParticipantsGender (v2.1.20) ─────────────────────────────────────────
 // O organizador de um torneio atribui o gênero de inscritos que estavam SEM
 // gênero. As regras do Firestore só deixam a pessoa editar o próprio perfil, então
