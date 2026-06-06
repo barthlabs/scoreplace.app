@@ -4939,14 +4939,14 @@ window._renderCreateTournamentHeader = function() {
 
   var actionsHtml =
     '<div class="create-hdr-actions" style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:nowrap;">' +
-      '<button class="btn btn-tool-amber btn-sm" id="btn-load-template-create" type="button" ' +
-              'onclick="window._showTemplatePickerInCreate()" ' +
-              'style="' + tplPad + 'flex-shrink:0;border-radius:10px;" ' +
-              'title="' + (_t('create.loadTemplate') || 'Carregar Template') + '">💾' + loadLbl + '</button>' +
-      '<button class="btn btn-tool-indigo btn-sm" id="btn-save-template-create" type="button" ' +
+      '<button class="btn btn-tool-amber btn-sm" id="btn-save-template-create" type="button" ' +
               'onclick="window._saveCurrentFormAsTemplate()" ' +
               'style="' + tplPad + 'flex-shrink:0;border-radius:10px;" ' +
-              'title="' + (_t('create.saveTemplate') || 'Salvar Template') + '">⭐' + saveLbl + '</button>' +
+              'title="' + (_t('create.saveTemplate') || 'Salvar Template') + '">💾' + saveLbl + '</button>' +
+      '<button class="btn btn-tool-indigo btn-sm" id="btn-load-template-create" type="button" ' +
+              'onclick="window._showTemplatePickerInCreate()" ' +
+              'style="' + tplPad + 'flex-shrink:0;border-radius:10px;" ' +
+              'title="' + (_t('create.loadTemplate') || 'Carregar Template') + '">⭐' + loadLbl + '</button>' +
       '<button class="btn btn-danger-ghost btn-sm hover-lift" id="btn-discard-tournament" type="button" ' +
               'onclick="window._discardCreateTournament()" ' +
               'style="' + actPad + 'flex-shrink:0;border-radius:10px;" ' +

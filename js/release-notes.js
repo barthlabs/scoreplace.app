@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">💾 v2.1.63-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Ícones de template corrigidos.</b><br><br>' +
+      'No criar/editar torneio, o <b>💾 disquete salva</b> o template e a <b>⭐ estrela acessa</b> os templates salvos — estavam invertidos.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🎾 v2.1.62-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Quadras por modalidade (dinâmico) + acesso do local no torneio.</b><br><br>' +
       'Quadras são <b>por modalidade</b> — não existe total genérico. Ao escolher um local cadastrado, o app puxa o nº de quadras <b>da modalidade do torneio</b> (Beach Tennis no Paineiras = 9, Tênis = 14, Pickleball = 4…). E se você <b>trocar a modalidade</b>, o número <b>muda na hora</b>. Se o local não oferece a modalidade, avisa. A <b>política de acesso</b> do local também reflete no torneio (Paineiras = restrito: sócios + convidados).</p>' +
