@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Tema Claro mais confiável em qualquer aparelho.</b> A correção de contraste agora reconhece a cor tanto em hex quanto em rgb. Alguns textos coloridos definidos via código eram gravados pelo navegador como rgb e escapavam do ajuste — agora são escurecidos corretamente, deixando o tema Claro legível de forma consistente entre iPhone e Android.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.89-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>W.O. em duplas: parceiro vai para lista de espera.</b> Quando apenas um jogador de uma dupla é marcado ausente e não há substituto disponível, o <b>parceiro presente</b> agora vai automaticamente para a <b>lista de espera</b> — podendo ser emparelhado com outro jogador em jogo futuro. Antes o time inteiro era desclassificado mesmo com um dos dois presentes.</li>' +
