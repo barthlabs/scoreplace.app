@@ -4009,11 +4009,35 @@ window._persistPreferredLocations = async function() {
 // v2.1.59: se o local está cadastrado, puxa nº de quadras e acesso. Resolve por
 // placeId OU nome. Se o preferido (prefIdx) estava sem placeId, grava o
 // placeId/_id + endereço de volta no perfil — corrige o banco.
+// v2.1.60: modalidade selecionada no form (sem o emoji do botão).
+window._currentFormSport = function() {
+  var active = document.querySelector('.sport-btn-active');
+  var raw = active ? active.getAttribute('data-sport') : '';
+  if (!raw) { var ss = document.getElementById('select-sport'); raw = (ss && ss.value) ? ss.value : ''; }
+  return String(raw || '').replace(/^[^\wÀ-ɏ]+/u, '').trim();
+};
+// v2.1.60: nº de quadras do venve para a MODALIDADE do torneio. courts[] é um
+// array de GRUPOS por modalidade, cada um com `count` (ex.: Beach Tennis=9,
+// Tênis=14). Antes eu usava courts.length (nº de grupos) — errado. Agora soma o
+// count dos grupos que incluem a modalidade; se nenhum casar, soma o total.
+window._venueCourtsForSport = function(v, sport) {
+  var courts = Array.isArray(v && v.courts) ? v.courts : [];
+  if (!courts.length) return (typeof v.courtCount === 'number' && v.courtCount > 0) ? v.courtCount : 0;
+  var sportLow = String(sport || '').trim().toLowerCase();
+  var sumSport = 0, sumAll = 0;
+  courts.forEach(function(c) {
+    var cnt = parseInt(c && c.count, 10); if (isNaN(cnt) || cnt < 1) cnt = 1;
+    sumAll += cnt;
+    var sps = Array.isArray(c && c.sports) ? c.sports.map(function(s) { return String(s).trim().toLowerCase(); }) : [];
+    if (sportLow && sps.indexOf(sportLow) !== -1) sumSport += cnt;
+  });
+  return sumSport > 0 ? sumSport : sumAll;
+};
 window._pullRegisteredVenueData = async function(placeId, name, prefIdx) {
   try {
     var v = await window._resolveRegisteredVenueDoc(placeId, name);
     if (!v) return null;
-    var count = (typeof v.courtCount === 'number' && v.courtCount > 0) ? v.courtCount : (Array.isArray(v.courts) ? v.courts.length : 0);
+    var count = window._venueCourtsForSport(v, window._currentFormSport());
     if (count > 0) {
       var ccEl = document.getElementById('tourn-court-count');
       if (ccEl) { ccEl.value = count; if (typeof window._onCourtCountChange === 'function') { try { window._onCourtCountChange(); } catch (e) {} } }
