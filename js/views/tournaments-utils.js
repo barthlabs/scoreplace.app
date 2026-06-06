@@ -646,9 +646,9 @@ window._buildProgressInner = function(t) {
   if (!schedStart) schedStart = actualStart;
   var progFrac = prog.total > 0 ? (prog.completed / prog.total) : 0;
 
-  var head = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
-    '<span style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;opacity:0.8;">Progresso do Torneio</span>' +
-    '<span style="font-size:0.8rem;font-weight:700;">' + prog.completed + '/' + prog.total + ' partidas (' + prog.pct + '%)</span>' +
+  var head = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;">' +
+    '<span style="font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;opacity:0.85;">Progresso do Torneio</span>' +
+    '<span style="font-size:0.92rem;font-weight:800;">' + prog.completed + '/' + prog.total + ' partidas (' + prog.pct + '%)</span>' +
   '</div>';
 
   // Sem timeline confiável → barra simples (comportamento antigo).
@@ -661,7 +661,12 @@ window._buildProgressInner = function(t) {
       (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ Todas as partidas concluídas!</div>' : '');
   }
 
-  var endForElapsed = isFinished ? (+t.finishedAt || now) : now;
+  // finishedAt costuma vir como STRING ISO — parsear direito (não usar +str=NaN).
+  var finishedMs = t.finishedAt ? (typeof t.finishedAt === 'number' ? t.finishedAt : new Date(t.finishedAt).getTime()) : null;
+  if (finishedMs != null && isNaN(finishedMs)) finishedMs = null;
+  // v2.1.48: ao encerrar o torneio o cronômetro PÁRA (congela em finishedAt),
+  // mesmo que nem todos os jogos tenham sido realizados.
+  var endForElapsed = (isFinished && finishedMs != null) ? finishedMs : (isFinished ? now : now);
   var elapsedMs = endForElapsed - actualStart;
   var expectedFrac = (now - schedStart) / (plannedEnd - schedStart);
   if (expectedFrac < 0) expectedFrac = 0;
@@ -675,24 +680,47 @@ window._buildProgressInner = function(t) {
   else color = '#ef4444';
 
   var estEndMs;
-  if (isFinished) estEndMs = (+t.finishedAt || now);
+  if (isFinished) estEndMs = (finishedMs != null ? finishedMs : now);
   else if (progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
   else estEndMs = plannedEnd;
 
-  var topRow = '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;font-size:0.7rem;gap:8px;">' +
-    '<span style="color:var(--text-muted);white-space:nowrap;">início <b style="color:var(--text-bright);">' + window._tProgFmtClock(actualStart) + '</b></span>' +
-    '<span style="color:' + color + ';font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
-    '<span style="color:var(--text-muted);white-space:nowrap;">' + (isFinished ? 'fim ' : 'fim est. ') + '<b style="color:var(--text-bright);">' + window._tProgFmtClock(estEndMs) + '</b></span>' +
+  var _time = function(ms) { var d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  var _date = function(ms) { var d = new Date(ms); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); };
+  var _timeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
+  var _lblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
+  // coluna REAL: horário + label (2 linhas)
+  var _realCol = function(ms, label, align) {
+    return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
+      '<span style="' + _timeS + '">' + _time(ms) + '</span>' +
+      '<span style="' + _lblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+    '</div>';
+  };
+  // coluna PROGRAMADO: horário + data + label (3 linhas, azul)
+  var _progCol = function(ms, label, align) {
+    return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
+      '<span style="' + _timeS + 'color:#93c5fd;">' + _time(ms) + '</span>' +
+      '<span style="font-size:0.72rem;color:#60a5fa;font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
+      '<span style="' + _lblS + 'color:#60a5fa;text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+    '</div>';
+  };
+
+  var topRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
+    _realCol(actualStart, 'início real', 'flex-start') +
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
+      '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
+      '<span style="' + _lblS + '">' + (isFinished ? 'durou' : 'decorrido') + '</span>' +
+    '</div>' +
+    _realCol(estEndMs, isFinished ? 'final' : 'final estimado', 'flex-end') +
   '</div>';
-  var realBar = '<div style="width:100%;height:9px;background:rgba(255,255,255,0.1);border-radius:5px 5px 0 0;overflow:hidden;">' +
+  var realBar = '<div style="width:100%;height:11px;background:rgba(255,255,255,0.1);border-radius:6px 6px 0 0;overflow:hidden;">' +
     '<div style="width:' + Math.round(progFrac * 100) + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' +
   '</div>';
-  var blueBar = '<div style="width:100%;height:6px;background:rgba(255,255,255,0.06);border-radius:0 0 5px 5px;overflow:hidden;">' +
+  var blueBar = '<div style="width:100%;height:7px;background:rgba(255,255,255,0.06);border-radius:0 0 6px 6px;overflow:hidden;">' +
     '<div style="width:' + Math.round(expectedFrac * 100) + '%;height:100%;background:#3b82f6;transition:width 0.9s linear;"></div>' +
   '</div>';
-  var botRow = '<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:0.66rem;color:#60a5fa;">' +
-    '<span>programado ' + window._tProgFmtClock(schedStart) + '</span>' +
-    '<span>previsto ' + window._tProgFmtClock(plannedEnd) + '</span>' +
+  var botRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:7px;gap:8px;">' +
+    _progCol(schedStart, 'início programado', 'flex-start') +
+    _progCol(plannedEnd, 'final programado', 'flex-end') +
   '</div>';
   return head + topRow + realBar + blueBar + botRow;
 };

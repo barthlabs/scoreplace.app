@@ -9,6 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">⏱️ v2.1.48-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Progresso do torneio: cronômetro pára ao encerrar + layout maior.</b><br><br>' +
+      'Ao encerrar o torneio o <b>cronômetro pára</b> (congela no horário do encerramento), mesmo sem todos os jogos realizados. O box de progresso ficou com <b>fontes maiores</b> e organizado: cada horário com a <b>data</b> e o <b>rótulo</b> embaixo (início real e fim estimado em 2 linhas; início e fim programados em 3 linhas com a data). No card da dashboard, o torneio encerrado mostra <b>quanto durou logo abaixo do nome</b> e vai para a seção <b>Encerrados</b> depois de 12h.</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">⏱️ v2.1.47-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Progresso do torneio com ritmo ao vivo.</b><br><br>' +
       'A barra de progresso agora mostra o <b>ritmo</b>: fica <b>verde</b> (dentro do previsto), <b>amarela</b> (quase/pouco atrasado) ou <b>vermelha</b> (atrasado). Colada embaixo, uma <b>barra azul</b> anda sozinha do início programado (0%) até o fim previsto (100%). Acima: o horário que o torneio <b>começou</b> (esquerda), o <b>fim estimado pelo ritmo real</b> (direita) e o <b>tempo decorrido</b> ao vivo no meio. Ao encerrar, o card na dashboard mostra <b>quanto o torneio durou</b>.</p>' +

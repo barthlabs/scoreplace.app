@@ -465,6 +465,16 @@ function renderDashboard(container) {
     const statusBg = isFinished ? 'rgba(251,191,36,0.15)' : (isAberto ? '#fbbf24' : (tournamentStarted ? 'rgba(16,185,129,0.2)' : 'rgba(0,0,0,0.3)'));
     const statusColor = isFinished ? '#fbbf24' : (isAberto ? '#78350f' : (tournamentStarted ? '#34d399' : '#fca5a5'));
     const statusFontWeight = isAberto ? '700' : '600';
+    // v2.1.48: duração do torneio encerrado (início real → encerramento), exibida
+    // logo abaixo do nome/logo no card.
+    let _finDurStr = '';
+    if (isFinished && t.tournamentStarted) {
+      const _fEndMs = t.finishedAt ? (typeof t.finishedAt === 'number' ? t.finishedAt : new Date(t.finishedAt).getTime()) : null;
+      if (_fEndMs && !isNaN(_fEndMs)) {
+        const _fdMs = _fEndMs - (+t.tournamentStarted);
+        if (_fdMs > 0 && typeof window._tProgFmtDur === 'function') _finDurStr = window._tProgFmtDur(_fdMs).replace(/\s\d+s$/, '');
+      }
+    }
 
     let enrollmentText = _t('enroll.modeMixed');
     if (t.enrollmentMode === 'individual') enrollmentText = _t('enroll.modeIndividual');
@@ -601,19 +611,7 @@ function renderDashboard(container) {
     } else if (isParticipating && !canEnroll && !isFinished) {
       enrollBtnHtml = `<div style="font-size: 0.65rem; font-weight: 700; color: #fef08a; text-transform: uppercase; letter-spacing: 0.5px;">${_t('enroll.enrolled')} ✓</div>`;
     } else if (isFinished && (isParticipating || isOrg)) {
-      // v2.1.47: tempo que o torneio durou (início real → encerramento).
-      var _finDurStr = '';
-      if (t.tournamentStarted) {
-        var _fEnd = t.finishedAt ? (typeof t.finishedAt === 'number' ? t.finishedAt : new Date(t.finishedAt).getTime()) : null;
-        if (_fEnd && !isNaN(_fEnd)) {
-          var _fd = _fEnd - (+t.tournamentStarted);
-          if (_fd > 0 && typeof window._tProgFmtDur === 'function') _finDurStr = window._tProgFmtDur(_fd).replace(/\s\d+s$/, '');
-        }
-      }
-      enrollBtnHtml = `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">` +
-        `<div style="font-size: 0.65rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(251,191,36,0.12); padding: 3px 10px; border-radius: 10px; border: 1px solid rgba(251,191,36,0.25);">🏆 ${isOrg ? _t('dashboard.youOrganized') : _t('dashboard.youParticipated')}</div>` +
-        (_finDurStr ? `<div style="font-size:0.6rem;color:var(--text-muted);font-weight:600;">⏱️ durou ${_finDurStr}</div>` : '') +
-      `</div>`;
+      enrollBtnHtml = `<div style="font-size: 0.65rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(251,191,36,0.12); padding: 3px 10px; border-radius: 10px; border: 1px solid rgba(251,191,36,0.25);">🏆 ${isOrg ? _t('dashboard.youOrganized') : _t('dashboard.youParticipated')}</div>`;
     }
 
     const _isFav = typeof window._isFavorite === 'function' && window._isFavorite(t.id);
@@ -654,6 +652,7 @@ function renderDashboard(container) {
                   </h4>
                   <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.4rem;cursor:pointer;flex-shrink:0;color:${_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;margin-top:2px;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '♥' : '♡'}</span>
                 </div>
+                ${_finDurStr ? `<div style="font-size:0.78rem;color:#fbbf24;font-weight:600;margin-top:4px;">⏱️ durou ${_finDurStr}</div>` : ''}
               </div>
             </div>
 
@@ -2095,14 +2094,15 @@ function renderDashboard(container) {
   let filteredHtml = '';
   if (curFilter === 'todos' && !curSport && !curLocation && !curFormat && encerradosCount > 0) {
     // v2.1.12: torneio encerrado só vai pra seção "Encerrados" depois de 24h.
-    // Nas primeiras 24h após encerrar, ele continua na lista principal (pra
-    // todo mundo ver o resultado/pódio fresquinho). finishedAt é setado em
-    // todos os caminhos de encerramento; se faltar (legado), trata como antigo.
+    // v2.1.48: nas primeiras 12h após encerrar, continua na lista principal (pra
+    // todo mundo ver o resultado/pódio fresquinho); depois vai pra "Encerrados".
+    // finishedAt é setado em todos os caminhos de encerramento; se faltar
+    // (legado), trata como antigo.
     const _isRecentlyFinished = function(t) {
       if (!t || t.status !== 'finished') return false;
       var fa = t.finishedAt ? new Date(t.finishedAt).getTime() : 0;
       if (!fa || isNaN(fa)) return false;
-      return (Date.now() - fa) < 24 * 60 * 60 * 1000;
+      return (Date.now() - fa) < 12 * 60 * 60 * 1000;
     };
     const activeList = filtered.filter(t => t.status !== 'finished' || _isRecentlyFinished(t));
     const finishedList = filtered.filter(t => t.status === 'finished' && !_isRecentlyFinished(t));
