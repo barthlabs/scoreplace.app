@@ -9,6 +9,16 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🎾 v2.1.62-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Quadras por modalidade (dinâmico) + acesso do local no torneio.</b><br><br>' +
+      'Quadras são <b>por modalidade</b> — não existe total genérico. Ao escolher um local cadastrado, o app puxa o nº de quadras <b>da modalidade do torneio</b> (Beach Tennis no Paineiras = 9, Tênis = 14, Pickleball = 4…). E se você <b>trocar a modalidade</b>, o número <b>muda na hora</b>. Se o local não oferece a modalidade, avisa. A <b>política de acesso</b> do local também reflete no torneio (Paineiras = restrito: sócios + convidados).</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🗄️ v2.1.61-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
+      '<p><b>Total de quadras do local (courtCount) consistente.</b><br><br>' +
+      'O campo resumido de total de quadras do local (<code>courtCount</code>) não estava sendo gravado quando você editava as quadras — ficava vazio, enquanto o detalhe (9 Beach Tennis, 14 Tênis…) vinha do <code>courts[]</code>. Agora o app mantém o <b>courtCount = soma de todas as quadras</b> a cada edição, e os locais já cadastrados foram corrigidos no banco (Paineiras = 29, etc.).</p>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🎾 v2.1.60-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Junho, 2026)</span></div>' +
       '<p><b>Nº de quadras puxa o valor certo da modalidade.</b><br><br>' +
       'O cadastro do local guarda as quadras <b>agrupadas por modalidade</b> (ex.: Clube Paineiras = 9 Beach Tennis, 14 Tênis, 4 Pickleball…). O app estava contando o nº de <b>grupos</b> (4) em vez do total da modalidade do torneio. Agora ele puxa o <b>count da modalidade selecionada</b> — torneio de Beach Tennis no Paineiras preenche <b>9 quadras</b>.</p>' +

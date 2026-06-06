@@ -4016,22 +4016,50 @@ window._currentFormSport = function() {
   if (!raw) { var ss = document.getElementById('select-sport'); raw = (ss && ss.value) ? ss.value : ''; }
   return String(raw || '').replace(/^[^\wÀ-ɏ]+/u, '').trim();
 };
-// v2.1.60: nº de quadras do venve para a MODALIDADE do torneio. courts[] é um
-// array de GRUPOS por modalidade, cada um com `count` (ex.: Beach Tennis=9,
-// Tênis=14). Antes eu usava courts.length (nº de grupos) — errado. Agora soma o
-// count dos grupos que incluem a modalidade; se nenhum casar, soma o total.
+// v2.1.62: nº de quadras do venve EXCLUSIVAMENTE da MODALIDADE escolhida.
+// courts[] é um array de GRUPOS por modalidade, cada um com `count` (ex.: Beach
+// Tennis=9, Tênis=14). Soma SÓ os grupos que incluem a modalidade. Se o local
+// não oferece a modalidade, retorna 0 (NÃO usa total genérico — não se joga
+// beach tennis em quadra de tênis).
 window._venueCourtsForSport = function(v, sport) {
   var courts = Array.isArray(v && v.courts) ? v.courts : [];
-  if (!courts.length) return (typeof v.courtCount === 'number' && v.courtCount > 0) ? v.courtCount : 0;
   var sportLow = String(sport || '').trim().toLowerCase();
-  var sumSport = 0, sumAll = 0;
+  if (!courts.length || !sportLow) return 0;
+  var sumSport = 0;
   courts.forEach(function(c) {
-    var cnt = parseInt(c && c.count, 10); if (isNaN(cnt) || cnt < 1) cnt = 1;
-    sumAll += cnt;
     var sps = Array.isArray(c && c.sports) ? c.sports.map(function(s) { return String(s).trim().toLowerCase(); }) : [];
-    if (sportLow && sps.indexOf(sportLow) !== -1) sumSport += cnt;
+    if (sps.indexOf(sportLow) !== -1) { var cnt = parseInt(c && c.count, 10); sumSport += (isNaN(cnt) || cnt < 1) ? 1 : cnt; }
   });
-  return sumSport > 0 ? sumSport : sumAll;
+  return sumSport;
+};
+// v2.1.62: re-puxa o nº de quadras (e reaplica acesso) do local atualmente
+// selecionado no form, para a modalidade atual. Chamado ao trocar a modalidade.
+window._refreshVenueCourtsForSport = async function() {
+  var pidEl = document.getElementById('tourn-venue-place-id');
+  var nameEl = document.getElementById('tourn-venue');
+  var placeId = pidEl ? pidEl.value : '';
+  var name = nameEl ? (nameEl._lastSelectedVenue || nameEl.value) : '';
+  if (!placeId && !name) return;
+  try {
+    var v = await window._resolveRegisteredVenueDoc(placeId, name);
+    if (!v) return;
+    var sport = window._currentFormSport();
+    var count = window._venueCourtsForSport(v, sport);
+    var cc = document.getElementById('tourn-court-count');
+    if (count > 0) {
+      if (cc) { cc.value = count; if (window._onCourtCountChange) { try { window._onCourtCountChange(); } catch (e) {} } }
+      if (typeof showNotification === 'function') showNotification('🏟️ ' + count + ' quadra(s) de ' + sport, 'No ' + (v.name || 'local') + '.', 'info');
+    } else if (typeof showNotification === 'function') {
+      showNotification('⚠️ Sem quadras de ' + sport, (v.name || 'Esse local') + ' não tem quadras dessa modalidade cadastradas — confira o nº de quadras.', 'warning');
+    }
+    // acesso não muda com a modalidade, mas reaplica pra garantir
+    if (v.accessPolicy) {
+      var arr = (v.accessPolicy === 'public') ? ['public'] : ['members'];
+      var ae = document.getElementById('tourn-venue-access');
+      if (ae) ae.value = arr.join(',');
+      if (window._applyVenueAccessUI) { try { window._applyVenueAccessUI(arr); } catch (e) {} }
+    }
+  } catch (e) {}
 };
 window._pullRegisteredVenueData = async function(placeId, name, prefIdx) {
   try {
@@ -4663,6 +4691,11 @@ window._onSportChange = function() {
 
   // Update detailed summary and presets
   if (typeof window._updateGSMSummaryFromHidden === 'function') window._updateGSMSummaryFromHidden();
+
+  // v2.1.62: ao trocar a MODALIDADE, re-puxa o nº de quadras do local cadastrado
+  // PARA ESSA modalidade (quadras são por modalidade — não se joga beach tennis
+  // em quadra de tênis). Só roda se já há um local selecionado.
+  if (typeof window._refreshVenueCourtsForSport === 'function') { try { window._refreshVenueCourtsForSport(); } catch (e) {} }
 };
 
 // ─── Pre-fill form from a saved template ──────────────────────────────────

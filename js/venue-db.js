@@ -204,13 +204,16 @@ window.VenueDB = {
         if (cityQ && !(v.city || '').toLowerCase().includes(cityQ)) return false;
         if (priceQ && v.priceRange !== priceQ) return false;
         if (minCourts > 0) {
-          // Aceita courtCount escalar OU courts[] array — cadastros recentes
-          // gravam o array (v0.15.51+) mas nem sempre o contador denormalizado.
-          // Venues sem nenhuma das duas coisas (cadastro inicial) passam como
-          // wildcard — mesmo princípio do filtro de sport.
-          var effectiveCount = (typeof v.courtCount === 'number' && v.courtCount > 0)
-            ? v.courtCount
-            : (Array.isArray(v.courts) ? v.courts.length : 0);
+          // v2.1.62: total de quadras = SOMA dos count de cada grupo de courts[]
+          // (cada grupo é uma modalidade com seu próprio count). courts.length
+          // (nº de grupos) subcontava. Filtro de descoberta "≥N quadras" usa o
+          // total real. Venues sem courts[] passam como wildcard.
+          var effectiveCount = 0;
+          if (Array.isArray(v.courts) && v.courts.length) {
+            v.courts.forEach(function(c) { var n = parseInt(c && c.count, 10); effectiveCount += (isNaN(n) || n < 1) ? 1 : n; });
+          } else if (typeof v.courtCount === 'number' && v.courtCount > 0) {
+            effectiveCount = v.courtCount;
+          }
           if (effectiveCount > 0 && effectiveCount < minCourts) return false;
           // effectiveCount === 0 passa como wildcard (venue ainda sem quadras).
         }
@@ -343,6 +346,10 @@ window.VenueDB = {
       // Sync sports[] top-level field = union of all court entries
       var allSports = {};
       courts.forEach(function(c) { (c.sports || []).forEach(function(s) { allSports[s] = 1; }); });
+      // v2.1.62: NÃO denormalizar um courtCount "total" — quadras são POR
+      // MODALIDADE (não se joga beach tennis em quadra de tênis). A verdade está
+      // em courts[] (cada grupo {count, sports}); quem precisa do nº de quadras
+      // deve somar o count da modalidade específica, não um total genérico.
       var merged = Object.assign({}, base, {
         courts: courts,
         sports: Object.keys(allSports),
