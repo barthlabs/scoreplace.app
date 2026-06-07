@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.2-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Torneio — botão W.O. aparece para todos os participantes sem Presente.</b> O botão W.O. agora aparece para qualquer participante cujo toggle Presente não esteja ativado, independente de o jogo já ter sido decidido por W.O. anteriormente. Quem já está marcado como ausente vê "Reverter"; os demais sem Presente veem "W.O.".</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Partida Casual — 3 toggles na página de estatísticas.</b> Ao fim de uma partida casual de duplas, a página de estatísticas agora exibe os mesmos 3 toggles da tela de configuração: 🔀 Sortear Duplas, ⚤ Duplas Mistas (quando há 2H+2M) e 👑 Rei/Rainha. Assim é possível ativar ou ajustar o modo diretamente antes de iniciar o próximo jogo.</li>' +

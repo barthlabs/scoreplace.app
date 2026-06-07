@@ -1693,12 +1693,12 @@ function renderParticipants(container, tournamentId) {
           ? `window._markAbsent('${tId}', '${safeName}')`
           : `window._declareAbsent('${tId}', '${safeName}')`);
       const woLabel = isAbsent ? 'Reverter' : 'W.O.';
-      // v2.2.0: _showWoBtn — exibe "W.O." só quando o jogo ainda não foi decidido
-      // por W.O. (isWO=false); se já foi W.O.'d, só quem está em t.absent vê
-      // "Reverter". Isso evita que jogadores no mesmo time do W.O.'d (ex: parceiro
-      // presente) recebam o botão "W.O." como se pudessem gerar outro W.O.
-      // Quando isAbsent=true (o W.O.'d real): sempre mostra "Reverter" em azul.
-      const _showWoBtn = isOrg && (isAbsent || (!mc && !isWO));
+      // Regra simples: botão W.O./Reverter aparece para todo participante que
+      // NÃO está com o toggle Presente ativado (!mc). Quando isAbsent=true →
+      // mostra "Reverter"; quando !mc && !isAbsent → mostra "W.O.".
+      // Remover a restrição !isWO que escondia o botão para jogadores cujo
+      // jogo já foi resolvido por W.O. mas que ainda não estão marcados ausentes.
+      const _showWoBtn = isOrg && !mc;
       const woBtn = _showWoBtn
         ? `<button class="btn btn-micro" onclick="event.stopPropagation(); ${woAction}" style="border:1px solid ${isAbsent ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.2)'};background:${isAbsent ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.08)'};color:${isAbsent ? '#60a5fa' : '#f87171'};font-weight:800;font-size:0.7rem;${isAbsent ? 'opacity:1;' : 'opacity:0.6;'}">${woLabel}</button>`
         : '';
