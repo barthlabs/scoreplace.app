@@ -6647,7 +6647,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var _unsubFirestore = null;
   var _casualCancelled = false; // local flag so we don't double-evacuate
   var _myCloseClicked = false;  // v2.2.12: este cliente iniciou consenso de encerramento
-  var _knownPlayerUids = [];    // v2.2.12: UIDs dos jogadores reais na sala (do Firestore)
+  // v2.2.15: pré-populado de _casualPlayers para que o consenso funcione mesmo
+  // antes do primeiro onSnapshot (race condition: "Fechar" clicado rápido)
+  var _knownPlayerUids = _casualPlayers.reduce(function(arr, p) {
+    if (p && p.uid) arr.push(p.uid);
+    return arr;
+  }, []);
 
   // Serialize state for Firestore
   function _serializeState() {
@@ -7592,7 +7597,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
     var matchSport = (opts && (opts.sportName || opts.title)) || 'Beach Tennis';
     if (typeof window._openCasualMatch === 'function') {
-      window._openCasualMatch({ sport: matchSport, isDoubles: !!isDoubles, participants: participants });
+      // v2.2.15: passa docId/roomCode/createdBy para retornar à sala existente
+      // (sem isso, convidados que entraram em partida ativa criariam sala nova)
+      window._openCasualMatch({
+        sport: matchSport,
+        isDoubles: !!isDoubles,
+        participants: participants,
+        docId: opts && opts.casualDocId,
+        roomCode: opts && opts.roomCode,
+        createdBy: opts && opts.createdBy
+      });
     }
   }
 
