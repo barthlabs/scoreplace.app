@@ -3963,20 +3963,23 @@ window._openLiveScoring = function(tId, matchId, opts) {
   }
 
   // Handler for tie rule dialog choice — restricted to registered players in the match
+  // (casual matches bypass uid check — the match creator is always a player)
   window._liveResolveTie = function(rule) {
     var cu = window.AppStore && window.AppStore.currentUser;
-    if (cu && cu.uid) {
-      var names = p1Players.concat(p2Players);
-      var ok = false;
-      for (var i = 0; i < names.length; i++) {
-        var mm = _playerMeta[names[i]];
-        if (mm && mm.uid === cu.uid) { ok = true; break; }
+    if (!isCasual) {
+      if (cu && cu.uid) {
+        var names = p1Players.concat(p2Players);
+        var ok = false;
+        for (var i = 0; i < names.length; i++) {
+          var mm = _playerMeta[names[i]];
+          if (mm && mm.uid === cu.uid) { ok = true; break; }
+        }
+        if (!ok) { _render(); return; }
+      } else {
+        // Not logged in — can't make the decision
+        _render();
+        return;
       }
-      if (!ok) { _render(); return; }
-    } else {
-      // Not logged in — can't make the decision
-      _render();
-      return;
     }
     state.tieRulePending = false;
 
@@ -5047,9 +5050,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Determine whether the current viewer is a registered player in this match.
     // Used to gate match-control actions (tie-rule choice, tie-break button, restart) —
     // they must only be operable by registered users actually playing.
+    // Casual matches always allow the viewer to control (creator is always a player).
     var _curUser = window.AppStore && window.AppStore.currentUser;
-    var _isViewerInMatch = false;
-    if (_curUser && _curUser.uid) {
+    var _isViewerInMatch = isCasual; // casual: always true; tournament: check uid
+    if (!isCasual && _curUser && _curUser.uid) {
       var _mn = p1Players.concat(p2Players);
       for (var _mni = 0; _mni < _mn.length; _mni++) {
         var _mm = _playerMeta[_mn[_mni]];
