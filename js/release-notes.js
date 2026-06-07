@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.22-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Match point encerra a partida (multiplayer).</b> Em partida casual com mais de um jogador, marcar o ponto da vitória não fazia nada — a tela de estatísticas não aparecia. Causa: um dado de sincronização antigo, ainda em trânsito, revertia o encerramento. Corrigido: o encerramento fixa um marco de tempo e nenhum dado mais antigo reverte mais a partida. Agora marca o último ponto → encerra → mostra as estatísticas → opções de jogar de novo (mesmos times) ou re-sortear.</li>' +
+        '<li><b>Encerramento consensual — "Confirmar" funciona.</b> Quando um jogador pede pra encerrar, basta <b>um</b> outro jogador confirmar pra encerrar pra todos (antes exigia que todos confirmassem, e jogadores que já tinham saído travavam pra sempre). Recusar volta todos ao placar. O botão "Fechar agora" continua disponível pra encerrar a sala imediatamente quando você está sozinho.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>"Fechar agora" dissolve a sala de verdade.</b> Quando você fica sozinho numa partida casual (os outros saíram mas os nomes continuam na sala), o botão "Fechar agora" agora <b>apaga a sala</b> em vez de só fechar a tela: o registro da partida é dissolvido, o ponteiro de "partida ativa" é limpo, e você vai direto pro dashboard. Não volta mais pra mesma sala fantasma toda vez que abre o app.</li>' +

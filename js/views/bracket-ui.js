@@ -4508,6 +4508,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
         try { clearTimeout(_syncTimer); } catch(_e) {}
         var _finalLiveState = null;
         try { _finalLiveState = _serializeState(); } catch(_e) {}
+        // v2.2.22-beta: estabelece o baseline de sync NO MOMENTO do encerramento
+        // local. Sem isto, um snapshot 'active' em trânsito (de um ponto anterior,
+        // _ts menor) chegava DEPOIS do finish e revertia o estado finalizado via
+        // o branch "Jogar Novamente" (status==='active' && state.isFinished) que
+        // não tinha guarda de _ts — sintoma: "marquei o match point e nada
+        // aconteceu". Com _lastSyncTs = _ts do finish, qualquer 'active' mais
+        // antigo é ignorado; só um Jogar Novamente real (com _ts maior) reverte.
+        if (_finalLiveState && _finalLiveState._ts) { _lastSyncTs = _finalLiveState._ts; }
         var _playersForUpdate = [];
         var _allForUpdate = p1Players.concat(p2Players);
         for (var _upi = 0; _upi < _allForUpdate.length; _upi++) {
@@ -6808,25 +6816,23 @@ window._openLiveScoring = function(tId, matchId, opts) {
     banner.id = 'close-pending-banner';
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:100003;background:rgba(0,0,0,0.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;box-sizing:border-box;';
     if (isInitiator) {
-      var _remaining = 8;
+      // v2.2.22-beta: sem auto-fire por timeout. O countdown antigo disparava
+      // _closePendingForceClose (DISSOLVE a sala) em 8s, fazendo corrida com o
+      // outro jogador que estava prestes a Confirmar/Recusar — o iniciador saía
+      // e o outro ficava com a sala morta. Agora o iniciador espera a resposta:
+      // "Cancelar" volta pro placar, ou "Fechar agora" (manual) dissolve a sala
+      // — escape pra quando está sozinho com fantasmas.
       banner.innerHTML =
         '<div style="background:rgba(251,191,36,0.12);border:1.5px solid rgba(251,191,36,0.45);border-radius:20px;padding:28px 32px;text-align:center;max-width:320px;width:100%;box-sizing:border-box;">' +
           '<div style="font-size:2rem;margin-bottom:10px;">⏳</div>' +
           '<div style="color:#fbbf24;font-weight:800;font-size:1.1rem;margin-bottom:8px;">Aguardando confirmação</div>' +
-          '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">Os outros jogadores precisam confirmar o encerramento.</div>' +
-          '<div style="color:rgba(255,255,255,0.35);font-size:0.78rem;margin-top:10px;">Fecha automaticamente em <span id="close-pending-countdown">' + _remaining + '</span>s</div>' +
+          '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">Os outros jogadores precisam confirmar o encerramento. Ou use <b>Fechar agora</b> para encerrar a sala imediatamente.</div>' +
         '</div>' +
         '<div style="display:flex;gap:10px;">' +
           '<button onclick="window._casualCloseCancel()" style="background:rgba(239,68,68,0.15);border:1.5px solid rgba(239,68,68,0.5);color:#f87171;border-radius:14px;padding:12px 24px;font-size:0.92rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;">Cancelar</button>' +
           '<button onclick="window._closePendingForceClose()" style="background:rgba(251,191,36,0.15);border:1.5px solid rgba(251,191,36,0.5);color:#fbbf24;border-radius:14px;padding:12px 24px;font-size:0.92rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;">Fechar agora</button>' +
         '</div>';
       document.body.appendChild(banner);
-      _closePendingTimer = setInterval(function() {
-        _remaining--;
-        var countEl = document.getElementById('close-pending-countdown');
-        if (countEl) countEl.textContent = _remaining;
-        if (_remaining <= 0) _closePendingForceClose();
-      }, 1000);
       return; // banner já appendado
     } else {
       var _safeName = byName ? byName.replace(/[<>"'&]/g, function(c){ return {'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]; }) : 'Alguém';
@@ -6962,6 +6968,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
               state.isFinished = true; // garantia, caso liveState nao tenha
               if (data.liveState.winner != null) state.winner = data.liveState.winner;
               _matchEndTime = _matchEndTime || Date.now();
+              // v2.2.22-beta: baseline = _ts do finish, para que só um Jogar
+              // Novamente real (com _ts maior) re-abra o placar — snapshots
+              // 'active' em trânsito (mais antigos) não revertem as stats.
+              if (data.liveState._ts) _lastSyncTs = data.liveState._ts;
             }
             // NÃO para o listener — mantém vivo para detectar se alguém
             // clicar "Jogar Novamente" (status volta pra 'active').
@@ -7007,7 +7017,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // status voltou pra 'active'. Reseta state e re-renderiza o
           // placar ao vivo para todos os demais logados que estavam
           // vendo as stats.
-          if (data && data.status === 'active' && state.isFinished && !_casualCancelled) {
+          // v2.2.22-beta: só reverte pro placar (Jogar Novamente) se o liveState
+          // remoto for GENUINAMENTE mais novo que o nosso baseline. Um snapshot
+          // 'active' em trânsito (de antes do encerramento, _ts menor) NÃO pode
+          // mais des-finalizar a partida — era a causa de "match point não fez
+          // nada" no modo multiplayer.
+          if (data && data.status === 'active' && state.isFinished && !_casualCancelled &&
+              data.liveState && data.liveState._ts && data.liveState._ts > _lastSyncTs) {
             _isRemoteUpdate = true;
             if (data.liveState) {
               _applyRemoteState(data.liveState);
@@ -8445,8 +8461,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var allUids = Array.isArray(d.playerUids) ? d.playerUids : _knownPlayerUids;
       var nonInitiators = allUids.filter(function(u) { return u !== cp.by; });
       var confirmed = Array.isArray(cp.confirmedBy) ? cp.confirmedBy : [];
-      var allConfirmed = nonInitiators.every(function(u) { return confirmed.indexOf(u) !== -1; });
-      if (allConfirmed) {
+      // v2.2.22-beta: basta UM outro jogador real confirmar. Antes exigia que
+      // TODOS os nonInitiators confirmassem (`every`), mas UIDs fantasma (gente
+      // que saiu sem limpar playerUids) nunca confirmam → o "todos confirmaram"
+      // nunca era verdade → "Confirmar não fazia nada". Em partida casual, se o
+      // iniciador quer encerrar e ao menos mais um confirma, encerra pra todos.
+      var someoneConfirmed = confirmed.some(function(u) {
+        return u !== cp.by && nonInitiators.indexOf(u) !== -1;
+      });
+      if (someoneConfirmed) {
         // Todos confirmaram — cancela timer do iniciador (se ainda ativo) e fecha
         if (_closePendingTimer) { clearInterval(_closePendingTimer); _closePendingTimer = null; }
         // Remove closePending e sinaliza volta à sala (setupAt)
