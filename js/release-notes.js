@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.34-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Botões do cabeçalho voltam no Rei/Rainha.</b> Ao iniciar uma rodada do Rei/Rainha, os botões do topo (⚙️ Ajustar, ↺ Resetar, ✕ Fechar) sumiam. Corrigido — eles voltam a aparecer no placar ao vivo de cada rodada.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.33-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Rei/Rainha retroativo conta os jogos anteriores.</b> Se você jogou partidas com parceiros diferentes e depois ativou o Rei/Rainha, agora os jogos anteriores da sessão são considerados na série — o app monta a rodada que falta (com o parceiro que você ainda não jogou) em vez de recomeçar do zero. Antes só contava o jogo atual ("Jogo 2 de 3" e repetia parceiro), porque o histórico era perdido a cada partida.</li>' +

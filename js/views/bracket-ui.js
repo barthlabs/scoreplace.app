@@ -5896,6 +5896,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
       return;
     }
 
+    // v2.2.34-beta: ESTADO ATIVO — garante que os botões do cabeçalho
+    // (⚙️ Ajustar / ↺ Resetar / ✕ Fechar) estejam VISÍVEIS. O finished-render
+    // os esconde (v2.2.18 casual) e, no Rei/Rainha, o MESMO overlay é reusado
+    // pra próxima rodada — sem isto, o cabeçalho sumia após iniciar a rodada.
+    var _hdrAct = document.getElementById('live-score-header-actions');
+    if (_hdrAct) {
+      _hdrAct.style.display = 'flex';
+      var _rstBtn = _hdrAct.querySelector('button[onclick*="_liveScoreReset"]');
+      if (_rstBtn) _rstBtn.style.display = '';
+    }
+
     // Current game display — no "GAME" label, only special states
     var gameLabel = '';
     var p1Display, p2Display;
