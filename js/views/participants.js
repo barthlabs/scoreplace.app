@@ -1693,29 +1693,34 @@ function renderParticipants(container, tournamentId) {
           ? `window._markAbsent('${tId}', '${safeName}')`
           : `window._declareAbsent('${tId}', '${safeName}')`);
       const woLabel = isAbsent ? 'Reverter' : 'W.O.';
-      // v1.0.88-beta: omitir botão W.O. quando Presente confirmado.
-      // User: 'na lista de inscritos, da mesma forma que o botão de presença
-      // do jogador é omitido quando damos WO para um participante, vamos
-      // omitir o botao de WO quando a presença for confirmada.'
-      // Pra desfazer: usuário toggla Presença off → botão W.O. reaparece.
-      // Quando isAbsent=true mostra "Reverter" (não some — pois é a única
-      // forma de desfazer W.O.). Quando mc=true E !isAbsent, omite.
-      const _showWoBtn = isOrg && (isAbsent || !mc);
+      // v2.2.0: _showWoBtn — exibe "W.O." só quando o jogo ainda não foi decidido
+      // por W.O. (isWO=false); se já foi W.O.'d, só quem está em t.absent vê
+      // "Reverter". Isso evita que jogadores no mesmo time do W.O.'d (ex: parceiro
+      // presente) recebam o botão "W.O." como se pudessem gerar outro W.O.
+      // Quando isAbsent=true (o W.O.'d real): sempre mostra "Reverter" em azul.
+      const _showWoBtn = isOrg && (isAbsent || (!mc && !isWO));
       const woBtn = _showWoBtn
         ? `<button class="btn btn-micro" onclick="event.stopPropagation(); ${woAction}" style="border:1px solid ${isAbsent ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.2)'};background:${isAbsent ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.08)'};color:${isAbsent ? '#60a5fa' : '#f87171'};font-weight:800;font-size:0.7rem;${isAbsent ? 'opacity:1;' : 'opacity:0.6;'}">${woLabel}</button>`
         : '';
-      const woBadge = isWO ? `<div style="font-size:0.7rem;font-weight:800;padding:4px 12px;border-radius:8px;background:rgba(239,68,68,0.15);color:#f87171;flex-shrink:0;border:1px solid rgba(239,68,68,0.3);">W.O.</div>` : '';
+      // v2.2.0: badge W.O. só aparece quando ESTE jogador está em t.absent —
+      // não deve aparecer no parceiro presente nem em quem simplesmente não
+      // fez check-in. A partida ter wo:true é info de resultado do jogo, não
+      // de status individual do jogador.
+      const woBadge = isAbsent ? `<div style="font-size:0.7rem;font-weight:800;padding:4px 12px;border-radius:8px;background:rgba(239,68,68,0.15);color:#f87171;flex-shrink:0;border:1px solid rgba(239,68,68,0.3);">W.O.</div>` : '';
 
       // Colors: 3 estados + standby amarelo
+      // v2.2.0: isWO (match-level) removido dos visuais — só isAbsent torna o card
+      // vermelho/riscado. Antes, todo jogador no lado perdedor de um W.O. ficava
+      // vermelho, mesmo estando Presente ou apenas sem check-in.
       const presenceDotColor = mc ? '#10b981' : isAbsent ? '#ef4444' : '#64748b';
       const presenceDot = `<span style="width:8px;height:8px;border-radius:50%;background:${presenceDotColor};display:inline-block;flex-shrink:0;"></span>`;
-      const nameColor = isStandby ? '#fbbf24' : (mc ? '#4ade80' : isAbsent ? '#f87171' : isWO ? '#f87171' : 'var(--text-bright)');
+      const nameColor = isStandby ? '#fbbf24' : (mc ? '#4ade80' : isAbsent ? '#f87171' : 'var(--text-bright)');
       const cardBg = isStandby
         ? (mc ? 'rgba(251,191,36,0.12)' : isAbsent ? 'rgba(239,68,68,0.08)' : 'rgba(251,191,36,0.06)')
-        : (mc ? 'rgba(16,185,129,0.12)' : isAbsent ? 'rgba(239,68,68,0.08)' : isWO ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)');
+        : (mc ? 'rgba(16,185,129,0.12)' : isAbsent ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)');
       const cardBorder = isStandby
         ? (mc ? 'rgba(251,191,36,0.3)' : isAbsent ? 'rgba(239,68,68,0.25)' : 'rgba(251,191,36,0.15)')
-        : (mc ? 'rgba(16,185,129,0.3)' : isAbsent ? 'rgba(239,68,68,0.3)' : isWO ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.06)');
+        : (mc ? 'rgba(16,185,129,0.3)' : isAbsent ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)');
 
       // VIP check (by individual name or team name)
       const vipMap = t.vips || {};
@@ -1748,7 +1753,9 @@ function renderParticipants(container, tournamentId) {
       const jogoInline = matchLabel
         ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;margin-left:6px;">${matchLabel}</span>`
         : '';
-      const nameCell = `<div style="display:flex;align-items:baseline;gap:6px;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isWO ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${vipTag}${isStandby ? presenceDot : ''}${jogoInline}</div>`;
+      // v2.2.0: strikethrough só quando isAbsent (player em t.absent) —
+      // não quando isWO (match-level). Parceiro presente não deve ter riscado.
+      const nameCell = `<div style="display:flex;align-items:baseline;gap:6px;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${vipTag}${isStandby ? presenceDot : ''}${jogoInline}</div>`;
       // Inline layout: name+Jogo anchored to top-left, teams stack to the right, "vs" at top-right.
       // Mobile (< 768px) falls back to name on top, matchup block below.
       const _isNarrow = typeof window !== 'undefined' && window.innerWidth && window.innerWidth < 768;
