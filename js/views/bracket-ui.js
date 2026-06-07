@@ -6942,9 +6942,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
               // banner já existe e eu ainda não confirmei — nada a fazer
             }
           } else {
-            // closePending foi removido (cancelado) — remove o banner se estiver aberto
+            // closePending foi removido (Recusar/Cancelar) — remove o banner e
+            // reseta o flag local pra TODOS resumirem o placar e poderem
+            // re-iniciar um encerramento depois. v2.2.23-beta: sem o reset de
+            // _myCloseClicked, o iniciador ficava travado (próximo ✕ caía no
+            // confirm dialog em vez do consenso) após um Recusar do outro.
             var _bannerToRemove = document.getElementById('close-pending-banner');
             if (_bannerToRemove) _bannerToRemove.remove();
+            if (_closePendingTimer) { clearInterval(_closePendingTimer); _closePendingTimer = null; }
+            _myCloseClicked = false;
           }
           // v1.7.3-beta: Match ended (status='finished') — APLICA o
           // liveState final no overlay e deixa o usuário ver a tela de

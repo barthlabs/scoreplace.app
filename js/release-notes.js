@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.23-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Recusar encerramento volta todos ao placar.</b> Quando alguém pede pra encerrar e o outro <b>Recusa</b>, todos voltam ao placar ao vivo e ninguém sai — e quem tinha pedido pode pedir o encerramento de novo normalmente depois (antes ficava travado).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.22-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Match point encerra a partida (multiplayer).</b> Em partida casual com mais de um jogador, marcar o ponto da vitória não fazia nada — a tela de estatísticas não aparecia. Causa: um dado de sincronização antigo, ainda em trânsito, revertia o encerramento. Corrigido: o encerramento fixa um marco de tempo e nenhum dado mais antigo reverte mais a partida. Agora marca o último ponto → encerra → mostra as estatísticas → opções de jogar de novo (mesmos times) ou re-sortear.</li>' +
