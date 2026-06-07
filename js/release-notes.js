@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.8-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Lista de Espera — toggle de presença desabilitado para jogadores ausentes.</b> Jogadores enviados à lista de espera por estarem ausentes agora aparecem com o toggle "Presente" desabilitado (opaco, sem clique). Para reativá-los, o organizador deve usar o botão "Reverter" — assim o toggle permanece no estado correto (desativado) até a reativação explícita. Corrige também o bug onde clicar no toggle de um jogador ausente da lista de espera afetava outros jogadores: a lógica de "Reverter" é individual por jogador.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.7-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Dashboard — torneios encerrados vão para seção separada em todos os filtros.</b> Nos filtros "Organizados" e "Participando", os torneios encerrados agora aparecem numa seção colapsável "Torneios Encerrados" no final da lista — igual ao que já acontecia no filtro "Todos". Antes ficavam misturados com os torneios ativos nesses dois filtros.</li>' +

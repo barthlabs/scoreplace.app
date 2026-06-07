@@ -216,6 +216,23 @@ window._toggleCheckIn = function (tId, playerName) {
   if (!t.checkedIn) t.checkedIn = {};
   if (!t.absent) t.absent = {};
   const wasCheckedIn = !!t.checkedIn[playerName];
+
+  // Guard v2.2.8: jogadores na lista de espera por ausência devem ser reativados
+  // via botão "Reverter" — toggle fica desabilitado na UI, isso é um safety net.
+  if (!wasCheckedIn && t.absent && t.absent[playerName]) {
+    const _pnFor = p => (typeof p === 'string' ? p : (p && (p.displayName || p.name || p.email || '')));
+    const _inStandby = (Array.isArray(t.standbyParticipants) &&
+      t.standbyParticipants.some(p => _pnFor(p) === playerName)) ||
+      (Array.isArray(t.waitlist) &&
+      t.waitlist.some(p => _pnFor(p) === playerName));
+    if (_inStandby) {
+      if (typeof showNotification === 'function') {
+        showNotification('ℹ️', 'Use o botão "Reverter" para reativar este jogador da lista de espera.', 'info');
+      }
+      return;
+    }
+  }
+
   if (wasCheckedIn) {
     // Desmarcar presença → volta ao estado "sem confirmação"
     delete t.checkedIn[playerName];
@@ -1682,7 +1699,9 @@ function renderParticipants(container, tournamentId) {
 
       // Toggle "Presente" — sempre renderizado para todo participante,
       // independente de o jogo já ter resultado ou W.O. (check-in é independente do resultado)
-      const presentToggle = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}');"><span class="toggle-slider"></span></label><span style="font-size:0.68rem;font-weight:700;color:${mc ? '#4ade80' : '#64748b'};white-space:nowrap;">${mc ? 'Presente' : 'Ausente'}</span>`;
+      // v2.2.8: standby players marcados como ausentes ficam com toggle desabilitado — usar "Reverter"
+      const isAbsentStandby = isStandby && isAbsent;
+      const presentToggle = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAbsentStandby ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} ${isAbsentStandby ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}');"`}><span class="toggle-slider"></span></label><span style="font-size:0.68rem;font-weight:700;color:${mc ? '#4ade80' : '#64748b'};white-space:nowrap;">${mc ? 'Presente' : 'Ausente'}</span>`;
 
       // W.O. button — marca W.O. / reverte W.O.
       // Standby players use simple toggle; active participants always go through the
