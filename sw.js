@@ -20,13 +20,24 @@ firebase.initializeApp({
 var messaging = firebase.messaging();
 messaging.onBackgroundMessage(function(payload) {
   console.log('[SW] Background push received:', payload);
-  var title = (payload.notification && payload.notification.title) || 'scoreplace.app';
-  var body = (payload.notification && payload.notification.body) || '';
-  var link = (payload.data && payload.data.link) || '/';
+  // sendPushNotification envia DATA-ONLY (sem payload `notification`) de
+  // propósito: assim o navegador NÃO exibe uma cópia automática e o SW é o
+  // único lugar que chama showNotification — fim das notificações duplicadas.
+  // Fallback pra payload.notification mantém compat com mensagens antigas.
+  var data = payload.data || {};
+  var note = payload.notification || {};
+  var title = data.title || note.title || 'scoreplace.app';
+  var body = data.body || note.body || '';
+  var link = data.link || '/';
+  // `tag` estável: entregas repetidas (retry, multi-aba, race) substituem a
+  // notificação anterior em vez de empilhar — só uma aparece na tela.
+  var tag = data.tag || ('scoreplace|' + (data.type || '') + '|' + (data.tournamentId || ''));
   return self.registration.showNotification(title, {
     body: body,
     icon: '/icons/icon-192.svg',
     badge: '/icons/icon-192.svg',
+    tag: tag,
+    renotify: false,
     data: { url: link },
     vibrate: [200, 100, 200]
   });
@@ -53,7 +64,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v2.1.91-beta';
+var CACHE_NAME = 'scoreplace-v2.1.92-beta';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
