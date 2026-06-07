@@ -9429,12 +9429,23 @@ window._openCasualMatch = function(restoreOpts) {
   // Helper canônico: gênero efetivo do slot. Override por partida (_slotGenders)
   // tem prioridade sobre o gender do perfil do usuário logado naquele slot.
   function _resolveSlotGender(slotIdx) {
-    if (_slotGenders[slotIdx]) return _slotGenders[slotIdx];
-    // Coach mode: não usar gender do perfil do participante — slot foi liberado
-    if (_coachMode) return null;
+    // Coach mode: slots foram liberados — só vale o override manual da partida.
+    if (_coachMode) return _slotGenders[slotIdx] || null;
     var lp = _lobbyParticipants[slotIdx];
+    // v2.2.28-beta: o gênero do PERFIL é AUTORITATIVO. Uma marcação manual de
+    // outro usuário (override por partida) NUNCA sobrepõe o gênero que o dono
+    // definiu no próprio perfil. Override só vale quando NÃO há gênero de perfil
+    // (participante digitado/guest, ou usuário real com uid mas sem gênero).
     if (lp && lp.uid && _participantGenders[lp.uid]) return _participantGenders[lp.uid];
+    if (_slotGenders[slotIdx]) return _slotGenders[slotIdx];
     return null;
+  }
+  // True quando o slot tem um usuário real cujo gênero veio do PERFIL — nesse
+  // caso ninguém pode re-marcar (o ícone vira somente-leitura).
+  function _slotGenderIsFromProfile(slotIdx) {
+    if (_coachMode) return false;
+    var lp = _lobbyParticipants[slotIdx];
+    return !!(lp && lp.uid && _participantGenders[lp.uid]);
   }
   // Restore participants from the existing Firestore doc when re-entering after reload
   var _lobbyParticipants = (restoreOpts && Array.isArray(restoreOpts.participants) && restoreOpts.participants.length > 0)
@@ -9723,18 +9734,30 @@ window._openCasualMatch = function(restoreOpts) {
     // causing "TypeError: _genderIconHtml is not a function" in singles mode.
     function _genderIconHtml(ci) {
       var g = _resolveSlotGender(ci);
+      // v2.2.28-beta: gênero vindo do PERFIL é somente-leitura — ninguém
+      // re-marca o gênero de quem já tem no perfil. Editável só pra guest
+      // digitado ou usuário real sem gênero no perfil.
+      var _fromProfile = _slotGenderIsFromProfile(ci);
       var sym, clr, title, bg, bdr, pulseClass;
       if (g === 'masculino') {
-        sym = '♂'; clr = '#60a5fa'; title = 'Masculino — toque pra mudar';
+        sym = '♂'; clr = '#60a5fa'; title = _fromProfile ? 'Masculino (do perfil)' : 'Masculino — toque pra mudar';
         bg = 'rgba(255,255,255,0.06)'; bdr = 'rgba(255,255,255,0.12)'; pulseClass = '';
       } else if (g === 'feminino') {
-        sym = '♀'; clr = '#f472b6'; title = 'Feminino — toque pra mudar';
+        sym = '♀'; clr = '#f472b6'; title = _fromProfile ? 'Feminino (do perfil)' : 'Feminino — toque pra mudar';
         bg = 'rgba(255,255,255,0.06)'; bdr = 'rgba(255,255,255,0.12)'; pulseClass = '';
       } else {
         // Estado não definido — visualmente chamativo
         sym = '?'; clr = '#fbbf24'; title = 'Toque pra definir o gênero';
         bg = 'rgba(251,191,36,0.15)'; bdr = 'rgba(251,191,36,0.5)';
         pulseClass = ' _casual-gender-pulse';
+      }
+      // Somente-leitura: <span> sem onclick (não abre o picker).
+      if (_fromProfile) {
+        return '<span data-gender-slot="' + ci + '" ' +
+          'title="' + title + '" aria-label="' + title + '" ' +
+          'style="width:26px;height:26px;min-width:26px;border-radius:50%;background:' + bg + ';' +
+          'border:1px solid ' + bdr + ';color:' + clr + ';font-size:0.95rem;font-weight:800;' +
+          'display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;line-height:1;cursor:default;">' + sym + '</span>';
       }
       return '<button type="button" data-gender-slot="' + ci + '" class="' + pulseClass.trim() + '" ' +
         'onclick="event.stopPropagation();window._casualSetSlotGender(' + ci + ')" ' +
@@ -10750,7 +10773,26 @@ window._openCasualMatch = function(restoreOpts) {
     ov.querySelectorAll('[data-gv]').forEach(function(btn) {
       btn.onclick = function() {
         var v = btn.getAttribute('data-gv');
-        _slotGenders[slotIdx] = (v === '__null__') ? null : v;
+        var _gv = (v === '__null__') ? null : v;
+        // v2.2.28-beta: se o slot é do PRÓPRIO usuário logado, marcar o gênero
+        // aqui ALIMENTA o perfil global dele (não é override por partida). Assim
+        // vira autoritativo e propaga via participantGenders pros demais — e
+        // ninguém mais consegue re-marcar (vira somente-leitura).
+        var _lpG = _lobbyParticipants[slotIdx];
+        var _cuG = window.AppStore && window.AppStore.currentUser;
+        var _isOwnSlot = !!(_lpG && _cuG && _lpG.uid && _cuG.uid && _lpG.uid === _cuG.uid);
+        if (_isOwnSlot && _gv) {
+          _cuG.gender = _gv;
+          _participantGenders[_cuG.uid] = _gv;
+          try { delete _slotGenders[slotIdx]; } catch (e) {} // perfil manda; limpa override
+          if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+            window.FirestoreDB.saveUserProfile(_cuG.uid, { gender: _gv }).catch(function () {});
+          }
+          _publishMyGender();
+        } else {
+          // Guest digitado ou usuário sem perfil → override manual por partida.
+          _slotGenders[slotIdx] = _gv;
+        }
         _close();
         _renderSetup();
         _syncCasualSetupDebounced();
