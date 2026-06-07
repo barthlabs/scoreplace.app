@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.38-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Nomes corretos nas Últimas Partidas.</b> Os cards de últimas partidas mostravam nomes errados (ex.: "Rodrigo Barth / Rodrigo Barth", um jogador trocado por outro) quando as duplas eram sorteadas. Causa: o app assumia que o 1º jogador do time 1 era o criador da sala. Corrigido — cada jogador aparece com o nome real (os dados sempre estiveram corretos; era só a exibição).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.37-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Fim da tela duplicada ao desligar o Rei/Rainha.</b> Ao desativar o toggle Rei/Rainha na tela de resultado final, a tela mostrava os controles repetidos (dois "Iniciar", dois conjuntos de toggles). Corrigido — o cabeçalho volta ao normal e os controles aparecem uma vez só.</li>' +
