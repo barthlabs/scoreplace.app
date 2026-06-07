@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.27-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Gênero propaga entre todos da sala.</b> Em partida casual, o gênero de cada jogador com conta agora é compartilhado com todos na sala — quem cria a sala e quem entra veem os mesmos gêneros, de forma consistente. Cada jogador publica o próprio gênero (do perfil) e todos recebem, sem depender de carregar o perfil alheio. Isso faz o ícone de gênero e o toggle <b>Duplas Mistas</b> aparecerem corretamente em todos os dispositivos.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.26-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>"Jogar Novamente" com consenso (multiplayer).</b> Na tela de estatísticas, clicar em <b>Jogar</b> agora funciona como na sala de organização: quem clica fica em <b>"⏳ Aguardando os outros"</b> e os demais precisam confirmar (pelo menos 1 de cada time) antes da nova partida começar pra todos.</li>' +

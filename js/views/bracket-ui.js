@@ -11136,8 +11136,27 @@ window._openCasualMatch = function(restoreOpts) {
           slotGenders: _slotGenders,
           slotLinkedUid: _slotLinkedUid.slice()
         });
+        _publishMyGender();
       } catch(e) {}
     }, 500);
+  }
+  // v2.2.27-beta: propaga o gênero por UID. Cada cliente publica o PRÓPRIO
+  // gênero (do perfil) no doc da sala via dot-path participantGenders.<uid> —
+  // sem clobber entre clientes. Todos leem e mergeiam (snapshot + poll). Assim
+  // o gênero do criador (Nelson) chega a quem entra (Rodrigo) e vice-versa,
+  // independente de ler o perfil alheio ou da ordem dos slots. Resolve o
+  // toggle Duplas Mistas e o ícone de gênero ficarem inconsistentes entre
+  // dispositivos. Escrita direta (não via updateCasualMatch) pra preservar a
+  // chave com ponto (dot-path) sem o _cleanUndefined reaninhar o objeto.
+  function _publishMyGender() {
+    var _cuPG = window.AppStore && window.AppStore.currentUser;
+    if (!_cuPG || !_cuPG.uid || !_cuPG.gender || !_sessionDocId) return;
+    if (!window.FirestoreDB || !window.FirestoreDB.db) return;
+    try {
+      var _upd = {};
+      _upd['participantGenders.' + _cuPG.uid] = _cuPG.gender;
+      window.FirestoreDB.db.collection('casualMatches').doc(_sessionDocId).update(_upd).catch(function() {});
+    } catch (e) {}
   }
   // Exposed for oninput handlers on name fields
   window._syncCasualSetupFromInput = _syncCasualSetupDebounced;
@@ -11971,6 +11990,26 @@ window._openCasualMatch = function(restoreOpts) {
             try { _renderSetup(); } catch(e) {}
           }
         }
+
+        // v2.2.27-beta: propaga gênero por UID. Mergeia participantGenders
+        // (uid → gênero) publicado por cada cliente. Robusto a ordem de slots e
+        // independe de ler o perfil alheio — o gênero do criador chega a quem
+        // entra e vice-versa. Só sobrescreve com valor não-vazio.
+        if (fresh.participantGenders && typeof fresh.participantGenders === 'object') {
+          var _pgChanged = false;
+          for (var _pgk in fresh.participantGenders) {
+            if (!Object.prototype.hasOwnProperty.call(fresh.participantGenders, _pgk)) continue;
+            var _pgv = fresh.participantGenders[_pgk];
+            if (_pgv && _participantGenders[_pgk] !== _pgv) {
+              _participantGenders[_pgk] = _pgv;
+              _pgChanged = true;
+            }
+          }
+          if (_pgChanged) { try { _renderSetup(); } catch(e) {} }
+        }
+        // Garante que o meu gênero está publicado (caso o doc tenha sido criado
+        // depois do primeiro sync, ou re-entrada na sala).
+        _publishMyGender();
 
         // v1.6.55-beta: sincroniza slotLinkedUid de outros clientes para que
         // o avatar/foto e nome do amigo vinculado via autocomplete apareçam
