@@ -60,7 +60,13 @@ function initRouter() {
       } catch(e) {}
     }
 
-    // --- Visitors can view tournaments without login — enrollment triggers login on demand ---
+    // --- Auth gate: salva destino de convite para redirect pós-login ---
+    // Se visitante não logado tenta acessar torneio via link de convite,
+    // salva o ID para que o fluxo de auto-inscrição pós-login funcione.
+    var _isLoggedInEarly = !!(window.AppStore && window.AppStore.currentUser);
+    if (!_isLoggedInEarly && view === 'tournaments' && cleanParam) {
+      try { sessionStorage.setItem('_pendingEnrollTournamentId', cleanParam); } catch(e) {}
+    }
 
     links.forEach(l => {
       l.classList.remove('active');
@@ -156,7 +162,11 @@ function initRouter() {
     try { _hasAuthCacheNow = !!localStorage.getItem('scoreplace_authCache'); } catch(e) {}
     window._log('[scoreplace-router] route', hash, 'loggedIn:', _isLoggedInNow, 'authCache:', _hasAuthCacheNow, 'authResolved:', !!window._authStateResolved);
 
-    if (!_isLoggedInNow && (view === '' || view === 'dashboard') && typeof renderLanding === 'function') {
+    // v2.1.94-beta: gate expandido para TODAS as rotas. Usuário não logado
+    // nunca vê dados de torneio (evita confusão com dados desatualizados).
+    // Exceções: #terms e #privacy (páginas legais sempre públicas).
+    var _isLegalView = (view === 'privacy' || view === 'terms');
+    if (!_isLoggedInNow && !_isLegalView && typeof renderLanding === 'function') {
 
       if (_hasAuthCacheNow) {
         if (window._authStateResolved) {
