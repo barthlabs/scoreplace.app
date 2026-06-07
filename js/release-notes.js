@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.97-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Tela de retorno sem link de acesso por e-mail.</b> Ao fazer logoff e abrir o login novamente, o banner "Bem-vindo de volta" mostrava um botão "Enviar link de acesso" que não funcionava mais (o app não usa esse fluxo). Agora o banner mostra o botão correto para o método de login da conta: "Entrar com Google" para contas Google, "Entrar com e-mail e senha" para contas de senha, e "Entrar com telefone" para contas de telefone.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.96-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Botão Reverter disponível em todos os W.O.</b> Na lista de inscritos, alguns jogadores marcados com W.O. não tinham o botão Reverter — especificamente jogadores "órfãos" (que foram retirados de uma dupla após o W.O. do parceiro) cujo jogo original já havia sido decidido. Agora todos os W.O. exibem o botão Reverter, independente do status do jogo.</li>' +

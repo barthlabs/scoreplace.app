@@ -492,7 +492,8 @@ if (firebase && firebase.auth) {
       try {
         localStorage.setItem('scoreplace_authCache', JSON.stringify({
           uid: user.uid, email: user.email,
-          displayName: user.displayName, photoURL: user.photoURL
+          displayName: user.displayName, photoURL: user.photoURL,
+          authProvider: 'google.com'
         }));
       } catch(e) {}
       window._log('[scoreplace-auth] Calling simulateLoginSuccess directly from getRedirectResult');
@@ -615,9 +616,14 @@ if (firebase && firebase.auth) {
       }
       // Cache login state for instant restore on next page load
       try {
+        // v2.1.94: guarda authProvider para o banner "Bem-vindo de volta"
+        // mostrar o botão correto (Google, senha ou telefone) sem magic link.
+        var _cachedProvider = (user.providerData && user.providerData[0] && user.providerData[0].providerId) || '';
+        var _existingCache = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
         localStorage.setItem('scoreplace_authCache', JSON.stringify({
           uid: user.uid, email: user.email,
-          displayName: user.displayName, photoURL: user.photoURL
+          displayName: user.displayName, photoURL: user.photoURL,
+          authProvider: _cachedProvider || _existingCache.authProvider || ''
         }));
       } catch(e) {}
 
@@ -793,7 +799,8 @@ function handleGoogleLogin() {
       try {
         localStorage.setItem('scoreplace_authCache', JSON.stringify({
           uid: user.uid, email: user.email,
-          displayName: user.displayName, photoURL: user.photoURL
+          displayName: user.displayName, photoURL: user.photoURL,
+          authProvider: 'google.com'
         }));
       } catch(e) {}
       window._log('[scoreplace-auth] Calling simulateLoginSuccess directly from popup callback');
@@ -1812,6 +1819,11 @@ function handleEmailLogin() {
         window.FirestoreDB.saveUserProfile(user.uid, _loginProf).catch(function() {});
       }
       _tryLinkPendingCredential(result);
+      try {
+        var _pwCache = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
+        _pwCache.authProvider = 'password';
+        localStorage.setItem('scoreplace_authCache', JSON.stringify(_pwCache));
+      } catch(e) {}
       showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {name: user.displayName}) : _t('auth.welcome'), 'success');
       var modal = document.getElementById('modal-login');
       if (modal) modal.classList.remove('active');
@@ -3797,7 +3809,9 @@ window._resetLoginGuard = function() {
 };
 
 // v1.8.70: retorno rápido — quando sessão Firebase expirou mas temos cache do usuário,
-// mostra botão de 1 clique para reenviar o link de acesso sem digitar nada.
+// v2.1.94: banner "Bem-vindo de volta" mostra o botão de login correto
+// para o provider usado da última vez (Google, senha ou telefone).
+// Magic link removido — o app não usa mais esse fluxo para retorno.
 window._showQuickReturnBanner = function() {
   try {
     var cached = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
@@ -3805,15 +3819,38 @@ window._showQuickReturnBanner = function() {
     var name = cached.displayName || cached.email || 'você';
     var email = cached.email || '';
     var photo = cached.photoURL || '';
+    var provider = cached.authProvider || '';
 
     // Inserir banner no topo do modal de login
     var modalBody = document.querySelector('#modal-login .modal-body');
     if (!modalBody || document.getElementById('quick-return-banner')) return;
 
+    var safeName = name.length > 30 ? name.slice(0, 28) + '…' : name;
     var initial = name ? name[0].toUpperCase() : '?';
     var avatarHtml = photo
       ? '<img src="' + photo + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
       : '<div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:1rem;flex-shrink:0;">' + initial + '</div>';
+
+    // Botão correto por provider
+    var actionBtn = '';
+    if (provider === 'google.com' || !provider) {
+      // Google é o provider padrão — fallback também vai pra Google
+      actionBtn = '<button id="quick-return-btn" onclick="window._quickReturnLogin()" style="width:100%;padding:10px;border-radius:10px;border:none;background:#fff;color:#1f2937;font-weight:700;font-size:0.88rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 1px 4px rgba(0,0,0,0.18);">' +
+        '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>' +
+        'Entrar com Google' +
+      '</button>';
+    } else if (provider === 'password') {
+      // Senha — destaca o bloco de e-mail+senha no modal
+      actionBtn = '<button id="quick-return-btn" onclick="window._quickReturnLogin()" style="width:100%;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:700;font-size:0.88rem;cursor:pointer;">🔑 Entrar com e-mail e senha</button>';
+    } else if (provider === 'phone') {
+      actionBtn = '<button id="quick-return-btn" onclick="window._quickReturnLogin()" style="width:100%;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:700;font-size:0.88rem;cursor:pointer;">📱 Entrar com telefone</button>';
+    } else {
+      // Provider desconhecido → botão Google como fallback
+      actionBtn = '<button id="quick-return-btn" onclick="window._quickReturnLogin()" style="width:100%;padding:10px;border-radius:10px;border:none;background:#fff;color:#1f2937;font-weight:700;font-size:0.88rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 1px 4px rgba(0,0,0,0.18);">' +
+        '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>' +
+        'Entrar com Google' +
+      '</button>';
+    }
 
     var banner = document.createElement('div');
     banner.id = 'quick-return-banner';
@@ -3823,11 +3860,11 @@ window._showQuickReturnBanner = function() {
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
         avatarHtml +
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font-weight:700;font-size:0.92rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (name.length > 30 ? name.slice(0,28)+'…' : name) + '</div>' +
+          '<div style="font-weight:700;font-size:0.92rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + safeName + '</div>' +
           (email ? '<div style="font-size:0.72rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + email + '</div>' : '') +
         '</div>' +
       '</div>' +
-      '<button id="quick-return-btn" onclick="window._quickReturnLogin()" style="width:100%;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:700;font-size:0.88rem;cursor:pointer;transition:opacity 0.2s;">📩 Enviar link de acesso</button>' +
+      actionBtn +
       '<div style="text-align:center;margin-top:8px;">' +
         '<button onclick="document.getElementById(\'quick-return-banner\').remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.75rem;text-decoration:underline;">Entrar com outra conta</button>' +
       '</div>';
@@ -3839,30 +3876,35 @@ window._showQuickReturnBanner = function() {
 window._quickReturnLogin = function() {
   try {
     var cached = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
-    var email = cached.email || '';
-    if (!email) { document.getElementById('quick-return-banner') && document.getElementById('quick-return-banner').remove(); return; }
+    var provider = cached.authProvider || '';
 
-    var btn = document.getElementById('quick-return-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+    if (provider === 'password') {
+      // Desce o banner e foca no campo de e-mail/senha
+      var bannerEl = document.getElementById('quick-return-banner');
+      if (bannerEl) bannerEl.remove();
+      // Pre-preenche o e-mail se existir
+      if (cached.email) {
+        var emailInp = document.getElementById('login-email');
+        if (emailInp) { emailInp.value = cached.email; emailInp.dispatchEvent(new Event('input')); }
+      }
+      var pwInp = document.getElementById('login-password');
+      if (pwInp) setTimeout(function() { pwInp.focus(); }, 100);
+      return;
+    }
 
-    var sendFn = firebase.functions().httpsCallable('sendMagicLink');
-    sendFn({ email: email })
-      .then(function() {
-        var banner = document.getElementById('quick-return-banner');
-        if (banner) {
-          banner.innerHTML =
-            '<div style="text-align:center;padding:6px 0;">' +
-              '<div style="font-size:1.3rem;margin-bottom:4px;">📩</div>' +
-              '<div style="font-weight:700;color:var(--text-bright);font-size:0.9rem;margin-bottom:3px;">Link enviado!</div>' +
-              '<div style="font-size:0.76rem;color:var(--text-muted);">Verifique <b>' + email + '</b><br>e clique no link para entrar.</div>' +
-            '</div>';
-        }
-      })
-      .catch(function(err) {
-        var btn2 = document.getElementById('quick-return-btn');
-        if (btn2) { btn2.disabled = false; btn2.textContent = '📩 Enviar link de acesso'; }
-        if (window.showNotification) window.showNotification('Erro', (err && err.message) || 'Tente novamente.', 'error');
-      });
+    if (provider === 'phone') {
+      // Desce o banner e mostra o bloco de telefone
+      var bannerPhone = document.getElementById('quick-return-banner');
+      if (bannerPhone) bannerPhone.remove();
+      var phoneBlock = document.getElementById('login-block-phone');
+      if (phoneBlock) phoneBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // Google (padrão) — aciona o popup de login
+    if (typeof window.handleGoogleLogin === 'function') {
+      window.handleGoogleLogin();
+    }
   } catch(e) {}
 };
 
