@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.30-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Iniciar leva os dois jogadores juntos pro placar.</b> Corrigido o bug em que, ao iniciar a próxima partida, um jogador ia pro placar e o outro ficava preso em "Aguardando". Agora quando o segundo confirma, ambos entram na nova partida. (Causa: quem aguardava continuava ouvindo a sala antiga e não era levado pra nova.)</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.29-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Botão "Iniciar" não trava mais.</b> Na tela de estatísticas, o botão passou a se chamar <b>Iniciar</b>. E corrigido o bug em que ele ficava "Aguardando" pra sempre quando havia 2 jogadores reais e 2 convidados: agora um time só de convidados não bloqueia o início — basta o OK de 1 jogador real de cada time que tenha jogadores reais.</li>' +

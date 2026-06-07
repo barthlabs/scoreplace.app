@@ -7043,6 +7043,34 @@ window._openLiveScoring = function(tId, matchId, opts) {
             if (_closePendingTimer) { clearInterval(_closePendingTimer); _closePendingTimer = null; }
             _myCloseClicked = false;
           }
+          // v2.2.30-beta: a sala apontou pra uma NOVA sala (o "Iniciar" criou um
+          // novo doc pra a próxima partida). SEGUE pra lá. ROOT FIX do bug
+          // "quem clicou Iniciar em segundo ficou preso no Aguardando": o
+          // cliente que aguardava estava escutando o doc ANTIGO; quando o
+          // starter criava o novo doc + nextRoomCode, o branch status==='finished'
+          // abaixo dava `return` ANTES de qualquer lógica de follow — então o
+          // cliente nunca migrava. Agora detectamos nextRoomCode aqui no topo e
+          // navegamos pro novo placar, levando AMBOS pra mesma partida.
+          if (data && data.nextRoomCode && !_casualCancelled) {
+            var _nrc = String(data.nextRoomCode);
+            _casualCancelled = true;
+            if (_unsubFirestore) { try { _unsubFirestore(); } catch(e) {} _unsubFirestore = null; }
+            try { window.removeEventListener('resize', _onResize); } catch(e) {}
+            try { document.removeEventListener('visibilitychange', _onVisibility); } catch(e) {}
+            try { window.removeEventListener('pagehide', _onPagehide); } catch(e) {}
+            try { _releaseWakeLock(); } catch(e) {}
+            var _bnr = document.getElementById('close-pending-banner');
+            if (_bnr) _bnr.remove();
+            var _ovNR = document.getElementById('live-scoring-overlay');
+            if (_ovNR) _ovNR.remove();
+            try { sessionStorage.setItem('_activeCasualRoom', _nrc); } catch(e) {}
+            if (typeof window._navigateToScannedRoute === 'function') {
+              window._navigateToScannedRoute('#casual/' + _nrc);
+            } else {
+              try { window.location.hash = '#casual/' + _nrc; } catch(e) {}
+            }
+            return;
+          }
           // v1.7.3-beta: Match ended (status='finished') — APLICA o
           // liveState final no overlay e deixa o usuário ver a tela de
           // stats (renderizada quando state.isFinished=true).
