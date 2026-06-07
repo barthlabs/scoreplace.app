@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.32-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Toggles da tela de estatísticas são lembrados.</b> Sortear Duplas, Duplas Mistas e Rei/Rainha agora voltam na próxima partida com a configuração que você deixou — antes voltavam sempre ligados. Corrige também o caso em que continuava sorteando dupla mista mesmo com o toggle desligado.</li>' +
+        '<li><b>Encerrar exige a confirmação do outro.</b> Ao clicar em Fechar, quem clicou agora só vê "Aguardando confirmação" — o outro jogador precisa Confirmar ou Recusar. O atalho "Fechar agora" (que encerra sem esperar) só aparece após 12s sem resposta, pra sala sozinha/sem retorno.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.31-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Fim da tela preta ao iniciar a 3ª+ partida.</b> Quem dava o start na próxima partida às vezes ficava com a tela preta (a partir do 3º jogo seguido). Causa: o início reabria a sala de organização por baixo dos panos, e essa cadeia quebrava após alguns jogos. Agora o início cria a próxima partida direto e leva os dois jogadores pela mesma rota — simétrico e estável, sem reabrir a sala.</li>' +

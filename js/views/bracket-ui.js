@@ -6902,23 +6902,34 @@ window._openLiveScoring = function(tId, matchId, opts) {
     banner.id = 'close-pending-banner';
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:100003;background:rgba(0,0,0,0.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;box-sizing:border-box;';
     if (isInitiator) {
-      // v2.2.22-beta: sem auto-fire por timeout. O countdown antigo disparava
-      // _closePendingForceClose (DISSOLVE a sala) em 8s, fazendo corrida com o
-      // outro jogador que estava prestes a Confirmar/Recusar — o iniciador saía
-      // e o outro ficava com a sala morta. Agora o iniciador espera a resposta:
-      // "Cancelar" volta pro placar, ou "Fechar agora" (manual) dissolve a sala
-      // — escape pra quando está sozinho com fantasmas.
+      // v2.2.32-beta: a CONFIRMAÇÃO do outro jogador é o caminho padrão. O
+      // "Fechar agora" (que dissolve sem esperar) NÃO aparece de imediato —
+      // antes o usuário clicava nele achando que confirmava e fechava pros dois
+      // sem o outro responder. Agora o iniciador só vê "Aguardando confirmação"
+      // + "Cancelar"; o escape "Fechar agora" só surge após 12s (caso ninguém
+      // responda — sala com fantasmas).
       banner.innerHTML =
         '<div style="background:rgba(251,191,36,0.12);border:1.5px solid rgba(251,191,36,0.45);border-radius:20px;padding:28px 32px;text-align:center;max-width:320px;width:100%;box-sizing:border-box;">' +
           '<div style="font-size:2rem;margin-bottom:10px;">⏳</div>' +
           '<div style="color:#fbbf24;font-weight:800;font-size:1.1rem;margin-bottom:8px;">Aguardando confirmação</div>' +
-          '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">Os outros jogadores precisam confirmar o encerramento. Ou use <b>Fechar agora</b> para encerrar a sala imediatamente.</div>' +
+          '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">O outro jogador precisa confirmar o encerramento.</div>' +
         '</div>' +
-        '<div style="display:flex;gap:10px;">' +
+        '<div id="close-pending-initiator-btns" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">' +
           '<button onclick="window._casualCloseCancel()" style="background:rgba(239,68,68,0.15);border:1.5px solid rgba(239,68,68,0.5);color:#f87171;border-radius:14px;padding:12px 24px;font-size:0.92rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;">Cancelar</button>' +
-          '<button onclick="window._closePendingForceClose()" style="background:rgba(251,191,36,0.15);border:1.5px solid rgba(251,191,36,0.5);color:#fbbf24;border-radius:14px;padding:12px 24px;font-size:0.92rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;">Fechar agora</button>' +
         '</div>';
       document.body.appendChild(banner);
+      // Escape "Fechar agora" só depois de 12s sem resposta (sala fantasma).
+      if (_closePendingTimer) { clearTimeout(_closePendingTimer); _closePendingTimer = null; }
+      _closePendingTimer = setTimeout(function() {
+        var _btns = document.getElementById('close-pending-initiator-btns');
+        if (!_btns || document.getElementById('close-pending-forcebtn')) return;
+        var _fb = document.createElement('button');
+        _fb.id = 'close-pending-forcebtn';
+        _fb.textContent = 'Fechar agora';
+        _fb.setAttribute('onclick', 'window._closePendingForceClose()');
+        _fb.style.cssText = 'background:rgba(251,191,36,0.15);border:1.5px solid rgba(251,191,36,0.5);color:#fbbf24;border-radius:14px;padding:12px 24px;font-size:0.92rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;';
+        _btns.appendChild(_fb);
+      }, 12000);
       return; // banner já appendado
     } else {
       var _safeName = byName ? byName.replace(/[<>"'&]/g, function(c){ return {'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]; }) : 'Alguém';
@@ -8061,7 +8072,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
       playerUids: newPlayers.filter(function(p) { return !!p.uid; }).map(function(p) { return p.uid; }),
       roomCode: newRoom,
       status: 'active',
-      result: null
+      result: null,
+      // v2.2.32-beta: carrega a configuração dos toggles pra próxima partida —
+      // sem isto, autoShuffle/Mistas/Rei-Rainha voltavam ao default (ligado) a
+      // cada jogo (bug: "sempre sorteava dupla mista mesmo desligando").
+      statsConfig: {
+        autoShuffle: !!autoShuffle,
+        mixedDoubles: !!_mixedDoublesEnabled,
+        reiRainha: !!_reiRainhaMode,
+        _ts: Date.now()
+      }
     }).then(function(newDocId) {
       if (!newDocId) throw new Error('saveCasualMatch returned null');
       // Aponta o doc ANTIGO pra nova sala — seguidores migram via o handler de
@@ -12620,7 +12640,11 @@ window._renderCasualJoin = function(container, roomCode) {
       var p1Str = p1Names.join(' / ');
       var p2Str = p2Names.join(' / ');
       var sc = match.scoring || {};
-      window._openLiveScoring(null, null, {
+      // v2.2.32-beta: carrega a config dos toggles persistida no doc pra que a
+      // tela de estatísticas da nova partida volte com a MESMA configuração do
+      // jogo anterior (e não sempre com Duplas Mistas ligado).
+      var _scfg = (match.statsConfig && typeof match.statsConfig === 'object') ? match.statsConfig : {};
+      var _liveOpts = {
         casual: true,
         scoring: sc,
         p1Name: p1Str,
@@ -12632,7 +12656,11 @@ window._renderCasualJoin = function(container, roomCode) {
         createdBy: match.createdBy,
         roomCode: roomCode,
         players: players
-      });
+      };
+      if (typeof _scfg.autoShuffle === 'boolean') _liveOpts.autoShuffle = _scfg.autoShuffle;
+      if (typeof _scfg.mixedDoubles === 'boolean') _liveOpts.mixedDoubles = _scfg.mixedDoubles;
+      if (typeof _scfg.reiRainha === 'boolean') _liveOpts.reiRainhaMode = _scfg.reiRainha;
+      window._openLiveScoring(null, null, _liveOpts);
       // Show a brief toast so user knows they joined
       if (typeof showNotification === 'function') {
         showNotification(_t('casual.liveTitle'), _t('casual.liveConnectedMsg', {name: _safe(creatorName)}), 'success');
