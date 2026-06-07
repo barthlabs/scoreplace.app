@@ -2137,6 +2137,35 @@ function renderDashboard(container) {
     }
   }
 
+  // Torneios com sorteio feito mas ainda não iniciados pelo organizador.
+  // Aparecem entre "Em andamento (esta semana)" e "Favoritos". Removidos do
+  // filtrado principal para não duplicar.
+  let awaitingStartHtml = '';
+  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat) {
+    const _hasDraw2 = function(t) {
+      return (Array.isArray(t.matches) && t.matches.length > 0) ||
+             (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+             (Array.isArray(t.groups) && t.groups.length > 0);
+    };
+    const _awaitList = filtered.filter(function(t) {
+      if (t.status === 'finished' || t.status === 'closed') return false;
+      if (_isRunning(t)) return false;
+      if (!_hasDraw2(t)) return false;
+      var started = !!(t.tournamentStarted || t.status === 'in_progress' || t.status === 'active' || t.status === 'started');
+      return !started;
+    });
+    if (_awaitList.length) {
+      _awaitList.sort(sortByDate);
+      const _awaitIds = new Set(_awaitList.map(function(t) { return String(t.id); }));
+      filtered = filtered.filter(function(t) { return !_awaitIds.has(String(t.id)); });
+      awaitingStartHtml =
+        '<div style="margin-bottom:1.25rem;">' +
+          '<div style="font-weight:800;font-size:0.95rem;color:#f59e0b;margin-bottom:0.6rem;border-left:3px solid #f59e0b;padding-left:10px;">⏳ Sorteados — aguardando início <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + _awaitList.length + ')</span></div>' +
+          '<div class="cards-grid">' + _awaitList.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>' +
+        '</div>';
+    }
+  }
+
   // v2.1.56: logo ABAIXO da faixa "Em andamento (esta semana)" do topo, os
   // FAVORITOS (coração acionado) que ainda não estão em andamento. Removidos da
   // lista principal pra não duplicar. Só no filtro 'todos' sem filtros secundários.
@@ -2182,7 +2211,7 @@ function renderDashboard(container) {
     const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
     filteredHtml = visibleActive.length > 0
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
-      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
+      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
     if (activeList.length > visibleActive.length) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;var c=document.getElementById(\'view-container\');if(c&&typeof renderDashboard===\'function\')renderDashboard(c);" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
     }
@@ -2270,7 +2299,7 @@ function renderDashboard(container) {
           '<div style="margin-top:1.25rem;font-size:0.78rem;color:var(--text-muted);">Dica: se já existe um torneio público na sua cidade, ele vai aparecer aqui automaticamente.</div>' +
         '</div>';
     } else {
-      filteredHtml = (runningBandHtml || runningBottomHtml || favoritesBandHtml) ? '' : '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
+      filteredHtml = (runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml) ? '' : '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
     }
     if (_sortedFiltered.length > visibleItems.length) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;var c=document.getElementById(\'view-container\');if(c&&typeof renderDashboard===\'function\')renderDashboard(c);" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: _sortedFiltered.length - visibleItems.length}) + '</button></div>';
@@ -2720,6 +2749,7 @@ function renderDashboard(container) {
     </div>
     <div class="dashboard-list" style="margin-bottom: 2rem;">
       ${runningBandHtml}
+      ${awaitingStartHtml}
       ${favoritesBandHtml}
       ${(window._dashView === 'compact') ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : '<div class="cards-grid">' + filteredHtml + '</div>'}
     </div>
