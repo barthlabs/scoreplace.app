@@ -6690,6 +6690,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var _unsubFirestore = null;
   var _casualCancelled = false; // local flag so we don't double-evacuate
   var _myCloseClicked = false;  // v2.2.12: este cliente iniciou consenso de encerramento
+  var _closePendingTimer = null; // v2.2.19: auto-fecha se ninguém confirmar em 8s
   // v2.2.15: pré-populado de _casualPlayers para que o consenso funcione mesmo
   // antes do primeiro onSnapshot (race condition: "Fechar" clicado rápido)
   var _knownPlayerUids = _casualPlayers.reduce(function(arr, p) {
@@ -6755,21 +6756,50 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _localizeRoleLabels();
   }
 
+  // v2.2.19-beta: força o fechamento sem consenso (timeout ou usuário sozinho)
+  function _closePendingForceClose() {
+    if (_closePendingTimer) { clearInterval(_closePendingTimer); _closePendingTimer = null; }
+    var _db = window.FirestoreDB && window.FirestoreDB.db;
+    if (_db && _casualDocId) {
+      _db.collection('casualMatches').doc(_casualDocId).update({
+        closePending: firebase.firestore.FieldValue.delete()
+      }).catch(function() {});
+    }
+    var b = document.getElementById('close-pending-banner');
+    if (b) b.remove();
+    // Reutiliza _liveScoreCloseStats (sem dialog, grava hostClosed se host)
+    if (typeof window._liveScoreCloseStats === 'function') window._liveScoreCloseStats();
+  }
+
   // v2.2.12-beta: banner de consenso de encerramento — iniciador ou convidado
   function _showClosePendingBanner(isInitiator, byName) {
     var existing = document.getElementById('close-pending-banner');
     if (existing) existing.remove();
+    if (_closePendingTimer) { clearInterval(_closePendingTimer); _closePendingTimer = null; }
     var banner = document.createElement('div');
     banner.id = 'close-pending-banner';
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:100003;background:rgba(0,0,0,0.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;box-sizing:border-box;';
     if (isInitiator) {
+      var _remaining = 8;
       banner.innerHTML =
         '<div style="background:rgba(251,191,36,0.12);border:1.5px solid rgba(251,191,36,0.45);border-radius:20px;padding:28px 32px;text-align:center;max-width:320px;width:100%;box-sizing:border-box;">' +
           '<div style="font-size:2rem;margin-bottom:10px;">⏳</div>' +
           '<div style="color:#fbbf24;font-weight:800;font-size:1.1rem;margin-bottom:8px;">Aguardando confirmação</div>' +
           '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">Os outros jogadores precisam confirmar o encerramento.</div>' +
+          '<div style="color:rgba(255,255,255,0.35);font-size:0.78rem;margin-top:10px;">Fecha automaticamente em <span id="close-pending-countdown">' + _remaining + '</span>s</div>' +
         '</div>' +
-        '<button onclick="window._casualCloseCancel()" style="background:rgba(239,68,68,0.15);border:1.5px solid rgba(239,68,68,0.5);color:#f87171;border-radius:14px;padding:12px 36px;font-size:0.95rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;">Cancelar</button>';
+        '<div style="display:flex;gap:10px;">' +
+          '<button onclick="window._casualCloseCancel()" style="background:rgba(239,68,68,0.15);border:1.5px solid rgba(239,68,68,0.5);color:#f87171;border-radius:14px;padding:12px 24px;font-size:0.92rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;">Cancelar</button>' +
+          '<button onclick="window._closePendingForceClose()" style="background:rgba(251,191,36,0.15);border:1.5px solid rgba(251,191,36,0.5);color:#fbbf24;border-radius:14px;padding:12px 24px;font-size:0.92rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;">Fechar agora</button>' +
+        '</div>';
+      document.body.appendChild(banner);
+      _closePendingTimer = setInterval(function() {
+        _remaining--;
+        var countEl = document.getElementById('close-pending-countdown');
+        if (countEl) countEl.textContent = _remaining;
+        if (_remaining <= 0) _closePendingForceClose();
+      }, 1000);
+      return; // banner já appendado
     } else {
       var _safeName = byName ? byName.replace(/[<>"'&]/g, function(c){ return {'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]; }) : 'Alguém';
       banner.innerHTML =
@@ -8332,9 +8362,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
     );
   };
 
+  // expõe force-close para o botão "Fechar agora" no banner
+  window._closePendingForceClose = _closePendingForceClose;
+
   // v2.2.12-beta: cancelar consenso de encerramento — iniciador ou convidado recusa
   window._casualCloseCancel = function() {
     _myCloseClicked = false;
+    if (_closePendingTimer) { clearInterval(_closePendingTimer); _closePendingTimer = null; }
     var _db = window.FirestoreDB && window.FirestoreDB.db;
     if (_db && _casualDocId) {
       _db.collection('casualMatches').doc(_casualDocId).update({
@@ -8367,7 +8401,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var confirmed = Array.isArray(cp.confirmedBy) ? cp.confirmedBy : [];
       var allConfirmed = nonInitiators.every(function(u) { return confirmed.indexOf(u) !== -1; });
       if (allConfirmed) {
-        // Todos confirmaram — remove closePending e sinaliza volta à sala (setupAt)
+        // Todos confirmaram — cancela timer do iniciador (se ainda ativo) e fecha
+        if (_closePendingTimer) { clearInterval(_closePendingTimer); _closePendingTimer = null; }
+        // Remove closePending e sinaliza volta à sala (setupAt)
         var _newSetupAt = Date.now();
         await _db.collection('casualMatches').doc(_casualDocId).update({
           closePending: firebase.firestore.FieldValue.delete(),
