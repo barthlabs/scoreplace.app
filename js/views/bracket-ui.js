@@ -7002,6 +7002,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
               // 'active' em trânsito (mais antigos) não revertem as stats.
               if (data.liveState._ts) _lastSyncTs = data.liveState._ts;
             }
+            // v2.2.25-beta: aplica a config de stats compartilhada (Sortear /
+            // Mistas / Rei-Rainha) escrita por outro jogador, pra que todos
+            // vejam os mesmos toggles. _isRemoteUpdate=true já impede eco.
+            try { _applyRemoteStatsConfig(data.statsConfig); } catch (e) {}
             // NÃO para o listener — mantém vivo para detectar se alguém
             // clicar "Jogar Novamente" (status volta pra 'active').
             // Re-render no estado finished — comparativeSection com stats
@@ -7389,12 +7393,63 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // ─── v2.2.1-beta: handlers dos toggles da página de estatísticas ─────────────
   // Atualizam variáveis do closure diretamente; chamados via onchange no DOM.
 
+  // v2.2.25-beta: sincroniza as configurações da tela de estatísticas (Sortear
+  // Duplas / Duplas Mistas / Rei-Rainha) para TODOS os jogadores da sala via
+  // Firestore. Quando um jogador mexe num toggle, os outros veem a mesma
+  // configuração — a próxima partida sai igual pra todos.
+  function _syncStatsConfig() {
+    if (!_casualDocId || !window.FirestoreDB || !window.FirestoreDB.db) return;
+    if (_isRemoteUpdate) return; // não ecoa de volta um apply remoto
+    try {
+      window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId).update({
+        statsConfig: {
+          autoShuffle: !!autoShuffle,
+          mixedDoubles: !!_mixedDoublesEnabled,
+          reiRainha: !!_reiRainhaMode,
+          _ts: Date.now()
+        }
+      }).catch(function() {});
+    } catch (e) {}
+  }
+  // Aplica a config remota nos toggles locais. Retorna true se algo mudou
+  // (pra o caller re-renderizar). Não escreve no Firestore (evita loop).
+  function _applyRemoteStatsConfig(cfg) {
+    if (!cfg) return false;
+    var changed = false;
+    if (typeof cfg.autoShuffle === 'boolean' && cfg.autoShuffle !== autoShuffle) {
+      autoShuffle = cfg.autoShuffle; changed = true;
+    }
+    if (typeof cfg.mixedDoubles === 'boolean' && cfg.mixedDoubles !== _mixedDoublesEnabled) {
+      _mixedDoublesEnabled = cfg.mixedDoubles; changed = true;
+    }
+    if (typeof cfg.reiRainha === 'boolean' && cfg.reiRainha !== _reiRainhaMode) {
+      if (cfg.reiRainha) {
+        _reiRainhaMode = true;
+        try { _activateReiRainhaRetroactive(); } catch (e) {}
+      } else {
+        _reiRainhaMode = false;
+        _reiRainhaRound = 0;
+        _reiRainhaPlayers = null;
+        _reiRainhaWins = [0, 0, 0, 0];
+        _reiRainhaPairings = [
+          { t1: [0, 1], t2: [2, 3] },
+          { t1: [0, 2], t2: [1, 3] },
+          { t1: [0, 3], t2: [1, 2] }
+        ];
+      }
+      changed = true;
+    }
+    return changed;
+  }
+
   window._statsToggleShuffle = function(chk) {
     autoShuffle = !!chk.checked;
+    _syncStatsConfig();
   };
 
   window._statsToggleMixed = function(chk) {
     _mixedDoublesEnabled = !!chk.checked;
+    _syncStatsConfig();
   };
 
   // Ativa/desativa Rei/Rainha a partir da página de estatísticas.
@@ -7417,6 +7472,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       ];
       _render();
     }
+    _syncStatsConfig(); // v2.2.25-beta: propaga pros outros jogadores
   };
 
   // Reconstrói o estado Rei/Rainha retroativamente a partir de _sessionGameHistory.
