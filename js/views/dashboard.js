@@ -2262,6 +2262,17 @@ function renderDashboard(container) {
       var _otherEnc = filtered.filter(function(t) { return !_isMine(t); });
       _sortedFiltered = _myEnc.concat(_otherEnc);
     }
+    // v2.2.7: Para filtros "organizados" e "participando", torneios encerrados
+    // vão para seção separada colapsável no final — mesmo padrão do "todos".
+    var _finishedSubSection = '';
+    if ((curFilter === 'organizados' || curFilter === 'participando') && !curSport && !curLocation && !curFormat) {
+      var _activeItems = _sortedFiltered.filter(function(t) { return t.status !== 'finished'; });
+      var _finishedItems = _sortedFiltered.filter(function(t) { return t.status === 'finished'; });
+      if (_finishedItems.length > 0) {
+        _sortedFiltered = _activeItems;
+        _finishedSubSection = '<div style="grid-column:1/-1;margin-top:0.5rem;"><details><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: _finishedItems.length}) + '</summary><div style="margin-top:0.75rem;"><div class="cards-grid">' + _finishedItems.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div></div></details></div>';
+      }
+    }
     const visibleItems = _sortedFiltered.slice(0, pageNum * PAGE_SIZE);
     // Empty state: dois níveis de experiência dependendo do contexto.
     // (a) Usuário novo sem nenhum torneio em lugar nenhum (allUnique zero),
@@ -2308,6 +2319,8 @@ function renderDashboard(container) {
       // everything loaded, offer to fetch the next server page via cursor.
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._loadMoreDiscovery()" class="btn hover-lift" style="background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">🔍 ' + _t('dashboard.discoverMore') + '</button></div>';
     }
+    // Seção de encerrados para filtros organizados/participando (v2.2.7)
+    if (_finishedSubSection) filteredHtml += _finishedSubSection;
   }
 
   // Build filter pills for sports
