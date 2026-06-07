@@ -6756,19 +6756,47 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _localizeRoleLabels();
   }
 
-  // v2.2.19-beta: força o fechamento sem consenso (timeout ou usuário sozinho)
+  // v2.2.21-beta: "Fechar agora" DISSOLVE a sala. O usuário ficou preso
+  // aguardando uma confirmação que nunca chegou (sozinho, com UIDs fantasma no
+  // _knownPlayerUids). Antes (v2.2.19/20) só fechava o overlay local e tentava
+  // limpar o ponteiro — mas (a) deixava o doc da partida vivo (status:active),
+  // então o resume puxava de volta toda vez, e (b) ao remover o overlay o
+  // usuário caía na tela de loading do _renderCasualJoin (a "ampulheta na tela
+  // preta") em vez do dashboard. Agora: deleta o doc (cancelCasualMatch ignora
+  // finished = histórico preservado), limpa o ponteiro com suppress longo, e
+  // navega pro dashboard de forma explícita. Doc deletado = mesmo que o clear
+  // do ponteiro corra, o próximo resume cai no self-heal (loadCasualMatch null).
   function _closePendingForceClose() {
     if (_closePendingTimer) { clearInterval(_closePendingTimer); _closePendingTimer = null; }
-    var _db = window.FirestoreDB && window.FirestoreDB.db;
-    if (_db && _casualDocId) {
-      _db.collection('casualMatches').doc(_casualDocId).update({
-        closePending: firebase.firestore.FieldValue.delete()
-      }).catch(function() {});
-    }
     var b = document.getElementById('close-pending-banner');
     if (b) b.remove();
-    // Reutiliza _liveScoreCloseStats (sem dialog, grava hostClosed se host)
-    if (typeof window._liveScoreCloseStats === 'function') window._liveScoreCloseStats();
+    var _cuFC = window.AppStore && window.AppStore.currentUser;
+    // 1) Limpa o ponteiro de resume ANTES de qualquer await — suppress de 10s
+    //    cobre a janela até a navegação assentar.
+    try {
+      if (_cuFC && _cuFC.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+        window._suppressCasualResumeUntil = Date.now() + 10000;
+        window.FirestoreDB.saveUserProfile(_cuFC.uid, { activeCasualRoom: null }).catch(function() {});
+      }
+      if (_cuFC) _cuFC.activeCasualRoom = null;
+    } catch (e) {}
+    try { sessionStorage.removeItem('_activeCasualRoom'); } catch (e) {}
+    // 2) Cleanup local (listeners, wake lock, overlay). _liveScoreCloseStats
+    //    também grava hostClosed se for host de partida finalizada.
+    if (typeof window._liveScoreCloseStats === 'function') {
+      try { window._liveScoreCloseStats(); } catch (e) {}
+    }
+    // 3) Dissolve a sala: deleta o doc se a partida NÃO está finalizada.
+    //    cancelCasualMatch pula docs finished (são histórico permanente).
+    if (_casualDocId && window.FirestoreDB && typeof window.FirestoreDB.cancelCasualMatch === 'function') {
+      try {
+        var p = window.FirestoreDB.cancelCasualMatch(_casualDocId);
+        if (p && typeof p.catch === 'function') p.catch(function() {});
+      } catch (e) {}
+    }
+    // 4) Sai da rota #casual/CODE → dashboard. Sem isto o usuário fica na tela
+    //    de loading do _renderCasualJoin que ficou por baixo do overlay.
+    try { window.location.replace('#dashboard'); } catch (e) { window.location.hash = '#dashboard'; }
   }
 
   // v2.2.12-beta: banner de consenso de encerramento — iniciador ou convidado
@@ -11882,13 +11910,16 @@ window._renderCasualJoin = function(container, roomCode) {
     container.innerHTML = _backHtml + '<div id="casual-join-body">' + html + '</div>';
   }
 
+  // v2.2.21-beta: bola de tênis girando (loader canônico) em vez da ampulheta.
   _setBody(
-    '<div style="display:flex;justify-content:center;align-items:center;min-height:60vh;">' +
-      '<div style="text-align:center;">' +
-        '<div style="font-size:2rem;margin-bottom:1rem;">⏳</div>' +
-        '<p style="color:var(--text-muted);font-size:0.9rem;">' + _t('casual.loading') + '</p>' +
-      '</div>' +
-    '</div>'
+    (typeof window._renderBallLoader === 'function')
+      ? window._renderBallLoader(_t('casual.loading'), { minHeight: '60vh' })
+      : '<div style="display:flex;justify-content:center;align-items:center;min-height:60vh;">' +
+          '<div style="text-align:center;">' +
+            '<div style="font-size:2rem;margin-bottom:1rem;">🎾</div>' +
+            '<p style="color:var(--text-muted);font-size:0.9rem;">' + _t('casual.loading') + '</p>' +
+          '</div>' +
+        '</div>'
   );
 
   // Wait for Firebase Auth to rehydrate before deciding "logged-in vs anon".
