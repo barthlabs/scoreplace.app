@@ -1086,17 +1086,12 @@ window._updateEmailSenhaValidity = function() {
       passLabelEl.style.fontWeight = '400';
     }
   }
-  // Botão Entrar fica verde quando ambos válidos
+  // Botão Entrar: sempre verde, só opacidade varia (campos válidos = cheio, inválidos = dimmed)
   if (entrarBtn) {
-    if (emailValid && passValid) {
-      entrarBtn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
-      entrarBtn.style.borderColor = '#059669';
-      entrarBtn.style.color = '#fff';
-    } else {
-      entrarBtn.style.background = '';
-      entrarBtn.style.borderColor = '';
-      entrarBtn.style.color = '';
-    }
+    entrarBtn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
+    entrarBtn.style.border = 'none';
+    entrarBtn.style.color = '#fff';
+    entrarBtn.style.opacity = (emailValid && passValid) ? '1' : '0.45';
   }
   if (typeof window._loginMutualExclude === 'function') window._loginMutualExclude();
 };
@@ -4022,7 +4017,7 @@ function setupLoginModal() {
                     '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'login-password\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
                   '</div>' +
                 '</div>' +
-                '<button type="submit" id="btn-email-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;transition:background 0.2s,border-color 0.2s,color 0.2s;">Entrar</button>' +
+                '<button type="submit" id="btn-email-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;transition:background 0.2s,opacity 0.2s;">Entrar</button>' +
               '</form>' +
               // Criar Conta + Esqueci a Senha como BOTÕES de destaque (v1.9.73)
               '<div style="display:flex;gap:8px;margin-top:12px;">' +
