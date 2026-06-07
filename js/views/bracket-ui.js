@@ -3668,6 +3668,50 @@ window._openLiveScoring = function(tId, matchId, opts) {
     return male === 2 && female === 2;
   }
 
+  // v2.2.26-beta: consenso de "Jogar Novamente" na tela de estatísticas —
+  // espelha o fluxo "ready" do lobby (_casualReadyClick). Quem clica em Jogar
+  // fica em "⏳ Aguardando +N"; os demais precisam confirmar (clicar também),
+  // com pelo menos 1 de cada time. Quando a condição é atendida, UM cliente
+  // (o de menor uid entre os prontos, pra não bifurcar) dispara a nova partida.
+  var _myRestartClicked = false;
+  var _restartInitiated = false;
+  function _restartConditionMet(readyUids, freshDoc) {
+    if (!Array.isArray(readyUids) || readyUids.length < 2) return false;
+    if (!isDoubles) return true; // singles: 2 prontos basta
+    var pls = (freshDoc && Array.isArray(freshDoc.players)) ? freshDoc.players
+      : ((opts && Array.isArray(opts.players)) ? opts.players : []);
+    var t1 = pls.some(function(p) { return p && p.team === 1 && readyUids.indexOf(p.uid) !== -1; });
+    var t2 = pls.some(function(p) { return p && p.team === 2 && readyUids.indexOf(p.uid) !== -1; });
+    return t1 && t2;
+  }
+  // Eu sou o cliente designado pra disparar (menor uid entre os prontos)?
+  function _amRestartStarter(readyUids) {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var myUid = cu && cu.uid;
+    if (!myUid || !Array.isArray(readyUids) || !readyUids.length) return false;
+    var sorted = readyUids.slice().sort();
+    return sorted[0] === myUid;
+  }
+  // Atualiza o botão "Jogar" da tela de stats: "⏳ Aguardando +N" pra quem já
+  // clicou; "Jogar (N pronto)" pra quem ainda não. Procura por id conhecido.
+  function _updateRestartButtonUI(readyUids) {
+    var btn = document.getElementById('live-restart-btn');
+    if (!btn) return;
+    var cnt = Array.isArray(readyUids) ? readyUids.length : 0;
+    var needTeams = isDoubles;
+    if (_myRestartClicked) {
+      var needed = needTeams ? '' : (' +' + Math.max(0, 2 - cnt));
+      btn.disabled = true;
+      btn.onclick = null;
+      btn.style.background = 'rgba(251,191,36,0.14)';
+      btn.style.color = '#fbbf24';
+      btn.style.boxShadow = 'none';
+      btn.textContent = '⏳ Aguardando' + (needTeams ? ' os outros' : needed);
+    } else if (cnt > 0) {
+      btn.textContent = '🔄 Jogar (' + cnt + ' pronto' + (cnt > 1 ? 's' : '') + ')';
+    }
+  }
+
   // ── State ──
   var state = {
     sets: [], // Array of { gamesP1, gamesP2, tiebreak: { p1, p2 } | null }
@@ -5681,8 +5725,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
           : '';
         restartSection =
           '<div style="display:flex;flex-direction:column;gap:6px;width:100%;">' +
-            '<button onclick="window._liveScoreGoToSetup()" style="width:100%;padding:12px;border-radius:12px;font-size:0.92rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Jogar</button>' +
-            '<button onclick="window._liveScoreCloseStats()" style="width:100%;padding:9px;border-radius:10px;font-size:0.8rem;font-weight:700;border:1px solid rgba(255,255,255,0.12);cursor:pointer;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">✕ Encerrar</button>' +
+            '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="width:100%;padding:12px;border-radius:12px;font-size:0.92rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Jogar</button>' +
+            '<button onclick="window._liveStatsClose()" style="width:100%;padding:9px;border-radius:10px;font-size:0.8rem;font-weight:700;border:1px solid rgba(255,255,255,0.12);cursor:pointer;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">✕ Encerrar</button>' +
             '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.18);cursor:pointer;">' +
               '<div style="display:flex;align-items:center;gap:6px;">' +
                 '<span style="font-size:0.9rem;">🔀</span>' +
@@ -5709,9 +5753,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       } else {
         restartSection =
           '<div style="display:flex;gap:8px;width:100%;">' +
-            '<button onclick="window._liveScoreGoToSetup()" style="flex:1;padding:14px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Jogar Novamente</button>' +
+            '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="flex:1;padding:14px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Jogar Novamente</button>' +
             '<button onclick="window._liveScoreShareCasual()" title="Compartilhar resultado" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:#25d366;color:white;box-shadow:0 4px 20px rgba(37,211,102,0.3);">📤</button>' +
-            '<button onclick="window._liveScoreCloseStats()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
+            '<button onclick="window._liveStatsClose()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
           '</div>';
       }
 
@@ -7013,6 +7057,19 @@ window._openLiveScoring = function(tId, matchId, opts) {
             // isFinished=true.
             try { _render(); } catch(e) {}
             _isRemoteUpdate = false;
+            // v2.2.26-beta: consenso de "Jogar Novamente". Atualiza o botão
+            // (mostra "N pronto" / "Aguardando os outros") com o restartReady
+            // remoto e, se a condição foi atingida, o cliente designado (menor
+            // uid entre os prontos) dispara a nova partida — os demais seguem.
+            try {
+              var _rr = (data && Array.isArray(data.restartReady)) ? data.restartReady : [];
+              _updateRestartButtonUI(_rr);
+              if (_myRestartClicked && !_restartInitiated &&
+                  _restartConditionMet(_rr, data) && _amRestartStarter(_rr)) {
+                _restartInitiated = true;
+                _doRestartNow();
+              }
+            } catch (e) {}
             // Notificação leve pro guest saber que jogo acabou (host não
             // recebe esta — ele já viu o confirm dialog).
             // v2.2.18-beta: stats aparecem automaticamente — sem notificação de ✕
@@ -7649,7 +7706,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             '<span style="font-size:1.1rem;font-weight:900;color:#f59e0b;">Resultado Final · Rei/Rainha</span>' +
           '</div>' +
           cardsHtml +
-          '<button onclick="window._liveScoreGoToSetup()" style="width:100%;padding:11px;border-radius:12px;font-size:0.88rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 16px rgba(16,185,129,0.35);margin-top:2px;">🔄 Jogar Novamente</button>' +
+          '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="width:100%;padding:11px;border-radius:12px;font-size:0.88rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 16px rgba(16,185,129,0.35);margin-top:2px;">🔄 Jogar Novamente</button>' +
         '</div>';
     }
   };
@@ -7861,7 +7918,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // v1.7.3-beta: usa setupAt em vez de status:'setup' para não destruir
   // o registro histórico (status:'finished' precisa ser preservado para
   // loadRecentCasualMatchesForUser encontrar essa partida).
-  window._liveScoreGoToSetup = function() {
+  // v2.2.26-beta: inicia DE FATO a nova partida (corpo extraído do antigo
+  // _liveScoreGoToSetup). Chamado direto no solo, ou pelo cliente "starter"
+  // quando o consenso de Jogar é atingido no multiplayer.
+  function _doRestartNow() {
     if (state.isFinished && !_resultSaved) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
     }
@@ -7869,12 +7929,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (_casualDocId && window.FirestoreDB && window.FirestoreDB.db) {
       try {
         window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
-          .update({ setupAt: new Date().toISOString() })
+          .update({ setupAt: new Date().toISOString(), restartReady: [] })
           .catch(function(e) { window._warn('[LiveScore] goToSetup setupAt write failed:', e); });
       } catch(e) {}
     }
     // v2.2.1-beta: salva no histórico de sessão para ativação retroativa do Rei/Rainha.
-    // Só grava quando é partida casual de duplas e o jogo terminou com vencedor.
     if (isCasual && isDoubles && state.isFinished && state.winner != null) {
       _sessionGameHistory.push({
         p1: p1Players.slice(),
@@ -7882,12 +7941,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
         winner: state.winner || 0
       });
     }
-    // v1.9.72: "Jogar"/"Jogar Novamente" deve ir DIRETO para uma nova partida
-    // (sem passar pela tela de setup), honrando o toggle "Re-sortear". O setup
-    // só é necessário pra re-compartilhar a sala em MULTIPLAYER — então só
-    // auto-iniciamos quando é solo (no máx. 1 participante registrado).
-    // v2.2.1-beta: autoShuffle já atualizado pelo _statsToggleShuffle — lê var do closure.
     var _shouldShuffle = !!autoShuffle;
+    _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true, autoStart: true, autoShuffle: _shouldShuffle });
+  }
+
+  window._liveScoreGoToSetup = function() {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var myUid = cu && cu.uid;
+    // Conta UIDs reais na partida pra decidir solo vs multiplayer.
     var _uidSet = {};
     try {
       var _allNm = (p1Players || []).concat(p2Players || []);
@@ -7895,16 +7956,43 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var _mt = _playerMeta[_allNm[_ui]];
         if (_mt && _mt.uid) _uidSet[_mt.uid] = 1;
       }
+      if (Array.isArray(_knownPlayerUids)) {
+        for (var _ki = 0; _ki < _knownPlayerUids.length; _ki++) _uidSet[_knownPlayerUids[_ki]] = 1;
+      }
     } catch(e) {}
     var _isSolo = Object.keys(_uidSet).length <= 1;
-    if (_isSolo) {
-      _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true, autoStart: true, autoShuffle: _shouldShuffle });
-    } else {
-      // v2.1.99: multiplayer também usa autoStart — vai direto para o placar
-      // ao vivo sem mostrar a tela de setup ao host. Guests seguem via
-      // nextRoomCode → detectam status:'active' no novo doc → abrem live scoring.
-      _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true, autoStart: true, autoShuffle: _shouldShuffle });
+    // Solo (ou sem Firestore) → inicia imediatamente, sem consenso.
+    if (_isSolo || !myUid || !_casualDocId || !window.FirestoreDB || !window.FirestoreDB.db) {
+      _doRestartNow();
+      return;
     }
+    // v2.2.26-beta: MULTIPLAYER — consenso de Jogar (espelha o lobby). Quem
+    // clica fica "⏳ Aguardando os outros"; os demais precisam clicar também
+    // (pelo menos 1 de cada time). Quando atingido, o cliente de menor uid
+    // dispara a nova partida; os outros seguem pelo nextRoomCode/setupAt.
+    if (_myRestartClicked) return;
+    _myRestartClicked = true;
+    if (state.isFinished && !_resultSaved) { try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {} }
+    if (isCasual && isDoubles && state.isFinished && state.winner != null) {
+      _sessionGameHistory.push({ p1: p1Players.slice(), p2: p2Players.slice(), winner: state.winner || 0 });
+    }
+    _updateRestartButtonUI([myUid]);
+    window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId).update({
+      restartReady: firebase.firestore.FieldValue.arrayUnion(myUid)
+    }).then(function() {
+      return window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId).get();
+    }).then(function(snap) {
+      var fresh = snap && snap.exists ? snap.data() : null;
+      var ready = (fresh && Array.isArray(fresh.restartReady)) ? fresh.restartReady : [myUid];
+      _updateRestartButtonUI(ready);
+      if (!_restartInitiated && _restartConditionMet(ready, fresh) && _amRestartStarter(ready)) {
+        _restartInitiated = true;
+        _doRestartNow();
+      }
+    }).catch(function() {
+      _myRestartClicked = false;
+      _updateRestartButtonUI([]);
+    });
   };
 
   // Compartilhar resultado da partida casual — tournament match já tem o
@@ -8325,6 +8413,37 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // no painel de estatísticas (substitui o ✕ Fechar do header). Para o host de
   // partida casual finalizada: grava hostClosed:true (evacua guests). Para
   // qualquer usuário: fecha o overlay local sem pedir confirmação.
+  // v2.2.26-beta: "✕ Encerrar" da tela de stats. Em MULTIPLAYER usa o mesmo
+  // consenso do ✕ mid-game: grava closePending e mostra "Aguardando confirmação"
+  // — assim, se um jogador clicou "Jogar" e outro clica "Encerrar", quem clicou
+  // Jogar é AVISADO ("Fulano quer encerrar — Confirmar/Recusar") e aceita sair
+  // ou recusa (volta pras stats). Solo (ou sem outros uids) encerra direto.
+  window._liveStatsClose = function() {
+    var _cuLC = window.AppStore && window.AppStore.currentUser;
+    var _myUidLC = _cuLC && _cuLC.uid;
+    if (isCasual && _casualDocId && _myUidLC &&
+        Array.isArray(_knownPlayerUids) && _knownPlayerUids.length > 1 && !_myCloseClicked) {
+      _myCloseClicked = true;
+      var _dbLC = window.FirestoreDB && window.FirestoreDB.db;
+      if (_dbLC) {
+        _dbLC.collection('casualMatches').doc(_casualDocId).update({
+          closePending: {
+            by: _myUidLC,
+            byName: (_cuLC.displayName || _cuLC.email || 'Alguém'),
+            at: Date.now(),
+            confirmedBy: []
+          }
+        }).catch(function(e) {
+          _myCloseClicked = false;
+          window._warn && window._warn('[statsClose] update failed', e);
+        });
+      }
+      _showClosePendingBanner(true, '');
+      return;
+    }
+    window._liveScoreCloseStats();
+  };
+
   window._liveScoreCloseStats = function() {
     if (!_resultSaved) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(_e) {}
