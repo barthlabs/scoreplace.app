@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.12-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Partidas Casuais — encerramento consensual.</b> Ao clicar em ✕ Fechar durante o placar ao vivo (com múltiplos jogadores), o jogo não encerra de imediato: quem clicou vê a tela "⏳ Aguardando confirmação" com botão Cancelar. Os demais jogadores veem "[Nome] quer encerrar" com os botões Recusar ou Confirmar. Todos confirmando → todos voltam para a mesma sala de partida casual que estavam. Cancelar/Recusar → volta ao placar ao vivo normalmente.</li>' +
+        '<li><b>Lobby — sair da sala avisa os demais.</b> Clicar em Voltar na tela de organização da sala remove o jogador da sala e notifica os que ficaram. Se todos os jogadores com conta (uid) saírem, a sala é dissolvida automaticamente.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.11-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Placar ao vivo — layout portrait reformulado.</b> O placar ocupa toda a tela (altura e largura) sem scroll. Cinco linhas proporcionais fixas de cima a baixo: games + botão Desfazer → times (fotos/ícones e nomes) → placares grandes → botões ▲ subir ponto → botões ▼ baixar ponto. Tudo sempre visível ao mesmo tempo.</li>' +

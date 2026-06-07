@@ -6646,6 +6646,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var _isRemoteUpdate = false; // true when receiving from Firestore
   var _unsubFirestore = null;
   var _casualCancelled = false; // local flag so we don't double-evacuate
+  var _myCloseClicked = false;  // v2.2.12: este cliente iniciou consenso de encerramento
+  var _knownPlayerUids = [];    // v2.2.12: UIDs dos jogadores reais na sala (do Firestore)
 
   // Serialize state for Firestore
   function _serializeState() {
@@ -6705,6 +6707,37 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _localizeRoleLabels();
   }
 
+  // v2.2.12-beta: banner de consenso de encerramento — iniciador ou convidado
+  function _showClosePendingBanner(isInitiator, byName) {
+    var existing = document.getElementById('close-pending-banner');
+    if (existing) existing.remove();
+    var banner = document.createElement('div');
+    banner.id = 'close-pending-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,0.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;box-sizing:border-box;';
+    if (isInitiator) {
+      banner.innerHTML =
+        '<div style="background:rgba(251,191,36,0.12);border:1.5px solid rgba(251,191,36,0.45);border-radius:20px;padding:28px 32px;text-align:center;max-width:320px;width:100%;box-sizing:border-box;">' +
+          '<div style="font-size:2rem;margin-bottom:10px;">⏳</div>' +
+          '<div style="color:#fbbf24;font-weight:800;font-size:1.1rem;margin-bottom:8px;">Aguardando confirmação</div>' +
+          '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">Os outros jogadores precisam confirmar o encerramento.</div>' +
+        '</div>' +
+        '<button onclick="window._casualCloseCancel()" style="background:rgba(239,68,68,0.15);border:1.5px solid rgba(239,68,68,0.5);color:#f87171;border-radius:14px;padding:12px 36px;font-size:0.95rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;">Cancelar</button>';
+    } else {
+      var _safeName = byName ? byName.replace(/[<>"'&]/g, function(c){ return {'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]; }) : 'Alguém';
+      banner.innerHTML =
+        '<div style="background:rgba(239,68,68,0.1);border:1.5px solid rgba(239,68,68,0.4);border-radius:20px;padding:28px 32px;text-align:center;max-width:320px;width:100%;box-sizing:border-box;">' +
+          '<div style="font-size:2rem;margin-bottom:10px;">🚪</div>' +
+          '<div style="color:#f87171;font-weight:800;font-size:1.1rem;margin-bottom:8px;">' + _safeName + ' quer encerrar</div>' +
+          '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">Confirme para todos voltarem à sala de espera da partida.</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:12px;">' +
+          '<button onclick="window._casualCloseCancel()" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);color:#f87171;border-radius:12px;padding:10px 24px;font-size:0.88rem;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">Recusar</button>' +
+          '<button onclick="window._casualCloseConfirm()" style="background:rgba(34,197,94,0.15);border:1.5px solid rgba(34,197,94,0.45);color:#86efac;border-radius:12px;padding:10px 24px;font-size:0.88rem;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">Confirmar</button>' +
+        '</div>';
+    }
+    document.body.appendChild(banner);
+  }
+
   // Sync local state to Firestore (debounced 300ms)
   function _syncLiveState() {
     if (!_casualDocId || !window.FirestoreDB || !window.FirestoreDB.db) return;
@@ -6742,6 +6775,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
             return;
           }
           var data = doc.data();
+          // v2.2.12: mantém lista local de UIDs dos jogadores reais
+          if (data && Array.isArray(data.playerUids)) _knownPlayerUids = data.playerUids;
           // v1.7.3-beta: na 1ª invocação, inicializa _lastKnownSetupAt com
           // o valor atual do doc (evita falso-positivo de "setup" no attach).
           if (!_firstSnapshotSeen) {
@@ -6765,6 +6800,25 @@ window._openLiveScoring = function(tId, matchId, opts) {
               try { window.location.hash = '#dashboard'; } catch(e) {}
             }
             return;
+          }
+          // v2.2.12-beta: consenso de encerramento — um jogador quer fechar
+          // e aguarda confirmação dos demais antes de voltar à sala.
+          var _cp = data && data.closePending;
+          var _cuCP = window.AppStore && window.AppStore.currentUser;
+          var _myUidCP = _cuCP && _cuCP.uid;
+          if (_cp && _myUidCP && !_casualCancelled) {
+            var _amInitiator = _cp.by === _myUidCP;
+            var _confirmed = Array.isArray(_cp.confirmedBy) && _cp.confirmedBy.indexOf(_myUidCP) !== -1;
+            var _existingBanner = document.getElementById('close-pending-banner');
+            if (!_existingBanner) {
+              _showClosePendingBanner(_amInitiator, _cp.byName || '');
+            } else if (!_amInitiator && !_confirmed) {
+              // banner já existe e eu ainda não confirmei — nada a fazer
+            }
+          } else {
+            // closePending foi removido (cancelado) — remove o banner se estiver aberto
+            var _bannerToRemove = document.getElementById('close-pending-banner');
+            if (_bannerToRemove) _bannerToRemove.remove();
           }
           // v1.7.3-beta: Match ended (status='finished') — APLICA o
           // liveState final no overlay e deixa o usuário ver a tela de
@@ -8041,6 +8095,32 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Close handler — always confirms before leaving
   window._closeLiveScoring = function() {
+    // v2.2.12-beta: consenso de encerramento para casual multiplayer.
+    // Em vez do confirm dialog, escreve closePending no Firestore e mostra
+    // o banner de "Aguardando confirmação" para o iniciador. Os outros jogadores
+    // veem o banner via onSnapshot e podem Confirmar ou Recusar.
+    var _cuCL = window.AppStore && window.AppStore.currentUser;
+    var _myUidCL = _cuCL && _cuCL.uid;
+    if (isCasual && _casualDocId && _myUidCL && _knownPlayerUids.length > 1 && !_myCloseClicked) {
+      _myCloseClicked = true;
+      var _dbCL = window.FirestoreDB && window.FirestoreDB.db;
+      if (_dbCL) {
+        _dbCL.collection('casualMatches').doc(_casualDocId).update({
+          closePending: {
+            by: _myUidCL,
+            byName: (_cuCL.displayName || _cuCL.email || 'Alguém'),
+            at: Date.now(),
+            confirmedBy: []
+          }
+        }).catch(function(e) {
+          _myCloseClicked = false;
+          window._warn('[closeConsensus] update failed', e);
+          showNotification('Erro', 'Não foi possível solicitar encerramento. Tente novamente.', 'error');
+        });
+      }
+      _showClosePendingBanner(true, '');
+      return;
+    }
     var _cleanup = function() {
       if (_unsubFirestore) { try { _unsubFirestore(); } catch(e) {} _unsubFirestore = null; }
       window.removeEventListener('resize', _onResize);
@@ -8142,6 +8222,56 @@ window._openLiveScoring = function(tId, matchId, opts) {
         }
       }
     );
+  };
+
+  // v2.2.12-beta: cancelar consenso de encerramento — iniciador ou convidado recusa
+  window._casualCloseCancel = function() {
+    _myCloseClicked = false;
+    var _db = window.FirestoreDB && window.FirestoreDB.db;
+    if (_db && _casualDocId) {
+      _db.collection('casualMatches').doc(_casualDocId).update({
+        closePending: firebase.firestore.FieldValue.delete()
+      }).catch(function(e) { window._warn('[closeConsensus] cancel failed', e); });
+    }
+    var b = document.getElementById('close-pending-banner');
+    if (b) b.remove();
+  };
+
+  // v2.2.12-beta: confirmar encerramento — convidado confirma, voltar à sala
+  window._casualCloseConfirm = async function() {
+    var _cuCC = window.AppStore && window.AppStore.currentUser;
+    var _myUidCC = _cuCC && _cuCC.uid;
+    if (!_myUidCC || !_casualDocId || !window.FirestoreDB || !window.FirestoreDB.db) return;
+    var _db = window.FirestoreDB.db;
+    try {
+      // Adiciona meu UID na lista de confirmados atomicamente
+      await _db.collection('casualMatches').doc(_casualDocId).update({
+        'closePending.confirmedBy': firebase.firestore.FieldValue.arrayUnion(_myUidCC)
+      });
+      // Lê o doc para verificar se todos os não-iniciadores confirmaram
+      var snap = await _db.collection('casualMatches').doc(_casualDocId).get();
+      if (!snap.exists) return;
+      var d = snap.data();
+      var cp = d && d.closePending;
+      if (!cp) return; // já foi cancelado
+      var allUids = Array.isArray(d.playerUids) ? d.playerUids : _knownPlayerUids;
+      var nonInitiators = allUids.filter(function(u) { return u !== cp.by; });
+      var confirmed = Array.isArray(cp.confirmedBy) ? cp.confirmedBy : [];
+      var allConfirmed = nonInitiators.every(function(u) { return confirmed.indexOf(u) !== -1; });
+      if (allConfirmed) {
+        // Todos confirmaram — remove closePending e sinaliza volta à sala (setupAt)
+        var _newSetupAt = Date.now();
+        await _db.collection('casualMatches').doc(_casualDocId).update({
+          closePending: firebase.firestore.FieldValue.delete(),
+          setupAt: _newSetupAt,
+          status: 'setup'
+        });
+        // O próprio onSnapshot vai detectar _setupSignal e chamar _casualReopenSetup
+      }
+    } catch(e) {
+      window._warn('[closeConsensus] confirm failed', e);
+      showNotification('Erro', 'Não foi possível confirmar. Tente novamente.', 'error');
+    }
   };
 
   // Re-render on orientation/resize change for landscape layout
