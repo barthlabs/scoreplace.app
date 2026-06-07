@@ -6626,9 +6626,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
     { t1: [0, 3], t2: [1, 2] }
   ];
   // v2.2.1-beta: histórico de jogos na sessão para ativação retroativa do Rei/Rainha.
-  // Persiste dentro do closure (mesmo overlay reaproveitado entre partidas).
   // Cada entrada: { p1:[names], p2:[names], winner:1|2|0 }
-  var _sessionGameHistory = [];
+  // v2.2.33-beta: SEMEADO de opts.sessionHistory — cada partida é um closure
+  // NOVO (doc novo por jogo), então sem isto o histórico era zerado a cada jogo
+  // e o Rei/Rainha retroativo só "via" o jogo atual (bug: "Jogo 2 de 3" e
+  // pareava com o 1º parceiro de novo, ignorando os jogos anteriores). Agora o
+  // histórico flui pelo encadeamento de docs (_doRestartNow grava sessionHistory
+  // no doc novo; _renderCasualJoin repassa em opts).
+  var _sessionGameHistory = (opts && Array.isArray(opts.sessionHistory))
+    ? opts.sessionHistory.map(function(g) { return { p1: (g.p1||[]).slice(), p2: (g.p2||[]).slice(), winner: g.winner || 0 }; })
+    : [];
 
   // v1.3.33-beta: render das sugestões de vínculo guest→friend.
   // Pra cada slot SEM uid em _casualPlayers, busca matches em
@@ -8081,7 +8088,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
         mixedDoubles: !!_mixedDoublesEnabled,
         reiRainha: !!_reiRainhaMode,
         _ts: Date.now()
-      }
+      },
+      // v2.2.33-beta: carrega o histórico de jogos da sessão (já inclui o jogo
+      // que acabou) pro Rei/Rainha retroativo reconhecer todas as partidas.
+      sessionHistory: _sessionGameHistory.slice(0, 8)
     }).then(function(newDocId) {
       if (!newDocId) throw new Error('saveCasualMatch returned null');
       // Aponta o doc ANTIGO pra nova sala — seguidores migram via o handler de
@@ -12660,6 +12670,8 @@ window._renderCasualJoin = function(container, roomCode) {
       if (typeof _scfg.autoShuffle === 'boolean') _liveOpts.autoShuffle = _scfg.autoShuffle;
       if (typeof _scfg.mixedDoubles === 'boolean') _liveOpts.mixedDoubles = _scfg.mixedDoubles;
       if (typeof _scfg.reiRainha === 'boolean') _liveOpts.reiRainhaMode = _scfg.reiRainha;
+      // v2.2.33-beta: repassa o histórico da sessão pro Rei/Rainha retroativo.
+      if (Array.isArray(match.sessionHistory)) _liveOpts.sessionHistory = match.sessionHistory;
       window._openLiveScoring(null, null, _liveOpts);
       // Show a brief toast so user knows they joined
       if (typeof showNotification === 'function') {
