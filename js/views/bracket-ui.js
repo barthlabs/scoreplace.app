@@ -5974,10 +5974,42 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var display = player === 1 ? p1Display : p2Display;
       var plateBg = _isDeuce ? '#f97316' : '#fff';
       var plateClr = _isDeuce ? '#fff' : '#111';
-      return '<div style="width:100%;height:100%;background:' + plateBg + ';border-radius:calc(18px * var(--live-plate-scale,1));padding:calc(6px * var(--live-plate-scale,1));box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
-        '<span style="font-size:calc(clamp(4rem,20vw,9rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
+      return '<div class="ls-plate-box" style="width:100%;height:100%;background:' + plateBg + ';border-radius:calc(18px * var(--live-plate-scale,1));padding:calc(6px * var(--live-plate-scale,1));box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
+        '<span class="ls-plate-num" style="font-size:calc(clamp(4rem,20vw,9rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
       '</div>';
     };
+
+    // v2.2.16-beta: ajusta o tamanho do número e dos botões para preencher o
+    // box disponível em modo portrait. Chamado após render e ao mover o slider.
+    var _fitLivePlateText = function() {
+      var ov = document.getElementById('live-scoring-overlay');
+      if (!ov) return;
+      requestAnimationFrame(function() {
+        ov.querySelectorAll('.ls-plate-box').forEach(function(box) {
+          var span = box.querySelector('.ls-plate-num');
+          if (!span) return;
+          var pad = parseFloat(getComputedStyle(box).paddingTop) || 6;
+          var bh = box.offsetHeight - pad * 2;
+          var bw = box.offsetWidth - pad * 2;
+          if (bh < 10 || bw < 10) return;
+          var chars = Math.max((span.textContent || '').length, 1);
+          // Fonte weight-900: cada char ocupa ~0.65× tamanho em largura
+          var maxByHeight = bh * 0.88;
+          var maxByWidth = (bw * 0.85) / (chars * 0.65);
+          var fs = Math.max(16, Math.min(maxByHeight, maxByWidth));
+          span.style.fontSize = Math.floor(fs) + 'px';
+        });
+        ov.querySelectorAll('.ls-up-btn').forEach(function(btn) {
+          var h = btn.offsetHeight;
+          if (h > 10) btn.style.fontSize = Math.floor(h * 0.55) + 'px';
+        });
+        ov.querySelectorAll('.ls-down-btn').forEach(function(btn) {
+          var h = btn.offsetHeight;
+          if (h > 10) btn.style.fontSize = Math.floor(h * 0.52) + 'px';
+        });
+      });
+    };
+    window._fitLivePlateText = _fitLivePlateText;
 
     // Buttons column builder
     var _buildBtns = function(player) {
@@ -6073,10 +6105,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Portrait-specific up/down button builders — sem min-height fixo, preenchem o row
       var _portUpBtn = function(player) {
         var clr = player === 1 ? '#3b82f6' : '#ef4444';
-        return '<button class="live-vol" onclick="window._liveScorePoint(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,8vw,4rem) * var(--live-btn-scale,1));font-weight:900;border-radius:calc(14px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'">▲</button>';
+        return '<button class="live-vol ls-up-btn" onclick="window._liveScorePoint(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,8vw,4rem) * var(--live-btn-scale,1));font-weight:900;border-radius:calc(14px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'">▲</button>';
       };
       var _portDownBtn = function(player) {
-        return '<button class="live-vol-sm" onclick="window._liveScoreMinus(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.09);color:var(--text-muted);font-size:calc(clamp(1.1rem,4vw,1.6rem) * var(--live-btn-scale,1));font-weight:700;border-radius:calc(10px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;border:1px solid rgba(255,255,255,0.08);" ontouchstart="this.style.background=\'rgba(255,255,255,0.18)\'" ontouchend="this.style.background=\'rgba(255,255,255,0.09)\'">▼</button>';
+        return '<button class="live-vol-sm ls-down-btn" onclick="window._liveScoreMinus(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.09);color:var(--text-muted);font-size:calc(clamp(1.1rem,4vw,1.6rem) * var(--live-btn-scale,1));font-weight:700;border-radius:calc(10px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;border:1px solid rgba(255,255,255,0.08);" ontouchstart="this.style.background=\'rgba(255,255,255,0.18)\'" ontouchend="this.style.background=\'rgba(255,255,255,0.09)\'">▼</button>';
       };
 
       var portGamesRow = showGamesBox
@@ -6132,6 +6164,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
           portFinishRow +
         '</div>';
 
+      // v2.2.16-beta: fit text to fill plate boxes and buttons
+      _fitLivePlateText();
       // Attach court-side drag-and-drop (swap sides)
       setTimeout(function() { _setupCourtSwapDrag(); }, 30);
     }
@@ -6718,7 +6752,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (existing) existing.remove();
     var banner = document.createElement('div');
     banner.id = 'close-pending-banner';
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,0.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;box-sizing:border-box;';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:100003;background:rgba(0,0,0,0.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;box-sizing:border-box;';
     if (isInitiator) {
       banner.innerHTML =
         '<div style="background:rgba(251,191,36,0.12);border:1.5px solid rgba(251,191,36,0.45);border-radius:20px;padding:28px 32px;text-align:center;max-width:320px;width:100%;box-sizing:border-box;">' +
@@ -6806,6 +6840,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
               try { _releaseWakeLock(); } catch(e) {}
               var _ovHC = document.getElementById('live-scoring-overlay');
               if (_ovHC) _ovHC.remove();
+              // v2.2.16-beta: limpa referência de sala para o guest não ficar
+              // com ponteiro morto para uma sala encerrada pelo host.
+              try {
+                window._suppressCasualResumeUntil = Date.now() + 6000;
+                sessionStorage.removeItem('_activeCasualRoom');
+                if (_cuHC && _cuHC.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+                  window.FirestoreDB.saveUserProfile(_cuHC.uid, { activeCasualRoom: null }).catch(function(){});
+                }
+              } catch(e) {}
               if (typeof showNotification === 'function') showNotification('Partida encerrada', 'O host encerrou a partida.', 'info');
               try { window.location.hash = '#dashboard'; } catch(e) {}
             }
@@ -7938,6 +7981,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
         if (ov) ov.style.setProperty(cssVar, scale);
         var lbl = document.getElementById('lss-val-' + key);
         if (lbl) lbl.textContent = inp.value + '%';
+        // v2.2.16-beta: re-fit after scale change (layout shifts with CSS var)
+        requestAnimationFrame(function() { if (window._fitLivePlateText) window._fitLivePlateText(); });
       });
       inp.addEventListener('change', function() { _saveLiveScorePrefs(_liveScorePrefs); });
     });
@@ -8163,7 +8208,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       _title = 'Encerrar partida casual?';
       _msg = _matchFinished
         ? 'O resultado será salvo como confirmado. A partida casual será encerrada para TODOS os jogadores — eles voltarão ao dashboard automaticamente.'
-        : 'Ao fechar, a partida casual será encerrada para TODOS os jogadores — eles voltarão ao dashboard automaticamente.';
+        : 'Todos os jogadores voltarão à sala de organização da partida para uma nova rodada.';
     } else if (isCasual) {
       _title = 'Abandonar partida?';
       _msg = _matchFinished
@@ -8192,22 +8237,27 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // independente de quem fecha — e os participantes não são removidos
         // (a query de "últimas partidas" depende de playerUids).
         if (isCasual && isOrganizer) _casualCancelled = true; // gate do reopen-setup
-        // v2.1.93: sinaliza guests via Firestore para todos fecharem (inclusive
-        // quando match está finished e leaveCasualMatch não seria chamado).
-        // hostClosed:true não altera status:'finished' — histórico preservado.
+        // v2.2.16-beta: comportamento diferente para match completo vs. mid-game.
+        // Match completo: fecha para todos via hostClosed:true (histórico preservado).
+        // Mid-game: retorna todos ao mesmo lobby via status:'setup' — _setupSignal
+        // disparado no onSnapshot dos guests; sessão reutilizada (mesma sala).
         if (isCasual && isOrganizer && _casualDocId && window.FirestoreDB && window.FirestoreDB.db) {
           try {
-            window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
-              .update({ hostClosed: true })
-              .catch(function() {});
+            if (_matchIsComplete) {
+              window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
+                .update({ hostClosed: true })
+                .catch(function() {});
+            } else {
+              // Mid-game: sinaliza retorno ao lobby sem encerrar a sala
+              window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
+                .update({ status: 'setup', setupAt: Date.now() })
+                .catch(function() {});
+            }
           } catch(e) {}
         }
-        if (isCasual && !_matchIsComplete && cu && cu.uid && _casualDocId && window.FirestoreDB && typeof window.FirestoreDB.leaveCasualMatch === 'function') {
-          try {
-            var leavePromise = window.FirestoreDB.leaveCasualMatch(_casualDocId, cu.uid);
-            if (leavePromise && typeof leavePromise.catch === 'function') leavePromise.catch(function(){});
-          } catch(e) {}
-        }
+        // leaveCasualMatch removido do mid-game: sala permanece ativa para guests
+        // retornarem via _setupSignal. Match completo: condição !_matchIsComplete
+        // já impedia o call antes, sem mudança necessária.
         // Clear activeCasualRoom from the profile + suppress resume for
         // 6s so a stale snapshot doesn't yank the user back into the
         // match they just closed. (MutationObserver normally handles
@@ -8232,7 +8282,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // quem iniciou a partida (referência `overlay` no closure do setup).
         if (isCasual) {
           if (isOrganizer && typeof window._casualReopenSetup === 'function') {
-            try { window._casualReopenSetup({ keepSession: false }); } catch(e) {
+            try { window._casualReopenSetup({ keepSession: !_matchIsComplete }); } catch(e) {
               try { window.location.hash = '#dashboard'; } catch(e2) {}
             }
           } else {
