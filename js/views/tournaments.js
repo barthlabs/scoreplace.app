@@ -451,6 +451,19 @@ function renderTournaments(container, tournamentId = null) {
                     window.showFinalReviewPanel(tId);
                 }
             };
+            // Se ausentes foram movidos, persistir no Firestore ANTES de abrir o painel.
+            // O listener onSnapshot substitui store.tournaments inteiro quando chega
+            // dados do servidor — sem salvar primeiro, os participantes originais
+            // (com ausentes) voltam do Firestore e o sorteio os inclui mesmo assim.
+            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.syncImmediate === 'function') {
+                var _doGenderThenDraw = function() {
+                    if (typeof window._maybeShowGenderDrawDialog === 'function' &&
+                        window._maybeShowGenderDrawDialog(tId, _continueDraw)) return;
+                    _continueDraw();
+                };
+                Promise.resolve(window.AppStore.syncImmediate(tId)).then(_doGenderThenDraw).catch(_doGenderThenDraw);
+                return;
+            }
             // v2.1.20: em duplas mistas com sorteio livre (sem categoria masc/fem),
             // mostra o diálogo de gênero + modo (livre/equilibrado) antes do sorteio.
             if (typeof window._maybeShowGenderDrawDialog === 'function' &&
