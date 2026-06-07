@@ -4809,11 +4809,25 @@ window._autoFixStaleNames = async function(forceTournamentId) {
   window._debug('[AutoFixNames] Found ' + uids.length + ' UIDs and ' + emails.length + ' emails to check');
   if (uids.length === 0 && emails.length === 0) return;
 
-  var profileMap = {};
-  var emailProfileMap = {};
+  // v2.2.9: cache de sessão para evitar re-buscar profiles já conhecidos.
+  // forceTournamentId contorna o cache para garantir dados frescos ao forçar fix.
+  if (!window._autoFixNamesCache || forceTournamentId) {
+    window._autoFixNamesCache = { profileMap: {}, emailProfileMap: {}, uidsLoaded: {}, emailsLoaded: {} };
+  }
+  var _cache = window._autoFixNamesCache;
+
+  var profileMap = _cache.profileMap;
+  var emailProfileMap = _cache.emailProfileMap;
+
+  // Só buscar UIDs/emails que ainda não estão no cache
+  var uidsToFetch = uids.filter(function(uid) { return !_cache.uidsLoaded[uid]; });
+  var emailsToFetchRaw = emails.filter(function(e) { return !_cache.emailsLoaded[e] && !emailProfileMap[e]; });
+
+  window._debug('[AutoFixNames] Cache hit: ' + (uids.length - uidsToFetch.length) + ' UIDs, fetching ' + uidsToFetch.length + ' new');
+
   try {
-    for (var i = 0; i < uids.length; i += 10) {
-      var batch = uids.slice(i, i + 10);
+    for (var i = 0; i < uidsToFetch.length; i += 10) {
+      var batch = uidsToFetch.slice(i, i + 10);
       var snap = await window.FirestoreDB.db.collection('users')
         .where(firebase.firestore.FieldPath.documentId(), 'in', batch).get();
       try { if (window._noteFsReads) window._noteFsReads(snap.size, 'autofix-uid'); } catch (e) {}
@@ -4824,8 +4838,10 @@ window._autoFixStaleNames = async function(forceTournamentId) {
           if (data.email) emailProfileMap[data.email] = { displayName: data.displayName, uid: doc.id, previousDisplayNames: Array.isArray(data.previousDisplayNames) ? data.previousDisplayNames : [] };
         }
       });
+      // Marcar como carregados mesmo que não tenham displayName (evita re-buscar ghosts)
+      batch.forEach(function(uid) { _cache.uidsLoaded[uid] = true; });
     }
-    var emailsToFetch = emails.filter(function(e) { return !emailProfileMap[e]; });
+    var emailsToFetch = emailsToFetchRaw.filter(function(e) { return !emailProfileMap[e]; });
     for (var j = 0; j < emailsToFetch.length; j += 10) {
       var emailBatch = emailsToFetch.slice(j, j + 10);
       var esnap = await window.FirestoreDB.db.collection('users')
@@ -4837,6 +4853,7 @@ window._autoFixStaleNames = async function(forceTournamentId) {
           emailProfileMap[data.email] = { displayName: data.displayName, uid: doc.id, previousDisplayNames: Array.isArray(data.previousDisplayNames) ? data.previousDisplayNames : [] };
         }
       });
+      emailBatch.forEach(function(e) { _cache.emailsLoaded[e] = true; });
     }
   } catch(e) {
     window._warn('[AutoFixNames] Error fetching profiles:', e);
