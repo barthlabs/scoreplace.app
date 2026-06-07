@@ -5651,6 +5651,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         restartSection =
           '<div style="display:flex;flex-direction:column;gap:6px;width:100%;">' +
             '<button onclick="window._liveScoreGoToSetup()" style="width:100%;padding:12px;border-radius:12px;font-size:0.92rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Jogar</button>' +
+            '<button onclick="window._liveScoreCloseStats()" style="width:100%;padding:9px;border-radius:10px;font-size:0.8rem;font-weight:700;border:1px solid rgba(255,255,255,0.12);cursor:pointer;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">✕ Encerrar</button>' +
             '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.18);cursor:pointer;">' +
               '<div style="display:flex;align-items:center;gap:6px;">' +
                 '<span style="font-size:0.9rem;">🔀</span>' +
@@ -5679,6 +5680,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '<div style="display:flex;gap:8px;width:100%;">' +
             '<button onclick="window._liveScoreGoToSetup()" style="flex:1;padding:14px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Jogar Novamente</button>' +
             '<button onclick="window._liveScoreShareCasual()" title="Compartilhar resultado" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:#25d366;color:white;box-shadow:0 4px 20px rgba(37,211,102,0.3);">📤</button>' +
+            '<button onclick="window._liveScoreCloseStats()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:0.95rem;font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
           '</div>';
       }
 
@@ -5786,16 +5788,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
         window._initStatsAnimation(container);
       }
 
-      // Tournament finish screen: hide the Reset button (would undo the
-      // finished state) but KEEP the ✕ Fechar button visible — users were
-      // reporting the back button "didn't work" when the last match in a
-      // tournament finished, because this overlay (z-index 100002) covered
-      // the sticky back header and nothing else could dismiss it.
-      // _closeLiveScoring() already prompts to save/confirm the result.
+      // v2.2.18-beta: casual — stats aparecem automaticamente para todos os
+      // UIDs reais; ✕ Fechar desnecessário (encerramento via botão no próprio
+      // painel). Torneio: mantém ✕ (único caminho pra sair do overlay).
       var hdrActions = document.getElementById('live-score-header-actions');
       if (hdrActions) {
-        hdrActions.style.display = '';
-        if (!isCasual) {
+        if (isCasual) {
+          hdrActions.style.display = 'none';
+        } else {
+          hdrActions.style.display = '';
           var resetBtn = hdrActions.querySelector('button[onclick*="_liveScoreReset"]');
           if (resetBtn) resetBtn.style.display = 'none';
         }
@@ -6913,11 +6914,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             _isRemoteUpdate = false;
             // Notificação leve pro guest saber que jogo acabou (host não
             // recebe esta — ele já viu o confirm dialog).
-            var cuDone2 = window.AppStore && window.AppStore.currentUser;
-            var wasHost2 = cuDone2 && _casualCreatedBy && cuDone2.uid === _casualCreatedBy;
-            if (!wasHost2 && typeof showNotification === 'function') {
-              showNotification('🏆 Partida encerrada', 'Confira as estatísticas abaixo. Toque em ✕ pra fechar.', 'success');
-            }
+            // v2.2.18-beta: stats aparecem automaticamente — sem notificação de ✕
             return;
           }
           // v1.7.3-beta: "Jogar Novamente" / "Desparear" — sinaliza via
@@ -8164,6 +8161,40 @@ window._openLiveScoring = function(tId, matchId, opts) {
   };
   window.addEventListener('pagehide', _onPagehide);
   _requestWakeLock();
+
+  // v2.2.18-beta: encerra as stats sem dialog — chamado pelo botão "✕ Encerrar"
+  // no painel de estatísticas (substitui o ✕ Fechar do header). Para o host de
+  // partida casual finalizada: grava hostClosed:true (evacua guests). Para
+  // qualquer usuário: fecha o overlay local sem pedir confirmação.
+  window._liveScoreCloseStats = function() {
+    if (!_resultSaved) {
+      try { _saveResult({ keepOpen: true, silent: true }); } catch(_e) {}
+    }
+    var _cuCS = window.AppStore && window.AppStore.currentUser;
+    var _isHostCS = _cuCS && _cuCS.uid && _casualCreatedBy && _cuCS.uid === _casualCreatedBy;
+    // Host de partida finalizada: sinaliza hostClosed para evacuar guests
+    if (isCasual && _isHostCS && _casualDocId && state.isFinished && window.FirestoreDB && window.FirestoreDB.db) {
+      try {
+        window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
+          .update({ hostClosed: true }).catch(function() {});
+      } catch(_e2) {}
+    }
+    // Cleanup e fecha overlay
+    if (_unsubFirestore) { try { _unsubFirestore(); } catch(_e3) {} _unsubFirestore = null; }
+    try { window.removeEventListener('resize', _onResize); } catch(_e4) {}
+    try { document.removeEventListener('visibilitychange', _onVisibility); } catch(_e5) {}
+    try { window.removeEventListener('pagehide', _onPagehide); } catch(_e6) {}
+    try {
+      window.removeEventListener('resize', _fitLiveOverlay);
+      window.removeEventListener('orientationchange', _fitLiveOverlay);
+      if (window.visualViewport && window.visualViewport.removeEventListener) {
+        window.visualViewport.removeEventListener('resize', _fitLiveOverlay);
+      }
+    } catch(_e7) {}
+    _releaseWakeLock();
+    var _ovCS = document.getElementById('live-scoring-overlay');
+    if (_ovCS) _ovCS.remove();
+  };
 
   // Close handler — always confirms before leaving
   window._closeLiveScoring = function() {
