@@ -9872,6 +9872,8 @@ window._openCasualMatch = function(restoreOpts) {
       // Reseta sessão: próximo Iniciar cria novo doc no Firestore
       _sessionDocId = null;
       _sessionReopened = false;
+      _myReadyClicked = false; // v2.2.10-beta
+      _startInitiated = false; // v2.2.10-beta
       // v1.6.50-beta: para o polling de refresh — sem isso, o interval continua
       // lendo o Firestore com _sessionRoomCode antigo e sobrescreve os nomes
       // digitados nos slots com "Jogador X, Y, Z" após alguns segundos.
@@ -9882,6 +9884,8 @@ window._openCasualMatch = function(restoreOpts) {
       // próxima partida deve criar um novo doc (em vez de reactivar o antigo
       // com result stale, que faria _openLiveScoring pular direto às stats).
       _sessionReopened = true;
+      _myReadyClicked = false; // v2.2.10-beta
+      _startInitiated = false; // v2.2.10-beta
     }
     // Re-appenda overlay (ainda em memória no closure)
     if (!document.getElementById('casual-match-overlay')) {
@@ -10432,6 +10436,16 @@ window._openCasualMatch = function(restoreOpts) {
   var _sessionRoomCode = (restoreOpts && restoreOpts.roomCode) || _generateRoomCode();
   var _sessionDocId = (restoreOpts && restoreOpts.docId) || null;
 
+  // v2.2.10-beta: controle do fluxo "ready" — jogo só começa com ≥2 prontos
+  var _myReadyClicked = false;   // este cliente já clicou em Iniciar
+  var _startInitiated = false;   // _casualStart já foi disparado (evita duplo-trigger)
+
+  function _checkAndStart() {
+    if (_startInitiated) return;
+    _startInitiated = true;
+    window._casualStart();
+  }
+
   // True when the organizer has explicitly paired the 4 players into teams
   // (not autoShuffle, all 4 slots assigned via drag-and-drop). Guests use this
   // to decide whether to show the "Times Formados" preview in the lobby.
@@ -10442,6 +10456,68 @@ window._openCasualMatch = function(restoreOpts) {
       _teamAssignments[2] !== undefined &&
       _teamAssignments[3] !== undefined);
   }
+
+  // v2.2.10-beta: condição para iniciar — ≥2 UIDs prontos; se times formados,
+  // precisa de pelo menos 1 pronto em cada time.
+  function _readyConditionMet(readyUids, freshDoc) {
+    if (!Array.isArray(readyUids) || readyUids.length < 2) return false;
+    var tf = freshDoc && freshDoc.teamsFormed;
+    if (!tf) return true;
+    var pls = (freshDoc && Array.isArray(freshDoc.players)) ? freshDoc.players : [];
+    var t1Ok = pls.some(function(p) { return p && p.team === 1 && readyUids.indexOf(p.uid) !== -1; });
+    var t2Ok = pls.some(function(p) { return p && p.team === 2 && readyUids.indexOf(p.uid) !== -1; });
+    return t1Ok && t2Ok;
+  }
+
+  // Atualiza o botão Iniciar: amber "Aguardando +N" para quem já clicou,
+  // label com contagem para quem ainda não clicou.
+  function _updateReadyButtonUI(readyUids) {
+    var btn = document.getElementById('casual-header-start');
+    if (!btn) return;
+    var cnt = Array.isArray(readyUids) ? readyUids.length : 0;
+    if (_myReadyClicked) {
+      var needed = Math.max(0, 2 - cnt);
+      btn.disabled = true;
+      btn.onclick = null;
+      btn.style.cssText = 'background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.45);color:#fbbf24;border-radius:10px;padding:7px 14px;font-size:0.82rem;font-weight:800;cursor:default;box-shadow:none;flex-shrink:0;white-space:nowrap;-webkit-tap-highlight-color:transparent;';
+      btn.textContent = needed > 0 ? ('⏳ Aguardando +' + needed) : '⏳ Iniciando…';
+    } else if (cnt > 0) {
+      btn.textContent = _t('casual.start') + ' (' + cnt + ' pronto' + (cnt > 1 ? 's' : '') + ')';
+    } else {
+      btn.textContent = _t('casual.start');
+    }
+  }
+
+  // Handler do clique em Iniciar — registra UID no readyPlayers do Firestore,
+  // mostra amber tag, e inicia quando condições são atendidas.
+  window._casualReadyClick = async function() {
+    if (_myReadyClicked) return;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var cuUid = cu && cu.uid;
+    // Sem UID (guest não logado) — cai na lógica original direta
+    if (!cuUid || !_sessionDocId) {
+      await window._casualStart();
+      return;
+    }
+    _myReadyClicked = true;
+    _updateReadyButtonUI([]); // mostra "⏳ Aguardando +1" imediatamente
+    try {
+      await window.FirestoreDB.db.collection('casualMatches').doc(_sessionDocId).update({
+        readyPlayers: firebase.firestore.FieldValue.arrayUnion(cuUid)
+      });
+      // Verifica se condição já é atendida logo após salvar
+      var fresh = await window.FirestoreDB.loadCasualMatch(_sessionRoomCode);
+      if (fresh && _readyConditionMet(fresh.readyPlayers || [], fresh)) {
+        _checkAndStart();
+      } else {
+        _updateReadyButtonUI((fresh && Array.isArray(fresh.readyPlayers)) ? fresh.readyPlayers : [cuUid]);
+      }
+    } catch(e) {
+      // Falha no save — reverte estado para o usuário tentar de novo
+      _myReadyClicked = false;
+      _updateReadyButtonUI([]);
+    }
+  };
 
   // Broadcast setup state (players + teams + scoring) to Firestore so invited
   // users watching the lobby see team formations in real time. Debounced so
@@ -10950,7 +11026,7 @@ window._openCasualMatch = function(restoreOpts) {
         // silently when the attribute value is ambiguous after HTML encoding.
         onClickOverride: function() { window._casualSetupClose && window._casualSetupClose(); },
         middleHtml: '<div style="flex:1;display:flex;align-items:center;gap:8px;justify-content:center;"><span style="font-size:1rem;">⚡</span><span style="font-size:0.95rem;font-weight:800;color:#38bdf8;">' + _t('casual.title') + '</span></div>',
-        rightHtml: '<button id="casual-header-start" onclick="window._casualStart()" style="background:linear-gradient(135deg,#10b981,#059669);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:10px;padding:7px 16px;font-size:0.85rem;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(16,185,129,0.35);-webkit-tap-highlight-color:transparent;flex-shrink:0;">' + _t('casual.start') + '</button>'
+        rightHtml: '<button id="casual-header-start" onclick="window._casualReadyClick()" style="background:linear-gradient(135deg,#10b981,#059669);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:10px;padding:7px 16px;font-size:0.85rem;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(16,185,129,0.35);-webkit-tap-highlight-color:transparent;flex-shrink:0;">' + _t('casual.start') + '</button>'
       })
     : '<div></div>';
   overlay.innerHTML = _chdr +
@@ -11343,6 +11419,13 @@ window._openCasualMatch = function(restoreOpts) {
           if (_luChanged) {
             try { _renderSetup(); } catch(e) {}
           }
+        }
+
+        // v2.2.10-beta: sincroniza readyPlayers e verifica condição de início
+        var _freshReady = Array.isArray(fresh.readyPlayers) ? fresh.readyPlayers : [];
+        _updateReadyButtonUI(_freshReady);
+        if (_myReadyClicked && !_startInitiated && _readyConditionMet(_freshReady, fresh)) {
+          _checkAndStart();
         }
       }).catch(function() {});
     }, 3000);
