@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.14-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Placar ao vivo — ajuste de tamanho proporcional.</b> Ao mover os sliders de "Placar" e "Botões" no painel Ajustar, o box inteiro (fundo branco + número; caixa do botão + símbolo) cresce e encolhe junto — não só o texto interno. O número ocupa o box com margem proporcional ao tamanho selecionado. O <code>border-radius</code> dos elementos também escala para manter a proporção visual.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.13-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Salas sem atividade dissolvidas automaticamente.</b> Uma sala de partida casual ativa sem pontos marcados por 2 horas é dissolvida automaticamente pelo servidor. A cada ponto marcado o timestamp de última atividade é atualizado no Firestore; uma Cloud Function rodando a cada 30 min verifica e apaga as salas expiradas, limpando também os ponteiros <em>activeCasualRoom</em> dos perfis dos jogadores.</li>' +

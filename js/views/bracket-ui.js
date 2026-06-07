@@ -5974,7 +5974,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var display = player === 1 ? p1Display : p2Display;
       var plateBg = _isDeuce ? '#f97316' : '#fff';
       var plateClr = _isDeuce ? '#fff' : '#111';
-      return '<div style="width:100%;height:100%;background:' + plateBg + ';border-radius:18px;padding:4px;box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
+      return '<div style="width:100%;height:100%;background:' + plateBg + ';border-radius:calc(18px * var(--live-plate-scale,1));padding:calc(6px * var(--live-plate-scale,1));box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
         '<span style="font-size:calc(clamp(4rem,20vw,9rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
       '</div>';
     };
@@ -6003,7 +6003,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var display = player === 1 ? p1Display : p2Display;
         var plateBg = _isDeuce ? '#f97316' : '#fff';
         var plateClr = _isDeuce ? '#fff' : '#111';
-        return '<div style="width:100%;background:' + plateBg + ';border-radius:14px;padding:clamp(10px,4vh,28px) 4px;box-shadow:0 4px 24px rgba(0,0,0,0.5),0 0 0 3px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
+        return '<div style="width:100%;background:' + plateBg + ';border-radius:calc(14px * var(--live-plate-scale,1));padding:calc(clamp(10px,4vh,28px) * var(--live-plate-scale,1)) calc(4px * var(--live-plate-scale,1));box-shadow:0 4px 24px rgba(0,0,0,0.5),0 0 0 3px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
           '<span style="font-size:calc(clamp(3.5rem,14vw,7rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
         '</div>';
       };
@@ -6073,10 +6073,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Portrait-specific up/down button builders — sem min-height fixo, preenchem o row
       var _portUpBtn = function(player) {
         var clr = player === 1 ? '#3b82f6' : '#ef4444';
-        return '<button class="live-vol" onclick="window._liveScorePoint(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,8vw,4rem) * var(--live-btn-scale,1));font-weight:900;border-radius:14px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'">▲</button>';
+        return '<button class="live-vol" onclick="window._liveScorePoint(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,8vw,4rem) * var(--live-btn-scale,1));font-weight:900;border-radius:calc(14px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'">▲</button>';
       };
       var _portDownBtn = function(player) {
-        return '<button class="live-vol-sm" onclick="window._liveScoreMinus(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.09);color:var(--text-muted);font-size:calc(clamp(1.1rem,4vw,1.6rem) * var(--live-btn-scale,1));font-weight:700;border-radius:10px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;border:1px solid rgba(255,255,255,0.08);" ontouchstart="this.style.background=\'rgba(255,255,255,0.18)\'" ontouchend="this.style.background=\'rgba(255,255,255,0.09)\'">▼</button>';
+        return '<button class="live-vol-sm" onclick="window._liveScoreMinus(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.09);color:var(--text-muted);font-size:calc(clamp(1.1rem,4vw,1.6rem) * var(--live-btn-scale,1));font-weight:700;border-radius:calc(10px * var(--live-btn-scale,1));display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;border:1px solid rgba(255,255,255,0.08);" ontouchstart="this.style.background=\'rgba(255,255,255,0.18)\'" ontouchend="this.style.background=\'rgba(255,255,255,0.09)\'">▼</button>';
       };
 
       var portGamesRow = showGamesBox
@@ -6111,18 +6111,18 @@ window._openLiveScoring = function(tId, matchId, opts) {
               _buildNameStack(rightTeam) +
             '</div>' +
           '</div>' +
-          // Placares — flex:4
-          '<div style="flex:4;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+          // Placares — flex escala com --live-plate-scale
+          '<div style="flex:calc(4 * var(--live-plate-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
             '<div style="flex:1;display:flex;align-items:stretch;">' + _buildPlate(leftTeam) + '</div>' +
             '<div style="flex:1;display:flex;align-items:stretch;">' + _buildPlate(rightTeam) + '</div>' +
           '</div>' +
-          // Botões ↑ — flex:3
-          (!state.isFinished ? '<div style="flex:3;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+          // Botões ↑ — flex escala com --live-btn-scale
+          (!state.isFinished ? '<div style="flex:calc(3 * var(--live-btn-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
             '<div style="flex:1;display:flex;">' + _portUpBtn(leftTeam) + '</div>' +
             '<div style="flex:1;display:flex;">' + _portUpBtn(rightTeam) + '</div>' +
           '</div>' : '') +
-          // Botões ↓ — flex:1.5 + safe-area
-          (!state.isFinished ? '<div style="flex:1.5;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px) calc(2px + env(safe-area-inset-bottom,0px));">' +
+          // Botões ↓ — flex escala com --live-btn-scale + safe-area
+          (!state.isFinished ? '<div style="flex:calc(1.5 * var(--live-btn-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px) calc(2px + env(safe-area-inset-bottom,0px));">' +
             '<div style="flex:1;display:flex;">' + _portDownBtn(leftTeam) + '</div>' +
             '<div style="flex:1;display:flex;">' + _portDownBtn(rightTeam) + '</div>' +
           '</div>' : '') +
