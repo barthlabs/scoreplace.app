@@ -5985,19 +5985,27 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var ov = document.getElementById('live-scoring-overlay');
       if (!ov) return;
       requestAnimationFrame(function() {
-        ov.querySelectorAll('.ls-plate-box').forEach(function(box) {
-          var span = box.querySelector('.ls-plate-num');
-          if (!span) return;
+        var boxes = ov.querySelectorAll('.ls-plate-box');
+        if (!boxes.length) return;
+        // Usa sempre 2 chars como referência — pior caso do sistema de pontuação
+        // (15, 30, 40, AD). Garante que todos os boxes tenham o mesmo fontSize
+        // independente do valor atual ("0" não fica maior que "40").
+        // Fonte weight-900 tabular: cada char ≈ 0.65× fontSize em largura.
+        var REF_CHARS = 2;
+        var minFs = Infinity;
+        boxes.forEach(function(box) {
           var pad = parseFloat(getComputedStyle(box).paddingTop) || 6;
           var bh = box.offsetHeight - pad * 2;
           var bw = box.offsetWidth - pad * 2;
           if (bh < 10 || bw < 10) return;
-          var chars = Math.max((span.textContent || '').length, 1);
-          // Fonte weight-900: cada char ocupa ~0.65× tamanho em largura
-          var maxByHeight = bh * 0.88;
-          var maxByWidth = (bw * 0.85) / (chars * 0.65);
-          var fs = Math.max(16, Math.min(maxByHeight, maxByWidth));
-          span.style.fontSize = Math.floor(fs) + 'px';
+          var fs = Math.min(bh * 0.88, (bw * 0.85) / (REF_CHARS * 0.65));
+          if (fs < minFs) minFs = fs;
+        });
+        if (minFs === Infinity || minFs < 16) return;
+        var fs = Math.floor(minFs);
+        boxes.forEach(function(box) {
+          var span = box.querySelector('.ls-plate-num');
+          if (span) span.style.fontSize = fs + 'px';
         });
         ov.querySelectorAll('.ls-up-btn').forEach(function(btn) {
           var h = btn.offsetHeight;
