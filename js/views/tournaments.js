@@ -415,6 +415,113 @@ function renderTournaments(container, tournamentId = null) {
         return toMove.length;
     };
 
+    // v2.2.39: "Garantir sorteio só entre os presentes" — move todos os NÃO
+    // presentes (sem check-in OU marcados ausentes) de t.participants para a
+    // lista de espera, para que o sorteio inclua apenas quem fez a chamada.
+    // Ausentes podem voltar depois (regra de 4 presentes acumulados na espera).
+    // "Presente" = NÃO ausente E (nome com check-in direto OU, sendo dupla
+    // "A / B", todos os membros com check-in) — espelha a regra canônica de
+    // presença de equipe usada na substituição (participants.js).
+    window._isParticipantPresent = function(t, name) {
+        if (!t || !name) return false;
+        var ci = t.checkedIn || {}, ab = t.absent || {};
+        if (ab[name]) return false;
+        if (ci[name]) return true;
+        if (name.indexOf('/') !== -1) {
+            var members = name.split('/').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+            if (members.length >= 2 && members.every(function(m) { return !!ci[m]; })) return true;
+        }
+        return false;
+    };
+
+    window._moveAbsentToWaitlistForPresentDraw = function(t) {
+        if (!t) return 0;
+        var parts = Array.isArray(t.participants) ? t.participants : [];
+        var _nm = function(p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
+        var notPresent = parts.filter(function(p) {
+            var n = _nm(p);
+            return n && !window._isParticipantPresent(t, n);
+        });
+        if (notPresent.length === 0) return 0;
+        var moveSet = {};
+        notPresent.forEach(function(p) { var n = _nm(p); if (n) moveSet[n] = true; });
+        t.participants = parts.filter(function(p) { var n = _nm(p); return !n || !moveSet[n]; });
+        if (!Array.isArray(t.waitlist)) t.waitlist = [];
+        notPresent.forEach(function(p) {
+            var n = _nm(p);
+            var already = t.waitlist.some(function(w) { return _nm(w) === n; });
+            if (!already) t.waitlist.push(p);
+        });
+        return notPresent.length;
+    };
+
+    // v2.2.39: diálogo de escolha do modo de sorteio quando as inscrições
+    // seguem ABERTAS após o sorteio. Organizador escolhe entre sortear com
+    // todos (antes da chamada) ou garantir o sorteio só entre os presentes.
+    window._showPresenceDrawChoice = function(tId, startDraw) {
+        var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        if (!t) return;
+        var existing = document.getElementById('presence-draw-choice');
+        if (existing) existing.remove();
+        var dialog = document.createElement('div');
+        dialog.id = 'presence-draw-choice';
+        dialog.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:100010;';
+        dialog.innerHTML =
+            '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:16px;max-width:440px;width:90%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+              '<div style="background:rgba(59,130,246,0.1);border-bottom:1px solid var(--border-color);padding:1.25rem;display:flex;align-items:center;gap:12px;">' +
+                '<span style="font-size:2rem;">🎲</span>' +
+                '<div style="font-size:1.1rem;font-weight:700;color:var(--text-color);">Como deseja sortear?</div>' +
+              '</div>' +
+              '<div style="padding:1.1rem 1.25rem 0.5rem;color:var(--text-muted);font-size:0.92rem;line-height:1.55;">' +
+                'As inscrições continuarão <b>abertas</b> após o sorteio. Escolha como montar a chave:' +
+              '</div>' +
+              '<div style="padding:0.75rem 1.25rem 1.25rem;display:flex;flex-direction:column;gap:10px;">' +
+                '<button id="pdc-all" style="text-align:left;background:rgba(255,255,255,0.06);color:var(--text-main);border:1px solid rgba(255,255,255,0.15);padding:13px 16px;font-weight:600;font-size:0.92rem;border-radius:12px;cursor:pointer;line-height:1.4;">' +
+                  '🎲 Sortear com todos<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Inclui todos os inscritos, presentes ou não (antes da chamada).</span>' +
+                '</button>' +
+                '<button id="pdc-present" style="text-align:left;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:13px 16px;font-weight:700;font-size:0.92rem;border-radius:12px;cursor:pointer;line-height:1.4;">' +
+                  '✅ Só entre os presentes<br><span style="font-weight:400;font-size:0.82rem;color:rgba(255,255,255,0.85);">Ausentes vão para a lista de espera; entram depois quando 4 presentes se acumularem.</span>' +
+                '</button>' +
+                '<button id="pdc-cancel" style="background:transparent;color:var(--text-muted);border:none;padding:8px;font-weight:600;font-size:0.88rem;cursor:pointer;">Cancelar</button>' +
+              '</div>' +
+            '</div>';
+        document.body.appendChild(dialog);
+        var close = function() { dialog.remove(); };
+        dialog.querySelector('#pdc-cancel').addEventListener('click', close);
+        dialog.querySelector('#pdc-all').addEventListener('click', function() {
+            close();
+            startDraw();
+        });
+        dialog.querySelector('#pdc-present').addEventListener('click', function() {
+            var tt = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+            if (!tt) { close(); return; }
+            var _nm = function(p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
+            var parts = Array.isArray(tt.participants) ? tt.participants : [];
+            var presentCount = parts.filter(function(p) { return window._isParticipantPresent(tt, _nm(p)); }).length;
+            if (presentCount < 2) {
+                if (typeof showNotification !== 'undefined') {
+                    showNotification('⚠️ Poucos presentes', 'Marque pelo menos 2 participantes presentes (check-in) antes de sortear só entre os presentes.', 'warning');
+                }
+                close();
+                return;
+            }
+            var moved = window._moveAbsentToWaitlistForPresentDraw(tt);
+            close();
+            var proceed = function() {
+                if (moved > 0 && typeof showNotification !== 'undefined') {
+                    showNotification('✅ Sorteio entre presentes', moved + ' ausente(s) enviado(s) para a lista de espera.', 'info');
+                }
+                startDraw();
+            };
+            // persiste ANTES de sortear — senão o onSnapshot devolve os ausentes
+            if (moved > 0 && window.AppStore && typeof window.AppStore.syncImmediate === 'function') {
+                Promise.resolve(window.AppStore.syncImmediate(tId)).then(proceed).catch(proceed);
+            } else {
+                proceed();
+            }
+        });
+    };
+
     window._handleSortearClick = function (tId, isAberto) {
         window._lastActiveTournamentId = tId;
         var _startDraw = function() {
@@ -478,13 +585,9 @@ function renderTournaments(container, tournamentId = null) {
         var _tSort = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
         var _lateMode = !!(_tSort && (_tSort.lateEnrollment === 'standby' || _tSort.lateEnrollment === 'expand'));
         if (isAberto && _lateMode) {
-            showConfirmDialog(
-                'Sortear agora?',
-                'As inscrições continuarão ABERTAS após o sorteio — novos inscritos vão para a lista de espera. Você poderá encerrá-las depois em "Encerrar Inscrições". Deseja sortear agora?',
-                function() { _startDraw(); },
-                null,
-                { type: 'info', confirmText: '🎲 Sortear', cancelText: 'Cancelar' }
-            );
+            // v2.2.39: inscrições seguem abertas após o sorteio — perguntar se
+            // sorteia com todos (antes da chamada) ou só entre os presentes.
+            window._showPresenceDrawChoice(tId, _startDraw);
         } else if (isAberto) {
             showConfirmDialog(
                 _t('org.closeRegConfirmTitle'),

@@ -122,7 +122,14 @@ window._createExtraGamesFromWaitlist = function(t) {
   var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
   var seen = {}; var pool = [];
   _sp.concat(_wl).forEach(function(p){ var n = _name(p); if (n && !seen[n]) { seen[n] = true; pool.push(p); } });
-  pool = pool.filter(function(p){ return _name(p).indexOf(' / ') === -1; }); // só indivíduos
+  // v2.2.39: só indivíduos PRESENTES (com check-in) e NÃO ausentes entram no
+  // novo confronto. Ausentes que estão na lista de espera NÃO contam — antes
+  // eram incluídos no jogo e na chave por engano. Junta-se 4 presentes.
+  var _ci = t.checkedIn || {}, _ab = t.absent || {};
+  pool = pool.filter(function(p){
+    var n = _name(p);
+    return n.indexOf(' / ') === -1 && !!_ci[n] && !_ab[n]; // só indivíduos presentes
+  });
   if (pool.length < 4) return 0;
 
   if (!Array.isArray(t.participants)) t.participants = [];
