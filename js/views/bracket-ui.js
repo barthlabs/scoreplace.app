@@ -12681,6 +12681,37 @@ window._renderCasualJoin = function(container, roomCode) {
     }
 
     if (match.status === 'active') {
+      // v2.2.36-beta: ANTI-TRAVA. Um crash pode deixar uma sala 'active' parada
+      // (todos saíram sem encerrar) e o resume jogava o usuário lá pra sempre.
+      // Se a sala está ATIVA mas sem atividade há > 20min, é abandonada →
+      // auto-dissolve: limpa ponteiro + sessionStorage, apaga o doc (se eu for
+      // o criador) e vai pro dashboard, em vez de prender o usuário.
+      var _laRaw = match.lastActivityAt;
+      var _laMs = (typeof _laRaw === 'number') ? _laRaw : (_laRaw ? parseInt(_laRaw, 10) : 0);
+      var _staleMs = 20 * 60 * 1000;
+      if (_laMs && (Date.now() - _laMs) > _staleMs) {
+        try { sessionStorage.removeItem('_activeCasualRoom'); } catch (e) {}
+        try {
+          var _cuStale = window.AppStore && window.AppStore.currentUser;
+          if (_cuStale && _cuStale.uid) {
+            window._suppressCasualResumeUntil = Date.now() + 8000;
+            if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+              window.FirestoreDB.saveUserProfile(_cuStale.uid, { activeCasualRoom: null }).catch(function () {});
+            }
+            _cuStale.activeCasualRoom = null;
+            // Só o criador apaga o doc (evita corrida). cancelCasualMatch pula
+            // docs finished — aqui é active, então dissolve.
+            if (match.createdBy && _cuStale.uid === match.createdBy && docId &&
+                window.FirestoreDB && typeof window.FirestoreDB.cancelCasualMatch === 'function') {
+              var _pStale = window.FirestoreDB.cancelCasualMatch(docId);
+              if (_pStale && _pStale.catch) _pStale.catch(function () {});
+            }
+          }
+        } catch (e) {}
+        if (typeof showNotification === 'function') showNotification('Sala encerrada', 'A partida casual estava parada e foi encerrada.', 'info');
+        try { window.location.replace('#dashboard'); } catch (e) { window.location.hash = '#dashboard'; }
+        return;
+      }
       // Open the live scoring overlay in real-time mode so all players can see and interact
       var p1Names = players.filter(function(p) { return p.team === 1; }).map(function(p) { return p.name; });
       var p2Names = players.filter(function(p) { return p.team === 2; }).map(function(p) { return p.name; });
