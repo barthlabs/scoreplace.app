@@ -7973,17 +7973,53 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // v2.2.26-beta: inicia DE FATO a nova partida (corpo extraído do antigo
   // _liveScoreGoToSetup). Chamado direto no solo, ou pelo cliente "starter"
   // quando o consenso de Jogar é atingido no multiplayer.
+  // v2.2.31-beta: helpers do restart in-place (criar próxima partida como novo
+  // doc, sem reabrir o lobby).
+  function _genRoomCodeLS() {
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
+    for (var i = 0; i < 6; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+  }
+  function _shuffleArrLS(a) {
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function _genderByNameLS() {
+    var m = {}; var src = (opts && Array.isArray(opts.players)) ? opts.players : [];
+    for (var i = 0; i < src.length; i++) { if (src[i] && src[i].name) m[src[i].name] = src[i].gender || ''; }
+    return m;
+  }
+  // Times da próxima partida: embaralha se autoShuffle; respeita duplas mistas.
+  function _computeRestartTeams() {
+    var t1 = p1Players.slice(), t2 = p2Players.slice();
+    if (!isDoubles || !autoShuffle) return { t1: t1, t2: t2 };
+    var all = p1Players.concat(p2Players);
+    if (all.length < 4) return { t1: t1, t2: t2 };
+    var gmap = _genderByNameLS();
+    var males = all.filter(function(n) { return gmap[n] === 'masculino'; });
+    var females = all.filter(function(n) { return gmap[n] === 'feminino'; });
+    if (_mixedDoublesEnabled && males.length === 2 && females.length === 2) {
+      _shuffleArrLS(males); _shuffleArrLS(females);
+      return { t1: [males[0], females[0]], t2: [males[1], females[1]] };
+    }
+    var arr = _shuffleArrLS(all.slice());
+    return { t1: [arr[0], arr[1]], t2: [arr[2], arr[3]] };
+  }
+  function _buildRestartPlayers(t1, t2) {
+    var gmap = _genderByNameLS();
+    var out = [];
+    function add(name, team, slot) {
+      var mm = _playerMeta[name] || {};
+      out.push({ slot: slot, name: name, team: team, uid: mm.uid || null, photoURL: mm.photoURL || null, gender: gmap[name] || null });
+    }
+    t1.forEach(function(n, i) { add(n, 1, i); });
+    t2.forEach(function(n, i) { add(n, 2, t1.length + i); });
+    return out;
+  }
+
   function _doRestartNow() {
     if (state.isFinished && !_resultSaved) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
-    }
-    // Sinaliza para outros dispositivos via campo setupAt (sem alterar status)
-    if (_casualDocId && window.FirestoreDB && window.FirestoreDB.db) {
-      try {
-        window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
-          .update({ setupAt: new Date().toISOString(), restartReady: [] })
-          .catch(function(e) { window._warn('[LiveScore] goToSetup setupAt write failed:', e); });
-      } catch(e) {}
     }
     // v2.2.1-beta: salva no histórico de sessão para ativação retroativa do Rei/Rainha.
     if (isCasual && isDoubles && state.isFinished && state.winner != null) {
@@ -7993,8 +8029,69 @@ window._openLiveScoring = function(tId, matchId, opts) {
         winner: state.winner || 0
       });
     }
-    var _shouldShuffle = !!autoShuffle;
-    _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true, autoStart: true, autoShuffle: _shouldShuffle });
+    var _cuR = window.AppStore && window.AppStore.currentUser;
+    // SOLO (ou sem Firestore) → caminho antigo: reabre setup + autoStart.
+    if (!_casualDocId || !window.FirestoreDB || !window.FirestoreDB.db ||
+        typeof window.FirestoreDB.saveCasualMatch !== 'function') {
+      _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true, autoStart: true, autoShuffle: !!autoShuffle });
+      return;
+    }
+    // v2.2.31-beta: MULTIPLAYER — cria a próxima partida como NOVO doc DIRETO e
+    // navega TODOS via #casual/<novaSala> (eu agora; os outros via nextRoomCode).
+    // Antes o starter chamava _closeLiveScoringAndReopenSetup → window._casualReopenSetup
+    // (closure do lobby) + autoStart; no 3º jogo essa cadeia cross-closure
+    // quebrava e deixava o starter com TELA PRETA (erro engolido, sem Sentry).
+    // Agora starter e seguidores percorrem o MESMO caminho (_renderCasualJoin),
+    // simétrico e sem reabrir o lobby. Histórico preservado (doc antigo fica
+    // finished). _restartInitiated já está true (não refaz).
+    var teams = _computeRestartTeams();
+    var newPlayers = _buildRestartPlayers(teams.t1, teams.t2);
+    var cfg = (opts && opts.scoring) ? opts.scoring : {};
+    var newRoom = _genRoomCodeLS();
+    var oldDocId = _casualDocId;
+    window.FirestoreDB.saveCasualMatch({
+      createdBy: _casualCreatedBy || (_cuR && _cuR.uid) || null,
+      createdByName: (_cuR && _cuR.displayName) || '',
+      createdAt: new Date().toISOString(),
+      sport: (opts && opts.sportName) || '',
+      scoring: cfg,
+      isDoubles: isDoubles,
+      teamsFormed: true,
+      players: newPlayers,
+      playerUids: newPlayers.filter(function(p) { return !!p.uid; }).map(function(p) { return p.uid; }),
+      roomCode: newRoom,
+      status: 'active',
+      result: null
+    }).then(function(newDocId) {
+      if (!newDocId) throw new Error('saveCasualMatch returned null');
+      // Aponta o doc ANTIGO pra nova sala — seguidores migram via o handler de
+      // nextRoomCode no listener do placar (v2.2.30).
+      try {
+        window.FirestoreDB.db.collection('casualMatches').doc(oldDocId)
+          .update({ nextRoomCode: newRoom }).catch(function() {});
+      } catch (e) {}
+      // Navega EU pra nova sala (mesmo caminho do seguidor).
+      _casualCancelled = true;
+      if (_unsubFirestore) { try { _unsubFirestore(); } catch(e) {} _unsubFirestore = null; }
+      try { window.removeEventListener('resize', _onResize); } catch(e) {}
+      try { document.removeEventListener('visibilitychange', _onVisibility); } catch(e) {}
+      try { window.removeEventListener('pagehide', _onPagehide); } catch(e) {}
+      try { _releaseWakeLock(); } catch(e) {}
+      var ovR = document.getElementById('live-scoring-overlay'); if (ovR) ovR.remove();
+      try { sessionStorage.setItem('_activeCasualRoom', newRoom); } catch(e) {}
+      if (_cuR && _cuR.uid && window.FirestoreDB.saveUserProfile) {
+        window.FirestoreDB.saveUserProfile(_cuR.uid, { activeCasualRoom: newRoom }).catch(function() {});
+      }
+      if (typeof window._navigateToScannedRoute === 'function') {
+        window._navigateToScannedRoute('#casual/' + newRoom);
+      } else { try { window.location.hash = '#casual/' + newRoom; } catch(e) {} }
+    }).catch(function(e) {
+      window._warn && window._warn('[restart] new doc failed — fallback reopen', e);
+      _restartInitiated = false;
+      try {
+        _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true, autoStart: true, autoShuffle: !!autoShuffle });
+      } catch(e2) {}
+    });
   }
 
   window._liveScoreGoToSetup = function() {
