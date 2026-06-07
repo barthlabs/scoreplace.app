@@ -8209,6 +8209,24 @@ window._openLiveScoring = function(tId, matchId, opts) {
           .update({ hostClosed: true }).catch(function() {});
       } catch(_e2) {}
     }
+    // v2.2.20-beta ROOT FIX (Request 3): limpa o ponteiro activeCasualRoom do
+    // perfil + sessionStorage. SEM isto, quem fecha via ✕ "Encerrar" (este
+    // caminho no-dialog, incluindo o auto-close v2.2.19) NUNCA limpava o
+    // ponteiro — então toda vez que reabria o app o startRealtimeListener
+    // lia o activeCasualRoom ainda setado e jogava o usuário de volta na
+    // sala morta (populada com nomes digitados + UIDs stale). O _closeLiveScoring
+    // (caminho com confirm dialog) já fazia isto; aqui faltava. Sufoca o resume
+    // por 6s pra um snapshot stale não puxar de volta logo após o clear.
+    if (isCasual) {
+      try {
+        if (_cuCS && _cuCS.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+          window._suppressCasualResumeUntil = Date.now() + 6000;
+          window.FirestoreDB.saveUserProfile(_cuCS.uid, { activeCasualRoom: null }).catch(function(){});
+        }
+        if (_cuCS) _cuCS.activeCasualRoom = null;
+      } catch(_eACR) {}
+      try { sessionStorage.removeItem('_activeCasualRoom'); } catch(_eSS) {}
+    }
     // Cleanup e fecha overlay
     if (_unsubFirestore) { try { _unsubFirestore(); } catch(_e3) {} _unsubFirestore = null; }
     try { window.removeEventListener('resize', _onResize); } catch(_e4) {}
