@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.95-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Botão de inscrição correto nos cards do dashboard.</b> Em torneios de duplas, o card na dashboard mostrava "Inscrever-se" mesmo com o usuário já inscrito (o detalhe do torneio mostrava "Desinscrever-se" corretamente). A lógica do card pulava participantes com barra ("/") no nome, que é o formato das duplas. Corrigido para usar a mesma função centralizada do detalhe do torneio.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.94-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Usuário deslogado nunca vê dados de torneio.</b> Antes, qualquer URL interna (torneio, chaveamento, participantes, etc.) era acessível sem login, o que causava confusão: usuário via dados desatualizados de uma sessão anterior e achava que ainda estava logado. Agora toda rota interna redireciona para a tela inicial quando não há sessão ativa — apenas Termos e Privacidade continuam públicas. Links de convite continuam funcionando: o destino é salvo e o usuário é levado ao torneio automaticamente após fazer login.</li>' +

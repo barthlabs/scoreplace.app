@@ -500,39 +500,23 @@ function renderDashboard(container) {
 
     const isOrg = window.AppStore.currentUser && t.organizerEmail === window.AppStore.currentUser.email;
 
+    // v2.1.95-beta: usa função centralizada (igual ao detalhe do torneio)
+    // para detectar inscrição. A lógica inline anterior pulava duplas
+    // (indexOf(' / ') return false) causando "Inscrever-se" em vez de
+    // "Desinscrever-se" para participantes de torneios em dupla.
     let isParticipating = false;
     if (t.participants && window.AppStore.currentUser) {
-      const user = window.AppStore.currentUser;
-      const arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-      if (arr.length > 0) {
-        isParticipating = arr.some(p => {
-          if (typeof p === 'string') {
-            if (p.indexOf(' / ') !== -1) return false;
-            return p === user.email || p === user.displayName;
-          }
-          if (p.uid && user.uid && p.uid === user.uid) return true;
-          if (p.email && p.email === user.email) return true;
-          if (p.displayName && p.displayName === user.displayName) return true;
-          return false;
-        });
-      }
+      isParticipating = typeof window._isUserEnrolledInTournament === 'function'
+        ? window._isUserEnrolledInTournament(window.AppStore.currentUser, t)
+        : false;
     }
 
     // v2.1.5: detecta se o usuário está na lista de espera (standby/waitlist)
+    // Usa _userMatchesParticipant centralizado para consistência com detalhes.
     let _isInStandby = false;
-    if (window.AppStore.currentUser) {
+    if (window.AppStore.currentUser && typeof window._userMatchesParticipant === 'function') {
       const _cuStb = window.AppStore.currentUser;
-      const _matchStb = function(p) {
-        if (!p) return false;
-        if (typeof p === 'string') {
-          if (p.indexOf(' / ') !== -1) return false;
-          return p === _cuStb.email || p === _cuStb.displayName;
-        }
-        if (p.uid && _cuStb.uid && p.uid === _cuStb.uid) return true;
-        if (p.email && _cuStb.email && p.email === _cuStb.email) return true;
-        if (p.displayName && _cuStb.displayName && p.displayName === _cuStb.displayName) return true;
-        return false;
-      };
+      const _matchStb = p => window._userMatchesParticipant(_cuStb, p);
       _isInStandby = (Array.isArray(t.standbyParticipants) && t.standbyParticipants.some(_matchStb)) ||
                      (Array.isArray(t.waitlist) && t.waitlist.some(_matchStb));
     }
