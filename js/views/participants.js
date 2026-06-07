@@ -1950,10 +1950,13 @@ function renderParticipants(container, tournamentId) {
         const _rcEntry = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const _rcLabel = rcMc ? 'Presente' : rcAbs ? 'Ausente' : 'Aguardando';
         const _rcColor = rcMc ? '#4ade80' : rcAbs ? '#f87171' : '#cbd5e1';
+        const _rcWoBtn = (!rcMc && isOrg)
+          ? `<button class="btn btn-micro" onclick="event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');" style="border:1px solid ${rcAbs ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.35)'};background:${rcAbs ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.1)'};color:${rcAbs ? '#60a5fa' : '#f87171'};font-weight:800;font-size:0.68rem;">${rcAbs ? 'Reverter' : 'W.O.'}</button>`
+          : '';
         rollCallRow = `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.14);" onclick="event.stopPropagation();">
           <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>
           <span style="flex:1;font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span>
-          <button class="btn btn-micro" onclick="event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');" style="border:1px solid ${rcAbs ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.35)'};background:${rcAbs ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.1)'};color:${rcAbs ? '#60a5fa' : '#f87171'};font-weight:800;font-size:0.68rem;">${rcAbs ? 'Reverter' : 'Ausente'}</button>
+          ${_rcWoBtn}
         </div>`;
       }
       const _rcCardExtra = canRollCall ? (rcMc ? 'box-shadow:0 0 0 2px rgba(16,185,129,0.55),0 4px 10px rgba(0,0,0,0.1);' : rcAbs ? 'opacity:0.55;' : '') : '';
