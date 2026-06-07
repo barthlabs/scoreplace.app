@@ -3645,6 +3645,29 @@ window._openLiveScoring = function(tId, matchId, opts) {
     return window._sportIcon ? window._sportIcon(sn) : '🎾';
   })();
 
+  // v2.2.24-beta: toggles da tela de estatísticas (Sortear Duplas / Duplas
+  // Mistas / Rei-Rainha) referenciados pelo finished-render do _render. Estes
+  // identificadores existiam SÓ no escopo do _openCasualMatch (setup/lobby);
+  // o _render do placar ao vivo está em OUTRO escopo (_openLiveScoring) e, ao
+  // encerrar uma partida de DUPLAS, lançava `ReferenceError:
+  // _canShowMixedToggle is not defined` — a exceção abortava o re-render, então
+  // o ponto não subia na tela e a partida nunca encerrava. Declarados aqui no
+  // escopo correto. _statsToggleShuffle/_statsToggleMixed (window) e
+  // _liveScoreGoToSetup escrevem/leem estas mesmas vars do closure.
+  var autoShuffle = (opts && typeof opts.autoShuffle === 'boolean') ? opts.autoShuffle : true;
+  var _mixedDoublesEnabled = (opts && typeof opts.mixedDoubles === 'boolean') ? opts.mixedDoubles : true;
+  function _canShowMixedToggle() {
+    if (!isDoubles) return false;
+    var male = 0, female = 0;
+    var src = (opts && Array.isArray(opts.players)) ? opts.players : [];
+    for (var _gi = 0; _gi < src.length; _gi++) {
+      var _g = src[_gi] && (src[_gi].gender || src[_gi].sexo);
+      if (_g === 'male' || _g === 'masculino' || _g === 'm' || _g === 'M') male++;
+      else if (_g === 'female' || _g === 'feminino' || _g === 'f' || _g === 'F') female++;
+    }
+    return male === 2 && female === 2;
+  }
+
   // ── State ──
   var state = {
     sets: [], // Array of { gamesP1, gamesP2, tiebreak: { p1, p2 } | null }
