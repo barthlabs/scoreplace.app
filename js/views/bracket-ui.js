@@ -7411,8 +7411,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (_isSolo) {
       _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true, autoStart: true, autoShuffle: _shouldShuffle });
     } else {
-      // Multiplayer: mantém a tela de setup pra o host re-compartilhar a sala.
-      _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true });
+      // v2.1.99: multiplayer também usa autoStart — vai direto para o placar
+      // ao vivo sem mostrar a tela de setup ao host. Guests seguem via
+      // nextRoomCode → detectam status:'active' no novo doc → abrem live scoring.
+      _closeLiveScoringAndReopenSetup({ keepSession: true, isInitiator: true, autoStart: true, autoShuffle: _shouldShuffle });
     }
   };
 
@@ -10541,10 +10543,13 @@ window._openCasualMatch = function(restoreOpts) {
       var _mixedApplied = false;
       if (_mixedDoublesEnabled && _canShowMixedToggle()) {
         // Mixed-doubles shuffle: ensure each team has 1M + 1F.
+        // v2.1.99: usa players[gi].gender (já resolvido via _resolveSlotGender, que
+        // inclui _slotGenders definidos manualmente) em vez de apenas _participantGenders
+        // (que só contém perfis carregados assincronamente). Fix: 2 homens no mesmo time.
         var males = [], females = [];
         for (var gi = 0; gi < players.length; gi++) {
           var gUid = players[gi].uid;
-          var gg = gUid ? _participantGenders[gUid] : '';
+          var gg = players[gi].gender || (gUid ? (_participantGenders[gUid] || '') : '');
           if (gg === 'masculino') males.push(players[gi]);
           else if (gg === 'feminino') females.push(players[gi]);
         }
@@ -10556,7 +10561,12 @@ window._openCasualMatch = function(restoreOpts) {
           var t2a = males[1 - mIdx], t2b = females[1 - fIdx];
           // If current user exists and isn't in Team 1, swap with same-gender Team-1 member.
           if (cuUid) {
-            var cuGender = _participantGenders[cuUid];
+            // cuGender: prioriza gender já resolvido no array players
+            var cuGender = '';
+            for (var _cgi = 0; _cgi < players.length; _cgi++) {
+              if (players[_cgi].uid === cuUid) { cuGender = players[_cgi].gender || ''; break; }
+            }
+            if (!cuGender) cuGender = _participantGenders[cuUid] || '';
             if (t1a.uid !== cuUid && t1b.uid !== cuUid) {
               if (cuGender === 'masculino' && t2a.uid === cuUid) { var sA = t1a; t1a = t2a; t2a = sA; }
               else if (cuGender === 'feminino' && t2b.uid === cuUid) { var sB = t1b; t1b = t2b; t2b = sB; }

@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.99-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Partida Casual — "Jogar com resortear": duplas mistas respeitadas.</b> Ao clicar em "Jogar com resortear" ao fim de uma partida de duplas mistas, os times ficavam com 2 homens no mesmo time. O sorteio lia os gêneros do banco de dados (carregados assincronamente) em vez de usar os gêneros já definidos na tela de configuração — que estavam corretos. Agora o sorteio usa a fonte certa e sempre garante 1 homem + 1 mulher por time.</li>' +
+        '<li><b>Partida Casual — "Jogar com resortear": vai direto para o placar.</b> Ao clicar em "Jogar com resortear", o app voltava para a tela de configuração/lobby em vez de abrir o placar ao vivo imediatamente. Corrigido: o novo jogo inicia direto no placar para todos os participantes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.1.98-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Botão "Entrar" sempre verde no login.</b> O botão ficava cinza quando os campos estavam vazios. Agora é sempre verde — fica com opacidade reduzida enquanto e-mail/senha não estão preenchidos corretamente, e fica cheio ao completar os campos.</li>' +

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.98-beta';
+window.SCOREPLACE_VERSION = '2.1.99-beta';
 
 // ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
 // Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
