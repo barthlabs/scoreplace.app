@@ -7608,6 +7608,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
         { t1: [0, 2], t2: [1, 3] },
         { t1: [0, 3], t2: [1, 2] }
       ];
+      // v2.2.37-beta: se o cabeçalho foi SEQUESTRADO pelo _reiRainhaShowFinal
+      // (pódio + toggles no topo), restaura o cabeçalho original ANTES do
+      // _render. Sem isto, o _render reconstrói a restartSection normal no
+      // conteúdo e fica DUPLICADO (Iniciar + toggles no topo E embaixo).
+      try {
+        var _tbRR = document.querySelector('#live-scoring-overlay > div:first-child');
+        if (_tbRR && _tbRR.innerHTML.indexOf('Resultado Final') !== -1) {
+          _tbRR.outerHTML = headerHtml;
+        }
+      } catch (e) {}
       _render();
     }
     _syncStatsConfig(); // v2.2.25-beta: propaga pros outros jogadores
