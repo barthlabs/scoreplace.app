@@ -7777,17 +7777,43 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (ov2) container = ov2.firstElementChild;
     }
 
-    // Substitui restartSection (topo) pelo resumo Rei/Rainha
+    // Substitui restartSection (topo) pelo resumo Rei/Rainha.
+    // v2.2.35-beta: inclui o CABEÇALHO (⚙️/↺/✕) e os TOGGLES (Sortear/Mistas/
+    // Rei-Rainha) — antes o resultado final substituía o header e omitia os
+    // toggles, deixando o usuário sem como fechar/resetar nem reconfigurar a
+    // próxima partida.
+    var _rrMixedRow = _canShowMixedToggle()
+      ? '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(236,72,153,0.07);border:1px solid rgba(236,72,153,0.18);cursor:pointer;">' +
+          '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.9rem;">⚤</span><span style="font-size:0.72rem;font-weight:700;color:#f472b6;">Duplas Mistas</span></div>' +
+          '<span class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="chk-stats-mixed" ' + (_mixedDoublesEnabled ? 'checked' : '') + ' onchange="window._statsToggleMixed(this)" /><span class="toggle-slider"></span></span>' +
+        '</label>'
+      : '';
     var topBar = document.querySelector('#live-scoring-overlay > div:first-child');
     if (topBar) {
       topBar.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:10px;width:100%;">' +
+          // Cabeçalho: Ajustar / Resetar / Fechar
+          '<div id="live-score-header-actions" style="display:flex;gap:6px;align-items:center;justify-content:flex-end;">' +
+            '<button class="live-vol-sm" onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;"><span style="font-size:0.88rem;line-height:1;">⚙️</span>Ajustar</button>' +
+            '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
+            '<button class="live-vol-sm" onclick="window._liveStatsClose()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
+          '</div>' +
           '<div style="display:flex;align-items:center;justify-content:center;gap:8px;">' +
             '<span style="font-size:1.3rem;">👑</span>' +
             '<span style="font-size:1.1rem;font-weight:900;color:#f59e0b;">Resultado Final · Rei/Rainha</span>' +
           '</div>' +
           cardsHtml +
           '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="width:100%;padding:11px;border-radius:12px;font-size:0.88rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 16px rgba(16,185,129,0.35);margin-top:2px;">🔄 Iniciar</button>' +
+          // Toggles da próxima partida
+          '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.18);cursor:pointer;">' +
+            '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.9rem;">🔀</span><span style="font-size:0.72rem;font-weight:700;color:#fbbf24;">Sortear Duplas</span></div>' +
+            '<span class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="chk-stats-shuffle" ' + (autoShuffle ? 'checked' : '') + ' onchange="window._statsToggleShuffle(this)" /><span class="toggle-slider"></span></span>' +
+          '</label>' +
+          _rrMixedRow +
+          '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.18);cursor:pointer;">' +
+            '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.9rem;">👑</span><span style="font-size:0.72rem;font-weight:700;color:#f59e0b;">Rei/Rainha</span></div>' +
+            '<span class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="chk-stats-rr" checked onchange="window._statsToggleReiRainha(this)" /><span class="toggle-slider"></span></span>' +
+          '</label>' +
         '</div>';
     }
   };
