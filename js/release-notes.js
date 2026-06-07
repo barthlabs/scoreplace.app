@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.11-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Placar ao vivo — layout portrait reformulado.</b> O placar ocupa toda a tela (altura e largura) sem scroll. Cinco linhas proporcionais fixas de cima a baixo: games + botão Desfazer → times (fotos/ícones e nomes) → placares grandes → botões ▲ subir ponto → botões ▼ baixar ponto. Tudo sempre visível ao mesmo tempo.</li>' +
+        '<li><b>Painel Ajustar transparente.</b> O botão "Configurar" virou "Ajustar". O painel de ajustes usa glassmorphism (backdrop blur) para que o placar apareça atrás em tempo real enquanto o usuário move os sliders — feedback imediato do tamanho de cada elemento.</li>' +
+        '<li><b>Novo controle de Placar.</b> Slider dedicado para o tamanho dos números grandes do placar (separado do controle de Games). Ordem dos sliders: Games · Nomes · Foto/ícone · Placar · Botões.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.10-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Partidas Casuais — início consensual.</b> O jogo só começa quando pelo menos 2 participantes clicam em "Iniciar". Quem clicou primeiro vê uma tag âmbar "⏳ Aguardando +1" no lugar do botão. Quando os times estão formados (modo duplas sem embaralhamento), é exigido pelo menos 1 jogador de cada equipe pronto. O polling detecta a condição e inicia automaticamente para todos.</li>' +

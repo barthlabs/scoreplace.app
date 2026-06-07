@@ -5974,8 +5974,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var display = player === 1 ? p1Display : p2Display;
       var plateBg = _isDeuce ? '#f97316' : '#fff';
       var plateClr = _isDeuce ? '#fff' : '#111';
-      return '<div style="width:100%;background:' + plateBg + ';border-radius:18px;padding:clamp(22px,7vh,48px) 8px;box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
-        '<span style="font-size:clamp(7rem,30vw,15rem);font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
+      return '<div style="width:100%;height:100%;background:' + plateBg + ';border-radius:18px;padding:4px;box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
+        '<span style="font-size:calc(clamp(4rem,20vw,9rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
       '</div>';
     };
 
@@ -6004,7 +6004,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var plateBg = _isDeuce ? '#f97316' : '#fff';
         var plateClr = _isDeuce ? '#fff' : '#111';
         return '<div style="width:100%;background:' + plateBg + ';border-radius:14px;padding:clamp(10px,4vh,28px) 4px;box-shadow:0 4px 24px rgba(0,0,0,0.5),0 0 0 3px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
-          '<span style="font-size:clamp(3.5rem,14vw,7rem);font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
+          '<span style="font-size:calc(clamp(3.5rem,14vw,7rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
         '</div>';
       };
       var _lsUpBtn = function(player) {
@@ -6065,36 +6065,71 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '</div>' +
         '</div>';
     } else {
-      // ── PORTRAIT: two columns with team-colored backgrounds, draggable to swap sides ──
-      container.innerHTML =
-        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100%;width:100%;gap:0;padding:clamp(4px,1vh,12px) 0 0 0;">' +
-          // Sets row
-          setsRow +
-          // Special label (TIE-BREAK, winner)
-          (gameLabel ? '<div style="text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;margin-bottom:clamp(2px,0.5vh,6px);">' + gameLabel + '</div>' : '') +
-          // Games box — above plates for guaranteed visibility
-          // v1.3.67-beta: undo button beside games box (outside), not inside it
-          // v1.3.68-beta: SVG undo icon in white, games box centered via symmetric flex spacers
-          // v1.3.70-beta: games numbers bigger — spacer pushes court to bottom
-          (showGamesBox ? '<div style="flex-shrink:0;margin-bottom:clamp(4px,1vh,8px);display:flex;align-items:center;width:100%;"><div style="flex:1;"></div>' + gamesCenter + '<div style="flex:1;display:flex;align-items:center;padding-left:10px;"><button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:38px;height:38px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;"><svg viewBox="0 0 24 24" width="28" height="28" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg></button></div></div>' : '') +
-          // Flexible spacer: pushes court content toward the bottom, freeing space above for bigger games box
-          '<div style="flex:1;min-height:0;"></div>' +
-          // Two-column score plates with team-colored backgrounds
-          '<div id="live-court-container" style="display:flex;align-items:stretch;width:100%;gap:4px;justify-content:center;flex-shrink:0;">' +
-            // Left column
-            '<div class="court-side" data-court-side="left" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:clamp(3px,0.8vh,6px);padding:clamp(4px,1vh,10px) clamp(4px,1vw,8px);border-radius:14px;background:' + leftBg + ';border:1px solid ' + leftBdr + ';cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
-              _buildNameStack(leftTeam) +
-              _buildPlate(leftTeam) +
-              _buildBtns(leftTeam) +
+      // ── PORTRAIT: 5 linhas proporcionais preenchendo a tela inteira ──
+      // Ordem: Games+Desfazer → Times → Placares → Botões ↑ → Botões ↓
+      container.style.overflow = 'hidden';
+      container.style.padding = '0';
+
+      // Portrait-specific up/down button builders — sem min-height fixo, preenchem o row
+      var _portUpBtn = function(player) {
+        var clr = player === 1 ? '#3b82f6' : '#ef4444';
+        return '<button class="live-vol" onclick="window._liveScorePoint(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:' + clr + ';color:#fff;font-size:calc(clamp(2.4rem,8vw,4rem) * var(--live-btn-scale,1));font-weight:900;border-radius:14px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 14px rgba(0,0,0,0.4);transition:transform 0.08s;" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'">▲</button>';
+      };
+      var _portDownBtn = function(player) {
+        return '<button class="live-vol-sm" onclick="window._liveScoreMinus(' + player + ')" style="flex:1;width:100%;min-height:0;padding:0;border:none;cursor:pointer;background:rgba(255,255,255,0.09);color:var(--text-muted);font-size:calc(clamp(1.1rem,4vw,1.6rem) * var(--live-btn-scale,1));font-weight:700;border-radius:10px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;border:1px solid rgba(255,255,255,0.08);" ontouchstart="this.style.background=\'rgba(255,255,255,0.18)\'" ontouchend="this.style.background=\'rgba(255,255,255,0.09)\'">▼</button>';
+      };
+
+      var portGamesRow = showGamesBox
+        ? '<div style="flex:0 0 auto;display:flex;align-items:center;width:100%;padding:clamp(4px,1vh,8px) clamp(8px,2vw,16px);">' +
+            '<div style="flex:1;"></div>' + gamesCenter +
+            '<div style="flex:1;display:flex;align-items:center;padding-left:10px;">' +
+              '<button onclick="window._liveScoreUndoLastPoint()" title="Desfazer último ponto" style="flex-shrink:0;width:38px;height:38px;border-radius:50%;border:none;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0;opacity:0.75;">' +
+                '<svg viewBox="0 0 24 24" width="28" height="28" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>' +
+              '</button>' +
             '</div>' +
-            // Right column
-            '<div class="court-side" data-court-side="right" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:clamp(3px,0.8vh,6px);padding:clamp(4px,1vh,10px) clamp(4px,1vw,8px);border-radius:14px;background:' + rightBg + ';border:1px solid ' + rightBdr + ';cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
+          '</div>'
+        : '';
+
+      // Captura finishBtn dentro do layout e evita o append duplo abaixo
+      var portFinishRow = finishBtn;
+      finishBtn = '';
+
+      container.innerHTML =
+        '<div style="display:flex;flex-direction:column;height:100%;width:100%;overflow:hidden;gap:0;">' +
+          // Sets row (compacto, topo)
+          setsRow +
+          // Rótulo especial (TIE-BREAK, vencedor)
+          (gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '') +
+          // Games + Desfazer
+          portGamesRow +
+          // Times (fotos/ícones + nomes) — flex:2
+          '<div style="flex:2;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:4px clamp(4px,1.5vw,10px) 2px;">' +
+            '<div class="court-side" data-court-side="left" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:' + leftBg + ';border:1px solid ' + leftBdr + ';border-radius:12px;padding:4px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
+              _buildNameStack(leftTeam) +
+            '</div>' +
+            '<div class="court-side" data-court-side="right" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:' + rightBg + ';border:1px solid ' + rightBdr + ';border-radius:12px;padding:4px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
               _buildNameStack(rightTeam) +
-              _buildPlate(rightTeam) +
-              _buildBtns(rightTeam) +
             '</div>' +
           '</div>' +
+          // Placares — flex:4
+          '<div style="flex:4;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+            '<div style="flex:1;display:flex;align-items:stretch;">' + _buildPlate(leftTeam) + '</div>' +
+            '<div style="flex:1;display:flex;align-items:stretch;">' + _buildPlate(rightTeam) + '</div>' +
+          '</div>' +
+          // Botões ↑ — flex:3
+          (!state.isFinished ? '<div style="flex:3;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+            '<div style="flex:1;display:flex;">' + _portUpBtn(leftTeam) + '</div>' +
+            '<div style="flex:1;display:flex;">' + _portUpBtn(rightTeam) + '</div>' +
+          '</div>' : '') +
+          // Botões ↓ — flex:1.5 + safe-area
+          (!state.isFinished ? '<div style="flex:1.5;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px) calc(2px + env(safe-area-inset-bottom,0px));">' +
+            '<div style="flex:1;display:flex;">' + _portDownBtn(leftTeam) + '</div>' +
+            '<div style="flex:1;display:flex;">' + _portDownBtn(rightTeam) + '</div>' +
+          '</div>' : '') +
+          // Dica de troca de lado (só com fixSides ativo)
           swapHint +
+          // Botão Encerrar Partida (apenas partidas casuais sem sets)
+          portFinishRow +
         '</div>';
 
       // Attach court-side drag-and-drop (swap sides)
@@ -7706,7 +7741,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // v1.9.69: botão "⚙️ Configurar" no header, no lugar do antigo "Desfazer"
       // (que era redundante — o undo real é a setinha ↺ ao lado do placar de
       // games, que desfaz ponto a ponto). Engrenagem + texto = visível em quadra.
-      '<button class="live-vol-sm" onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" title="Ajustes do placar" aria-label="Ajustes do placar" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;"><span style="font-size:0.88rem;line-height:1;">⚙️</span>Configurar</button>' +
+      '<button class="live-vol-sm" onclick="window._liveScoreOpenSizeSettings&&window._liveScoreOpenSizeSettings()" title="Ajustar tamanhos" aria-label="Ajustar tamanhos" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;"><span style="font-size:0.88rem;line-height:1;">⚙️</span>Ajustar</button>' +
       '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
       '<button class="live-vol-sm" onclick="window._closeLiveScoring()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
     '</div>' +
@@ -7741,6 +7776,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       nameScale: _clampLiveScale(p.nameScale, 1),
       photoScale: _clampLiveScale(p.photoScale, 1),
       scoreScale: _clampLiveScale(p.scoreScale, 1),
+      plateScale: _clampLiveScale(p.plateScale, 1),
       btnScale: _clampLiveScale(p.btnScale, 1),
       // v1.9.64: "fixar lados". false (padrão) = sacador sempre à esquerda,
       // inverte a cada novo sacador. true = lados fixos (troca só manual).
@@ -7757,6 +7793,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     ov.style.setProperty('--live-name-scale', prefs.nameScale);
     ov.style.setProperty('--live-photo-scale', prefs.photoScale);
     ov.style.setProperty('--live-score-scale', prefs.scoreScale);
+    ov.style.setProperty('--live-plate-scale', prefs.plateScale);
     ov.style.setProperty('--live-btn-scale', prefs.btnScale);
   }
   function _saveLiveScorePrefs(prefs) {
@@ -7779,40 +7816,44 @@ window._openLiveScoring = function(tId, matchId, opts) {
     document.head.appendChild(_ps);
   }
 
-  // Painel de sliders (toggle). Sliders 50%–150%, oninput aplica ao vivo via
+  // Painel de sliders (toggle). Sliders 10%–400%, oninput aplica ao vivo via
   // CSS var (sem re-render), onchange persiste (localStorage + perfil).
+  // Painel transparente (backdrop-filter) para ver o placar ao vivo enquanto ajusta.
   window._liveScoreOpenSizeSettings = function() {
     var ex = document.getElementById('live-size-settings');
     if (ex) { ex.remove(); return; }
     function row(key, label, cssVar) {
       var pct = Math.round((_liveScorePrefs[key] || 1) * 100);
-      return '<div style="margin-bottom:14px;">' +
-        '<div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--text-bright);font-weight:600;margin-bottom:6px;"><span>' + label + '</span><span id="lss-val-' + key + '" style="color:#fbbf24;font-weight:800;">' + pct + '%</span></div>' +
-        '<input type="range" min="10" max="400" step="5" value="' + pct + '" data-lss-key="' + key + '" data-lss-var="' + cssVar + '" style="width:100%;accent-color:#fbbf24;height:28px;" />' +
+      return '<div style="margin-bottom:12px;">' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.9);font-weight:600;margin-bottom:5px;"><span>' + label + '</span><span id="lss-val-' + key + '" style="color:#fbbf24;font-weight:800;">' + pct + '%</span></div>' +
+        '<input type="range" min="10" max="400" step="5" value="' + pct + '" data-lss-key="' + key + '" data-lss-var="' + cssVar + '" style="width:100%;accent-color:#fbbf24;height:26px;" />' +
       '</div>';
     }
     var panel = document.createElement('div');
     panel.id = 'live-size-settings';
-    panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;';
-    panel.innerHTML = '<div style="background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px 18px 0 0;padding:18px 18px calc(26px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 30px rgba(0,0,0,0.5);">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:0.98rem;font-weight:800;color:var(--text-bright);">⚙️ Ajustes do placar</div><button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">✕</button></div>' +
-      '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:16px;line-height:1.4;">Tamanhos proporcionais ao seu dispositivo (10%–400%). Salvo no seu perfil.</div>' +
-      row('nameScale', 'Nome dos jogadores', '--live-name-scale') +
+    // Outer: quase-transparente e pointer-events:none → toques fora fecham pelo botão
+    // ou caem no placar (para ver mudanças em tempo real)
+    panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:transparent;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;';
+    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.55);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+        '<div style="font-size:1.1rem;font-weight:800;color:#fff;">Ajustar</div>' +
+        '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
+      '</div>' +
+      row('scoreScale', 'Games', '--live-score-scale') +
+      row('nameScale', 'Nomes', '--live-name-scale') +
       row('photoScale', 'Foto / ícone', '--live-photo-scale') +
-      row('scoreScale', 'Número dos games', '--live-score-scale') +
+      row('plateScale', 'Placar', '--live-plate-scale') +
       row('btnScale', 'Botões', '--live-btn-scale') +
-      // Toggle Fixar lados (v1.9.64) — v1.9.68: switch na mesma linha do
-      // rótulo (alinhado com ele), descrição abaixo em largura cheia.
-      '<div style="margin:6px 0 14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">' +
+      // Toggle Fixar lados
+      '<div style="margin:6px 0 12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1);">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">' +
-          '<div style="font-size:0.82rem;color:var(--text-bright);font-weight:600;">Fixar lados</div>' +
+          '<div style="font-size:0.82rem;color:rgba(255,255,255,0.9);font-weight:600;">Fixar lados</div>' +
           '<button id="lss-fixsides-btn" onclick="window._liveScoreToggleFixSides()" role="switch" aria-checked="' + (_liveScorePrefs.fixSides ? 'true' : 'false') + '" style="flex-shrink:0;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;transition:background 0.2s;background:' + (_liveScorePrefs.fixSides ? '#10b981' : 'rgba(255,255,255,0.18)') + ';"><span style="position:absolute;top:3px;left:' + (_liveScorePrefs.fixSides ? '21px' : '3px') + ';width:22px;height:22px;border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></span></button>' +
         '</div>' +
-        '<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.35;margin-top:6px;">Desativado: o sacador fica sempre à esquerda (inverte a cada saque). Ativado: lados fixos.</div>' +
+        '<div style="font-size:0.66rem;color:rgba(255,255,255,0.45);line-height:1.35;margin-top:5px;">Desativado: o sacador fica sempre à esquerda. Ativado: lados fixos.</div>' +
       '</div>' +
-      '<button onclick="window._liveScoreResetSizes()" style="width:100%;margin-top:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted);border-radius:10px;padding:11px;font-size:0.8rem;font-weight:600;cursor:pointer;">Restaurar tamanhos (100%)</button>' +
+      '<button onclick="window._liveScoreResetSizes()" style="width:100%;margin-top:2px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.55);border-radius:10px;padding:10px;font-size:0.8rem;font-weight:600;cursor:pointer;">Restaurar (100%)</button>' +
     '</div>';
-    panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
     document.body.appendChild(panel);
     panel.querySelectorAll('input[type=range]').forEach(function(inp) {
       inp.addEventListener('input', function() {
@@ -7844,7 +7885,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   };
   window._liveScoreResetSizes = function() {
     // Reseta só os tamanhos — preserva a preferência fixSides.
-    _liveScorePrefs = { nameScale: 1, photoScale: 1, scoreScale: 1, btnScale: 1, fixSides: !!_liveScorePrefs.fixSides };
+    _liveScorePrefs = { nameScale: 1, photoScale: 1, scoreScale: 1, plateScale: 1, btnScale: 1, fixSides: !!_liveScorePrefs.fixSides };
     _applyLiveScorePrefs(_liveScorePrefs);
     _saveLiveScorePrefs(_liveScorePrefs);
     var ex = document.getElementById('live-size-settings');
