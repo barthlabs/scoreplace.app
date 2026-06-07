@@ -1771,22 +1771,10 @@ function renderParticipants(container, tournamentId) {
       } else {
         infoBlock = nameCell;
       }
-      // v0.17.34: W.O. orphans não mostravam ações.
-      // v1.0.79-beta: orphans agora mostram Reverter SE o jogo original
-      // ainda não começou. User: 'deve poder reverter desde o jogo não
-      // tenha começado'. Reverter completo desfaz substituição + restaura
-      // time original (handler em _markAbsent v1.0.79).
-      let _origMatchPending = true;
-      if (isWOOrphan && ind.woMeta && ind.woMeta.matchNum) {
-        try {
-          const _allM = (typeof window._collectAllMatches === 'function')
-            ? window._collectAllMatches(t)
-            : (Array.isArray(t.matches) ? t.matches.slice() : []);
-          const _origMatch = _allM[ind.woMeta.matchNum - 1];
-          _origMatchPending = !_origMatch || !_origMatch.winner;
-        } catch (_e) {}
-      }
-      const _showActions = !isWOOrphan || _origMatchPending;
+      // v2.1.96: todos os W.O. devem ter Reverter disponível — sem restrição
+      // por status do jogo. User: "aqui todos os WO deveriam estar com o
+      // reverter disponível. Alguns estão sem o reverter disponível."
+      const _showActions = true;
 
       // Skill category badge/dropdown for check-in mode
       const _ciSkillCats = t.skillCategories || [];
