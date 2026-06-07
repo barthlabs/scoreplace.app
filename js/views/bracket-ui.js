@@ -6744,7 +6744,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (_isRemoteUpdate) return; // Don't echo back remote updates
     clearTimeout(_syncTimer);
     _syncTimer = setTimeout(function() {
-      window.FirestoreDB.updateCasualMatch(_casualDocId, { liveState: _serializeState() });
+      // v2.2.13-beta: lastActivityAt atualizado em cada sync para que a Cloud
+      // Function de limpeza dissolva salas sem atividade por 2h.
+      window.FirestoreDB.updateCasualMatch(_casualDocId, {
+        liveState: _serializeState(),
+        lastActivityAt: Date.now()
+      });
     }, 300);
   }
 

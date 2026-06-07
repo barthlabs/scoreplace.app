@@ -621,8 +621,9 @@ exports.flushNotifEmailDigest = onSchedule(
 // cheap as the app grows.
 exports.cleanupOldCasualMatches = onSchedule(
   {
-    // a cada 6h pra honrar o TTL de 12h das salas não-finalizadas (vida máx ~18h)
-    schedule: "every 6 hours",
+    // a cada 30min para honrar o TTL de 2h de inatividade em salas ativas
+    // (pior caso: sala dissolve até 30min após completar 2h sem pontos).
+    schedule: "every 30 minutes",
     timeZone: "America/Sao_Paulo",
     region: "us-central1",
   },
@@ -635,13 +636,16 @@ exports.cleanupOldCasualMatches = onSchedule(
       .where("finishedAt", "<", threshold);
     const deletedFinished = await _batchDeleteQuery(finishedQuery);
 
-    // (2) Salas NÃO finalizadas abandonadas (>12h) — waiting/active/setup que
-    // nunca viraram registro. Antes acumulavam pra sempre (66 salas, várias com
-    // 30+ dias). Regra do dono: finished persiste como registro; o resto é
-    // efêmero e some em 12h. Firestore não tem `!=`, então varremos a coleção
-    // (pequena) e filtramos client-side por status + createdAt. lastActivityAt
-    // quando existir vence; senão createdAt.
-    const cutoff = Date.now() - 12 * 60 * 60 * 1000;
+    // (2) Salas NÃO finalizadas abandonadas — Firestore não tem `!=`, então
+    // varremos a coleção (pequena) e filtramos client-side por status.
+    // Regra: finished persiste como registro histórico; todo o resto é efêmero.
+    //   • status='active': dissolve se lastActivityAt > 2h (sem pontos marcados).
+    //   • status='setup'/'waiting'/outro: dissolve se lastActivityAt > 12h.
+    // lastActivityAt é escrito pelo cliente a cada ponto marcado (_syncLiveState).
+    // Quando ausente, cai no createdAt/updatedAt como fallback.
+    const now = Date.now();
+    const cutoff2h  = now - 2  * 60 * 60 * 1000;
+    const cutoff12h = now - 12 * 60 * 60 * 1000;
     let deletedStale = 0;
     const allSnap = await db.collection("casualMatches").get();
     let batch = db.batch();
@@ -651,7 +655,8 @@ exports.cleanupOldCasualMatches = onSchedule(
       if (d.status === "finished") continue; // registro — nunca apaga aqui
       const tsRaw = d.lastActivityAt || d.updatedAt || d.createdAt || null;
       let ts = 0;
-      if (tsRaw) { const p = new Date(tsRaw).getTime(); if (!isNaN(p)) ts = p; }
+      if (tsRaw) { const p = Number(tsRaw); ts = !isNaN(p) && p > 1e12 ? p : new Date(tsRaw).getTime(); }
+      const cutoff = d.status === "active" ? cutoff2h : cutoff12h;
       // Sem timestamp = legado → trata como antigo (apaga).
       if (ts === 0 || ts < cutoff) {
         batch.delete(doc.ref); inBatch++; deletedStale++;
@@ -684,7 +689,7 @@ exports.cleanupOldCasualMatches = onSchedule(
     }
     if (pIn > 0) await pBatch.commit();
 
-    console.log(`[cleanupOldCasualMatches] finished>30d=${deletedFinished} | naoFinalizadas>12h=${deletedStale} | ponteirosLimpos=${clearedPointers}`);
+    console.log(`[cleanupOldCasualMatches] finished>30d=${deletedFinished} | active>2h=${deletedStale} | ponteirosLimpos=${clearedPointers}`);
   }
 );
 
