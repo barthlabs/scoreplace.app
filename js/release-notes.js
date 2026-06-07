@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Partida Casual — 3 toggles na página de estatísticas.</b> Ao fim de uma partida casual de duplas, a página de estatísticas agora exibe os mesmos 3 toggles da tela de configuração: 🔀 Sortear Duplas, ⚤ Duplas Mistas (quando há 2H+2M) e 👑 Rei/Rainha. Assim é possível ativar ou ajustar o modo diretamente antes de iniciar o próximo jogo.</li>' +
+        '<li><b>Partida Casual — Rei/Rainha retroativo.</b> O Rei/Rainha pode ser ativado a qualquer momento durante a série. Ativado no 2º jogo: o 1º jogo é reconhecido retroativamente como a 1ª rodada. Ativado no 3º jogo: os 2 anteriores são retroativamente incluídos. Jogos com o mesmo par de times repetido são descartados da contagem. Só são contados jogos com os 4 jogadores presentes e pairings distintos.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Torneio — W.O. não aparece mais no card de parceiro presente.</b> Na lista de inscritos com check-in, quando um jogo tinha W.O. (ex: Leila recebeu W.O. no Jogo 3), o card do parceiro presente (Flávia) aparecia com badge "W.O." e card vermelho — mesmo estando com Presente marcado. Também o card de jogadores apenas sem check-in (não W.O. explícito) ficava vermelho com badge W.O. e botão de W.O. adicional. Corrigido: badge W.O., card vermelho e risco no nome só aparecem quando aquele jogador específico foi marcado como W.O. individualmente.</li>' +

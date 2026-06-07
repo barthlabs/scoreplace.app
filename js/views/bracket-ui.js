@@ -5631,16 +5631,40 @@ window._openLiveScoring = function(tId, matchId, opts) {
               '</button>';
           }
         } else {
-        // v1.3.62-beta: "↔ Desparear" texto amber removido — o elo 🔗
-        // com borda pontilhada (unpairChainHtml, abaixo no scroll) já
-        // representa a ação visualmente consistente com a tela de setup.
-        restartSection =
-          '<div style="display:flex;align-items:center;gap:8px;width:100%;">' +
-            '<button onclick="window._liveScoreGoToSetup()" title="Jogar novamente com os mesmos times" style="flex:0 0 auto;padding:12px 14px;border-radius:12px;font-size:0.88rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);white-space:nowrap;">🔄 Jogar</button>' +
-            '<label style="flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);cursor:pointer;">' +
-              '<span style="font-size:0.68rem;font-weight:600;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">Re-sortear</span>' +
+        // v2.2.1-beta: 3 toggles na página de estatísticas (Sortear, Mistas, Rei/Rainha)
+        var _statsMixedRow = _canShowMixedToggle()
+          ? '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(236,72,153,0.07);border:1px solid rgba(236,72,153,0.18);cursor:pointer;">' +
+              '<div style="display:flex;align-items:center;gap:6px;">' +
+                '<span style="font-size:0.9rem;">⚤</span>' +
+                '<span style="font-size:0.72rem;font-weight:700;color:#f472b6;">Duplas Mistas</span>' +
+              '</div>' +
               '<span class="toggle-switch toggle-sm" style="flex-shrink:0;">' +
-                '<input type="checkbox" id="chk-shuffle-teams" />' +
+                '<input type="checkbox" id="chk-stats-mixed" ' + (_mixedDoublesEnabled ? 'checked' : '') + ' onchange="window._statsToggleMixed(this)" />' +
+                '<span class="toggle-slider"></span>' +
+              '</span>' +
+            '</label>'
+          : '';
+        restartSection =
+          '<div style="display:flex;flex-direction:column;gap:6px;width:100%;">' +
+            '<button onclick="window._liveScoreGoToSetup()" style="width:100%;padding:12px;border-radius:12px;font-size:0.92rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Jogar</button>' +
+            '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.18);cursor:pointer;">' +
+              '<div style="display:flex;align-items:center;gap:6px;">' +
+                '<span style="font-size:0.9rem;">🔀</span>' +
+                '<span style="font-size:0.72rem;font-weight:700;color:#fbbf24;">Sortear Duplas</span>' +
+              '</div>' +
+              '<span class="toggle-switch toggle-sm" style="flex-shrink:0;">' +
+                '<input type="checkbox" id="chk-stats-shuffle" ' + (autoShuffle ? 'checked' : '') + ' onchange="window._statsToggleShuffle(this)" />' +
+                '<span class="toggle-slider"></span>' +
+              '</span>' +
+            '</label>' +
+            _statsMixedRow +
+            '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.18);cursor:pointer;">' +
+              '<div style="display:flex;align-items:center;gap:6px;">' +
+                '<span style="font-size:0.9rem;">👑</span>' +
+                '<span style="font-size:0.72rem;font-weight:700;color:#f59e0b;">Rei/Rainha</span>' +
+              '</div>' +
+              '<span class="toggle-switch toggle-sm" style="flex-shrink:0;">' +
+                '<input type="checkbox" id="chk-stats-rr" onchange="window._statsToggleReiRainha(this)" />' +
                 '<span class="toggle-slider"></span>' +
               '</span>' +
             '</label>' +
@@ -6437,6 +6461,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
     { t1: [0, 2], t2: [1, 3] },
     { t1: [0, 3], t2: [1, 2] }
   ];
+  // v2.2.1-beta: histórico de jogos na sessão para ativação retroativa do Rei/Rainha.
+  // Persiste dentro do closure (mesmo overlay reaproveitado entre partidas).
+  // Cada entrada: { p1:[names], p2:[names], winner:1|2|0 }
+  var _sessionGameHistory = [];
 
   // v1.3.33-beta: render das sugestões de vínculo guest→friend.
   // Pra cada slot SEM uid em _casualPlayers, busca matches em
@@ -7104,6 +7132,139 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
   };
 
+  // ─── v2.2.1-beta: handlers dos toggles da página de estatísticas ─────────────
+  // Atualizam variáveis do closure diretamente; chamados via onchange no DOM.
+
+  window._statsToggleShuffle = function(chk) {
+    autoShuffle = !!chk.checked;
+  };
+
+  window._statsToggleMixed = function(chk) {
+    _mixedDoublesEnabled = !!chk.checked;
+  };
+
+  // Ativa/desativa Rei/Rainha a partir da página de estatísticas.
+  // Ao ativar, chama _activateReiRainhaRetroactive() para retroativamente
+  // reconhecer jogos anteriores da mesma sessão, desde que com pairings distintos.
+  window._statsToggleReiRainha = function(chk) {
+    if (chk.checked) {
+      _reiRainhaMode = true;
+      _activateReiRainhaRetroactive();
+      _render();
+    } else {
+      _reiRainhaMode = false;
+      _reiRainhaRound = 0;
+      _reiRainhaPlayers = null;
+      _reiRainhaWins = [0, 0, 0, 0];
+      _reiRainhaPairings = [
+        { t1: [0, 1], t2: [2, 3] },
+        { t1: [0, 2], t2: [1, 3] },
+        { t1: [0, 3], t2: [1, 2] }
+      ];
+      _render();
+    }
+  };
+
+  // Reconstrói o estado Rei/Rainha retroativamente a partir de _sessionGameHistory.
+  //
+  // Regras:
+  //  - Os 4 jogadores devem ser os mesmos em todos os jogos reconhecidos.
+  //  - Cada jogo deve ter um pairing distinto (nunca repetir o mesmo time).
+  //  - Jogos com pairing repetido são descartados da série.
+  //
+  // Ao ativar no jogo N, os jogos anteriores válidos contam como rodadas iniciais.
+  // O jogo atual (stats page) não tem wins pré-contados — será registrado
+  // quando o usuário clicar no botão "Jogo N" (via _reiRainhaNextRound).
+  // Exceção: se há 2 históricos válidos + atual = 3 rodadas completas,
+  // conta wins do atual imediatamente e mostra "Ver Resultado Final".
+  function _activateReiRainhaRetroactive() {
+    var curP1 = p1Players.slice();
+    var curP2 = p2Players.slice();
+    if (curP1.length + curP2.length !== 4) return;
+
+    var allFour = curP1.concat(curP2);
+    var playerSet = allFour.slice().sort().join('\x00');
+
+    // Chave canônica de partição: independe da ordem dos times ou jogadores.
+    function _pk(t1, t2) {
+      var s1 = t1.slice().sort().join('|');
+      var s2 = t2.slice().sort().join('|');
+      return [s1, s2].sort().join('::');
+    }
+
+    // Constrói o conjunto de partições já vistas, começando pela partida atual.
+    var seenKeys = {};
+    seenKeys[_pk(curP1, curP2)] = true;
+
+    // Jogos históricos válidos: mesmos 4 jogadores, pairing distinto.
+    var validHistory = [];
+    for (var hi = 0; hi < _sessionGameHistory.length; hi++) {
+      var gh = _sessionGameHistory[hi];
+      var ghSet = gh.p1.concat(gh.p2).slice().sort().join('\x00');
+      if (ghSet !== playerSet) continue; // jogadores diferentes
+      var gk = _pk(gh.p1, gh.p2);
+      if (seenKeys[gk]) continue; // pairing repetido — invalida
+      seenKeys[gk] = true;
+      validHistory.push(gh);
+    }
+
+    // Fixa os jogadores a partir da partida atual.
+    _reiRainhaPlayers = allFour.slice(); // [P0, P1, P2, P3]
+
+    // Zera vitórias e pré-conta apenas os jogos históricos.
+    // As vitórias da partida atual são registradas pelo _reiRainhaNextRound.
+    _reiRainhaWins = [0, 0, 0, 0];
+    for (var hi2 = 0; hi2 < validHistory.length; hi2++) {
+      var vg = validHistory[hi2];
+      var t1i = vg.p1.map(function(n) { return _reiRainhaPlayers.indexOf(n); });
+      var t2i = vg.p2.map(function(n) { return _reiRainhaPlayers.indexOf(n); });
+      if (vg.winner === 1) { t1i.forEach(function(i) { if (i >= 0) _reiRainhaWins[i]++; }); }
+      else if (vg.winner === 2) { t2i.forEach(function(i) { if (i >= 0) _reiRainhaWins[i]++; }); }
+    }
+
+    // Todas as 3 partições possíveis para 4 jogadores.
+    var A = allFour[0], B = allFour[1], C = allFour[2], D = allFour[3];
+    var allThree = [
+      { t1: [A, B], t2: [C, D] },
+      { t1: [A, C], t2: [B, D] },
+      { t1: [A, D], t2: [B, C] }
+    ];
+
+    // Ordem dos pairings: histórico (mais antigo→recente) + atual + faltantes.
+    var playedPairings = validHistory.map(function(vg) { return { t1: vg.p1.slice(), t2: vg.p2.slice() }; });
+    playedPairings.push({ t1: curP1.slice(), t2: curP2.slice() });
+    var missingPartitions = allThree.filter(function(part) {
+      return !seenKeys[_pk(part.t1, part.t2)];
+    });
+    var orderedPairings = playedPairings.concat(missingPartitions).slice(0, 3);
+
+    // Reconstrói _reiRainhaPairings com índices para _reiRainhaPlayers.
+    for (var ri = 0; ri < orderedPairings.length; ri++) {
+      var part = orderedPairings[ri];
+      _reiRainhaPairings[ri] = {
+        t1: part.t1.map(function(n) { return _reiRainhaPlayers.indexOf(n); }),
+        t2: part.t2.map(function(n) { return _reiRainhaPlayers.indexOf(n); })
+      };
+    }
+
+    var numHistory = validHistory.length;
+
+    if (numHistory >= 2) {
+      // Todos os 3 jogos já foram disputados — conta o atual e vai direto ao final.
+      var curT1i = curP1.map(function(n) { return _reiRainhaPlayers.indexOf(n); });
+      var curT2i = curP2.map(function(n) { return _reiRainhaPlayers.indexOf(n); });
+      if (state.winner === 1) { curT1i.forEach(function(i) { if (i >= 0) _reiRainhaWins[i]++; }); }
+      else if (state.winner === 2) { curT2i.forEach(function(i) { if (i >= 0) _reiRainhaWins[i]++; }); }
+      _reiRainhaRound = 3; // sentinela: _reiRainhaShowFinal não re-conta
+    } else {
+      // numHistory = 0 ou 1:
+      //   round = numHistory → partida atual é a rodada numHistory no sistema.
+      //   _reiRainhaPairings[numHistory] = pairing da partida atual.
+      //   _reiRainhaNextRound usará state.winner para registrar essa vitória.
+      _reiRainhaRound = numHistory;
+    }
+  }
+
   // Exibe o resultado final após os 3 jogos do Rei/Rainha.
   window._reiRainhaShowFinal = function() {
     // Garante captura de jogadores
@@ -7393,12 +7554,21 @@ window._openLiveScoring = function(tId, matchId, opts) {
           .catch(function(e) { window._warn('[LiveScore] goToSetup setupAt write failed:', e); });
       } catch(e) {}
     }
+    // v2.2.1-beta: salva no histórico de sessão para ativação retroativa do Rei/Rainha.
+    // Só grava quando é partida casual de duplas e o jogo terminou com vencedor.
+    if (isCasual && isDoubles && state.isFinished && state.winner != null) {
+      _sessionGameHistory.push({
+        p1: p1Players.slice(),
+        p2: p2Players.slice(),
+        winner: state.winner || 0
+      });
+    }
     // v1.9.72: "Jogar"/"Jogar Novamente" deve ir DIRETO para uma nova partida
     // (sem passar pela tela de setup), honrando o toggle "Re-sortear". O setup
     // só é necessário pra re-compartilhar a sala em MULTIPLAYER — então só
     // auto-iniciamos quando é solo (no máx. 1 participante registrado).
-    var _shuffleChk = document.getElementById('chk-shuffle-teams');
-    var _shouldShuffle = !!(_shuffleChk && _shuffleChk.checked);
+    // v2.2.1-beta: autoShuffle já atualizado pelo _statsToggleShuffle — lê var do closure.
+    var _shouldShuffle = !!autoShuffle;
     var _uidSet = {};
     try {
       var _allNm = (p1Players || []).concat(p2Players || []);
