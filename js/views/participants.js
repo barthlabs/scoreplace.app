@@ -1343,6 +1343,37 @@ function renderParticipants(container, tournamentId) {
   const checkedIn = t.checkedIn;
   const absent = t.absent;
 
+  // v2.2.40: presença da CHAMADA continua visível DEPOIS do sorteio (antes de
+  // iniciar). Quem foi marcado presente na chamada permanece presente na lista
+  // de inscritos. Detecção é por ENTRY (nome direto) OU, sendo dupla "A / B",
+  // por todos os membros — cobre duplas formadas no sorteio a partir de
+  // indivíduos (o check-in foi feito nos nomes individuais).
+  const _entryPresent = (name) => {
+    if (!name) return false;
+    if (absent[name]) return false;
+    if (checkedIn[name]) return true;
+    if (name.indexOf('/') !== -1) {
+      const ms = name.split('/').map(s => s.trim()).filter(Boolean);
+      if (ms.length >= 2 && ms.every(m => !!checkedIn[m])) return true;
+    }
+    return false;
+  };
+  const _entryAbsent = (name) => {
+    if (!name) return false;
+    if (absent[name]) return true;
+    if (name.indexOf('/') !== -1) {
+      const ms = name.split('/').map(s => s.trim()).filter(Boolean);
+      if (ms.length >= 2 && ms.some(m => !!absent[m])) return true;
+    }
+    return false;
+  };
+  // Pós-sorteio antes de iniciar: presença visível em modo somente leitura
+  // (a chamada já foi feita; alterações de presença vêm pelo check-in pós-início).
+  // Só ativa se HOUVE chamada (algum check-in/ausência) — torneios que não usam
+  // chamada mantêm a grade normal pós-sorteio, sem rótulos de presença.
+  const _hasRollCallData = Object.keys(checkedIn).length > 0 || Object.keys(absent).length > 0;
+  const postDrawPresence = isOrg && drawDone && !canCheckIn && !isFinished && _hasRollCallData;
+
   // Standby participants — merge both sources (waitlist + standbyParticipants, dedup by name)
   // mesmo padrão de _declareAbsent, _autoSubstituteWO e bracket.js
   const _getStandbyName = p => window._pName(p);
@@ -1372,15 +1403,15 @@ function renderParticipants(container, tournamentId) {
   countIndividuals(parts);
   if (canCheckIn) countIndividuals(standbyParts);
 
-  // ── Contagem da CHAMADA pré-sorteio (por entry: time/individual) ──
+  // ── Contagem da CHAMADA (por entry: time/individual) — pré e pós sorteio ──
   let rcTotal = 0, rcPresent = 0, rcAbsent = 0;
-  if (canRollCall) {
+  if (canRollCall || postDrawPresence) {
     parts.forEach(p => {
       const en = window._pName(p);
       if (!en) return;
       rcTotal++;
-      if (checkedIn[en]) rcPresent++;
-      else if (absent[en]) rcAbsent++;
+      if (_entryPresent(en)) rcPresent++;
+      else if (_entryAbsent(en)) rcAbsent++;
     });
   }
   const rcPending = rcTotal - rcPresent - rcAbsent;
@@ -1846,11 +1877,13 @@ function renderParticipants(container, tournamentId) {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
       const isTeam = pName.includes('/');
 
-      // v2.1.86: estado da CHAMADA pré-sorteio (por entry) + filtro presente/ausente/aguardando
-      const rcMc = canRollCall && !!checkedIn[pName];
-      const rcAbs = canRollCall && !!absent[pName];
-      const rcPend = canRollCall && !rcMc && !rcAbs;
-      if (canRollCall) {
+      // v2.1.86/v2.2.40: estado da CHAMADA (por entry) + filtro presente/ausente/aguardando.
+      // Vale na chamada pré-sorteio (interativa) e pós-sorteio antes de iniciar (leitura).
+      const _showPres = canRollCall || postDrawPresence;
+      const rcMc = _showPres && _entryPresent(pName);
+      const rcAbs = _showPres && !rcMc && _entryAbsent(pName);
+      const rcPend = _showPres && !rcMc && !rcAbs;
+      if (_showPres) {
         if (currentFilter === 'present' && !rcMc) return '';
         if (currentFilter === 'absent' && !rcAbs) return '';
         if (currentFilter === 'pending' && !rcPend) return '';
@@ -1977,8 +2010,18 @@ function renderParticipants(container, tournamentId) {
           <span style="flex:1;font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span>
           ${_rcWoBtn}
         </div>`;
+      } else if (postDrawPresence) {
+        // v2.2.40: pós-sorteio (antes de iniciar) — presença da chamada em
+        // modo somente leitura. Confirma ao organizador que os presentes
+        // continuam presentes após o sorteio.
+        const _rcLabel = rcMc ? 'Presente' : rcAbs ? 'Ausente' : 'Aguardando';
+        const _rcColor = rcMc ? '#4ade80' : rcAbs ? '#f87171' : '#cbd5e1';
+        const _rcIcon = rcMc ? '✅' : rcAbs ? '🚫' : '⏳';
+        rollCallRow = `<div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.14);">
+          <span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcIcon} ${_rcLabel}</span>
+        </div>`;
       }
-      const _rcCardExtra = canRollCall ? (rcMc ? 'box-shadow:0 0 0 2px rgba(16,185,129,0.55),0 4px 10px rgba(0,0,0,0.1);' : rcAbs ? 'opacity:0.55;' : '') : '';
+      const _rcCardExtra = (canRollCall || postDrawPresence) ? (rcMc ? 'box-shadow:0 0 0 2px rgba(16,185,129,0.55),0 4px 10px rgba(0,0,0,0.1);' : rcAbs ? 'opacity:0.55;' : '') : '';
 
       const bgNum = isVip ? '⭐' : idx + 1;
       return `
@@ -2016,9 +2059,9 @@ function renderParticipants(container, tournamentId) {
     </div>
   ` : '';
 
-  // ── Filtros da CHAMADA pré-sorteio (por entry) ──
+  // ── Filtros da CHAMADA (por entry) — pré-sorteio e pós-sorteio (leitura) ──
   const rcPct = rcTotal > 0 ? Math.round(rcPresent / rcTotal * 100) : 0;
-  const rollCallControls = canRollCall ? `
+  const rollCallControls = (canRollCall || postDrawPresence) ? `
     <div style="display:flex;align-items:center;gap:8px;margin-top:8px;margin-bottom:4px;flex-wrap:wrap;">
         <button class="btn btn-pill btn-sm" onclick="window._setCheckInFilter('${tId}', 'all')" style="border:1px solid ${currentFilter === 'all' ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'all' ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'all' ? '#a5b4fc' : 'var(--text-muted)'};">Todos (${rcTotal})</button>
         <button class="btn btn-pill btn-sm" onclick="window._setCheckInFilter('${tId}', 'present')" style="border:1px solid ${currentFilter === 'present' ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.1)'};background:${currentFilter === 'present' ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.05)'};color:${currentFilter === 'present' ? '#4ade80' : 'var(--text-muted)'};">Presentes (${rcPresent})</button>
