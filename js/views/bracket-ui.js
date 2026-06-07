@@ -6681,6 +6681,24 @@ window._openLiveScoring = function(tId, matchId, opts) {
             _firstSnapshotSeen = true;
             _lastKnownSetupAt = (data && data.setupAt) || null;
           }
+          // v2.1.93: host fechou a partida — evacua guests do live-scoring-overlay.
+          // hostClosed:true é escrito pelo organizador ao clicar Fechar (inclusive
+          // quando status='finished', onde leaveCasualMatch não é chamado).
+          // Status 'finished' não é alterado para preservar o histórico.
+          if (data && data.hostClosed === true && !_casualCancelled) {
+            var _cuHC = window.AppStore && window.AppStore.currentUser;
+            var _wasHostHC = _cuHC && _casualCreatedBy && _cuHC.uid === _casualCreatedBy;
+            if (!_wasHostHC) {
+              _casualCancelled = true;
+              if (_unsubFirestore) { try { _unsubFirestore(); } catch(e) {} _unsubFirestore = null; }
+              try { _releaseWakeLock(); } catch(e) {}
+              var _ovHC = document.getElementById('live-scoring-overlay');
+              if (_ovHC) _ovHC.remove();
+              if (typeof showNotification === 'function') showNotification('Partida encerrada', 'O host encerrou a partida.', 'info');
+              try { window.location.hash = '#dashboard'; } catch(e) {}
+            }
+            return;
+          }
           // v1.7.3-beta: Match ended (status='finished') — APLICA o
           // liveState final no overlay e deixa o usuário ver a tela de
           // stats (renderizada quando state.isFinished=true).
@@ -7858,6 +7876,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // independente de quem fecha — e os participantes não são removidos
         // (a query de "últimas partidas" depende de playerUids).
         if (isCasual && isOrganizer) _casualCancelled = true; // gate do reopen-setup
+        // v2.1.93: sinaliza guests via Firestore para todos fecharem (inclusive
+        // quando match está finished e leaveCasualMatch não seria chamado).
+        // hostClosed:true não altera status:'finished' — histórico preservado.
+        if (isCasual && isOrganizer && _casualDocId && window.FirestoreDB && window.FirestoreDB.db) {
+          try {
+            window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
+              .update({ hostClosed: true })
+              .catch(function() {});
+          } catch(e) {}
+        }
         if (isCasual && !_matchIsComplete && cu && cu.uid && _casualDocId && window.FirestoreDB && typeof window.FirestoreDB.leaveCasualMatch === 'function') {
           try {
             var leavePromise = window.FirestoreDB.leaveCasualMatch(_casualDocId, cu.uid);
@@ -10626,6 +10654,8 @@ window._openCasualMatch = function(restoreOpts) {
       // deletado" → remove overlay e redireciona para dashboard, destruindo a
       // sessão e fazendo a primeira partida desaparecer do histórico.
       if (_setupRefreshInterval) { clearInterval(_setupRefreshInterval); _setupRefreshInterval = null; }
+      // v2.1.93: preserva docId antigo para sinalizar guests via nextRoomCode.
+      var _prevDocIdReopen = _sessionDocId;
       _sessionRoomCode = _generateRoomCode();
       try {
         _sessionDocId = await window.FirestoreDB.saveCasualMatch({
@@ -10640,8 +10670,18 @@ window._openCasualMatch = function(restoreOpts) {
           playerUids: players.filter(function(p) { return !!p.uid; }).map(function(p) { return p.uid; }),
           roomCode: _sessionRoomCode,
           status: 'active',
-          result: null
+          result: null,
+          slotGenders: _slotGenders,
+          slotLinkedUid: _slotLinkedUid.slice()
         });
+        // v2.1.93: sinaliza guests sobre o novo roomCode via doc antigo.
+        // Guests fazem polling do roomCode antigo e ao detectar nextRoomCode
+        // seguem para o novo doc (novo jogo) sem perder a sessão.
+        if (_prevDocIdReopen && window.FirestoreDB && window.FirestoreDB.db) {
+          window.FirestoreDB.db.collection('casualMatches').doc(_prevDocIdReopen)
+            .update({ nextRoomCode: _sessionRoomCode })
+            .catch(function(e) { window._warn('[Casual] nextRoomCode write failed:', e); });
+        }
       } catch (e) { window._warn('Casual reopen save failed:', e); }
     } else if (_sessionDocId) {
       // Update existing match to active with current players (sem reopen).
@@ -10821,6 +10861,67 @@ window._openCasualMatch = function(restoreOpts) {
           try { window.location.hash = '#dashboard'; } catch(e) {}
           return;
         }
+        // v2.1.93: host encerrou a partida — evacua guests que ainda estão
+        // no lobby (setup overlay). Caso normal: host fecha via "Fechar"
+        // depois do jogo terminar. Guests com overlay aberto são redirecionados
+        // ao dashboard com aviso.
+        if (fresh.hostClosed === true) {
+          clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
+          var _ovHCSetup = document.getElementById('casual-match-overlay');
+          if (_ovHCSetup) _ovHCSetup.remove();
+          var _ovQRHC = document.getElementById('casual-qr-overlay');
+          if (_ovQRHC) _ovQRHC.remove();
+          if (typeof showNotification === 'function') showNotification(_t('casual.matchCancelled'), _t('casual.matchCancelledMsg'), 'info');
+          try { window.location.hash = '#dashboard'; } catch(e) {}
+          return;
+        }
+
+        // v2.1.93: host iniciou um NOVO jogo (reopen). O doc antigo recebe
+        // nextRoomCode apontando para o novo doc. Guests que ainda fazem
+        // polling do roomCode antigo detectam aqui e seguem para o novo jogo.
+        if (fresh.nextRoomCode && fresh.nextRoomCode !== _sessionRoomCode) {
+          _sessionRoomCode = fresh.nextRoomCode;
+          // Carrega o novo doc imediatamente para não esperar o próximo tick
+          window.FirestoreDB.loadCasualMatch(_sessionRoomCode).then(function(freshNew) {
+            if (!freshNew) return; // novo doc ainda não chegou — próximo tick pega
+            if (freshNew._docId) _sessionDocId = freshNew._docId;
+            // Sincroniza gêneros do novo doc antes de abrir o live scoring
+            if (freshNew.slotGenders && typeof freshNew.slotGenders === 'object') {
+              for (var _ngi = 0; _ngi < 4; _ngi++) {
+                if (freshNew.slotGenders[_ngi]) _slotGenders[_ngi] = freshNew.slotGenders[_ngi];
+              }
+            }
+            if (freshNew.status === 'active') {
+              clearInterval(_setupRefreshInterval); _setupRefreshInterval = null;
+              var _ovAN = document.getElementById('casual-match-overlay');
+              if (_ovAN) _ovAN.remove();
+              var _qrAN = document.getElementById('casual-qr-overlay');
+              if (_qrAN) _qrAN.remove();
+              var _newPlayers = Array.isArray(freshNew.players) ? freshNew.players : [];
+              var _np1n = _newPlayers.filter(function(p) { return p.team === 1; }).map(function(p) { return p.name; }).join(' / ');
+              var _np2n = _newPlayers.filter(function(p) { return p.team === 2; }).map(function(p) { return p.name; }).join(' / ');
+              if (typeof window._openLiveScoring === 'function') {
+                window._openLiveScoring(null, null, {
+                  casual: true,
+                  scoring: freshNew.scoring || {},
+                  p1Name: _np1n,
+                  p2Name: _np2n,
+                  title: freshNew.sport || _t('casual.title'),
+                  sportName: freshNew.sport || '',
+                  isDoubles: !!freshNew.isDoubles,
+                  casualDocId: freshNew._docId || _sessionDocId,
+                  createdBy: freshNew.createdBy || null,
+                  roomCode: _sessionRoomCode,
+                  players: _newPlayers
+                });
+              }
+              if (typeof showNotification === 'function') showNotification(_t('casual.matchStarted'), '', 'success');
+            }
+            // se novo doc ainda é 'setup', o próximo tick do polling (com novo _sessionRoomCode) o detecta
+          }).catch(function() {});
+          return;
+        }
+
         // v1.6.11-beta: sala única — se OUTRO participante clicou Iniciar
         // (status virou 'active' no Firestore), transiciona TODOS pra live
         // scoring. Antes só o criador podia iniciar; entrantes ficavam
