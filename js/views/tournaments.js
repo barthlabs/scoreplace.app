@@ -382,6 +382,39 @@ function renderTournaments(container, tournamentId = null) {
         return solo.length;
     };
 
+    // Move jogadores marcados como ausentes (W.O.) de t.participants para
+    // t.standbyParticipants antes do sorteio, para que o bracket não os inclua.
+    // Eles ficam disponíveis para substituição durante o torneio.
+    window._autoMoveAbsentToStandby = function(t) {
+        if (!t || !t.absent || Object.keys(t.absent).length === 0) return 0;
+        var absentMap = t.absent;
+        var parts = Array.isArray(t.participants) ? t.participants : [];
+        var toMove = parts.filter(function(p) {
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            return n && absentMap.hasOwnProperty(n);
+        });
+        if (toMove.length === 0) return 0;
+        var moveSet = {};
+        toMove.forEach(function(p) {
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            if (n) moveSet[n] = true;
+        });
+        t.participants = parts.filter(function(p) {
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            return !n || !moveSet[n];
+        });
+        if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+        toMove.forEach(function(p) {
+            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+            var already = t.standbyParticipants.some(function(w) {
+                var wn = typeof w === 'string' ? w : (w.displayName || w.name || '');
+                return wn === n;
+            });
+            if (!already) t.standbyParticipants.push(p);
+        });
+        return toMove.length;
+    };
+
     window._handleSortearClick = function (tId, isAberto) {
         window._lastActiveTournamentId = tId;
         var _startDraw = function() {
@@ -406,6 +439,10 @@ function renderTournaments(container, tournamentId = null) {
             var movedCount = t ? window._autoMoveSoloToWaitlist(t) : 0;
             if (movedCount > 0 && typeof showNotification !== 'undefined') {
                 showNotification('🙋 ' + movedCount + ' participante(s) sem dupla', 'Movido(s) para lista de espera.', 'info');
+            }
+            var absentMovedCount = t ? window._autoMoveAbsentToStandby(t) : 0;
+            if (absentMovedCount > 0 && typeof showNotification !== 'undefined') {
+                showNotification('⚠️ ' + absentMovedCount + ' participante(s) ausente(s)', 'Removido(s) do sorteio e enviado(s) para lista de espera.', 'warning');
             }
             var _continueDraw = function() {
                 if (typeof window.showUnifiedResolutionPanel === 'function') {
