@@ -140,8 +140,15 @@ function _calcAdvancedPoints(t, playerName, category) {
   var total = 0;
   var breakdown = [];
 
-  (t.rounds || []).forEach(function(round) {
-    (round.matches || []).forEach(function(m) {
+  // v2.3.3: format-agnostic — varre TODAS as partidas do torneio (eliminatórias,
+  // grupos, rounds de Liga/Suíço, Rei/Rainha) via coletor canônico, em vez de só
+  // t.rounds. Assim Pontos Avançados funciona em qualquer tipo de torneio.
+  var _allMatches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : null;
+  if (!_allMatches) {
+    _allMatches = [];
+    (t.rounds || []).forEach(function(round) { (round.matches || []).forEach(function(mm) { _allMatches.push(mm); }); });
+  }
+  _allMatches.forEach(function(m) {
       if (category && m.category !== category) return;
       if (m.isBye || !m.winner || m.isSitOut) return;
 
@@ -162,7 +169,7 @@ function _calcAdvancedPoints(t, playerName, category) {
         won = (isInP1 && m.winner === m.p1) || (isInP2 && m.winner === m.p2) || m.winner === playerName;
       }
 
-      var mBreakdown = { round: round.round || round.roundNumber || 0, opponent: isInP1 ? (m.p2 || '') : (m.p1 || ''), won: won, draw: isDraw, items: [] };
+      var mBreakdown = { round: m.round || m.roundNumber || 0, opponent: isInP1 ? (m.p2 || '') : (m.p1 || ''), won: won, draw: isDraw, items: [] };
       var mTotal = 0;
 
       if (vParticipation) {
@@ -235,7 +242,6 @@ function _calcAdvancedPoints(t, playerName, category) {
       mBreakdown.total = mTotal;
       total += mTotal;
       breakdown.push(mBreakdown);
-    });
   });
 
   return { total: total, breakdown: breakdown };

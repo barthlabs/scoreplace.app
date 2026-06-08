@@ -2760,7 +2760,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   const _drawHeader = _drawsAllowed ? `
               <th style="${_thStyle}text-align:center;color:#94a3b8;" data-sort-col="4" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Empates">E <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
   const _advHeader = _useAdvStandings ? `
-              <th style="${_thStyle}text-align:center;color:#fbbf24;" data-sort-col="${_advColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Pontos Avançados">⚡ PA <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
+              <th style="${_thStyle}text-align:center;color:#fbbf24;" data-sort-col="${_advColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Pontos Avançados">💯 PA <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
   const _gsmHeaders = _useSetsStandings ? `
               <th style="${_thStyle}text-align:center;color:#06b6d4;" data-sort-col="${_gsmStartIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de sets (vencidos − perdidos)">±S <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               <th style="${_thStyle}text-align:center;color:#8b5cf6;" data-sort-col="${_gsmStartIdx + 1}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de games (vencidos − perdidos)">±G <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';

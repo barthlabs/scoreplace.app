@@ -486,7 +486,7 @@ function setupCreateTournamentModal() {
               <!-- Sistema de Pontos Avançado (apenas Liga / Suíço) -->
               <div id="adv-scoring-section" style="display:none; background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <div class="toggle-row" style="padding:0; margin-bottom:10px;">
-                  <div class="toggle-row-label"><span style="font-size:0.85rem;font-weight:700;color:#fbbf24;">⚡ ${_t('create.advScoringTitle')}</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${_t('create.advScoringDesc')}</div></div>
+                  <div class="toggle-row-label"><span style="font-size:0.85rem;font-weight:700;color:#fbbf24;">💯 ${_t('create.advScoringTitle')}</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${_t('create.advScoringDesc')}</div></div>
                   <label class="toggle-switch toggle-sm"><input type="checkbox" id="adv-scoring-enabled" onchange="window._onAdvScoringToggle()"><span class="toggle-slider"></span></label>
                 </div>
                 <div id="adv-scoring-body" style="display:none; margin-top:12px;">
@@ -727,7 +727,7 @@ function setupCreateTournamentModal() {
                   <li draggable="true" data-tb="vitorias" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbWinsTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 🏆 ${_t('create.tbWins')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
                   <li draggable="true" data-tb="buchholz" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbBuchholzTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 💪 ${_t('create.tbBuchholz')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbBuchholzAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('buchholz')" style="margin-left:auto;cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
                   <li draggable="true" data-tb="sonneborn_berger" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbSonnebornTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ⭐ ${_t('create.tbSonneborn')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbSonnebornAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('sonneborn_berger')" style="margin-left:auto;cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
-                  <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ⚡ ${_t('create.tbAdvancedPoints')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbAdvancedPointsNote')}</small><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
+                  <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 💯 ${_t('create.tbAdvancedPoints')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbAdvancedPointsNote')}</small><span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('pontos_avancados')" style="margin-left:auto;cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
                   <li draggable="true" data-tb="sorteio" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 🎲 ${_t('create.tbRandom')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
                 </ul>
                 <p style="margin: 1rem 0 0.4rem; font-size: 0.78rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">${_t('create.tbExcludedSection')}</p>
@@ -1789,14 +1789,14 @@ function setupCreateTournamentModal() {
     var estimContainer = document.getElementById('time-estimates-container');
     if (estimContainer) estimContainer.style.display = (isLiga || isSuico) ? 'none' : '';
 
-    // Sistema de Pontos Avançado: apenas Liga ou Suíço (puro, sem Rei/Rainha)
+    // v2.3.3: Sistema de Pontos Avançado disponível em TODOS os formatos.
+    // Antes era restrito a Liga/Suíço; agora o cálculo (_calcAdvancedPoints)
+    // varre todas as partidas via _collectAllMatches — funciona em
+    // eliminatórias, grupos, Rei/Rainha, Liga e Suíço.
     var advSection = document.getElementById('adv-scoring-section');
-    if (advSection) {
-      var showAdv = (isLiga || isSuico) && !isMonarch;
-      advSection.style.display = showAdv ? 'block' : 'none';
-    }
+    if (advSection) advSection.style.display = 'block';
     document.querySelectorAll('#tiebreaker-list li[data-tb="pontos_avancados"], #tiebreaker-excluded-list li[data-tb="pontos_avancados"]').forEach(function(tbAdv) {
-      tbAdv.style.display = (isLiga || isSuico) ? '' : 'none';
+      tbAdv.style.display = '';
     });
 
     window._updateAutoCloseVisibility();
@@ -5571,6 +5571,7 @@ window._showTiebreakInfo = function(criterion) {
         title: 'Força dos Adversários',
         subtitle: 'Buchholz',
         accent: '#3b82f6', // blue
+        accentRgb: '59,130,246',
         sections: [
           {
             icon: '📖',
@@ -5605,6 +5606,7 @@ window._showTiebreakInfo = function(criterion) {
         title: 'Qualidade das Vitórias',
         subtitle: 'Sonneborn-Berger',
         accent: '#a855f7', // purple
+        accentRgb: '168,85,247',
         sections: [
           {
             icon: '📖',
@@ -5630,6 +5632,41 @@ window._showTiebreakInfo = function(criterion) {
             icon: '🎲',
             title: 'Quando aplicar',
             body: 'Útil quando <b>Buchholz</b> ainda empata (o que é raro).<br><br>Mais relevante em <b>torneios longos</b> onde a diferença entre vencer um adversário forte e vencer um fraco é significativa.'
+          }
+        ]
+      };
+    } else if (criterion === 'pontos_avancados') {
+      return {
+        icon: '💯',
+        title: 'Pontos Avançados',
+        subtitle: 'Sistema de pontuação por eventos',
+        accent: '#fbbf24', // amber
+        accentRgb: '251,191,36',
+        sections: [
+          {
+            icon: '📖',
+            title: 'O que é',
+            body: 'Um sistema de pontuação por <b>eventos</b> que roda em paralelo ao placar. Em vez de só contar vitória/derrota, soma pontos por coisas que aconteceram em cada partida (participação, vitória, games ganhos/perdidos, etc.) com <b>valores que você configura</b>. O total vira o número usado pra desempatar.<br><br>Só funciona se você <b>ligar o "Sistema de Pontos Avançado"</b> logo acima, na criação do torneio.'
+          },
+          {
+            icon: '🧮',
+            title: 'Como é calculado',
+            body: 'Pra cada jogador, somam-se os eventos de <b>todas as partidas</b> que ele jogou (ignora BYE e jogos sem resultado). Valores padrão (todos configuráveis):<br><br>• Participação: <b>+150</b> por jogo<br>• Vitória na partida: <b>+150</b><br>• Game ganho: <b>+50</b> cada<br>• Game perdido: <b>−20</b> cada<br>• Ponto de tie-break: <b>+2</b> cada<br><br><b>Requerem placar ao vivo</b> (ponto a ponto):<br>• Killing point: <b>+10</b> cada<br>• Ponto marcado: <b>+1</b> cada'
+          },
+          {
+            icon: '🔢',
+            title: 'Exemplo numérico',
+            body: 'Beach Tennis, valores padrão. Você venceu por <b>6–4</b>:<br>Participação +150 · Vitória +150 · 6 games ×50 = +300 · 4 games ×(−20) = −80<br><br><b style="color:#10b981;">Total da partida = 520.</b><br>Somando todas as suas partidas, dá o número que aparece na coluna <b>💯 PA</b> da classificação (clicável pra ver o detalhamento).'
+          },
+          {
+            icon: '🛡️',
+            title: 'Piso de segurança',
+            body: 'Nenhuma partida pode resultar em total <b>negativo</b>. Se os games perdidos (−20) superarem o que você ganhou num jogo, o resultado daquela partida trava em <b>0</b> — nunca puxa seu total geral pra baixo.'
+          },
+          {
+            icon: '🎲',
+            title: 'Quando aplicar',
+            body: 'Ideal pra circuitos e rankings estilo Beach Tennis e tênis, onde se ganha pontos por participar e por desempenho. Disponível em <b>todos os formatos</b> (eliminatórias, grupos, Liga, Suíço e Rei/Rainha).<br><br>Como costuma ser bem granular, quando ativo normalmente vai pro <b>topo</b> da ordem de desempate.'
           }
         ]
       };
@@ -5665,7 +5702,7 @@ window._showTiebreakInfo = function(criterion) {
   overlay.innerHTML =
     '<div style="background:var(--bg-card,#1c1c1e);border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:18px;max-width:640px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.6);overflow:hidden;">' +
       // Standard header: title left, X close right
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));background:linear-gradient(135deg,rgba(' + (criterion === 'buchholz' ? '59,130,246' : '168,85,247') + ',0.12),rgba(255,255,255,0.02));">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));background:linear-gradient(135deg,rgba(' + (sections.accentRgb || '88,166,255') + ',0.12),rgba(255,255,255,0.02));">' +
         '<div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">' +
           '<span style="font-size:2rem;flex-shrink:0;">' + sections.icon + '</span>' +
           '<div style="min-width:0;">' +

@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>💯 Pontos Avançados em todos os formatos.</b> O sistema de pontuação por eventos (participação, vitória, games, etc.) deixou de ser exclusivo de Liga/Suíço — agora está disponível em eliminatórias, grupos, Rei/Rainha, Liga e Suíço.</li>' +
+        '<li><b>Botão ℹ️ explicando o critério.</b> Cada detalhe do cálculo, os valores padrão, o exemplo numérico e o piso de segurança agora ficam num popup ao lado de "Pontos Avançados".</li>' +
+        '<li><b>Novo ícone 💯.</b> O critério trocou o ⚡ pelo 💯 pra não confundir com o atalho de Partida Casual.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.2-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Ícones em todos os critérios de desempate.</b> Antes só Pontos Avançados, Antiguidade e Juventude tinham ícone. Agora todos têm: 🆚 Confronto Direto, ⚖️ Saldo de Pontos, 🏆 Número de Vitórias, 💪 Força dos Adversários, ⭐ Qualidade das Vitórias e 🎲 Sorteio.</li>' +

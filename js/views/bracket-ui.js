@@ -3288,7 +3288,7 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     });
   }
   var summary = '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap;">' +
-    '<span style="font-size:1.4rem;font-weight:900;color:#fbbf24;">⚡ ' + (result.total || 0) + '</span>' +
+    '<span style="font-size:1.4rem;font-weight:900;color:#fbbf24;">💯 ' + (result.total || 0) + '</span>' +
     '<span style="color:var(--text-muted);font-size:0.8rem;">pontos avançados em ' + result.breakdown.length + ' partida' + (result.breakdown.length === 1 ? '' : 's') + '</span>' +
     '</div>';
   var tableHtml = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">' +
@@ -3298,7 +3298,7 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     '<th style="padding:6px 10px;text-align:left;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;">Detalhamento</th>' +
     '<th style="padding:6px 10px;text-align:right;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;">Total</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
-  showAlertDialog('⚡ Pontos Avançados — ' + playerName, summary + tableHtml, null, { type: 'info' });
+  showAlertDialog('💯 Pontos Avançados — ' + playerName, summary + tableHtml, null, { type: 'info' });
 };
 
 // ─── Advance from Groups to Elimination ─────────────────────────────────────
