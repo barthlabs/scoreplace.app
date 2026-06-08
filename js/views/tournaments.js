@@ -1433,7 +1433,6 @@ function renderTournaments(container, tournamentId = null) {
              ${isAberto ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window.addPlaceholdersFunction('${t.id}')">➕ Placeholders</button>` : ''}
         ` : '';
 
-        const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
         // Categorias button removed — category management is now inline in "Inscritos Confirmados"
         const categoriasBtn = '';
         // v1.3.1-beta: botão de análise sempre visível pro organizador, mesmo
@@ -1447,10 +1446,11 @@ function renderTournaments(container, tournamentId = null) {
         const _teamSizeN = parseInt(t.teamSize) || 1;
         const _enoughForGame = Math.floor(_confirmedPlayers / _teamSizeN) >= 2;
         const _glowGame = (_enoughForGame && !sorteioRealizado) ? ' sp-glow-amber' : '';
-        const _glowEdit = (_enoughForGame && !sorteioRealizado) ? ' sp-glow-indigo' : '';
-        const _glowAnalise = (!_hasTournCats) ? ' sp-glow-indigo' : '';
+        // v2.3.1: brilho de Análise e Editar usa o MESMO efeito dos botões
+        // especiais da hero box (.btn-shine — sweep de luz periódico), não o
+        // pulse box-shadow (sp-glow-*). Sempre ligado, igual à hero box.
         // v2.1.45: Análise omitida depois do sorteio.
-        const enrollmentReportBtn = (isOrg && !sorteioRealizado) ? `<button class="btn btn-indigo hover-lift${_glowAnalise}" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">📊 Análise</button>` : '';
+        const enrollmentReportBtn = (isOrg && !sorteioRealizado) ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">📊 Análise</button>` : '';
 
         const isSuicoFormat = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
         const isLigaFormat = window._isLigaFormat(t);
@@ -1997,7 +1997,7 @@ function renderTournaments(container, tournamentId = null) {
               <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.35); margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
-                ${!isFinished ? `<button class="btn btn-indigo hover-lift${_glowEdit}" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
+                ${!isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
                 ${t.status !== 'closed' ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window._sendOrgCommunication('${t.id}')">📢 ${_t('org.communicate')}</button>` : ''}
                 ${addParticipantBtns}
                 ${/* v1.9.98: CSV removido daqui — já está no grid de ações geral do organizador (Regras/Inscritos/Imprimir/CSV/Modo TV). Evita duplicação. */ ''}

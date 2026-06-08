@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>✨ Brilho nos botões Análise e Editar.</b> Os botões <b>📊 Análise</b> e <b>✏️ Editar</b> do organizador agora têm o mesmo brilho periódico dos botões especiais da tela inicial — destacando as ferramentas principais de quem organiza o torneio.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🏆 Fase Final da Temporada (Liga).</b> Ao fim de uma temporada de Liga, o organizador pode disparar um mata-mata entre os melhores colocados para sagrar os <b>campeões da temporada</b> — a "confraternização + torneio extra". Botão <b>🏆 Fase Final</b> nas ferramentas do organizador de qualquer Liga.</li>' +
