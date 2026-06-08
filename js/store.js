@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.44-beta';
+window.SCOREPLACE_VERSION = '2.2.45-beta';
 
 // ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
 // Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
@@ -3119,17 +3119,39 @@ window.AppStore = {
   getMyParticipations() {
     if (!this.currentUser || !this.currentUser.uid) return [];
     var uid = this.currentUser.uid;
+    // Verifica inscrição REAL em participants[] (uid solo, p1Uid/p2Uid de dupla
+    // formada, ou sub-participante de time). Preserva o match de duplas por uid.
+    var _isEnrolledInParts = function(t) {
+      var pList = Array.isArray(t.participants) ? t.participants : [];
+      return pList.some(function(p) {
+        if (typeof p !== 'object' || !p) return false;
+        if (p.uid === uid) return true;
+        if (p.p1Uid === uid || p.p2Uid === uid) return true;
+        if (Array.isArray(p.participants)) {
+          return p.participants.some(function(sub) { return sub && sub.uid === uid; });
+        }
+        return false;
+      });
+    };
     return this.tournaments.filter(function(t) {
-      // uid é a única fonte — participante inscrito aparece em memberUids
-      if (Array.isArray(t.memberUids) && t.memberUids.indexOf(uid) !== -1) return true;
+      // v2.2.45 FIX: memberUids[] inclui creatorUid + uids de co-hosts SÓ pra
+      // read-access nas regras do Firestore — NÃO é prova de inscrição. Antes,
+      // o organizador caía aqui e o próprio torneio aparecia em "Participando"
+      // sem ele ter clicado em Inscrever-se. Agora: membro normal (não
+      // organizador/co-host) presente em memberUids conta direto; organizador
+      // ou co-host só conta se realmente se inscreveu em participants[].
+      var inMembers = Array.isArray(t.memberUids) && t.memberUids.indexOf(uid) !== -1;
       // Fallback: torneios sem memberUids (migração pendente)
       if (!Array.isArray(t.memberUids) || t.memberUids.length === 0) {
-        var pList = Array.isArray(t.participants) ? t.participants : [];
-        return pList.some(function(p) {
-          return typeof p === 'object' && p && p.uid === uid;
-        });
+        return _isEnrolledInParts(t);
       }
-      return false;
+      if (!inMembers) return false;
+      var isCreator = !!(t.creatorUid && t.creatorUid === uid);
+      var isCoHost = Array.isArray(t.coHosts) && t.coHosts.some(function(ch) {
+        return ch && ch.status === 'active' && ch.uid === uid;
+      });
+      if (!isCreator && !isCoHost) return true; // membro comum = participante
+      return _isEnrolledInParts(t); // organizador/co-host: exige inscrição real
     });
   },
 
