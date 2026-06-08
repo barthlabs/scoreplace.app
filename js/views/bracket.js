@@ -3230,7 +3230,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // Liga: user's matches at the top, then the round's standings table, then
   // the collapsible "Demais jogos da rodada" card.
   if (isLigaFmt) {
-    return _phaseBannerHtml + _progressBar + _readyBanner + currentRoundHtml + standingsTablesHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+    // Fase Final da temporada (playoffs): injetada logo após a classificação.
+    var _playoffHtml = (typeof window._renderPlayoffSection === 'function') ? window._renderPlayoffSection(t) : '';
+    return _phaseBannerHtml + _progressBar + _readyBanner + currentRoundHtml + standingsTablesHtml + _playoffHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
   }
   return _phaseBannerHtml + _progressBar + standingsTablesHtml + _readyBanner + currentRoundHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
 }

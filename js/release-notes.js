@@ -9,6 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏆 Fase Final da Temporada (Liga).</b> Ao fim de uma temporada de Liga, o organizador pode disparar um mata-mata entre os melhores colocados para sagrar os <b>campeões da temporada</b> — a "confraternização + torneio extra". Botão <b>🏆 Fase Final</b> nas ferramentas do organizador de qualquer Liga.</li>' +
+        '<li><b>Tudo configurável.</b> Você decide <b>quantos disputam</b> (top-N da classificação), os <b>confrontos</b> (por classificação com cabeças de chave, ou sorteio) e — em Ligas de duplas — como <b>formar as duplas</b> (1º+último para equilibrar, ou sequencial). Configuração <b>por categoria</b>. Campos opcionais de data/local da confraternização.</li>' +
+        '<li><b>Lista de espera + W.O.</b> Quem fica logo abaixo do corte vira lista de espera; o organizador pode substituir um classificado ausente ou declarar W.O. a qualquer momento. A classificação da temporada é congelada ao gerar a fase final, e dá pra <b>refazer</b> até o primeiro placar.</li>' +
+        '<li><i>Em breve nesta fase: Dupla Eliminatória, Grupos+Eliminatória, formação manual de duplas e rodada Rei/Rainha classificatória.</i></li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.47-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Novos critérios de desempate por idade.</b> <b>Antiguidade</b> (mais velho ganha) e <b>Juventude</b> (mais novo ganha) — escolher um manda o outro pros não considerados (são mutuamente exclusivos). Usam a data de nascimento do perfil; em duplas, a média das idades.</li>' +

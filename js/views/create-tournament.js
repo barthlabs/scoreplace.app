@@ -269,6 +269,12 @@ function setupCreateTournamentModal() {
                     <label class="toggle-switch"><input type="checkbox" id="liga-open-enrollment" checked><span class="toggle-slider"></span></label>
                   </div>
                 </div>
+                <div class="form-group mt-2">
+                  <div class="toggle-row">
+                    <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">${_t('create.ligaPlayoffToggle')}</span><div class="toggle-desc">${_t('create.ligaPlayoffDesc')}</div></div></div>
+                    <label class="toggle-switch"><input type="checkbox" id="liga-playoff-toggle"><span class="toggle-slider"></span></label>
+                  </div>
+                </div>
                 <div id="liga-draw-schedule" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(16,185,129,0.15);">
                   <p style="margin: 0 0 0.35rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.drawSchedule')}</p>
                   <p style="margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-bright); font-weight: 600;">Primeiro Sorteio</p>
@@ -3559,6 +3565,8 @@ function setupCreateTournamentModal() {
     }
     if (_inactX) document.getElementById('liga-inactivity-x').value = _inactX;
     document.getElementById('liga-open-enrollment').checked = _openEnroll !== false;
+    var _playoffLoad = document.getElementById('liga-playoff-toggle');
+    if (_playoffLoad) _playoffLoad.checked = (t.playoffEnabled === true);
 
     // v0.14.52: Temporada + Equilibrado toggles
     var _seasonLoad = document.getElementById('liga-season-toggle');
@@ -3882,6 +3890,10 @@ function setupCreateTournamentModal() {
           tourData.ligaInactivity = document.getElementById('liga-inactivity').value;
           tourData.ligaInactivityX = parseInt(document.getElementById('liga-inactivity-x').value) || 3;
           tourData.ligaOpenEnrollment = document.getElementById('liga-open-enrollment').checked;
+          // Fase Final de temporada (pré-anúncio na criação; config real é feita
+          // depois via #fase-final/:tId). Só marca a intenção aqui.
+          var _playoffToggle = document.getElementById('liga-playoff-toggle');
+          tourData.playoffEnabled = !!(_playoffToggle && _playoffToggle.checked);
           // Agendamento
           tourData.drawFirstDate = document.getElementById('liga-first-draw-date').value || '';
           tourData.drawFirstTime = document.getElementById('liga-first-draw-time').value || '19:00';

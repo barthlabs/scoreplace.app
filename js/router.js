@@ -394,6 +394,15 @@ function initRouter() {
           return;
         }
         break;
+      case 'fase-final':
+        // Fase Final de temporada (playoffs de Liga). Param é o tId.
+        if (typeof window.renderFaseFinalPage === 'function' && cleanParam) {
+          window.renderFaseFinalPage(viewContainer, cleanParam);
+        } else {
+          window.location.replace('#dashboard');
+          return;
+        }
+        break;
       default:
         // Rota desconhecida — redireciona para dashboard
         window.location.replace('#dashboard');
