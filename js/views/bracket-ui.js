@@ -3679,12 +3679,25 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (!Array.isArray(readyUids) || readyUids.length < 1) return false;
     var pls = (freshDoc && Array.isArray(freshDoc.players)) ? freshDoc.players
       : ((opts && Array.isArray(opts.players)) ? opts.players : []);
-    // v2.2.29-beta: condição = "1 de cada time ATUAL que tenha usuário real".
-    // Bug corrigido: com 2 reais no MESMO time + 2 convidados no outro, a regra
-    // antiga exigia um uid real em CADA time — impossível (o time de convidados
-    // não tem uid), então ficava "aguardando" pra sempre. Agora: um time só de
-    // convidados é auto-OK (ninguém pra clicar); um time com reais exige ≥1
-    // desses pronto. Convidados não bloqueiam o início.
+    // v2.2.41-beta: conjunto de TODOS os uids reais na partida — de todas as
+    // fontes. Crucial: quem entra pela sala via link fica em `playerUids` mas
+    // pode ter `uid:null` no slot de `players[]` (entrou sem reivindicar slot
+    // com a conta). Se confiarmos só em `players[].team/uid`, o time do
+    // adversário fica "sem reais" → auto-OK → a revanche começava com UM clique
+    // (bug reportado). Espelhamos o lobby: com 2+ reais, exige ≥2 confirmações.
+    var realSet = {};
+    if (freshDoc && Array.isArray(freshDoc.playerUids)) freshDoc.playerUids.forEach(function(u) { if (u) realSet[u] = 1; });
+    pls.forEach(function(p) { if (p && p.uid) realSet[p.uid] = 1; });
+    if (Array.isArray(_knownPlayerUids)) _knownPlayerUids.forEach(function(u) { if (u) realSet[u] = 1; });
+    var realCount = Object.keys(realSet).length;
+    // 0 ou 1 real → ninguém além de quem clicou pra confirmar → pode iniciar.
+    if (realCount <= 1) return true;
+    // 2+ reais → exige pelo menos 2 confirmações DISTINTAS (espelha o lobby,
+    // que tem o mesmo guard de `length < 2`). Garante que o outro time confirme.
+    var readyReal = readyUids.filter(function(u) { return realSet[u]; });
+    if (readyReal.length < 2) return false;
+    // E, quando os times estão rotulados em players[], exige ≥1 de cada time
+    // que tenha reais. Time só de convidados é auto-OK (ninguém pra clicar).
     function _teamReady(team) {
       var realUids = pls.filter(function(p) { return p && p.team === team && p.uid; })
                         .map(function(p) { return p.uid; });
