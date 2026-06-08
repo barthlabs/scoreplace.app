@@ -716,13 +716,19 @@ function setupCreateTournamentModal() {
                 <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: #58a6ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
                 <small class="text-muted" style="display:block;margin-bottom:0.75rem;">${_t('create.tiebreakerDesc')}</small>
                 <ul id="tiebreaker-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
-                  <li draggable="true" data-tb="confronto_direto" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbHeadToHeadTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbHeadToHead')}</li>
-                  <li draggable="true" data-tb="saldo_pontos" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbPointDiffTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbPointDiff')}</li>
-                  <li draggable="true" data-tb="vitorias" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbWinsTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbWins')}</li>
-                  <li draggable="true" data-tb="buchholz" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbBuchholzTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbBuchholz')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbBuchholzAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('buchholz')" style="margin-left:auto;cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span></li>
-                  <li draggable="true" data-tb="sonneborn_berger" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbSonnebornTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbSonneborn')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbSonnebornAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('sonneborn_berger')" style="margin-left:auto;cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span></li>
-                  <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ⚡ ${_t('create.tbAdvancedPoints')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbAdvancedPointsNote')}</small></li>
-                  <li draggable="true" data-tb="sorteio" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbRandom')}</li>
+                  <li draggable="true" data-tb="confronto_direto" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbHeadToHeadTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbHeadToHead')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
+                  <li draggable="true" data-tb="saldo_pontos" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbPointDiffTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbPointDiff')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
+                  <li draggable="true" data-tb="vitorias" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbWinsTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbWins')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
+                  <li draggable="true" data-tb="buchholz" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbBuchholzTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbBuchholz')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbBuchholzAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('buchholz')" style="margin-left:auto;cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
+                  <li draggable="true" data-tb="sonneborn_berger" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbSonnebornTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbSonneborn')} <small style="opacity:0.5; font-size:0.75rem;">(${_t('create.tbSonnebornAbbr')})</small> <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('sonneborn_berger')" style="margin-left:auto;cursor:pointer;font-size:0.95rem;opacity:0.6;padding:0 4px;" title="${_t('create.tbInfoBtn')}">ℹ️</span><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
+                  <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ⚡ ${_t('create.tbAdvancedPoints')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbAdvancedPointsNote')}</small><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
+                  <li draggable="true" data-tb="sorteio" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> ${_t('create.tbRandom')}<span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#f87171;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRemoveBtn')}">✕</span></li>
+                </ul>
+                <p style="margin: 1rem 0 0.4rem; font-size: 0.78rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">${_t('create.tbExcludedSection')}</p>
+                <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tbExcludedDesc')}</small>
+                <ul id="tiebreaker-excluded-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;min-height:40px;border:1px dashed rgba(255,255,255,0.12);border-radius:8px;padding:6px;">
+                  <li draggable="true" data-tb="antiguidade" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 👴 ${_t('create.tbOldest')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbOldestNote')}</small><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#34d399;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRestoreBtn')}">↩</span></li>
+                  <li draggable="true" data-tb="juventude" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span> 👶 ${_t('create.tbYoungest')} <small style="opacity:0.5; font-size:0.75rem;">${_t('create.tbYoungestNote')}</small><span data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;cursor:pointer;color:#34d399;font-weight:700;font-size:0.95rem;padding:0 6px;" title="${_t('create.tbRestoreBtn')}">↩</span></li>
                 </ul>
               </div>
 
@@ -776,37 +782,98 @@ function setupCreateTournamentModal() {
 
     // Setup tiebreaker drag-and-drop
     const tbList = document.getElementById('tiebreaker-list');
+    const tbExcluded = document.getElementById('tiebreaker-excluded-list');
     if (tbList) {
+      // v2.2.47: helpers compartilhados pros dois boxes (ativo + não considerados)
+      var _tbAllLis = function() { return Array.prototype.slice.call(document.querySelectorAll('#tiebreaker-list li, #tiebreaker-excluded-list li')); };
+      var _tbClearMarks = function() { _tbAllLis().forEach(function(li) { li.style.borderTop = ''; }); };
+
+      // Atualiza o botão ✕/↩ conforme o box em que o critério está
+      window._tbUpdateRowControls = function(li) {
+        if (!li) return;
+        var btn = li.querySelector('[data-tb-move]');
+        if (!btn) return;
+        var inExcluded = li.parentNode && li.parentNode.id === 'tiebreaker-excluded-list';
+        if (inExcluded) {
+          btn.textContent = '↩'; btn.style.color = '#34d399';
+          btn.title = (window._t ? window._t('create.tbRestoreBtn') : 'Reativar critério');
+        } else {
+          btn.textContent = '✕'; btn.style.color = '#f87171';
+          btn.title = (window._t ? window._t('create.tbRemoveBtn') : 'Não considerar este critério');
+        }
+      };
+
+      // Antiguidade x Juventude são MUTUAMENTE EXCLUSIVOS — manter no máximo um
+      // no box ativo; o outro vai pros não considerados.
+      window._tbNormalizeAge = function(preferKey) {
+        var active = document.getElementById('tiebreaker-list');
+        var excluded = document.getElementById('tiebreaker-excluded-list');
+        if (!active || !excluded) return;
+        ['antiguidade', 'juventude'].forEach(function(k) {
+          if (k === preferKey) return;
+          var li = active.querySelector('li[data-tb="' + k + '"]');
+          if (li) { excluded.appendChild(li); window._tbUpdateRowControls(li); }
+        });
+      };
+
+      // Clique no ✕ (ativo→excluído) ou ↩ (excluído→ativo)
+      window._tbMove = function(btn) {
+        var li = btn.closest('li'); if (!li) return;
+        var active = document.getElementById('tiebreaker-list');
+        var excluded = document.getElementById('tiebreaker-excluded-list');
+        if (!active || !excluded) return;
+        var inActive = li.parentNode === active;
+        var key = li.dataset.tb;
+        if (inActive) {
+          excluded.appendChild(li);
+        } else {
+          active.appendChild(li);
+          if (key === 'antiguidade' || key === 'juventude') window._tbNormalizeAge(key);
+        }
+        window._tbUpdateRowControls(li);
+      };
+
       let dragItem = null;
-      tbList.addEventListener('dragstart', (e) => {
-        dragItem = e.target.closest('li');
-        if (dragItem) {
-          dragItem.style.opacity = '0.4';
-          e.dataTransfer.effectAllowed = 'move';
-        }
-      });
-      tbList.addEventListener('dragend', (e) => {
-        if (dragItem) dragItem.style.opacity = '1';
-        dragItem = null;
-        tbList.querySelectorAll('li').forEach(li => li.style.borderTop = '');
-      });
-      tbList.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        const target = e.target.closest('li');
-        if (target && target !== dragItem) {
-          tbList.querySelectorAll('li').forEach(li => li.style.borderTop = '');
-          target.style.borderTop = '2px solid #58a6ff';
-        }
-      });
-      tbList.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const target = e.target.closest('li');
-        if (target && dragItem && target !== dragItem) {
-          tbList.insertBefore(dragItem, target);
-        }
-        tbList.querySelectorAll('li').forEach(li => li.style.borderTop = '');
-      });
+      var _attachTbDnd = function(listEl) {
+        if (!listEl) return;
+        listEl.addEventListener('dragstart', (e) => {
+          dragItem = e.target.closest('li');
+          if (dragItem) {
+            dragItem.style.opacity = '0.4';
+            e.dataTransfer.effectAllowed = 'move';
+          }
+        });
+        listEl.addEventListener('dragend', (e) => {
+          if (dragItem) dragItem.style.opacity = '1';
+          dragItem = null;
+          _tbClearMarks();
+        });
+        listEl.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          const target = e.target.closest('li');
+          _tbClearMarks();
+          if (target && target !== dragItem) target.style.borderTop = '2px solid #58a6ff';
+        });
+        listEl.addEventListener('drop', (e) => {
+          e.preventDefault();
+          if (!dragItem) return;
+          const target = e.target.closest('li');
+          if (target && target !== dragItem) {
+            target.parentNode.insertBefore(dragItem, target);
+          } else if (!target) {
+            listEl.appendChild(dragItem);
+          }
+          _tbClearMarks();
+          window._tbUpdateRowControls(dragItem);
+          var k = dragItem.dataset.tb;
+          if ((k === 'antiguidade' || k === 'juventude') && dragItem.parentNode && dragItem.parentNode.id === 'tiebreaker-list') {
+            window._tbNormalizeAge(k);
+          }
+        });
+      };
+      _attachTbDnd(tbList);
+      _attachTbDnd(tbExcluded);
 
       // Touch drag-and-drop for tiebreaker criteria
       let _touchDragEl = null;
@@ -848,17 +915,29 @@ function setupCreateTournamentModal() {
         const touch = e.changedTouches[0];
         const target = document.elementFromPoint(touch.clientX, touch.clientY);
         const targetItem = target ? target.closest('[draggable]') : null;
+        const targetList = target ? target.closest('#tiebreaker-list, #tiebreaker-excluded-list') : null;
 
         if (targetItem && targetItem !== _touchDragEl) {
-          const container = _touchDragEl.parentNode;
-          const items = Array.from(container.querySelectorAll('[draggable]'));
-          const fromIdx = items.indexOf(_touchDragEl);
-          const toIdx = items.indexOf(targetItem);
-          if (fromIdx < toIdx) {
-            container.insertBefore(_touchDragEl, targetItem.nextSibling);
+          // insere relativo ao item alvo (mesmo que seja em outro box)
+          const container = targetItem.parentNode;
+          if (container === _touchDragEl.parentNode) {
+            const items = Array.from(container.querySelectorAll('[draggable]'));
+            const fromIdx = items.indexOf(_touchDragEl);
+            const toIdx = items.indexOf(targetItem);
+            if (fromIdx < toIdx) container.insertBefore(_touchDragEl, targetItem.nextSibling);
+            else container.insertBefore(_touchDragEl, targetItem);
           } else {
             container.insertBefore(_touchDragEl, targetItem);
           }
+        } else if (targetList && targetList !== _touchDragEl.parentNode) {
+          // soltou num box vazio (ou área sem item) — move pro fim daquele box
+          targetList.appendChild(_touchDragEl);
+        }
+
+        if (typeof window._tbUpdateRowControls === 'function') window._tbUpdateRowControls(_touchDragEl);
+        var _tk = _touchDragEl.dataset.tb;
+        if ((_tk === 'antiguidade' || _tk === 'juventude') && _touchDragEl.parentNode && _touchDragEl.parentNode.id === 'tiebreaker-list' && typeof window._tbNormalizeAge === 'function') {
+          window._tbNormalizeAge(_tk);
         }
 
         _touchDragEl = null;
@@ -1710,8 +1789,9 @@ function setupCreateTournamentModal() {
       var showAdv = (isLiga || isSuico) && !isMonarch;
       advSection.style.display = showAdv ? 'block' : 'none';
     }
-    var tbAdv = document.querySelector('#tiebreaker-list li[data-tb="pontos_avancados"]');
-    if (tbAdv) tbAdv.style.display = (isLiga || isSuico) ? '' : 'none';
+    document.querySelectorAll('#tiebreaker-list li[data-tb="pontos_avancados"], #tiebreaker-excluded-list li[data-tb="pontos_avancados"]').forEach(function(tbAdv) {
+      tbAdv.style.display = (isLiga || isSuico) ? '' : 'none';
+    });
 
     window._updateAutoCloseVisibility();
     window._updateRegDateVisibility();
@@ -3522,15 +3602,34 @@ function setupCreateTournamentModal() {
     if (t.gruposCount) document.getElementById('grupos-count').value = t.gruposCount;
     if (t.gruposClassified) document.getElementById('grupos-classified').value = t.gruposClassified;
 
-    // Restore tiebreaker order
-    if (t.tiebreakers && t.tiebreakers.length > 0) {
+    // Restore tiebreaker order + excluded box (v2.2.47)
+    {
       const tbList = document.getElementById('tiebreaker-list');
-      if (tbList) {
-        const items = Array.from(tbList.querySelectorAll('li'));
-        t.tiebreakers.forEach(tb => {
-          const item = items.find(li => li.dataset.tb === tb);
-          if (item) tbList.appendChild(item);
+      const tbExcl = document.getElementById('tiebreaker-excluded-list');
+      if (tbList && tbExcl) {
+        // mapa de todos os <li> por chave (em qualquer um dos boxes)
+        var _allTbItems = {};
+        Array.prototype.slice.call(document.querySelectorAll('#tiebreaker-list li, #tiebreaker-excluded-list li')).forEach(function(li) {
+          if (li.dataset.tb) _allTbItems[li.dataset.tb] = li;
         });
+        // 1) ativos na ordem salva
+        if (Array.isArray(t.tiebreakers)) {
+          t.tiebreakers.forEach(function(tb) {
+            var item = _allTbItems[tb];
+            if (item) { tbList.appendChild(item); if (window._tbUpdateRowControls) window._tbUpdateRowControls(item); }
+          });
+        }
+        // 2) excluídos salvos (se houver) pro box de não considerados
+        if (Array.isArray(t.tiebreakersExcluded)) {
+          t.tiebreakersExcluded.forEach(function(tb) {
+            var item = _allTbItems[tb];
+            if (item) { tbExcl.appendChild(item); if (window._tbUpdateRowControls) window._tbUpdateRowControls(item); }
+          });
+        }
+        // 3) garante exclusividade idade (caso dados antigos tragam ambos ativos)
+        if (tbList.querySelector('li[data-tb="antiguidade"]') && tbList.querySelector('li[data-tb="juventude"]') && window._tbNormalizeAge) {
+          window._tbNormalizeAge('antiguidade');
+        }
       }
     }
 
@@ -3883,6 +3982,11 @@ function setupCreateTournamentModal() {
         const tbList = document.getElementById('tiebreaker-list');
         if (tbList) {
           tourData.tiebreakers = Array.from(tbList.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
+        }
+        // v2.2.47: critérios movidos pra "não considerados" (inclui antiguidade/juventude por padrão)
+        const tbExcl = document.getElementById('tiebreaker-excluded-list');
+        if (tbExcl) {
+          tourData.tiebreakersExcluded = Array.from(tbExcl.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
         }
 
         // Sistema de Pontos Avançado (apenas Liga/Suíço puro)

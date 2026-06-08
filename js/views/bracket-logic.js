@@ -242,6 +242,42 @@ function _calcAdvancedPoints(t, playerName, category) {
 }
 window._calcAdvancedPoints = _calcAdvancedPoints;
 
+// v2.2.47: nome do competidor → timestamp de nascimento (pros critérios de
+// desempate antiguidade/juventude). birthDate vem no formato "DD/MM/AAAA".
+// Para duplas/times, usa a MÉDIA das datas dos membros que tiverem data.
+// Também mapeia cada membro individualmente (útil em Rei/Rainha).
+function _tbParseBirth(bd) {
+  if (!bd) return null;
+  var p = String(bd).split('/');
+  if (p.length !== 3) return null;
+  var d = parseInt(p[0], 10), mo = parseInt(p[1], 10), y = parseInt(p[2], 10);
+  if (!y || !mo || !d) return null;
+  var ts = new Date(y, mo - 1, d).getTime();
+  return isNaN(ts) ? null : ts;
+}
+window._tbBirthByName = function(t) {
+  var map = {};
+  var parts = (t && Array.isArray(t.participants)) ? t.participants : [];
+  parts.forEach(function(p) {
+    if (!p || typeof p !== 'object') return;
+    var nm = p.displayName || p.name || '';
+    var times = [];
+    var own = _tbParseBirth(p.birthDate);
+    if (own != null) times.push(own);
+    if (Array.isArray(p.participants)) {
+      p.participants.forEach(function(sub) {
+        var st = _tbParseBirth(sub && sub.birthDate);
+        if (st != null) times.push(st);
+        var sn = sub && (sub.displayName || sub.name);
+        if (sn && st != null && map[sn] == null) map[sn] = st;
+      });
+    }
+    if (nm && times.length) map[nm] = times.reduce(function(a, b) { return a + b; }, 0) / times.length;
+  });
+  return map;
+};
+window._tbParseBirth = _tbParseBirth;
+
 window._computeStandings = _computeStandings; // expose globally for finishTournament
 function _computeStandings(t, category) {
   const scoreMap = {};
@@ -426,6 +462,9 @@ function _computeStandings(t, category) {
   }
   const tiebreakers = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : defaultTb;
 
+  // v2.2.47: mapa nome→timestamp de nascimento (pros critérios antiguidade/juventude)
+  var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
+
   // Build head-to-head map for confronto_direto
   const h2h = {};
   allRoundMatches.forEach(m => {
@@ -499,6 +538,18 @@ function _computeStandings(t, category) {
           diff = (b.advancedPoints || 0) - (a.advancedPoints || 0);
           if (diff !== 0) return diff;
           break;
+        case 'antiguidade': {
+          // mais velho ganha → nascimento mais antigo (timestamp menor) vem primeiro
+          var aoBirth = birthByName[a.name], boBirth = birthByName[b.name];
+          if (aoBirth != null && boBirth != null && aoBirth !== boBirth) return aoBirth - boBirth;
+          break;
+        }
+        case 'juventude': {
+          // mais novo ganha → nascimento mais recente (timestamp maior) vem primeiro
+          var ayBirth = birthByName[a.name], byBirth = birthByName[b.name];
+          if (ayBirth != null && byBirth != null && ayBirth !== byBirth) return byBirth - ayBirth;
+          break;
+        }
         case 'sorteio':
           return Math.random() - 0.5;
       }
@@ -748,6 +799,7 @@ function _rankByTiebreakers(t, playerNames) {
     defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'sorteio'];
   }
   var tiebreakers = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : defaultTb;
+  var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
 
   players.sort(function(a, b) {
     // Primary: last match score diff (closer game = better = higher diff)
@@ -757,6 +809,16 @@ function _rankByTiebreakers(t, playerNames) {
       var tb = tiebreakers[ti];
       var diff = 0;
       switch (tb) {
+        case 'antiguidade': {
+          var aoB = birthByName[a.name], boB = birthByName[b.name];
+          if (aoB != null && boB != null && aoB !== boB) return aoB - boB; // mais velho primeiro
+          break;
+        }
+        case 'juventude': {
+          var ayB = birthByName[a.name], byB = birthByName[b.name];
+          if (ayB != null && byB != null && ayB !== byB) return byB - ayB; // mais novo primeiro
+          break;
+        }
         case 'confronto_direto':
           var k1 = a.name + '|' + b.name;
           var k2 = b.name + '|' + a.name;
@@ -1369,6 +1431,7 @@ function _updateProgressiveClassification(t) {
       _defaultTb = ['pontos_avancados'].concat(_defaultTb);
     }
     var _userTb = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : _defaultTb;
+    var _birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
 
     // ─── Sort comparator: same logic as _computeStandings sort ───
     var _applyTb = function(a, b) {
@@ -1423,6 +1486,16 @@ function _updateProgressiveClassification(t) {
             diff = (b.advancedPoints || 0) - (a.advancedPoints || 0);
             if (diff !== 0) return diff;
             break;
+          case 'antiguidade': {
+            var _aoB = _birthByName[a.name], _boB = _birthByName[b.name];
+            if (_aoB != null && _boB != null && _aoB !== _boB) return _aoB - _boB;
+            break;
+          }
+          case 'juventude': {
+            var _ayB = _birthByName[a.name], _byB = _birthByName[b.name];
+            if (_ayB != null && _byB != null && _ayB !== _byB) return _byB - _ayB;
+            break;
+          }
           case 'sorteio':
             return Math.random() - 0.5;
         }

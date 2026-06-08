@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.47-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Novos critérios de desempate por idade.</b> <b>Antiguidade</b> (mais velho ganha) e <b>Juventude</b> (mais novo ganha) — escolher um manda o outro pros não considerados (são mutuamente exclusivos). Usam a data de nascimento do perfil; em duplas, a média das idades.</li>' +
+        '<li><b>Critérios não considerados.</b> Cada critério ganhou um <b>✕ vermelho</b> que o move pra um box "Não Considerados" abaixo; de lá pode voltar arrastando ou pelo <b>↩ verde</b>. Assim o organizador monta exatamente a lista de desempate que quiser.</li>' +
+        '<li><b>Editar torneio até o fim.</b> O botão <b>Editar</b> agora fica disponível pro organizador até o torneio ser encerrado (antes sumia após o sorteio) — útil pra ajustar datas, local e critérios de desempate com o torneio em andamento.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.46-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Modo misto: separar duplas formadas das sorteadas.</b> Quando o Modo de Inscrição aceita <b>Individual + Times Montados</b> ao mesmo tempo, aparece uma nova opção: <b>Separar por origem</b>. Ligada, gera chaveamentos separados — duplas montadas só enfrentam montadas e duplas sorteadas só enfrentam sorteadas (dois campeões). Desligada (padrão), todas se enfrentam livremente no mesmo chaveamento. Vale para eliminatórias e suíço.</li>' +
