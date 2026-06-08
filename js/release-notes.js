@@ -9,9 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.42-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.2.43-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>Partida casual com 1 jogador real inicia sem aguardar +1.</b> Ao clicar em <b>Iniciar</b> numa sala onde só você está logado (os demais são convidados sem conta, nomes padrão "Jogador 01/02/03" ou nomes do autocompletar que ainda não entraram), o placar abre na hora — antes ficava travado em "⏳ Aguardando +1". A confirmação do segundo jogador só é exigida quando há 2+ pessoas logadas de fato na sala.</li>' +
+        '<li><b>+ Participante e + Placeholders disponíveis enquanto a inscrição estiver aberta.</b> Os botões do organizador agora seguem o estado real da inscrição — ficam visíveis e funcionais mesmo depois do sorteio e do início do torneio, desde que as inscrições continuem abertas (Liga em temporada, inscrição tardia). Novos inscritos entram automaticamente na lista de espera quando o sorteio já saiu. Antes os botões sumiam assim que o sorteio era feito.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +

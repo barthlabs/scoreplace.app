@@ -1420,12 +1420,17 @@ function renderTournaments(container, tournamentId = null) {
         // com inscrição aberta. O "+ Time" continua só antes do sorteio (o fluxo
         // de time não trata lista de espera). addParticipantFunction já roteia
         // pra lista de espera quando o sorteio já saiu.
-        // v2.1.45: +Participante/+Time/+Placeholders disponíveis mesmo com inscrições
-        // ENCERRADAS, mas OMITIDOS depois do sorteio (!sorteioRealizado).
+        // v2.2.43: +Participante e +Placeholders seguem o estado REAL da inscrição
+        // (isAberto) — ficam visíveis e funcionais enquanto as inscrições estiverem
+        // abertas, INCLUSIVE depois do sorteio e do início do torneio (Liga aberta,
+        // late enrollment standby/expand). addParticipantFunction e
+        // addPlaceholdersFunction já roteiam pra lista de espera quando o sorteio
+        // já saiu. +Time continua só antes do sorteio (o fluxo de time não trata
+        // lista de espera).
         const addParticipantBtns = isOrg ? `
-             ${((allowsIndividual || isDoublesMode) && !sorteioRealizado) ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
+             ${((allowsIndividual || isDoublesMode) && isAberto) ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
              ${((allowsTeams && !isDoublesMode) && !sorteioRealizado) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
-             ${!sorteioRealizado ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window.addPlaceholdersFunction('${t.id}')">➕ Placeholders</button>` : ''}
+             ${isAberto ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window.addPlaceholdersFunction('${t.id}')">➕ Placeholders</button>` : ''}
         ` : '';
 
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
