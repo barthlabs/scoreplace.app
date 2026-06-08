@@ -627,6 +627,14 @@ function setupCreateTournamentModal() {
                   </div>
                 </div>
                 <small class="text-muted" style="display:block;margin-top:6px;" id="enroll-mode-desc">${_t('create.enrollModeIndividualDesc')}</small>
+                <!-- v2.2.46: terceiro toggle — só no modo misto (Individual + Times) -->
+                <input type="hidden" id="mixed-pairing-separated" value="false">
+                <div id="mixed-pairing-container" style="display:none;margin-top:8px;">
+                  <div class="toggle-row" id="mixed-pairing-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
+                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🆚</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.mixedPairingLabel')}</span><div class="toggle-desc" id="mixed-pairing-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.mixedPairingFreeDesc')}</div></div></div>
+                    <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="mixed-pairing-toggle" aria-label="Separar duplas por origem" onchange="window._syncMixedPairing()"><span class="toggle-slider"></span></label>
+                  </div>
+                </div>
               </div>
 
               <!-- Auto-close (apenas eliminatórias) -->
@@ -1040,6 +1048,23 @@ function setupCreateTournamentModal() {
     if (sel) sel.value = value;
     var descEl = document.getElementById('enroll-mode-desc');
     if (descEl) descEl.textContent = _enrollModeDescs[value] || '';
+    // v2.2.46: terceiro toggle (separar duplas por origem) só faz sentido no
+    // modo misto — Individual (sorteadas) + Times Montados (formadas) juntos.
+    var mpc = document.getElementById('mixed-pairing-container');
+    if (mpc) mpc.style.display = (value === 'misto') ? 'block' : 'none';
+  };
+
+  // v2.2.46: separar duplas formadas x sorteadas em chaveamentos próprios.
+  window._syncMixedPairing = function() {
+    var tgl = document.getElementById('mixed-pairing-toggle');
+    var hidden = document.getElementById('mixed-pairing-separated');
+    var desc = document.getElementById('mixed-pairing-desc');
+    if (!tgl) return;
+    var on = tgl.checked;
+    if (hidden) hidden.value = on ? 'true' : 'false';
+    if (desc) desc.textContent = on
+      ? (window._t ? window._t('create.mixedPairingSeparatedDesc') : 'Chaveamentos separados.')
+      : (window._t ? window._t('create.mixedPairingFreeDesc') : 'Enfrentam-se livremente.');
   };
 
   // v2.1.65: avisa que faltam montar os times e leva pra edição do Modo de
@@ -3276,6 +3301,12 @@ function setupCreateTournamentModal() {
       _teamTgl.checked = (_enrollMode === 'time' || _enrollMode === 'misto');
       window._syncEnrollToggles();
     }
+    // v2.2.46: restaura toggle de separação por origem (modo misto)
+    var _mpTgl = document.getElementById('mixed-pairing-toggle');
+    if (_mpTgl) {
+      _mpTgl.checked = !!t.mixedPairingSeparated;
+      if (typeof window._syncMixedPairing === 'function') window._syncMixedPairing();
+    }
     if (t.teamSize) document.getElementById('tourn-team-size').value = t.teamSize;
 
     // Restore game types (Simples/Duplas) via toggles
@@ -3682,6 +3713,8 @@ function setupCreateTournamentModal() {
           // v2.1.21: Liga ignora prazo de inscrição (sempre aberta) — limpa o residual.
           registrationLimit: (format === 'Liga' ? '' : regDateVal),
           enrollmentMode: enrollmentVal,
+          // v2.2.46: separar duplas formadas x sorteadas (só vale no modo misto)
+          mixedPairingSeparated: enrollmentVal === 'misto' && (document.getElementById('mixed-pairing-separated') || {}).value === 'true',
           teamSize: teamSizeVal,
           gameTypes: (document.getElementById('tourn-game-types') || {}).value || 'duplas',
           thirdPlace: true,
@@ -4869,6 +4902,12 @@ window._prefillFromTemplate = function(tpl) {
     enrollSel.value = tpl.enrollmentMode;
     window._selectEnrollMode(tpl.enrollmentMode);
   }
+  // v2.2.46: separar duplas por origem (modo misto)
+  var _mpTplTgl = document.getElementById('mixed-pairing-toggle');
+  if (_mpTplTgl) {
+    _mpTplTgl.checked = !!tpl.mixedPairingSeparated;
+    if (typeof window._syncMixedPairing === 'function') window._syncMixedPairing();
+  }
 
   // Max participants
   var maxP = document.getElementById('tourn-max-participants');
@@ -5265,6 +5304,7 @@ window._saveCurrentFormAsTemplate = function() {
       customCategories: customCats,
       combinedCategories: combinedCats,
       enrollmentMode: get('select-inscricao') || 'individual',
+      mixedPairingSeparated: get('mixed-pairing-separated') === 'true',
       teamSize: parseInt(get('tourn-team-size')) || 1,
       gameTypes: get('tourn-game-types') || 'duplas',
       maxParticipants: parseInt(get('tourn-max-participants')) || '',

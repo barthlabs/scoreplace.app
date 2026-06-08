@@ -98,6 +98,40 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
 // v2.1.22: exposto pra reuso (jogos extras de tardios em torneios "expand").
 window._formDoublesTeams = _formDoublesTeams;
 
+// v2.2.46: separação por origem da dupla no modo MISTO.
+// Quando t.mixedPairingSeparated está ligado, duplas formadas manualmente e
+// duplas sorteadas viram CATEGORIAS distintas — o pipeline de chaveamento por
+// categoria (já existente e testado) gera brackets separados, então formadas
+// só enfrentam formadas e sorteadas só enfrentam sorteadas, cada lado com seu
+// campeão. Cruza com categorias existentes (ex.: "Masculino · Duplas sorteadas").
+// Deve ser chamado DEPOIS de _formDoublesTeams (que popula t.teamOrigins).
+window._MIXED_ORIGIN_FORMED = 'Duplas formadas';
+window._MIXED_ORIGIN_DRAWN = 'Duplas sorteadas';
+window._applyMixedOriginCategories = function(t, participants) {
+  if (!t || !Array.isArray(participants)) return;
+  var origins = t.teamOrigins || {};
+  var newCatSet = {};
+  participants.forEach(function(p) {
+    if (!p || typeof p !== 'object') return;
+    var nm = p.displayName || p.name || '';
+    if (nm.indexOf(' / ') === -1) return; // só duplas/times — sobra individual fica de fora
+    var originLbl = (origins[nm] === 'sorteada') ? window._MIXED_ORIGIN_DRAWN : window._MIXED_ORIGIN_FORMED;
+    var existing = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : [];
+    // Não cruzar com rótulos de origem já aplicados (idempotência em re-sorteio).
+    existing = existing.filter(function(c) {
+      return c.indexOf(window._MIXED_ORIGIN_FORMED) === -1 && c.indexOf(window._MIXED_ORIGIN_DRAWN) === -1;
+    });
+    var crossed = (existing.length > 0)
+      ? existing.map(function(c) { return c + ' · ' + originLbl; })
+      : [originLbl];
+    if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, crossed);
+    else { p.categories = crossed; p.category = crossed[0]; }
+    crossed.forEach(function(c) { newCatSet[c] = true; });
+  });
+  var newCats = Object.keys(newCatSet);
+  if (newCats.length > 0) t.combinedCategories = newCats;
+};
+
 // ─── v2.1.26: Inscritos tardios entram NA chave (integração real) ─────────────
 // Em eliminatória com inscrição tardia 'expand', quando ≥4 acumulam na espera,
 // formamos duplas (sorteio). Elas viram INSCRITOS (presença/W.O.) e cada par de
@@ -860,6 +894,13 @@ window.generateDrawFunction = function (tId) {
         if (_formed.leftoverCount > 0) {
             window.AppStore.logAction(tId, `${_formed.leftoverCount} jogador(es) sem time completo (sobra)`);
         }
+    }
+
+    // v2.2.46: modo misto com "separar por origem" → duplas formadas e sorteadas
+    // viram categorias distintas (brackets separados). Aplica-se a eliminatória
+    // (simples/dupla) e suíço; grupos/liga seguem regra antiga (sem separação).
+    if (t.mixedPairingSeparated && enrMode === 'misto' && teamSize === 2 && typeof window._applyMixedOriginCategories === 'function') {
+        window._applyMixedOriginCategories(t, participants);
     }
 
     // 1. Shuffling agora é feito por categoria dentro do loop de geração de matches
