@@ -11332,6 +11332,21 @@ window._openCasualMatch = function(restoreOpts) {
       _teamAssignments[3] !== undefined);
   }
 
+  // v2.2.42-beta: conta participantes REAIS (com uid) atualmente na sala.
+  // O fluxo "ready / Aguardando +N" só faz sentido quando há 2+ pessoas
+  // logadas para confirmar. Quando só o criador é real (os demais slots são
+  // convidados sem conta, nomes default "Jogador 01/02/03" ou nomes do
+  // autocompletar que ainda não entraram na sala), não há ninguém pra dar o
+  // segundo "ready" — então o jogo deve iniciar direto, sem aguardar +1.
+  function _realUidParticipantCount() {
+    var seen = {};
+    for (var i = 0; i < _lobbyParticipants.length; i++) {
+      var p = _lobbyParticipants[i];
+      if (p && p.uid) seen[p.uid] = true;
+    }
+    return Object.keys(seen).length;
+  }
+
   // v2.2.10-beta: condição para iniciar — ≥2 UIDs prontos; se times formados,
   // precisa de pelo menos 1 pronto em cada time.
   function _readyConditionMet(readyUids, freshDoc) {
@@ -11371,6 +11386,12 @@ window._openCasualMatch = function(restoreOpts) {
     var cuUid = cu && cu.uid;
     // Sem UID (guest não logado) — cai na lógica original direta
     if (!cuUid || !_sessionDocId) {
+      await window._casualStart();
+      return;
+    }
+    // v2.2.42-beta: só há 1 participante real na sala (o próprio criador) —
+    // ninguém pra dar o segundo "ready". Inicia direto, sem "Aguardando +1".
+    if (_realUidParticipantCount() < 2) {
       await window._casualStart();
       return;
     }
