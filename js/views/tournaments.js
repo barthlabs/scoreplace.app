@@ -1440,8 +1440,17 @@ function renderTournaments(container, tournamentId = null) {
         // sem inscritos — modal trata empty state. User: 'Essa função de
         // relatório de inscritos deve estar entre os botoes ferramentas do
         // organizador no card de detalhe do torneio.'
+        // v2.2.44: brilho de atenção nos botões do organizador.
+        // _enoughForGame = inscritos confirmados (sem lista de espera) suficientes
+        // pra montar pelo menos 1 jogo (2 lados de teamSize jogadores cada).
+        const _confirmedPlayers = Math.max(0, (individualCount || 0) - (Array.isArray(t.waitlist) ? t.waitlist.length : 0));
+        const _teamSizeN = parseInt(t.teamSize) || 1;
+        const _enoughForGame = Math.floor(_confirmedPlayers / _teamSizeN) >= 2;
+        const _glowGame = (_enoughForGame && !sorteioRealizado) ? ' sp-glow-amber' : '';
+        const _glowEdit = (_enoughForGame && !sorteioRealizado) ? ' sp-glow-indigo' : '';
+        const _glowAnalise = (!_hasTournCats) ? ' sp-glow-indigo' : '';
         // v2.1.45: Análise omitida depois do sorteio.
-        const enrollmentReportBtn = (isOrg && !sorteioRealizado) ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">📊 Análise</button>` : '';
+        const enrollmentReportBtn = (isOrg && !sorteioRealizado) ? `<button class="btn btn-indigo hover-lift${_glowAnalise}" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">📊 Análise</button>` : '';
 
         const isSuicoFormat = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
         const isLigaFormat = window._isLigaFormat(t);
@@ -1467,8 +1476,8 @@ function renderTournaments(container, tournamentId = null) {
             if (isLigaAutoDraw) {
                 // Sem botão manual — auto-draw fica responsável.
             } else if (isLigaFormat && t.drawManual) {
-                sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window.generateDrawFunction('${t.id}')">🎲 Sortear</button>` : '';
-                sortearAberto = (t.status !== 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift" onclick="${sortearOnClick}">🎲 Sortear</button>` : '';
+                sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window.generateDrawFunction('${t.id}')">🎲 Sortear</button>` : '';
+                sortearAberto = (t.status !== 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="${sortearOnClick}">🎲 Sortear</button>` : '';
                 if (hasDraw) {
                     sortearBtn = `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window.generateDrawFunction('${t.id}')">🎲 Próxima Rodada</button>`;
                 }
@@ -1479,8 +1488,8 @@ function renderTournaments(container, tournamentId = null) {
                 // quando user havia cancelado antes — sorteava com defaults silenciosos.
                 // User: 'quando coloquei para sortear depois de ter cancelado ele sorteou
                 // direto sem me perguntar novamente a formação dos grupos.'
-                sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window._handleSortearClick('${t.id}', false)">🎲 Sortear</button>` : '';
-                sortearAberto = (t.status !== 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift" onclick="${sortearOnClick}">🎲 Sortear</button>` : '';
+                sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._handleSortearClick('${t.id}', false)">🎲 Sortear</button>` : '';
+                sortearAberto = (t.status !== 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="${sortearOnClick}">🎲 Sortear</button>` : '';
             }
         }
 
@@ -1988,7 +1997,7 @@ function renderTournaments(container, tournamentId = null) {
               <div style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.35); margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
-                ${(!sorteioRealizado && !isFinished) ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
+                ${(!sorteioRealizado && !isFinished) ? `<button class="btn btn-indigo hover-lift${_glowEdit}" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
                 ${t.status !== 'closed' ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window._sendOrgCommunication('${t.id}')">📢 ${_t('org.communicate')}</button>` : ''}
                 ${addParticipantBtns}
                 ${/* v1.9.98: CSV removido daqui — já está no grid de ações geral do organizador (Regras/Inscritos/Imprimir/CSV/Modo TV). Evita duplicação. */ ''}

@@ -50,6 +50,21 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   border-color: #a78bfa !important;
 }
 
+/* Brilho de atenção em botões de ação do organizador (loop contínuo). */
+@keyframes spGlowAmber {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+  50% { box-shadow: 0 0 16px 3px rgba(251,191,36,0.7); }
+}
+@keyframes spGlowIndigo {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(129,140,248,0); }
+  50% { box-shadow: 0 0 16px 3px rgba(129,140,248,0.7); }
+}
+.sp-glow-amber { animation: spGlowAmber 1.6s ease-in-out infinite; }
+.sp-glow-indigo { animation: spGlowIndigo 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .sp-glow-amber, .sp-glow-indigo { animation: none; }
+}
+
 /* ==== FIXED BACK HEADER ==== */
 .sticky-back-header {
   position: fixed;
