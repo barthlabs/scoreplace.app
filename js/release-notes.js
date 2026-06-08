@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.4-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Ordem padrão dos critérios de desempate ajustada.</b> Agora começa com Pontos Avançados, depois Confronto Direto, Saldo, Vitórias, Buchholz, Sonneborn, Antiguidade e Sorteio — com Juventude entre os não considerados (você ainda pode reordenar arrastando).</li>' +
+        '<li><b>Layout dos botões unificado.</b> O ℹ️ de Buchholz e Sonneborn agora fica ao lado do nome (como no Pontos Avançados) e o ✕ vermelho fica sempre à direita, igual em todos os critérios.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>💯 Pontos Avançados em todos os formatos.</b> O sistema de pontuação por eventos (participação, vitória, games, etc.) deixou de ser exclusivo de Liga/Suíço — agora está disponível em eliminatórias, grupos, Rei/Rainha, Liga e Suíço.</li>' +

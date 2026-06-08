@@ -459,9 +459,9 @@ function _computeStandings(t, category) {
   // Pontos Avançados está ativo, vai pro topo (já era assim).
   // Empty array fallback: se t.tiebreakers existe mas está vazio,
   // usar default em vez de [] (que pulava todos os tiebreakers).
-  var defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'sorteio'];
+  var defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   if (t.scoring && t.scoring.type === 'sets') {
-    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'sorteio'];
+    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   }
   if (t.advancedScoring && t.advancedScoring.enabled) {
     defaultTb = ['pontos_avancados'].concat(defaultTb);
@@ -800,9 +800,9 @@ function _rankByTiebreakers(t, playerNames) {
   // v0.17.40: alinhado com default principal — confronto direto + Buchholz
   // + Sonneborn fazem sentido em repechage também (rank de jogadores que
   // jogaram entre si). Empty array fallback aplicado.
-  var defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'sorteio'];
+  var defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   if (t.scoring && t.scoring.type === 'gsm') {
-    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'sorteio'];
+    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   }
   var tiebreakers = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : defaultTb;
   var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
@@ -1429,9 +1429,9 @@ function _updateProgressiveClassification(t) {
     // ─── User's configured tiebreakers (or default) ───
     // Mesma ordem default que _computeStandings (line 420): alinhada com a
     // UI em create-tournament.js.
-    var _defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'sorteio'];
+    var _defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     if (t.scoring && t.scoring.type === 'sets') {
-      _defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'sorteio'];
+      _defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     }
     if (t.advancedScoring && t.advancedScoring.enabled) {
       _defaultTb = ['pontos_avancados'].concat(_defaultTb);
