@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.14-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Liga usa a barra de progresso rica na dashboard.</b> Antes a Liga mostrava só a barra simples; agora usa a barra rica (com a barra roxa do torneio inteiro), igual aos demais formatos.</li>' +
+        '<li><b>Barra roxa do torneio voltou a aparecer.</b> Quando o fim do torneio vinha com hora (ex.: 2026-06-12T19:59), o cálculo das rodadas planejadas dava data inválida e a barra roxa sumia. Corrigido o parsing de datas.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.13-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Correção: config de Pontos Avançados não salvava em Liga Rei/Rainha.</b> O save excluía o formato Rei/Rainha e gravava advancedScoring como nulo — então quem ativava nesse formato perdia a configuração. Agora salva em todos os formatos.</li>' +

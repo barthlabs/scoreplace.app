@@ -792,9 +792,9 @@ function renderDashboard(container) {
             ${(() => {
               // v2.1.52: box de progresso COMPLETO (mesmo do card de detalhes) no
               // lugar do pill simples de "tempo decorrido".
+              // v2.3.14: Liga TAMBÉM usa a barra rica (com a barra roxa do torneio
+              // inteiro). Antes era excluída — o que deixava só a barra simples.
               if (!sorteioRealizado || isFinished) return '';
-              // Liga: usa os countdowns próprios (próximo sorteio / fim de temporada)
-              if (window._isLigaFormat && window._isLigaFormat(t)) return '';
               return (typeof window._renderTournamentProgress === 'function') ? window._renderTournamentProgress(t) : '';
             })()}
 
@@ -848,11 +848,10 @@ function renderDashboard(container) {
               // Progress bar for active tournaments
               if (typeof window._getTournamentProgress === 'function') {
                 var _prog = window._getTournamentProgress(t);
-                // v2.1.55: quando o box de progresso COMPLETO já aparece (em
-                // andamento, não-Liga, não encerrado), não mostrar a barra simples
-                // — evita as duas barras duplicadas no mesmo card.
-                var _fullBoxShown = sorteioRealizado && !isFinished &&
-                  !(window._isLigaFormat && window._isLigaFormat(t)) && _prog.total > 0;
+                // v2.1.55/v2.3.14: quando o box de progresso COMPLETO (rico) já
+                // aparece (qualquer formato em andamento, não encerrado), não
+                // mostrar a barra simples — evita duplicar. Agora inclui Liga.
+                var _fullBoxShown = sorteioRealizado && !isFinished && _prog.total > 0;
                 if (_prog.total > 0 && !_fullBoxShown) {
                   var _barColor = _prog.pct === 100 ? '#10b981' : (_prog.pct > 50 ? '#3b82f6' : '#f59e0b');
                   _html += '<div class="info-box" style="margin-top: 10px; padding: 8px 12px;">';

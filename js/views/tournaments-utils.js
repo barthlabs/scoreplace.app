@@ -645,8 +645,13 @@ window._ligaTournamentProgress = function(t) {
   });
   var roundsPlanned = t.rounds.length;
   if (t.drawManual !== true && t.drawFirstDate) {
-    var firstDraw = new Date(t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')).getTime();
-    var endMs = t.endDate ? new Date(t.endDate + 'T23:59:59').getTime() : null;
+    // v2.3.14: parsing robusto — drawFirstDate/endDate podem já vir com 'T<hora>'
+    // (ex.: endDate "2026-06-12T19:59"). Antes concatenava 'T...' num valor que
+    // já tinha T → Data inválida → roundsPlanned ficava 1 → barra roxa sumia.
+    var _fdStr = String(t.drawFirstDate).indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00'));
+    var firstDraw = new Date(_fdStr).getTime();
+    var _endStr = t.endDate ? (String(t.endDate).indexOf('T') > -1 ? t.endDate : (t.endDate + 'T23:59:59')) : null;
+    var endMs = _endStr ? new Date(_endStr).getTime() : null;
     var intervalDays = parseInt(t.drawIntervalDays) || 7; if (intervalDays < 1) intervalDays = 1;
     var intervalMs = intervalDays * 86400000;
     if (!isNaN(firstDraw) && endMs && endMs > firstDraw) {
