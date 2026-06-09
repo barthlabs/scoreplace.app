@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.8-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏆 Barra de progresso do torneio completo (Liga).</b> Abaixo das barras de tempo agora há uma barra do torneio inteiro — ex.: "24/120 jogos · rodada 1 de 5" — calculada pelas rodadas planejadas (do 1º sorteio até o fim, pelo intervalo). O contador de cima passa a refletir a rodada atual, não a soma de todas.</li>' +
+        '<li><b>Auto-correção de rodada gerada antes da hora.</b> Ligas que tinham a próxima rodada criada cedo (bug pré-v2.3.7) são corrigidas automaticamente: a rodada extra sem resultados é removida e volta a ser sorteada no horário agendado.</li>' +
+        '<li><b>"Partidas disputadas" não conta mais folgas.</b> Em rodadas com jogador de folga (sit-out), o número de partidas disputadas estava 1 a mais (ex.: 25 em vez de 24). Corrigido.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.7-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Correção crítica: Liga não gera mais a próxima rodada antes da hora.</b> Numa Liga com sorteio agendado, lançar o último placar da rodada disparava a geração imediata da rodada seguinte — antes do horário marcado. Isso fazia aparecer "Rodada 2" cedo e inflava o contador de partidas (ex.: 24/48). Agora, ao encerrar a rodada, o sistema apenas atualiza a classificação e aguarda o sorteio agendado.</li>' +

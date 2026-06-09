@@ -629,10 +629,54 @@ window._estimateTournamentMinutes = function(t) {
   var slots = Math.ceil(totalMatches / courts);
   return slots * timePerSlot;
 };
+// v2.3.8: progresso do TORNEIO INTEIRO para Liga (todas as rodadas planejadas).
+// Diferente de _getTournamentProgress, que conta só as rodadas que JÁ existem.
+// Retorna null se não for Liga ou não houver rodada. perRound usa a 1ª rodada
+// (sem sit-outs) como referência; roundsPlanned vem do agendamento
+// (drawFirstDate..endDate / intervalo) quando agendado, senão das existentes.
+window._ligaTournamentProgress = function(t) {
+  if (!t || !(window._isLigaFormat && window._isLigaFormat(t))) return null;
+  if (!Array.isArray(t.rounds) || t.rounds.length === 0) return null;
+  var perRound = (t.rounds[0].matches || []).filter(function(m){ return !m.isSitOut; }).length;
+  if (perRound < 1) return null;
+  var completedAll = 0;
+  t.rounds.forEach(function(r){
+    (r.matches || []).forEach(function(m){ if (m.winner && !m.isSitOut) completedAll++; });
+  });
+  var roundsPlanned = t.rounds.length;
+  if (t.drawManual !== true && t.drawFirstDate) {
+    var firstDraw = new Date(t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')).getTime();
+    var endMs = t.endDate ? new Date(t.endDate + 'T23:59:59').getTime() : null;
+    var intervalDays = parseInt(t.drawIntervalDays) || 7; if (intervalDays < 1) intervalDays = 1;
+    var intervalMs = intervalDays * 86400000;
+    if (!isNaN(firstDraw) && endMs && endMs > firstDraw) {
+      roundsPlanned = Math.floor((endMs - firstDraw) / intervalMs) + 1;
+    }
+  }
+  if (roundsPlanned < t.rounds.length) roundsPlanned = t.rounds.length;
+  var totalPlanned = roundsPlanned * perRound;
+  var pct = totalPlanned > 0 ? Math.round(completedAll / totalPlanned * 100) : 0;
+  return { perRound: perRound, completedAll: completedAll, roundsPlanned: roundsPlanned,
+           totalPlanned: totalPlanned, pct: pct, currentRoundNum: t.rounds.length };
+};
 // HTML interno (recomputado a cada tick).
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
   if (!prog.total) return '';
+  // v2.3.8: barra do TORNEIO inteiro (Liga multi-rodada) — anexada ao fim.
+  var _ligaBarHtml = '';
+  var _lp = window._ligaTournamentProgress(t);
+  if (_lp && _lp.roundsPlanned > 1) {
+    _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
+        '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
+        '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _lp.completedAll + '/' + _lp.totalPlanned + ' jogos · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned + '</span>' +
+      '</div>' +
+      '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">' +
+        '<div style="width:' + _lp.pct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
+      '</div>' +
+    '</div>';
+  }
   var isFinished = t.status === 'finished' || !!t.finishedAt;
   var now = Date.now();
   var actualStart = t.tournamentStarted ? (+t.tournamentStarted) : null;
@@ -658,7 +702,8 @@ window._buildProgressInner = function(t) {
       '<div style="width:100%;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">' +
         '<div style="width:' + prog.pct + '%;height:100%;background:' + c + ';border-radius:4px;transition:width 0.5s ease;"></div>' +
       '</div>' +
-      (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ Todas as partidas concluídas!</div>' : '');
+      (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ Todas as partidas concluídas!</div>' : '') +
+      _ligaBarHtml;
   }
 
   // finishedAt costuma vir como STRING ISO — parsear direito (não usar +str=NaN).
@@ -722,7 +767,7 @@ window._buildProgressInner = function(t) {
     _progCol(schedStart, 'início programado', 'flex-start') +
     _progCol(plannedEnd, 'final programado', 'flex-end') +
   '</div>';
-  return head + topRow + realBar + blueBar + botRow;
+  return head + topRow + realBar + blueBar + botRow + _ligaBarHtml;
 };
 window._renderTournamentProgress = function(t) {
   var prog = window._getTournamentProgress(t);

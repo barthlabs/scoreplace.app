@@ -2916,7 +2916,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           '<div><div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">' + _t('bracket.statStreak') + '</div>' +
           '<div style="font-weight: 700; color: var(--text-bright);">' + byStreak[0].name + ' <span style="color: #10b981;">(' + byStreak[0].streak + ' seguidas)</span></div></div></div>');
       }
-      var totalMatches = rounds.reduce(function(sum, r) { return sum + (r.matches || []).filter(function(m) { return m.winner && !m.isBye; }).length; }, 0);
+      // v2.3.8: exclui sit-outs (jogador que folga na rodada) — não são partidas
+      // disputadas. Antes contava 25 (24 jogos reais + 1 folga com "vencedor").
+      var totalMatches = rounds.reduce(function(sum, r) { return sum + (r.matches || []).filter(function(m) { return m.winner && !m.isBye && !m.isSitOut; }).length; }, 0);
       var totalDraws = rounds.reduce(function(sum, r) { return sum + (r.matches || []).filter(function(m) { return m.winner === 'draw' || m.draw; }).length; }, 0);
       if (totalMatches > 0) {
         statItems.push('<div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(99,102,241,0.08); border-radius: 10px; border-left: 3px solid #6366f1;">' +

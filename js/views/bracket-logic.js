@@ -2616,6 +2616,41 @@ function _generateNextRoundForPlayers(t, category) {
   });
 }
 
+// ─── v2.3.8: self-heal de rodadas geradas ANTES da hora ─────────────────────
+// O bug pré-v2.3.7 fazia COMPLETAR a rodada gerar a SEGUINTE imediatamente,
+// antes do sorteio agendado. Esta função remove rodadas extras que (a) ainda
+// não chegaram no horário agendado E (b) não têm nenhum resultado lançado.
+// Roda no poller (só organizador escreve) e corrige os dados já afetados sem
+// intervenção manual. Retorna true se removeu alguma rodada.
+function _healPrematureLigaRounds(t) {
+  if (!(window._isLigaFormat && window._isLigaFormat(t))) return false;
+  if (t.drawManual === true || !t.drawFirstDate) return false;
+  if (!Array.isArray(t.rounds) || t.rounds.length < 2) return false;
+  var firstDraw = new Date(t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')).getTime();
+  if (isNaN(firstDraw)) return false;
+  var intervalDays = parseInt(t.drawIntervalDays) || 7;
+  if (intervalDays < 1) intervalDays = 1;
+  var intervalMs = intervalDays * 86400000;
+  var now = Date.now();
+  var removed = false;
+  while (t.rounds.length >= 2) {
+    var lastIdx = t.rounds.length - 1;
+    // idx 1 = 2ª rodada = firstDraw + 1 intervalo; idx N = firstDraw + N intervalos
+    var scheduledForLast = firstDraw + lastIdx * intervalMs;
+    if (scheduledForLast <= now) break;            // horário do sorteio já chegou → legítima
+    var lastRound = t.rounds[lastIdx];
+    var played = (lastRound && lastRound.matches || []).some(function(m) { return m.winner && !m.isSitOut; });
+    if (played) break;                             // tem resultado → não mexe
+    t.rounds.pop();
+    removed = true;
+  }
+  if (removed && typeof _computeStandings === 'function') {
+    t.standings = _computeStandings(t);
+  }
+  return removed;
+}
+window._healPrematureLigaRounds = _healPrematureLigaRounds;
+
 // ─── Liga auto-draw poller ──────────────────────────────────────────────────
 // Runs periodically on the organizer's browser. For every Liga tournament
 // where drawManual is off and drawFirstDate/Time are set, fires the scheduled
@@ -2658,6 +2693,23 @@ window._checkLigaAutoDraws = async function() {
 
     // Skip finished
     if (t.status === 'finished') continue;
+
+    // v2.3.8: corrige rodadas geradas antes da hora (bug pré-v2.3.7). Remove a
+    // rodada extra prematura, salva e re-renderiza a view atual. Segue o fluxo
+    // normal depois (pode ser hora de um sorteio legítimo).
+    if (_healPrematureLigaRounds(t)) {
+      t.updatedAt = new Date().toISOString();
+      try { await window.AppStore.syncImmediate(t.id); } catch (e) { window._warn('[heal] save failed', e); }
+      try {
+        var _h = (window.location && window.location.hash) || '';
+        var _vc = document.getElementById('view-container');
+        if (_vc && _h.indexOf('#tournaments/' + t.id) === 0 && typeof window.renderTournaments === 'function') {
+          window.renderTournaments(_vc, t.id);
+        } else if (_h.indexOf('#bracket/' + t.id) === 0 && typeof window._rerenderBracket === 'function') {
+          window._rerenderBracket(t.id);
+        }
+      } catch (e) {}
+    }
 
     // Stop if end date has passed
     if (t.endDate) {
