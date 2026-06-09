@@ -477,6 +477,62 @@
     ];
   }
 
+  // v2.3.41: helper — pula um step cujo alvo não existe/está invisível AGORA
+  // (seções opcionais: convites, preferidos, etc.). Não marca visto → reaparece
+  // numa próxima visita se o elemento existir.
+  function _missing(sel) {
+    try { var e = document.querySelector(sel); if (!e) return true; var r = e.getBoundingClientRect(); return r.width <= 0 || r.height <= 0; }
+    catch (e2) { return true; }
+  }
+  function _miss(sel) { return function () { return _missing(sel); }; }
+
+  // Botões da hero box da dashboard (Place, Pessoas, Ler QR, Convidar) — só na
+  // rota da dashboard. Cobrem a "porta de entrada" de cada funcionalidade.
+  function _heroSteps() {
+    return [
+      { id: 'dash_place', el: '#btn-place', waitFor: _isDashboardRoute, title: '📍 Place', text: 'Ache quadras e arenas perto de você e marque presença pra avisar os amigos.' },
+      { id: 'dash_people', el: '#btn-people', waitFor: _isDashboardRoute, title: '👥 Pessoas', text: 'Encontre outros jogadores, adicione amigos e veja quem joga o quê.' },
+      { id: 'dash_qr', el: '#btn-scan-qr', waitFor: _isDashboardRoute, title: '📷 Ler QR Code', text: 'Aponte a câmera num QR de torneio ou partida pra entrar na hora — ou digite o código.' },
+      { id: 'dash_invite', el: '#btn-invite-app', waitFor: _isDashboardRoute, title: '📱 Convidar', text: 'Chame amigos pro app: mostre o QR ou compartilhe o link de convite.' }
+    ];
+  }
+  function _dashboardSteps() { return _menuSteps().concat(_heroSteps()); }
+
+  // Pessoas (#explore)
+  function _exploreSteps() {
+    return [
+      { id: 'ex_search', el: '#explore-search-input', title: '🔍 Buscar pessoas', text: 'Procure jogadores por nome, cidade ou esporte.' },
+      { id: 'ex_pending', el: '#explore-pending', title: '📨 Convites recebidos', text: 'Pedidos de amizade pra você aceitar ou recusar aparecem aqui.', skipIf: _miss('#explore-pending') },
+      { id: 'ex_results', el: '#explore-results', title: '➕ Outros jogadores', text: 'Pessoas que ainda não são suas amigas — toque em adicionar pra mandar um pedido de amizade.', skipIf: _miss('#explore-results') },
+      { id: 'ex_friends', el: '#explore-friends', title: '🤝 Seus amigos', text: 'Quem você já tem como amigo — veja perfis, parcerias e jogos em comum.', skipIf: _miss('#explore-friends') },
+      { id: 'ex_sent', el: '#explore-sent', title: '✉️ Convites enviados', text: 'Pedidos que você mandou e aguardam resposta — dá pra cancelar.', skipIf: _miss('#explore-sent') }
+    ];
+  }
+
+  // Place (#place / #venues)
+  function _placeSteps() {
+    return [
+      { id: 'pl_sports', el: '#venues-sport-pills', title: '🎾 Modalidades', text: 'Filtre os locais pelas modalidades que você joga (pode escolher mais de uma).', skipIf: _miss('#venues-sport-pills') },
+      { id: 'pl_search', el: '#venues-location', title: '🔎 Buscar local', text: 'Procure um local por nome, endereço ou bairro.', skipIf: _miss('#venues-location') },
+      { id: 'pl_gps', el: '#venues-geo-btn', title: '📍 Sua localização', text: 'Use o GPS pra centrar o mapa e achar locais perto de você.', skipIf: _miss('#venues-geo-btn') },
+      { id: 'pl_map', el: '#venues-map', title: '🗺️ Mapa', text: 'Os pins são os locais; o círculo mostra o seu raio de busca.', skipIf: _miss('#venues-map') },
+      { id: 'pl_checkin', el: '[id^="pref-checkin-btn-"]', title: '📍 Estou aqui agora', text: 'Nos seus locais preferidos, avise que está jogando agora — os amigos veem.', skipIf: _miss('[id^="pref-checkin-btn-"]') },
+      { id: 'pl_plan', el: '[id^="pref-plan-btn-"]', title: '🗓️ Planejar ida', text: 'Marque que vai jogar mais tarde e combine com a galera.', skipIf: _miss('[id^="pref-plan-btn-"]') },
+      { id: 'pl_results', el: '#venues-results', title: '🏟️ Locais perto', text: 'Toque num card pra ver detalhes, horários e quem está por lá.', skipIf: _miss('#venues-results') },
+      { id: 'pl_register', el: '#venues-register-btn', title: '➕ Cadastrar local', text: 'Não achou seu local? Cadastre você mesmo e adicione as quadras.', skipIf: _miss('#venues-register-btn') }
+    ];
+  }
+
+  // Convidar (#invite)
+  function _inviteSteps() {
+    return [
+      { id: 'iv_qr', el: '#qr-code-img', title: '📱 Convide com QR', text: 'Peça pro seu amigo apontar a câmera nesse QR pra entrar no app já te seguindo.' },
+      { id: 'iv_copy', el: '#invite-copy-btn', title: '📋 Copiar link', text: 'Copie o link do convite pra mandar em qualquer app.', skipIf: _miss('#invite-copy-btn') },
+      { id: 'iv_download', el: '#invite-download-btn', title: '💾 Baixar QR', text: 'Salve a imagem do QR pra postar ou enviar.', skipIf: _miss('#invite-download-btn') },
+      { id: 'iv_print', el: '#invite-print-btn', title: '🖨️ Imprimir', text: 'Imprima o QR pra deixar no seu clube ou quadra.', skipIf: _miss('#invite-print-btn') }
+    ];
+  }
+
   // ── gatilhos públicos ─────────────────────────────────────────────────────
   function _init(context, providerFn) {
     try {
@@ -491,7 +547,7 @@
       _armIdle();
     } catch (e) { _stop(); }
   }
-  function autoStartDashboard() { _init('dashboard', _menuSteps); }
+  function autoStartDashboard() { _init('dashboard', _dashboardSteps); }
   // v2.3.34: contas novas caem direto no perfil → aqui as dicas dos CAMPOS do
   // perfil vêm primeiro (sem o hamburger). As dicas do hamburger/menu rodam
   // no contexto da dashboard (autoStartDashboard / _menuSteps).
@@ -500,12 +556,14 @@
     try { markSeen('profile_entry'); } catch (e) {}
     _init('profile', _profileSteps);
   }
+  function startExploreTour() { _init('explore', _exploreSteps); }
+  function startPlaceTour() { _init('place', _placeSteps); }
+  function startInviteTour() { _init('invite', _inviteSteps); }
 
-  // sai de dashboard/perfil → para o watcher (outras telas não disparam dicas)
-  window.addEventListener('hashchange', function () {
-    var h = (window.location.hash || '').toLowerCase();
-    if (h.indexOf('#dashboard') !== 0 && h.indexOf('#profile') !== 0) _stop();
-  });
+  // v2.3.41: cada tela tem seu próprio tour, escopado pela rota. Ao navegar,
+  // para o tour atual — a render da nova tela rearma o tour dela. Soft-refresh
+  // (snapshot, sem mudança de hash) não dispara hashchange, então não reseta.
+  window.addEventListener('hashchange', function () { _stop(); });
 
   // ── shim de compat: o toggle do perfil chama window._hintSystem.* ───────────
   window._hintSystem = {
@@ -522,6 +580,9 @@
   window._coach = {
     autoStartDashboard: autoStartDashboard,
     startProfileTour: startProfileTour,
+    startExploreTour: startExploreTour,
+    startPlaceTour: startPlaceTour,
+    startInviteTour: startInviteTour,
     isDisabled: isDisabled,
     setEnabled: setEnabled,
     reset: function () { _saveSeen({}); },

@@ -389,7 +389,7 @@
   function _registerCtaHtml() {
     return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
       '<span style="font-size:0.8rem;color:var(--text-muted);">Não encontrou seu local?</span>' +
-      '<button class="btn btn-sm btn-primary hover-lift" onclick="window.location.hash=\'#my-venues\'" style="white-space:nowrap;">+ Cadastrar local</button>' +
+      '<button id="venues-register-btn" class="btn btn-sm btn-primary hover-lift" onclick="window.location.hash=\'#my-venues\'" style="white-space:nowrap;">+ Cadastrar local</button>' +
     '</div>';
   }
 
@@ -4286,5 +4286,7 @@
     if (deepLinkPlaceId && typeof window._venuesOpenDetail === 'function') {
       setTimeout(function() { window._venuesOpenDetail(deepLinkPlaceId); }, 150);
     }
+    // v2.3.41: tour de coachmarks da tela Place (idle-driven, self-guardado)
+    if (window._coach && typeof window._coach.startPlaceTour === 'function') window._coach.startPlaceTour();
   };
 })();

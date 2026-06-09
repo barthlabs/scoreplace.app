@@ -80,6 +80,9 @@ function renderExplore(container) {
 
   // Auto-load non-friend users
   _performUserSearch('', myUid, myFriends, mySent, myReceived);
+
+  // v2.3.41: tour de coachmarks da tela Pessoas (idle-driven, self-guardado)
+  if (window._coach && typeof window._coach.startExploreTour === 'function') window._coach.startExploreTour();
 }
 
 // ---- Helper: check if a participant entry matches a given user (by email OR displayName) ----
