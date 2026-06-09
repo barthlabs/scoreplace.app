@@ -2828,15 +2828,31 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         if (!m.p1 && !m.p2) return;
         var w = m.winner;
         var isDraw = w === 'draw' || m.draw;
-        var p1Style = w === m.p1 ? 'color:#4ade80;font-weight:700;' : (isDraw ? 'color:#94a3b8;' : 'color:var(--text-muted);opacity:0.7;');
-        var p2Style = w === m.p2 ? 'color:#4ade80;font-weight:700;' : (isDraw ? 'color:#94a3b8;' : 'color:var(--text-muted);opacity:0.7;');
-        var score = (m.scoreP1 !== undefined && m.scoreP1 !== null) ? (m.scoreP1 + ' x ' + m.scoreP2) : (w ? (isDraw ? _t('bracket.draw') : '') : _t('bracket.pending'));
+        var p1Win = !!w && w === m.p1;
+        var p2Win = !!w && w === m.p2;
+        var p1Style = p1Win ? 'color:#4ade80;font-weight:700;' : (isDraw ? 'color:#94a3b8;' : 'color:var(--text-muted);opacity:0.8;');
+        var p2Style = p2Win ? 'color:#4ade80;font-weight:700;' : (isDraw ? 'color:#94a3b8;' : 'color:var(--text-muted);opacity:0.8;');
+        var hasScore = (m.scoreP1 !== undefined && m.scoreP1 !== null);
+        // v2.3.5: layout empilhado (dupla + placar à direita), igual aos cards
+        // do bracket. Antes era p1 | placar | p2 em 3 colunas num card estreito —
+        // com nomes de dupla longos o placar "6 x 2" quebrava e colava nos nomes.
+        var rowS = 'display:flex;justify-content:space-between;align-items:center;gap:8px;line-height:1.25;';
+        var nameS = 'flex:1;min-width:0;overflow-wrap:anywhere;';
+        var numS = 'flex-shrink:0;font-weight:700;min-width:16px;text-align:right;';
+        var footer = '';
+        if (!w) footer = '<div style="font-size:0.65rem;color:var(--text-muted);text-align:center;margin-top:3px;">' + _t('bracket.pending') + '</div>';
+        else if (isDraw && !hasScore) footer = '<div style="font-size:0.65rem;color:#94a3b8;text-align:center;margin-top:3px;">' + _t('bracket.draw') + '</div>';
         prevRoundsInner += '<div style="min-width: 200px; flex: 1; max-width: 280px; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem;">' +
-          '<div style="display: flex; justify-content: space-between; align-items: center;">' +
-          '<span style="' + p1Style + '">' + (m.p1 || 'TBD') + '</span>' +
-          '<span style="font-size: 0.7rem; color: var(--text-muted); margin: 0 6px;">' + score + '</span>' +
-          '<span style="' + p2Style + '">' + (m.p2 || 'TBD') + '</span>' +
-          '</div></div>';
+          '<div style="' + rowS + '">' +
+            '<span style="' + nameS + p1Style + '">' + (m.p1 || 'TBD') + '</span>' +
+            '<span style="' + numS + (p1Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP1 : '') + '</span>' +
+          '</div>' +
+          '<div style="' + rowS + 'margin-top:3px;">' +
+            '<span style="' + nameS + p2Style + '">' + (m.p2 || 'TBD') + '</span>' +
+            '<span style="' + numS + (p2Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP2 : '') + '</span>' +
+          '</div>' +
+          footer +
+        '</div>';
       });
       prevRoundsInner += '</div></div>';
     }
