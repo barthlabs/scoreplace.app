@@ -79,7 +79,9 @@
   }
 
   function _matchComplete(m) {
-    return !!(m && (m.winner || m.isBye));
+    // v2.3.9: sit-out (folga) e BYE não são jogos a disputar — contam como
+    // "resolvidos" pra fins de rodada completa, mesmo sem winner.
+    return !!(m && (m.winner || m.isBye || m.isSitOut));
   }
 
   function _roundStatus(matches) {

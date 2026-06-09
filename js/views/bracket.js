@@ -1934,7 +1934,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult) {
     // already exposes.
     var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: sg.players, matches: sg.matches }) : [];
     var matches = sg.matches || [];
-    var groupDone = matches.length > 0 && matches.every(function(m) { return !!m.winner; });
+    var groupDone = matches.length > 0 && matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
     if (!groupDone) allGroupsDone = false;
 
     // Standings table — no crown; qualified rows still highlighted via CLASSIF badge
@@ -2050,8 +2050,8 @@ function renderGroupStage(t, isOrg, canEnterResult) {
   // Check if all group matches are complete (adapter-derived)
   const allGroupsDone = subgroups.every(function(sg) {
     var rds = sg.rounds || [];
-    if (rds.length > 0) return rds.every(function(r) { return (r.matches || []).every(function(m) { return m.winner; }); });
-    return (sg.matches || []).every(function(m) { return m.winner; });
+    if (rds.length > 0) return rds.every(function(r) { return (r.matches || []).every(function(m) { return m.winner || m.isBye || m.isSitOut; }); });
+    return (sg.matches || []).every(function(m) { return m.winner || m.isBye || m.isSitOut; });
   });
 
   // v1.0.97-beta: faltava ')' fechando a chamada — onclick virava JS inválido
@@ -2389,7 +2389,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   });
 
   const currentRoundData = rounds[currentRound - 1];
-  const allComplete = (currentRoundData.matches || []).every(m => m.winner);
+  const allComplete = (currentRoundData.matches || []).every(m => m.winner || m.isBye || m.isSitOut);
   const isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
   const isLigaFmt = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
   const maxRounds = t.swissRounds || 99;
@@ -2581,7 +2581,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _monarchGlobalMatchNum = _monarchPrevRoundsMatches;
         var _renderGroup = function(g) {
           var gStandings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings(g) : [];
-          var gDone = g.matches.length > 0 && g.matches.every(function(m) { return !!m.winner; });
+          var gDone = g.matches.length > 0 && g.matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
           var gRows = gStandings.map(function(s, si) {
             var diff = s.pointsFor - s.pointsAgainst;
             var setDiff = s.setsWon - s.setsLost;
@@ -2819,7 +2819,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       var rd = rounds[ri];
       if (!rd || !rd.matches || rd.matches.length === 0) continue;
       var prevMatchOffset = rounds.slice(0, ri).reduce(function(sum, r) { return sum + (r.matches || []).length; }, 0);
-      var rdComplete = (rd.matches || []).every(function(m) { return m.winner; });
+      var rdComplete = (rd.matches || []).every(function(m) { return m.winner || m.isBye || m.isSitOut; });
       var rdIsRR = rd.format === 'rei_rainha';
       prevRoundsInner += '<div style="margin-bottom: 12px;">' +
         '<div style="font-weight: 700; font-size: 0.85rem; color: var(--text-bright); margin-bottom: 8px;">' + (rdIsRR ? '👑 ' : '') + _t('bracket.round', {n: ri + 1}) + (rdComplete ? ' — ' + _t('bracket.complete') + ' ✓' : '') + '</div>' +

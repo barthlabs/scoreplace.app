@@ -98,7 +98,7 @@ function _checkGroupRoundComplete(t, groupIndex) {
   const g = t.groups[groupIndex];
   const activeRound = (g.rounds || []).find(r => r.status === 'active');
   if (!activeRound) return;
-  const allDone = (activeRound.matches || []).every(m => m.winner);
+  const allDone = (activeRound.matches || []).every(m => m.winner || m.isBye || m.isSitOut);
   if (allDone) {
     activeRound.status = 'complete';
     // Activate next pending round
@@ -332,14 +332,18 @@ function _computeStandings(t, category) {
         if (scoreMap[m.p2]) { scoreMap[m.p2].setsWon += sw2; scoreMap[m.p2].setsLost += sw1; scoreMap[m.p2].gamesWon += gw2; scoreMap[m.p2].gamesLost += gw1; scoreMap[m.p2].tiebreaksWon += tb2; }
       }
 
-      // Sit-out: player receives average points compensation (Liga)
-      if (m.isSitOut && m.p1 && m.sitOutPoints !== undefined) {
-        _ensureEntry(m.p1);
-        scoreMap[m.p1].points += (m.sitOutPoints || 0);
+      // Sit-out: player receives average points compensation (Liga). v2.3.9:
+      // retorna pra QUALQUER sit-out (com ou sem sitOutPoints, com ou sem
+      // winner legado) — folga nunca conta como vitória/partida disputada.
+      if (m.isSitOut) {
+        if (m.p1 && m.sitOutPoints !== undefined) {
+          _ensureEntry(m.p1);
+          scoreMap[m.p1].points += (m.sitOutPoints || 0);
+        }
         return;
       }
       // Skip BYE and unresolved matches
-      if (!m.winner || m.isBye) return;
+      if (!m.winner || m.isBye || m.isSitOut) return;
 
       // Rei/Rainha (monarch) matches in Liga: individual stats from team matches
       if (m.isMonarch && m.team1 && m.team2) {
@@ -474,7 +478,7 @@ function _computeStandings(t, category) {
   // Build head-to-head map for confronto_direto
   const h2h = {};
   allRoundMatches.forEach(m => {
-    if (!m.winner || m.isBye) return;
+    if (!m.winner || m.isBye || m.isSitOut) return;
     const isDraw = m.winner === 'draw' || m.draw;
     if (isDraw) {
       const key = `${m.p1}|||${m.p2}|||d`;
@@ -712,7 +716,7 @@ function _advanceWinner(t, completedMatch) {
   // Swiss/Liga: check if round is fully complete
   if (completedMatch.roundIndex !== undefined) {
     const round = (t.rounds || [])[completedMatch.roundIndex];
-    if (round && (round.matches || []).every(m => m.winner)) {
+    if (round && (round.matches || []).every(m => m.winner || m.isBye || m.isSitOut)) {
       round.status = 'complete';
       t.standings = _computeStandings(t);
     }
@@ -738,7 +742,7 @@ function _rankByTiebreakers(t, playerNames) {
     var lastScoreDiff = 0, lastPointsScored = 0;
 
     allMatches.forEach(function(m) {
-      if (!m.winner || m.isBye) return;
+      if (!m.winner || m.isBye || m.isSitOut) return;
       if (m.p1 !== name && m.p2 !== name) return;
       var isP1 = m.p1 === name;
       var scored = parseInt(isP1 ? m.scoreP1 : m.scoreP2) || 0;
@@ -790,7 +794,7 @@ function _rankByTiebreakers(t, playerNames) {
   // Build head-to-head map
   var h2h = {};
   allMatches.forEach(function(m) {
-    if (!m.winner || m.isBye) return;
+    if (!m.winner || m.isBye || m.isSitOut) return;
     var key = m.p1 + '|' + m.p2;
     if (!h2h[key]) h2h[key] = { w1: 0, w2: 0 };
     if (m.winner === m.p1) h2h[key].w1++;
@@ -1154,7 +1158,7 @@ function _updateProgressiveClassification(t) {
   function _getPlayerHistory(playerName) {
     var totalScored = 0, totalConceded = 0, matchesWon = 0;
     allMatches.forEach(function(m) {
-      if (!m.winner || m.isBye) return;
+      if (!m.winner || m.isBye || m.isSitOut) return;
       if (m.p1 !== playerName && m.p2 !== playerName) return;
       var isP1 = m.p1 === playerName;
       var scored = parseInt(isP1 ? m.scoreP1 : m.scoreP2) || 0;
@@ -1345,7 +1349,7 @@ function _updateProgressiveClassification(t) {
         if (nm) ensure(nm);
       });
       groupMatches.forEach(function(m) {
-        if (!m.winner || m.isBye) return;
+        if (!m.winner || m.isBye || m.isSitOut) return;
         ensure(m.p1); ensure(m.p2);
         var s1 = parseInt(m.scoreP1) || 0;
         var s2 = parseInt(m.scoreP2) || 0;
@@ -1386,7 +1390,7 @@ function _updateProgressiveClassification(t) {
       Object.keys(smap).forEach(function(nm) {
         var s = smap[nm];
         groupMatches.forEach(function(m) {
-          if (!m.winner || m.isBye) return;
+          if (!m.winner || m.isBye || m.isSitOut) return;
           if (m.p1 === s.name && smap[m.p2]) s.buchholz += smap[m.p2].points;
           if (m.p2 === s.name && smap[m.p1]) s.buchholz += smap[m.p1].points;
         });
@@ -1395,7 +1399,7 @@ function _updateProgressiveClassification(t) {
       Object.keys(smap).forEach(function(nm) {
         var s = smap[nm];
         groupMatches.forEach(function(m) {
-          if (!m.winner || m.isBye) return;
+          if (!m.winner || m.isBye || m.isSitOut) return;
           var isDraw = m.draw || m.winner === 'draw';
           var opp = m.p1 === s.name ? m.p2 : (m.p2 === s.name ? m.p1 : null);
           if (!opp || !smap[opp]) return;
@@ -1414,7 +1418,7 @@ function _updateProgressiveClassification(t) {
         if (Array.isArray(r.matches)) allM = allM.concat(r.matches);
       });
       allM.forEach(function(m) {
-        if (!m.winner || m.isBye) return;
+        if (!m.winner || m.isBye || m.isSitOut) return;
         var isDraw = m.draw || m.winner === 'draw';
         if (isDraw) {
           _h2hAllGroups[m.p1 + '|||' + m.p2 + '|||d'] = (_h2hAllGroups[m.p1 + '|||' + m.p2 + '|||d'] || 0) + 1;
@@ -2066,7 +2070,9 @@ window._drawFromRoundRobinSchedule = function(t, category) {
       var soObj = {
         id: 'sitout-rr-r' + roundNum + '-' + si + catSuffix + '-' + ts,
         round: roundNum, roundIndex: (t.rounds || []).length,
-        p1: name, p2: 'FOLGA', winner: name,
+        // v2.3.9: folga (sit-out) NÃO tem vencedor — não é um jogo disputado.
+        // O jogador recebe sitOutPoints na classificação (sem contar vitória).
+        p1: name, p2: 'FOLGA',
         isSitOut: true, sitOutPoints: avgPts, sitOutReason: 'remainder',
         label: 'R' + roundNum + ' • Folga' + catLabel
       };
@@ -2386,7 +2392,9 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
       var soObj = {
         id: 'sitout-rr-r' + roundNum + '-' + si + catSuffix + '-' + ts,
         round: roundNum, roundIndex: (t.rounds || []).length,
-        p1: name, p2: 'FOLGA', winner: name,
+        // v2.3.9: folga (sit-out) NÃO tem vencedor — não é um jogo disputado.
+        // O jogador recebe sitOutPoints na classificação (sem contar vitória).
+        p1: name, p2: 'FOLGA',
         isSitOut: true, sitOutPoints: avgPts,
         sitOutReason: isInactive ? 'inactive' : 'remainder',
         label: 'R' + roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
@@ -2529,7 +2537,9 @@ function _generateNextRoundForPlayers(t, category) {
       var soObj = {
         id: 'sitout-r' + roundNum + '-' + idx + catSuffix + '-' + timestamp,
         round: roundNum, roundIndex: roundIdx,
-        p1: name, p2: 'FOLGA', winner: name,
+        // v2.3.9: folga (sit-out) NÃO tem vencedor — não é um jogo disputado.
+        // O jogador recebe sitOutPoints na classificação (sem contar vitória).
+        p1: name, p2: 'FOLGA',
         isSitOut: true, sitOutPoints: avgPts,
         sitOutReason: isInactive ? 'inactive' : 'remainder',
         label: 'R' + roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
@@ -2651,6 +2661,25 @@ function _healPrematureLigaRounds(t) {
 }
 window._healPrematureLigaRounds = _healPrematureLigaRounds;
 
+// v2.3.9: remove o `winner` legado de partidas de FOLGA (sit-out). Antes a folga
+// era criada com winner=jogador, o que vazava como "vitória"/"partida disputada"
+// nas estatísticas. Roda no poller (organizador) e limpa os dados já gravados.
+// Retorna true se alterou algo.
+function _healSitOutWinners(t) {
+  if (!Array.isArray(t.rounds)) return false;
+  var changed = false;
+  t.rounds.forEach(function(r) {
+    (r && r.matches || []).forEach(function(m) {
+      if (m && m.isSitOut && m.winner !== undefined) { delete m.winner; changed = true; }
+    });
+  });
+  if (changed && typeof _computeStandings === 'function') {
+    try { t.standings = _computeStandings(t); } catch (e) {}
+  }
+  return changed;
+}
+window._healSitOutWinners = _healSitOutWinners;
+
 // ─── Liga auto-draw poller ──────────────────────────────────────────────────
 // Runs periodically on the organizer's browser. For every Liga tournament
 // where drawManual is off and drawFirstDate/Time are set, fires the scheduled
@@ -2694,10 +2723,12 @@ window._checkLigaAutoDraws = async function() {
     // Skip finished
     if (t.status === 'finished') continue;
 
-    // v2.3.8: corrige rodadas geradas antes da hora (bug pré-v2.3.7). Remove a
-    // rodada extra prematura, salva e re-renderiza a view atual. Segue o fluxo
-    // normal depois (pode ser hora de um sorteio legítimo).
-    if (_healPrematureLigaRounds(t)) {
+    // v2.3.8/2.3.9: auto-correções nos dados — (a) rodada gerada antes da hora
+    // (bug pré-v2.3.7) e (b) folgas (sit-out) com winner legado. Remove/limpa,
+    // salva e re-renderiza. Segue o fluxo normal depois.
+    var _didHeal = _healPrematureLigaRounds(t);
+    if (_healSitOutWinners(t)) _didHeal = true;
+    if (_didHeal) {
       t.updatedAt = new Date().toISOString();
       try { await window.AppStore.syncImmediate(t.id); } catch (e) { window._warn('[heal] save failed', e); }
       try {
