@@ -3625,6 +3625,23 @@ async function simulateLoginSuccess(user) {
         return;
       }
       if (t && window.AppStore.currentUser) {
+        // v2.3.6 FIX (bug recorrente): NUNCA auto-inscrever o organizador/criador
+        // no PRÓPRIO torneio. O flag _pendingEnrollTournamentId é setado quando um
+        // visitante DESLOGADO abre #tournaments/<id> (router.js:67) — se quem abre
+        // é o próprio organizador (sessão expirada, bookmark, logout, ou abrir o
+        // próprio link de convite pra conferir), ao logar ele virava participante
+        // do torneio que criou, sem nunca ter se inscrito. Organizador que QUER
+        // jogar ainda pode usar o botão "Inscrever-se" manualmente.
+        var _cu = window.AppStore.currentUser;
+        var _isOrganizer = (t.creatorUid && _cu.uid && String(t.creatorUid) === String(_cu.uid)) ||
+                           (t.creatorEmail && _cu.email && String(t.creatorEmail).toLowerCase() === String(_cu.email).toLowerCase()) ||
+                           (t.organizerEmail && _cu.email && String(t.organizerEmail).toLowerCase() === String(_cu.email).toLowerCase());
+        if (_isOrganizer) {
+          window.location.hash = '#tournaments/' + pendingEnrollId;
+          if (typeof initRouter === 'function') initRouter();
+          window._simulateLoginInProgress = false;
+          return;
+        }
         // Block auto-enrollment if enrollments are closed
         var _isLigaFmt = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
         var _ligaOpenEnroll = _isLigaFmt && t.ligaOpenEnrollment;
