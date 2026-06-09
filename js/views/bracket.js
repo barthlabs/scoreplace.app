@@ -104,6 +104,18 @@ function renderBracket(container, tournamentId, isInline) {
   }).catch(function() {});
 
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
+
+  // v2.3.10: heal IMEDIATO ao abrir o bracket (organizador) — não espera o
+  // poller de 60s. Remove rodada gerada antes da hora (bug pré-v2.3.7) e o
+  // `winner` legado de folgas. Salva uma vez (idempotente nas próximas).
+  if (isOrg) {
+    var _healedPrem = (typeof window._healPrematureLigaRounds === 'function') && window._healPrematureLigaRounds(t);
+    var _healedSit = (typeof window._healSitOutWinners === 'function') && window._healSitOutWinners(t);
+    if ((_healedPrem || _healedSit) && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+      try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+    }
+  }
+
   // v2.1.26: tardios entram NA chave — SÓ o organizador dispara (escrita de
   // matches/participants só passa nas rules como admin). Auto ao abrir o bracket.
   if (isOrg && typeof window._createExtraGamesFromWaitlist === 'function') {
@@ -202,22 +214,12 @@ function renderBracket(container, tournamentId, isInline) {
         </button>
     </div>` : '';
 
+  // v2.3.10: SEMPRE a barra rica (ritmo + barra roxa do torneio inteiro pra
+  // Liga). A barra simples antiga foi eliminada. _renderTournamentProgress já
+  // trata o caso sem progresso (retorna '') e liga o ticker ao vivo.
   let progressBarHtml = '';
-  if (!isInline && hasContent && typeof window._getTournamentProgress === 'function') {
-    const _prog = window._getTournamentProgress(t);
-    if (_prog.total > 0) {
-      const _barColor = _prog.pct === 100 ? '#10b981' : (_prog.pct > 50 ? '#3b82f6' : '#f59e0b');
-      progressBarHtml = '<div style="margin: 0 0 1.5rem; padding: 12px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">' +
-        '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">' +
-        '<span style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Progresso do Torneio</span>' +
-        '<span style="font-size: 0.8rem; font-weight: 700; color: var(--text-bright);">' + _prog.completed + '/' + _prog.total + ' partidas (' + _prog.pct + '%)</span>' +
-        '</div>' +
-        '<div style="width: 100%; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden;">' +
-        '<div style="width: ' + _prog.pct + '%; height: 100%; background: ' + _barColor + '; border-radius: 4px; transition: width 0.5s ease;"></div>' +
-        '</div>' +
-        (_prog.pct === 100 && t.status !== 'finished' ? '<div style="margin-top: 6px; font-size: 0.75rem; color: #10b981; font-weight: 600;">✅ ' + _t('bracket.allMatchesDone') + '</div>' : '') +
-        '</div>';
-    }
+  if (!isInline && hasContent && typeof window._renderTournamentProgress === 'function') {
+    progressBarHtml = window._renderTournamentProgress(t);
   }
 
   // ── "Só meus jogos" toggle is now inside the sticky header (headerHtml) ──
