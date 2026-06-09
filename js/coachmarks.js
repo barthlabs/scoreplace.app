@@ -60,6 +60,7 @@
   var _openedHam = false;    // abrimos o hamburger pra este step
   var _targetEl = null;      // elemento destacado (pra detectar "seguiu a dica")
   var _targetHandler = null;
+  var _nextTimer = null;     // agenda a próxima dica 3s após clicar numa
 
   // ── helpers DOM ──────────────────────────────────────────────────────────
   function _user() { return (window.AppStore && window.AppStore.currentUser) || null; }
@@ -107,6 +108,7 @@
 
   // ── teardown ──────────────────────────────────────────────────────────────
   function _clearCountdown() { if (_cdTimer) { clearInterval(_cdTimer); _cdTimer = null; } }
+  function _clearNext() { if (_nextTimer) { clearTimeout(_nextTimer); _nextTimer = null; } }
   function _detachTarget() {
     if (_targetEl && _targetHandler) { try { _targetEl.removeEventListener('click', _targetHandler, true); } catch (e) {} }
     _targetEl = null; _targetHandler = null;
@@ -118,6 +120,7 @@
   // remove só a dica da tela (mantém o watcher de inatividade)
   function _hide() {
     _clearCountdown();
+    _clearNext();
     _detachTarget();
     if (_resizeBound) {
       window.removeEventListener('resize', _resizeBound);
@@ -235,7 +238,7 @@
       // Re-anexa a cada render (resize/scroll) sem empilhar listeners.
       _detachTarget();
       _targetEl = el;
-      _targetHandler = function () { _followed(step); };
+      _targetHandler = function () { _engaged(step); };
       el.addEventListener('click', _targetHandler, true);
       _overlay.innerHTML = '';
       var vw = window.innerWidth, vh = window.innerHeight;
@@ -287,7 +290,7 @@
       card.querySelector('.coach-skip').textContent = 'Pular dicas';
       card.querySelector('.coach-next').textContent = lastStep ? 'Entendi' : 'Próximo →';
       card.querySelector('.coach-skip').addEventListener('click', function (e) { e.stopPropagation(); _skipAll(); });
-      card.querySelector('.coach-next').addEventListener('click', function (e) { e.stopPropagation(); _advance(step); });
+      card.querySelector('.coach-next').addEventListener('click', function (e) { e.stopPropagation(); _engaged(step); });
       _overlay.appendChild(card);
 
       // posiciona o card
@@ -332,31 +335,27 @@
   }
 
   // ── transições ──────────────────────────────────────────────────────────
-  function _advance(step) {
+  // v2.3.37: ao clicar numa dica (botão "Próximo" OU o elemento destacado),
+  // marca como vista e dispara a PRÓXIMA em 3s — nem imediato, nem esperando o
+  // idle. Dá um respiro pra ação acontecer (ex.: o menu terminar de abrir).
+  function _scheduleNext(ms) {
+    _clearNext();
+    _nextTimer = setTimeout(function () {
+      _nextTimer = null;
+      if (isDisabled() || !_provider || _overlay || !_user()) return;
+      var next = _pending()[0];
+      if (next) _showStep(next);
+      else _armIdle(); // nada elegível agora (ex.: itens esperando o hamburger) → modo idle
+    }, ms);
+  }
+  function _engaged(step) {
     if (step) markSeen(step.id);
     _firstShow = false;
-    var next = _pending()[0];
-    // reusa o overlay (re-render in place) pra não piscar o hamburger entre
-    // passos; só dá _hide (fade-out) quando não há próximo.
-    if (next) { _clearCountdown(); _detachTarget(); _showStep(next); }
-    else { _hide(); }
-  }
-  function _advanceSilently(step) {
-    // alvo não resolveu: marca visto pra não travar e tenta o próximo
-    if (step) markSeen(step.id);
     _hide();
-    var next = _pending()[0];
-    if (next) _showStep(next);
+    _scheduleNext(3000);
   }
   function _autoDismiss() {
-    // não clicou em "Próximo" durante o contador → some e volta após 15s parado
-    _firstShow = false;
-    _hide();
-    _armIdle();
-  }
-  function _followed(step) {
-    // clicou no elemento destacado (seguiu a dica) → marca como vista, não volta
-    if (step) markSeen(step.id);
+    // não clicou durante o contador → some e volta após 15s parado
     _firstShow = false;
     _hide();
     _armIdle();
