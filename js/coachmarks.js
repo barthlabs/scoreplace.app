@@ -389,11 +389,15 @@
     var ham = document.querySelector('.hamburger-btn');
     return !!(ham && window.getComputedStyle(ham).display !== 'none');
   }
+  // 1ª dica de TODAS (qualquer contexto): quando o menu está escondido atrás do
+  // hamburger (mobile), ensina a abri-lo. No desktop (menu inline) é pulada, e
+  // uma vez aprendida (vista) some de todo lugar via o mapa de "vistos".
+  function _menuOpenStep() {
+    return { id: 'menu_open', el: function () { return document.querySelector('.hamburger-btn'); }, title: '☰ Abrir o menu', text: 'Toque aqui pra abrir o menu com tudo que o app oferece.', skipIf: function () { return !_hamVisible(); } };
+  }
   function _menuSteps() {
     return [
-      // 1ª dica: quando o menu está escondido atrás do hamburger (mobile),
-      // ensina a abri-lo. No desktop (menu inline visível) é pulada.
-      { id: 'menu_open', el: function () { return document.querySelector('.hamburger-btn'); }, title: '☰ Abrir o menu', text: 'Toque aqui pra abrir o menu com tudo que o app oferece.', skipIf: function () { return !_hamVisible(); } },
+      _menuOpenStep(),
       { id: 'menu_inicio', el: function () { return document.querySelector(_menuScopeSel('a[href="#dashboard"]')); }, title: '🏠 Início', text: 'Sua central: torneios, partidas casuais e tudo que importa. Clique aqui a qualquer momento e volte para essa tela inicial.' },
       { id: 'menu_notif', el: function () { return document.querySelector(_menuScopeSel('a[href="#notifications"]')); }, title: '🔔 Notificações', text: 'Avisos de sorteios, jogos e convites chegam aqui.' },
       { id: 'menu_tema', el: function () { return document.querySelector(_menuScopeSel('#theme-toggle-btn')); }, title: '🎨 Aparência', text: 'Alterne entre os temas claro e escuro com um toque.' },
@@ -431,10 +435,13 @@
     } catch (e) { _stop(); }
   }
   function autoStartDashboard() { _init('dashboard', _menuSteps); }
+  // No perfil, a dica do hamburger também vem ANTES de tudo (se ainda não
+  // aprendida) — depois os campos/configurações.
+  function _profileProvider() { return [_menuOpenStep()].concat(_profileSteps()); }
   function startProfileTour() {
     // visitou o perfil → não cobra mais a entrada no menu
     try { markSeen('profile_entry'); } catch (e) {}
-    _init('profile', _profileSteps);
+    _init('profile', _profileProvider);
   }
 
   // sai de dashboard/perfil → para o watcher (outras telas não disparam dicas)
