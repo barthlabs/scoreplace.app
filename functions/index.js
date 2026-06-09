@@ -1127,8 +1127,8 @@ function _buildVerificationEmailContent(link, name) {
               '<p style="margin:0 0 6px;font-size:1.05rem;font-weight:700;color:#fff;">Bem-vindo' + safeGreet + '! 🎉</p>' +
               '<p style="margin:0 0 18px;font-size:0.92rem;color:#cbd5e1;">Falta só confirmar seu e-mail pra começar.</p>' +
               '<table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;">' +
-                '<tr><td style="background:#059669;background:linear-gradient(180deg,#34d399 0%,#10b981 55%,#059669 100%);border-bottom:4px solid #047857;border-radius:12px;box-shadow:0 4px 12px rgba(16,185,129,0.35);">' +
-                  '<a href="' + safeLinkAttr + '" style="display:inline-block;padding:18px 44px;color:#ffffff;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;text-shadow:0 1px 1px rgba(0,0,0,0.22);">' +
+                '<tr><td style="background:#10b981;background:linear-gradient(180deg,#34d399 0%,#10b981 55%,#059669 100%);border-top:2px solid #6ee7b7;border-bottom:5px solid #047857;border-radius:12px;box-shadow:0 6px 14px rgba(5,150,105,0.4);">' +
+                  '<a href="' + safeLinkAttr + '" style="display:inline-block;padding:16px 44px;color:#ffffff;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;text-shadow:0 -1px 0 rgba(0,0,0,0.25);">' +
                     '✅ Confirmar minha conta' +
                   '</a>' +
                 '</td></tr>' +
