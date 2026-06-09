@@ -25,6 +25,7 @@
   var PAD = 8;            // padding do "buraco" em volta do alvo
   var IDLE_FIRST = 10000; // 1ª dica após 10s parado
   var IDLE_AGAIN = 15000; // dica volta após 15s parado
+  var SUSPEND_MS = 180000; // v2.3.44: scroll/clique/digitar = quem já sabe usar → silencia dicas por 3 min
   var COUNTDOWN = 8;      // segundos do contador
   var CD_R = 22, CD_C = 2 * Math.PI * CD_R; // raio/circunferência do anel
 
@@ -61,6 +62,8 @@
   var _targetEl = null;      // elemento destacado (pra detectar "seguiu a dica")
   var _targetHandler = null;
   var _nextTimer = null;     // agenda a próxima dica 3s após clicar numa
+  var _suspendedUntil = 0;   // timestamp até quando as dicas ficam suspensas por interação real
+  var _shownAt = 0;          // quando a dica atual apareceu (ignora o scroll programático do scrollIntoView)
 
   // ── helpers DOM ──────────────────────────────────────────────────────────
   function _user() { return (window.AppStore && window.AppStore.currentUser) || null; }
@@ -157,17 +160,36 @@
   function _armIdle() {
     if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
     if (isDisabled() || !_provider || _overlay) return;
-    _idleTimer = setTimeout(_idleFire, _firstShow ? IDLE_FIRST : IDLE_AGAIN);
+    var base = _firstShow ? IDLE_FIRST : IDLE_AGAIN;
+    // Respeita a suspensão por interação real: nunca antes de _suspendedUntil.
+    var rem = _suspendedUntil - Date.now();
+    if (rem > base) base = rem + 200;
+    _idleTimer = setTimeout(_idleFire, base);
   }
-  function _onActivity() {
-    // só conta enquanto NÃO há dica na tela (durante a dica o contador manda)
-    if (_overlay) return;
+  function _onActivity(e) {
+    var ty = e && e.type;
+    // Engajamento com a própria dica (toque/clique no card, na máscara ou no
+    // elemento destacado) segue o fluxo do tour — não suspende nem interrompe.
+    if (_overlay && (ty === 'mousedown' || ty === 'touchstart') && e.target && e.target.closest) {
+      if (e.target.closest('.coach-card') || e.target.closest('.coach-mask')) return;
+      if (_targetEl && (_targetEl === e.target || (_targetEl.contains && _targetEl.contains(e.target)))) return;
+    }
+    // Interação real (scroll/clique/digitar) → silencia as dicas por 3 min.
+    _suspendedUntil = Date.now() + SUSPEND_MS;
+    if (_overlay) {
+      // Ignora o scroll programático do scrollIntoView ao abrir a dica
+      // (primeiros ~800ms). Depois disso, scroll/teclado interrompem a dica.
+      if ((ty === 'scroll' || ty === 'wheel') && (Date.now() - _shownAt) < 800) { _armIdle(); return; }
+      _hide();
+      _armIdle();
+      return;
+    }
     _armIdle();
   }
   function _startWatch() {
     if (_watching) return;
     _watching = true;
-    _activityBound = function () { _onActivity(); };
+    _activityBound = function (e) { _onActivity(e); };
     ['mousedown', 'keydown', 'touchstart', 'wheel', 'scroll'].forEach(function (ev) {
       document.addEventListener(ev, _activityBound, true);
     });
@@ -175,6 +197,7 @@
   function _idleFire() {
     try {
       if (isDisabled() || !_provider || _overlay || !_user()) return;
+      if (Date.now() < _suspendedUntil) { _armIdle(); return; } // suspensão por interação real
       var pending = _pending();
       if (!pending.length) return; // nada a mostrar
       _showStep(pending[0]);
@@ -200,8 +223,8 @@
     d.className = 'coach-mask';
     d.style.left = x + 'px'; d.style.top = y + 'px';
     d.style.width = Math.max(0, w) + 'px'; d.style.height = Math.max(0, h) + 'px';
-    // clicar fora = dispensa antecipada (volta após 15s parado)
-    d.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); _autoDismiss(); });
+    // clicar fora = dispensa deliberada → silencia as dicas por 3 min
+    d.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); _suspendedUntil = Date.now() + SUSPEND_MS; _autoDismiss(); });
     return d;
   }
 
@@ -209,6 +232,7 @@
     // v2.3.33: NÃO abrimos o hamburger automaticamente. As dicas dos itens do
     // menu têm waitFor=_menuReady e só aparecem depois que o USUÁRIO abre o
     // hamburger. Aqui é só renderizar.
+    _shownAt = Date.now(); // marca o momento (ignora o scroll programático do scrollIntoView)
     _render(step);
   }
 
@@ -343,6 +367,7 @@
     _nextTimer = setTimeout(function () {
       _nextTimer = null;
       if (isDisabled() || !_provider || _overlay || !_user()) return;
+      if (Date.now() < _suspendedUntil) { _armIdle(); return; } // interação durante os 3s do encadeamento
       var next = _pending()[0];
       if (next) _showStep(next);
       else _armIdle(); // nada elegível agora (ex.: itens esperando o hamburger) → modo idle

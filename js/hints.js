@@ -14,6 +14,7 @@
   var IDLE_TIMEOUT = 12000;         // ms of inactivity before showing a hint (era 6000)
   var HINT_DISPLAY_TIME = 10000;    // ms a hint stays visible (sem mudança)
   var HINT_COOLDOWN = 10000;        // ms between consecutive hints (era 5000)
+  var SUSPEND_DURATION = 180000;    // 3min: scroll/clique/digitar = quem sabe usar; silencia dicas
   var STRATEGIC_BOOST = 0.30;       // probability boost for strategic hints
   var LS_KEY = 'scoreplace_hints';
   var LS_DISABLED_KEY = 'scoreplace_hints_disabled';
@@ -25,6 +26,7 @@
   var _activeHint = null;
   var _activeEl = null;
   var _onCooldown = false;
+  var _suspendedUntil = 0;   // timestamp até quando as dicas ficam suspensas por interação real
   var _initialized = false;
   var _seenHints = {};
   var _sessionShown = {};
@@ -902,9 +904,23 @@
   }
 
   // ── Idle Detection ─────────────────────────────────────────────────────────
-  // Any user interaction (scroll, click, typing) dismisses the current hint
-  // and resets the idle timer.
-  var _activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'click', 'scroll', 'input'];
+  // Dois níveis de interação:
+  //  • _activityEvents (mousemove): reset leve do contador de ociosidade.
+  //  • _suspendEvents (scroll/clique/digitar): interação REAL de quem já sabe
+  //    usar — interrompe a dica ativa e SUSPENDE as dicas por 3 min. Pedido do
+  //    usuário: "as dicas são para ajudar quem não sabe usar, não para atrapalhar
+  //    quem sabe".
+  var _activityEvents = ['mousemove'];
+  var _suspendEvents = ['scroll', 'click', 'mousedown', 'touchstart', 'keydown', 'input'];
+
+  function _suspendHints() {
+    _suspendedUntil = Date.now() + SUSPEND_DURATION;
+    // Interrompe a dica ativa imediatamente (sem reagendar a próxima já).
+    if (_activeHint) _dismissHint(false);
+    // Reagenda a verificação de ociosidade pro fim da suspensão.
+    clearTimeout(_idleTimer);
+    if (!_isDisabled()) _idleTimer = setTimeout(_onIdle, SUSPEND_DURATION + 200);
+  }
 
   function _resetIdleTimer() {
     clearTimeout(_idleTimer);
@@ -914,11 +930,21 @@
       return;
     }
     if (_isDisabled() || _onCooldown) return;
-    _idleTimer = setTimeout(_onIdle, IDLE_TIMEOUT);
+    // Respeita a suspensão por interação real: nunca antes de _suspendedUntil.
+    var _delay = IDLE_TIMEOUT;
+    var _rem = _suspendedUntil - Date.now();
+    if (_rem > 0) _delay = Math.max(_delay, _rem + 200);
+    _idleTimer = setTimeout(_onIdle, _delay);
   }
 
   function _onIdle() {
     if (_isDisabled() || _activeHint || _onCooldown) return;
+    // Suspensão ativa (scroll/clique/digitar nos últimos 3 min): reagenda e sai.
+    if (Date.now() < _suspendedUntil) {
+      clearTimeout(_idleTimer);
+      _idleTimer = setTimeout(_onIdle, (_suspendedUntil - Date.now()) + 200);
+      return;
+    }
     // Blocking overlay / modal detection is now handled inside _isElementVisible().
     // If an overlay is open, only hints targeting elements INSIDE that overlay
     // will pass the visibility check — background hints are automatically suppressed.
@@ -931,6 +957,9 @@
     _activityEvents.forEach(function(evt) {
       document.addEventListener(evt, _resetIdleTimer, { passive: true });
     });
+    _suspendEvents.forEach(function(evt) {
+      document.addEventListener(evt, _suspendHints, { passive: true });
+    });
     _resetIdleTimer();
   }
 
@@ -938,6 +967,9 @@
     clearTimeout(_idleTimer);
     _activityEvents.forEach(function(evt) {
       document.removeEventListener(evt, _resetIdleTimer);
+    });
+    _suspendEvents.forEach(function(evt) {
+      document.removeEventListener(evt, _suspendHints);
     });
     _dismissHint(false);
   }
