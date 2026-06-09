@@ -25,7 +25,7 @@
   var PAD = 8;            // padding do "buraco" em volta do alvo
   var IDLE_FIRST = 10000; // 1ª dica após 10s parado
   var IDLE_AGAIN = 15000; // dica volta após 15s parado
-  var COUNTDOWN = 5;      // segundos do contador
+  var COUNTDOWN = 8;      // segundos do contador
   var CD_R = 22, CD_C = 2 * Math.PI * CD_R; // raio/circunferência do anel
 
   // ── persistência ──────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@
     s.id = 'coach-style';
     s.textContent =
       '@keyframes coachPulse{0%,100%{box-shadow:0 0 0 2px rgba(251,191,36,0.9),0 0 0 6px rgba(251,191,36,0.25)}50%{box-shadow:0 0 0 2px rgba(251,191,36,0.9),0 0 0 12px rgba(251,191,36,0.05)}}' +
-      '.coach-mask{position:fixed;background:rgba(2,6,23,0.55);pointer-events:auto;transition:all 0.18s ease;}' +
+      '.coach-mask{position:fixed;background:rgba(2,6,23,0.70);pointer-events:auto;transition:all 0.18s ease;}' +
       '.coach-ring{position:fixed;border-radius:12px;pointer-events:none;animation:coachPulse 1.6s ease-in-out infinite;transition:all 0.18s ease;}' +
       '.coach-cd{position:fixed;top:14px;right:14px;width:54px;height:54px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;}' +
       '.coach-cd svg{position:absolute;top:0;left:0;transform:rotate(-90deg);}' +
@@ -117,9 +117,15 @@
       window.removeEventListener('scroll', _resizeBound, true);
       _resizeBound = null;
     }
-    if (_overlay && _overlay.parentNode) _overlay.parentNode.removeChild(_overlay);
+    var node = _overlay;
     _overlay = null;
     _current = null;
+    if (node) {
+      // fade-out suave; durante o fade não bloqueia cliques (máscaras → none)
+      try { var ms = node.querySelectorAll('.coach-mask'); for (var i = 0; i < ms.length; i++) ms[i].style.pointerEvents = 'none'; } catch (e) {}
+      node.style.opacity = '0';
+      setTimeout(function () { if (node.parentNode) node.parentNode.removeChild(node); }, 280);
+    }
     _closeHamIfOpened();
   }
   // para tudo: esconde a dica E desliga o watcher
@@ -187,9 +193,10 @@
   }
 
   function _showStep(step) {
-    // steps de menu precisam do hamburger aberto (mobile)
+    // steps de menu precisam do hamburger aberto (mobile) — exceto o menu_open,
+    // que aponta o hamburger FECHADO pra ensinar a abrir.
     var delay = 0;
-    if (step.id && step.id.indexOf('menu_') === 0) {
+    if (step.id && step.id.indexOf('menu_') === 0 && step.id !== 'menu_open') {
       var ham = document.querySelector('.hamburger-btn');
       var hamVis = ham && window.getComputedStyle(ham).display !== 'none';
       if (hamVis) {
@@ -213,8 +220,10 @@
       if (!_overlay) {
         _overlay = document.createElement('div');
         _overlay.id = 'coach-overlay';
-        _overlay.style.cssText = 'position:fixed;inset:0;z-index:' + Z + ';pointer-events:none;';
+        _overlay.style.cssText = 'position:fixed;inset:0;z-index:' + Z + ';pointer-events:none;opacity:0;transition:opacity 0.28s ease;';
         document.body.appendChild(_overlay);
+        var _ov0 = _overlay;
+        requestAnimationFrame(function () { if (_ov0) _ov0.style.opacity = '1'; }); // fade-in suave
         _resizeBound = function () { if (_overlay && _current) _render(_current); };
         window.addEventListener('resize', _resizeBound);
         window.addEventListener('scroll', _resizeBound, true);
@@ -324,10 +333,11 @@
   function _advance(step) {
     if (step) markSeen(step.id);
     _firstShow = false;
-    _hide();
     var next = _pending()[0];
-    if (next) { _showStep(next); }
-    // sem próximo → fica só o watcher; nada pendente, idle não mostra nada
+    // reusa o overlay (re-render in place) pra não piscar o hamburger entre
+    // passos; só dá _hide (fade-out) quando não há próximo.
+    if (next) { _clearCountdown(); _detachTarget(); _showStep(next); }
+    else { _hide(); }
   }
   function _advanceSilently(step) {
     // alvo não resolveu: marca visto pra não travar e tenta o próximo
@@ -375,8 +385,15 @@
     var hamVisible = ham && window.getComputedStyle(ham).display !== 'none';
     return (hamVisible ? '#hamburger-dropdown ' : '.topbar-menu ') + inner;
   }
+  function _hamVisible() {
+    var ham = document.querySelector('.hamburger-btn');
+    return !!(ham && window.getComputedStyle(ham).display !== 'none');
+  }
   function _menuSteps() {
     return [
+      // 1ª dica: quando o menu está escondido atrás do hamburger (mobile),
+      // ensina a abri-lo. No desktop (menu inline visível) é pulada.
+      { id: 'menu_open', el: function () { return document.querySelector('.hamburger-btn'); }, title: '☰ Abrir o menu', text: 'Toque aqui pra abrir o menu com tudo que o app oferece.', skipIf: function () { return !_hamVisible(); } },
       { id: 'menu_inicio', el: function () { return document.querySelector(_menuScopeSel('a[href="#dashboard"]')); }, title: '🏠 Início', text: 'Sua central: torneios, partidas casuais e tudo que importa começa por aqui.' },
       { id: 'menu_notif', el: function () { return document.querySelector(_menuScopeSel('a[href="#notifications"]')); }, title: '🔔 Notificações', text: 'Avisos de sorteios, jogos e convites chegam aqui.' },
       { id: 'menu_tema', el: function () { return document.querySelector(_menuScopeSel('#theme-toggle-btn')); }, title: '🎨 Aparência', text: 'Alterne entre os temas claro e escuro com um toque.' },
