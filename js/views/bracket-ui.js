@@ -1597,6 +1597,9 @@ window._saveSetResult = function(tId, matchId) {
     m.winner = m.p2;
     m.draw = false;
   }
+  // v2.3.17: lançamento por sets — marca fim/início.
+  m.resultAt = Date.now();
+  if (!m.startedAt) m.startedAt = m.resultAt;
   if (m.pendingResult) delete m.pendingResult;
 
   const ov = document.getElementById('set-scoring-overlay');
@@ -1804,6 +1807,10 @@ window._saveResultInline = function (tId, matchId) {
     m.winner = s1 > s2 ? m.p1 : m.p2;
     m.draw = false;
   }
+  // v2.3.17: lançamento direto — marca fim; início = agora se não havia (sem
+  // placar ao vivo não temos o 1º ponto, então é o melhor proxy disponível).
+  m.resultAt = Date.now();
+  if (!m.startedAt) m.startedAt = m.resultAt;
   // Se havia um pendingResult (proposta anterior) — agora foi finalizado
   // pelo organizador OU pelo adversário, libera o slot.
   if (m.pendingResult) delete m.pendingResult;
@@ -1967,6 +1974,7 @@ window._approveResult = function(tId, matchId) {
   }
   m.winner = pr.winner;
   m.draw = !!pr.draw;
+  m.resultAt = Date.now(); if (!m.startedAt) m.startedAt = m.resultAt; // v2.3.17
   delete m.pendingResult;
 
   // Auto check-in pros participantes do match
@@ -2525,6 +2533,7 @@ window._confirmEditPending = function(tId, matchId) {
     }
     m.winner = winner;
     m.draw = s1 === s2;
+    m.resultAt = Date.now(); if (!m.startedAt) m.startedAt = m.resultAt; // v2.3.17
     delete m.pendingResult;
 
     if (!t.checkedIn) t.checkedIn = {};
@@ -3506,6 +3515,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (!t) return;
     m = _findMatch(t, matchId);
     if (!m) return;
+    // v2.3.17: marca o INÍCIO da partida (placar ao vivo) = abertura do placar,
+    // proxy do 1º ponto. Só pra partida ainda não decidida.
+    if (m && !m.startedAt && !m.winner) m.startedAt = Date.now();
   }
 
   var sc = isCasual ? (opts.scoring || {}) : (t.scoring || {});
@@ -4756,6 +4768,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       m.winner = state.currentGameP1 > state.currentGameP2 ? m.p1 : m.p2;
     }
     m.liveScored = true;
+    // v2.3.17: marca o FIM (último ponto) da partida.
+    m.resultAt = Date.now();
+    if (!m.startedAt) m.startedAt = m.resultAt;
 
     // Check-in both teams — having played the match proves both were present.
     // Mirrors the logic in _saveSetResult so live-scored matches don't leave

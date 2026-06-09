@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.17-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Horários reais das partidas (infra).</b> Cada partida passa a registrar quando começou (1º ponto/abertura do placar ao vivo, ou o lançamento direto) e quando terminou, e a rodada registra sua conclusão. É a base para a próxima versão das barras de progresso da rodada (início real / final real). Sem efeito visível ainda — começa a valer da próxima rodada em diante.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.16-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Estimativa de rodadas agora é pela hora exata.</b> O badge "≈ N rodadas" na edição usava meia-noite do 1º sorteio + fim do dia, inflando a conta (dava 5 quando o correto era 4, porque o 5º sorteio cairia depois da hora de término). Agora bate com a barra do torneio.</li>' +

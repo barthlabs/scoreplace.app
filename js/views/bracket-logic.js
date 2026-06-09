@@ -1885,6 +1885,9 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId) {
   if (t.rounds[roundIdx] && t.rounds[roundIdx].status === 'complete') return;
 
   t.rounds[roundIdx].status = 'complete';
+  // v2.3.17: marca a conclusão da rodada (último ponto/jogo lançado) — usado
+  // como "Final real" na barra de progresso da rodada.
+  if (!t.rounds[roundIdx].completedAt) t.rounds[roundIdx].completedAt = Date.now();
   t.standings = _computeStandings(t);
 
   const isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
