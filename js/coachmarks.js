@@ -177,6 +177,9 @@
     return all.filter(function (s) {
       if (isStepSeen(s.id)) return false;
       if (typeof s.skipIf === 'function') { try { if (s.skipIf()) return false; } catch (e) {} }
+      // waitFor: adia o step (NÃO marca visto) até a condição ser satisfeita —
+      // ex.: dicas dos itens do menu esperam o usuário abrir o hamburger.
+      if (typeof s.waitFor === 'function') { try { if (!s.waitFor()) return false; } catch (e) {} }
       return true;
     });
   }
@@ -193,25 +196,17 @@
   }
 
   function _showStep(step) {
-    // steps de menu precisam do hamburger aberto (mobile) — exceto o menu_open,
-    // que aponta o hamburger FECHADO pra ensinar a abrir.
-    var delay = 0;
-    if (step.id && step.id.indexOf('menu_') === 0 && step.id !== 'menu_open') {
-      var ham = document.querySelector('.hamburger-btn');
-      var hamVis = ham && window.getComputedStyle(ham).display !== 'none';
-      if (hamVis) {
-        var dd = document.getElementById('hamburger-dropdown');
-        if (dd && !dd.classList.contains('open') && typeof window._toggleHamburger === 'function') {
-          window._toggleHamburger(ham); _openedHam = true; delay = 240;
-        }
-      }
-    }
-    setTimeout(function () { _render(step); }, delay);
+    // v2.3.33: NÃO abrimos o hamburger automaticamente. As dicas dos itens do
+    // menu têm waitFor=_menuReady e só aparecem depois que o USUÁRIO abre o
+    // hamburger. Aqui é só renderizar.
+    _render(step);
   }
 
   function _render(step) {
     var el = _resolve(step);
-    if (!el) { _advanceSilently(step); return; } // alvo sumiu → marca visto e segue
+    // alvo indisponível (ex.: usuário fechou o hamburger no meio) → adia SEM
+    // marcar visto; volta quando reabrir + ficar parado.
+    if (!el) { _firstShow = false; _hide(); _armIdle(); return; }
 
     try { el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' }); } catch (e) {}
 
@@ -389,20 +384,27 @@
     var ham = document.querySelector('.hamburger-btn');
     return !!(ham && window.getComputedStyle(ham).display !== 'none');
   }
+  function _hamOpen() {
+    var d = document.getElementById('hamburger-dropdown');
+    return !!(d && d.classList.contains('open'));
+  }
+  // menu "pronto" pras dicas dos itens: desktop (menu inline) sempre, no mobile
+  // só quando o usuário JÁ abriu o hamburger.
+  function _menuReady() { return !_hamVisible() || _hamOpen(); }
   // 1ª dica de TODAS (qualquer contexto): quando o menu está escondido atrás do
   // hamburger (mobile), ensina a abri-lo. No desktop (menu inline) é pulada, e
   // uma vez aprendida (vista) some de todo lugar via o mapa de "vistos".
   function _menuOpenStep() {
-    return { id: 'menu_open', el: function () { return document.querySelector('.hamburger-btn'); }, title: '☰ Abrir o menu', text: 'Toque aqui pra abrir o menu com tudo que o app oferece.', skipIf: function () { return !_hamVisible(); } };
+    return { id: 'menu_open', el: function () { return document.querySelector('.hamburger-btn'); }, title: '☰ Abrir o menu', text: 'Toque aqui pra abrir o menu com tudo que o app oferece.', skipIf: function () { return !_hamVisible(); }, waitFor: function () { return !_hamOpen(); } };
   }
   function _menuSteps() {
     return [
       _menuOpenStep(),
-      { id: 'menu_inicio', el: function () { return document.querySelector(_menuScopeSel('a[href="#dashboard"]')); }, title: '🏠 Início', text: 'Sua central: torneios, partidas casuais e tudo que importa. Clique aqui a qualquer momento e volte para essa tela inicial.' },
-      { id: 'menu_notif', el: function () { return document.querySelector(_menuScopeSel('a[href="#notifications"]')); }, title: '🔔 Notificações', text: 'Avisos de sorteios, jogos e convites chegam aqui.' },
-      { id: 'menu_tema', el: function () { return document.querySelector(_menuScopeSel('#theme-toggle-btn')); }, title: '🎨 Aparência', text: 'Alterne entre os temas claro e escuro com um toque.' },
-      { id: 'menu_ajuda', el: function () { return document.querySelector(_menuScopeSel('button[onclick*="#help"]')); }, title: '❓ Ajuda', text: 'O manual completo do app, sempre que precisar.' },
-      { id: 'menu_perfil', el: function () { return document.querySelector(_menuScopeSel('#btn-login')); }, title: '👤 Seu perfil', text: 'Toque aqui pra abrir e completar seu perfil — é o que destrava eventos do seu interesse.' }
+      { id: 'menu_inicio', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('a[href="#dashboard"]')); }, title: '🏠 Início', text: 'Sua central: torneios, partidas casuais e tudo que importa. Clique aqui a qualquer momento e volte para essa tela inicial.' },
+      { id: 'menu_notif', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('a[href="#notifications"]')); }, title: '🔔 Notificações', text: 'Avisos de sorteios, jogos e convites chegam aqui.' },
+      { id: 'menu_tema', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('#theme-toggle-btn')); }, title: '🎨 Aparência', text: 'Alterne entre os temas claro e escuro com um toque.' },
+      { id: 'menu_ajuda', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('button[onclick*="#help"]')); }, title: '❓ Ajuda', text: 'O manual completo do app, sempre que precisar.' },
+      { id: 'menu_perfil', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('#btn-login')); }, title: '👤 Seu perfil', text: 'Toque aqui pra abrir e completar seu perfil — é o que destrava eventos do seu interesse.' }
     ];
   }
   function _profileSteps() {
