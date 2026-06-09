@@ -297,6 +297,32 @@ function _calcAdvancedPoints(t, playerName, category) {
 }
 window._calcAdvancedPoints = _calcAdvancedPoints;
 
+// Média de Pontos Avançados (PA) por rodada JOGADA — base da compensação de
+// folga quando o torneio usa Pontos Avançados. Espelha _computeAvgPointsPerRound
+// (que faz a média dos pontos simples 3/1/0), mas somando PA. Remove o próprio
+// item de compensação de folga do total pra não contaminar a média.
+function _computeAvgAdvancedPerRound(t, playerName, category) {
+  var rs = _playerRoundStats(t, playerName, category);
+  if (!rs.played) return 0;
+  var full = _calcAdvancedPoints(t, playerName, category);
+  var comp = 0;
+  (full.breakdown || []).forEach(function(b) { if (b && b.isSitOutComp) comp += (b.total || 0); });
+  return Math.round((full.total - comp) / rs.played);
+}
+window._computeAvgAdvancedPerRound = _computeAvgAdvancedPerRound;
+
+// Compensação de folga (sit-out) atribuída/exibida, respeitando o sistema de
+// pontuação do torneio: média de Pontos Avançados quando PA está ativo; senão,
+// média dos pontos simples (3/1/0). É a regra do torneio — quem folga recebe a
+// sua média no critério que rankeia a tabela.
+function _sitOutComp(t, playerName, category) {
+  if (t && t.advancedScoring && t.advancedScoring.enabled) {
+    return _computeAvgAdvancedPerRound(t, playerName, category);
+  }
+  return _computeAvgPointsPerRound(t, playerName, category);
+}
+window._sitOutComp = _sitOutComp;
+
 // v2.2.47: nome do competidor → timestamp de nascimento (pros critérios de
 // desempate antiguidade/juventude). birthDate vem no formato "DD/MM/AAAA".
 // Para duplas/times, usa a MÉDIA das datas dos membros que tiverem data.
@@ -2155,7 +2181,7 @@ window._drawFromRoundRobinSchedule = function(t, category) {
   var allActive = Object.keys(_getActiveLigaPlayers(t));
   allActive.forEach(function(name, si) {
     if (allPlaying.indexOf(name) === -1) {
-      var avgPts = _computeAvgPointsPerRound(t, name, category);
+      var avgPts = _sitOutComp(t, name, category); // PA quando o torneio usa Pontos Avançados; senão pontos simples
       var soObj = {
         id: 'sitout-rr-r' + roundNum + '-' + si + catSuffix + '-' + ts,
         round: roundNum, roundIndex: (t.rounds || []).length,
@@ -2477,7 +2503,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     _recordSitOut(t, inactiveSitOuts, category);
     allSitOuts.forEach(function(name, si) {
       var isInactive = inactiveSitOuts.indexOf(name) !== -1;
-      var avgPts = isInactive ? 0 : _computeAvgPointsPerRound(t, name, category);
+      var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
       var soObj = {
         id: 'sitout-rr-r' + roundNum + '-' + si + catSuffix + '-' + ts,
         round: roundNum, roundIndex: (t.rounds || []).length,
@@ -2622,7 +2648,7 @@ function _generateNextRoundForPlayers(t, category) {
     _recordSitOut(t, inactiveSitOutsSwiss, category);
     allSitOuts.forEach(function(name, idx) {
       var isInactive = inactiveSitOutsSwiss.indexOf(name) !== -1;
-      var avgPts = isInactive ? 0 : _computeAvgPointsPerRound(t, name, category);
+      var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
       var soObj = {
         id: 'sitout-r' + roundNum + '-' + idx + catSuffix + '-' + timestamp,
         round: roundNum, roundIndex: roundIdx,

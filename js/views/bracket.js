@@ -1402,10 +1402,19 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
   // Sit-out (Folga): render compact info card instead of full match card
   if (m.isSitOut) {
     var _isInactiveSO = m.sitOutReason === 'inactive';
-    var _soPts = m.sitOutPoints || 0;
+    // v2.3.45: a compensação exibida respeita o sistema de pontuação. Quando o
+    // torneio usa Pontos Avançados, mostra a MÉDIA DE PA das rodadas jogadas
+    // (computada ao vivo — não o sitOutPoints congelado, que podia trazer a
+    // média dos pontos simples 3/1/0). Senão, pontos simples.
+    var _soT = window._currentBracketTournament;
+    var _soAdv = !!(_soT && _soT.advancedScoring && _soT.advancedScoring.enabled);
+    var _soPts = (_soAdv && typeof window._sitOutComp === 'function')
+      ? window._sitOutComp(_soT, m.p1, m.category)
+      : (m.sitOutPoints || 0);
+    var _soUnit = _soAdv ? ' PA' : (' pt' + (_soPts !== 1 ? 's' : ''));
     var _soDetail = _isInactiveSO
-      ? 'Folga (inativo) — <b style="color:#ef4444;">0 pts</b>'
-      : 'Folga — recebe <b style="color:#fbbf24;">' + _soPts + ' pt' + (_soPts !== 1 ? 's' : '') + '</b> (média)';
+      ? 'Folga (inativo) — <b style="color:#ef4444;">0' + (_soAdv ? ' PA' : ' pts') + '</b>'
+      : 'Folga — recebe <b style="color:#fbbf24;">' + _soPts + _soUnit + '</b> (média)';
     var _soBg = _isInactiveSO ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.08)';
     var _soBorder = _isInactiveSO ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)';
     var _soIcon = _isInactiveSO ? '🔴' : '😴';
@@ -2511,8 +2520,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _renderRow = function(label, items, color, bg, border, icon, hint) {
           if (items.length === 0) return '';
           var _names = items.map(function(m) {
-            var _pts = m.sitOutPoints != null ? m.sitOutPoints : 0;
-            var _ptsLbl = '<span style="font-size:0.7rem;font-weight:700;opacity:0.85;margin-left:4px;">+' + _pts + ' pt' + (_pts !== 1 ? 's' : '') + '</span>';
+            // v2.3.45: respeita o sistema de pontuação (PA quando ativo), ao vivo.
+            var _suT = window._currentBracketTournament;
+            var _suAdv = !!(_suT && _suT.advancedScoring && _suT.advancedScoring.enabled);
+            var _pts = (_suAdv && typeof window._sitOutComp === 'function')
+              ? window._sitOutComp(_suT, m.p1, m.category)
+              : (m.sitOutPoints != null ? m.sitOutPoints : 0);
+            var _ptsLbl = '<span style="font-size:0.7rem;font-weight:700;opacity:0.85;margin-left:4px;">+' + _pts + (_suAdv ? ' PA' : (' pt' + (_pts !== 1 ? 's' : ''))) + '</span>';
             // v0.17.29: destaque ciano + badge "VOCÊ" no pill do usuário
             // logado — leitura imediata de "estou de fora porque…"
             var _isMe = _nameMatchesCurUser(m.p1);
