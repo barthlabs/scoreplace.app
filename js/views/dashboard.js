@@ -244,6 +244,12 @@ function renderDashboard(container) {
     return false;
   };
   const sortByDate = (a, b) => {
+    // v2.3.23: torneios ENCERRADOS sempre por último — abaixo de tudo, inclusive
+    // dos em andamento que não acontecem nesta semana. Sem isso, o endDate no
+    // passado fazia o finished vazar pro meio do sort cronológico.
+    const finA = a.status === 'finished', finB = b.status === 'finished';
+    if (finA && !finB) return 1;
+    if (!finA && finB) return -1;
     // v2.1.52: torneios EFETIVAMENTE em andamento (iniciados) sempre no topo,
     // acima dos que ainda não começaram.
     const runA = _isRunning(a), runB = _isRunning(b);
