@@ -394,7 +394,7 @@
       // 1ª dica: quando o menu está escondido atrás do hamburger (mobile),
       // ensina a abri-lo. No desktop (menu inline visível) é pulada.
       { id: 'menu_open', el: function () { return document.querySelector('.hamburger-btn'); }, title: '☰ Abrir o menu', text: 'Toque aqui pra abrir o menu com tudo que o app oferece.', skipIf: function () { return !_hamVisible(); } },
-      { id: 'menu_inicio', el: function () { return document.querySelector(_menuScopeSel('a[href="#dashboard"]')); }, title: '🏠 Início', text: 'Sua central: torneios, partidas casuais e tudo que importa começa por aqui.' },
+      { id: 'menu_inicio', el: function () { return document.querySelector(_menuScopeSel('a[href="#dashboard"]')); }, title: '🏠 Início', text: 'Sua central: torneios, partidas casuais e tudo que importa. Clique aqui a qualquer momento e volte para essa tela inicial.' },
       { id: 'menu_notif', el: function () { return document.querySelector(_menuScopeSel('a[href="#notifications"]')); }, title: '🔔 Notificações', text: 'Avisos de sorteios, jogos e convites chegam aqui.' },
       { id: 'menu_tema', el: function () { return document.querySelector(_menuScopeSel('#theme-toggle-btn')); }, title: '🎨 Aparência', text: 'Alterne entre os temas claro e escuro com um toque.' },
       { id: 'menu_ajuda', el: function () { return document.querySelector(_menuScopeSel('button[onclick*="#help"]')); }, title: '❓ Ajuda', text: 'O manual completo do app, sempre que precisar.' },
