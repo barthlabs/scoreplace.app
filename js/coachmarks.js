@@ -51,6 +51,8 @@
   var _activityBound = null;
   var _current = null;       // step atualmente exibido
   var _openedHam = false;    // abrimos o hamburger pra este step
+  var _targetEl = null;      // elemento destacado (pra detectar "seguiu a dica")
+  var _targetHandler = null;
 
   // ── helpers DOM ──────────────────────────────────────────────────────────
   function _user() { return (window.AppStore && window.AppStore.currentUser) || null; }
@@ -98,6 +100,10 @@
 
   // ── teardown ──────────────────────────────────────────────────────────────
   function _clearCountdown() { if (_cdTimer) { clearInterval(_cdTimer); _cdTimer = null; } }
+  function _detachTarget() {
+    if (_targetEl && _targetHandler) { try { _targetEl.removeEventListener('click', _targetHandler, true); } catch (e) {} }
+    _targetEl = null; _targetHandler = null;
+  }
   function _closeHamIfOpened() {
     if (_openedHam && typeof window._closeHamburger === 'function') { try { window._closeHamburger(); } catch (e) {} }
     _openedHam = false;
@@ -105,6 +111,7 @@
   // remove só a dica da tela (mantém o watcher de inatividade)
   function _hide() {
     _clearCountdown();
+    _detachTarget();
     if (_resizeBound) {
       window.removeEventListener('resize', _resizeBound);
       window.removeEventListener('scroll', _resizeBound, true);
@@ -213,6 +220,12 @@
         window.addEventListener('scroll', _resizeBound, true);
       }
       _current = step;
+      // "seguiu a dica": clicar no elemento destacado marca como vista (não volta).
+      // Re-anexa a cada render (resize/scroll) sem empilhar listeners.
+      _detachTarget();
+      _targetEl = el;
+      _targetHandler = function () { _followed(step); };
+      el.addEventListener('click', _targetHandler, true);
       _overlay.innerHTML = '';
       var vw = window.innerWidth, vh = window.innerHeight;
       var r = el.getBoundingClientRect();
@@ -329,6 +342,13 @@
     _hide();
     _armIdle();
   }
+  function _followed(step) {
+    // clicou no elemento destacado (seguiu a dica) → marca como vista, não volta
+    if (step) markSeen(step.id);
+    _firstShow = false;
+    _hide();
+    _armIdle();
+  }
   function _skipAll() {
     // desliga as dicas de vez (reativa no perfil)
     setEnabled(false);
@@ -340,6 +360,13 @@
     var v = u[field];
     if (Array.isArray(v)) return v.length > 0;
     return !!(v && String(v).trim());
+  }
+  // true se o campo já tem valor no perfil OU já foi digitado no DOM (mesmo
+  // antes de salvar) — preencher encerra a dica.
+  function _fieldHasValue(field, inputId) {
+    if (_filled(field)) return true;
+    try { var el = document.getElementById(inputId); if (el && el.value && String(el.value).trim()) return true; } catch (e) {}
+    return false;
   }
 
   // ── definição dos tours ─────────────────────────────────────────────────
@@ -359,9 +386,9 @@
   }
   function _profileSteps() {
     return [
-      { id: 'pf_gender', el: '#profile-edit-gender', title: '⚥ Seu gênero', text: 'Define em quais categorias dos torneios você se encaixa (feminino, masculino, misto).', skipIf: function () { return _filled('gender'); } },
-      { id: 'pf_birth', el: '#profile-edit-birthdate', title: '🎂 Data de nascimento', text: 'Libera torneios por faixa etária (40+, 50+, 60+...) feitos pra você.', skipIf: function () { return _filled('birthDate'); } },
-      { id: 'pf_city', el: '#profile-edit-city', title: '📍 Sua cidade', text: 'Aproxima você de eventos e quadras perto de onde você está.', skipIf: function () { return _filled('city'); } },
+      { id: 'pf_gender', el: '#profile-edit-gender', title: '⚥ Seu gênero', text: 'Define em quais categorias dos torneios você se encaixa (feminino, masculino, misto).', skipIf: function () { return _fieldHasValue('gender', 'profile-edit-gender'); } },
+      { id: 'pf_birth', el: '#profile-edit-birthdate', title: '🎂 Data de nascimento', text: 'Libera torneios por faixa etária (40+, 50+, 60+...) feitos pra você.', skipIf: function () { return _fieldHasValue('birthDate', 'profile-edit-birthdate'); } },
+      { id: 'pf_city', el: '#profile-edit-city', title: '📍 Sua cidade', text: 'Aproxima você de eventos e quadras perto de onde você está.', skipIf: function () { return _fieldHasValue('city', 'profile-edit-city'); } },
       { id: 'pf_sports', el: '#profile-sports-pills', title: '🎾 Modalidades e nível', text: 'Escolha seus esportes e seu nível em cada um — filtramos eventos do seu nível.', skipIf: function () { return _filled('preferredSports'); } },
       { id: 'pf_locations', el: '#profile-location-search', title: '⭐ Locais preferidos', text: 'Cadastre onde você costuma jogar pra achar rapidinho os eventos por lá.', skipIf: function () { return _filled('preferredLocations'); } },
       { id: 'ps_uiscale', el: '#profile-ui-scale', title: '🔎 Tamanho da interface', text: 'Deixe tudo maior ou menor, do jeito mais confortável pra você.' },

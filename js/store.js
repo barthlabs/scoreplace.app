@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.26-beta';
+window.SCOREPLACE_VERSION = '2.3.27-beta';
 
 // ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
 // Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
@@ -1077,6 +1077,20 @@ window._friendlyUserName = function(user) {
     return String(ph);
   }
   return null;
+};
+
+// v2.3.27: APENAS para a saudação da hero box e o nome no link de perfil da
+// topbar (os 2 únicos lugares que só o próprio usuário vê). Extrai o primeiro
+// nome quando é um nome de verdade; mantém telefone/email/identificadores
+// intactos (não dá pra "encurtar"). NÃO usar em nenhum outro lugar — nomes de
+// outros usuários e contextos públicos seguem com o nome completo.
+window._firstNameOnly = function(name) {
+  if (!name) return name;
+  var s = String(name).trim();
+  if (!s) return s;
+  if (s.indexOf('@') > -1 || s.indexOf('(') > -1 || s.indexOf('+') > -1 || /\d{3,}/.test(s)) return s;
+  var first = s.split(/\s+/)[0];
+  return first || s;
 };
 
 // Normalizes any phone string to E.164 format with + prefix.

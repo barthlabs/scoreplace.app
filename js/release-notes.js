@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.27-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Dica seguida não volta.</b> Se você clica no que a dica aponta (ou preenche o campo), ela é dada como concluída e não reaparece.</li>' +
+        '<li><b>Saudação mais pessoal.</b> Na hero box ("Bem-vindo, Nelson!") e no seu nome na barra do topo agora aparece só o primeiro nome — só você vê isso; em todo o resto do app o nome completo continua igual.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.26-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Dicas com tempo e contador.</b> A 1ª dica só aparece depois de 10s parado (não pisca mais ao carregar). Cada dica vem com um contador circular (5→1) no canto superior direito. Se você não tocar em "Próximo" durante esses 5s, a dica some — e volta após 15s de inatividade. Enquanto você está jogando/usando, nada interrompe.</li>' +
