@@ -609,7 +609,7 @@ window._translations['pt'] = {
   'profile.emailRequired': 'Email necessário',
   'profile.emailRequiredMsg': 'Para receber notificações por email, seu perfil precisa ter um email cadastrado.',
   'profile.myProfile': 'Meu Perfil',
-  'profile.labelName': 'Nome',
+  'profile.labelName': 'Nome de Exibição (que os outros usuários verão)',
   'profile.labelSex': 'Gênero',
   'profile.sexNotInform': 'Não informar',
   'profile.sexMasc': 'Masculino',

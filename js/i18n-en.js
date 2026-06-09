@@ -596,7 +596,7 @@ window._translations['en'] = {
   'profile.emailRequired': 'Email required',
   'profile.emailRequiredMsg': 'To receive email notifications, your profile must have an email address.',
   'profile.myProfile': 'My Profile',
-  'profile.labelName': 'Name',
+  'profile.labelName': 'Display Name (visible to other users)',
   'profile.labelSex': 'Gender',
   'profile.sexNotInform': 'Prefer not to say',
   'profile.sexMasc': 'Male',

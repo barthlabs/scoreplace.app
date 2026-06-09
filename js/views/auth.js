@@ -3365,7 +3365,7 @@ async function simulateLoginSuccess(user) {
     // width:auto + max-width:120px constrange contra flex-stretch do parent.
     // Bug reportado: "salvar visivelmente errado" — antes botão crescia
     // pra ocupar todo o lado direito da back-header.
-    var saveBtnHtml = '<button type="button" class="btn btn-primary btn-sm hover-lift" onclick="if(window._spinButton)window._spinButton(this, \'Salvando...\'); if(typeof saveUserProfile===\'function\')saveUserProfile()" style="flex:0 0 auto;width:auto;max-width:120px;background:#10b981;color:#fff;border:1px solid #059669;font-weight:700;padding:7px 14px;border-radius:10px;font-size:0.82rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(16,185,129,0.3);">💾 ' + _t('btn.save') + '</button>';
+    var saveBtnHtml = '<button type="button" class="btn btn-primary btn-sm hover-lift" id=\"profile-save-btn\" onclick="if(window._spinButton)window._spinButton(this, \'Salvando...\'); if(typeof saveUserProfile===\'function\')saveUserProfile()" style="flex:0 0 auto;width:auto;max-width:120px;background:#10b981;color:#fff;border:1px solid #059669;font-weight:700;padding:7px 14px;border-radius:10px;font-size:0.82rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(16,185,129,0.3);">💾 ' + _t('btn.save') + '</button>';
     var hdr = (typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
         href: '#dashboard',
@@ -7178,7 +7178,7 @@ if (typeof window.renderProfilePage !== 'function') {
 
     var _t = window._t || function (k) { return k; };
     // v1.3.29-beta: idem ao primary path — Save compacto + width-constrained.
-    var saveBtnHtml = '<button type="button" class="btn btn-primary btn-sm hover-lift" onclick="if(window._spinButton)window._spinButton(this,\'Salvando...\'); if(typeof saveUserProfile===\'function\')saveUserProfile()" style="flex:0 0 auto;width:auto;max-width:120px;background:#10b981;color:#fff;border:1px solid #059669;font-weight:700;padding:7px 14px;border-radius:10px;font-size:0.82rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(16,185,129,0.3);">💾 ' + _t('btn.save') + '</button>';
+    var saveBtnHtml = '<button type="button" class="btn btn-primary btn-sm hover-lift" id=\"profile-save-btn\" onclick="if(window._spinButton)window._spinButton(this,\'Salvando...\'); if(typeof saveUserProfile===\'function\')saveUserProfile()" style="flex:0 0 auto;width:auto;max-width:120px;background:#10b981;color:#fff;border:1px solid #059669;font-weight:700;padding:7px 14px;border-radius:10px;font-size:0.82rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(16,185,129,0.3);">💾 ' + _t('btn.save') + '</button>';
     var hdr = (typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
         href: '#dashboard',

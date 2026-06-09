@@ -462,6 +462,7 @@
   }
   function _profileSteps() {
     return [
+      { id: 'pf_save', el: '#profile-save-btn', title: '💾 Salvar', text: 'Sempre que mudar algo no seu perfil, toque em Salvar pra gravar as alterações.' },
       { id: 'pf_gender', el: '#profile-edit-gender', title: '⚥ Seu gênero', text: 'Define em quais categorias dos torneios você se encaixa (feminino, masculino, misto).', skipIf: function () { return _fieldHasValue('gender', 'profile-edit-gender'); } },
       { id: 'pf_birth', el: '#profile-edit-birthdate', title: '🎂 Data de nascimento', text: 'Libera torneios por faixa etária (40+, 50+, 60+...) feitos pra você.', skipIf: function () { return _fieldHasValue('birthDate', 'profile-edit-birthdate'); } },
       { id: 'pf_city', el: '#profile-edit-city', title: '📍 Sua cidade', text: 'Aproxima você de eventos e quadras perto de onde você está.', skipIf: function () { return _fieldHasValue('city', 'profile-edit-city'); } },
