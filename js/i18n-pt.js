@@ -947,6 +947,8 @@ window._translations['pt'] = {
   'bui.swissFinishedRounds': 'Torneio Encerrado',
   'bui.swissFinishedRoundsMsg': '{n} rodadas concluídas!',
   'bui.newRound': 'Nova Rodada',
+  'bui.roundClosedTitle': 'Rodada encerrada',
+  'bui.roundClosedScheduledMsg': 'A próxima rodada será sorteada automaticamente no horário agendado.',
   'bui.newRoundMsg': 'Rodada {n} gerada com {count} partida(s)!',
   'bui.tournamentFinished': '🏆 Torneio Encerrado!',
   'bui.tournamentFinishedChamp': '{name} é o campeão!',

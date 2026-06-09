@@ -1868,14 +1868,31 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId) {
       });
     }
   } else {
-    _generateNextRound(t);
-    var _newRound = t.rounds[t.rounds.length - 1];
-    var _newMatchCount = (_newRound && _newRound.matches || []).filter(function(m) { return !m.isSitOut; }).length;
-    showNotification(_t('bui.newRound'), _t('bui.newRoundMsg', { n: t.rounds.length, count: _newMatchCount }), 'success');
+    // v2.3.7 FIX (bug reportado): Liga com sorteio AGENDADO NÃO gera a próxima
+    // rodada ao COMPLETAR a atual. A próxima é gerada pelo poller agendado
+    // (_checkLigaAutoDraws → _fireLigaAutoDraw) no horário certo
+    // (drawFirstDate + N×intervalo). Antes, lançar o último placar da rodada
+    // disparava _generateNextRound imediatamente, criando a rodada seguinte
+    // ANTES da hora — e inflando o "X/Y partidas" (o progresso soma TODAS as
+    // rodadas existentes). Liga manual e Suíço seguem gerando na conclusão,
+    // pois têm gatilho próprio (botão / fluxo contínuo do Suíço).
+    var _ligaScheduled = (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) && t.drawManual !== true && !!t.drawFirstDate;
+    if (_ligaScheduled) {
+      showNotification(
+        _t('bui.roundClosedTitle') || 'Rodada encerrada',
+        _t('bui.roundClosedScheduledMsg') || 'A próxima rodada será sorteada automaticamente no horário agendado.',
+        'success'
+      );
+    } else {
+      _generateNextRound(t);
+      var _newRound = t.rounds[t.rounds.length - 1];
+      var _newMatchCount = (_newRound && _newRound.matches || []).filter(function(m) { return !m.isSitOut; }).length;
+      showNotification(_t('bui.newRound'), _t('bui.newRoundMsg', { n: t.rounds.length, count: _newMatchCount }), 'success');
 
-    // Notify all participants — personalized per recipient (shows their match)
-    if (typeof window._notifyDrawPersonalized === 'function') {
-      window._notifyDrawPersonalized(t, tId, { type: 'new_round', roundIndex: t.rounds.length - 1 });
+      // Notify all participants — personalized per recipient (shows their match)
+      if (typeof window._notifyDrawPersonalized === 'function') {
+        window._notifyDrawPersonalized(t, tId, { type: 'new_round', roundIndex: t.rounds.length - 1 });
+      }
     }
   }
 

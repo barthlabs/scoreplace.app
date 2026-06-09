@@ -934,6 +934,8 @@ window._translations['en'] = {
   'bui.swissFinishedRounds': 'Tournament Finished',
   'bui.swissFinishedRoundsMsg': '{n} rounds completed!',
   'bui.newRound': 'New Round',
+  'bui.roundClosedTitle': 'Round closed',
+  'bui.roundClosedScheduledMsg': 'The next round will be drawn automatically at the scheduled time.',
   'bui.newRoundMsg': 'Round {n} generated with {count} match(es)!',
   'bui.tournamentFinished': '🏆 Tournament Finished!',
   'bui.tournamentFinishedChamp': '{name} is the champion!',

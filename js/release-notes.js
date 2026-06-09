@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.7-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Correção crítica: Liga não gera mais a próxima rodada antes da hora.</b> Numa Liga com sorteio agendado, lançar o último placar da rodada disparava a geração imediata da rodada seguinte — antes do horário marcado. Isso fazia aparecer "Rodada 2" cedo e inflava o contador de partidas (ex.: 24/48). Agora, ao encerrar a rodada, o sistema apenas atualiza a classificação e aguarda o sorteio agendado.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.6-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Correção: organizador não é mais inscrito sozinho no próprio torneio.</b> Quando o organizador abria o link do próprio torneio estando deslogado e depois entrava, ele era auto-inscrito como jogador sem ter se inscrito. Agora o criador/organizador nunca é auto-inscrito — se quiser jogar, usa o botão "Inscrever-se" normalmente.</li>' +
