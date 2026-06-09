@@ -397,10 +397,18 @@ function _computeStandings(t, category) {
         var isDraw = m.winner === 'draw' || m.draw;
         var team1Won = !isDraw && m.winner === m.p1;
         var team2Won = !isDraw && m.winner === m.p2;
+        // v2.3.15: acumula GAMES p/ a coluna "% games". O bloco monarch não chama
+        // _accumulateGSM, então some aqui: usa m.sets quando houver (soma games de
+        // todos os sets), senão usa scoreP1/scoreP2 (ex.: 6×2).
+        var _g1 = 0, _g2 = 0;
+        if (Array.isArray(m.sets) && m.sets.length) {
+          m.sets.forEach(function(st){ _g1 += parseInt(st.gamesP1) || 0; _g2 += parseInt(st.gamesP2) || 0; });
+        } else { _g1 = ms1; _g2 = ms2; }
         m.team1.forEach(function(name) {
           _ensureEntry(name);
           scoreMap[name].played++;
           scoreMap[name].pointsDiff += (ms1 - ms2);
+          scoreMap[name].gamesWon += _g1; scoreMap[name].gamesLost += _g2;
           if (isDraw) { scoreMap[name].draws = (scoreMap[name].draws || 0) + 1; scoreMap[name].points += 1; }
           else if (team1Won) { scoreMap[name].wins++; scoreMap[name].points += 3; }
           else { scoreMap[name].losses++; }
@@ -409,6 +417,7 @@ function _computeStandings(t, category) {
           _ensureEntry(name);
           scoreMap[name].played++;
           scoreMap[name].pointsDiff += (ms2 - ms1);
+          scoreMap[name].gamesWon += _g2; scoreMap[name].gamesLost += _g1;
           if (isDraw) { scoreMap[name].draws = (scoreMap[name].draws || 0) + 1; scoreMap[name].points += 1; }
           else if (team2Won) { scoreMap[name].wins++; scoreMap[name].points += 3; }
           else { scoreMap[name].losses++; }
@@ -429,6 +438,10 @@ function _computeStandings(t, category) {
         var ds2 = parseInt(m.scoreP2) || 0;
         scoreMap[m.p1].pointsDiff += (ds1 - ds2);
         scoreMap[m.p2].pointsDiff += (ds2 - ds1);
+        if (!Array.isArray(m.sets) || !m.sets.length) {
+          scoreMap[m.p1].gamesWon += ds1; scoreMap[m.p1].gamesLost += ds2;
+          scoreMap[m.p2].gamesWon += ds2; scoreMap[m.p2].gamesLost += ds1;
+        }
         _accumulateGSM(m);
         return;
       }
@@ -450,6 +463,10 @@ function _computeStandings(t, category) {
       } else {
         scoreMap[m.p2].pointsDiff += (s2 - s1);
         scoreMap[m.p1].pointsDiff += (s1 - s2);
+      }
+      if (!Array.isArray(m.sets) || !m.sets.length) {
+        scoreMap[m.p1].gamesWon += s1; scoreMap[m.p1].gamesLost += s2;
+        scoreMap[m.p2].gamesWon += s2; scoreMap[m.p2].gamesLost += s1;
       }
       _accumulateGSM(m);
     });

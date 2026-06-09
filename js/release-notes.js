@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.15-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Classificação reorganizada.</b> Nova ordem de colunas: <b>Pontuação · % G · V · D · Saldo · J</b>. A 1ª coluna é o 💯 PA (quando os Pontos Avançados estão ativos) ou os Pts simples (quando não). Adicionada a coluna <b>% G</b> (games vencidos ÷ total) — distingue um 6×0 de um 6×4, coisa que V/D não fazem.</li>' +
+        '<li><b>±S/±G escondidos quando inúteis.</b> As colunas de saldo de Sets/Games só aparecem em torneios marcados por sets. Em Ligas de placar simples (onde sempre davam 0) elas somem — o "Saldo" já é o saldo de games.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.14-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Liga usa a barra de progresso rica na dashboard.</b> Antes a Liga mostrava só a barra simples; agora usa a barra rica (com a barra roxa do torneio inteiro), igual aos demais formatos.</li>' +

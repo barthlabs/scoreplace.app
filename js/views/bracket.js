@@ -2353,31 +2353,41 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // E aparece SOMENTE quando: scoring permite (não-sets/gsm) E há ao menos
   // 1 empate computado. Caso contrário, oculta — ou impossível ou ruído.
   const _drawsAllowed = !_isSetsBased && !_explicitlyDisallowed && _hasAnyDraws;
+  // v2.3.15: ±S/±G só quando há SETS reais — em placar simples ficam sempre 0
+  // (o "Saldo" já é o saldo de games). Hide data-driven.
+  var _anyRealSets = _allStandingsRows.some(function(s){ return ((s.setsWon||0)+(s.setsLost||0)) > 0; });
+  var _showGsm = _useSetsStandings && _anyRealSets;
+  // v2.3.15: nova ordem de colunas — [PA ou Pts] · %G · V · D · [E] · Saldo · [±S ±G] · J
   const _buildStandingsRows = function(computed) {
     return computed.map((s, i) => {
       var _setsDiff = (s.setsWon || 0) - (s.setsLost || 0);
       var _gamesDiff = (s.gamesWon || 0) - (s.gamesLost || 0);
+      var _totG = (s.gamesWon || 0) + (s.gamesLost || 0);
+      var _pctG = _totG > 0 ? Math.round((s.gamesWon || 0) / _totG * 100) : 0;
       var _safeName = s.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var _safeTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      var _advCell = _useAdvStandings
+      // 1ª coluna de pontuação: PA (quando ativo) OU Pts simples
+      var _scoreCell = _useAdvStandings
         ? `<td style="padding:11px 14px;text-align:center;color:#fbbf24;font-weight:800;font-size:1.02rem;cursor:pointer;" onclick="window._showAdvancedPointsBreakdown('${_safeTid}','${_safeName}','${String(s.category || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Pontos Avançados (classificação) — clique para ver o detalhamento">${s.advancedPoints || 0}</td>`
-        : '';
+        : `<td style="padding:11px 14px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>`;
+      var _pctCell = `<td style="padding:11px 14px;text-align:center;color:${_pctG >= 50 ? '#4ade80' : 'var(--text-muted)'};font-weight:600;" title="% de games vencidos (${s.gamesWon || 0} de ${_totG})">${_totG > 0 ? _pctG + '%' : '—'}</td>`;
       var _drawCell = _drawsAllowed
         ? `<td style="padding:11px 14px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>`
+        : '';
+      var _gsmCells = _showGsm
+        ? `<td style="padding:11px 14px;text-align:center;color:${_setsDiff >= 0 ? '#06b6d4' : '#f87171'};">${_setsDiff >= 0 ? '+' : ''}${_setsDiff}</td><td style="padding:11px 14px;text-align:center;color:${_gamesDiff >= 0 ? '#8b5cf6' : '#f87171'};">${_gamesDiff >= 0 ? '+' : ''}${_gamesDiff}</td>`
         : '';
       return `
     <tr style="border-bottom:1px solid var(--border-color);${i < 3 ? 'background:rgba(251,191,36,0.03)' : ''}">
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
       <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name)}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
-      <td style="padding:11px 14px;font-weight:${_useAdvStandings ? '600' : '800'};color:${_useAdvStandings ? 'var(--text-muted)' : 'var(--primary-color)'};text-align:center;"${_useAdvStandings ? ' title="Pontos simples (3 por vitória) — informativo. A classificação usa os Pontos Avançados."' : ''}>${s.points}</td>
+      ${_scoreCell}
+      ${_pctCell}
       <td style="padding:11px 14px;text-align:center;color:#4ade80;">${s.wins}</td>
-      ${_drawCell}
       <td style="padding:11px 14px;text-align:center;color:#f87171;">${s.losses}</td>
-      <td style="padding:11px 14px;text-align:center;color:${s.pointsDiff >= 0 ? '#4ade80' : '#f87171'};">${s.pointsDiff >= 0 ? '+' : ''}${s.pointsDiff}</td>` +
-      _advCell +
-      (_useSetsStandings ? `
-      <td style="padding:11px 14px;text-align:center;color:${_setsDiff >= 0 ? '#06b6d4' : '#f87171'};">${_setsDiff >= 0 ? '+' : ''}${_setsDiff}</td>
-      <td style="padding:11px 14px;text-align:center;color:${_gamesDiff >= 0 ? '#8b5cf6' : '#f87171'};">${_gamesDiff >= 0 ? '+' : ''}${_gamesDiff}</td>` : '') + `
+      ${_drawCell}
+      <td style="padding:11px 14px;text-align:center;color:${s.pointsDiff >= 0 ? '#4ade80' : '#f87171'};">${s.pointsDiff >= 0 ? '+' : ''}${s.pointsDiff}</td>
+      ${_gsmCells}
       <td style="padding:11px 14px;text-align:center;color:var(--text-muted);">${s.played}</td>
     </tr>`;
     }).join('');
@@ -2752,31 +2762,33 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     </div>`;
 
   const _thStyle = 'padding:9px 14px;font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;white-space:nowrap;transition:color 0.15s;';
-  // v0.17.30: índices de coluna shiftam quando E é omitido. D/Saldo/PA/GSM/J
-  // recalculam pra continuar válidos no _sortStandingsTable.
-  var _drawShift = _drawsAllowed ? 0 : 1;
-  var _dColIdx = 5 - _drawShift;
-  var _saldoColIdx = 6 - _drawShift;
-  var _advColIdx = 7 - _drawShift; // PA column (when adv enabled) sits after Saldo
-  var _gsmStartIdx = _advColIdx + (_useAdvStandings ? 1 : 0);
+  // v2.3.15: ordem # · Nome · [PA/Pts] · %G · V · D · [E] · Saldo · [±S ±G] · J.
+  // Índices de sort acompanham a presença (ou não) de E e ±S/±G.
+  var _vColIdx = 4;
+  var _dColIdx = 5;
+  var _eColIdx = 6;
+  var _saldoColIdx = _drawsAllowed ? 7 : 6;
+  var _gsmStartIdx = _saldoColIdx + 1;
+  var _jColIdx = _saldoColIdx + 1 + (_showGsm ? 2 : 0);
+  const _scoreHeader = _useAdvStandings
+    ? `<th style="${_thStyle}text-align:center;color:#fbbf24;" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Pontos Avançados (classificação)">💯 PA <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`
+    : `<th style="${_thStyle}text-align:center;color:var(--primary-color);" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Pontos">Pts <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
+  const _pctHeader = `<th style="${_thStyle}text-align:center;color:#a3e635;" data-sort-col="3" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="% de games vencidos (games ganhos ÷ total)">% G <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
   const _drawHeader = _drawsAllowed ? `
-              <th style="${_thStyle}text-align:center;color:#94a3b8;" data-sort-col="4" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Empates">E <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
-  const _advHeader = _useAdvStandings ? `
-              <th style="${_thStyle}text-align:center;color:#fbbf24;" data-sort-col="${_advColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Pontos Avançados">💯 PA <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
-  const _gsmHeaders = _useSetsStandings ? `
+              <th style="${_thStyle}text-align:center;color:#94a3b8;" data-sort-col="${_eColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Empates">E <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
+  const _gsmHeaders = _showGsm ? `
               <th style="${_thStyle}text-align:center;color:#06b6d4;" data-sort-col="${_gsmStartIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de sets (vencidos − perdidos)">±S <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               <th style="${_thStyle}text-align:center;color:#8b5cf6;" data-sort-col="${_gsmStartIdx + 1}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de games (vencidos − perdidos)">±G <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
-  var _jColIdx = _gsmStartIdx + (_useSetsStandings ? 2 : 0);
   const _tableHeader = `<thead>
             <tr style="border-bottom:2px solid var(--border-color);">
               <th style="${_thStyle}text-align:left;color:var(--text-muted);" data-sort-col="0" data-sort-type="num" onclick="window._sortStandingsTable(this)"># <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">▼</span></th>
               <th style="${_thStyle}text-align:left;color:var(--text-muted);" data-sort-col="1" data-sort-type="text" onclick="window._sortStandingsTable(this)">Participante <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
-              <th style="${_thStyle}text-align:center;color:var(--primary-color);" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Pontos">Pts <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
-              <th style="${_thStyle}text-align:center;color:#4ade80;" data-sort-col="3" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Vitórias">V <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
-              ${_drawHeader}
+              ${_scoreHeader}
+              ${_pctHeader}
+              <th style="${_thStyle}text-align:center;color:#4ade80;" data-sort-col="${_vColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Vitórias">V <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               <th style="${_thStyle}text-align:center;color:#f87171;" data-sort-col="${_dColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Derrotas">D <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
-              <th style="${_thStyle}text-align:center;color:var(--text-muted);" data-sort-col="${_saldoColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de pontos (pró − contra)">Saldo <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
-              ${_advHeader}
+              ${_drawHeader}
+              <th style="${_thStyle}text-align:center;color:var(--text-muted);" data-sort-col="${_saldoColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de games (pró − contra)">Saldo <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               ${_gsmHeaders}
               <th style="${_thStyle}text-align:center;color:var(--text-muted);" data-sort-col="${_jColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Jogos disputados">J <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
             </tr>
