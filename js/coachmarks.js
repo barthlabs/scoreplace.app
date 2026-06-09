@@ -437,13 +437,13 @@
     } catch (e) { _stop(); }
   }
   function autoStartDashboard() { _init('dashboard', _menuSteps); }
-  // No perfil, a dica do hamburger também vem ANTES de tudo (se ainda não
-  // aprendida) — depois os campos/configurações.
-  function _profileProvider() { return [_menuOpenStep()].concat(_profileSteps()); }
+  // v2.3.34: contas novas caem direto no perfil → aqui as dicas dos CAMPOS do
+  // perfil vêm primeiro (sem o hamburger). As dicas do hamburger/menu rodam
+  // no contexto da dashboard (autoStartDashboard / _menuSteps).
   function startProfileTour() {
     // visitou o perfil → não cobra mais a entrada no menu
     try { markSeen('profile_entry'); } catch (e) {}
-    _init('profile', _profileProvider);
+    _init('profile', _profileSteps);
   }
 
   // sai de dashboard/perfil → para o watcher (outras telas não disparam dicas)
