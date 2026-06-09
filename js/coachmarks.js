@@ -29,8 +29,15 @@
   var CD_R = 22, CD_C = 2 * Math.PI * CD_R; // raio/circunferência do anel
 
   // ── persistência ──────────────────────────────────────────────────────────
-  function _seen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}') || {}; } catch (e) { return {}; } }
-  function _saveSeen(m) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(m)); } catch (e) {} }
+  // v2.3.35: estado "visto" POR CONTA (uid). Antes era por navegador, então uma
+  // conta nova no mesmo navegador herdava as dicas já vistas e nada disparava.
+  function _seenKey() {
+    var u = _user();
+    var uid = (u && u.uid) ? String(u.uid) : 'anon';
+    return SEEN_KEY + '_' + uid;
+  }
+  function _seen() { try { return JSON.parse(localStorage.getItem(_seenKey()) || '{}') || {}; } catch (e) { return {}; } }
+  function _saveSeen(m) { try { localStorage.setItem(_seenKey(), JSON.stringify(m)); } catch (e) {} }
   function isStepSeen(id) { return !!_seen()[id]; }
   function markSeen(id) { var m = _seen(); m[id] = 1; _saveSeen(m); }
   function isDisabled() { try { return localStorage.getItem(DISABLED_KEY) === '1'; } catch (e) { return false; } }
@@ -398,13 +405,16 @@
     return { id: 'menu_open', el: function () { return document.querySelector('.hamburger-btn'); }, title: '☰ Abrir o menu', text: 'Toque aqui pra abrir o menu com tudo que o app oferece.', skipIf: function () { return !_hamVisible(); }, waitFor: function () { return !_hamOpen(); } };
   }
   function _menuSteps() {
+    // v2.3.35: com o menu aberto, as dicas seguem a ordem da DIREITA pra ESQUERDA
+    // da topbar: Perfil (botão de login, mais à direita) → Ajuda → Tema →
+    // Notificações → Início (mais à esquerda).
     return [
       _menuOpenStep(),
-      { id: 'menu_inicio', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('a[href="#dashboard"]')); }, title: '🏠 Início', text: 'Sua central: torneios, partidas casuais e tudo que importa. Clique aqui a qualquer momento e volte para essa tela inicial.' },
-      { id: 'menu_notif', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('a[href="#notifications"]')); }, title: '🔔 Notificações', text: 'Avisos de sorteios, jogos e convites chegam aqui.' },
-      { id: 'menu_tema', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('#theme-toggle-btn')); }, title: '🎨 Aparência', text: 'Alterne entre os temas claro e escuro com um toque.' },
+      { id: 'menu_perfil', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('#btn-login')); }, title: '👤 Seu perfil', text: 'Toque aqui pra abrir e completar seu perfil — é o que destrava eventos do seu interesse.' },
       { id: 'menu_ajuda', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('button[onclick*="#help"]')); }, title: '❓ Ajuda', text: 'O manual completo do app, sempre que precisar.' },
-      { id: 'menu_perfil', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('#btn-login')); }, title: '👤 Seu perfil', text: 'Toque aqui pra abrir e completar seu perfil — é o que destrava eventos do seu interesse.' }
+      { id: 'menu_tema', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('#theme-toggle-btn')); }, title: '🎨 Aparência', text: 'Alterne entre os temas claro e escuro com um toque.' },
+      { id: 'menu_notif', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('a[href="#notifications"]')); }, title: '🔔 Notificações', text: 'Avisos de sorteios, jogos e convites chegam aqui.' },
+      { id: 'menu_inicio', waitFor: _menuReady, el: function () { return document.querySelector(_menuScopeSel('a[href="#dashboard"]')); }, title: '🏠 Início', text: 'Sua central: torneios, partidas casuais e tudo que importa. Clique aqui a qualquer momento e volte para essa tela inicial.' }
     ];
   }
   function _profileSteps() {
