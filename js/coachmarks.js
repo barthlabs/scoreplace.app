@@ -82,7 +82,7 @@
       '@keyframes coachPulse{0%,100%{box-shadow:0 0 0 2px rgba(251,191,36,0.9),0 0 0 6px rgba(251,191,36,0.25)}50%{box-shadow:0 0 0 2px rgba(251,191,36,0.9),0 0 0 12px rgba(251,191,36,0.05)}}' +
       '.coach-mask{position:fixed;background:rgba(2,6,23,0.70);pointer-events:auto;transition:all 0.18s ease;}' +
       '.coach-ring{position:fixed;border-radius:12px;pointer-events:none;animation:coachPulse 1.6s ease-in-out infinite;transition:all 0.18s ease;}' +
-      '.coach-cd{position:fixed;top:14px;right:14px;width:54px;height:54px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;}' +
+      '.coach-cd{position:fixed;top:14px;left:14px;width:54px;height:54px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;}' +
       '.coach-cd svg{position:absolute;top:0;left:0;transform:rotate(-90deg);}' +
       '.coach-cd-track{fill:none;stroke:rgba(255,255,255,0.18);stroke-width:4;}' +
       '.coach-cd-prog{fill:none;stroke:#fbbf24;stroke-width:4;stroke-linecap:round;}' +
@@ -254,7 +254,7 @@
       ring.style.width = hw + 'px'; ring.style.height = hh + 'px';
       _overlay.appendChild(ring);
 
-      // contador circular (canto superior direito)
+      // contador circular (canto superior ESQUERDO — sempre)
       var cd = document.createElement('div');
       cd.className = 'coach-cd';
       cd.innerHTML =
