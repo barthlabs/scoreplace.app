@@ -2360,7 +2360,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       var _safeName = s.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var _safeTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var _advCell = _useAdvStandings
-        ? `<td style="padding:11px 14px;text-align:center;color:#fbbf24;font-weight:700;cursor:pointer;" onclick="window._showAdvancedPointsBreakdown('${_safeTid}','${_safeName}','${String(s.category || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Ver detalhamento">${s.advancedPoints || 0}</td>`
+        ? `<td style="padding:11px 14px;text-align:center;color:#fbbf24;font-weight:800;font-size:1.02rem;cursor:pointer;" onclick="window._showAdvancedPointsBreakdown('${_safeTid}','${_safeName}','${String(s.category || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Pontos Avançados (classificação) — clique para ver o detalhamento">${s.advancedPoints || 0}</td>`
         : '';
       var _drawCell = _drawsAllowed
         ? `<td style="padding:11px 14px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>`
@@ -2369,7 +2369,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     <tr style="border-bottom:1px solid var(--border-color);${i < 3 ? 'background:rgba(251,191,36,0.03)' : ''}">
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
       <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name)}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
-      <td style="padding:11px 14px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>
+      <td style="padding:11px 14px;font-weight:${_useAdvStandings ? '600' : '800'};color:${_useAdvStandings ? 'var(--text-muted)' : 'var(--primary-color)'};text-align:center;"${_useAdvStandings ? ' title="Pontos simples (3 por vitória) — informativo. A classificação usa os Pontos Avançados."' : ''}>${s.points}</td>
       <td style="padding:11px 14px;text-align:center;color:#4ade80;">${s.wins}</td>
       ${_drawCell}
       <td style="padding:11px 14px;text-align:center;color:#f87171;">${s.losses}</td>

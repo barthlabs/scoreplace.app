@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.11-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Pontos Avançados valem como classificação da Liga.</b> Quando o "Sistema de Pontos Avançado" está ativo, a Liga passa a ser ranqueada por ELE (não mais pelos pontos simples 3/1/0). A pontuação de todos é recomputada de todas as partidas. Na tabela, a coluna 💯 PA vira a pontuação principal e os pontos simples ficam como informação.</li>' +
+        '<li><b>Configurável pelo organizador.</b> Na tela de criar/editar a Liga, a seção "Sistema de Pontos Avançado" permite ligar/desligar e ajustar o valor de cada evento (participação, vitória, game ganho/perdido, ponto de tie-break, etc.).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.10-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Barra de progresso unificada.</b> A barra simples antiga foi eliminada — agora a tela do chaveamento usa a mesma barra rica do detalhe (ritmo, horários e, em Liga, a barra roxa "Torneio completo" com X/120 jogos · rodada N de M).</li>' +

@@ -491,9 +491,19 @@ function _computeStandings(t, category) {
     }
   });
 
+  // v2.3.11: quando o Sistema de Pontos Avançado está ativo, ELE é a pontuação
+  // PRINCIPAL da Liga (substitui os pontos simples 3/1/0 como critério primário).
+  // Os pontos avançados já são recomputados de todas as partidas em
+  // _calcAdvancedPoints. Sem o sistema ativo, segue o padrão 3/1/0.
+  var _advPrimary = !!(t.advancedScoring && t.advancedScoring.enabled);
   standings.sort((a, b) => {
-    // Primary: always sort by points first
-    if (b.points !== a.points) return b.points - a.points;
+    // Primary: pontos avançados (se ativos) OU pontos simples
+    if (_advPrimary) {
+      var _advDiff = (b.advancedPoints || 0) - (a.advancedPoints || 0);
+      if (_advDiff !== 0) return _advDiff;
+    } else {
+      if (b.points !== a.points) return b.points - a.points;
+    }
 
     // Then apply configured tiebreakers
     for (const tb of tiebreakers) {
