@@ -522,7 +522,7 @@ function setupCreateTournamentModal() {
                   <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; padding:6px 10px; background:rgba(248,113,113,0.06); border-radius:6px; border-left:2px solid #f87171;">ⓘ ${_t('create.advScoringGroupBWarn')}</div>
                   <!-- v2.3.12: toggle mestre — desligado, nivela quem usa placar ao vivo -->
                   <div style="display:flex; align-items:center; gap:10px; padding:9px 11px; background:rgba(248,113,113,0.08); border:1px solid rgba(248,113,113,0.25); border-radius:8px; margin-bottom:8px;">
-                    <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="adv-apply-live" checked><span class="toggle-slider"></span></label>
+                    <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="adv-apply-live" checked onchange="window._onAdvApplyLiveToggle()"><span class="toggle-slider"></span></label>
                     <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:700; color:#f87171;">${_t('create.advApplyLive')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advApplyLiveDesc')}</div></div>
                   </div>
                   <div style="display:flex; flex-direction:column; gap:6px;">
@@ -1814,6 +1814,24 @@ function setupCreateTournamentModal() {
     var on = document.getElementById('adv-scoring-enabled').checked;
     var body = document.getElementById('adv-scoring-body');
     if (body) body.style.display = on ? 'block' : 'none';
+    if (typeof window._onAdvApplyLiveToggle === 'function') window._onAdvApplyLiveToggle();
+  };
+
+  // v2.3.13: o toggle mestre "Aplicar pontos de placar ao vivo" controla os 2
+  // toggles individuais do Grupo B (killing point, ponto marcado). Desligado,
+  // desmarca e desabilita os dois (e o cálculo já os zera).
+  window._onAdvApplyLiveToggle = function () {
+    var master = document.getElementById('adv-apply-live');
+    var on = master ? master.checked : true;
+    ['killing_point', 'point_scored'].forEach(function (key) {
+      var row = document.querySelector('#adv-scoring-body .adv-row[data-adv-key="' + key + '"]');
+      if (!row) return;
+      var en = row.querySelector('.adv-enabled');
+      var val = row.querySelector('.adv-value');
+      if (en) { en.disabled = !on; if (!on) en.checked = false; }
+      if (val) val.disabled = !on;
+      row.style.opacity = on ? '1' : '0.45';
+    });
   };
 
   // _onRankingManualChange mantida como alias para backward compat
@@ -3656,6 +3674,8 @@ function setupCreateTournamentModal() {
       // v2.3.12: restaura o toggle de placar ao vivo (default true)
       var _applyLiveLoad = document.getElementById('adv-apply-live');
       if (_applyLiveLoad) _applyLiveLoad.checked = (t.advancedScoring.applyLiveScoring !== false);
+      // v2.3.13: reflete o estado do toggle mestre nos 2 toggles do Grupo B
+      if (typeof window._onAdvApplyLiveToggle === 'function') window._onAdvApplyLiveToggle();
       Object.keys(t.advancedScoring.categories).forEach(function(key) {
         var row = document.querySelector('#adv-scoring-body .adv-row[data-adv-key="' + key + '"]');
         if (!row) return;
@@ -4009,29 +4029,30 @@ function setupCreateTournamentModal() {
           tourData.tiebreakersExcluded = Array.from(tbExcl.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
         }
 
-        // Sistema de Pontos Avançado (apenas Liga/Suíço puro)
-        if ((formatValue === 'liga' || formatValue === 'suico') && drawModeValue !== 'rei_rainha') {
-          var _advEnabled = document.getElementById('adv-scoring-enabled');
-          if (_advEnabled) {
-            var _advCats = {};
-            Array.from(document.querySelectorAll('#adv-scoring-body .adv-row')).forEach(function(row) {
-              var key = row.dataset.advKey;
-              if (!key) return;
-              var en = row.querySelector('.adv-enabled');
-              var val = row.querySelector('.adv-value');
-              _advCats[key] = {
-                enabled: !!(en && en.checked),
-                value: val ? (parseInt(val.value, 10) || 0) : 0
-              };
-            });
-            var _applyLiveEl = document.getElementById('adv-apply-live');
-            tourData.advancedScoring = {
-              enabled: !!_advEnabled.checked,
-              categories: _advCats,
-              // v2.3.12: default true (aplica); false = pontos de placar ao vivo não contam
-              applyLiveScoring: _applyLiveEl ? !!_applyLiveEl.checked : true
+        // Sistema de Pontos Avançado — v2.3.13: disponível em TODOS os formatos
+        // (a seção é sempre renderizada desde a v2.3.3). Antes o save só gravava
+        // quando drawMode !== 'rei_rainha', então Liga Rei/Rainha caía no else e
+        // zerava advancedScoring mesmo o organizador tendo ativado. Bug corrigido.
+        var _advEnabled = document.getElementById('adv-scoring-enabled');
+        if (_advEnabled) {
+          var _advCats = {};
+          Array.from(document.querySelectorAll('#adv-scoring-body .adv-row')).forEach(function(row) {
+            var key = row.dataset.advKey;
+            if (!key) return;
+            var en = row.querySelector('.adv-enabled');
+            var val = row.querySelector('.adv-value');
+            _advCats[key] = {
+              enabled: !!(en && en.checked),
+              value: val ? (parseInt(val.value, 10) || 0) : 0
             };
-          }
+          });
+          var _applyLiveEl = document.getElementById('adv-apply-live');
+          tourData.advancedScoring = {
+            enabled: !!_advEnabled.checked,
+            categories: _advCats,
+            // v2.3.12: default true (aplica); false = pontos de placar ao vivo não contam
+            applyLiveScoring: _applyLiveEl ? !!_applyLiveEl.checked : true
+          };
         } else {
           tourData.advancedScoring = null;
         }
