@@ -9,9 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.25-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.26-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>Saída fácil das dicas.</b> Às vezes você só quer jogar: depois de 5 segundos com a dica na tela, é só tocar fora dela pra pausar as dicas por 10 minutos (elas voltam sozinhas). Um aviso discreto mostra quando essa opção fica disponível.</li>' +
+        '<li><b>Dicas com tempo e contador.</b> A 1ª dica só aparece depois de 10s parado (não pisca mais ao carregar). Cada dica vem com um contador circular (5→1) no canto superior direito. Se você não tocar em "Próximo" durante esses 5s, a dica some — e volta após 15s de inatividade. Enquanto você está jogando/usando, nada interrompe.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +

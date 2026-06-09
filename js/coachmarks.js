@@ -1,73 +1,58 @@
 // ─── scoreplace.app — Coachmarks (spotlight tour) ──────────────────────────
-// v2.3.24-beta. Substitui o antigo sistema de balões por inatividade (hints.js,
-// aposentado). Estilo "spotlight": escurece a tela ~55%, deixa só o elemento
-// destacado clicável e mostra um card curto apontando pra ele. Guiado pela
-// JORNADA de descoberta do usuário:
-//   1) Menu (explica cada item) — uma vez.
-//   2) Perfil (se incompleto) — destaca a entrada; some após visitar.
-//   3) Dentro do perfil: gênero → nascimento → cidade → modalidades →
-//      locais preferidos (só os campos AINDA não preenchidos).
-//   4) Ainda no perfil: tamanho da interface → presença → notificações →
-//      temas → idioma → como desligar as dicas. Cada uma só uma vez.
+// v2.3.26-beta. Dicas no estilo "spotlight": escurece a tela ~55%, deixa só o
+// alvo clicável e mostra um card curto apontando pra ele, com um CONTADOR
+// circular (5→1) no canto superior direito. Guiado pela jornada de descoberta
+// e DISPARADO POR INATIVIDADE (não pisca logo que a tela carrega):
+//   • 1ª dica: 10s parado.
+//   • Se a pessoa NÃO clicar em "Próximo" durante os 5s do contador, a dica
+//     some — e volta após 15s de inatividade (a mesma dica de antes).
+//   • Qualquer atividade reinicia o relógio de inatividade (enquanto não há dica
+//     na tela) — quem está jogando não é interrompido.
 //
-// Persistência: localStorage scoreplace_coach_v1 = { stepId: 1 }.
-// Desligado: localStorage scoreplace_coach_disabled = '1'.
-// Tudo é defensivo (try/catch) — coachmark NUNCA pode quebrar o app.
+// Jornada: menu (cada item) → dentro do perfil: campos que faltam
+// (gênero/nascimento/cidade/modalidades/locais) → configurações
+// (tamanho/presença/notificações/temas/idioma/desligar). Campo preenchido
+// nunca mais aparece (skipIf). "Pular dicas" desliga de vez (reativa no perfil).
+//
+// Persistência: localStorage scoreplace_coach_v1 = { stepId: 1 } (vistos),
+// scoreplace_coach_disabled = '1' (desligado). Tudo defensivo (try/catch).
 (function () {
   'use strict';
 
   var SEEN_KEY = 'scoreplace_coach_v1';
   var DISABLED_KEY = 'scoreplace_coach_disabled';
-  var SNOOZE_KEY = 'scoreplace_coach_snooze_until';
   var Z = 2000001;
-  var PAD = 8; // padding do "buraco" em volta do alvo
-  var ARM_MS = 5000;      // após 5s, clicar fora pausa as dicas
-  var SNOOZE_MS = 600000; // 10 minutos
+  var PAD = 8;            // padding do "buraco" em volta do alvo
+  var IDLE_FIRST = 10000; // 1ª dica após 10s parado
+  var IDLE_AGAIN = 15000; // dica volta após 15s parado
+  var COUNTDOWN = 5;      // segundos do contador
+  var CD_R = 22, CD_C = 2 * Math.PI * CD_R; // raio/circunferência do anel
 
   // ── persistência ──────────────────────────────────────────────────────────
-  function _seen() {
-    try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}') || {}; }
-    catch (e) { return {}; }
-  }
-  function _saveSeen(map) {
-    try { localStorage.setItem(SEEN_KEY, JSON.stringify(map)); } catch (e) {}
-  }
+  function _seen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function _saveSeen(m) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(m)); } catch (e) {} }
   function isStepSeen(id) { return !!_seen()[id]; }
   function markSeen(id) { var m = _seen(); m[id] = 1; _saveSeen(m); }
-  function _snoozeActive() {
-    try {
-      var until = parseInt(localStorage.getItem(SNOOZE_KEY) || '0', 10);
-      return until && Date.now() < until;
-    } catch (e) { return false; }
-  }
-  function isDisabled() {
-    try { if (localStorage.getItem(DISABLED_KEY) === '1') return true; } catch (e) {}
-    return _snoozeActive();
-  }
-  function snooze() {
-    // pausa temporária (10 min) — pra quem "só quer jogar agora". Volta sozinho.
-    try { localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS)); } catch (e) {}
-    _teardown();
-  }
+  function isDisabled() { try { return localStorage.getItem(DISABLED_KEY) === '1'; } catch (e) { return false; } }
   function setEnabled(on) {
-    try {
-      if (on) { localStorage.removeItem(DISABLED_KEY); localStorage.removeItem(SNOOZE_KEY); }
-      else localStorage.setItem(DISABLED_KEY, '1');
-    } catch (e) {}
-    if (!on) _teardown();
+    try { if (on) localStorage.removeItem(DISABLED_KEY); else localStorage.setItem(DISABLED_KEY, '1'); } catch (e) {}
+    if (!on) _stop();
   }
 
   // ── estado runtime ──────────────────────────────────────────────────────────
-  var _overlay = null;     // container fixo
-  var _queue = [];         // steps restantes do tour atual
-  var _idx = 0;            // índice no tour atual
-  var _total = 0;          // total de steps visíveis no tour atual
-  var _onDone = null;      // callback ao fim do tour
+  var _overlay = null;       // container fixo (presente só enquanto a dica aparece)
+  var _provider = null;      // função → steps ordenados do contexto atual
+  var _context = null;       // 'dashboard' | 'profile'
+  var _watching = false;     // listeners de atividade ativos
+  var _firstShow = true;     // 10s na 1ª, 15s nas demais
+  var _idleTimer = null;
+  var _cdTimer = null;
   var _resizeBound = null;
-  var _armed = false;      // após 5s, clicar fora pausa as dicas
-  var _armTimer = null;
+  var _activityBound = null;
+  var _current = null;       // step atualmente exibido
+  var _openedHam = false;    // abrimos o hamburger pra este step
 
-  // ── helpers de DOM ──────────────────────────────────────────────────────────
+  // ── helpers DOM ──────────────────────────────────────────────────────────
   function _user() { return (window.AppStore && window.AppStore.currentUser) || null; }
   function _isVisible(el) {
     if (!el) return false;
@@ -77,8 +62,6 @@
     if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) return false;
     return true;
   }
-  // Resolve o alvo de um step. step.el pode ser uma função (retorna elemento) ou
-  // um seletor CSS. Retorna o primeiro VISÍVEL.
   function _resolve(step) {
     try {
       if (typeof step.el === 'function') return step.el() || null;
@@ -88,7 +71,7 @@
     } catch (e) { return null; }
   }
 
-  // ── estilos (injetados uma vez) ───────────────────────────────────────────
+  // ── estilos ──────────────────────────────────────────────────────────────
   function _ensureStyle() {
     if (document.getElementById('coach-style')) return;
     var s = document.createElement('style');
@@ -96,9 +79,12 @@
     s.textContent =
       '@keyframes coachPulse{0%,100%{box-shadow:0 0 0 2px rgba(251,191,36,0.9),0 0 0 6px rgba(251,191,36,0.25)}50%{box-shadow:0 0 0 2px rgba(251,191,36,0.9),0 0 0 12px rgba(251,191,36,0.05)}}' +
       '.coach-mask{position:fixed;background:rgba(2,6,23,0.55);pointer-events:auto;transition:all 0.18s ease;}' +
-      '.coach-hintout{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:rgba(15,23,42,0.92);border:1px solid rgba(148,163,184,0.35);color:#cbd5e1;font-size:0.74rem;font-weight:600;padding:8px 14px;border-radius:999px;pointer-events:none;opacity:0;transition:opacity 0.3s ease;white-space:nowrap;box-shadow:0 4px 18px rgba(0,0,0,0.4);}' +
-      '.coach-hintout.show{opacity:1;}' +
       '.coach-ring{position:fixed;border-radius:12px;pointer-events:none;animation:coachPulse 1.6s ease-in-out infinite;transition:all 0.18s ease;}' +
+      '.coach-cd{position:fixed;top:14px;right:14px;width:54px;height:54px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;}' +
+      '.coach-cd svg{position:absolute;top:0;left:0;transform:rotate(-90deg);}' +
+      '.coach-cd-track{fill:none;stroke:rgba(255,255,255,0.18);stroke-width:4;}' +
+      '.coach-cd-prog{fill:none;stroke:#fbbf24;stroke-width:4;stroke-linecap:round;}' +
+      '.coach-cd-num{position:relative;font-size:1.2rem;font-weight:800;color:#fbbf24;font-variant-numeric:tabular-nums;text-shadow:0 1px 4px rgba(0,0,0,0.6);}' +
       '.coach-card{position:fixed;max-width:300px;background:linear-gradient(135deg,#1e293b,#0f172a);border:1px solid rgba(251,191,36,0.45);border-radius:14px;padding:16px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,0.55);pointer-events:auto;color:#e2e8f0;z-index:1;}' +
       '.coach-card h4{margin:0 0 6px;font-size:0.98rem;font-weight:800;color:#fbbf24;letter-spacing:0.2px;}' +
       '.coach-card p{margin:0 0 12px;font-size:0.86rem;line-height:1.45;color:#e2e8f0;}' +
@@ -110,46 +96,123 @@
     document.head.appendChild(s);
   }
 
-  // ── render de um step ───────────────────────────────────────────────────────
-  function _teardown() {
-    if (_armTimer) { clearTimeout(_armTimer); _armTimer = null; }
-    _armed = false;
-    if (_overlay && _overlay.parentNode) _overlay.parentNode.removeChild(_overlay);
-    _overlay = null;
+  // ── teardown ──────────────────────────────────────────────────────────────
+  function _clearCountdown() { if (_cdTimer) { clearInterval(_cdTimer); _cdTimer = null; } }
+  function _closeHamIfOpened() {
+    if (_openedHam && typeof window._closeHamburger === 'function') { try { window._closeHamburger(); } catch (e) {} }
+    _openedHam = false;
+  }
+  // remove só a dica da tela (mantém o watcher de inatividade)
+  function _hide() {
+    _clearCountdown();
     if (_resizeBound) {
       window.removeEventListener('resize', _resizeBound);
       window.removeEventListener('scroll', _resizeBound, true);
       _resizeBound = null;
     }
+    if (_overlay && _overlay.parentNode) _overlay.parentNode.removeChild(_overlay);
+    _overlay = null;
+    _current = null;
+    _closeHamIfOpened();
+  }
+  // para tudo: esconde a dica E desliga o watcher
+  function _stop() {
+    _hide();
+    if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
+    if (_activityBound) {
+      ['mousedown', 'keydown', 'touchstart', 'wheel', 'scroll'].forEach(function (ev) {
+        document.removeEventListener(ev, _activityBound, true);
+      });
+      _activityBound = null;
+    }
+    _watching = false;
+    _provider = null;
+    _context = null;
   }
 
+  // ── inatividade ─────────────────────────────────────────────────────────
+  function _armIdle() {
+    if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
+    if (isDisabled() || !_provider || _overlay) return;
+    _idleTimer = setTimeout(_idleFire, _firstShow ? IDLE_FIRST : IDLE_AGAIN);
+  }
+  function _onActivity() {
+    // só conta enquanto NÃO há dica na tela (durante a dica o contador manda)
+    if (_overlay) return;
+    _armIdle();
+  }
+  function _startWatch() {
+    if (_watching) return;
+    _watching = true;
+    _activityBound = function () { _onActivity(); };
+    ['mousedown', 'keydown', 'touchstart', 'wheel', 'scroll'].forEach(function (ev) {
+      document.addEventListener(ev, _activityBound, true);
+    });
+  }
+  function _idleFire() {
+    try {
+      if (isDisabled() || !_provider || _overlay || !_user()) return;
+      var pending = _pending();
+      if (!pending.length) return; // nada a mostrar
+      _showStep(pending[0]);
+    } catch (e) { _hide(); }
+  }
+  function _pending() {
+    if (!_provider) return [];
+    var all;
+    try { all = _provider() || []; } catch (e) { all = []; }
+    return all.filter(function (s) {
+      if (isStepSeen(s.id)) return false;
+      if (typeof s.skipIf === 'function') { try { if (s.skipIf()) return false; } catch (e) {} }
+      return true;
+    });
+  }
+
+  // ── render de um step ───────────────────────────────────────────────────────
   function _maskRect(x, y, w, h) {
     var d = document.createElement('div');
     d.className = 'coach-mask';
     d.style.left = x + 'px'; d.style.top = y + 'px';
     d.style.width = Math.max(0, w) + 'px'; d.style.height = Math.max(0, h) + 'px';
-    // v2.3.25: clicar fora — depois de 5s (armado) pausa as dicas por 10 min,
-    // pra quem "só quer jogar". Antes disso, dá tempo de ler (no-op).
-    d.addEventListener('click', function (e) {
-      e.stopPropagation(); e.preventDefault();
-      if (_armed) snooze();
-    });
+    // clicar fora = dispensa antecipada (volta após 15s parado)
+    d.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); _autoDismiss(); });
     return d;
   }
 
-  function _drawStep(step) {
+  function _showStep(step) {
+    // steps de menu precisam do hamburger aberto (mobile)
+    var delay = 0;
+    if (step.id && step.id.indexOf('menu_') === 0) {
+      var ham = document.querySelector('.hamburger-btn');
+      var hamVis = ham && window.getComputedStyle(ham).display !== 'none';
+      if (hamVis) {
+        var dd = document.getElementById('hamburger-dropdown');
+        if (dd && !dd.classList.contains('open') && typeof window._toggleHamburger === 'function') {
+          window._toggleHamburger(ham); _openedHam = true; delay = 240;
+        }
+      }
+    }
+    setTimeout(function () { _render(step); }, delay);
+  }
+
+  function _render(step) {
     var el = _resolve(step);
-    if (!el) { _next(); return; } // alvo sumiu → pula
+    if (!el) { _advanceSilently(step); return; } // alvo sumiu → marca visto e segue
 
-    // rearma o "clicar fora" a cada passo (dá 5s de leitura antes de liberar)
-    _armed = false;
-    if (_armTimer) { clearTimeout(_armTimer); _armTimer = null; }
-
-    // garante visível no viewport
     try { el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' }); } catch (e) {}
 
     requestAnimationFrame(function () {
-      if (!_overlay) return;
+      _ensureStyle();
+      if (!_overlay) {
+        _overlay = document.createElement('div');
+        _overlay.id = 'coach-overlay';
+        _overlay.style.cssText = 'position:fixed;inset:0;z-index:' + Z + ';pointer-events:none;';
+        document.body.appendChild(_overlay);
+        _resizeBound = function () { if (_overlay && _current) _render(_current); };
+        window.addEventListener('resize', _resizeBound);
+        window.addEventListener('scroll', _resizeBound, true);
+      }
+      _current = step;
       _overlay.innerHTML = '';
       var vw = window.innerWidth, vh = window.innerHeight;
       var r = el.getBoundingClientRect();
@@ -158,53 +221,52 @@
       if (hx + hw > vw) hw = vw - hx;
       if (hy + hh > vh) hh = vh - hy;
 
-      // 4 retângulos escuros em volta do buraco
-      _overlay.appendChild(_maskRect(0, 0, vw, hy));               // topo
-      _overlay.appendChild(_maskRect(0, hy + hh, vw, vh - hy - hh)); // base
-      _overlay.appendChild(_maskRect(0, hy, hx, hh));              // esquerda
-      _overlay.appendChild(_maskRect(hx + hw, hy, vw - hx - hw, hh)); // direita
+      _overlay.appendChild(_maskRect(0, 0, vw, hy));
+      _overlay.appendChild(_maskRect(0, hy + hh, vw, vh - hy - hh));
+      _overlay.appendChild(_maskRect(0, hy, hx, hh));
+      _overlay.appendChild(_maskRect(hx + hw, hy, vw - hx - hw, hh));
 
-      // anel pulsante em volta do alvo
       var ring = document.createElement('div');
       ring.className = 'coach-ring';
       ring.style.left = hx + 'px'; ring.style.top = hy + 'px';
       ring.style.width = hw + 'px'; ring.style.height = hh + 'px';
       _overlay.appendChild(ring);
 
-      // card
+      // contador circular (canto superior direito)
+      var cd = document.createElement('div');
+      cd.className = 'coach-cd';
+      cd.innerHTML =
+        '<svg width="54" height="54" viewBox="0 0 54 54">' +
+          '<circle class="coach-cd-track" cx="27" cy="27" r="' + CD_R + '"></circle>' +
+          '<circle class="coach-cd-prog" cx="27" cy="27" r="' + CD_R + '" stroke-dasharray="' + CD_C.toFixed(1) + '" stroke-dashoffset="' + CD_C.toFixed(1) + '"></circle>' +
+        '</svg><span class="coach-cd-num">' + COUNTDOWN + '</span>';
+      _overlay.appendChild(cd);
+
+      // card — "X de N" estável: posição entre os steps APLICÁVEIS (ignora os
+      // pulados por skipIf, mas conta os já vistos pra não regredir o total).
       var card = document.createElement('div');
       card.className = 'coach-card';
-      var stepLine = _total > 1 ? '<div class="coach-step">' + (_idx + 1) + ' de ' + _total + '</div>' : '';
-      var lastStep = _idx >= _total - 1;
-      card.innerHTML = stepLine +
-        '<h4></h4><p></p>' +
-        '<div class="coach-actions">' +
-          '<button class="coach-skip" type="button"></button>' +
-          '<button class="coach-next" type="button"></button>' +
-        '</div>';
+      var applicable = [];
+      try {
+        applicable = (_provider() || []).filter(function (s) {
+          return !(typeof s.skipIf === 'function' && (function () { try { return s.skipIf(); } catch (e) { return false; } })());
+        });
+      } catch (e) { applicable = []; }
+      var totalAppl = applicable.length;
+      var curPos = 0; for (var i = 0; i < applicable.length; i++) { if (applicable[i].id === step.id) { curPos = i; break; } }
+      var stepLine = totalAppl > 1 ? '<div class="coach-step">' + (curPos + 1) + ' de ' + totalAppl + '</div>' : '';
+      var lastStep = (curPos + 1) >= totalAppl;
+      card.innerHTML = stepLine + '<h4></h4><p></p>' +
+        '<div class="coach-actions"><button class="coach-skip" type="button"></button><button class="coach-next" type="button"></button></div>';
       card.querySelector('h4').textContent = step.title || '';
       card.querySelector('p').textContent = step.text || '';
       card.querySelector('.coach-skip').textContent = 'Pular dicas';
       card.querySelector('.coach-next').textContent = lastStep ? 'Entendi' : 'Próximo →';
-      card.querySelector('.coach-skip').addEventListener('click', function (e) {
-        e.stopPropagation(); _skipAll();
-      });
-      card.querySelector('.coach-next').addEventListener('click', function (e) {
-        e.stopPropagation(); _next();
-      });
+      card.querySelector('.coach-skip').addEventListener('click', function (e) { e.stopPropagation(); _skipAll(); });
+      card.querySelector('.coach-next').addEventListener('click', function (e) { e.stopPropagation(); _advance(step); });
       _overlay.appendChild(card);
 
-      // aviso "toque fora pra pausar" — só aparece quando o clique-fora arma (5s)
-      var hintOut = document.createElement('div');
-      hintOut.className = 'coach-hintout';
-      hintOut.textContent = '👆 Toque fora pra pausar as dicas por 10 min';
-      _overlay.appendChild(hintOut);
-      _armTimer = setTimeout(function () {
-        _armed = true;
-        if (hintOut && hintOut.parentNode) hintOut.classList.add('show');
-      }, ARM_MS);
-
-      // posiciona o card: abaixo do alvo se couber, senão acima; clampa horizontal
+      // posiciona o card
       requestAnimationFrame(function () {
         var cw = card.offsetWidth, ch = card.offsetHeight;
         var top, left = hx + hw / 2 - cw / 2;
@@ -217,71 +279,74 @@
         card.style.left = left + 'px';
         card.style.top = top + 'px';
       });
+
+      // dispara o contador (anel preenche em COUNTDOWN s, número 5→1)
+      _startCountdown(cd);
     });
   }
 
-  function _next() {
-    if (_idx < _queue.length) markSeen(_queue[_idx].id);
-    _idx++;
-    if (_idx >= _queue.length) { _finish(); return; }
-    _drawStep(_queue[_idx]);
+  function _startCountdown(cd) {
+    _clearCountdown();
+    var prog = cd.querySelector('.coach-cd-prog');
+    var num = cd.querySelector('.coach-cd-num');
+    var left = COUNTDOWN;
+    if (num) num.textContent = left;
+    // anel preenche de 0% → 100% ao longo de COUNTDOWN s
+    if (prog) {
+      prog.style.transition = 'none';
+      prog.style.strokeDashoffset = CD_C.toFixed(1);
+      requestAnimationFrame(function () {
+        prog.style.transition = 'stroke-dashoffset ' + COUNTDOWN + 's linear';
+        prog.style.strokeDashoffset = '0';
+      });
+    }
+    _cdTimer = setInterval(function () {
+      left--;
+      if (left <= 0) { _clearCountdown(); _autoDismiss(); return; }
+      if (num) num.textContent = left;
+    }, 1000);
+  }
+
+  // ── transições ──────────────────────────────────────────────────────────
+  function _advance(step) {
+    if (step) markSeen(step.id);
+    _firstShow = false;
+    _hide();
+    var next = _pending()[0];
+    if (next) { _showStep(next); }
+    // sem próximo → fica só o watcher; nada pendente, idle não mostra nada
+  }
+  function _advanceSilently(step) {
+    // alvo não resolveu: marca visto pra não travar e tenta o próximo
+    if (step) markSeen(step.id);
+    _hide();
+    var next = _pending()[0];
+    if (next) _showStep(next);
+  }
+  function _autoDismiss() {
+    // não clicou em "Próximo" durante o contador → some e volta após 15s parado
+    _firstShow = false;
+    _hide();
+    _armIdle();
   }
   function _skipAll() {
-    // marca todos os steps restantes como vistos (não reaparecem)
-    for (var i = _idx; i < _queue.length; i++) markSeen(_queue[i].id);
-    _finish();
-  }
-  function _finish() {
-    _teardown();
-    var cb = _onDone; _onDone = null;
-    _queue = []; _idx = 0; _total = 0;
-    if (typeof cb === 'function') { try { cb(); } catch (e) {} }
+    // desliga as dicas de vez (reativa no perfil)
+    setEnabled(false);
   }
 
-  // ── runner de tour ──────────────────────────────────────────────────────────
-  // steps: [{id, el, title, text, skipIf?}]. Filtra steps já vistos ou skipIf().
-  function runTour(steps, onDone) {
-    try {
-      if (isDisabled()) { if (onDone) onDone(); return; }
-      if (_overlay) { if (onDone) onDone(); return; } // já tem um tour rodando
-      var pending = (steps || []).filter(function (s) {
-        if (isStepSeen(s.id)) return false;
-        if (typeof s.skipIf === 'function') { try { if (s.skipIf()) return false; } catch (e) {} }
-        return true;
-      });
-      if (!pending.length) { if (onDone) onDone(); return; }
-      _ensureStyle();
-      _queue = pending; _idx = 0; _total = pending.length; _onDone = onDone || null;
-      _overlay = document.createElement('div');
-      _overlay.id = 'coach-overlay';
-      _overlay.style.cssText = 'position:fixed;inset:0;z-index:' + Z + ';pointer-events:none;';
-      document.body.appendChild(_overlay);
-      _resizeBound = function () { if (_overlay && _idx < _queue.length) _drawStep(_queue[_idx]); };
-      window.addEventListener('resize', _resizeBound);
-      window.addEventListener('scroll', _resizeBound, true);
-      _drawStep(_queue[0]);
-    } catch (e) { _teardown(); if (onDone) try { onDone(); } catch (_e) {} }
-  }
-
-  // ── completude do perfil ────────────────────────────────────────────────────
+  // ── completude do perfil ────────────────────────────────────────────────
   function _filled(field) {
     var u = _user(); if (!u) return false;
     var v = u[field];
     if (Array.isArray(v)) return v.length > 0;
     return !!(v && String(v).trim());
   }
-  function _profileIncomplete() {
-    return !(_filled('gender') && _filled('birthDate') && _filled('city') &&
-             _filled('preferredSports') && _filled('preferredLocations'));
-  }
 
-  // ── definição dos tours ─────────────────────────────────────────────────────
-  // Scope do menu: hamburger aberto (mobile) ou .topbar-menu inline (desktop).
+  // ── definição dos tours ─────────────────────────────────────────────────
   function _menuScopeSel(inner) {
     var ham = document.querySelector('.hamburger-btn');
     var hamVisible = ham && window.getComputedStyle(ham).display !== 'none';
-    var scope = hamVisible ? '#hamburger-dropdown ' : '.topbar-menu ';
-    return scope + inner;
+    return (hamVisible ? '#hamburger-dropdown ' : '.topbar-menu ') + inner;
   }
   function _menuSteps() {
     return [
@@ -292,17 +357,13 @@
       { id: 'menu_perfil', el: function () { return document.querySelector(_menuScopeSel('#btn-login')); }, title: '👤 Seu perfil', text: 'Toque aqui pra abrir e completar seu perfil — é o que destrava eventos do seu interesse.' }
     ];
   }
-  function _profileFieldSteps() {
+  function _profileSteps() {
     return [
       { id: 'pf_gender', el: '#profile-edit-gender', title: '⚥ Seu gênero', text: 'Define em quais categorias dos torneios você se encaixa (feminino, masculino, misto).', skipIf: function () { return _filled('gender'); } },
       { id: 'pf_birth', el: '#profile-edit-birthdate', title: '🎂 Data de nascimento', text: 'Libera torneios por faixa etária (40+, 50+, 60+...) feitos pra você.', skipIf: function () { return _filled('birthDate'); } },
       { id: 'pf_city', el: '#profile-edit-city', title: '📍 Sua cidade', text: 'Aproxima você de eventos e quadras perto de onde você está.', skipIf: function () { return _filled('city'); } },
       { id: 'pf_sports', el: '#profile-sports-pills', title: '🎾 Modalidades e nível', text: 'Escolha seus esportes e seu nível em cada um — filtramos eventos do seu nível.', skipIf: function () { return _filled('preferredSports'); } },
-      { id: 'pf_locations', el: '#profile-location-search', title: '⭐ Locais preferidos', text: 'Cadastre onde você costuma jogar pra achar rapidinho os eventos por lá.', skipIf: function () { return _filled('preferredLocations'); } }
-    ];
-  }
-  function _profileSettingsSteps() {
-    return [
+      { id: 'pf_locations', el: '#profile-location-search', title: '⭐ Locais preferidos', text: 'Cadastre onde você costuma jogar pra achar rapidinho os eventos por lá.', skipIf: function () { return _filled('preferredLocations'); } },
       { id: 'ps_uiscale', el: '#profile-ui-scale', title: '🔎 Tamanho da interface', text: 'Deixe tudo maior ou menor, do jeito mais confortável pra você.' },
       { id: 'ps_presence', el: '#presence-visibility-group', title: '📡 Presença no local', text: 'Decida se (e pra quem) o app mostra que você está jogando num local.' },
       { id: 'ps_notif', el: '#profile-notify-platform', title: '🔔 Notificações', text: 'Escolha o que você recebe e por onde: no app, e-mail ou WhatsApp.' },
@@ -313,52 +374,30 @@
   }
 
   // ── gatilhos públicos ─────────────────────────────────────────────────────
-  // Chamado ao renderizar a dashboard (usuário logado).
-  function autoStartDashboard() {
+  function _init(context, providerFn) {
     try {
-      if (isDisabled() || !_user()) return;
-      if (_overlay) return;
-      var menuPending = _menuSteps().some(function (s) { return !isStepSeen(s.id); });
-      if (menuPending) {
-        var hadDropdown = false;
-        var ham = document.querySelector('.hamburger-btn');
-        var hamVisible = ham && window.getComputedStyle(ham).display !== 'none';
-        if (hamVisible && typeof window._toggleHamburger === 'function') {
-          var dd = document.getElementById('hamburger-dropdown');
-          if (dd && !dd.classList.contains('open')) { window._toggleHamburger(ham); hadDropdown = true; }
-        }
-        // pequeno atraso pra o dropdown pintar
-        setTimeout(function () {
-          runTour(_menuSteps(), function () {
-            if (hadDropdown && typeof window._closeHamburger === 'function') window._closeHamburger();
-            _maybeProfileEntry();
-          });
-        }, hadDropdown ? 220 : 60);
-      } else {
-        _maybeProfileEntry();
-      }
-    } catch (e) {}
+      if (isDisabled() || !_user()) { _stop(); return; }
+      if (_context === context && _watching) return; // já rodando neste contexto
+      _stop();
+      _context = context;
+      _provider = providerFn;
+      _firstShow = true;
+      _startWatch();
+      _armIdle();
+    } catch (e) { _stop(); }
   }
-  function _maybeProfileEntry() {
-    try {
-      if (isDisabled() || !_user()) return;
-      if (isStepSeen('profile_entry')) return;
-      if (!_profileIncomplete()) { markSeen('profile_entry'); return; }
-      runTour([{ id: 'profile_entry', el: '#btn-login', title: '👤 Complete seu perfil', text: 'Faltam alguns dados. Toque no seu perfil pra preencher e aproveitar melhor o app.' }]);
-    } catch (e) {}
-  }
-  // Chamado quando o perfil abre.
+  function autoStartDashboard() { _init('dashboard', _menuSteps); }
   function startProfileTour() {
-    try {
-      if (isDisabled() || !_user()) return;
-      markSeen('profile_entry'); // visitou o perfil → não cobra mais a entrada
-      // pequeno atraso pra o form montar
-      setTimeout(function () {
-        var steps = _profileFieldSteps().concat(_profileSettingsSteps());
-        runTour(steps);
-      }, 400);
-    } catch (e) {}
+    // visitou o perfil → não cobra mais a entrada no menu
+    try { markSeen('profile_entry'); } catch (e) {}
+    _init('profile', _profileSteps);
   }
+
+  // sai de dashboard/perfil → para o watcher (outras telas não disparam dicas)
+  window.addEventListener('hashchange', function () {
+    var h = (window.location.hash || '').toLowerCase();
+    if (h.indexOf('#dashboard') !== 0 && h.indexOf('#profile') !== 0) _stop();
+  });
 
   // ── shim de compat: o toggle do perfil chama window._hintSystem.* ───────────
   window._hintSystem = {
@@ -367,20 +406,18 @@
     disable: function () { setEnabled(false); },
     isDisabled: isDisabled,
     reset: function () { _saveSeen({}); },
-    dismiss: function () { _teardown(); },
+    dismiss: function () { _hide(); },
     forceShow: function () {}
   };
-  // mantém o toggle "dicas" visível no perfil (auth.js gateia por isto)
   window._HINTS_ENABLED = true;
 
   window._coach = {
-    runTour: runTour,
     autoStartDashboard: autoStartDashboard,
     startProfileTour: startProfileTour,
     isDisabled: isDisabled,
     setEnabled: setEnabled,
-    snooze: snooze,
     reset: function () { _saveSeen({}); },
-    _teardown: _teardown
+    _stop: _stop,
+    _teardown: _hide
   };
 })();
