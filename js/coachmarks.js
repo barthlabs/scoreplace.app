@@ -434,14 +434,18 @@
     var d = document.getElementById('hamburger-dropdown');
     return !!(d && d.classList.contains('open'));
   }
-  // menu "pronto" pras dicas dos itens: desktop (menu inline) sempre, no mobile
-  // só quando o usuário JÁ abriu o hamburger.
-  function _menuReady() { return !_hamVisible() || _hamOpen(); }
-  // 1ª dica de TODAS (qualquer contexto): quando o menu está escondido atrás do
-  // hamburger (mobile), ensina a abri-lo. No desktop (menu inline) é pulada, e
-  // uma vez aprendida (vista) some de todo lugar via o mapa de "vistos".
+  // v2.3.39: as dicas do menu/hamburger SÓ podem aparecer na DASHBOARD — nunca
+  // no perfil ou em outra página (mesmo que o contexto "vaze" via _scheduleNext).
+  function _isDashboardRoute() {
+    var h = (window.location.hash || '').toLowerCase();
+    return h === '' || h === '#' || h.indexOf('#dashboard') === 0;
+  }
+  // menu "pronto" pras dicas dos itens: precisa estar na dashboard E (desktop
+  // com menu inline OU o usuário já abriu o hamburger).
+  function _menuReady() { return _isDashboardRoute() && (!_hamVisible() || _hamOpen()); }
+  // 1ª dica: ensina a abrir o hamburger — SÓ na dashboard, com o menu fechado.
   function _menuOpenStep() {
-    return { id: 'menu_open', el: function () { return document.querySelector('.hamburger-btn'); }, title: '☰ Abrir o menu', text: 'Toque aqui pra abrir o menu com tudo que o app oferece.', skipIf: function () { return !_hamVisible(); }, waitFor: function () { return !_hamOpen(); } };
+    return { id: 'menu_open', el: function () { return document.querySelector('.hamburger-btn'); }, title: '☰ Abrir o menu', text: 'Toque aqui pra abrir o menu com tudo que o app oferece.', skipIf: function () { return !_hamVisible(); }, waitFor: function () { return _isDashboardRoute() && !_hamOpen(); } };
   }
   function _menuSteps() {
     // v2.3.35: com o menu aberto, as dicas seguem a ordem da DIREITA pra ESQUERDA
