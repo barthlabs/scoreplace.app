@@ -1624,6 +1624,21 @@ function renderDashboard(container) {
 
     // Calcula label de fase para eliminatórias (FINAL, SEMI-FINAL etc.)
     function _elabFaseLabel(t, m) {
+      // Liga/Suíço/Ranking e jogos Rei/Rainha NÃO têm fase de eliminatória
+      // (Final/Semi/Quartas). Para esses, o rótulo correto é o label próprio do
+      // jogo ("R1 Grupo F • Jogo 1") ou "Rodada N". Sem este guard, a derivação
+      // abaixo (fromEnd = maxRound - curRound) aplicava nomes de mata-mata numa
+      // Liga — ex.: card de Liga aparecia como "🏆 SEMIFINAL". (bug v2.3.x)
+      var _isLiga = (typeof window._isLigaFormat === 'function')
+        ? window._isLigaFormat(t)
+        : (t && (t.format === 'Liga' || t.format === 'Ranking'));
+      var _isSwiss = t && (t.format === 'Suíço' || t.format === 'Suico');
+      if (_isLiga || _isSwiss || (m && m.isMonarch)) {
+        if (m && m.label) return String(m.label);
+        if (m && m.roundLabel) return String(m.roundLabel);
+        if (m && m.round != null) return 'Rodada ' + m.round;
+        return '';
+      }
       // Conta partidas totais do torneio (excluindo BYE/TBD) para estimar total de times
       var allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
       var realMatches = allM.filter(function(mm) {
@@ -1685,12 +1700,15 @@ function renderDashboard(container) {
       // Fase label + cor da barra (igual às colunas do bracket)
       var tRef = participacoes.find(function(tt) { return tt.id === item.tId; });
       var faseStr = tRef ? _elabFaseLabel(tRef, item.m) : (item.subLine || '');
-      // Cor baseada na fase — Final=ouro, Semi=ciano, Quartas=verde, resto=primário
-      var faseColor = '#fbbf24'; // ouro por padrão (Final)
+      // Cor baseada na fase — Semi=ciano, Quartas=verde, Oitavas/Rodada/Grupo=índigo,
+      // Final=ouro. Default índigo (neutro) pra não pintar Liga/Rei-Rainha de ouro
+      // como se fosse Final.
       var faseLower = faseStr.toLowerCase();
+      var faseColor = '#818cf8'; // índigo (neutro) por padrão
       if (faseLower.indexOf('semi') !== -1) faseColor = '#06b6d4';
       else if (faseLower.indexOf('quarta') !== -1) faseColor = '#4ade80';
-      else if (faseLower.indexOf('oitava') !== -1 || faseLower.indexOf('rodada') !== -1) faseColor = '#818cf8';
+      else if (faseLower.indexOf('oitava') !== -1 || faseLower.indexOf('rodada') !== -1 || faseLower.indexOf('grupo') !== -1) faseColor = '#818cf8';
+      else if (faseLower.indexOf('final') !== -1) faseColor = '#fbbf24'; // ouro só pra Final real
 
       // matchLabel — JOGO N do match ou fallback
       var matchLabel = item.m.label || 'JOGO 1';

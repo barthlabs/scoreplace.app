@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.42-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Fim do "SEMIFINAL" na Liga.</b> Os cards de "Meus Resultados" na tela inicial mostravam fases de eliminatória (Final, Semifinal, Quartas) até em torneios de Liga e Rei/Rainha. Agora cada jogo mostra o rótulo certo — "Rodada N" ou o grupo do Rei/Rainha (ex.: "R1 Grupo F • Jogo 1") — e a cor da barra deixou de pintar Liga de ouro como se fosse uma final.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.41-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Dicas guiadas em mais telas.</b> As dicas no estilo spotlight agora cobrem também: os botões da tela inicial (Place, Pessoas, Ler QR, Convidar) e, dentro de cada uma, os controles principais — buscar pessoas/locais, filtros, mapa, marcar presença, convites de amizade, copiar/compartilhar o QR de convite. (Torneios ficam pra depois.)</li>' +
