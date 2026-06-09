@@ -3164,7 +3164,51 @@ window._exitTvMode = function() {
 };
 
 // ─── Player match history popup ──────────────────────────────────────────────
-window._showPlayerHistory = function(tId, playerName) {
+// v2.3.21: long-press (segurar o touch) num cabeçalho da classificação abre a
+// explicação da coluna. No desktop o `title` (hover) já cobre isso. Listeners
+// delegados no document, anexados uma única vez — sobrevivem a re-renders.
+window._ensureStHeaderExplainer = function() {
+  if (window._stExplainerOn) return;
+  window._stExplainerOn = true;
+  var timer = null, longFired = false;
+  var findTh = function(el) { return (el && el.closest) ? el.closest('th[data-explain]') : null; };
+  document.addEventListener('touchstart', function(e) {
+    var th = findTh(e.target);
+    if (!th) return;
+    longFired = false;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function() {
+      longFired = true;
+      try {
+        var ttl = th.getAttribute('data-explain-title') || 'Coluna';
+        var msg = th.getAttribute('data-explain') || '';
+        if (window.showAlertDialog) window.showAlertDialog(ttl, msg, null, { type: 'info' });
+      } catch (_e) {}
+    }, 420);
+  }, { passive: true });
+  var cancel = function() { if (timer) { clearTimeout(timer); timer = null; } };
+  document.addEventListener('touchmove', cancel, { passive: true });
+  document.addEventListener('touchend', function() {
+    cancel();
+    if (longFired) {
+      // impede o "click" de ordenação que dispara logo após o long-press
+      window._stSuppressClick = true;
+      longFired = false;
+      setTimeout(function() { window._stSuppressClick = false; }, 700);
+    }
+  });
+  // captura: consome o próximo click após long-press (antes do onclick inline do th)
+  document.addEventListener('click', function(e) {
+    if (window._stSuppressClick && findTh(e.target)) {
+      window._stSuppressClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
+};
+
+window._showPlayerHistory = function(tId, playerName, filter) {
+  var _flt = filter || 'all'; // 'all' | 'wins' | 'losses'
   var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
   if (!t) return;
   var matches = [];
@@ -3221,7 +3265,7 @@ window._showPlayerHistory = function(tId, playerName) {
   }
 
   var wins = 0, losses = 0, draws = 0;
-  var rows = matches.map(function(item) {
+  var rowObjs = matches.map(function(item) {
     var m = item.m;
     var opponent = m.p1 === playerName ? m.p2 : m.p1;
     var isDraw = m.winner === 'draw' || m.draw;
@@ -3235,13 +3279,23 @@ window._showPlayerHistory = function(tId, playerName) {
       : (m.winner ? '' : '—');
     var resultIcon = isDraw ? '🤝' : (isWin ? '✅' : (isLoss ? '❌' : '⏳'));
     var roundLabel = item.label || (item.round ? 'Rodada ' + item.round : (item.group ? 'Grupo ' + item.group : (m.label || '')));
-    return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">' +
-      '<td style="padding:8px 10px;font-size:0.8rem;color:var(--text-muted);">' + roundLabel + '</td>' +
-      '<td style="padding:8px 10px;font-size:0.8rem;font-weight:600;color:var(--text-bright);">' + (opponent || 'BYE') + '</td>' +
-      '<td style="padding:8px 10px;font-size:0.8rem;text-align:center;">' + scoreStr + '</td>' +
-      '<td style="padding:8px 10px;font-size:0.85rem;text-align:center;">' + resultIcon + '</td>' +
-      '</tr>';
-  }).join('');
+    return {
+      type: isWin ? 'win' : (isLoss ? 'loss' : (isDraw ? 'draw' : 'pending')),
+      html: '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">' +
+        '<td style="padding:8px 10px;font-size:0.8rem;color:var(--text-muted);">' + roundLabel + '</td>' +
+        '<td style="padding:8px 10px;font-size:0.8rem;font-weight:600;color:var(--text-bright);">' + (opponent || 'BYE') + '</td>' +
+        '<td style="padding:8px 10px;font-size:0.8rem;text-align:center;">' + scoreStr + '</td>' +
+        '<td style="padding:8px 10px;font-size:0.85rem;text-align:center;">' + resultIcon + '</td>' +
+        '</tr>'
+    };
+  });
+  // v2.3.21: filtro (clique em V → só vitórias; D → só derrotas).
+  var shown = rowObjs.filter(function(r) {
+    if (_flt === 'wins') return r.type === 'win';
+    if (_flt === 'losses') return r.type === 'loss';
+    return true;
+  });
+  var rows = shown.map(function(r) { return r.html; }).join('');
 
   var summary = '<div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">' +
     '<span style="font-weight:700;color:#4ade80;">' + wins + 'V</span>' +
@@ -3249,6 +3303,17 @@ window._showPlayerHistory = function(tId, playerName) {
     '<span style="font-weight:700;color:#f87171;">' + losses + 'D</span>' +
     '<span style="color:var(--text-muted);">' + matches.length + ' partidas</span>' +
     '</div>';
+
+  var _ttl = _flt === 'wins' ? ('✅ Vitórias — ' + playerName)
+    : (_flt === 'losses' ? ('❌ Derrotas — ' + playerName)
+    : _t('bui.h2hTitle', { name: playerName }));
+
+  if (shown.length === 0) {
+    var _emptyMsg = _flt === 'wins' ? 'Nenhuma vitória até agora.'
+      : (_flt === 'losses' ? 'Nenhuma derrota até agora.' : _t('bui.h2hEmpty'));
+    showAlertDialog(_ttl, summary + '<div style="color:var(--text-muted);font-size:0.85rem;">' + _emptyMsg + '</div>', null, { type: 'info' });
+    return;
+  }
 
   var tableHtml = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">' +
     '<thead><tr style="border-bottom:2px solid var(--border-color);">' +
@@ -3258,7 +3323,7 @@ window._showPlayerHistory = function(tId, playerName) {
     '<th style="padding:6px 10px;text-align:center;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;">Resultado</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 
-  showAlertDialog(_t('bui.h2hTitle', { name: playerName }), summary + tableHtml, null, { type: 'info' });
+  showAlertDialog(_ttl, summary + tableHtml, null, { type: 'info' });
 };
 
 // ─── Advanced Points breakdown popup ─────────────────────────────────────────

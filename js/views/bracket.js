@@ -2371,7 +2371,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       var _scoreCell = _useAdvStandings
         ? `<td style="padding:11px 14px;text-align:center;color:#fbbf24;font-weight:800;font-size:1.02rem;cursor:pointer;" onclick="window._showAdvancedPointsBreakdown('${_safeTid}','${_safeName}','${String(s.category || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Pontos Avançados (classificação) — clique para ver o detalhamento">${s.advancedPoints || 0}</td>`
         : `<td style="padding:11px 14px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>`;
-      var _pctCell = `<td style="padding:11px 14px;text-align:center;color:${_pctG >= 50 ? '#4ade80' : 'var(--text-muted)'};font-weight:600;" title="% de games vencidos (${s.gamesWon || 0} de ${_totG})">${_totG > 0 ? _pctG + '%' : '—'}</td>`;
+      var _pctCell = `<td style="padding:11px 14px;text-align:center;color:${_pctG >= 50 ? '#4ade80' : 'var(--text-muted)'};font-weight:600;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','all')" title="% de games vencidos (${s.gamesWon || 0} de ${_totG}) — clique para ver os confrontos">${_totG > 0 ? _pctG + '%' : '—'}</td>`;
       var _drawCell = _drawsAllowed
         ? `<td style="padding:11px 14px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>`
         : '';
@@ -2384,16 +2384,18 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name)}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
       ${_scoreCell}
       ${_pctCell}
-      <td style="padding:11px 14px;text-align:center;color:#4ade80;">${s.wins}</td>
-      <td style="padding:11px 14px;text-align:center;color:#f87171;">${s.losses}</td>
+      <td style="padding:11px 14px;text-align:center;color:#4ade80;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>
+      <td style="padding:11px 14px;text-align:center;color:#f87171;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','losses')" title="Clique para ver as derrotas">${s.losses}</td>
       ${_drawCell}
-      <td style="padding:11px 14px;text-align:center;color:${s.pointsDiff >= 0 ? '#4ade80' : '#f87171'};">${s.pointsDiff >= 0 ? '+' : ''}${s.pointsDiff}</td>
+      <td style="padding:11px 14px;text-align:center;color:${s.pointsDiff >= 0 ? '#4ade80' : '#f87171'};cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','all')" title="Saldo de games — clique para ver os confrontos">${s.pointsDiff >= 0 ? '+' : ''}${s.pointsDiff}</td>
       ${_gsmCells}
-      <td style="padding:11px 14px;text-align:center;color:var(--text-muted);">${s.played}</td>
+      <td style="padding:11px 14px;text-align:center;color:var(--text-muted);cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','all')" title="Jogos disputados — clique para ver os confrontos">${s.played}</td>
     </tr>`;
     }).join('');
   };
 
+  // v2.3.21: garante o handler de long-press dos cabeçalhos (explicação por coluna).
+  if (typeof window._ensureStHeaderExplainer === 'function') window._ensureStHeaderExplainer();
   // v0.17.74: reusa __standingsCache (computado no topo pra _hasAnyDraws).
   // Evita re-rodar _computeStandings — antes era chamado 2x (uma pra cache,
   // outra aqui).
@@ -2732,10 +2734,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   var _saldoColIdx = _drawsAllowed ? 7 : 6;
   var _gsmStartIdx = _saldoColIdx + 1;
   var _jColIdx = _saldoColIdx + 1 + (_showGsm ? 2 : 0);
+  const _paExplain = 'Sistema de classificação configurado pelo organizador. Cada jogador soma pontos por participação na rodada, por vitória e por jogo disputado — e, se o organizador ativou, também pelos pontos marcados no placar ao vivo. É o critério principal da classificação. Toque no número de PA de um jogador pra ver o detalhamento exato dele.';
   const _scoreHeader = _useAdvStandings
-    ? `<th style="${_thStyle}text-align:center;color:#fbbf24;" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Pontos Avançados (classificação)">💯 PA <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`
-    : `<th style="${_thStyle}text-align:center;color:var(--primary-color);" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Pontos">Pts <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
-  const _pctHeader = `<th style="${_thStyle}text-align:center;color:#a3e635;" data-sort-col="3" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="% de games vencidos (games ganhos ÷ total)">% G <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
+    ? `<th style="${_thStyle}text-align:center;color:#fbbf24;" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="💯 Pontos Avançados (PA)" data-explain="${_paExplain}" title="Pontos Avançados (PA) — ${_paExplain}">💯 PA <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`
+    : `<th style="${_thStyle}text-align:center;color:var(--primary-color);" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="Pontos" data-explain="Pontos da classificação: vitória pontua mais, empate menos, derrota não pontua. Toque no número de um jogador pra ver os confrontos." title="Pontos da classificação (vitória/empate/derrota)">Pts <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
+  const _pctHeader = `<th style="${_thStyle}text-align:center;color:#a3e635;" data-sort-col="3" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="% G — Games vencidos" data-explain="Percentual de games vencidos: games ganhos dividido pelo total de games jogados. Toque no número pra ver os confrontos." title="% de games vencidos (games ganhos ÷ total)">% G <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
   const _drawHeader = _drawsAllowed ? `
               <th style="${_thStyle}text-align:center;color:#94a3b8;" data-sort-col="${_eColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Empates">E <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
   const _gsmHeaders = _showGsm ? `
@@ -2747,12 +2750,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               <th style="${_thStyle}text-align:left;color:var(--text-muted);" data-sort-col="1" data-sort-type="text" onclick="window._sortStandingsTable(this)">Participante <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               ${_scoreHeader}
               ${_pctHeader}
-              <th style="${_thStyle}text-align:center;color:#4ade80;" data-sort-col="${_vColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Vitórias">V <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
-              <th style="${_thStyle}text-align:center;color:#f87171;" data-sort-col="${_dColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Derrotas">D <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
+              <th style="${_thStyle}text-align:center;color:#4ade80;" data-sort-col="${_vColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="V — Vitórias" data-explain="Número de vitórias. Toque no número de um jogador pra ver quais confrontos ele venceu." title="Vitórias — clique no número de um jogador pra ver os confrontos vencidos">V <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
+              <th style="${_thStyle}text-align:center;color:#f87171;" data-sort-col="${_dColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="D — Derrotas" data-explain="Número de derrotas. Toque no número pra ver os confrontos perdidos." title="Derrotas — clique no número de um jogador pra ver os confrontos perdidos">D <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               ${_drawHeader}
-              <th style="${_thStyle}text-align:center;color:var(--text-muted);" data-sort-col="${_saldoColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de games (pró − contra)">Saldo <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
+              <th style="${_thStyle}text-align:center;color:var(--text-muted);" data-sort-col="${_saldoColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="Saldo de games" data-explain="Saldo de games: games a favor menos games contra. Toque pra ver os confrontos." title="Saldo de games (pró − contra)">Saldo <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               ${_gsmHeaders}
-              <th style="${_thStyle}text-align:center;color:var(--text-muted);" data-sort-col="${_jColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Jogos disputados">J <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
+              <th style="${_thStyle}text-align:center;color:var(--text-muted);" data-sort-col="${_jColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="J — Jogos" data-explain="Jogos disputados. Toque pra ver todos os confrontos." title="Jogos disputados">J <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
             </tr>
           </thead>`;
 
