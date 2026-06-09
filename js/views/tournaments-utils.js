@@ -668,20 +668,6 @@ window._ligaTournamentProgress = function(t) {
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
   if (!prog.total) return '';
-  // v2.3.8: barra do TORNEIO inteiro (Liga multi-rodada) — anexada ao fim.
-  var _ligaBarHtml = '';
-  var _lp = window._ligaTournamentProgress(t);
-  if (_lp && _lp.roundsPlanned > 1) {
-    _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
-        '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
-        '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _lp.completedAll + '/' + _lp.totalPlanned + ' jogos · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned + '</span>' +
-      '</div>' +
-      '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">' +
-        '<div style="width:' + _lp.pct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
-      '</div>' +
-    '</div>';
-  }
   var isFinished = t.status === 'finished' || !!t.finishedAt;
   var now = Date.now();
   var actualStart = t.tournamentStarted ? (+t.tournamentStarted) : null;
@@ -695,9 +681,71 @@ window._buildProgressInner = function(t) {
   if (!schedStart) schedStart = actualStart;
   var progFrac = prog.total > 0 ? (prog.completed / prog.total) : 0;
 
+  var _time = function(ms) { var d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  var _date = function(ms) { var d = new Date(ms); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); };
+
+  // ── v2.3.18: Liga → barra ESCOPADA NA RODADA ATUAL ──────────────────────
+  // 🟢 verde = % da rodada concluída; 🔵 azul = tempo regulamentar (do sorteio
+  // desta rodada até o PRÓXIMO sorteio); início real = 1º ponto da rodada;
+  // final real = último ponto (round.completedAt).
+  var _isLiga = !!(window._isLigaFormat && window._isLigaFormat(t)) && Array.isArray(t.rounds) && t.rounds.length > 0;
+  var _roundComplete = false, _roundCompletedMs = null, _roundNum = 0;
+  var _labelSchedStart = 'início programado', _labelSchedEnd = 'final programado', _labelHead = 'Progresso do Torneio';
+  if (_isLiga) {
+    var _ri = t.rounds.length - 1;
+    var _curR = t.rounds[_ri] || {};
+    var _rMatches = (_curR.matches || []).filter(function(m){ return !m.isSitOut; });
+    var _rTotal = _rMatches.length;
+    var _rDone = _rMatches.filter(function(m){ return m.winner; }).length;
+    if (_rTotal > 0) { prog = { total: _rTotal, completed: _rDone, pct: Math.round(_rDone / _rTotal * 100) }; progFrac = _rDone / _rTotal; }
+    _roundNum = _ri + 1;
+    _roundComplete = _rTotal > 0 && _rDone === _rTotal;
+    _roundCompletedMs = _curR.completedAt ? (+_curR.completedAt) : null;
+    var _starts = _rMatches.map(function(m){ return m.startedAt ? (+m.startedAt) : 0; }).filter(function(x){ return x; });
+    var _roundStart = _starts.length ? Math.min.apply(null, _starts) : null;
+    var _fdStr2 = String(t.drawFirstDate || '').indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate ? (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')) : '');
+    var _firstDrawMs = _fdStr2 ? new Date(_fdStr2).getTime() : NaN;
+    var _intvDays = parseInt(t.drawIntervalDays) || 7; if (_intvDays < 1) _intvDays = 1;
+    var _intvMs = _intvDays * 86400000;
+    var _thisDraw = !isNaN(_firstDrawMs) ? _firstDrawMs + _ri * _intvMs : null;
+    var _nextDraw = !isNaN(_firstDrawMs) ? _firstDrawMs + (_ri + 1) * _intvMs : null;
+    if (_roundStart) actualStart = _roundStart; else if (_thisDraw) actualStart = _thisDraw;
+    if (_thisDraw) schedStart = _thisDraw;
+    if (_nextDraw) plannedEnd = _nextDraw;
+    _labelSchedStart = 'sorteio da rodada';
+    _labelSchedEnd = 'próximo sorteio';
+    _labelHead = 'Rodada ' + _roundNum;
+  }
+
+  // v2.3.8/2.3.18: barra do TORNEIO inteiro (Liga multi-rodada) com data/hora
+  // do 1º ponto e do limite do último ponto.
+  var _ligaBarHtml = '';
+  var _lp = window._ligaTournamentProgress(t);
+  if (_lp && _lp.roundsPlanned > 1) {
+    var _allStarts = [];
+    (t.rounds || []).forEach(function(r){ (r.matches || []).forEach(function(m){ if (m && m.startedAt && !m.isSitOut) _allStarts.push(+m.startedAt); }); });
+    var _firstPointMs = _allStarts.length ? Math.min.apply(null, _allStarts) : (t.tournamentStarted ? (+t.tournamentStarted) : null);
+    var _deadlineMs = window._tProgParseMs(t.endDate);
+    var _dtLine = (_firstPointMs || _deadlineMs)
+      ? '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:0.62rem;color:var(--text-muted);">' +
+          '<span>' + (_firstPointMs ? '🟢 1º ponto: ' + _date(_firstPointMs) + ' ' + _time(_firstPointMs) : '') + '</span>' +
+          '<span style="text-align:right;">' + (_deadlineMs ? '🏁 limite: ' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) : '') + '</span>' +
+        '</div>'
+      : '';
+    _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
+        '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
+        '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _lp.completedAll + '/' + _lp.totalPlanned + ' jogos · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned + '</span>' +
+      '</div>' +
+      '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">' +
+        '<div style="width:' + _lp.pct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
+      '</div>' + _dtLine +
+    '</div>';
+  }
+
   var head = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;">' +
-    '<span style="font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;opacity:0.85;">Progresso do Torneio</span>' +
-    '<span style="font-size:0.92rem;font-weight:800;">' + prog.completed + '/' + prog.total + ' partidas (' + prog.pct + '%)</span>' +
+    '<span style="font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;opacity:0.85;">' + _labelHead + '</span>' +
+    '<span style="font-size:0.92rem;font-weight:800;">' + prog.completed + '/' + prog.total + (_isLiga ? ' jogos' : ' partidas') + ' (' + prog.pct + '%)</span>' +
   '</div>';
 
   // Sem timeline confiável → barra simples (comportamento antigo).
@@ -707,41 +755,45 @@ window._buildProgressInner = function(t) {
       '<div style="width:100%;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">' +
         '<div style="width:' + prog.pct + '%;height:100%;background:' + c + ';border-radius:4px;transition:width 0.5s ease;"></div>' +
       '</div>' +
-      (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ Todas as partidas concluídas!</div>' : '') +
+      (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ ' + (_isLiga ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
       _ligaBarHtml;
   }
 
-  // finishedAt costuma vir como STRING ISO — parsear direito (não usar +str=NaN).
   var finishedMs = t.finishedAt ? (typeof t.finishedAt === 'number' ? t.finishedAt : new Date(t.finishedAt).getTime()) : null;
   if (finishedMs != null && isNaN(finishedMs)) finishedMs = null;
-  // v2.1.48: ao encerrar o torneio o cronômetro PÁRA (congela em finishedAt),
-  // mesmo que nem todos os jogos tenham sido realizados.
-  var endForElapsed = (isFinished && finishedMs != null) ? finishedMs : (isFinished ? now : now);
+  // fim "real" da rodada (Liga) quando completa → congela o cronômetro
+  var _roundEndReal = (_isLiga && _roundComplete && _roundCompletedMs) ? _roundCompletedMs : null;
+  var endForElapsed = _roundEndReal ? _roundEndReal : ((isFinished && finishedMs != null) ? finishedMs : now);
   var elapsedMs = endForElapsed - actualStart;
   var expectedFrac = (now - schedStart) / (plannedEnd - schedStart);
   if (expectedFrac < 0) expectedFrac = 0;
   if (expectedFrac > 1) expectedFrac = 1;
-  if (isFinished) expectedFrac = Math.max(expectedFrac, progFrac);
+  if (isFinished || _roundComplete) expectedFrac = Math.max(expectedFrac, progFrac);
 
   var diff = expectedFrac - progFrac;
   var color;
-  if (isFinished || diff <= 0.02) color = '#10b981';
+  if (isFinished || _roundComplete || diff <= 0.02) color = '#10b981';
   else if (diff <= 0.12) color = '#f59e0b';
   else color = '#ef4444';
 
   var estEndMs;
-  if (isFinished) estEndMs = (finishedMs != null ? finishedMs : now);
+  if (_roundEndReal) estEndMs = _roundEndReal;
+  else if (isFinished) estEndMs = (finishedMs != null ? finishedMs : now);
   else if (progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
   else estEndMs = plannedEnd;
 
-  var _time = function(ms) { var d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
-  var _date = function(ms) { var d = new Date(ms); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); };
+  var _endLabel = _roundEndReal ? 'final real' : (isFinished ? 'final' : 'final estimado');
+  var _elapsedLabel = (_roundEndReal || isFinished) ? 'durou' : 'decorrido';
+  // mostra DATA quando início e fim caem em dias diferentes
+  var _multiDay = _date(actualStart) !== _date(estEndMs);
+
   var _timeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
   var _lblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
-  // coluna REAL: horário + label (2 linhas)
-  var _realCol = function(ms, label, align) {
+  // coluna REAL: horário (+ data quando multi-dia) + label
+  var _realCol = function(ms, label, align, withDate) {
     return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
       '<span style="' + _timeS + '">' + _time(ms) + '</span>' +
+      (withDate ? '<span style="font-size:0.72rem;color:var(--text-muted);font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' : '') +
       '<span style="' + _lblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
     '</div>';
   };
@@ -755,12 +807,12 @@ window._buildProgressInner = function(t) {
   };
 
   var topRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
-    _realCol(actualStart, 'início real', 'flex-start') +
+    _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
     '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
       '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
-      '<span style="' + _lblS + '">' + (isFinished ? 'durou' : 'decorrido') + '</span>' +
+      '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
     '</div>' +
-    _realCol(estEndMs, isFinished ? 'final' : 'final estimado', 'flex-end') +
+    _realCol(estEndMs, _endLabel, 'flex-end', _multiDay) +
   '</div>';
   var realBar = '<div style="width:100%;height:11px;background:rgba(255,255,255,0.1);border-radius:6px 6px 0 0;overflow:hidden;">' +
     '<div style="width:' + Math.round(progFrac * 100) + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' +
@@ -769,8 +821,8 @@ window._buildProgressInner = function(t) {
     '<div style="width:' + Math.round(expectedFrac * 100) + '%;height:100%;background:#3b82f6;transition:width 0.9s linear;"></div>' +
   '</div>';
   var botRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:7px;gap:8px;">' +
-    _progCol(schedStart, 'início programado', 'flex-start') +
-    _progCol(plannedEnd, 'final programado', 'flex-end') +
+    _progCol(schedStart, _labelSchedStart, 'flex-start') +
+    _progCol(plannedEnd, _labelSchedEnd, 'flex-end') +
   '</div>';
   return head + topRow + realBar + blueBar + botRow + _ligaBarHtml;
 };

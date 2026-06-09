@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.18-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Barra de progresso da Liga escopada na rodada.</b> Agora a barra rica mostra a RODADA atual: 🟢 verde = % da rodada concluída (muda de cor pelo ritmo); 🔵 azul = tempo regulamentar (do sorteio desta rodada até o próximo). "Início real" = 1º ponto da rodada; "Final estimado" vira "Final real" quando o último ponto é lançado. "Final programado" virou "Próximo sorteio". Mostra a data quando início e fim caem em dias diferentes.</li>' +
+        '<li><b>Barra do torneio com horários.</b> A barra roxa "Torneio completo" agora mostra a data/hora do 1º ponto e o limite para o último ponto do último jogo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.17-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Horários reais das partidas (infra).</b> Cada partida passa a registrar quando começou (1º ponto/abertura do placar ao vivo, ou o lançamento direto) e quando terminou, e a rodada registra sua conclusão. É a base para a próxima versão das barras de progresso da rodada (início real / final real). Sem efeito visível ainda — começa a valer da próxima rodada em diante.</li>' +
