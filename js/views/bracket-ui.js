@@ -3265,7 +3265,8 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     tiebreak_point: '⚡ Ponto em tie-break',
     killing_point: '💥 Killing point',
     point_scored: '➕ Ponto feito',
-    floor: '⚓ Piso (mín. 0)'
+    floor: '⚓ Piso (mín. 0)',
+    sitout_avg: '🪑 Folga (média das rodadas jogadas)'
   };
   var rows = '';
   if (result.breakdown.length === 0) {
@@ -3279,9 +3280,14 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
         var sign = it.value >= 0 ? '+' : '';
         return '<div style="font-size:0.72rem;color:var(--text-muted);">' + lbl + ' × ' + it.count + ' = <b style="color:' + (it.value >= 0 ? '#4ade80' : '#f87171') + ';">' + sign + it.value + '</b></div>';
       }).join('');
+      // v2.3.12: linha de compensação de folga (não é uma partida) — rótulo próprio
+      var _firstCell = mb.isSitOutComp
+        ? '🪑 Folga'
+        : ('R' + (mb.round || '?') + ' ' + resIcon);
+      var _oppCell = mb.isSitOutComp ? '— média das jogadas' : window._safeHtml(oppLabel);
       rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">' +
-        '<td style="padding:8px 10px;font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">R' + (mb.round || '?') + ' ' + resIcon + '</td>' +
-        '<td style="padding:8px 10px;font-size:0.8rem;color:var(--text-bright);">' + window._safeHtml(oppLabel) + '</td>' +
+        '<td style="padding:8px 10px;font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">' + _firstCell + '</td>' +
+        '<td style="padding:8px 10px;font-size:0.8rem;color:var(--text-bright);">' + _oppCell + '</td>' +
         '<td style="padding:8px 10px;">' + itemsHtml + '</td>' +
         '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#fbbf24;font-size:0.9rem;">' + mb.total + '</td>' +
         '</tr>';

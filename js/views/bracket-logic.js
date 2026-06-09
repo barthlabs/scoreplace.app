@@ -112,6 +112,30 @@ function _checkGroupRoundComplete(t, groupIndex) {
 // Retorna { total, breakdown } com detalhamento por partida para transparência.
 // Invariantes preservados por design de valores: vitória sempre > derrota; dominância recompensada;
 // floor per-match em 0 evita totais negativos.
+// v2.3.12: conta rodadas JOGADAS vs FOLGAS de um jogador (pra média dinâmica da
+// compensação de folga). Uma rodada conta como "jogada" se o jogador disputou
+// qualquer partida nela; como "folga" se só folgou (sit-out) sem jogar.
+function _playerRoundStats(t, playerName, category) {
+  var played = 0, satOut = 0;
+  (t.rounds || []).forEach(function(round) {
+    var didPlay = false, didSit = false;
+    (round.matches || []).forEach(function(m) {
+      if (category && m.category !== category) return;
+      if (m.isSitOut) { if (m.p1 === playerName) didSit = true; return; }
+      if (m.isBye || !m.winner) return;
+      if (m.isMonarch && Array.isArray(m.team1) && Array.isArray(m.team2)) {
+        if (m.team1.indexOf(playerName) !== -1 || m.team2.indexOf(playerName) !== -1) didPlay = true;
+      } else if (m.p1 === playerName || m.p2 === playerName) {
+        didPlay = true;
+      }
+    });
+    if (didPlay) played++;
+    else if (didSit) satOut++;
+  });
+  return { played: played, satOut: satOut };
+}
+window._playerRoundStats = _playerRoundStats;
+
 function _calcAdvancedPoints(t, playerName, category) {
   if (!t || !t.advancedScoring || !t.advancedScoring.enabled || !playerName) {
     return { total: 0, breakdown: [] };
@@ -128,6 +152,13 @@ function _calcAdvancedPoints(t, playerName, category) {
   var vTbPoint = getVal('tiebreak_point');
   var vKilling = getVal('killing_point');
   var vPointScored = getVal('point_scored');
+  // v2.3.12: toggle do organizador. Quando desligado, os pontos que dependem de
+  // PLACAR AO VIVO (killing point, ponto marcado) NÃO são aplicados — nivela
+  // quem usa placar ao vivo vs quem prefere não usar. Default: aplica.
+  if (t.advancedScoring.applyLiveScoring === false) {
+    vKilling = 0;
+    vPointScored = 0;
+  }
 
   function _playerInSide(side, name) {
     if (Array.isArray(side)) return side.indexOf(name) !== -1;
@@ -244,6 +275,24 @@ function _calcAdvancedPoints(t, playerName, category) {
       breakdown.push(mBreakdown);
   });
 
+  // v2.3.12: compensação de FOLGA = MÉDIA dos pontos avançados das rodadas
+  // JOGADAS × nº de folgas, RECALCULADA a cada rodada (não congelada). Quem
+  // folga na rodada 1 não fica com 0: assim que joga, a média das rodadas
+  // jogadas passa a valer também pelas rodadas de folga.
+  var _rs = _playerRoundStats(t, playerName, category);
+  if (_rs.satOut > 0 && _rs.played > 0) {
+    var _advAvg = total / _rs.played;
+    var _comp = Math.round(_advAvg * _rs.satOut);
+    if (_comp !== 0) {
+      breakdown.push({
+        round: 0, opponent: '', isSitOutComp: true, sitOutRounds: _rs.satOut, won: false, draw: false,
+        items: [{ key: 'sitout_avg', count: _rs.satOut, unit: Math.round(_advAvg), value: _comp }],
+        total: _comp
+      });
+      total += _comp;
+    }
+  }
+
   return { total: total, breakdown: breakdown };
 }
 window._calcAdvancedPoints = _calcAdvancedPoints;
@@ -332,16 +381,12 @@ function _computeStandings(t, category) {
         if (scoreMap[m.p2]) { scoreMap[m.p2].setsWon += sw2; scoreMap[m.p2].setsLost += sw1; scoreMap[m.p2].gamesWon += gw2; scoreMap[m.p2].gamesLost += gw1; scoreMap[m.p2].tiebreaksWon += tb2; }
       }
 
-      // Sit-out: player receives average points compensation (Liga). v2.3.9:
-      // retorna pra QUALQUER sit-out (com ou sem sitOutPoints, com ou sem
-      // winner legado) — folga nunca conta como vitória/partida disputada.
-      if (m.isSitOut) {
-        if (m.p1 && m.sitOutPoints !== undefined) {
-          _ensureEntry(m.p1);
-          scoreMap[m.p1].points += (m.sitOutPoints || 0);
-        }
-        return;
-      }
+      // Sit-out (folga): NÃO pontua aqui. v2.3.12: a compensação é a MÉDIA das
+      // rodadas JOGADAS (recalculada a cada rodada), aplicada DEPOIS do loop —
+      // tanto nos pontos simples quanto nos avançados. O `m.sitOutPoints`
+      // congelado (legado) deixou de ser usado. Folga nunca conta como
+      // vitória/partida disputada.
+      if (m.isSitOut) { if (m.p1) _ensureEntry(m.p1); return; }
       // Skip BYE and unresolved matches
       if (!m.winner || m.isBye || m.isSitOut) return;
 
@@ -448,12 +493,26 @@ function _computeStandings(t, category) {
   // Compute gamesDiff for each player
   standings.forEach(function(s) { s.gamesDiff = (s.gamesWon || 0) - (s.gamesLost || 0); s.setsDiff = (s.setsWon || 0) - (s.setsLost || 0); });
 
-  // Advanced Points: compute per player if enabled
+  // Advanced Points: compute per player if enabled. v2.3.12: o total já inclui
+  // a compensação de folga (média das rodadas jogadas), calculada dentro de
+  // _calcAdvancedPoints — então os avançados não precisam de ajuste extra aqui.
   if (t.advancedScoring && t.advancedScoring.enabled && typeof _calcAdvancedPoints === 'function') {
     standings.forEach(function(s) {
       s.advancedPoints = _calcAdvancedPoints(t, s.name, category).total;
     });
   }
+
+  // v2.3.12: compensação de FOLGA nos pontos SIMPLES (3/1/0) = MÉDIA das rodadas
+  // JOGADAS × nº de folgas, recalculada a cada rodada. (Os avançados já têm a
+  // compensação embutida acima.) Sem rodada jogada → sem média → 0.
+  standings.forEach(function(s) {
+    var _rsB = _playerRoundStats(t, s.name, category);
+    s.sitOutRounds = _rsB.satOut;
+    if (_rsB.satOut > 0 && _rsB.played > 0) {
+      var _basicAvg = s.points / _rsB.played;
+      s.points += Math.round(_basicAvg * _rsB.satOut);
+    }
+  });
 
   // v0.17.40: ordem padrão recomendada (alinhada com a UI em
   // create-tournament.js): Confronto Direto → Saldo → Vitórias → Buchholz

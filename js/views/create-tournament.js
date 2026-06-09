@@ -520,6 +520,11 @@ function setupCreateTournamentModal() {
                   </div>
                   <p style="font-size:0.7rem; color:#f87171; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">${_t('create.advScoringGroupB')}</p>
                   <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; padding:6px 10px; background:rgba(248,113,113,0.06); border-radius:6px; border-left:2px solid #f87171;">ⓘ ${_t('create.advScoringGroupBWarn')}</div>
+                  <!-- v2.3.12: toggle mestre — desligado, nivela quem usa placar ao vivo -->
+                  <div style="display:flex; align-items:center; gap:10px; padding:9px 11px; background:rgba(248,113,113,0.08); border:1px solid rgba(248,113,113,0.25); border-radius:8px; margin-bottom:8px;">
+                    <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="adv-apply-live" checked><span class="toggle-slider"></span></label>
+                    <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:700; color:#f87171;">${_t('create.advApplyLive')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advApplyLiveDesc')}</div></div>
+                  </div>
                   <div style="display:flex; flex-direction:column; gap:6px;">
                     <div class="adv-row" data-adv-key="killing_point" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
                       <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled"><span class="toggle-slider"></span></label>
@@ -3648,6 +3653,9 @@ function setupCreateTournamentModal() {
         _advEnEl.checked = !!t.advancedScoring.enabled;
         window._onAdvScoringToggle();
       }
+      // v2.3.12: restaura o toggle de placar ao vivo (default true)
+      var _applyLiveLoad = document.getElementById('adv-apply-live');
+      if (_applyLiveLoad) _applyLiveLoad.checked = (t.advancedScoring.applyLiveScoring !== false);
       Object.keys(t.advancedScoring.categories).forEach(function(key) {
         var row = document.querySelector('#adv-scoring-body .adv-row[data-adv-key="' + key + '"]');
         if (!row) return;
@@ -4016,9 +4024,12 @@ function setupCreateTournamentModal() {
                 value: val ? (parseInt(val.value, 10) || 0) : 0
               };
             });
+            var _applyLiveEl = document.getElementById('adv-apply-live');
             tourData.advancedScoring = {
               enabled: !!_advEnabled.checked,
-              categories: _advCats
+              categories: _advCats,
+              // v2.3.12: default true (aplica); false = pontos de placar ao vivo não contam
+              applyLiveScoring: _applyLiveEl ? !!_applyLiveEl.checked : true
             };
           }
         } else {

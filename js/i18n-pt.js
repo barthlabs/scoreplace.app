@@ -1821,6 +1821,8 @@ window._translations['pt'] = {
   'create.advScoringGroupB': 'Requerem pontuação ao vivo',
   'create.advScoringGroupBWarn': 'Estes critérios só são contabilizados quando as partidas forem marcadas ponto a ponto ao vivo.',
   'create.advScoringFloorNote': 'Piso de segurança: nenhuma partida pode resultar em total negativo (mínimo 0 por partida).',
+  'create.advApplyLive': 'Aplicar pontos de placar ao vivo',
+  'create.advApplyLiveDesc': 'Quando desligado, killing point e ponto marcado NÃO contam — nivela quem usa placar ao vivo com quem prefere não usar.',
   'create.advParticipation': 'Participação (jogou)',
   'create.advParticipationDesc': 'Pontos por comparecer e disputar a partida.',
   'create.advMatchWon': 'Vitória na partida',

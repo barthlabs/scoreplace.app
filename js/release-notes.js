@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.12-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Folga (sit-out) recebe a média das rodadas jogadas, recalculada a cada rodada.</b> Quem folga não fica mais com 0: a compensação é a média de pontos das rodadas que o jogador realmente disputou, multiplicada pelas folgas — atualizada a cada nova rodada. Ex.: folga na 1ª, faz 100 na 2ª → 200; faz 50 na 3ª → 150 jogados + 75 (média) = 225. Vale para os Pontos Avançados e para os pontos simples; aparece no detalhamento como "🪑 Folga".</li>' +
+        '<li><b>Toggle de placar ao vivo.</b> Na config dos Pontos Avançados, o organizador pode desligar a aplicação dos pontos que dependem de placar ao vivo (killing point, ponto marcado) — assim quem usa placar ao vivo não leva vantagem sobre quem prefere não usar.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.11-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Pontos Avançados valem como classificação da Liga.</b> Quando o "Sistema de Pontos Avançado" está ativo, a Liga passa a ser ranqueada por ELE (não mais pelos pontos simples 3/1/0). A pontuação de todos é recomputada de todas as partidas. Na tabela, a coluna 💯 PA vira a pontuação principal e os pontos simples ficam como informação.</li>' +

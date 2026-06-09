@@ -1809,6 +1809,8 @@ window._translations['en'] = {
   'create.advScoringGroupB': 'Require live scoring',
   'create.advScoringGroupBWarn': 'These categories only count when matches are tracked point by point live.',
   'create.advScoringFloorNote': 'Safety floor: no single match can produce a negative total (minimum 0 per match).',
+  'create.advApplyLive': 'Apply live-scoring points',
+  'create.advApplyLiveDesc': 'When off, killing point and point scored do NOT count — levels players who use live scoring with those who prefer not to.',
   'create.advParticipation': 'Participation (played)',
   'create.advParticipationDesc': 'Points for showing up and playing the match.',
   'create.advMatchWon': 'Match win',
