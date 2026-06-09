@@ -381,6 +381,46 @@
     return false;
   }
 
+  // ── re-engajamento (v2.3.36) ────────────────────────────────────────────────
+  // Se o usuário some por 7+ dias E o comportamento não condiz com quem domina
+  // o app (perfil incompleto, OU sem amigos, OU sem torneios/partidas), reseta
+  // TODO o progresso das dicas pra rodar o tour completo de novo.
+  function _profileIncomplete() {
+    return !(_filled('gender') && _filled('birthDate') && _filled('city') &&
+             _filled('preferredSports') && _filled('preferredLocations'));
+  }
+  function _noFriends() {
+    var u = _user(); var f = u && u.friends;
+    return !(Array.isArray(f) && f.length > 0);
+  }
+  function _noActivity() {
+    try {
+      var S = window.AppStore;
+      if (S && typeof S.getMyParticipations === 'function' && (S.getMyParticipations() || []).length > 0) return false;
+      if (S && typeof S.getMyOrganized === 'function' && (S.getMyOrganized() || []).length > 0) return false;
+      var u = _user();
+      if (u && Array.isArray(u.matchHistory) && u.matchHistory.length > 0) return false;
+    } catch (e) {}
+    return true;
+  }
+  function _looksNew() { return _profileIncomplete() || _noFriends() || _noActivity(); }
+  var _reengageDone = false;
+  function _maybeReengage() {
+    if (_reengageDone) return;
+    _reengageDone = true;
+    try {
+      var u = _user(); var uid = (u && u.uid) ? String(u.uid) : 'anon';
+      var key = 'scoreplace_coach_seenat_' + uid;
+      var last = parseInt(localStorage.getItem(key) || '0', 10);
+      var now = Date.now();
+      // 7+ dias longe E "parece novo" → reseta tudo (tour completo de novo)
+      if (last && (now - last) >= 7 * 86400000 && _looksNew()) {
+        _saveSeen({});
+      }
+      localStorage.setItem(key, String(now));
+    } catch (e) {}
+  }
+
   // ── definição dos tours ─────────────────────────────────────────────────
   function _menuScopeSel(inner) {
     var ham = document.querySelector('.hamburger-btn');
@@ -437,6 +477,7 @@
   function _init(context, providerFn) {
     try {
       if (isDisabled() || !_user()) { _stop(); return; }
+      _maybeReengage(); // 1x por sessão: pode resetar o progresso e re-rodar o tour
       if (_context === context && _watching) return; // já rodando neste contexto
       _stop();
       _context = context;
