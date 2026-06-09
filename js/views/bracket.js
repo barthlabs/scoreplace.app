@@ -1395,7 +1395,7 @@ function _teamAvatarHtml(teamName) {
   return html;
 }
 
-function renderMatchCard(m, canEnterResult, tId, matchNum) {
+function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
   var _t = window._t || function(k) { return k; };
   if (!m) return '';
 
@@ -1619,9 +1619,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
     : '';
 
   const winnerBadge = isDecided && !isByeMatch
-    // v2.1.41: NÃO repete o placar embaixo do vencedor — as linhas dos jogadores
-    // já mostram o placar (games/sets). Padroniza todos os cards igual.
-    ? `<div style="text-align:center;font-size:0.75rem;color:#4ade80;font-weight:700;margin-top:6px;padding:4px;background:rgba(16,185,129,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;gap:4px;">🏆 ${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(m.winner, window._currentBracketTournament) : window._safeHtml(m.winner)}${m.wo ? '<span style="color:#fbbf24;font-weight:800;font-size:0.68rem;">· por W.O.</span>' : ''}</div>`
+    // v2.3.19: NÃO mostra mais o troféu "🏆 vencedor" — a tarja verde + placar
+    // em destaque já deixam claro quem venceu. Só sobra a nota de W.O. quando
+    // aplicável (informação que não está em nenhum outro lugar do card).
+    ? (m.wo ? `<div style="text-align:center;font-size:0.68rem;color:#fbbf24;font-weight:800;margin-top:4px;">· por W.O.</div>` : '')
     : isByeMatch
     ? `<div style="text-align:center;font-size:0.72rem;color:#4ade80;font-weight:700;margin-top:6px;">BYE — Avança Direto</div>`
     : '';
@@ -1637,7 +1638,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum) {
   // Edit button: for decided matches — opens inline inputs for editing.
   // v2.1.85: NÃO aparece em partidas decididas por W.O. de time (m.wo) — nelas
   // não há placar real pra editar; o caminho é "Reverter W.O." (headerWoRevertBtn).
-  const headerEditBtn = isDecided && !isByeMatch && canEnterResult && !m.wo
+  const headerEditBtn = isDecided && !isByeMatch && canEnterResult && !m.wo && !compactDone
     ? `<button onclick="window._editResultInline('${_esc(tId)}','${_esc(m.id)}')"
           style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#fbbf24;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:3px;"
           onmouseover="this.style.background='rgba(245,158,11,0.2)'" onmouseout="this.style.background='rgba(245,158,11,0.1)'"
@@ -2592,49 +2593,10 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // mantém numeração consistente independente do sort visual.
         var _monarchGlobalMatchNum = _monarchPrevRoundsMatches;
         var _renderGroup = function(g) {
-          var gStandings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings(g) : [];
+          // v2.3.19: classificação POR GRUPO removida — a classificação geral
+          // (todos os jogadores) fica acima das rodadas. Aqui só renderizamos
+          // os jogos do grupo. `gDone` ainda é usado no badge/borda do grupo.
           var gDone = g.matches.length > 0 && g.matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
-          var gRows = gStandings.map(function(s, si) {
-            var diff = s.pointsFor - s.pointsAgainst;
-            var setDiff = s.setsWon - s.setsLost;
-            var gameDiff = s.gamesWon - s.gamesLost;
-            var winRatePct = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
-            var row = '<tr style="border-bottom:1px solid var(--border-color);">' +
-              '<td style="padding:5px 8px;font-weight:700;color:var(--text-muted);text-align:center;">' + (si+1) + 'º</td>' +
-              '<td style="padding:5px 8px;font-weight:600;color:var(--text-bright);">' + window._safeHtml(s.name) + '</td>' +
-              '<td style="padding:5px 8px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
-              '<td style="padding:5px 8px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
-              '<td style="padding:5px 8px;text-align:center;color:var(--text-bright);font-weight:600;">' + s.pointsFor + '</td>' +
-              '<td style="padding:5px 8px;text-align:center;color:' + (diff >= 0 ? '#4ade80' : '#f87171') + ';">' + (diff>=0?'+':'') + diff + '</td>';
-            if (_useSetsMonarch) {
-              row += '<td style="padding:5px 8px;text-align:center;color:#06b6d4;">' + s.setsWon + '-' + s.setsLost + '</td>' +
-                '<td style="padding:5px 8px;text-align:center;color:' + (setDiff >= 0 ? '#06b6d4' : '#f87171') + ';">' + (setDiff>=0?'+':'') + setDiff + '</td>' +
-                '<td style="padding:5px 8px;text-align:center;color:#8b5cf6;">' + s.gamesWon + '-' + s.gamesLost + '</td>' +
-                '<td style="padding:5px 8px;text-align:center;color:' + (gameDiff >= 0 ? '#8b5cf6' : '#f87171') + ';">' + (gameDiff>=0?'+':'') + gameDiff + '</td>' +
-                '<td style="padding:5px 8px;text-align:center;color:#f59e0b;">' + s.tiebreaksWon + '-' + s.tiebreaksLost + '</td>';
-            }
-            row += '<td style="padding:5px 8px;text-align:center;color:var(--text-muted);font-weight:600;">' + winRatePct + '%</td>' +
-            '</tr>';
-            return row;
-          }).join('');
-          var extraHeaders = _useSetsMonarch ? (
-            '<th style="padding:5px 8px;text-align:center;color:#06b6d4;font-size:0.65rem;" title="Sets vencidos - perdidos">Sets</th>' +
-            '<th style="padding:5px 8px;text-align:center;color:#06b6d4;font-size:0.65rem;" title="Saldo de sets">±S</th>' +
-            '<th style="padding:5px 8px;text-align:center;color:#8b5cf6;font-size:0.65rem;" title="Games vencidos - perdidos">Games</th>' +
-            '<th style="padding:5px 8px;text-align:center;color:#8b5cf6;font-size:0.65rem;" title="Saldo de games">±G</th>' +
-            '<th style="padding:5px 8px;text-align:center;color:#f59e0b;font-size:0.65rem;" title="Tie-breaks vencidos - perdidos">TB</th>'
-          ) : '';
-          var gTable = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem;margin-top:0.75rem;">' +
-            '<thead><tr style="border-bottom:2px solid var(--border-color);">' +
-            '<th style="padding:5px 8px;text-align:center;color:var(--text-muted);font-size:0.65rem;">#</th>' +
-            '<th style="padding:5px 8px;color:var(--text-muted);font-size:0.65rem;">Jogador</th>' +
-            '<th style="padding:5px 8px;text-align:center;color:var(--text-muted);font-size:0.65rem;">V</th>' +
-            '<th style="padding:5px 8px;text-align:center;color:var(--text-muted);font-size:0.65rem;">D</th>' +
-            '<th style="padding:5px 8px;text-align:center;color:var(--text-muted);font-size:0.65rem;" title="Pontos feitos em todos os jogos (pró)">Pts</th>' +
-            '<th style="padding:5px 8px;text-align:center;color:var(--text-muted);font-size:0.65rem;" title="Saldo de pontos (pró − contra)">Saldo</th>' +
-            extraHeaders +
-            '<th style="padding:5px 8px;text-align:center;color:var(--text-muted);font-size:0.65rem;" title="Aproveitamento (V/J)">%</th>' +
-            '</tr></thead><tbody>' + gRows + '</tbody></table>';
           // v0.16.52: cards de jogo viram itens de CSS Grid em vez de flex.
           // Antes (`flex:1 + max-width:320px`): cards na mesma linha disputavam
           // espaço (ficavam menores que max), mas o último sozinho na linha
@@ -2645,7 +2607,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var gCards = g.matches.map(function(m) {
             // v1.0.64-beta: usa contador global em vez de mi+1 (que resetava por grupo)
             _monarchGlobalMatchNum++;
-            return '<div>' + renderMatchCard(m, canEnterResult, t.id, _monarchGlobalMatchNum) + '</div>';
+            // v2.3.19: grupo concluído → cards compactos (sem botão Editar).
+            return '<div>' + renderMatchCard(m, canEnterResult, t.id, _monarchGlobalMatchNum, gDone) + '</div>';
           }).join('');
           var statusBadge = gDone ? '<span style="font-size:0.6rem;padding:2px 6px;border-radius:5px;background:rgba(16,185,129,0.15);color:#4ade80;font-weight:700;">✓</span>' : '<span style="font-size:0.6rem;padding:2px 6px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">' + _t('bracket.ongoing') + '</span>';
           // Highlight visual quando o grupo é do usuário logado.
@@ -2656,8 +2619,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           return '<div style="background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + '</div>' +
             '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">Jogadores: ' + g.players.map(function(n){return window._safeHtml(n);}).join(', ') + '</div>' +
-            '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;margin-bottom:0.75rem;">' + gCards + '</div>' +
-            '<div class="standings-scroll">' + gTable + '</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">' + gCards + '</div>' +
           '</div>';
         };
         // v0.17.29: usuário fora da rodada (desativado/sem grupo) → todos
@@ -3264,6 +3226,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   if (isLigaFmt) {
     // Fase Final da temporada (playoffs): injetada logo após a classificação.
     var _playoffHtml = (typeof window._renderPlayoffSection === 'function') ? window._renderPlayoffSection(t) : '';
+    // v2.3.19: quando a rodada atual já está concluída, a classificação geral
+    // sobe pra cima dos jogos da rodada (rodada vira "histórico" — o que importa
+    // é a tabela). Rodada em andamento mantém o teu jogo no topo (você age nele).
+    if (allComplete) {
+      return _phaseBannerHtml + _progressBar + _readyBanner + standingsTablesHtml + _playoffHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+    }
     return _phaseBannerHtml + _progressBar + _readyBanner + currentRoundHtml + standingsTablesHtml + _playoffHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
   }
   return _phaseBannerHtml + _progressBar + standingsTablesHtml + _readyBanner + currentRoundHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
