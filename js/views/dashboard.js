@@ -1247,6 +1247,7 @@ function renderDashboard(container) {
       // coloque isso e os sorteados junto."
       matchSources.forEach(function(m) {
         if (!m || m.winner) return; // Already has result
+        if (m.isSitOut || m.p1 === 'FOLGA' || m.p2 === 'FOLGA') return; // folga não é jogo a disputar
         if (m.p1 === 'TBD' || m.p2 === 'TBD' || m.p1 === 'BYE' || m.p2 === 'BYE') return;
 
         // Detecta se sou parte do match (singles, doubles slash-separated, ou monarch team).
@@ -1543,6 +1544,7 @@ function renderDashboard(container) {
 
       matchSources.forEach(function(m) {
         if (!m) return;
+        if (m.isSitOut || m.p1 === 'FOLGA' || m.p2 === 'FOLGA') return; // folga não é jogo a disputar
         if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return;
 
         // Am I in this match?
