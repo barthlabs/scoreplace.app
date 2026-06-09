@@ -327,7 +327,7 @@ function setupCreateTournamentModal() {
                   <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.tournamentEnd')}</div>
                   <div style="display:flex; gap:6px; align-items:center;">
                     <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término do torneio" style="padding:4px 6px; font-size:0.82rem; flex:1; min-width:0;" required oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                    <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término do torneio" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration()">
+                    <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término do torneio" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                   </div>
                 </div>
               </div>
@@ -1911,21 +1911,29 @@ function setupCreateTournamentModal() {
     var tag = document.getElementById('liga-rounds-tag');
     if (!tag) return;
     var dEl = document.getElementById('liga-first-draw-date');
+    var tEl = document.getElementById('liga-first-draw-time');
     var iEl = document.getElementById('liga-draw-interval');
-    var endEl = document.getElementById('tourn-end-date');
-    var first = (dEl && dEl.value) ? new Date(dEl.value + 'T00:00:00') : null;
+    var endDEl = document.getElementById('tourn-end-date');
+    var endTEl = document.getElementById('tourn-end-time');
+    // v2.3.16: cálculo PRECISO por HORA EXATA — igual ao _ligaTournamentProgress
+    // (barra roxa). Antes usava meia-noite (1º sorteio) + fim do dia (fim do
+    // torneio), o que inflava a estimativa (ex.: dava 5 quando o correto é 4
+    // porque o 5º sorteio cairia DEPOIS da hora de término).
+    var timeVal = (tEl && tEl.value) || '19:00';
+    var endTimeVal = (endTEl && endTEl.value) || '23:59';
+    var first = (dEl && dEl.value) ? new Date(dEl.value + 'T' + timeVal + ':00') : null;
     var interval = iEl ? parseInt(iEl.value, 10) : 0;
-    var end = (endEl && endEl.value) ? new Date(endEl.value + 'T23:59:59') : null;
+    var end = (endDEl && endDEl.value) ? new Date(endDEl.value + 'T' + endTimeVal + ':00') : null;
     if (!first || !end || !interval || interval < 1 ||
         isNaN(first.getTime()) || isNaN(end.getTime()) || end < first) {
       tag.style.display = 'none';
       return;
     }
-    var days = Math.floor((end - first) / (24 * 60 * 60 * 1000));
-    var rounds = Math.floor(days / interval) + 1;
+    var intervalMs = interval * 24 * 60 * 60 * 1000;
+    var rounds = Math.floor((end - first) / intervalMs) + 1;
     if (rounds < 1) { tag.style.display = 'none'; return; }
     tag.textContent = '≈ ' + rounds + ' rodada' + (rounds > 1 ? 's' : '');
-    tag.title = 'Do 1º sorteio até o fim do torneio, a cada ' + interval + ' dia(s)';
+    tag.title = 'Do 1º sorteio até o fim do torneio, a cada ' + interval + ' dia(s) — pela hora exata';
     tag.style.display = 'inline-flex';
   };
 
