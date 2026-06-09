@@ -1082,7 +1082,7 @@ body.hamburger-open #header-notif-bell { display: none !important; }
   gap: 4px !important;
 }
 .logoff-btn {
-  margin-left: 4px !important;
+  margin-left: 10px !important;
   flex-shrink: 0 !important;
 }
 

@@ -437,19 +437,54 @@ window._updateTopbarForUser = function(user) {
     var _loadingIndicator = _profileLoading
       ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgba(251,191,36,0.7);margin-left:4px;animation:pulseDot 1s infinite;" title="Carregando perfil…"></span>'
       : '';
+    // v2.3.38: o botão de perfil contém SÓ avatar + nome. O logoff virou um
+    // botão SEPARADO (irmão, #btn-logoff) — evita logoff acidental ao tocar no
+    // perfil e faz a dica do perfil não englobar o logoff.
     btnLogin.innerHTML =
       '<div style="display:flex; align-items:center; justify-content:center; gap:8px;" title="Meu Perfil">' +
         '<img src="' + _sh(photoUrl) + '" style="width:32px; height:32px; border-radius:50%; border: 2px solid var(--primary-color); object-fit:cover;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
         '<div style="display:none;width:32px;height:32px;border-radius:50%;background:var(--primary-color);color:white;align-items:center;justify-content:center;font-size:0.85rem;flex-shrink:0;">👤</div>' +
         '<span class="user-name-label" style="font-weight:600; font-size:1rem;">' + _sh(window._firstNameOnly ? window._firstNameOnly(displayFirstName) : displayFirstName) + '</span>' +
         _loadingIndicator +
-      '</div>' +
-      '<div title="Sair da Conta" class="logoff-btn" style="color: var(--danger-color); margin-left: 8px; display:flex; align-items:center; cursor:pointer; opacity: 0.8;" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.8\'">' +
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>' +
       '</div>';
+    if (typeof window._ensureTopbarLogoff === 'function') window._ensureTopbarLogoff(btnLogin);
   } catch (e) {
     window._warn('[scoreplace-auth] _updateTopbarForUser error:', e);
   }
+};
+
+// v2.3.38: botão de logoff SEPARADO do botão de perfil (irmão na profile-group).
+window._ensureTopbarLogoff = function(btnLogin) {
+  try {
+    var grp = btnLogin && btnLogin.parentNode;
+    if (!grp) return;
+    var lo = document.getElementById('btn-logoff');
+    if (!lo) {
+      lo = document.createElement('button');
+      lo.id = 'btn-logoff';
+      lo.setAttribute('aria-label', 'Sair da conta');
+      lo.setAttribute('title', 'Sair da Conta');
+      lo.setAttribute('onclick', 'if(typeof window._onLogoffBtnClick==="function") window._onLogoffBtnClick(event)');
+    }
+    lo.className = 'logoff-btn'; // reusa CSS responsivo (flex-shrink + margem)
+    // garante que fica logo após o botão de perfil
+    if (lo.previousSibling !== btnLogin || lo.parentNode !== grp) {
+      if (btnLogin.nextSibling) grp.insertBefore(lo, btnLogin.nextSibling); else grp.appendChild(lo);
+    }
+    lo.style.cssText = 'background:transparent;border:none;color:var(--danger-color);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:6px;margin-left:8px;opacity:0.8;border-radius:8px;';
+    lo.onmouseover = function(){ lo.style.opacity = '1'; };
+    lo.onmouseout = function(){ lo.style.opacity = '0.8'; };
+    lo.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>';
+  } catch (e) {}
+};
+window._removeTopbarLogoff = function() {
+  var lo = document.getElementById('btn-logoff');
+  if (lo && lo.parentNode) lo.parentNode.removeChild(lo);
+};
+window._onLogoffBtnClick = function(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  if (typeof window._closeHamburger === 'function') window._closeHamburger();
+  if (typeof handleLogout === 'function') handleLogout();
 };
 
 // ─── Handle redirect result on page load ────────────────────────────────────
@@ -3027,13 +3062,8 @@ async function simulateLoginSuccess(user) {
   // `onclick` attributes but NOT addEventListener listeners — hence inline wiring.
   window._onProfileBtnClick = function(e) {
     try {
-      // Clique no botão de logout (→) — sempre faz logout
-      if (e && e.target && e.target.closest && e.target.closest('[title="Sair da Conta"]')) {
-        e.stopPropagation();
-        if (typeof window._closeHamburger === 'function') window._closeHamburger();
-        handleLogout();
-        return;
-      }
+      // v2.3.38: logoff agora é botão separado (#btn-logoff). Este handler só
+      // abre o perfil — sem risco de logoff acidental.
       // Clique na área do perfil (avatar/nome)
       // Se já está na página de perfil, não fazer nada — evita re-render desnecessário
       var currentHash = (window.location.hash || '').replace('#', '').split('/')[0];
@@ -4173,6 +4203,7 @@ function handleLogout() {
     // Inline onclick survives cloneNode(true) into the hamburger dropdown.
     btnLogin.setAttribute('onclick', "if(typeof window._closeHamburger==='function')window._closeHamburger(); if(typeof openModal==='function')openModal('modal-login');");
   }
+  if (typeof window._removeTopbarLogoff === 'function') window._removeTopbarLogoff();
 
   // Close profile modal if open
   var modalProfile = document.getElementById('modal-profile');
@@ -4468,6 +4499,7 @@ window._executeDeleteAccount = async function() {
       btnLogin.style = 'font-size: 0.82rem; padding: 0 16px; height: 38px;';
       btnLogin.setAttribute('onclick', "if(typeof window._closeHamburger==='function')window._closeHamburger(); if(typeof openModal==='function')openModal('modal-login');");
     }
+    if (typeof window._removeTopbarLogoff === 'function') window._removeTopbarLogoff();
 
     var proBtn = document.getElementById('btn-upgrade-pro');
     if (proBtn) proBtn.style.display = 'none';
