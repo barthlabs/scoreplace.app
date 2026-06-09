@@ -728,7 +728,7 @@ window._buildProgressInner = function(t) {
     var _deadlineMs = window._tProgParseMs(t.endDate);
     var _dtLine = (_firstPointMs || _deadlineMs)
       ? '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:0.62rem;color:var(--text-muted);">' +
-          '<span>' + (_firstPointMs ? '🟢 1º ponto: ' + _date(_firstPointMs) + ' ' + _time(_firstPointMs) : '') + '</span>' +
+          '<span>' + (_firstPointMs ? 'início: ' + _date(_firstPointMs) + ' ' + _time(_firstPointMs) : '') + '</span>' +
           '<span style="text-align:right;">' + (_deadlineMs ? '🏁 limite: ' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) : '') + '</span>' +
         '</div>'
       : '';
@@ -768,7 +768,10 @@ window._buildProgressInner = function(t) {
   var expectedFrac = (now - schedStart) / (plannedEnd - schedStart);
   if (expectedFrac < 0) expectedFrac = 0;
   if (expectedFrac > 1) expectedFrac = 1;
-  if (isFinished || _roundComplete) expectedFrac = Math.max(expectedFrac, progFrac);
+  // v2.3.20: a barra azul é o TEMPO REGULAMENTAR — ela só chega a 100% na hora
+  // estipulada (próximo sorteio). NÃO antecipar pra 100% só porque a rodada
+  // terminou cedo. O bump só vale pro torneio inteiro finalizado.
+  if (isFinished) expectedFrac = Math.max(expectedFrac, progFrac);
 
   var diff = expectedFrac - progFrac;
   var color;
@@ -782,7 +785,7 @@ window._buildProgressInner = function(t) {
   else if (progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
   else estEndMs = plannedEnd;
 
-  var _endLabel = _roundEndReal ? 'final real' : (isFinished ? 'final' : 'final estimado');
+  var _endLabel = _roundEndReal ? 'final da rodada' : (isFinished ? 'final' : 'final estimado');
   var _elapsedLabel = (_roundEndReal || isFinished) ? 'durou' : 'decorrido';
   // mostra DATA quando início e fim caem em dias diferentes
   var _multiDay = _date(actualStart) !== _date(estEndMs);
@@ -812,7 +815,7 @@ window._buildProgressInner = function(t) {
       '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
       '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
     '</div>' +
-    _realCol(estEndMs, _endLabel, 'flex-end', _multiDay) +
+    _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
   '</div>';
   var realBar = '<div style="width:100%;height:11px;background:rgba(255,255,255,0.1);border-radius:6px 6px 0 0;overflow:hidden;">' +
     '<div style="width:' + Math.round(progFrac * 100) + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' +

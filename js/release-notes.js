@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.20-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Barra azul (tempo regulamentar) não corre na frente.</b> Mesmo que a rodada termine cedo, a barra azul só chega a 100% na hora estipulada pelo organizador (o próximo sorteio) — ela mede o prazo, não o quanto já jogou.</li>' +
+        '<li><b>"Final da rodada" com data e hora.</b> Quando os jogos da rodada terminam, no lugar de "final estimado" aparece <b>"final da rodada"</b> com a data e a hora reais da conclusão.</li>' +
+        '<li><b>Barra do torneio: "início" em vez de "1º ponto".</b> Rótulo mais limpo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Rodadas concluídas mais enxutas (Rei/Rainha).</b> Quando a rodada termina, a <b>classificação geral</b> sobe pra cima dos jogos (não há mais tabelinha de classificação por grupo). Removemos o troféu "🏆 vencedor" embaixo de cada jogo — a tarja verde + o placar em destaque já dizem quem ganhou. Em grupo concluído, o botão "Editar" some e os cards ficam compactos.</li>' +
