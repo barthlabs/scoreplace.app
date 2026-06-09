@@ -3006,6 +3006,12 @@ function renderDashboard(container) {
 
   // ─── Pending invite detection: auto-redirect to tournament with pending co-org or participation invite ───
   _checkPendingInvitesAndRedirect(visible);
+
+  // v2.3.24: jornada de coachmarks (menu → perfil). Atrasado pra dashboard
+  // assentar e não competir com o boot loader. Self-guarda contra disabled/visto.
+  if (window._coach && typeof window._coach.autoStartDashboard === 'function') {
+    setTimeout(function () { try { window._coach.autoStartDashboard(); } catch (e) {} }, 1100);
+  }
 }
 
 // v0.17.4: real-time listeners. Mantém listener vivo enquanto o dashboard

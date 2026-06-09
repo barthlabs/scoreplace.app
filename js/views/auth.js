@@ -5492,6 +5492,22 @@ function setupProfileModal() {
               '</div>' +
               '<button type="button" onclick="var d=document.getElementById(\'profile-ui-scale\'); if(d)d.value=100; var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=\'100%\'; window._setUiScale&&window._setUiScale(1);" style="margin-top:8px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);font-size:0.72rem;padding:5px 12px;border-radius:8px;cursor:pointer;">↺ Restaurar padrão (100%)</button>' +
             '</div>' +
+            // v2.3.24: Locais de preferência ANTES de Presença no local (jornada
+            // de descoberta: cadastrar onde joga vem antes de configurar presença).
+            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
+            // Locais de preferência (mapa)
+            '<div class="form-group" style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + _t('profile.labelLocations') + '</label>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">' + _t('profile.locationsDesc') + '</p>' +
+              '<div style="position:relative;display:flex;gap:6px;margin-bottom:8px;">' +
+                '<input type="text" id="profile-location-search" class="form-control" placeholder="' + _t('profile.searchLocation') + '" style="flex:1;box-sizing:border-box;font-size:0.8rem;" autocomplete="off">' +
+                '<button type="button" id="profile-locate-btn" onclick="window._profileLocateMe()" class="btn btn-sm" style="background:var(--primary-color);color:#fff;border:none;white-space:nowrap;font-size:0.75rem;padding:6px 10px;" title="Usar minha localização">📍</button>' +
+                '<div id="profile-location-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);max-height:240px;overflow-y:auto;margin-top:4px;"></div>' +
+              '</div>' +
+              '<div id="profile-map-container" style="width:100%;height:200px;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);margin-bottom:8px;background:#1a1a2e;"></div>' +
+              '<div id="profile-locations-list" style="display:flex;flex-direction:column;gap:4px;"></div>' +
+              '<input type="hidden" id="profile-edit-ceps" value="">' +
+            '</div>' +
             // Presença — visibilidade + silenciar
             '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
             '<div class="form-group" style="margin-bottom: 1rem;">' +
@@ -5520,20 +5536,6 @@ function setupProfileModal() {
               '</div>' +
               '<p style="font-size:0.68rem;color:var(--text-muted);margin:4px 0 0 0;">Enquanto silenciado, suas presenças não são criadas e você não aparece para amigos. Volta automático ao fim do prazo.</p>' +
               '<input type="hidden" id="profile-presence-visibility" value="friends">' +
-            '</div>' +
-            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
-            // Locais de preferência (mapa)
-            '<div class="form-group" style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + _t('profile.labelLocations') + '</label>' +
-              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">' + _t('profile.locationsDesc') + '</p>' +
-              '<div style="position:relative;display:flex;gap:6px;margin-bottom:8px;">' +
-                '<input type="text" id="profile-location-search" class="form-control" placeholder="' + _t('profile.searchLocation') + '" style="flex:1;box-sizing:border-box;font-size:0.8rem;" autocomplete="off">' +
-                '<button type="button" id="profile-locate-btn" onclick="window._profileLocateMe()" class="btn btn-sm" style="background:var(--primary-color);color:#fff;border:none;white-space:nowrap;font-size:0.75rem;padding:6px 10px;" title="Usar minha localização">📍</button>' +
-                '<div id="profile-location-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);max-height:240px;overflow-y:auto;margin-top:4px;"></div>' +
-              '</div>' +
-              '<div id="profile-map-container" style="width:100%;height:200px;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);margin-bottom:8px;background:#1a1a2e;"></div>' +
-              '<div id="profile-locations-list" style="display:flex;flex-direction:column;gap:4px;"></div>' +
-              '<input type="hidden" id="profile-edit-ceps" value="">' +
             '</div>' +
             '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
             // Social toggle + notification filters
@@ -7180,6 +7182,12 @@ if (typeof window.renderProfilePage !== 'function') {
     }
 
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
+
+    // v2.3.24: tour de coachmarks dentro do perfil (campos incompletos primeiro,
+    // depois configurações gerais). Self-guarda contra disabled/já-visto.
+    if (window._coach && typeof window._coach.startProfileTour === 'function') {
+      window._coach.startProfileTour();
+    }
   };
 }
 
