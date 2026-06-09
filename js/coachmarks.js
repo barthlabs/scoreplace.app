@@ -18,8 +18,11 @@
 
   var SEEN_KEY = 'scoreplace_coach_v1';
   var DISABLED_KEY = 'scoreplace_coach_disabled';
+  var SNOOZE_KEY = 'scoreplace_coach_snooze_until';
   var Z = 2000001;
   var PAD = 8; // padding do "buraco" em volta do alvo
+  var ARM_MS = 5000;      // após 5s, clicar fora pausa as dicas
+  var SNOOZE_MS = 600000; // 10 minutos
 
   // ── persistência ──────────────────────────────────────────────────────────
   function _seen() {
@@ -31,12 +34,24 @@
   }
   function isStepSeen(id) { return !!_seen()[id]; }
   function markSeen(id) { var m = _seen(); m[id] = 1; _saveSeen(m); }
+  function _snoozeActive() {
+    try {
+      var until = parseInt(localStorage.getItem(SNOOZE_KEY) || '0', 10);
+      return until && Date.now() < until;
+    } catch (e) { return false; }
+  }
   function isDisabled() {
-    try { return localStorage.getItem(DISABLED_KEY) === '1'; } catch (e) { return false; }
+    try { if (localStorage.getItem(DISABLED_KEY) === '1') return true; } catch (e) {}
+    return _snoozeActive();
+  }
+  function snooze() {
+    // pausa temporária (10 min) — pra quem "só quer jogar agora". Volta sozinho.
+    try { localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS)); } catch (e) {}
+    _teardown();
   }
   function setEnabled(on) {
     try {
-      if (on) localStorage.removeItem(DISABLED_KEY);
+      if (on) { localStorage.removeItem(DISABLED_KEY); localStorage.removeItem(SNOOZE_KEY); }
       else localStorage.setItem(DISABLED_KEY, '1');
     } catch (e) {}
     if (!on) _teardown();
@@ -49,6 +64,8 @@
   var _total = 0;          // total de steps visíveis no tour atual
   var _onDone = null;      // callback ao fim do tour
   var _resizeBound = null;
+  var _armed = false;      // após 5s, clicar fora pausa as dicas
+  var _armTimer = null;
 
   // ── helpers de DOM ──────────────────────────────────────────────────────────
   function _user() { return (window.AppStore && window.AppStore.currentUser) || null; }
@@ -78,7 +95,9 @@
     s.id = 'coach-style';
     s.textContent =
       '@keyframes coachPulse{0%,100%{box-shadow:0 0 0 2px rgba(251,191,36,0.9),0 0 0 6px rgba(251,191,36,0.25)}50%{box-shadow:0 0 0 2px rgba(251,191,36,0.9),0 0 0 12px rgba(251,191,36,0.05)}}' +
-      '.coach-mask{position:fixed;background:rgba(2,6,23,0.62);pointer-events:auto;transition:all 0.18s ease;}' +
+      '.coach-mask{position:fixed;background:rgba(2,6,23,0.55);pointer-events:auto;transition:all 0.18s ease;}' +
+      '.coach-hintout{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:rgba(15,23,42,0.92);border:1px solid rgba(148,163,184,0.35);color:#cbd5e1;font-size:0.74rem;font-weight:600;padding:8px 14px;border-radius:999px;pointer-events:none;opacity:0;transition:opacity 0.3s ease;white-space:nowrap;box-shadow:0 4px 18px rgba(0,0,0,0.4);}' +
+      '.coach-hintout.show{opacity:1;}' +
       '.coach-ring{position:fixed;border-radius:12px;pointer-events:none;animation:coachPulse 1.6s ease-in-out infinite;transition:all 0.18s ease;}' +
       '.coach-card{position:fixed;max-width:300px;background:linear-gradient(135deg,#1e293b,#0f172a);border:1px solid rgba(251,191,36,0.45);border-radius:14px;padding:16px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,0.55);pointer-events:auto;color:#e2e8f0;z-index:1;}' +
       '.coach-card h4{margin:0 0 6px;font-size:0.98rem;font-weight:800;color:#fbbf24;letter-spacing:0.2px;}' +
@@ -93,6 +112,8 @@
 
   // ── render de um step ───────────────────────────────────────────────────────
   function _teardown() {
+    if (_armTimer) { clearTimeout(_armTimer); _armTimer = null; }
+    _armed = false;
     if (_overlay && _overlay.parentNode) _overlay.parentNode.removeChild(_overlay);
     _overlay = null;
     if (_resizeBound) {
@@ -107,14 +128,22 @@
     d.className = 'coach-mask';
     d.style.left = x + 'px'; d.style.top = y + 'px';
     d.style.width = Math.max(0, w) + 'px'; d.style.height = Math.max(0, h) + 'px';
-    // bloqueia cliques fora do buraco
-    d.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); });
+    // v2.3.25: clicar fora — depois de 5s (armado) pausa as dicas por 10 min,
+    // pra quem "só quer jogar". Antes disso, dá tempo de ler (no-op).
+    d.addEventListener('click', function (e) {
+      e.stopPropagation(); e.preventDefault();
+      if (_armed) snooze();
+    });
     return d;
   }
 
   function _drawStep(step) {
     var el = _resolve(step);
     if (!el) { _next(); return; } // alvo sumiu → pula
+
+    // rearma o "clicar fora" a cada passo (dá 5s de leitura antes de liberar)
+    _armed = false;
+    if (_armTimer) { clearTimeout(_armTimer); _armTimer = null; }
 
     // garante visível no viewport
     try { el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' }); } catch (e) {}
@@ -164,6 +193,16 @@
         e.stopPropagation(); _next();
       });
       _overlay.appendChild(card);
+
+      // aviso "toque fora pra pausar" — só aparece quando o clique-fora arma (5s)
+      var hintOut = document.createElement('div');
+      hintOut.className = 'coach-hintout';
+      hintOut.textContent = '👆 Toque fora pra pausar as dicas por 10 min';
+      _overlay.appendChild(hintOut);
+      _armTimer = setTimeout(function () {
+        _armed = true;
+        if (hintOut && hintOut.parentNode) hintOut.classList.add('show');
+      }, ARM_MS);
 
       // posiciona o card: abaixo do alvo se couber, senão acima; clampa horizontal
       requestAnimationFrame(function () {
@@ -340,6 +379,7 @@
     startProfileTour: startProfileTour,
     isDisabled: isDisabled,
     setEnabled: setEnabled,
+    snooze: snooze,
     reset: function () { _saveSeen({}); },
     _teardown: _teardown
   };
