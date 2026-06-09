@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.22-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Long-press dos cabeçalhos mais confiável.</b> Segurar o toque num cabeçalho da classificação (no celular) pra ver a explicação da coluna agora tolera o micro-movimento do dedo, não é mais sequestrado pela seleção de texto do iOS e vibra ao abrir.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Classificação interativa.</b> Toque (ou clique) no número de <b>V</b> de um jogador pra ver os confrontos que ele venceu; em <b>D</b>, os que perdeu. <b>%G</b>, <b>Saldo</b> e <b>J</b> abrem a lista de confrontos; <b>PA</b> abre o detalhamento dos pontos.</li>' +

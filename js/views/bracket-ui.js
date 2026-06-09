@@ -3170,31 +3170,43 @@ window._exitTvMode = function() {
 window._ensureStHeaderExplainer = function() {
   if (window._stExplainerOn) return;
   window._stExplainerOn = true;
-  var timer = null, longFired = false;
+  var timer = null, longFired = false, startX = 0, startY = 0, MOVE_TOL = 12;
   var findTh = function(el) { return (el && el.closest) ? el.closest('th[data-explain]') : null; };
+  var fire = function(th) {
+    longFired = true;
+    try {
+      var ttl = th.getAttribute('data-explain-title') || 'Coluna';
+      var msg = th.getAttribute('data-explain') || '';
+      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (_v) {} }
+      if (window.showAlertDialog) window.showAlertDialog(ttl, msg, null, { type: 'info' });
+    } catch (_e) {}
+  };
+  var cancel = function() { if (timer) { clearTimeout(timer); timer = null; } };
   document.addEventListener('touchstart', function(e) {
     var th = findTh(e.target);
     if (!th) return;
     longFired = false;
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(function() {
-      longFired = true;
-      try {
-        var ttl = th.getAttribute('data-explain-title') || 'Coluna';
-        var msg = th.getAttribute('data-explain') || '';
-        if (window.showAlertDialog) window.showAlertDialog(ttl, msg, null, { type: 'info' });
-      } catch (_e) {}
-    }, 420);
+    var tch = e.touches && e.touches[0];
+    startX = tch ? tch.clientX : 0;
+    startY = tch ? tch.clientY : 0;
+    cancel();
+    timer = setTimeout(function() { fire(th); }, 380);
   }, { passive: true });
-  var cancel = function() { if (timer) { clearTimeout(timer); timer = null; } };
-  document.addEventListener('touchmove', cancel, { passive: true });
+  // só cancela se o dedo se moveu além da tolerância (micro-drift não conta)
+  document.addEventListener('touchmove', function(e) {
+    if (!timer) return;
+    var tch = e.touches && e.touches[0];
+    if (!tch) { cancel(); return; }
+    if (Math.abs(tch.clientX - startX) > MOVE_TOL || Math.abs(tch.clientY - startY) > MOVE_TOL) cancel();
+  }, { passive: true });
+  document.addEventListener('touchcancel', function() { cancel(); }, { passive: true });
   document.addEventListener('touchend', function() {
     cancel();
     if (longFired) {
       // impede o "click" de ordenação que dispara logo após o long-press
       window._stSuppressClick = true;
       longFired = false;
-      setTimeout(function() { window._stSuppressClick = false; }, 700);
+      setTimeout(function() { window._stSuppressClick = false; }, 800);
     }
   });
   // captura: consome o próximo click após long-press (antes do onclick inline do th)

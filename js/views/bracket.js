@@ -2725,7 +2725,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       })()}
     </div>`;
 
-  const _thStyle = 'padding:9px 14px;font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;white-space:nowrap;transition:color 0.15s;';
+  const _thStyle = 'padding:9px 14px;font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;white-space:nowrap;transition:color 0.15s;';
   // v2.3.15: ordem # · Nome · [PA/Pts] · %G · V · D · [E] · Saldo · [±S ±G] · J.
   // Índices de sort acompanham a presença (ou não) de E e ±S/±G.
   var _vColIdx = 4;
