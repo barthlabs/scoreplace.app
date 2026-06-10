@@ -2080,9 +2080,12 @@ function renderDashboard(container) {
               _sf(g.group) +
               '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(g.tName) + '</span>' +
             '</h4></div>';
+          // v2.3.62: o rótulo "JOGO N" com a barra colorida acima de cada chave
+          // foi removido — essa info já aparece no header de cada box
+          // ("R2 GRUPO A • JOGO N"). Só o cabeçalho do grupo (grupo + torneio)
+          // fica uma vez no topo. Pequena margem entre os boxes via margin.
           g.units.forEach(function(u) {
-            html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.4rem;">' +
-              '<div style="font-size:0.7rem;font-weight:800;color:' + u.color + ';text-transform:uppercase;letter-spacing:1px;padding-left:8px;border-left:3px solid ' + u.color + ';">' + _sf(u.jogo) + '</div>' +
+            html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;margin-bottom:6px;">' +
               u.body +
             '</div>';
           });
