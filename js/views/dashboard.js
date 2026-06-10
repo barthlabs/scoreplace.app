@@ -2018,11 +2018,15 @@ function renderDashboard(container) {
         }
 
         var _fp2 = _splitFase(faseStr2);
+        // v2.3.63: no header de cada box mostra só "JOGO N" (o grupo+torneio já
+        // aparece no cabeçalho compartilhado). Fallback pro label completo
+        // quando não há "jogo N" (ex.: eliminatórias "Final").
+        var _boxLabel = _fp2.jogo || matchLabel2;
         var _body = _posBadge +
           '<div onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
             // Header: label + badge resultado
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +
-              '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _sf(matchLabel2) + '</span>' +
+              '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _sf(_boxLabel) + '</span>' +
               '<span style="font-size:0.75rem;font-weight:800;color:' + resultColor + ';">' + resultLabel + '</span>' +
             '</div>' +
             // P1 row com placar

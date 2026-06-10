@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.63-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Impressão do convite: QR não pisca mais ao arrastar.</b> A pré-visualização agora atualiza só os tamanhos sem recarregar a página — o QR Code fica firme enquanto você ajusta os sliders.</li>' +
+        '<li><b>Sliders com muito mais alcance.</b> Logo, nome e textos agora escalam até bem grande (até 500%), igual o QR já fazia. O QR continua nunca cortando nas bordas.</li>' +
+        '<li><b>Meus Resultados: cada box mostra só "Jogo N".</b> O grupo e a rodada não se repetem em cada chave — ficam uma vez no cabeçalho do grupo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.62-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Meus Resultados mais limpo.</b> Nos "Últimos resultados", removemos o rótulo "JOGO N" com a barra colorida que ficava acima de cada chave — essa info já aparece no topo de cada box. O cabeçalho do grupo (ex: "R2 Grupo A · Teste de Liga") continua aparecendo uma vez, com uma margem mais confortável entre os boxes.</li>' +
