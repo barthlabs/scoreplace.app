@@ -250,18 +250,6 @@ window._showQRCode = function(tournamentId) {
     var isLight = document.documentElement.getAttribute('data-theme') === 'light';
     var safeN = window._safeHtml(t.name);
 
-    // Subtítulo pro flyer impresso: data/hora + local.
-    var flyerSubParts = [];
-    var dm = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
-    if (dm) {
-        var ds = dm[3] + '/' + dm[2] + '/' + dm[1];
-        if (dm[4]) ds += ' às ' + dm[4] + ':' + dm[5];
-        flyerSubParts.push('📅 ' + ds);
-    }
-    if (t.venue) flyerSubParts.push('📍 ' + t.venue);
-    var flyerSub = flyerSubParts.join('\n');
-    window._qrFlyerCtx = { kind: 'tournament', url: url, title: t.name || 'Torneio', subtitle: flyerSub };
-
     // Remove previous QR modal if any
     var prev = document.getElementById('qr-modal-overlay');
     if (prev) prev.remove();
@@ -284,7 +272,7 @@ window._showQRCode = function(tournamentId) {
       '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
         '<button onclick="navigator.clipboard.writeText(\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\').then(function(){if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');})" class="btn btn-sm hover-lift" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">📋 Copiar Link</button>' +
         '<button onclick="window._downloadQRCode(\'' + t.id + '\')" class="btn btn-sm hover-lift" style="background:rgba(16,185,129,0.15);color:#4ade80;border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">💾 Baixar QR</button>' +
-        '<button onclick="window._openInvitePrint(window._qrFlyerCtx)" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ Imprimir</button>' +
+        '<button onclick="window._openTournamentInvitePrint(\'' + t.id + '\')" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ Imprimir</button>' +
       '</div>';
 
     overlay.appendChild(modal);
@@ -353,11 +341,30 @@ window._flyerDefaultAppPhrase = function() {
   return 'Já conhece o scoreplace.app?\nJogue em outro nível!\nEscaneie o QR Code abaixo e descubra!';
 };
 
+// Resolve um torneio e abre o flyer já com url + nome + data/local + logo.
+// Centraliza o contexto (o logo é base64 grande — não cabe num onclick inline).
+window._openTournamentInvitePrint = function(tournamentId) {
+  var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tournamentId); });
+  if (!t && Array.isArray(window.AppStore.publicDiscovery)) {
+    t = window.AppStore.publicDiscovery.find(function(x) { return String(x.id) === String(tournamentId); });
+  }
+  if (!t) return;
+  var cu = window.AppStore.currentUser;
+  var ref = (cu && (cu.uid || cu.email)) || '';
+  var url = window._tournamentUrl(t.id) + (ref ? '?ref=' + encodeURIComponent(ref) : '');
+  var subParts = [];
+  var m = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+  if (m) { var ds = m[3] + '/' + m[2] + '/' + m[1]; if (m[4]) ds += ' às ' + m[4] + ':' + m[5]; subParts.push('📅 ' + ds); }
+  if (t.venue) subParts.push('📍 ' + t.venue);
+  window._openInvitePrint({ kind: 'tournament', url: url, title: t.name || 'Torneio', subtitle: subParts.join('\n'), logo: t.logoData || '' });
+};
+
 // Abre o overlay de configuração do flyer. opts:
 //   kind: 'app' | 'tournament' | 'casual'
 //   url:  string (link que vira o QR)
 //   title: string (nome do torneio / rótulo casual) — ignorado pra 'app'
 //   subtitle: string opcional (ex: data/local do torneio, código da sala)
+//   logo: string opcional (base64 do logo do torneio — só pra 'tournament')
 window._openInvitePrint = function(opts) {
   opts = opts || {};
   var _safe = window._safeHtml || function(s) { return String(s == null ? '' : s); };
@@ -456,7 +463,8 @@ window._doInvitePrint = function() {
     content: content,
     paper: paper,
     color: color,
-    orient: orient
+    orient: orient,
+    logo: opts.logo || ''
   });
 
   var win = window.open('', '_blank');
@@ -503,10 +511,15 @@ function _buildFlyerPrintHtml(o) {
               (o.title ? '<div style="font-size:clamp(14pt,4.6vw,26pt);font-weight:800;color:#0f172a;line-height:1.15;">' + esc(o.title) + '</div>' : '');
     sub = o.subtitle ? '<div style="font-size:clamp(9pt,2.4vw,13pt);color:#475569;margin-top:2%;white-space:pre-line;">' + esc(o.subtitle) + '</div>' : '';
   } else {
-    // tournament
-    heading = '<div style="font-size:clamp(10pt,2.4vw,14pt);font-weight:700;color:#b45309;letter-spacing:1px;text-transform:uppercase;margin-bottom:1.5%;">🏆 Convite para o torneio</div>' +
-              '<div style="font-size:clamp(15pt,5vw,28pt);font-weight:800;color:#0f172a;line-height:1.15;">' + esc(o.title || 'Torneio') + '</div>';
-    sub = o.subtitle ? '<div style="font-size:clamp(9pt,2.4vw,13pt);color:#475569;margin-top:2%;white-space:pre-line;">' + esc(o.subtitle) + '</div>' : '';
+    // tournament — nome em destaque (fonte maior, mais respiro acima/abaixo).
+    // Logo do torneio à esquerda do nome quando houver; o conjunto fica em
+    // ~70% da largura da página. Nomes longos quebram em 2-3 linhas.
+    var tLogo = o.logo ? '<img class="t-logo" src="' + esc(o.logo) + '" alt="" />' : '';
+    heading = '<div class="t-label">🏆 Convite para o torneio</div>' +
+              '<div class="name-block' + (o.logo ? ' has-logo' : '') + '">' + tLogo +
+                '<div class="t-name">' + esc(o.title || 'Torneio') + '</div>' +
+              '</div>';
+    sub = o.subtitle ? '<div class="t-sub">' + esc(o.subtitle) + '</div>' : '';
   }
 
   var caption = o.kind === 'tournament' ? 'Escaneie para acessar o torneio'
@@ -536,10 +549,13 @@ function _buildFlyerPrintHtml(o) {
   // 70% da página inteira. QR limitado por largura e altura da viewport pra
   // nunca transbordar pra uma 2ª página.
   // 78% da coluna ≈ 70% da página inteira (descontada a margem de 5%).
-  var logoW = (isLandscape && !qrOnly) ? '90%' : '78%';
+  // No flyer de torneio o herói é o bloco logo+nome, então a marca scoreplace
+  // do topo fica menor pra não competir.
+  var isTourn = o.kind === 'tournament';
+  var logoW = qrOnly ? '78%' : (isLandscape ? (isTourn ? '64%' : '90%') : (isTourn ? '50%' : '78%'));
   var qrW = qrOnly
     ? 'min(80vw,72vh)'
-    : (isLandscape ? 'min(40vw,60vh)' : 'min(56vw,42vh)');
+    : (isLandscape ? 'min(40vw,60vh)' : (isTourn ? 'min(50vw,36vh)' : 'min(56vw,42vh)'));
   var pageDir = (isLandscape && !qrOnly) ? 'row' : 'column';
   var pageGap = (isLandscape && !qrOnly) ? '6%' : '4vh';
   // Em retrato as colunas ocupam a largura inteira (logo = 70% da página).
@@ -563,11 +579,23 @@ function _buildFlyerPrintHtml(o) {
       colCss +
       '.logo { width:100%; margin-bottom:5%; display:flex; justify-content:center; }' +
       '.logo svg { width:' + logoW + '; height:auto; max-height:30vh; }' +
-      '.heading { max-width:96%; }' +
+      '.heading { width:96%; }' +
       '.qr-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:5mm; padding:4mm; display:inline-block; }' +
       '.qr { width:' + qrW + '; height:auto; display:block; }' +
       '.caption { margin-top:3%; font-size:clamp(8pt,2.2vw,12pt); color:#64748b; }' +
       '.brand { margin-top:4%; font-size:clamp(7pt,1.8vw,9pt); color:#94a3b8; letter-spacing:0.5px; }' +
+      // Bloco de nome do torneio: logo à esquerda (quando houver) + nome grande,
+      // conjunto em ~70% da largura da página, com respiro acima/abaixo.
+      '.t-label { font-size:clamp(10pt,2.4vw,14pt); font-weight:700; color:#b45309; letter-spacing:1px; text-transform:uppercase; }' +
+      '.name-block { width:80%; margin:5vh auto; display:flex; align-items:center; justify-content:center; gap:5%; }' +
+      '.name-block.has-logo { text-align:left; }' +
+      '.t-logo { width:26%; max-width:36mm; height:auto; flex-shrink:0; border-radius:8px; }' +
+      '.t-name { font-size:clamp(18pt,7vw,42pt); font-weight:800; color:#0f172a; line-height:1.12; word-break:break-word; }' +
+      '.name-block.has-logo .t-name { text-align:left; }' +
+      '.t-sub { font-size:clamp(9pt,2.4vw,13pt); color:#475569; white-space:pre-line; }' +
+      // Paisagem: coluna esquerda estreita e baixa → nome menor, bloco mais
+      // largo (92% da coluna) e menos margem vertical pra caber numa página.
+      (isLandscape && isTourn ? '.t-name { font-size:clamp(13pt,3vw,24pt); } .name-block { width:92%; margin:3vh auto; gap:4%; } .t-logo { width:22%; }' : '') +
     '</style>' +
     '</head><body><div class="page">' + inner + '</div></body></html>';
 }
