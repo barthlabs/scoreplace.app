@@ -538,11 +538,22 @@ window._updateFlyerPreview = function() {
   });
 };
 
-// Lê o estado atual e abre a janela de impressão.
+// Imprime EXATAMENTE o que está na pré-visualização. O iframe já renderiza o
+// flyer no tamanho real do papel (A4 px) com o @page certo — imprimir o próprio
+// iframe garante que o impresso é idêntico ao previsto (WYSIWYG). A escala
+// visual (transform) é só do elemento iframe; não afeta o print do documento.
+// Fallback: janela nova com o mesmo HTML (caso o print do iframe não esteja
+// disponível, ex.: alguns navegadores móveis).
 window._doInvitePrint = function() {
+  var frame = document.getElementById('flyer-preview-frame');
+  if (frame && frame.contentWindow && typeof frame.contentWindow.print === 'function') {
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      return;
+    } catch (e) { /* cai no fallback */ }
+  }
   var o = window._collectFlyerOpts();
-  var ov = document.getElementById('flyer-print-overlay');
-  if (ov) ov.remove();
   var html = _buildFlyerPrintHtml(o);
   var win = window.open('', '_blank');
   if (!win) {
