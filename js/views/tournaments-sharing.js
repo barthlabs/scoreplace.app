@@ -517,6 +517,8 @@ window._updateFlyerPreview = function() {
     var sizeStyle = doc && doc.getElementById('flyer-size-style');
     if (frame.__flyerSig === sig && sizeStyle) {
       sizeStyle.textContent = _flyerSizeCss(o);
+      // re-escala o conteúdo pra caber (o tamanho mudou) — sem recarregar o doc.
+      try { if (frame.contentWindow && frame.contentWindow._flyerFit) frame.contentWindow._flyerFit(); } catch (e) {}
       return;
     }
     frame.__flyerSig = sig;
@@ -548,6 +550,7 @@ window._doInvitePrint = function() {
   var frame = document.getElementById('flyer-preview-frame');
   if (frame && frame.contentWindow && typeof frame.contentWindow.print === 'function') {
     try {
+      if (frame.contentWindow._flyerFit) frame.contentWindow._flyerFit(); // garante o ajuste antes de imprimir
       frame.contentWindow.focus();
       frame.contentWindow.print();
       return;
@@ -673,7 +676,10 @@ function _buildFlyerPrintHtml(o) {
         ' gap:0; text-align:center; padding:5%; }' +
       '.logo { width:100%; flex:0 0 auto; margin:0 0 4% 0; display:flex; justify-content:center; }' +
       '.logo svg { width:' + logoW + '; height:auto; max-height:26vh; }' +
-      '.flyer-body { flex:1 1 auto; min-height:0; width:100%; display:flex; flex-direction:' + bodyDir + '; align-items:center; justify-content:' + bodyJustify + '; gap:' + bodyGap + '; }' +
+      // flyer-body: altura NATURAL (não flex:1). Um script escala esse bloco pra
+      // caber no espaço abaixo do logo → o QR nunca corta e o impresso (que é o
+      // próprio iframe) bate com a pré-visualização.
+      '.flyer-body { width:100%; display:flex; flex-direction:' + bodyDir + '; align-items:center; justify-content:' + bodyJustify + '; gap:' + bodyGap + '; transform-origin:top center; }' +
       '.col-qr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; }' +
       colCss +
       '.heading { min-width:0; }' +
@@ -693,7 +699,32 @@ function _buildFlyerPrintHtml(o) {
     // size-style: separado pra ser atualizado IN-PLACE pelos sliders sem
     // recarregar o iframe (e portanto sem o QR piscar/desaparecer).
     '<style id="flyer-size-style">' + _flyerSizeCss(o) + '</style>' +
-    '</head><body><div class="page">' + inner + '</div></body></html>';
+    '</head><body><div class="page">' + inner + '</div>' +
+    // Escala o .flyer-body pra caber no espaço abaixo do logo — garante que o QR
+    // nunca corta (e que o impresso = a pré-visualização, já que imprimimos este
+    // mesmo iframe). Exposto como window._flyerFit pra ser chamado após mudanças.
+    '<script>(function(){' +
+      'function fit(){' +
+        'var page=document.querySelector(".page"),logo=document.querySelector(".logo"),body=document.querySelector(".flyer-body");' +
+        'if(!page||!body)return;' +
+        'body.style.transform="none";' +
+        'var cs=getComputedStyle(page);' +
+        'var availH=page.clientHeight-parseFloat(cs.paddingTop||0)-parseFloat(cs.paddingBottom||0);' +
+        'var availW=page.clientWidth-parseFloat(cs.paddingLeft||0)-parseFloat(cs.paddingRight||0);' +
+        'if(logo){var ls=getComputedStyle(logo);availH-=(logo.offsetHeight+parseFloat(ls.marginBottom||0));}' +
+        'availH*=0.99;' +
+        'var bh=body.scrollHeight,bw=body.scrollWidth;' +
+        'if(bh<=0||bw<=0)return;' +
+        'var s=Math.min(1,availH/bh,availW/bw);' +
+        'body.style.transform="scale("+s+")";' +
+      '}' +
+      'window._flyerFit=fit;' +
+      'window.addEventListener("load",fit);' +
+      'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit).catch(function(){});}' +
+      'var qr=document.querySelector(".qr");if(qr){if(qr.complete)fit();else{qr.addEventListener("load",fit);qr.addEventListener("error",fit);}}' +
+      'setTimeout(fit,150);setTimeout(fit,500);' +
+    '})();<\/script>' +
+    '</body></html>';
 }
 
 // CSS que depende dos sliders de tamanho (só torneio, flyer completo). Fica

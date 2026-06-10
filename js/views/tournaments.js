@@ -1203,11 +1203,13 @@ function renderTournaments(container, tournamentId = null) {
         // Venue photo background — overlay gradient on top of photo
         let venuePhotoBg = '';
         if (t.venuePhotoUrl) {
+            // v2.3.71: gradiente mais leve (foto mais visível); a leitura vem de
+            // um box frosted sutil atrás do conteúdo (sem o contraste pesado).
             var overlayGradient = isOrg
-                ? 'linear-gradient(135deg, rgba(67,56,202,0.85) 0%, rgba(99,102,241,0.8) 100%)'
+                ? 'linear-gradient(135deg, rgba(67,56,202,0.5) 0%, rgba(99,102,241,0.42) 100%)'
                 : isParticipating
-                    ? 'linear-gradient(135deg, rgba(15,118,110,0.85) 0%, rgba(20,184,166,0.8) 100%)'
-                    : 'linear-gradient(135deg, rgba(30,41,59,0.85) 0%, rgba(15,23,42,0.8) 100%)';
+                    ? 'linear-gradient(135deg, rgba(15,118,110,0.5) 0%, rgba(20,184,166,0.42) 100%)'
+                    : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
             venuePhotoBg = 'background-image: ' + overlayGradient + ', url(' + t.venuePhotoUrl + '); background-size: cover; background-position: center;';
         }
 
@@ -1758,10 +1760,15 @@ function renderTournaments(container, tournamentId = null) {
         }
 
         var _cardTextColor = (_isLight && !venuePhotoBg) ? '#1f2937' : 'white';
+        // v2.3.71: foto do local de fundo → box frosted SUTIL atrás do conteúdo
+        // (blur desfoca a foto pra leitura, sem o contraste pesado de um box escuro).
+        var _photoPanel = venuePhotoBg
+          ? 'background: rgba(15,23,42,0.22); -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); border-radius: 12px;'
+          : '';
 
         return `
         <div class="card mb-3" style="position:relative;${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transition: transform 0.2s; ${!tournamentId ? 'cursor: pointer;' : ''}" ${!tournamentId ? `onclick="window.location.hash='#tournaments/${t.id}'" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'"` : ''}>
-          <div class="card-body p-4" style="${isOrg ? 'padding-bottom: 38px;' : ''}">
+          <div class="card-body p-4" style="${_photoPanel}${isOrg ? 'padding-bottom: 38px;' : ''}">
 
             <!-- Top Row: Icon/Modality | Status (same line on mobile) -->
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; flex-wrap: wrap; gap: 4px;">

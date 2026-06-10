@@ -563,10 +563,10 @@ function renderDashboard(container) {
     let venuePhotoBg = '';
     if (t.venuePhotoUrl) {
       var overlayGrad = isOrg
-        ? 'linear-gradient(135deg, rgba(67,56,202,0.85) 0%, rgba(99,102,241,0.8) 100%)'
+        ? 'linear-gradient(135deg, rgba(67,56,202,0.5) 0%, rgba(99,102,241,0.42) 100%)'
         : isParticipating
-          ? 'linear-gradient(135deg, rgba(15,118,110,0.85) 0%, rgba(20,184,166,0.8) 100%)'
-          : 'linear-gradient(135deg, rgba(30,41,59,0.85) 0%, rgba(15,23,42,0.8) 100%)';
+          ? 'linear-gradient(135deg, rgba(15,118,110,0.5) 0%, rgba(20,184,166,0.42) 100%)'
+          : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
       venuePhotoBg = 'background-image: ' + overlayGrad + ', url(' + t.venuePhotoUrl + '); background-size: cover; background-position: center;';
       _cardTextColor = 'white'; // Overlay sempre escuro, texto branco
     }
@@ -622,6 +622,10 @@ function renderDashboard(container) {
     }
 
     const _isFav = typeof window._isFavorite === 'function' && window._isFavorite(t.id);
+    // v2.3.71: foto do local de fundo → box frosted SUTIL atrás do conteúdo.
+    const _photoPanelD = venuePhotoBg
+      ? 'background: rgba(15,23,42,0.22); -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); border-radius: 12px;'
+      : '';
     return `
         <div class="card mb-3" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'">
           ${isOrg ? `
@@ -629,7 +633,7 @@ function renderDashboard(container) {
                <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(251,191,36,0.95)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
              </div>
           ` : ''}
-          <div class="card-body p-4" style="${isOrg ? 'padding-bottom: 38px;' : ''}">
+          <div class="card-body p-4" style="${_photoPanelD}${isOrg ? 'padding-bottom: 38px;' : ''}">
 
             <!-- Top Row: Icon/Modality | Status (same line, consistent with detail page) -->
             <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; flex-wrap: nowrap;">
