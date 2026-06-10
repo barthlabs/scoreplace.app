@@ -87,6 +87,54 @@ window._tournamentInviteText = function(t, url) {
     return lines.join('\n');
 };
 
+// Envia convite de torneio por e-mail — HTML rico e branded (mesmo padrão dos
+// e-mails de notificação), com botão azul "Entrar no torneio". Vai pela fila
+// `mail/` (extension firestore-send-email, remetente scoreplace.app@gmail.com).
+// Fallback pra mailto: quando a fila não está disponível (ex: deslogado).
+window._sendTournamentInviteEmail = function(tournamentId) {
+    var t = (window.AppStore.tournaments || []).find(function(tour) { return String(tour.id) === String(tournamentId); });
+    if (!t) return;
+    var inp = document.getElementById('invite-email-' + t.id);
+    var email = inp ? String(inp.value || '').trim() : '';
+    if (!email || email.indexOf('@') === -1) {
+        if (typeof showNotification === 'function') showNotification(window._t('tourn.attention'), window._t('tourn.enterEmail'), 'warning');
+        return;
+    }
+    var cu = window.AppStore.currentUser;
+    var inviterUid = (cu && (cu.uid || cu.email)) || '';
+    var inviteUrl = window._tournamentUrl(t.id) + (inviterUid ? '?ref=' + encodeURIComponent(inviterUid) : '');
+    var inviterName = (cu && cu.displayName) ? cu.displayName : '';
+
+    // Corpo: quem convidou + data/local (o nome do torneio aparece em destaque
+    // no cabeçalho 🏆 do template). Mantém o mesmo conteúdo da mensagem de
+    // WhatsApp, só que em HTML branded.
+    var lines = [inviterName ? (inviterName + ' está te convidando para este torneio.') : 'Você foi convidado para este torneio.', ''];
+    var m = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+    if (m) { var ds = m[3] + '/' + m[2] + '/' + m[1]; if (m[4]) ds += ' às ' + m[4] + ':' + m[5]; lines.push('📅 ' + ds); }
+    if (t.venue) lines.push('📍 ' + t.venue);
+    var message = lines.join('\n');
+    var subject = 'Convite para o torneio: ' + (t.name || 'Torneio');
+
+    var canQueue = window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function' && window.FirestoreDB.db;
+    if (canQueue && typeof window._emailTemplate === 'function') {
+        var html = window._emailTemplate('tournament_invite', {
+            message: message,
+            tournamentName: t.name || 'Torneio',
+            tournamentUrl: inviteUrl,
+            ctaText: 'Entrar no torneio',
+            ctaUrl: inviteUrl
+        });
+        window.FirestoreDB.queueEmail(email, subject, html);
+        if (inp) inp.value = '';
+        if (typeof showNotification === 'function') showNotification('Convite enviado', 'E-mail enviado para ' + email, 'success');
+        return;
+    }
+    // Fallback: abre o cliente de e-mail do usuário com texto puro.
+    var body = message + '\n\n👉 Inscreva-se: ' + inviteUrl;
+    window.open('mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body), '_self');
+    if (typeof showNotification === 'function') showNotification(window._t('tourn.emailOpening'), window._t('tourn.emailOpeningMsg'), 'info');
+};
+
 // Copy tournament link to clipboard (with native share fallback on mobile)
 window._shareTournament = function(tournamentId) {
     var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });

@@ -1530,8 +1530,8 @@ function renderTournaments(container, tournamentId = null) {
                          <button class="btn btn-whatsapp btn-sm hover-lift" style="flex-direction:column;gap:1px;padding:8px 4px;font-size:0.65rem;display:flex;align-items:center;justify-content:center;" onclick="window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent('${inviteTextSafe}'), '_blank')">
                             <span style="font-size:1.1rem;">💬</span>WhatsApp
                          </button>
-                         <button class="btn btn-primary btn-sm hover-lift" style="flex-direction:column;gap:1px;padding:8px 4px;font-size:0.65rem;display:flex;align-items:center;justify-content:center;" onclick="navigator.clipboard.writeText('${inviteUrl}'); showNotification(window._t('share.copied'),window._t('share.copiedLinkMsg'),'success')">
-                            <span style="font-size:1.1rem;">🔗</span>Copiar Link
+                         <button class="btn btn-primary btn-sm hover-lift" style="flex-direction:column;gap:1px;padding:8px 4px;font-size:0.65rem;display:flex;align-items:center;justify-content:center;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${inviteTextSafe}').then(function(){showNotification(window._t('share.copied'),'Mensagem do convite copiada','success');}).catch(function(){try{var i=document.createElement('textarea');i.value='${inviteTextSafe}';document.body.appendChild(i);i.select();document.execCommand('copy');document.body.removeChild(i);showNotification(window._t('share.copied'),'Mensagem do convite copiada','success');}catch(e){showNotification('Link','${inviteUrl}','info');}})">
+                            <span style="font-size:1.1rem;">📋</span>Copiar
                          </button>
                       </div>
                       <div id="invite-friends-status-${t.id}" style="font-size: 0.68rem; color: var(--text-muted); text-align: center; min-height:0;"></div>
@@ -1549,7 +1549,7 @@ function renderTournaments(container, tournamentId = null) {
                       <div style="font-size:0.65rem;font-weight:600;color:var(--text-muted);letter-spacing:0.3px;">Convide por e-mail</div>
                       <div style="display: flex; gap: 6px; align-items: stretch; margin-top:-3px;">
                          <input type="email" placeholder="email@exemplo.com" id="invite-email-${t.id}" style="flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-dark); color: var(--text-main); font-size: 0.75rem; min-width: 0; box-sizing: border-box;">
-                         <button class="btn btn-indigo btn-sm hover-lift" style="font-size:0.75rem;" onclick="var email = document.getElementById('invite-email-${t.id}').value; if(!email){showNotification(window._t('tourn.attention'),window._t('tourn.enterEmail'),'warning');return;} window.open('mailto:' + email + '?subject=' + encodeURIComponent('Convite: ${window._safeHtml(t.name)}') + '&body=' + encodeURIComponent('${inviteTextSafe}'), '_self'); showNotification(window._t('tourn.emailOpening'),window._t('tourn.emailOpeningMsg'),'info');">E-mail</button>
+                         <button class="btn btn-indigo btn-sm hover-lift" style="font-size:0.75rem;" onclick="event.stopPropagation(); window._sendTournamentInviteEmail('${t.id}')">E-mail</button>
                       </div>
 
                    </div>

@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.57-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Copiar e E-mail seguem o mesmo padrão do WhatsApp.</b> O botão <b>Copiar</b> agora copia a mensagem completa do convite (nome do torneio em destaque, data, local e link) — não só o link.</li>' +
+        '<li><b>Convite por e-mail bonito com botão azul.</b> O e-mail agora vai como uma mensagem branded do scoreplace.app, com o nome do torneio em destaque, data/local e um botão azul <b>"Entrar no torneio"</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.56-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Botão "Imprimir convite" na tela de convidar para o torneio.</b> Agora dá pra gerar o flyer direto de "Convidar para o Torneio" (abaixo do QR Code) — não só pelo QR Code das ferramentas.</li>' +
