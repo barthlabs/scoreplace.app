@@ -458,7 +458,11 @@
       { key: 'Fem',   label: '♀ Fem',  color: '236,72,153' },
       { key: 'Masc',  label: '♂ Masc', color: '59,130,246' },
       { key: 'Misto', label: '⚥ Misto', color: '168,85,247' },
-      { key: 'sem',   label: '?',       color: '148,163,184' },
+      // v2.3.53: rótulo explícito "Sem gên." (antes era só "?") — a linha do
+      // grupo sem gênero ficava colada na do Masc e parecia parte dele, levando
+      // a somar "5 (Masc s/hab) + 2 (sem gênero s/hab)" como se fossem 7 Masc.
+      // São grupos de gênero distintos: os 2 não têm gênero no perfil.
+      { key: 'sem',   label: '? Sem gên.', color: '148,163,184' },
     ];
 
     // Render one "by-gender" breakdown block (skill or age)
@@ -478,7 +482,7 @@
         var hasSem = d.sem > 0;
         if (keys.length === 0 && !hasSem) return;
         out += '<div style="display:flex;align-items:flex-start;gap:8px;">';
-        out += '<span style="font-size:0.68rem;font-weight:700;color:rgb(' + gc.color + ');min-width:40px;padding-top:3px;flex-shrink:0;">' + gc.label + '</span>';
+        out += '<span style="font-size:0.68rem;font-weight:700;color:rgb(' + gc.color + ');min-width:40px;padding-top:3px;flex-shrink:0;white-space:nowrap;">' + gc.label + '</span>';
         out += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
         keys.forEach(function (k) { if (d[k] > 0) out += _statPill(k, d[k], pillColor); });
         if (hasSem) out += _statPill(semLabel, d.sem, '148,163,184');
