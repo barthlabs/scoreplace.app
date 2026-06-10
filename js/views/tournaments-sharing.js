@@ -398,11 +398,12 @@ window._openInvitePrint = function(opts) {
       '<input type="range" id="' + id + '" min="' + min + '" max="' + max + '" value="' + val + '"' + _upd + ' style="flex:1;min-width:0;accent-color:#6366f1;">' +
     '</div>';
   };
-  // Sliders percentuais (100 = padrão). O tamanho/forma do LOGO é definido na
-  // hora de subir o logo do torneio — por isso não há slider de logo aqui.
+  // Sliders percentuais (100 = padrão). O tamanho do logo NA IMPRESSÃO é
+  // ajustável aqui; a FORMA (quadrado/círculo) é definida só no upload do logo.
   var sizeBlock = isTourn
     ? '<div id="flyer-size-block" style="margin-bottom:14px;padding:12px;border:1px solid var(--border-color,#2a2f45);border-radius:10px;">' +
         '<div style="font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:10px;">Tamanhos (arraste e veja na hora)</div>' +
+        _slider('flyer-logosize', 'Logo torneio', 0, 500, 100) +
         _slider('flyer-namesize', 'Nome', 30, 500, 100) +
         _slider('flyer-qrsize', 'QR Code', 40, 300, 100) +
         _slider('flyer-textsize', 'Textos', 50, 500, 100) +
