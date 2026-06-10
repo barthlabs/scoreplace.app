@@ -155,7 +155,7 @@ window.renderInvitePage = function(container) {
       '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
         '<button onclick="(function(u){navigator.clipboard.writeText(u).then(function(){if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');}).catch(function(){try{var i=document.createElement(\'input\');i.value=u;document.body.appendChild(i);i.select();document.execCommand(\'copy\');document.body.removeChild(i);if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');}catch(e){if(typeof showNotification===\'function\')showNotification(\'Link\',u,\'info\');}});}(\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\'))" id="invite-copy-btn" class="btn btn-sm hover-lift" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">📋 ' + window._safeHtml(copyLabel) + '</button>' +
         '<button onclick="window._downloadAppInviteQR()" id="invite-download-btn" class="btn btn-sm hover-lift" style="background:rgba(16,185,129,0.15);color:#4ade80;border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">💾 ' + window._safeHtml(dlLabel) + '</button>' +
-        '<button onclick="window._printQRCode()" id="invite-print-btn" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ ' + window._safeHtml(printLabel) + '</button>' +
+        '<button onclick="window._openInvitePrint({kind:\'app\',url:\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\'})" id="invite-print-btn" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ ' + window._safeHtml(printLabel) + '</button>' +
       '</div>' +
       '</div>';
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
@@ -199,6 +199,18 @@ window._showQRCode = function(tournamentId) {
     var isLight = document.documentElement.getAttribute('data-theme') === 'light';
     var safeN = window._safeHtml(t.name);
 
+    // Subtítulo pro flyer impresso: data/hora + local.
+    var flyerSubParts = [];
+    var dm = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+    if (dm) {
+        var ds = dm[3] + '/' + dm[2] + '/' + dm[1];
+        if (dm[4]) ds += ' às ' + dm[4] + ':' + dm[5];
+        flyerSubParts.push('📅 ' + ds);
+    }
+    if (t.venue) flyerSubParts.push('📍 ' + t.venue);
+    var flyerSub = flyerSubParts.join('\n');
+    window._qrFlyerCtx = { kind: 'tournament', url: url, title: t.name || 'Torneio', subtitle: flyerSub };
+
     // Remove previous QR modal if any
     var prev = document.getElementById('qr-modal-overlay');
     if (prev) prev.remove();
@@ -221,7 +233,7 @@ window._showQRCode = function(tournamentId) {
       '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
         '<button onclick="navigator.clipboard.writeText(\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\').then(function(){if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');})" class="btn btn-sm hover-lift" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">📋 Copiar Link</button>' +
         '<button onclick="window._downloadQRCode(\'' + t.id + '\')" class="btn btn-sm hover-lift" style="background:rgba(16,185,129,0.15);color:#4ade80;border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">💾 Baixar QR</button>' +
-        '<button onclick="window._printQRCode()" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ Imprimir</button>' +
+        '<button onclick="window._openInvitePrint(window._qrFlyerCtx)" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ Imprimir</button>' +
       '</div>';
 
     overlay.appendChild(modal);
@@ -260,14 +272,218 @@ window._downloadQRCode = function(tournamentId) {
     });
 };
 
-// Print QR Code
+// ─── Flyer de convite imprimível (v2.3.54) ──────────────────────────────────
+// Substitui o print "cru" do QR por um flyer configurável: logotipo colorido
+// no topo, título (nome do torneio / "Partida Casual" / frase do app editável)
+// e QR Code centralizado. O usuário escolhe tamanho do papel (A4/A5/A6/Carta),
+// cor (colorido ou P&B) e se quer o flyer completo ou só o QR. A impressão
+// abre o diálogo nativo do navegador — que já permite salvar em PDF ou mandar
+// pra impressora local/de rede.
+
+// Logo wordmark inline com texto escuro (imprime bem em papel branco).
+// A versão de icons/logo-wordmark.svg usa currentColor — aqui fixamos #0f172a.
+function _flyerLogoSvg() {
+  return '<svg width="300" height="90" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="scoreplace.app">' +
+    '<rect x="25" y="65" width="22" height="30" rx="3" fill="#CBD5E1"/>' +
+    '<rect x="52" y="45" width="22" height="50" rx="3" fill="#F59E0B"/>' +
+    '<rect x="79" y="75" width="22" height="20" rx="3" fill="#FB923C"/>' +
+    '<path d="M 63 35 L 65 41 L 71 41 L 66 45 L 68 51 L 63 47 L 58 51 L 60 45 L 55 41 L 61 41 Z" fill="#F59E0B"/>' +
+    '<text x="125" y="65" font-family="-apple-system, Segoe UI, Roboto, sans-serif" font-size="32" font-weight="600" fill="#0f172a" letter-spacing="-0.5">scoreplace</text>' +
+    '<text x="125" y="88" font-family="-apple-system, Segoe UI, Roboto, sans-serif" font-size="16" font-weight="400" fill="#0f172a" opacity="0.55">.app</text>' +
+  '</svg>';
+}
+
+// Frase padrão pré-preenchida para convite genérico do app.
+window._flyerDefaultAppPhrase = function() {
+  return 'Já conhece o scoreplace.app?\nJogue em outro nível!\nEscaneie o QR Code abaixo e descubra!';
+};
+
+// Abre o overlay de configuração do flyer. opts:
+//   kind: 'app' | 'tournament' | 'casual'
+//   url:  string (link que vira o QR)
+//   title: string (nome do torneio / rótulo casual) — ignorado pra 'app'
+//   subtitle: string opcional (ex: data/local do torneio, código da sala)
+window._openInvitePrint = function(opts) {
+  opts = opts || {};
+  var _safe = window._safeHtml || function(s) { return String(s == null ? '' : s); };
+  window._flyerPrintOpts = opts;
+
+  var prev = document.getElementById('flyer-print-overlay');
+  if (prev) prev.remove();
+
+  var isApp = opts.kind === 'app';
+  var defaultPhrase = window._flyerDefaultAppPhrase();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'flyer-print-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:100050;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overflow-y:auto;';
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) overlay.remove(); });
+
+  var phraseBlock = isApp
+    ? '<div style="text-align:left;margin-bottom:14px;">' +
+        '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">✏️ Mensagem do convite</label>' +
+        '<textarea id="flyer-phrase" rows="3" style="width:100%;box-sizing:border-box;min-width:0;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;font-family:inherit;resize:vertical;">' + _safe(defaultPhrase) + '</textarea>' +
+      '</div>'
+    : '';
+
+  overlay.innerHTML =
+    '<div style="background:var(--card-bg,#1e2235);border-radius:18px;padding:22px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;">' +
+      '<div style="text-align:center;font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:4px;">🖨️ Imprimir convite</div>' +
+      '<div style="text-align:center;font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-bottom:18px;">Gere um flyer pronto pra imprimir ou salvar em PDF</div>' +
+      phraseBlock +
+      // Conteúdo: flyer completo ou só QR
+      '<div style="margin-bottom:14px;">' +
+        '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">Conteúdo</label>' +
+        '<select id="flyer-content" style="width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;">' +
+          '<option value="full">Flyer completo (logo + texto + QR)</option>' +
+          '<option value="qr">Apenas o QR Code</option>' +
+        '</select>' +
+      '</div>' +
+      // Tamanho do papel
+      '<div style="margin-bottom:14px;">' +
+        '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">Tamanho do papel</label>' +
+        '<select id="flyer-paper" style="width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;">' +
+          '<option value="A4">A4 (210 × 297 mm)</option>' +
+          '<option value="A5">A5 (148 × 210 mm)</option>' +
+          '<option value="A6">A6 (105 × 148 mm)</option>' +
+          '<option value="letter">Carta (216 × 279 mm)</option>' +
+        '</select>' +
+      '</div>' +
+      // Cor
+      '<div style="margin-bottom:20px;">' +
+        '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">Cor</label>' +
+        '<select id="flyer-color" style="width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;">' +
+          '<option value="color">Colorido</option>' +
+          '<option value="bw">Preto e branco</option>' +
+        '</select>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button onclick="document.getElementById(\'flyer-print-overlay\').remove()" class="btn btn-sm" style="flex:0 0 auto;background:rgba(148,163,184,0.15);color:var(--text-muted,#94a3b8);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 16px;font-size:0.85rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '<button onclick="window._doInvitePrint()" class="btn btn-sm hover-lift" style="flex:1;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:0.88rem;font-weight:700;cursor:pointer;">🖨️ Imprimir / Salvar PDF</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+};
+
+// Lê as opções do overlay, monta o HTML do flyer e abre a janela de impressão.
+window._doInvitePrint = function() {
+  var opts = window._flyerPrintOpts || {};
+  var contentEl = document.getElementById('flyer-content');
+  var paperEl = document.getElementById('flyer-paper');
+  var colorEl = document.getElementById('flyer-color');
+  var phraseEl = document.getElementById('flyer-phrase');
+
+  var content = contentEl ? contentEl.value : 'full';
+  var paper = paperEl ? paperEl.value : 'A4';
+  var color = colorEl ? colorEl.value : 'color';
+  var phrase = phraseEl ? phraseEl.value : '';
+
+  var ov = document.getElementById('flyer-print-overlay');
+  if (ov) ov.remove();
+
+  var html = _buildFlyerPrintHtml({
+    kind: opts.kind,
+    url: opts.url || (window.SCOREPLACE_URL || 'https://scoreplace.app'),
+    title: opts.title || '',
+    subtitle: opts.subtitle || '',
+    phrase: phrase,
+    content: content,
+    paper: paper,
+    color: color
+  });
+
+  var win = window.open('', '_blank');
+  if (!win) {
+    if (typeof showNotification === 'function') showNotification('Pop-up bloqueado', 'Permita pop-ups pra imprimir o convite.', 'warning');
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+  win.onload = function() { try { win.focus(); win.print(); } catch (e) {} };
+  setTimeout(function() { try { win.print(); } catch (e) {} }, 600);
+};
+
+function _buildFlyerPrintHtml(o) {
+  var esc = function(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  };
+  // QR sempre preto sobre branco (lê melhor impresso, em cor ou P&B).
+  var qrUrl = window._qrCodeUrl(o.url, 700, false);
+
+  var paperSize = ({ A4: 'A4', A5: 'A5', A6: 'A6', letter: 'letter' })[o.paper] || 'A4';
+  var isBW = o.color === 'bw';
+  var qrOnly = o.content === 'qr';
+
+  // Título principal por tipo de convite.
+  var heading = '';
+  var sub = '';
+  if (o.kind === 'app') {
+    // Frase configurável — cada linha vira um parágrafo com peso decrescente.
+    var lines = String(o.phrase || window._flyerDefaultAppPhrase()).split('\n').filter(function(l) { return l.trim() !== ''; });
+    heading = lines.map(function(l, i) {
+      var size = i === 0 ? '26pt' : (i === 1 ? '20pt' : '14pt');
+      var weight = i === 0 ? '800' : (i === 1 ? '700' : '500');
+      var col = i === 0 ? '#0f172a' : (i === 1 ? '#4f46e5' : '#475569');
+      return '<div style="font-size:' + size + ';font-weight:' + weight + ';color:' + col + ';line-height:1.25;margin:2px 0;">' + esc(l) + '</div>';
+    }).join('');
+  } else if (o.kind === 'casual') {
+    heading = '<div style="font-size:14pt;font-weight:700;color:#0891b2;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">⚡ Partida Casual</div>' +
+              (o.title ? '<div style="font-size:24pt;font-weight:800;color:#0f172a;line-height:1.2;">' + esc(o.title) + '</div>' : '');
+    sub = o.subtitle ? '<div style="font-size:13pt;color:#475569;margin-top:8px;">' + esc(o.subtitle) + '</div>' : '';
+  } else {
+    // tournament
+    heading = '<div style="font-size:13pt;font-weight:700;color:#b45309;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">🏆 Convite para o torneio</div>' +
+              '<div style="font-size:26pt;font-weight:800;color:#0f172a;line-height:1.2;">' + esc(o.title || 'Torneio') + '</div>';
+    sub = o.subtitle ? '<div style="font-size:13pt;color:#475569;margin-top:8px;white-space:pre-line;">' + esc(o.subtitle) + '</div>' : '';
+  }
+
+  var caption = o.kind === 'tournament' ? 'Escaneie para acessar o torneio'
+    : (o.kind === 'casual' ? 'Escaneie para entrar na partida' : 'Escaneie o QR Code para acessar');
+
+  // Corpo do flyer.
+  var inner;
+  if (qrOnly) {
+    inner =
+      '<div class="qr-wrap"><img class="qr" src="' + esc(qrUrl) + '" alt="QR Code" /></div>' +
+      '<div class="caption">' + esc(caption) + '</div>';
+  } else {
+    inner =
+      '<div class="logo">' + _flyerLogoSvg() + '</div>' +
+      '<div class="heading">' + heading + sub + '</div>' +
+      '<div class="qr-wrap"><img class="qr" src="' + esc(qrUrl) + '" alt="QR Code" /></div>' +
+      '<div class="caption">' + esc(caption) + '</div>' +
+      '<div class="brand">scoreplace.app · Jogue em outro nível</div>';
+  }
+
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">' +
+    '<title>Convite — scoreplace.app</title>' +
+    '<style>' +
+      '@page { size: ' + paperSize + ' portrait; margin: 0; }' +
+      '* { box-sizing:border-box; }' +
+      'html,body { margin:0; padding:0; height:100%; background:#fff; }' +
+      'body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+        (isBW ? ' filter:grayscale(100%);' : '') +
+        ' -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
+      '.page { width:100%; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;' +
+        ' text-align:center; padding:14mm; }' +
+      '.logo { margin-bottom:10mm; }' +
+      '.logo svg { width:62mm; height:auto; }' +
+      '.heading { margin-bottom:12mm; max-width:90%; }' +
+      '.qr-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:6mm; padding:6mm; display:inline-block; }' +
+      '.qr { width:62mm; height:62mm; display:block; }' +
+      '.caption { margin-top:7mm; font-size:12pt; color:#64748b; }' +
+      '.brand { margin-top:10mm; font-size:9pt; color:#94a3b8; letter-spacing:0.5px; }' +
+    '</style>' +
+    '</head><body><div class="page">' + inner + '</div></body></html>';
+}
+
+// Compat — print "cru" antigo agora abre o flyer configurável do app.
+// (Mantido pra não quebrar call sites legados que não passam contexto.)
 window._printQRCode = function() {
-    var img = document.getElementById('qr-code-img');
-    if (!img) return;
-    var win = window.open('', '_blank');
-    win.document.write('<html><head><title>QR Code - scoreplace.app</title></head><body style="display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fff;"><div style="text-align:center;"><h2 style="font-family:sans-serif;color:#333;">scoreplace.app</h2><img src="' + img.src.replace(/bgcolor=[^&]+/, 'bgcolor=ffffff').replace(/color=[^&]+/, 'color=1a1e2e') + '" style="width:400px;height:400px;"><p style="font-family:sans-serif;color:#666;font-size:14px;margin-top:1rem;">Escaneie para acessar o torneio</p></div></body></html>');
-    win.document.close();
-    win.onload = function() { win.print(); };
+    window._openInvitePrint({ kind: 'app', url: (window.SCOREPLACE_URL || 'https://scoreplace.app') });
 };
 
 // ─── Helpers compartilhados (Print + CSV) ────────────────────────────────
