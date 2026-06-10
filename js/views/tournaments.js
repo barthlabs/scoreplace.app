@@ -1760,11 +1760,12 @@ function renderTournaments(container, tournamentId = null) {
         }
 
         var _cardTextColor = (_isLight && !venuePhotoBg) ? '#1f2937' : 'white';
-        // v2.3.71: foto do local de fundo → box frosted SUTIL atrás do conteúdo
-        // (blur desfoca a foto pra leitura, sem o contraste pesado de um box escuro).
-        var _photoPanel = venuePhotoBg
-          ? 'background: rgba(15,23,42,0.22); -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); border-radius: 12px;'
-          : '';
+        // v2.3.72: SEM box no card inteiro (não mata a foto). Caixas de leitura
+        // ficam SÓ nos blocos de info de fonte pequena/cor fraca (datas,
+        // cronômetro, inscritos, formato/acesso). _pReadBg = fundo escuro legível
+        // aplicado por bloco só quando há foto do local.
+        var _photoPanel = '';
+        var _pReadBg = venuePhotoBg ? 'rgba(15,23,42,0.62)' : '';
 
         return `
         <div class="card mb-3" style="position:relative;${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transition: transform 0.2s; ${!tournamentId ? 'cursor: pointer;' : ''}" ${!tournamentId ? `onclick="window.location.hash='#tournaments/${t.id}'" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'"` : ''}>
@@ -1815,7 +1816,7 @@ function renderTournaments(container, tournamentId = null) {
             </div>` : ''}
 
             <!-- Below Name: Calendário + Data -->
-            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; opacity: 0.7;">
+            <div style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.7;'}">
                <span style="font-size: 1.1rem;">🗓️</span>
                <span>${dates}</span>
             </div>
@@ -1900,7 +1901,7 @@ function renderTournaments(container, tournamentId = null) {
                 var _rgb = _colorMap[_ligaEvent.color] || '139,92,246';
                 // v0.16.90: toggle Liga removido daqui — agora vive na linha
                 // "Atualizado em..." acima (compartilhada entre lista e detalhe).
-                return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(' + _rgb + ',0.1);border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
+                return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEvent.icon + '</span>' +
                   '<span style="font-size:0.85rem;font-weight:700;color:' + _ligaEvent.color + ';">' + _ligaEvent.label + '</span>' +
                   '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ligaEvent.color + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
@@ -1927,7 +1928,7 @@ function renderTournaments(container, tournamentId = null) {
               var _next = _events[0];
               var _countdownText2 = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _colorMap2[_next.color] || '139,92,246';
-              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(' + _rgb2 + ',0.1);border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
+              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb2 + ',0.1)')) + ';border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _next.color + ';">' + _next.label + '</span>' +
                 '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _next.color + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText2 + '</span>' +
@@ -1943,13 +1944,13 @@ function renderTournaments(container, tournamentId = null) {
                <!-- Stats Column -->
                 <div style="display: inline-flex; flex-direction: column; gap: 8px; width: 100%;">
                     <div id="stat-boxes-row" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
-                        <div class="stat-box" data-stat="inscritos">
+                        <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👤</span>
                            <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Inscritos</span>
                         </div>
                         ${teamCount > 0 ? `
-                        <div class="stat-box" data-stat="equipes">
+                        <div class="stat-box" data-stat="equipes" ${_pReadBg ? 'style="background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👥</span>
                            <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${teamCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Equipes</span>
@@ -1967,7 +1968,7 @@ function renderTournaments(container, tournamentId = null) {
                 </div>
 
                <!-- Formato, Regras e Categorias -->
-               <div class="info-box" style="font-size:0.75rem;padding:6px 10px;line-height:1.5;gap:2px;border-radius:8px;">
+               <div class="info-box" style="font-size:0.75rem;padding:6px 10px;line-height:1.5;gap:2px;border-radius:8px;${_pReadBg ? 'background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);' : ''}">
                   <div><strong>Formato:</strong> ${t.format} · <strong>Inscrição:</strong> ${enrollmentText} · <strong>Acesso:</strong> ${publicText}</div>
                   ${(t.ligaSeasonMonths || t.rankingSeasonMonths) ? (() => {
                     const _sm = t.ligaSeasonMonths || t.rankingSeasonMonths;

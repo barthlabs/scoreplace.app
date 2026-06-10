@@ -622,10 +622,11 @@ function renderDashboard(container) {
     }
 
     const _isFav = typeof window._isFavorite === 'function' && window._isFavorite(t.id);
-    // v2.3.71: foto do local de fundo → box frosted SUTIL atrás do conteúdo.
-    const _photoPanelD = venuePhotoBg
-      ? 'background: rgba(15,23,42,0.22); -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); border-radius: 12px;'
-      : '';
+    // v2.3.72: SEM box no card inteiro (não mata a foto). Caixas de leitura só
+    // nos blocos de info pequena/cor fraca (datas, cronômetro, inscritos,
+    // formato/acesso). _pReadBg = fundo escuro legível por bloco quando há foto.
+    const _photoPanelD = '';
+    const _pReadBg = venuePhotoBg ? 'rgba(15,23,42,0.62)' : '';
     return `
         <div class="card mb-3" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'">
           ${isOrg ? `
@@ -676,7 +677,7 @@ function renderDashboard(container) {
             ` : ''}
 
             <!-- Below Name: Calendário + Data + badge contextual (HOJE/AMANHÃ/Em Xd) -->
-            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; opacity: 0.8; flex-wrap: wrap;">
+            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
                <span style="font-size: 1.1rem;">🗓️</span>
                <span>${dates}</span>
                ${(() => {
@@ -766,7 +767,7 @@ function renderDashboard(container) {
                   ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
                   : '';
                 return _toggleRowDash +
-                  '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(' + _rgb + ',0.1);border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
+                  '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +
                   '<span style="font-size:0.85rem;font-weight:700;color:' + _ligaEv.color + ';">' + _ligaEv.label + '</span>' +
                   '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ligaEv.color + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
@@ -792,7 +793,7 @@ function renderDashboard(container) {
               var _next = _events[0];
               var _countdownText = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _next.color === '#f59e0b' ? '245,158,11' : _next.color === '#10b981' ? '16,185,129' : '139,92,246';
-              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(' + _rgb2 + ',0.1);border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
+              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb2 + ',0.1)')) + ';border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _next.color + ';">' + _next.label + '</span>' +
                 '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _next.color + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
@@ -812,12 +813,12 @@ function renderDashboard(container) {
             <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 1.8rem 0;"></div>
 
             <!-- Bottom Section -->
-            <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; opacity: 0.75;">
+            <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; ${_pReadBg ? '' : 'opacity: 0.75;'}">
 
                <!-- Stats Column -->
                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
                    <div style="display: flex; flex-direction: row; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
-                       <div class="stat-box" style="flex-direction: column;">
+                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👤</span>
                              <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
@@ -825,7 +826,7 @@ function renderDashboard(container) {
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statEnrolled')}</span>
                        </div>
                        ${teamCount > 0 ? `
-                       <div class="stat-box" style="flex-direction: column;">
+                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👥</span>
                              <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${teamCount}</span>
@@ -847,7 +848,7 @@ function renderDashboard(container) {
                </div>
 
                <!-- Formato, Regras e Categorias -->
-               <div class="info-box">
+               <div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);"' : ''}>
                   <div><strong>${_t('dashboard.labelFormat')}:</strong> ${t.format}</div>
                   <div><strong>${_t('dashboard.labelAccess')}:</strong> ${publicText}</div>
                </div>
