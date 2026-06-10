@@ -2648,7 +2648,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         if (isLigaFmt && _userIsOutOfRound) {
           var _allCount = sortedGroups.reduce(function(acc, g) { return acc + (g.matches ? g.matches.length : 0); }, 0);
           ligaOtherMatchesHtml = '<div class="card" style="margin-bottom:1rem;">' +
-            '<details>' +
+            '<details open>' +
               '<summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">' +
                 '<span>▸ Jogos da rodada (' + _allCount + ')</span>' +
               '</summary>' +
@@ -2663,7 +2663,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         if (isLigaFmt && _myGroups.length > 0 && _otherGroups.length > 0) {
           var _otherCount = _otherGroups.reduce(function(acc, g) { return acc + (g.matches ? g.matches.length : 0); }, 0);
           ligaOtherMatchesHtml = '<div class="card" style="margin-bottom:1rem;">' +
-            '<details>' +
+            '<details open>' +
               '<summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">' +
                 '<span>▸ Demais jogos da rodada (' + _otherCount + ')</span>' +
               '</summary>' +
@@ -2706,7 +2706,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         if (isLigaFmt && _userIsOutOfRound) {
           const allHtml = allMatches.map((m, i) => buildCard(m, i)).join('');
           ligaOtherMatchesHtml = `<div class="card" style="margin-bottom:1rem;">
-            <details>
+            <details open>
               <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">
                 <span>▸ Jogos da rodada (${allMatches.length})</span>
               </summary>
@@ -2726,7 +2726,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // Stash the "other matches" in a separate card that the Liga branch of
             // the final return interposes AFTER the standings table.
             ligaOtherMatchesHtml = `<div class="card" style="margin-bottom:1rem;">
-              <details>
+              <details open>
                 <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">
                   <span>▸ Demais jogos da rodada (${otherIdx.length})</span>
                 </summary>
