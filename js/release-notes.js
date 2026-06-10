@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.76-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Convite impresso sai em UMA página só.</b> Aquela segunda página quase em branco acabou: o flyer agora é desenhado um tiquinho abaixo da altura real da folha, então o navegador não cria mais uma página extra por causa de um arredondamento de meio pixel.</li>' +
+        '<li><b>As definições de impressão ficam lembradas no torneio.</b> O conteúdo, o papel, a cor, a orientação e os tamanhos (logo, nome, QR, textos) que o organizador escolher ficam gravados no torneio automaticamente — sem botão de salvar. Na próxima vez que abrir “Imprimir convite”, já vem tudo como você deixou da última vez.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.75-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Partida casual: formar duplas arrastando ficou confiável.</b> Ao desfazer uma dupla (🔗) e arrastar um jogador sobre outro pra formar nova dupla, às vezes era preciso tentar 2-3 vezes. Três causas corrigidas: (1) o arraste não carregava dados, então soltar sobre o campo de nome (editável) era rejeitado pelo navegador; (2) o alvo passou a ser resolvido pelo card inteiro — soltar sobre o nome, o avatar ou o ícone de gênero forma a dupla; (3) os campos de nome ficam inertes durante o arraste e os atalhos de arrastar são religados na hora (sem a janela morta logo após o 🔗). Agora pareia de primeira.</li>' +

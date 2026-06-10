@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.75-beta';
+window.SCOREPLACE_VERSION = '2.3.76-beta';
 
 // ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
 // Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
@@ -214,7 +214,8 @@ window._softRefreshView = function() {
                   document.getElementById('remainder-resolution-panel') ||
                   document.getElementById('removal-subchoice-panel') ||
                   document.getElementById('simulation-panel') ||
-                  document.getElementById('incomplete-teams-panel');
+                  document.getElementById('incomplete-teams-panel') ||
+                  document.getElementById('flyer-print-overlay');
   var active = document.activeElement;
   var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
   if (openModal || isTyping) {
@@ -753,8 +754,10 @@ window._dismissAllOverlays = function(opts) {
     'live-scoring-overlay',   // partida casual ao vivo — ciclo de vida próprio,
                               // nunca deve ser varrido pelo sweep genérico
     'casual-match-overlay',   // lobby/join de partida casual — idem
-    'player-profile-overlay'  // perfil de jogador — escondido (display:none)
+    'player-profile-overlay', // perfil de jogador — escondido (display:none)
                               // quando stats está aberto, restaurado no Voltar
+    'flyer-print-overlay'     // diálogo de imprimir convite — fecha sozinho
+                              // (Cancelar/backdrop gravam as prefs e removem)
   ];
   ALWAYS_KEEP.forEach(function(id) {
     if (keep.indexOf(id) === -1) keep.push(id);

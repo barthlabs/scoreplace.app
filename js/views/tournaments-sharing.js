@@ -369,7 +369,47 @@ window._openTournamentInvitePrint = function(tournamentId) {
   var dline = _tournamentDateText(t);
   if (dline) subParts.push('📅 ' + dline);
   if (t.venue) subParts.push('📍 ' + t.venue);
-  window._openInvitePrint({ kind: 'tournament', url: url, title: t.name || 'Torneio', subtitle: subParts.join('\n'), logo: t.logoData || '', logoRadius: window._tournamentLogoRadius(t) });
+  window._openInvitePrint({ kind: 'tournament', tournamentId: t.id, url: url, title: t.name || 'Torneio', subtitle: subParts.join('\n'), logo: t.logoData || '', logoRadius: window._tournamentLogoRadius(t) });
+};
+
+// Lê as preferências de impressão salvas no torneio (ou null). Só leitura —
+// usado pra pré-preencher o diálogo com o que o organizador deixou da última vez.
+window._flyerSavedPrefs = function(tournamentId) {
+  if (!tournamentId) return null;
+  var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tournamentId); });
+  if (!t && Array.isArray(window.AppStore.publicDiscovery)) {
+    t = window.AppStore.publicDiscovery.find(function(x) { return String(x.id) === String(tournamentId); });
+  }
+  return (t && t.flyerPrintPrefs && typeof t.flyerPrintPrefs === 'object') ? t.flyerPrintPrefs : null;
+};
+
+// Grava (silenciosamente, sem botão) as definições atuais no torneio — só o
+// organizador grava. Chamado ao FECHAR o diálogo e ao imprimir, então o
+// snapshot do Firestore não atrapalha a edição em andamento. Pedido do usuário:
+// "as definições escolhidas pelo organizador devem ficar gravadas no torneio…
+//  é só lembrar, não precisa gravar com botões nem nada".
+window._flyerPersistPrefs = function() {
+  try {
+    var opts = window._flyerPrintOpts || {};
+    if (opts.kind !== 'tournament' || !opts.tournamentId) return;
+    var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(opts.tournamentId); });
+    if (!t) return;
+    // Só o organizador/co-organizador grava (Firestore rules bloqueiam terceiros).
+    if (!(window.AppStore.isOrganizer && window.AppStore.isOrganizer(t))) return;
+    if (!document.getElementById('flyer-content')) return; // diálogo já fechado
+    var o = window._collectFlyerOpts();
+    var prefs = { content: o.content, paper: o.paper, color: o.color, orient: o.orient, sizes: o.sizes, phrase: o.phrase || '' };
+    if (JSON.stringify(t.flyerPrintPrefs || null) === JSON.stringify(prefs)) return; // nada mudou
+    t.flyerPrintPrefs = prefs;
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t).catch(function() {});
+  } catch (e) { /* nunca quebra o fluxo de impressão */ }
+};
+
+// Fecha o diálogo de impressão gravando as preferências antes (silencioso).
+window._closeFlyerPrint = function() {
+  window._flyerPersistPrefs();
+  var ov = document.getElementById('flyer-print-overlay');
+  if (ov) ov.remove();
 };
 
 // Abre o overlay de configuração do flyer. opts:
@@ -394,7 +434,7 @@ window._openInvitePrint = function(opts) {
   var overlay = document.createElement('div');
   overlay.id = 'flyer-print-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:100050;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overflow-y:auto;';
-  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) overlay.remove(); });
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) window._closeFlyerPrint(); });
 
   var phraseBlock = isApp
     ? '<div style="text-align:left;margin-bottom:14px;">' +
@@ -457,12 +497,32 @@ window._openInvitePrint = function(opts) {
         sizeBlock +      // 3. Sliders (embaixo)
       '</div>' +
       '<div style="display:flex;gap:8px;margin-top:12px;">' +
-        '<button onclick="document.getElementById(\'flyer-print-overlay\').remove()" class="btn btn-sm" style="flex:0 0 auto;background:rgba(148,163,184,0.15);color:var(--text-muted,#94a3b8);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 16px;font-size:0.85rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '<button onclick="window._closeFlyerPrint()" class="btn btn-sm" style="flex:0 0 auto;background:rgba(148,163,184,0.15);color:var(--text-muted,#94a3b8);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 16px;font-size:0.85rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
         '<button onclick="window._doInvitePrint()" class="btn btn-sm hover-lift" style="flex:1;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:0.86rem;font-weight:700;cursor:pointer;">🖨️ Imprimir / PDF</button>' +
       '</div>' +
     '</div>';
 
   document.body.appendChild(overlay);
+
+  // Restaura as definições que o organizador deixou da última vez (sem botão —
+  // só lembra). Aplica aos selects + sliders + frase ANTES do 1º preview.
+  (function() {
+    var prefs = window._flyerSavedPrefs ? window._flyerSavedPrefs(opts.tournamentId) : null;
+    if (!prefs) return;
+    var setVal = function(id, v) { var el = document.getElementById(id); if (el && v != null && v !== '') el.value = v; };
+    setVal('flyer-content', prefs.content);
+    setVal('flyer-paper', prefs.paper);
+    setVal('flyer-color', prefs.color);
+    setVal('flyer-orient', prefs.orient);
+    if (prefs.sizes) {
+      setVal('flyer-logosize', prefs.sizes.logo);
+      setVal('flyer-namesize', prefs.sizes.name);
+      setVal('flyer-qrsize', prefs.sizes.qr);
+      setVal('flyer-textsize', prefs.sizes.text);
+    }
+    if (isApp && prefs.phrase) setVal('flyer-phrase', prefs.phrase);
+  })();
+
   // Primeira renderização do preview + re-escala em resize da janela.
   window._updateFlyerPreview();
   setTimeout(window._updateFlyerPreview, 60);
@@ -545,6 +605,8 @@ window._updateFlyerPreview = function() {
 // Fallback: janela nova com o mesmo HTML (caso o print do iframe não esteja
 // disponível, ex.: alguns navegadores móveis).
 window._doInvitePrint = function() {
+  // Grava as definições atuais no torneio (silencioso) antes de imprimir.
+  window._flyerPersistPrefs();
   var frame = document.getElementById('flyer-preview-frame');
   if (frame && frame.contentWindow && typeof frame.contentWindow.print === 'function') {
     try {
@@ -571,7 +633,12 @@ window._doInvitePrint = function() {
 // usada tanto pela pré-visualização quanto pela montagem do HTML — assim o
 // canvas do flyer tem SEMPRE o tamanho real do papel em px.
 function _flyerPaperPx(o) {
-  var PAPER = { A4: [794, 1123], A5: [559, 794], A6: [397, 559], letter: [816, 1056] };
+  // Dimensões em px @96dpi com FLOOR pra ficar SEMPRE estritamente abaixo da
+  // folha real — senão um arredondamento pra cima (ex: A4 = 1122.52px → 1123)
+  // estoura a página por ~0,5px e o navegador cria uma 2ª página quase em branco.
+  // A4 210×297mm → 793×1122; A5 148×210 → 559×793; A6 105×148 → 396×559;
+  // Carta 8.5×11in → 816×1055 (altura -1 pra garantir < folha exata de 1056).
+  var PAPER = { A4: [793, 1122], A5: [559, 793], A6: [396, 559], letter: [816, 1055] };
   var d = PAPER[(o && o.paper)] || PAPER.A4;
   var land = o && o.orient === 'landscape';
   return { pw: land ? d[1] : d[0], ph: land ? d[0] : d[1] };
