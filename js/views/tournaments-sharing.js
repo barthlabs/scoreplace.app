@@ -609,8 +609,10 @@ function _buildFlyerPrintHtml(o) {
   var caption = o.kind === 'tournament' ? 'Escaneie para acessar o torneio'
     : (o.kind === 'casual' ? 'Escaneie para entrar na partida' : 'Escaneie o QR Code para acessar');
 
-  // Corpo do flyer. Em paisagem: logo + texto à esquerda, QR à direita (2 colunas).
-  // Em retrato: empilhado e centralizado. Em ambos cabe numa única página.
+  // Corpo do flyer. O logo do scoreplace fica PINADO no topo (tamanho e posição
+  // fixos) — aumentar o logo/nome do torneio NÃO o empurra. O conteúdo do
+  // torneio (texto + QR) é centralizado no espaço abaixo do logo. Em paisagem
+  // esse conteúdo vira 2 colunas (texto à esquerda, QR à direita).
   var inner;
   if (qrOnly) {
     inner =
@@ -618,27 +620,29 @@ function _buildFlyerPrintHtml(o) {
       '<div class="caption">' + esc(caption) + '</div>';
   } else {
     inner =
-      '<div class="col-main">' +
-        '<div class="logo">' + _flyerLogoSvg() + '</div>' +
+      '<div class="logo">' + _flyerLogoSvg() + '</div>' +
+      '<div class="flyer-body">' +
         '<div class="heading">' + heading + sub + '</div>' +
-      '</div>' +
-      '<div class="col-qr">' +
-        '<div class="qr-wrap"><img class="qr" src="' + esc(qrUrl) + '" alt="QR Code" /></div>' +
-        '<div class="caption">' + esc(caption) + '</div>' +
-        '<div class="brand">scoreplace.app · Jogue em outro nível</div>' +
+        '<div class="col-qr">' +
+          '<div class="qr-wrap"><img class="qr" src="' + esc(qrUrl) + '" alt="QR Code" /></div>' +
+          '<div class="caption">' + esc(caption) + '</div>' +
+          '<div class="brand">scoreplace.app · Jogue em outro nível</div>' +
+        '</div>' +
       '</div>';
   }
 
   // Logo scoreplace do topo: SEMPRE ~70% da página (fixo, não-ajustável).
-  var logoW = qrOnly ? '78%' : (isLandscape ? '90%' : '78%');
+  var logoW = qrOnly ? '78%' : (isLandscape ? '64%' : '78%');
   // QR base (app/casual): formula fixa. Pro torneio o tamanho vem do
   // _flyerSizeCss (slider), injetado num <style> separado que sobrescreve.
   var qrWBase = qrOnly ? 'min(80vw,80vh)' : (isLandscape ? 'min(40vw,60vh)' : 'min(56vw,42vh)');
-  var pageDir = (isLandscape && !qrOnly) ? 'row' : 'column';
-  var pageGap = (isLandscape && !qrOnly) ? '6%' : '4vh';
+  var bodyDir = (isLandscape && !qrOnly) ? 'row' : 'column';
+  var bodyGap = (isLandscape && !qrOnly) ? '6%' : '4vh';
+  // Largura/flex dos blocos dentro do corpo. Paisagem → 2 colunas; retrato →
+  // empilhados em largura total.
   var colCss = (isLandscape && !qrOnly)
-    ? '.col-main { flex:1 1 0; width:auto; } .col-qr { flex:0 0 auto; width:auto; }'
-    : '.col-main, .col-qr { width:100%; }';
+    ? '.heading { flex:1 1 0; min-width:0; } .col-qr { flex:0 0 auto; }'
+    : '.heading, .col-qr { width:100%; }';
 
   return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">' +
     '<title>Convite — scoreplace.app</title>' +
@@ -649,13 +653,16 @@ function _buildFlyerPrintHtml(o) {
       'body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
         (isBW ? ' filter:grayscale(100%);' : '') +
         ' -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
-      '.page { width:100%; height:100vh; display:flex; flex-direction:' + pageDir + '; align-items:center; justify-content:center;' +
-        ' gap:' + pageGap + '; text-align:center; padding:5%; }' +
-      '.col-main, .col-qr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; }' +
+      // qrOnly centraliza tudo; flyer completo ancora o logo no topo (flex-start)
+      // e o corpo (flex:1) centraliza o conteúdo do torneio no resto da página.
+      '.page { width:100%; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:' + (qrOnly ? 'center' : 'flex-start') + ';' +
+        ' gap:0; text-align:center; padding:5%; }' +
+      '.logo { width:100%; flex:0 0 auto; margin:0 0 4% 0; display:flex; justify-content:center; }' +
+      '.logo svg { width:' + logoW + '; height:auto; max-height:26vh; }' +
+      '.flyer-body { flex:1 1 auto; min-height:0; width:100%; overflow:hidden; display:flex; flex-direction:' + bodyDir + '; align-items:center; justify-content:center; gap:' + bodyGap + '; }' +
+      '.col-qr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; }' +
       colCss +
-      '.logo { width:100%; margin-bottom:5%; display:flex; justify-content:center; }' +
-      '.logo svg { width:' + logoW + '; height:auto; max-height:30vh; }' +
-      '.heading { width:96%; }' +
+      '.heading { min-width:0; }' +
       '.qr-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:5mm; padding:4mm; display:inline-block; }' +
       '.qr { width:' + qrWBase + '; height:auto; display:block; }' +
       '.caption { margin-top:3%; font-size:clamp(8pt,2.2vw,12pt); color:#64748b; }' +
