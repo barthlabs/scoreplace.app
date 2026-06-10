@@ -6279,7 +6279,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // lados invertem a cada novo saque (lê-se o placar: sacador primeiro). As
     // CORES seguem o TIME (azul/vermelho), não o lado — preservadas na virada.
     // ATIVADO → lados fixos (_courtLeft só muda por arrasto manual).
-    if (!_liveScorePrefs.fixSides && serverInfo && (serverInfo.team === 1 || serverInfo.team === 2)) {
+    // v2.3.72 FIX: NO TIE-BREAK os lados NÃO invertem por saque. Bug grave: o
+    // saque alterna a cada 1-2 pontos no tie-break, então os times trocavam de
+    // lado quase a cada ponto — o usuário tocava pela POSIÇÃO e marcava no time
+    // ERRADO, deixando o placar empatado pra sempre (nunca atingindo a margem
+    // de 2 e não terminando). Durante o tie-break os lados ficam congelados.
+    if (!_liveScorePrefs.fixSides && !state.isTiebreak && !_isDecidingSet() &&
+        serverInfo && (serverInfo.team === 1 || serverInfo.team === 2)) {
       _courtLeft = serverInfo.team;
     }
     var leftTeam = _courtLeft; // 1 or 2
