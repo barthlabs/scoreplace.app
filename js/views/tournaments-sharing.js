@@ -430,35 +430,35 @@ window._openInvitePrint = function(opts) {
     '</div>';
   };
 
-  var controls =
+  // Ordem (vertical): 1) configurações  2) pré-visualização  3) sliders.
+  var configsBlock =
     phraseBlock +
     _sel('flyer-content', 'Conteúdo', '<option value="full">Flyer completo (logo + texto + QR)</option><option value="qr">Apenas o QR Code</option>') +
     _sel('flyer-paper', 'Tamanho do papel', '<option value="A4">A4 (210 × 297 mm)</option><option value="A5">A5 (148 × 210 mm)</option><option value="A6">A6 (105 × 148 mm)</option><option value="letter">Carta (216 × 279 mm)</option>') +
     _sel('flyer-color', 'Cor', '<option value="color">Colorido</option><option value="bw">Preto e branco</option>') +
-    _sel('flyer-orient', 'Orientação', '<option value="portrait">Retrato (vertical)</option><option value="landscape">Paisagem (horizontal)</option>') +
-    sizeBlock;
+    _sel('flyer-orient', 'Orientação', '<option value="portrait">Retrato (vertical)</option><option value="landscape">Paisagem (horizontal)</option>');
+
+  var previewBlock =
+    '<div id="flyer-preview-host" style="width:100%;height:min(50vh,460px);background:#0a0e1a;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:10px;box-sizing:border-box;margin:4px 0 14px;">' +
+      '<div id="flyer-preview-wrap" style="position:relative;box-shadow:0 6px 24px rgba(0,0,0,0.55);background:#fff;">' +
+        '<iframe id="flyer-preview-frame" title="Pré-visualização" style="border:0;background:#fff;display:block;"></iframe>' +
+      '</div>' +
+    '</div>';
 
   overlay.innerHTML =
-    '<div style="background:var(--card-bg,#1e2235);border-radius:18px;padding:18px;max-width:920px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;display:flex;flex-direction:column;max-height:92vh;">' +
+    '<div style="background:var(--card-bg,#1e2235);border-radius:18px;padding:18px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;display:flex;flex-direction:column;max-height:92vh;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:var(--text-bright,#fff);">🖨️ Imprimir convite</div>' +
-        '<div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);">Pré-visualização ao vivo — ajuste e veja na hora</div>' +
+        '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);">ajuste e veja na hora</div>' +
       '</div>' +
-      '<div style="display:flex;gap:16px;flex-wrap:wrap;flex:1;min-height:0;">' +
-        // Preview
-        '<div id="flyer-preview-host" style="flex:2 1 300px;min-width:240px;height:min(64vh,540px);background:#0a0e1a;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:10px;box-sizing:border-box;">' +
-          '<div id="flyer-preview-wrap" style="position:relative;box-shadow:0 6px 24px rgba(0,0,0,0.55);background:#fff;">' +
-            '<iframe id="flyer-preview-frame" title="Pré-visualização" style="border:0;background:#fff;display:block;"></iframe>' +
-          '</div>' +
-        '</div>' +
-        // Controls
-        '<div style="flex:1 1 250px;min-width:230px;max-width:320px;display:flex;flex-direction:column;min-height:0;">' +
-          '<div style="overflow-y:auto;flex:1;min-height:0;padding-right:4px;">' + controls + '</div>' +
-          '<div style="display:flex;gap:8px;margin-top:12px;">' +
-            '<button onclick="document.getElementById(\'flyer-print-overlay\').remove()" class="btn btn-sm" style="flex:0 0 auto;background:rgba(148,163,184,0.15);color:var(--text-muted,#94a3b8);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 16px;font-size:0.85rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
-            '<button onclick="window._doInvitePrint()" class="btn btn-sm hover-lift" style="flex:1;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:0.86rem;font-weight:700;cursor:pointer;">🖨️ Imprimir / PDF</button>' +
-          '</div>' +
-        '</div>' +
+      '<div style="overflow-y:auto;flex:1;min-height:0;padding-right:2px;">' +
+        configsBlock +   // 1. Configurações (em cima)
+        previewBlock +   // 2. Pré-visualização (no meio)
+        sizeBlock +      // 3. Sliders (embaixo)
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+        '<button onclick="document.getElementById(\'flyer-print-overlay\').remove()" class="btn btn-sm" style="flex:0 0 auto;background:rgba(148,163,184,0.15);color:var(--text-muted,#94a3b8);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 16px;font-size:0.85rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '<button onclick="window._doInvitePrint()" class="btn btn-sm hover-lift" style="flex:1;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:0.86rem;font-weight:700;cursor:pointer;">🖨️ Imprimir / PDF</button>' +
       '</div>' +
     '</div>';
 
