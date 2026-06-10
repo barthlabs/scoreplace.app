@@ -1921,6 +1921,16 @@ function renderDashboard(container) {
       html += '<div>';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.04em;">✅ Últimos resultados (' + recentConfirmed.length + ')</p>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      // v2.3.52: agrupa resultados que compartilham GRUPO + TORNEIO. Quando
+      // 2+ chaves repetem "R2 GRUPO A … TESTE DE LIGA", mostra esse rótulo uma
+      // única vez numa linha e só "JOGO N" acima de cada chave.
+      function _splitFase(s) {
+        s = String(s || '');
+        var mm = s.match(/^(.*?)[\s·•\-]*\b([Jj][Oo][Gg][Oo]\s*\d+)\s*$/);
+        if (mm && mm[1].trim()) return { group: mm[1].replace(/[\s·•\-]+$/, '').trim(), jogo: mm[2].trim() };
+        return { group: s.trim(), jogo: '' };
+      }
+      var _units = [];
       recentConfirmed.forEach(function(item) {
         var m2 = item.m;
         var _esc2 = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
@@ -2007,14 +2017,8 @@ function renderDashboard(container) {
             '<span style="font-size:1.6rem;">' + _posMedal + '</span></div>';
         }
 
-        html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.6rem;">' +
-          '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<h4 style="color:' + faseColor2 + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + faseColor2 + ';padding-left:8px;flex:1;">' +
-              (faseLower2.indexOf('final') !== -1 ? '🏆 ' : '') + _sf(faseStr2) +
-              '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(item.tName) + '</span>' +
-            '</h4>' +
-          '</div>' +
-          _posBadge +
+        var _fp2 = _splitFase(faseStr2);
+        var _body = _posBadge +
           '<div onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
             // Header: label + badge resultado
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +
@@ -2054,8 +2058,48 @@ function renderDashboard(container) {
                 return ph+sc4;
               })() +
             '</div>' +
-          '</div>' +
-        '</div>';
+          '</div>';
+        _units.push({ group: _fp2.group, jogo: _fp2.jogo, tName: item.tName, color: faseColor2, faseStr2: faseStr2, body: _body });
+      });
+
+      // Agrupa por (grupo + torneio) preservando a ordem original.
+      var _resGroups = [];
+      var _resGIdx = {};
+      _units.forEach(function(u) {
+        var canGroup = !!(u.group && u.jogo);
+        var key = (u.group || '').toLowerCase() + '||' + (u.tName || '').toLowerCase();
+        if (canGroup && _resGIdx[key] != null) { _resGroups[_resGIdx[key]].units.push(u); return; }
+        if (canGroup) _resGIdx[key] = _resGroups.length;
+        _resGroups.push({ group: u.group, tName: u.tName, color: u.color, grouped: canGroup, units: [u] });
+      });
+      _resGroups.forEach(function(g) {
+        if (g.grouped && g.units.length >= 2) {
+          // Cabeçalho compartilhado (linha inteira) + só "JOGO N" acima de cada chave.
+          html += '<div style="flex-basis:100%;width:100%;display:flex;align-items:center;gap:8px;margin:6px 0 -2px;">' +
+            '<h4 style="color:' + g.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + g.color + ';padding-left:8px;flex:1;">' +
+              _sf(g.group) +
+              '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(g.tName) + '</span>' +
+            '</h4></div>';
+          g.units.forEach(function(u) {
+            html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.4rem;">' +
+              '<div style="font-size:0.7rem;font-weight:800;color:' + u.color + ';text-transform:uppercase;letter-spacing:1px;padding-left:8px;border-left:3px solid ' + u.color + ';">' + _sf(u.jogo) + '</div>' +
+              u.body +
+            '</div>';
+          });
+        } else {
+          // Singleton — cabeçalho completo (grupo · jogo + torneio), como antes.
+          g.units.forEach(function(u) {
+            html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.6rem;">' +
+              '<div style="display:flex;align-items:center;gap:8px;">' +
+                '<h4 style="color:' + u.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + u.color + ';padding-left:8px;flex:1;">' +
+                  (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + _sf(u.faseStr2) +
+                  '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(u.tName) + '</span>' +
+                '</h4>' +
+              '</div>' +
+              u.body +
+            '</div>';
+          });
+        }
       });
       html += '</div>';
       html += '</div>';

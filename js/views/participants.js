@@ -1325,125 +1325,20 @@ function renderParticipants(container, tournamentId) {
   });
   t.participants = parts;
 
-  // ── v2.3.50: meta por participante (gênero · categoria/nível · faixa etária)
-  // a partir do PERFIL de cada pessoa, exibida abaixo do nome no card de
-  // inscritos. Gênero e nível têm fallback no objeto do inscrito (capturados na
-  // inscrição); a faixa etária só vem do perfil (birthDate), então é carregada
-  // assíncrona e aplicada via patch nos slots [data-pmeta-name] após o render.
-  function _attrEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
-  function _metaGenderBadge(g) {
-    if (!g) return '';
-    var key = String(g).toLowerCase().trim();
-    var map = {
-      fem: ['♀', 'Fem', '236,72,153'], feminino: ['♀', 'Fem', '236,72,153'], f: ['♀', 'Fem', '236,72,153'],
-      masc: ['♂', 'Masc', '59,130,246'], masculino: ['♂', 'Masc', '59,130,246'], m: ['♂', 'Masc', '59,130,246'],
-      misto: ['⚥', 'Misto', '168,85,247'], misto_aleatorio: ['⚥', 'Misto', '168,85,247'], misto_obrigatorio: ['⚥', 'Misto', '168,85,247']
-    };
-    var e = map[key];
-    if (!e) return '';
-    return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(' + e[2] + ',0.16);color:rgb(' + e[2] + ');border:1px solid rgba(' + e[2] + ',0.4);display:inline-flex;align-items:center;gap:3px;line-height:1.5;">' + e[0] + ' ' + e[1] + '</span>';
-  }
-  function _metaExtractSkill(catStr) {
-    if (!catStr) return '';
-    var skills = (t.skillCategories && t.skillCategories.length) ? t.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
-    var s = String(catStr).trim().toUpperCase();
-    for (var i = 0; i < skills.length; i++) {
-      var sk = String(skills[i]).toUpperCase();
-      if (s === sk || s.endsWith(' ' + sk) || s.indexOf(sk + ' ') >= 0) return skills[i];
-    }
-    return '';
-  }
-  function _metaSkillBadge(skill) {
-    if (!skill) return '';
-    return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);line-height:1.5;">' + window._safeHtml(skill) + '</span>';
-  }
-  function _metaAgeBadge(birthDate) {
-    if (!birthDate) return '';
-    var d = new Date(birthDate);
-    if (isNaN(d.getTime())) return '';
-    var now = new Date();
-    var age = now.getFullYear() - d.getFullYear();
-    var mm = now.getMonth() - d.getMonth();
-    if (mm < 0 || (mm === 0 && now.getDate() < d.getDate())) age--;
-    if (!(age >= 0 && age < 150)) return '';
-    var ageCats = (t.ageCategories && t.ageCategories.length) ? t.ageCategories : ['40+', '50+', '60+', '70+'];
-    var th = ageCats.map(function (c) { var m = String(c).match(/^(\d+)\+$/); return m ? { cat: c, val: parseInt(m[1]) } : null; })
-      .filter(Boolean).sort(function (a, b) { return b.val - a.val; });
-    var bucket = null;
-    for (var i = 0; i < th.length; i++) { if (age >= th[i].val) { bucket = th[i].cat; break; } }
-    if (!bucket) return '';
-    return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,0.16);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);line-height:1.5;">' + window._safeHtml(bucket) + '</span>';
-  }
-  function _metaBadgesHtml(gender, skill, birth, prefixName) {
-    var prefix = prefixName ? '<span style="font-size:0.6rem;color:var(--text-muted);font-weight:700;margin-right:1px;">' + window._safeHtml(prefixName) + ':</span>' : '';
-    var badges = _metaGenderBadge(gender) + _metaSkillBadge(skill) + _metaAgeBadge(birth);
-    return badges ? (prefix + badges) : '';
-  }
-  // Slot(s) de meta pra um inscrito (1 linha pra individual, 1 por membro em duplas).
+  // v2.3.52: meta de perfil (gênero · nível · faixa etária) abaixo do nome no
+  // card de inscritos — só pro ORGANIZADOR. Helpers compartilhados em store.js
+  // (window._profileMetaSlots / _loadParticipantProfilesByName /
+  // _patchProfileMetaSlots) pra a mesma lógica valer aqui e na seção "Inscritos
+  // Confirmados" do detalhe do torneio (tournaments.js), sem divergir.
   function _metaSlotsFor(p, pName, isTeam) {
-    // v2.3.51: meta de perfil (gênero/nível/idade) é visível só pro(s)
-    // organizador(es) — em todos os torneios e em qualquer estado (grid de
-    // inscrição OU lista de chamada/check-in). Dado de perfil (gênero/idade)
-    // não é exposto pros demais participantes.
-    if (!isOrg) return '';
-    var members = isTeam ? pName.split('/').map(function (n) { return n.trim(); }).filter(Boolean) : [pName];
-    return members.map(function (mn, mi) {
-      var lc = mn.toLowerCase();
-      var fbGender = (!isTeam && p && typeof p === 'object') ? (p.gender || '') : '';
-      var fbCat = (!isTeam && p && typeof p === 'object') ? (p.category || '') : '';
-      var prefixName = isTeam ? (mn.split(' ')[0]) : '';
-      var initial = _metaBadgesHtml(fbGender, _metaExtractSkill(fbCat), '', prefixName);
-      return '<div class="participant-meta" data-pmeta-name="' + _attrEsc(lc) + '" data-pmeta-gender="' + _attrEsc(fbGender) + '" data-pmeta-cat="' + _attrEsc(fbCat) + '" data-pmeta-prefix="' + _attrEsc(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + (mi === 0 ? '5px' : '3px') + ';">' + initial + '</div>';
-    }).join('');
+    return (typeof window._profileMetaSlots === 'function')
+      ? window._profileMetaSlots(p, pName, isTeam, t, isOrg) : '';
   }
-  // Carrega perfis (por uid, fallback por displayName) e popula cache por nome.
-  function _loadPartProfiles(list) {
-    if (!window.FirestoreDB || !window.FirestoreDB.db) return Promise.resolve();
-    window._partProfileByName = window._partProfileByName || {};
-    var db = window.FirestoreDB.db;
-    var pairs = [];
-    (list || []).forEach(function (p) {
-      if (typeof p === 'string') { p.split(' / ').forEach(function (n) { n = n.trim(); if (n) pairs.push({ name: n, uid: '' }); }); return; }
-      var dn = (p.displayName || p.name || '');
-      var members = dn.split(' / ').map(function (n) { return n.trim(); }).filter(Boolean);
-      if (members.length <= 1) {
-        pairs.push({ name: members[0] || dn, uid: p.uid || '' });
-      } else {
-        pairs.push({ name: members[0], uid: p.p1Uid || p.uid || '' });
-        pairs.push({ name: members[1], uid: p.p2Uid || '' });
-        for (var k = 2; k < members.length; k++) pairs.push({ name: members[k], uid: '' });
-      }
-    });
-    var proms = [];
-    pairs.forEach(function (pr) {
-      if (!pr.name) return;
-      var lc = pr.name.toLowerCase();
-      if (window._partProfileByName[lc]) return; // já em cache
-      var q = pr.uid
-        ? db.collection('users').doc(pr.uid).get().then(function (doc) { return doc.exists ? doc.data() : null; })
-        : db.collection('users').where('displayName', '==', pr.name).limit(1).get().then(function (snap) { return snap.empty ? null : snap.docs[0].data(); });
-      proms.push(q.then(function (d) { if (d) window._partProfileByName[lc] = d; }).catch(function () {}));
-    });
-    return Promise.all(proms);
+  if (isOrg && typeof window._loadParticipantProfilesByName === 'function') {
+    window._loadParticipantProfilesByName(parts).then(function () {
+      if (typeof window._patchProfileMetaSlots === 'function') window._patchProfileMetaSlots(container, t);
+    }).catch(function () {});
   }
-  // Patch dos slots após o perfil carregar — preenche faixa etária + atualiza
-  // gênero/nível com o perfil (que vence o snapshot da inscrição).
-  function _patchPartMeta() {
-    var slots = container.querySelectorAll('[data-pmeta-name]');
-    slots.forEach(function (slot) {
-      var nm = slot.getAttribute('data-pmeta-name') || '';
-      var prof = (window._partProfileByName && window._partProfileByName[nm]) || null;
-      var fbGender = slot.getAttribute('data-pmeta-gender') || '';
-      var fbCat = slot.getAttribute('data-pmeta-cat') || '';
-      var prefixName = slot.getAttribute('data-pmeta-prefix') || '';
-      var gender = (prof && prof.gender) || fbGender;
-      var skillRaw = (prof && prof.skillBySport && t.sport && prof.skillBySport[t.sport]) || '';
-      var skill = _metaExtractSkill(skillRaw) || _metaExtractSkill(fbCat);
-      var birth = (prof && prof.birthDate) || '';
-      slot.innerHTML = _metaBadgesHtml(gender, skill, birth, prefixName);
-    });
-  }
-  if (isOrg) _loadPartProfiles(parts).then(_patchPartMeta).catch(function () {});
 
   // ── Check-in logic ──
   const hasMatches = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);

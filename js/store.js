@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.51-beta';
+window.SCOREPLACE_VERSION = '2.3.52-beta';
 
 // ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
 // Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
@@ -1903,6 +1903,135 @@ window.renderSupportPage = function(container) {
 window._safeHtml = function(str) {
   if (!str) return '';
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+};
+
+// ─── v2.3.52: badges de perfil do participante (gênero · nível · faixa etária) ──
+// Usados no card de inscritos — tanto na seção "Inscritos Confirmados" do detalhe
+// do torneio (tournaments.js) quanto na página #participants (participants.js).
+// Single source of truth pra não divergir entre as duas telas. Visível só pro
+// ORGANIZADOR (dado de perfil — gênero/idade — não é exposto aos demais).
+// Gênero/nível têm fallback no objeto do inscrito (capturado na inscrição); a
+// faixa etária só vem do perfil (birthDate), carregada async via
+// _loadParticipantProfilesByName e aplicada nos slots [data-pmeta-name].
+window._partProfileByName = window._partProfileByName || {};
+
+window._profileMetaGenderBadge = function(g) {
+  if (!g) return '';
+  var key = String(g).toLowerCase().trim();
+  var map = {
+    fem: ['♀', 'Fem', '236,72,153'], feminino: ['♀', 'Fem', '236,72,153'], f: ['♀', 'Fem', '236,72,153'],
+    masc: ['♂', 'Masc', '59,130,246'], masculino: ['♂', 'Masc', '59,130,246'], m: ['♂', 'Masc', '59,130,246'],
+    misto: ['⚥', 'Misto', '168,85,247'], misto_aleatorio: ['⚥', 'Misto', '168,85,247'], misto_obrigatorio: ['⚥', 'Misto', '168,85,247']
+  };
+  var e = map[key];
+  if (!e) return '';
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(' + e[2] + ',0.16);color:rgb(' + e[2] + ');border:1px solid rgba(' + e[2] + ',0.4);display:inline-flex;align-items:center;gap:3px;line-height:1.5;">' + e[0] + ' ' + e[1] + '</span>';
+};
+
+window._profileMetaExtractSkill = function(catStr, t) {
+  if (!catStr) return '';
+  var skills = (t && t.skillCategories && t.skillCategories.length) ? t.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
+  var s = String(catStr).trim().toUpperCase();
+  for (var i = 0; i < skills.length; i++) {
+    var sk = String(skills[i]).toUpperCase();
+    if (s === sk || s.endsWith(' ' + sk) || s.indexOf(sk + ' ') >= 0) return skills[i];
+  }
+  return '';
+};
+
+window._profileMetaSkillBadge = function(skill) {
+  if (!skill) return '';
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);line-height:1.5;">' + window._safeHtml(skill) + '</span>';
+};
+
+window._profileMetaAgeBadge = function(birthDate, t) {
+  if (!birthDate) return '';
+  var d = new Date(birthDate);
+  if (isNaN(d.getTime())) return '';
+  var now = new Date();
+  var age = now.getFullYear() - d.getFullYear();
+  var mm = now.getMonth() - d.getMonth();
+  if (mm < 0 || (mm === 0 && now.getDate() < d.getDate())) age--;
+  if (!(age >= 0 && age < 150)) return '';
+  var ageCats = (t && t.ageCategories && t.ageCategories.length) ? t.ageCategories : ['40+', '50+', '60+', '70+'];
+  var th = ageCats.map(function(c) { var m = String(c).match(/^(\d+)\+$/); return m ? { cat: c, val: parseInt(m[1]) } : null; })
+    .filter(Boolean).sort(function(a, b) { return b.val - a.val; });
+  var bucket = null;
+  for (var i = 0; i < th.length; i++) { if (age >= th[i].val) { bucket = th[i].cat; break; } }
+  if (!bucket) return '';
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,0.16);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);line-height:1.5;">' + window._safeHtml(bucket) + '</span>';
+};
+
+window._profileMetaBadgesHtml = function(gender, skill, birth, prefixName, t) {
+  var prefix = prefixName ? '<span style="font-size:0.6rem;color:var(--text-muted);font-weight:700;margin-right:1px;">' + window._safeHtml(prefixName) + ':</span>' : '';
+  var badges = window._profileMetaGenderBadge(gender) + window._profileMetaSkillBadge(skill) + window._profileMetaAgeBadge(birth, t);
+  return badges ? (prefix + badges) : '';
+};
+
+var _attrEscMeta = function(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
+
+// Slot(s) de meta pra um inscrito (1 linha pra individual, 1 por membro em duplas).
+// Só renderiza pro organizador (isOrg). Retorna '' pra não-organizador.
+window._profileMetaSlots = function(p, pName, isTeam, t, isOrg) {
+  if (!isOrg) return '';
+  var members = isTeam ? String(pName).split('/').map(function(n) { return n.trim(); }).filter(Boolean) : [pName];
+  return members.map(function(mn, mi) {
+    var lc = String(mn).toLowerCase();
+    var fbGender = (!isTeam && p && typeof p === 'object') ? (p.gender || '') : '';
+    var fbCat = (!isTeam && p && typeof p === 'object') ? (p.category || '') : '';
+    var prefixName = isTeam ? String(mn).split(' ')[0] : '';
+    var initial = window._profileMetaBadgesHtml(fbGender, window._profileMetaExtractSkill(fbCat, t), '', prefixName, t);
+    return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + (mi === 0 ? '5px' : '3px') + ';">' + initial + '</div>';
+  }).join('');
+};
+
+// Carrega perfis (por uid; fallback por displayName) e popula _partProfileByName por nome (lowercase).
+window._loadParticipantProfilesByName = function(list) {
+  if (!window.FirestoreDB || !window.FirestoreDB.db) return Promise.resolve();
+  window._partProfileByName = window._partProfileByName || {};
+  var db = window.FirestoreDB.db;
+  var pairs = [];
+  (list || []).forEach(function(p) {
+    if (typeof p === 'string') { p.split(' / ').forEach(function(n) { n = n.trim(); if (n) pairs.push({ name: n, uid: '' }); }); return; }
+    var dn = (p.displayName || p.name || '');
+    var membersN = dn.split(' / ').map(function(n) { return n.trim(); }).filter(Boolean);
+    if (membersN.length <= 1) {
+      pairs.push({ name: membersN[0] || dn, uid: p.uid || '' });
+    } else {
+      pairs.push({ name: membersN[0], uid: p.p1Uid || p.uid || '' });
+      pairs.push({ name: membersN[1], uid: p.p2Uid || '' });
+      for (var k = 2; k < membersN.length; k++) pairs.push({ name: membersN[k], uid: '' });
+    }
+  });
+  var proms = [];
+  pairs.forEach(function(pr) {
+    if (!pr.name) return;
+    var lc = pr.name.toLowerCase();
+    if (window._partProfileByName[lc]) return;
+    var q = pr.uid
+      ? db.collection('users').doc(pr.uid).get().then(function(doc) { return doc.exists ? doc.data() : null; })
+      : db.collection('users').where('displayName', '==', pr.name).limit(1).get().then(function(snap) { return snap.empty ? null : snap.docs[0].data(); });
+    proms.push(q.then(function(d) { if (d) window._partProfileByName[lc] = d; }).catch(function() {}));
+  });
+  return Promise.all(proms);
+};
+
+// Patch dos slots [data-pmeta-name] dentro de container após o perfil carregar.
+window._patchProfileMetaSlots = function(container, t) {
+  if (!container) return;
+  var slots = container.querySelectorAll('[data-pmeta-name]');
+  slots.forEach(function(slot) {
+    var nm = slot.getAttribute('data-pmeta-name') || '';
+    var prof = (window._partProfileByName && window._partProfileByName[nm]) || null;
+    var fbGender = slot.getAttribute('data-pmeta-gender') || '';
+    var fbCat = slot.getAttribute('data-pmeta-cat') || '';
+    var prefixName = slot.getAttribute('data-pmeta-prefix') || '';
+    var gender = (prof && prof.gender) || fbGender;
+    var skillRaw = (prof && prof.skillBySport && t && t.sport && prof.skillBySport[t.sport]) || '';
+    var skill = window._profileMetaExtractSkill(skillRaw, t) || window._profileMetaExtractSkill(fbCat, t);
+    var birth = (prof && prof.birthDate) || '';
+    slot.innerHTML = window._profileMetaBadgesHtml(gender, skill, birth, prefixName, t);
+  });
 };
 
 // Replace button content with a spinner to indicate command received (enroll/unenroll etc).

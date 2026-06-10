@@ -2187,6 +2187,14 @@ function renderTournaments(container, tournamentId = null) {
                 });
             }).catch(function() {});
         }
+        // v2.3.52: carrega perfis (gênero/nível/idade) e aplica nos badges de
+        // meta dos cards de inscritos — só pro organizador. Mesmos helpers
+        // compartilhados usados na página #participants (store.js).
+        if (isOrg && typeof window._loadParticipantProfilesByName === 'function') {
+            window._loadParticipantProfilesByName(parts).then(function() {
+                if (typeof window._patchProfileMetaSlots === 'function') window._patchProfileMetaSlots(container, t);
+            }).catch(function() {});
+        }
         let individualCountParts = 0;
         parts.forEach(p => {
             const pStr = window._pName(p);
@@ -2565,6 +2573,7 @@ function renderTournaments(container, tournamentId = null) {
                               <div style="display:flex;align-items:center;gap:12px;">
                                   <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;justify-content:center;min-width:0;">
                                       ${pNameHtml}
+                                      ${(typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg) : ''}
                                       ${catBadgeRow}
                                   </div>
                                   ${ligaCardToggle}
@@ -2669,6 +2678,7 @@ function renderTournaments(container, tournamentId = null) {
                 ' style="' + bgStyle + 'border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
                 '<div style="display:flex;flex-direction:column;gap:0;">' +
                   nameHtml +
+                  ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, !!members, t, isOrg) : '') +
                   '<div style="display:flex;align-items:center;justify-content:space-between;">' +
                     labelHtml +
                     desfazerBtn +
