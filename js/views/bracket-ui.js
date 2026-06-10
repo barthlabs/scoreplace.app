@@ -1669,6 +1669,41 @@ window._saveSetResult = function(tId, matchId) {
   _rerenderBracket(tId, matchId);
 };
 
+// v2.3.46: re-renderiza UM card de partida in-place (sem re-render do bracket
+// inteiro). Usado pelo lançamento de placar em formatos por rodada (Liga/Suíço)
+// enquanto a rodada NÃO está completa — assim a página fica estática:
+// não pula scroll, não colapsa os "Demais jogos da rodada" e a classificação
+// geral fica congelada onde está. A classificação só recomputa/sobe quando
+// todos os placares da rodada forem lançados (re-render completo no fim da
+// rodada). Reusa renderMatchCard (mesmo markup) pra evitar divergência visual.
+// Retorna true se conseguiu substituir o card; false se deve cair no fallback
+// (_rerenderBracket).
+function _finalizeRoundCardInPlace(t, m, tId, matchId) {
+  if (typeof window.renderMatchCard !== 'function') return false;
+  var card = document.getElementById('card-' + matchId);
+  if (!card) return false; // não está no DOM (ex: dashboard) → fallback
+  // Contexto que renderMatchCard lê (coroa / sit-out / crown helper).
+  window._currentBracketTournament = t;
+  window._currentBracketTournamentId = String(tId);
+  var isOrg = window.AppStore && typeof window.AppStore.isOrganizer === 'function'
+    ? window.AppStore.isOrganizer(t) : false;
+  var canEnterResult = isOrg
+    || (typeof window._resultEntryIncludes === 'function'
+        && (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee')));
+  var mn = card.getAttribute('data-match-num');
+  var matchNum = (mn !== null && mn !== '') ? parseInt(mn, 10) : undefined;
+  var html;
+  try {
+    html = window.renderMatchCard(m, canEnterResult, tId, matchNum);
+  } catch (e) {
+    window._error && window._error('[_finalizeRoundCardInPlace] renderMatchCard threw', e);
+    return false;
+  }
+  if (!html) return false;
+  card.outerHTML = html;
+  return true;
+}
+
 window._saveResultInline = function (tId, matchId) {
   const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
   if (!t) return;
@@ -1815,6 +1850,12 @@ window._saveResultInline = function (tId, matchId) {
   // pelo organizador OU pelo adversário, libera o slot.
   if (m.pendingResult) delete m.pendingResult;
 
+  // v2.3.46: quando true, o save NÃO re-renderiza o bracket inteiro — só
+  // atualiza o card lançado in-place. Mantém a página estática (sem pulo de
+  // scroll, sem colapsar "Demais jogos", sem mexer na classificação) enquanto
+  // a rodada não está completa.
+  var _inPlaceFinalize = false;
+
   if (!isGroupMatch && !isRoundMatch) {
     // Eliminatórias — vencedor avança
     _advanceWinner(t, m);
@@ -1841,7 +1882,15 @@ window._saveResultInline = function (tId, matchId) {
             window._closeRound(tId, _roundIdxAuto, matchId);
           }
         }, 0);
+      } else if (!_thisComplete) {
+        // v2.3.46: rodada ainda incompleta → atualiza só este card in-place.
+        // A classificação só recomputa/sobe quando o último placar da rodada
+        // for lançado (rerender completo via _closeRound ou no caminho de
+        // rodada-completa-não-última abaixo).
+        _inPlaceFinalize = true;
       }
+      // _thisComplete && !_isLast → cai no rerender completo no fim (classificação
+      // sobe + próxima rodada gerada), comportamento preservado.
     }
   } else {
     // Check if current group round is complete, activate next
@@ -1875,6 +1924,15 @@ window._saveResultInline = function (tId, matchId) {
   // ainda não foi mutada → showInputs=true → botão volta pra "Confirmar"
   // verde. Fix: após mutação, propagar os mesmos valores pra qualquer ref
   // do mesmo match (por id) em monarchGroups e t.rodadas legacy.
+  // v2.3.46: no caminho in-place, suprime o soft-refresh ANTES do syncImmediate
+  // pra que o echo do onSnapshot (nosso próprio save) não dispare initRouter()
+  // e desmonte o layout estático (colapsando "Demais jogos" + recomputando a
+  // classificação). Reset após 3s, igual ao _rerenderBracket.
+  if (_inPlaceFinalize) {
+    window._suppressSoftRefresh = true;
+    clearTimeout(window._pendingSoftRefresh);
+  }
+
   _propagateMatchUpdate(t, m);
   window.AppStore.logAction(tId, `Resultado: ${m.p1} ${s1} × ${s2} ${m.p2}${m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner}`);
   window.AppStore.syncImmediate(tId);
@@ -1919,7 +1977,16 @@ window._saveResultInline = function (tId, matchId) {
     });
   }
 
-  _rerenderBracket(tId, matchId);
+  // v2.3.46: rodada incompleta em formato por rodada → atualiza só o card
+  // lançado (página estática). Se a finalização in-place falhar (card fora do
+  // DOM, etc.), cai no rerender completo. Rodada completa / eliminatórias /
+  // grupos seguem no rerender completo (classificação sobe, próxima rodada).
+  if (_inPlaceFinalize && _finalizeRoundCardInPlace(t, m, tId, matchId)) {
+    setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
+  } else {
+    window._suppressSoftRefresh = false;
+    _rerenderBracket(tId, matchId);
+  }
 };
 
 // v0.17.1: aprovar resultado pendente. Disponível pra: (a) qualquer membro

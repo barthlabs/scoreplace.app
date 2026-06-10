@@ -1903,7 +1903,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
   }
 
   return `
-    <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" style="background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -1913,6 +1913,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
       ${winnerBadge}
     </div>`;
 }
+// v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
+// individual in-place (sem re-render do bracket inteiro), preservando scroll,
+// o estado <details> aberto dos "Demais jogos" e a posição da classificação.
+window.renderMatchCard = renderMatchCard;
 
 // ─── Highlight winner based on score while typing ─────────────────────────────
 
@@ -3245,11 +3249,17 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     var _playoffHtml = (typeof window._renderPlayoffSection === 'function') ? window._renderPlayoffSection(t) : '';
     // v2.3.19: quando a rodada atual já está concluída, a classificação geral
     // sobe pra cima dos jogos da rodada (rodada vira "histórico" — o que importa
-    // é a tabela). Rodada em andamento mantém o teu jogo no topo (você age nele).
+    // é a tabela).
+    // v2.3.46: rodada EM ANDAMENTO → a classificação fica EMBAIXO (depois de
+    // "Seu jogo" E dos "Demais jogos da rodada") e só sobe pro topo quando todos
+    // os placares da rodada forem lançados (allComplete). Pedido do usuário:
+    // "a classificação geral fica embaixo e só vai para cima quando todos os
+    // placares da rodada forem lançados." Combina com o lançamento in-place
+    // (_finalizeRoundCardInPlace) que mantém a página estática durante a rodada.
     if (allComplete) {
       return _phaseBannerHtml + _progressBar + _readyBanner + standingsTablesHtml + _playoffHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
     }
-    return _phaseBannerHtml + _progressBar + _readyBanner + currentRoundHtml + standingsTablesHtml + _playoffHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+    return _phaseBannerHtml + _progressBar + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + standingsTablesHtml + _playoffHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
   }
   return _phaseBannerHtml + _progressBar + standingsTablesHtml + _readyBanner + currentRoundHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
 }
