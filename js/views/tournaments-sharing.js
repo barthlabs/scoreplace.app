@@ -65,23 +65,36 @@ window._openVenueFromTournament = function(tournamentId) {
     window.location.hash = '#venues/' + encodeURIComponent(key);
 };
 
+// Parse "2026-06-14T18:30" / "2026-06-14" → { d:'14/06/2026', time:'18:30'|null }
+function _fmtDateBR(s) {
+    var m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+    if (!m) return null;
+    return { d: m[3] + '/' + m[2] + '/' + m[1], time: m[4] ? (m[4] + ':' + m[5]) : null };
+}
+// Linha de data do convite. Liga (temporada) com início E fim → "de DD/MM/AAAA
+// a DD/MM/AAAA". Demais formatos → data única (+ hora quando houver).
+function _tournamentDateText(t) {
+    if (!t) return null;
+    var isLiga = !!(window._isLigaFormat && window._isLigaFormat(t));
+    var s = _fmtDateBR(t.startDate);
+    var e = _fmtDateBR(t.endDate);
+    if (isLiga && s && e) return 'de ' + s.d + ' a ' + e.d;
+    if (s) return s.d + (s.time ? ' às ' + s.time : '');
+    return null;
+}
+
 // v2.1.83: texto de convite de torneio — NOME + DATA/HORA + LOCAL, em vez de só
 // o nome. Usado no compartilhamento e no modal de convite. `url` opcional: quando
 // passado, anexa a linha "Inscreva-se" (clipboard/WhatsApp); no navigator.share a
-// url vai no campo próprio, então chamamos SEM url. Parse da data por regex
-// (startDate = "2026-06-14T18:30", hora local) — evita ambiguidade de fuso.
+// url vai no campo próprio, então chamamos SEM url.
 window._tournamentInviteText = function(t, url) {
     if (!t) return '';
     // Nome do torneio em destaque: linha em branco antes/depois + *negrito*
     // (WhatsApp/Telegram renderizam asteriscos como bold). Dá respiro e foco
     // ao nome, que é a informação mais importante do convite.
     var lines = ['🏆 Convite para o torneio', '', '*' + (t.name || 'Torneio') + '*', ''];
-    var m = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
-    if (m) {
-        var dateStr = m[3] + '/' + m[2] + '/' + m[1];
-        if (m[4]) dateStr += ' às ' + m[4] + ':' + m[5];
-        lines.push('📅 ' + dateStr);
-    }
+    var dline = _tournamentDateText(t);
+    if (dline) lines.push('📅 ' + dline);
     if (t.venue) lines.push('📍 ' + t.venue);
     if (url) { lines.push(''); lines.push('👉 Inscreva-se: ' + url); }
     return lines.join('\n');
@@ -109,8 +122,8 @@ window._sendTournamentInviteEmail = function(tournamentId) {
     // no cabeçalho 🏆 do template). Mantém o mesmo conteúdo da mensagem de
     // WhatsApp, só que em HTML branded.
     var lines = [inviterName ? (inviterName + ' está te convidando para este torneio.') : 'Você foi convidado para este torneio.', ''];
-    var m = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
-    if (m) { var ds = m[3] + '/' + m[2] + '/' + m[1]; if (m[4]) ds += ' às ' + m[4] + ':' + m[5]; lines.push('📅 ' + ds); }
+    var _dl = _tournamentDateText(t);
+    if (_dl) lines.push('📅 ' + _dl);
     if (t.venue) lines.push('📍 ' + t.venue);
     var message = lines.join('\n');
     var subject = 'Convite para o torneio: ' + (t.name || 'Torneio');
@@ -353,8 +366,8 @@ window._openTournamentInvitePrint = function(tournamentId) {
   var ref = (cu && (cu.uid || cu.email)) || '';
   var url = window._tournamentUrl(t.id) + (ref ? '?ref=' + encodeURIComponent(ref) : '');
   var subParts = [];
-  var m = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
-  if (m) { var ds = m[3] + '/' + m[2] + '/' + m[1]; if (m[4]) ds += ' às ' + m[4] + ':' + m[5]; subParts.push('📅 ' + ds); }
+  var dline = _tournamentDateText(t);
+  if (dline) subParts.push('📅 ' + dline);
   if (t.venue) subParts.push('📍 ' + t.venue);
   window._openInvitePrint({ kind: 'tournament', url: url, title: t.name || 'Torneio', subtitle: subParts.join('\n'), logo: t.logoData || '', logoRadius: window._tournamentLogoRadius(t) });
 };
