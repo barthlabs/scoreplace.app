@@ -523,11 +523,9 @@ window._updateFlyerPreview = function() {
     }
     frame.__flyerSig = sig;
     frame.srcdoc = _buildFlyerPrintHtml(o);
-    // Dimensões do papel em px @96dpi (retrato). Paisagem inverte.
-    var PAPER = { A4: [794, 1123], A5: [559, 794], A6: [397, 559], letter: [816, 1056] };
-    var dims = PAPER[o.paper] || PAPER.A4;
-    var pw = (o.orient === 'landscape') ? dims[1] : dims[0];
-    var ph = (o.orient === 'landscape') ? dims[0] : dims[1];
+    // Dimensões do papel em px @96dpi — MESMA fonte que o canvas .page do flyer.
+    var _pp = _flyerPaperPx(o);
+    var pw = _pp.pw, ph = _pp.ph;
     var availW = Math.max(host.clientWidth - 20, 40);
     var availH = Math.max(host.clientHeight - 20, 40);
     var scale = Math.min(availW / pw, availH / ph);
@@ -569,6 +567,24 @@ window._doInvitePrint = function() {
   setTimeout(function() { try { win.print(); } catch (e) {} }, 600);
 };
 
+// Dimensões do papel em px @96dpi (retrato). Paisagem inverte. Fonte ÚNICA
+// usada tanto pela pré-visualização quanto pela montagem do HTML — assim o
+// canvas do flyer tem SEMPRE o tamanho real do papel em px.
+function _flyerPaperPx(o) {
+  var PAPER = { A4: [794, 1123], A5: [559, 794], A6: [397, 559], letter: [816, 1056] };
+  var d = PAPER[(o && o.paper)] || PAPER.A4;
+  var land = o && o.orient === 'landscape';
+  return { pw: land ? d[1] : d[0], ph: land ? d[0] : d[1] };
+}
+// clamp(minPt, vw, maxPt) resolvido em PX absolutos contra a largura real do
+// papel (PW). Em impressão WebKit resolve vw/vh contra a JANELA, não a página —
+// por isso TUDO no flyer precisa ser px fixo pra preview == impressão.
+function _flyerClampPx(minPt, vw, maxPt, PW) {
+  var px = (vw / 100) * PW;
+  var lo = minPt * 96 / 72, hi = maxPt * 96 / 72;
+  return Math.round(Math.max(lo, Math.min(hi, px)) * 100) / 100;
+}
+
 function _buildFlyerPrintHtml(o) {
   var esc = function(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
@@ -585,29 +601,36 @@ function _buildFlyerPrintHtml(o) {
   var isLandscape = o.orient === 'landscape';
   var isTourn = o.kind === 'tournament';
 
+  // Canvas em PX reais do papel — base de TODOS os tamanhos (sem vw/vh, que
+  // quebram na impressão). PW = largura, PH = altura.
+  var _pp = _flyerPaperPx(o);
+  var PW = _pp.pw, PH = _pp.ph;
+  var cpx = function(minPt, vw, maxPt) { return _flyerClampPx(minPt, vw, maxPt, PW); };
+
   // Tamanhos ajustáveis (só torneio) — os valores em si vivem em _flyerSizeCss,
   // que é injetado num <style> separado e atualizado in-place (sem recarregar
   // o QR). Aqui só decidimos se o logo do torneio aparece (slider 0 = oculto).
   var sz = o.sizes || {};
   var hasTLogo = !!o.logo && (sz.logo == null || Number(sz.logo) > 2);
 
-  // Título principal por tipo de convite. Fontes em clamp(vw) → escalam com o
-  // tamanho do papel (A6 menor, A4 maior) mantendo proporção e uma só página.
+  // Título principal por tipo de convite. Fontes em PX (resolvidas contra a
+  // largura real do papel) → mesmas quebras de linha na tela e na impressão.
+  var mpx = Math.round(PW * 0.015); // margem vertical equivalente a 1.5%
   var heading = '';
   var sub = '';
   if (o.kind === 'app') {
     // Frase configurável — cada linha vira um parágrafo com peso decrescente.
     var lines = String(o.phrase || window._flyerDefaultAppPhrase()).split('\n').filter(function(l) { return l.trim() !== ''; });
     heading = lines.map(function(l, i) {
-      var size = i === 0 ? 'clamp(15pt,5vw,30pt)' : (i === 1 ? 'clamp(12pt,3.6vw,22pt)' : 'clamp(9pt,2.4vw,15pt)');
+      var size = i === 0 ? cpx(15, 5, 30) : (i === 1 ? cpx(12, 3.6, 22) : cpx(9, 2.4, 15));
       var weight = i === 0 ? '800' : (i === 1 ? '700' : '500');
       var col = i === 0 ? '#0f172a' : (i === 1 ? '#4f46e5' : '#475569');
-      return '<div style="font-size:' + size + ';font-weight:' + weight + ';color:' + col + ';line-height:1.2;margin:1.5% 0;">' + esc(l) + '</div>';
+      return '<div style="font-size:' + size + 'px;font-weight:' + weight + ';color:' + col + ';line-height:1.2;margin:' + mpx + 'px 0;">' + esc(l) + '</div>';
     }).join('');
   } else if (o.kind === 'casual') {
-    heading = '<div style="font-size:clamp(10pt,2.6vw,15pt);font-weight:700;color:#0891b2;letter-spacing:1px;text-transform:uppercase;margin-bottom:1.5%;">⚡ Partida Casual</div>' +
-              (o.title ? '<div style="font-size:clamp(14pt,4.6vw,26pt);font-weight:800;color:#0f172a;line-height:1.15;">' + esc(o.title) + '</div>' : '');
-    sub = o.subtitle ? '<div style="font-size:clamp(9pt,2.4vw,13pt);color:#475569;margin-top:2%;white-space:pre-line;">' + esc(o.subtitle) + '</div>' : '';
+    heading = '<div style="font-size:' + cpx(10, 2.6, 15) + 'px;font-weight:700;color:#0891b2;letter-spacing:1px;text-transform:uppercase;margin-bottom:' + mpx + 'px;">⚡ Partida Casual</div>' +
+              (o.title ? '<div style="font-size:' + cpx(14, 4.6, 26) + 'px;font-weight:800;color:#0f172a;line-height:1.15;">' + esc(o.title) + '</div>' : '');
+    sub = o.subtitle ? '<div style="font-size:' + cpx(9, 2.4, 13) + 'px;color:#475569;margin-top:' + Math.round(PW * 0.02) + 'px;white-space:pre-line;">' + esc(o.subtitle) + '</div>' : '';
   } else {
     // tournament — nome em destaque (fonte maior, mais respiro acima/abaixo).
     // Logo do torneio à esquerda do nome quando houver; o conjunto fica em
@@ -645,13 +668,16 @@ function _buildFlyerPrintHtml(o) {
       '</div>';
   }
 
-  // Logo scoreplace do topo: SEMPRE ~70% da página (fixo, não-ajustável).
-  var logoW = qrOnly ? '78%' : (isLandscape ? '64%' : '78%');
-  // QR base (app/casual): formula fixa. Pro torneio o tamanho vem do
-  // _flyerSizeCss (slider), injetado num <style> separado que sobrescreve.
-  var qrWBase = qrOnly ? 'min(80vw,80vh)' : (isLandscape ? 'min(40vw,60vh)' : 'min(56vw,42vh)');
+  // TODOS os tamanhos abaixo em PX absolutos derivados do canvas do papel (PW/PH).
+  // Nada de vw/vh/% — assim a tela e a impressão usam exatamente os mesmos valores.
+  var padPx = Math.round(PW * 0.05);
+  var logoWpx = Math.round(PW * (qrOnly ? 0.78 : (isLandscape ? 0.64 : 0.78)));
+  var logoMaxH = Math.round(PH * 0.26);
+  var logoMb = Math.round(PW * 0.04);
+  var qrBasePx = Math.round(qrOnly ? Math.min(PW * 0.80, PH * 0.80)
+    : (isLandscape ? Math.min(PW * 0.40, PH * 0.60) : Math.min(PW * 0.56, PH * 0.42)));
+  var bodyGapPx = (isLandscape && !qrOnly) ? Math.round(PW * 0.06) : Math.round(PH * 0.03);
   var bodyDir = (isLandscape && !qrOnly) ? 'row' : 'column';
-  var bodyGap = (isLandscape && !qrOnly) ? '6%' : '3vh';
   // Retrato: conteúdo ancorado no topo (logo do scoreplace acima) → o rótulo e
   // o nome NUNCA são cortados. Paisagem: centraliza a linha.
   var bodyJustify = (isLandscape && !qrOnly) ? 'center' : 'flex-start';
@@ -666,35 +692,35 @@ function _buildFlyerPrintHtml(o) {
     '<style>' +
       '@page { size: ' + paperSize + ' ' + (isLandscape ? 'landscape' : 'portrait') + '; margin: 0; }' +
       '* { box-sizing:border-box; }' +
-      'html,body { margin:0; padding:0; height:100%; background:#fff; overflow:hidden; }' +
+      'html,body { margin:0; padding:0; background:#fff; overflow:hidden; }' +
       'body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
         (isBW ? ' filter:grayscale(100%);' : '') +
         ' -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
-      // qrOnly centraliza tudo; flyer completo ancora o logo no topo (flex-start)
-      // e o corpo (flex:1) centraliza o conteúdo do torneio no resto da página.
-      '.page { width:100%; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:' + (qrOnly ? 'center' : 'flex-start') + ';' +
-        ' gap:0; text-align:center; padding:5%; }' +
-      '.logo { width:100%; flex:0 0 auto; margin:0 0 4% 0; display:flex; justify-content:center; }' +
-      '.logo svg { width:' + logoW + '; height:auto; max-height:26vh; }' +
+      // .page = canvas FIXO no tamanho real do papel em px. Impresso 1:1 (@page
+      // margin:0) e, na tela, o próprio <iframe> é escalado pra caber no host.
+      '.page { width:' + PW + 'px; height:' + PH + 'px; display:flex; flex-direction:column; align-items:center; justify-content:' + (qrOnly ? 'center' : 'flex-start') + ';' +
+        ' gap:0; text-align:center; padding:' + padPx + 'px; }' +
+      '.logo { width:100%; flex:0 0 auto; margin:0 0 ' + logoMb + 'px 0; display:flex; justify-content:center; }' +
+      '.logo svg { width:' + logoWpx + 'px; height:auto; max-height:' + logoMaxH + 'px; }' +
       // flyer-body: altura NATURAL (não flex:1). Um script escala esse bloco pra
       // caber no espaço abaixo do logo → o QR nunca corta e o impresso (que é o
       // próprio iframe) bate com a pré-visualização.
-      '.flyer-body { width:100%; display:flex; flex-direction:' + bodyDir + '; align-items:center; justify-content:' + bodyJustify + '; gap:' + bodyGap + '; transform-origin:top center; }' +
+      '.flyer-body { width:100%; display:flex; flex-direction:' + bodyDir + '; align-items:center; justify-content:' + bodyJustify + '; gap:' + bodyGapPx + 'px; transform-origin:top center; }' +
       '.col-qr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; }' +
       colCss +
       '.heading { min-width:0; }' +
       '.qr-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:5mm; padding:4mm; display:inline-block; }' +
-      '.qr { width:' + qrWBase + '; height:auto; display:block; }' +
-      '.caption { margin-top:3%; font-size:clamp(8pt,2.2vw,12pt); color:#64748b; }' +
-      '.brand { margin-top:4%; font-size:clamp(7pt,1.8vw,9pt); color:#94a3b8; letter-spacing:0.5px; }' +
+      '.qr { width:' + qrBasePx + 'px; height:auto; display:block; }' +
+      '.caption { margin-top:' + Math.round(PW * 0.03) + 'px; font-size:' + cpx(8, 2.2, 12) + 'px; color:#64748b; }' +
+      '.brand { margin-top:' + Math.round(PW * 0.04) + 'px; font-size:' + cpx(7, 1.8, 9) + 'px; color:#94a3b8; letter-spacing:0.5px; }' +
       // Bloco de nome do torneio (estrutura estática; tamanhos vêm do size-style).
-      '.t-label { font-size:clamp(10pt,2.4vw,14pt); font-weight:700; color:#b45309; letter-spacing:1px; text-transform:uppercase; }' +
-      '.name-block { width:80%; margin:2.5vh auto; display:flex; align-items:center; justify-content:center; gap:5%; }' +
+      '.t-label { font-size:' + cpx(10, 2.4, 14) + 'px; font-weight:700; color:#b45309; letter-spacing:1px; text-transform:uppercase; }' +
+      '.name-block { width:80%; margin:' + Math.round(PH * 0.025) + 'px auto; display:flex; align-items:center; justify-content:center; gap:' + Math.round(PW * 0.05) + 'px; }' +
       '.name-block.has-logo { text-align:left; }' +
-      '.t-logo { width:20vw; max-width:none; height:auto; flex:0 0 auto; border-radius:14%; }' +
-      '.t-name { font-size:6vw; font-weight:800; color:#0f172a; line-height:1.12; word-break:break-word; flex:1 1 auto; min-width:0; }' +
+      '.t-logo { width:' + Math.round(PW * 0.20) + 'px; max-width:none; height:auto; flex:0 0 auto; border-radius:14%; }' +
+      '.t-name { font-size:' + Math.round(PW * 0.06) + 'px; font-weight:800; color:#0f172a; line-height:1.12; word-break:break-word; flex:1 1 auto; min-width:0; }' +
       '.name-block.has-logo .t-name { text-align:left; }' +
-      '.t-sub { font-size:clamp(9pt,2.4vw,13pt); color:#475569; white-space:pre-line; }' +
+      '.t-sub { font-size:' + cpx(9, 2.4, 13) + 'px; color:#475569; white-space:pre-line; }' +
     '</style>' +
     // size-style: separado pra ser atualizado IN-PLACE pelos sliders sem
     // recarregar o iframe (e portanto sem o QR piscar/desaparecer).
@@ -729,29 +755,34 @@ function _buildFlyerPrintHtml(o) {
 
 // CSS que depende dos sliders de tamanho (só torneio, flyer completo). Fica
 // num <style> separado pra atualização in-place. Sliders são PERCENTUAIS
-// (100 = padrão); nome/logo escalam em vw (sem teto de clamp que travava o
-// crescimento antes). QR limitado por largura E altura → nunca corta.
+// (100 = padrão). Tudo em PX absoluto derivado do canvas do papel (PW/PH) —
+// sem vw/vh, pra que a impressão use exatamente os mesmos tamanhos da tela.
+// QR limitado por largura E altura → nunca corta.
 function _flyerSizeCss(o) {
   if (o.kind !== 'tournament' || o.content === 'qr') return '';
   var sz = o.sizes || {};
   var isLandscape = o.orient === 'landscape';
+  var pp = _flyerPaperPx(o);
+  var PW = pp.pw, PH = pp.ph;
+  var cpx = function(minPt, vw, maxPt) { return _flyerClampPx(minPt, vw, maxPt, PW); };
   var pLogo = (sz.logo != null ? Number(sz.logo) : 100) / 100;
   var pName = (sz.name != null ? Number(sz.name) : 100) / 100;
   var pQr = (sz.qr != null ? Number(sz.qr) : 100) / 100;
   var scale = (sz.text != null ? Number(sz.text) : 100) / 100;
   var radius = o.logoRadius || '14%';
-  var logoBase = isLandscape ? 13 : 20;   // vw
-  var nameBase = isLandscape ? 4 : 6;      // vw
-  var qrBase = 52 * pQr;                    // vw
-  var qrW = isLandscape ? 'min(' + qrBase.toFixed(2) + 'vw,46vw,86vh)' : 'min(' + qrBase.toFixed(2) + 'vw,90vw,86vh)';
+  var logoBase = (isLandscape ? 0.13 : 0.20) * PW;   // px
+  var nameBase = (isLandscape ? 0.04 : 0.06) * PW;   // px
+  // QR limitado por largura (52% base · slider) E por altura/ largura máximas.
+  var qrBase = 0.52 * PW * pQr;
+  var qrW = isLandscape ? Math.min(qrBase, 0.46 * PW, 0.86 * PH) : Math.min(qrBase, 0.90 * PW, 0.86 * PH);
   var css =
-    '.qr{width:' + qrW + ';}' +
-    '.t-logo{width:' + (logoBase * pLogo).toFixed(2) + 'vw;border-radius:' + radius + ';max-width:none;}' +
-    '.t-name{font-size:' + (nameBase * pName).toFixed(2) + 'vw;}' +
-    '.t-label{font-size:calc(' + scale + ' * clamp(10pt,2.4vw,14pt));}' +
-    '.t-sub{font-size:calc(' + scale + ' * clamp(9pt,2.4vw,13pt));}' +
-    '.caption{font-size:calc(' + scale + ' * clamp(8pt,2.2vw,12pt));}';
-  if (isLandscape) css += '.name-block{width:92%;margin:3vh auto;gap:4%;}';
+    '.qr{width:' + Math.round(qrW) + 'px;}' +
+    '.t-logo{width:' + Math.round(logoBase * pLogo) + 'px;border-radius:' + radius + ';max-width:none;}' +
+    '.t-name{font-size:' + (nameBase * pName).toFixed(1) + 'px;}' +
+    '.t-label{font-size:' + (scale * cpx(10, 2.4, 14)).toFixed(1) + 'px;}' +
+    '.t-sub{font-size:' + (scale * cpx(9, 2.4, 13)).toFixed(1) + 'px;}' +
+    '.caption{font-size:' + (scale * cpx(8, 2.2, 12)).toFixed(1) + 'px;}';
+  if (isLandscape) css += '.name-block{width:92%;margin:' + Math.round(PH * 0.03) + 'px auto;gap:' + Math.round(PW * 0.04) + 'px;}';
   return css;
 }
 

@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.74-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Impressão do convite agora é idêntica à pré-visualização — de verdade.</b> O flyer passou a ser desenhado num <b>canvas de pixels fixo no tamanho real do papel</b>, sem nenhuma medida relativa à janela. Antes, ao imprimir, o navegador (Safari/Chrome) recalculava os tamanhos contra a tela e não contra a folha — por isso o nome do torneio quebrava no meio (ex.: <i>Rankin/g</i>), o QR Code quase cortava e a frase abaixo dele sumia. Agora o que você vê na tela é exatamente o que sai impresso/PDF: mesmas quebras de linha, QR inteiro e a chamada <i>“Escaneie para acessar o torneio”</i> sempre visível. (Dica: deixe as margens em “Nenhuma” no diálogo de impressão.)</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.73-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Cards com foto do local: caixas de leitura só onde precisa.</b> Quando o card do torneio tem foto do local de fundo, agora apenas os blocos de texto pequeno e de baixo contraste — as <b>datas</b>, o <b>cronômetro</b> (início da Liga, próximo sorteio etc.), o número de <b>inscritos</b> e a linha <b>Formato/Acesso</b> — ganham uma caixa escura discreta atrás do texto. O resto do card (e a foto) fica à mostra: nada de painel escuro cobrindo a imagem inteira.</li>' +
