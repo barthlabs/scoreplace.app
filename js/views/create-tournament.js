@@ -90,15 +90,16 @@ function setupCreateTournamentModal() {
                     <input type="hidden" id="tourn-logo-data" value="">
                   </div>
                 </div>
-                <!-- Formato do logo: quadrado/círculo + arredondamento -->
-                <div id="logo-shape-row" style="display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap;">
-                  <span style="font-size:0.72rem; color:var(--text-muted); font-weight:600;">Formato:</span>
-                  <button type="button" id="logo-shape-square" onclick="window._setLogoShape('square')" style="padding:6px 12px; border-radius:8px; border:1px solid rgba(99,102,241,0.4); background:rgba(99,102,241,0.18); color:#a5b4fc; font-size:0.76rem; font-weight:600; cursor:pointer;">⬜ Quadrado</button>
-                  <button type="button" id="logo-shape-circle" onclick="window._setLogoShape('circle')" style="padding:6px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:var(--text-muted); font-size:0.76rem; font-weight:600; cursor:pointer;">⚪ Círculo</button>
-                  <span id="logo-radius-wrap" style="display:flex; align-items:center; gap:6px; flex:1; min-width:130px;">
-                    <span style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;">arredondar bordas</span>
-                    <input type="range" id="logo-radius-range" min="0" max="50" value="14" oninput="window._setLogoRadius(this.value)" style="flex:1; min-width:70px; accent-color:#6366f1;">
-                  </span>
+                <!-- Forma do logo: 1 slider contínuo. Direita = quadrado;
+                     arrastando pra esquerda arredonda as arestas até virar um
+                     círculo perfeito no extremo esquerdo. -->
+                <div id="logo-shape-row" style="margin-top:14px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.7rem; color:var(--text-muted); margin-bottom:5px;">
+                    <span>⚫ Círculo</span>
+                    <span style="font-weight:600;">Forma do logo</span>
+                    <span>Quadrado ⬛</span>
+                  </div>
+                  <input type="range" id="logo-forma-range" min="0" max="50" value="36" oninput="window._setLogoForma(this.value)" style="width:100%; accent-color:#6366f1;">
                   <input type="hidden" id="tourn-logo-shape" value="square">
                   <input type="hidden" id="tourn-logo-radius" value="14">
                 </div>
@@ -1676,11 +1677,16 @@ function setupCreateTournamentModal() {
     }
     var reader = new FileReader();
     reader.onload = function(e) {
-      // Abrir editor de crop/zoom antes de aplicar
+      // Abrir editor de crop/zoom/forma antes de aplicar. radiusControl=true
+      // adiciona o slider de Forma (quadrado ↔ círculo) e retorna o radius.
       if (typeof window._openImageCropEditor === 'function') {
+        var _curR = (function(){ var el = document.getElementById('tourn-logo-radius'); var s = document.getElementById('tourn-logo-shape'); if (s && s.value === 'circle') return 50; var r = el ? Number(el.value) : 14; return isNaN(r) ? 14 : r; })();
         window._openImageCropEditor(e.target.result,
-          { shape: 'square', size: 400, title: '🎨 Ajustar logo do torneio' },
-          function(croppedDataUrl) {
+          { size: 400, title: '🎨 Ajustar logo do torneio', radiusControl: true, initialRadius: _curR },
+          function(croppedDataUrl, radiusPct) {
+            if (radiusPct != null && typeof window._setLogoFormaFromRadius === 'function') {
+              window._setLogoFormaFromRadius(radiusPct, radiusPct >= 50);
+            }
             window._applyTournamentLogo(croppedDataUrl);
           }
         );
@@ -1728,28 +1734,29 @@ function setupCreateTournamentModal() {
     preview.style.borderRadius = shape === 'circle' ? '50%' : css;
   };
 
-  window._setLogoShape = function(shape) {
+  // Slider de Forma. value 0..50 (esquerda→direita). Direita (50) = quadrado
+  // (radius 0); esquerda (0) = círculo (radius 50). radius = 50 - value.
+  window._setLogoForma = function(v) {
+    var radius = 50 - Math.max(0, Math.min(50, Number(v)));
+    if (isNaN(radius)) radius = 14;
+    var radEl = document.getElementById('tourn-logo-radius');
     var shapeEl = document.getElementById('tourn-logo-shape');
-    if (shapeEl) shapeEl.value = shape;
-    var sq = document.getElementById('logo-shape-square');
-    var ci = document.getElementById('logo-shape-circle');
-    var on = function(b) { if (!b) return; b.style.border = '1px solid rgba(99,102,241,0.4)'; b.style.background = 'rgba(99,102,241,0.18)'; b.style.color = '#a5b4fc'; };
-    var off = function(b) { if (!b) return; b.style.border = '1px solid rgba(255,255,255,0.1)'; b.style.background = 'rgba(255,255,255,0.05)'; b.style.color = 'var(--text-muted)'; };
-    if (shape === 'circle') { on(ci); off(sq); } else { on(sq); off(ci); }
-    var radWrap = document.getElementById('logo-radius-wrap');
-    if (radWrap) radWrap.style.opacity = shape === 'circle' ? '0.4' : '1';
-    var radRange = document.getElementById('logo-radius-range');
-    if (radRange) radRange.disabled = (shape === 'circle');
+    if (radEl) radEl.value = radius;
+    if (shapeEl) shapeEl.value = radius >= 50 ? 'circle' : 'square';
     window._updateLogoPreviewShape();
   };
 
-  window._setLogoRadius = function(v) {
-    var radEl = document.getElementById('tourn-logo-radius');
-    if (radEl) radEl.value = v;
-    // mexer no slider implica formato quadrado
+  // Posiciona o slider de Forma a partir de um radius (0-50). circle => 0.
+  window._setLogoFormaFromRadius = function(radius, isCircle) {
+    var r = isCircle ? 50 : Math.max(0, Math.min(50, Number(radius)));
+    if (isNaN(r)) r = 14;
     var shapeEl = document.getElementById('tourn-logo-shape');
-    if (shapeEl && shapeEl.value !== 'square') window._setLogoShape('square');
-    else window._updateLogoPreviewShape();
+    var radEl = document.getElementById('tourn-logo-radius');
+    if (radEl) radEl.value = r;
+    if (shapeEl) shapeEl.value = r >= 50 ? 'circle' : 'square';
+    var slider = document.getElementById('logo-forma-range');
+    if (slider) slider.value = 50 - r;
+    window._updateLogoPreviewShape();
   };
 
   window._clearTournamentLogo = function() {
@@ -3568,11 +3575,9 @@ function setupCreateTournamentModal() {
       setTimeout(function() { window._initVenueCreateMap(parseFloat(t.venueLat), parseFloat(t.venueLon), t.venue || ''); }, 300);
     }
     // Restore logo shape/radius BEFORE applying logo (preview usa esses inputs)
-    var _shapeEl = document.getElementById('tourn-logo-shape');
-    var _radEl = document.getElementById('tourn-logo-radius');
-    if (_shapeEl) _shapeEl.value = (t.logoShape === 'circle') ? 'circle' : 'square';
-    if (_radEl) _radEl.value = (t.logoRadius != null && t.logoRadius !== '') ? t.logoRadius : 14;
-    if (typeof window._setLogoShape === 'function') window._setLogoShape(_shapeEl ? _shapeEl.value : 'square');
+    var _isCircle = (t.logoShape === 'circle');
+    var _radVal = (t.logoRadius != null && t.logoRadius !== '') ? t.logoRadius : 14;
+    if (typeof window._setLogoFormaFromRadius === 'function') window._setLogoFormaFromRadius(_radVal, _isCircle);
     // Restore logo
     document.getElementById('tourn-logo-data').value = t.logoData || '';
     if (t.logoData) {
@@ -5207,9 +5212,7 @@ window._prefillFromTemplate = function(tpl) {
   _setV('tourn-venue-place-id', tpl.venuePlaceId);
   _setV('tourn-venue-photo-url', tpl.venuePhotoUrl);
   // Logo
-  _setV('tourn-logo-shape', tpl.logoShape === 'circle' ? 'circle' : 'square');
-  _setV('tourn-logo-radius', (tpl.logoRadius != null && tpl.logoRadius !== '') ? tpl.logoRadius : 14);
-  if (typeof window._setLogoShape === 'function') { try { window._setLogoShape(tpl.logoShape === 'circle' ? 'circle' : 'square'); } catch (e) {} }
+  if (typeof window._setLogoFormaFromRadius === 'function') { try { window._setLogoFormaFromRadius((tpl.logoRadius != null && tpl.logoRadius !== '') ? tpl.logoRadius : 14, tpl.logoShape === 'circle'); } catch (e) {} }
   if (tpl.logoData) { _setV('tourn-logo-data', tpl.logoData); _setV('tourn-logo-locked', tpl.logoLocked ? '1' : '0'); if (typeof window._applyTournamentLogo === 'function') { try { window._applyTournamentLogo(tpl.logoData); } catch (e) {} } }
   // Liga / Suíço — formato de rodada, temporada, intervalo de sorteio, manual
   _setV('liga-round-format', tpl.ligaRoundFormat);
