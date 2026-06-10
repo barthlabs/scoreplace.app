@@ -13,3 +13,6 @@ test-results/
 .lighthouseci/
 fix-null-participants.js
 clear-match-results.js
+admin-delete-phone-accounts.js
+admin-delete-one-account.js
+functions-autodraw/node_modules/
