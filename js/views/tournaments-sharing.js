@@ -374,7 +374,9 @@ window._openInvitePrint = function(opts) {
   if (prev) prev.remove();
 
   var isApp = opts.kind === 'app';
+  var isTourn = opts.kind === 'tournament';
   var defaultPhrase = window._flyerDefaultAppPhrase();
+  var _upd = ' oninput="window._updateFlyerPreview()" onchange="window._updateFlyerPreview()"';
 
   var overlay = document.createElement('div');
   overlay.id = 'flyer-print-overlay';
@@ -384,21 +386,21 @@ window._openInvitePrint = function(opts) {
   var phraseBlock = isApp
     ? '<div style="text-align:left;margin-bottom:14px;">' +
         '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">✏️ Mensagem do convite</label>' +
-        '<textarea id="flyer-phrase" rows="3" style="width:100%;box-sizing:border-box;min-width:0;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;font-family:inherit;resize:vertical;">' + _safe(defaultPhrase) + '</textarea>' +
+        '<textarea id="flyer-phrase" rows="3"' + _upd + ' style="width:100%;box-sizing:border-box;min-width:0;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;font-family:inherit;resize:vertical;">' + _safe(defaultPhrase) + '</textarea>' +
       '</div>'
     : '';
 
   // Sliders de tamanho — só pro flyer de torneio (logo scoreplace fica fixo;
   // logo do torneio, fonte do nome, QR e textos são ajustáveis).
   var _slider = function(id, label, min, max, val) {
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
-      '<span style="font-size:0.74rem;color:var(--text-muted,#94a3b8);width:96px;flex-shrink:0;">' + label + '</span>' +
-      '<input type="range" id="' + id + '" min="' + min + '" max="' + max + '" value="' + val + '" style="flex:1;min-width:0;accent-color:#6366f1;">' +
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
+      '<span style="font-size:0.74rem;color:var(--text-muted,#94a3b8);width:90px;flex-shrink:0;">' + label + '</span>' +
+      '<input type="range" id="' + id + '" min="' + min + '" max="' + max + '" value="' + val + '"' + _upd + ' style="flex:1;min-width:0;accent-color:#6366f1;">' +
     '</div>';
   };
-  var sizeBlock = (opts.kind === 'tournament')
-    ? '<div id="flyer-size-block" style="margin-bottom:18px;padding:12px;border:1px solid var(--border-color,#2a2f45);border-radius:10px;">' +
-        '<div style="font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:10px;">Tamanhos (flyer completo)</div>' +
+  var sizeBlock = isTourn
+    ? '<div id="flyer-size-block" style="margin-bottom:14px;padding:12px;border:1px solid var(--border-color,#2a2f45);border-radius:10px;">' +
+        '<div style="font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:10px;">Tamanhos (arraste e veja na hora)</div>' +
         _slider('flyer-logosize', 'Logo torneio', 0, 44, 26) +
         _slider('flyer-namesize', 'Nome', 20, 50, 34) +
         _slider('flyer-qrsize', 'QR Code', 32, 70, 52) +
@@ -406,95 +408,116 @@ window._openInvitePrint = function(opts) {
       '</div>'
     : '';
 
+  var _sel = function(id, label, optsHtml) {
+    return '<div style="margin-bottom:12px;">' +
+      '<label style="display:block;font-size:0.75rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:5px;">' + label + '</label>' +
+      '<select id="' + id + '"' + _upd + ' style="width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:9px 12px;color:var(--text-bright,#fff);font-size:0.84rem;">' + optsHtml + '</select>' +
+    '</div>';
+  };
+
+  var controls =
+    phraseBlock +
+    _sel('flyer-content', 'Conteúdo', '<option value="full">Flyer completo (logo + texto + QR)</option><option value="qr">Apenas o QR Code</option>') +
+    _sel('flyer-paper', 'Tamanho do papel', '<option value="A4">A4 (210 × 297 mm)</option><option value="A5">A5 (148 × 210 mm)</option><option value="A6">A6 (105 × 148 mm)</option><option value="letter">Carta (216 × 279 mm)</option>') +
+    _sel('flyer-color', 'Cor', '<option value="color">Colorido</option><option value="bw">Preto e branco</option>') +
+    _sel('flyer-orient', 'Orientação', '<option value="portrait">Retrato (vertical)</option><option value="landscape">Paisagem (horizontal)</option>') +
+    sizeBlock;
+
   overlay.innerHTML =
-    '<div style="background:var(--card-bg,#1e2235);border-radius:18px;padding:22px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;">' +
-      '<div style="text-align:center;font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:4px;">🖨️ Imprimir convite</div>' +
-      '<div style="text-align:center;font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-bottom:18px;">Gere um flyer pronto pra imprimir ou salvar em PDF</div>' +
-      phraseBlock +
-      // Conteúdo: flyer completo ou só QR
-      '<div style="margin-bottom:14px;">' +
-        '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">Conteúdo</label>' +
-        '<select id="flyer-content" style="width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;">' +
-          '<option value="full">Flyer completo (logo + texto + QR)</option>' +
-          '<option value="qr">Apenas o QR Code</option>' +
-        '</select>' +
+    '<div style="background:var(--card-bg,#1e2235);border-radius:18px;padding:18px;max-width:920px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;display:flex;flex-direction:column;max-height:92vh;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap;">' +
+        '<div style="font-size:1.1rem;font-weight:800;color:var(--text-bright,#fff);">🖨️ Imprimir convite</div>' +
+        '<div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);">Pré-visualização ao vivo — ajuste e veja na hora</div>' +
       '</div>' +
-      // Tamanho do papel
-      '<div style="margin-bottom:14px;">' +
-        '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">Tamanho do papel</label>' +
-        '<select id="flyer-paper" style="width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;">' +
-          '<option value="A4">A4 (210 × 297 mm)</option>' +
-          '<option value="A5">A5 (148 × 210 mm)</option>' +
-          '<option value="A6">A6 (105 × 148 mm)</option>' +
-          '<option value="letter">Carta (216 × 279 mm)</option>' +
-        '</select>' +
-      '</div>' +
-      // Cor
-      '<div style="margin-bottom:20px;">' +
-        '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">Cor</label>' +
-        '<select id="flyer-color" style="width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;">' +
-          '<option value="color">Colorido</option>' +
-          '<option value="bw">Preto e branco</option>' +
-        '</select>' +
-      '</div>' +
-      // Orientação
-      '<div style="margin-bottom:20px;">' +
-        '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">Orientação</label>' +
-        '<select id="flyer-orient" style="width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;">' +
-          '<option value="portrait">Retrato (vertical)</option>' +
-          '<option value="landscape">Paisagem (horizontal)</option>' +
-        '</select>' +
-      '</div>' +
-      sizeBlock +
-      '<div style="display:flex;gap:8px;">' +
-        '<button onclick="document.getElementById(\'flyer-print-overlay\').remove()" class="btn btn-sm" style="flex:0 0 auto;background:rgba(148,163,184,0.15);color:var(--text-muted,#94a3b8);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 16px;font-size:0.85rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
-        '<button onclick="window._doInvitePrint()" class="btn btn-sm hover-lift" style="flex:1;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:0.88rem;font-weight:700;cursor:pointer;">🖨️ Imprimir / Salvar PDF</button>' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;flex:1;min-height:0;">' +
+        // Preview
+        '<div id="flyer-preview-host" style="flex:2 1 300px;min-width:240px;height:min(64vh,540px);background:#0a0e1a;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:10px;box-sizing:border-box;">' +
+          '<div id="flyer-preview-wrap" style="position:relative;box-shadow:0 6px 24px rgba(0,0,0,0.55);background:#fff;">' +
+            '<iframe id="flyer-preview-frame" title="Pré-visualização" style="border:0;background:#fff;display:block;"></iframe>' +
+          '</div>' +
+        '</div>' +
+        // Controls
+        '<div style="flex:1 1 250px;min-width:230px;max-width:320px;display:flex;flex-direction:column;min-height:0;">' +
+          '<div style="overflow-y:auto;flex:1;min-height:0;padding-right:4px;">' + controls + '</div>' +
+          '<div style="display:flex;gap:8px;margin-top:12px;">' +
+            '<button onclick="document.getElementById(\'flyer-print-overlay\').remove()" class="btn btn-sm" style="flex:0 0 auto;background:rgba(148,163,184,0.15);color:var(--text-muted,#94a3b8);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 16px;font-size:0.85rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
+            '<button onclick="window._doInvitePrint()" class="btn btn-sm hover-lift" style="flex:1;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:0.86rem;font-weight:700;cursor:pointer;">🖨️ Imprimir / PDF</button>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
     '</div>';
 
   document.body.appendChild(overlay);
+  // Primeira renderização do preview + re-escala em resize da janela.
+  window._updateFlyerPreview();
+  setTimeout(window._updateFlyerPreview, 60);
+  if (!window._flyerPreviewResizeBound) {
+    window._flyerPreviewResizeBound = true;
+    window.addEventListener('resize', function() {
+      if (document.getElementById('flyer-preview-frame')) window._updateFlyerPreview();
+    });
+  }
 };
 
-// Lê as opções do overlay, monta o HTML do flyer e abre a janela de impressão.
-window._doInvitePrint = function() {
+// Lê o estado atual de todos os controles + contexto e devolve as opções
+// que alimentam _buildFlyerPrintHtml. Compartilhado entre preview e impressão.
+window._collectFlyerOpts = function() {
   var opts = window._flyerPrintOpts || {};
-  var contentEl = document.getElementById('flyer-content');
-  var paperEl = document.getElementById('flyer-paper');
-  var colorEl = document.getElementById('flyer-color');
-  var phraseEl = document.getElementById('flyer-phrase');
-
-  var content = contentEl ? contentEl.value : 'full';
-  var paper = paperEl ? paperEl.value : 'A4';
-  var color = colorEl ? colorEl.value : 'color';
-  var orientEl = document.getElementById('flyer-orient');
-  var orient = orientEl ? orientEl.value : 'portrait';
-  var phrase = phraseEl ? phraseEl.value : '';
-  var _num = function(id, dflt) { var el = document.getElementById(id); var n = el ? Number(el.value) : NaN; return isNaN(n) ? dflt : n; };
-  var sizes = {
-    logo: _num('flyer-logosize', 26),
-    name: _num('flyer-namesize', 34),
-    qr: _num('flyer-qrsize', 52),
-    text: _num('flyer-textsize', 100)
-  };
-
-  var ov = document.getElementById('flyer-print-overlay');
-  if (ov) ov.remove();
-
-  var html = _buildFlyerPrintHtml({
+  var val = function(id, d) { var e = document.getElementById(id); return e ? e.value : d; };
+  var num = function(id, d) { var e = document.getElementById(id); var n = e ? Number(e.value) : NaN; return isNaN(n) ? d : n; };
+  var phEl = document.getElementById('flyer-phrase');
+  return {
     kind: opts.kind,
     url: opts.url || (window.SCOREPLACE_URL || 'https://scoreplace.app'),
     title: opts.title || '',
     subtitle: opts.subtitle || '',
-    phrase: phrase,
-    content: content,
-    paper: paper,
-    color: color,
-    orient: orient,
+    phrase: phEl ? phEl.value : '',
+    content: val('flyer-content', 'full'),
+    paper: val('flyer-paper', 'A4'),
+    color: val('flyer-color', 'color'),
+    orient: val('flyer-orient', 'portrait'),
     logo: opts.logo || '',
     logoRadius: opts.logoRadius || '14%',
-    sizes: sizes
-  });
+    sizes: { logo: num('flyer-logosize', 26), name: num('flyer-namesize', 34), qr: num('flyer-qrsize', 52), text: num('flyer-textsize', 100) }
+  };
+};
 
+// Renderiza o flyer dentro do iframe de preview, no tamanho real do papel,
+// escalado pra caber no espaço disponível. O iframe reproduz fielmente o
+// resultado impresso (vw/vh batem com as dimensões da página). rAF throttle.
+window._updateFlyerPreview = function() {
+  if (window._flyerPreviewRaf) return;
+  window._flyerPreviewRaf = requestAnimationFrame(function() {
+    window._flyerPreviewRaf = null;
+    var frame = document.getElementById('flyer-preview-frame');
+    var host = document.getElementById('flyer-preview-host');
+    var wrap = document.getElementById('flyer-preview-wrap');
+    if (!frame || !host || !wrap) return;
+    var o = window._collectFlyerOpts();
+    frame.srcdoc = _buildFlyerPrintHtml(o);
+    // Dimensões do papel em px @96dpi (retrato). Paisagem inverte.
+    var PAPER = { A4: [794, 1123], A5: [559, 794], A6: [397, 559], letter: [816, 1056] };
+    var dims = PAPER[o.paper] || PAPER.A4;
+    var pw = (o.orient === 'landscape') ? dims[1] : dims[0];
+    var ph = (o.orient === 'landscape') ? dims[0] : dims[1];
+    var availW = Math.max(host.clientWidth - 20, 40);
+    var availH = Math.max(host.clientHeight - 20, 40);
+    var scale = Math.min(availW / pw, availH / ph);
+    frame.style.width = pw + 'px';
+    frame.style.height = ph + 'px';
+    frame.style.transformOrigin = 'top left';
+    frame.style.transform = 'scale(' + scale + ')';
+    wrap.style.width = (pw * scale) + 'px';
+    wrap.style.height = (ph * scale) + 'px';
+  });
+};
+
+// Lê o estado atual e abre a janela de impressão.
+window._doInvitePrint = function() {
+  var o = window._collectFlyerOpts();
+  var ov = document.getElementById('flyer-print-overlay');
+  if (ov) ov.remove();
+  var html = _buildFlyerPrintHtml(o);
   var win = window.open('', '_blank');
   if (!win) {
     if (typeof showNotification === 'function') showNotification('Pop-up bloqueado', 'Permita pop-ups pra imprimir o convite.', 'warning');
