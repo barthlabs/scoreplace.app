@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.56-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Botão "Imprimir convite" na tela de convidar para o torneio.</b> Agora dá pra gerar o flyer direto de "Convidar para o Torneio" (abaixo do QR Code) — não só pelo QR Code das ferramentas.</li>' +
+        '<li><b>Nome do torneio em destaque no convite por WhatsApp.</b> O nome agora vem em <b>negrito</b> e com espaço acima e abaixo, separado do resto da mensagem — mais fácil de ler de relance.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.55-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Flyer de convite mais bonito e com orientação.</b> O <b>logotipo</b> agora ocupa <b>70% da largura</b> da página (bem maior e legível). Nova opção <b>Retrato ou Paisagem</b>: em paisagem o flyer se reorganiza em duas colunas (logo + texto à esquerda, QR à direita) e em retrato fica empilhado — sempre <b>numa única página</b>, em qualquer tamanho de papel (A4, A5, A6 ou Carta).</li>' +

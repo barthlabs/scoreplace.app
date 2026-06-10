@@ -1501,6 +1501,13 @@ function renderTournaments(container, tournamentId = null) {
                 : ('🏆 Torneio: ' + t.name + '\nAcesse o link abaixo para se inscrever:\n' + inviteUrl);
             // Safe version for embedding in onclick attributes (escape quotes and newlines)
             const inviteTextSafe = inviteText.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+            // Subtítulo do flyer impresso: data/hora + local.
+            const _flyerSubParts = [];
+            const _dm = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+            if (_dm) { let _ds = _dm[3] + '/' + _dm[2] + '/' + _dm[1]; if (_dm[4]) _ds += ' às ' + _dm[4] + ':' + _dm[5]; _flyerSubParts.push('📅 ' + _ds); }
+            if (t.venue) _flyerSubParts.push('📍 ' + t.venue);
+            const _flyerSubSafe = _flyerSubParts.join('\n').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+            const _flyerTitleSafe = String(t.name || 'Torneio').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             const _friendCount = (window.AppStore.currentUser && window.AppStore.currentUser.friends && window.AppStore.currentUser.friends.length > 0) ? ' (' + window.AppStore.currentUser.friends.length + ')' : '';
             const inviteModalHtml = `
              <div id="invite-modal-${t.id}" class="invite-modal-container" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 9999; cursor: default; box-sizing: border-box;" onclick="event.stopPropagation()">
@@ -1535,6 +1542,7 @@ function renderTournaments(container, tournamentId = null) {
                             <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&color=111111&data=${encodeURIComponent(inviteUrl)}" alt="QR Code" width="120" height="120" style="display: block;">
                          </div>
                          <div style="font-size: 0.6rem; color: var(--text-muted); margin-top: 3px;">Escaneie para se inscrever</div>
+                         <button class="btn btn-sm hover-lift" style="margin-top:8px;background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:7px 16px;font-size:0.72rem;font-weight:600;cursor:pointer;" onclick="event.stopPropagation(); window._openInvitePrint({kind:'tournament',url:'${inviteUrl}',title:'${_flyerTitleSafe}',subtitle:'${_flyerSubSafe}'})">🖨️ Imprimir convite</button>
                       </div>
 
                       <!-- Email -->

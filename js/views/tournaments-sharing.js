@@ -72,7 +72,10 @@ window._openVenueFromTournament = function(tournamentId) {
 // (startDate = "2026-06-14T18:30", hora local) — evita ambiguidade de fuso.
 window._tournamentInviteText = function(t, url) {
     if (!t) return '';
-    var lines = ['🏆 Convite para o torneio:', (t.name || 'Torneio')];
+    // Nome do torneio em destaque: linha em branco antes/depois + *negrito*
+    // (WhatsApp/Telegram renderizam asteriscos como bold). Dá respiro e foco
+    // ao nome, que é a informação mais importante do convite.
+    var lines = ['🏆 Convite para o torneio', '', '*' + (t.name || 'Torneio') + '*', ''];
     var m = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
     if (m) {
         var dateStr = m[3] + '/' + m[2] + '/' + m[1];
