@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.58-beta';
+window.SCOREPLACE_VERSION = '2.3.59-beta';
 
 // ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
 // Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
@@ -1606,6 +1606,16 @@ window._initStatsAnimation = function(rootEl) {
     // que o IntersectionObserver não tenha disparado (scroll containment,
     // off-screen, edge cases). Idempotente via flag _statAnimated.
     setTimeout(triggerAll, 1500);
+};
+// border-radius do logo do torneio, derivado de t.logoShape ('square'|'circle')
+// + t.logoRadius (0-50 %, só pra square). Default 14% (visual atual). Usado em
+// todos os lugares que renderizam o logo: dashboard, cards, detalhe, impressão.
+window._tournamentLogoRadius = function(t) {
+    if (!t) return '14%';
+    if (t.logoShape === 'circle') return '50%';
+    var r = (t.logoRadius != null && t.logoRadius !== '') ? Number(t.logoRadius) : 14;
+    if (isNaN(r)) r = 14;
+    return Math.max(0, Math.min(50, r)) + '%';
 };
 window._qrCodeUrl = function(data, size, darkMode) {
     var s = size || 280;

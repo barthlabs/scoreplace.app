@@ -651,7 +651,7 @@ function renderDashboard(container) {
 
             <!-- Middle: Logo 1/3 + conteúdo 2/3 -->
             <div style="display:flex;align-items:flex-start;gap:14px;margin:1.4rem 0 1.2rem 0;">
-              ${t.logoData ? `<div style="width:33%;min-width:80px;flex-shrink:0;"><img src="${t.logoData}" alt="Logo" style="width:100%;aspect-ratio:1/1;border-radius:12px;object-fit:cover;display:block;box-shadow:0 4px 16px rgba(0,0,0,0.4);"></div>` : ''}
+              ${t.logoData ? `<div style="width:33%;min-width:80px;flex-shrink:0;"><img src="${t.logoData}" alt="Logo" style="width:100%;aspect-ratio:1/1;border-radius:${window._tournamentLogoRadius(t)};object-fit:cover;display:block;box-shadow:0 4px 16px rgba(0,0,0,0.4);"></div>` : ''}
               <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0;">
                 <div style="display:flex;align-items:flex-start;gap:6px;">
                   <h4 style="margin:0;font-size:1.5rem;font-weight:800;color:white;line-height:1.2;flex:1;overflow-wrap:break-word;">
@@ -2454,7 +2454,7 @@ function renderDashboard(container) {
       var _rowBd = _lt ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)';
       var statusBadgeBgRgb = statusColor === '#4ade80' ? '16,185,129' : statusColor === '#60a5fa' ? '96,165,250' : '148,163,184';
       return '<a href="#tournaments/' + t.id + '" class="compact-row" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + _rowBg + ';border:1px solid ' + _rowBd + ';text-decoration:none;color:inherit;transition:background 0.2s;" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
-        (t.logoData ? '<img src="' + t.logoData + '" class="compact-logo" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;">' : '<div class="compact-logo" style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">' + (getSportIcon(t.sport)) + '</div>') +
+        (t.logoData ? '<img src="' + t.logoData + '" class="compact-logo" style="width:36px;height:36px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:cover;flex-shrink:0;">' : '<div class="compact-logo" style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">' + (getSportIcon(t.sport)) + '</div>') +
         '<div class="compact-info" style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;">' +
           '<div class="compact-name-block" style="flex:1;min-width:0;">' +
             '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (isFav ? '<span style="color:#f43f5e">♥</span> ' : '') + window._safeHtml(t.name) + '</div>' +

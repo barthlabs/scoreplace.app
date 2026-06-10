@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.59-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Logo do torneio: círculo ou quadrado (com arredondamento ajustável).</b> No criar/editar torneio dá pra escolher o <b>formato do logo</b> — quadrado (com slider de quanto arredondar) ou círculo. O formato vale em <b>todo o app</b> (dashboard, cards, detalhe) e na impressão.</li>' +
+        '<li><b>Impressão do convite com tamanhos ajustáveis.</b> Sliders pra <b>tamanho do logo do torneio, fonte do nome, QR Code e textos</b>. O logo do scoreplace.app fica fixo em 70%. O <b>QR Code nunca corta</b> nas bordas, e na horizontal ele vai pra direita pra compor melhor a página.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.58-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Nome do torneio em destaque no flyer impresso.</b> O nome agora aparece em <b>fonte bem maior</b>, com mais espaço acima e abaixo. Quando o torneio tem <b>logo</b>, ele vai <b>à esquerda do nome</b>; o conjunto logo+nome ocupa ~70% da largura da página. Nomes longos quebram em 2 ou 3 linhas — sempre numa única página (retrato ou paisagem).</li>' +

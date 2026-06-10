@@ -1786,7 +1786,7 @@ function renderTournaments(container, tournamentId = null) {
               ${t.logoData ? `
                 <div style="position:relative;width:33%;min-width:100px;flex-shrink:0;">
                   <img src="${t.logoData}" alt="Logo"
-                    style="width:100%;aspect-ratio:1/1;border-radius:16px;object-fit:cover;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
+                    style="width:100%;aspect-ratio:1/1;border-radius:${window._tournamentLogoRadius(t)};object-fit:cover;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
                     ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
                   >
                 </div>

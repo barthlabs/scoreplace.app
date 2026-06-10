@@ -90,6 +90,18 @@ function setupCreateTournamentModal() {
                     <input type="hidden" id="tourn-logo-data" value="">
                   </div>
                 </div>
+                <!-- Formato do logo: quadrado/círculo + arredondamento -->
+                <div id="logo-shape-row" style="display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap;">
+                  <span style="font-size:0.72rem; color:var(--text-muted); font-weight:600;">Formato:</span>
+                  <button type="button" id="logo-shape-square" onclick="window._setLogoShape('square')" style="padding:6px 12px; border-radius:8px; border:1px solid rgba(99,102,241,0.4); background:rgba(99,102,241,0.18); color:#a5b4fc; font-size:0.76rem; font-weight:600; cursor:pointer;">⬜ Quadrado</button>
+                  <button type="button" id="logo-shape-circle" onclick="window._setLogoShape('circle')" style="padding:6px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:var(--text-muted); font-size:0.76rem; font-weight:600; cursor:pointer;">⚪ Círculo</button>
+                  <span id="logo-radius-wrap" style="display:flex; align-items:center; gap:6px; flex:1; min-width:130px;">
+                    <span style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;">arredondar bordas</span>
+                    <input type="range" id="logo-radius-range" min="0" max="50" value="14" oninput="window._setLogoRadius(this.value)" style="flex:1; min-width:70px; accent-color:#6366f1;">
+                  </span>
+                  <input type="hidden" id="tourn-logo-shape" value="square">
+                  <input type="hidden" id="tourn-logo-radius" value="14">
+                </div>
               </div>
 
               <!-- Público/Privado -->
@@ -1682,13 +1694,62 @@ function setupCreateTournamentModal() {
     event.target.value = '';
   };
 
+  // Calcula o border-radius atual a partir dos inputs ocultos de formato.
+  window._currentLogoRadiusCss = function() {
+    var shapeEl = document.getElementById('tourn-logo-shape');
+    var radEl = document.getElementById('tourn-logo-radius');
+    var shape = shapeEl ? shapeEl.value : 'square';
+    if (shape === 'circle') return '50%';
+    var r = radEl ? Number(radEl.value) : 14;
+    if (isNaN(r)) r = 14;
+    return Math.max(0, Math.min(50, r)) + '%';
+  };
+
   window._applyTournamentLogo = function(dataUrl) {
     var preview = document.getElementById('logo-preview');
     var hidden = document.getElementById('tourn-logo-data');
     if (preview) {
-      preview.innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;object-fit:cover;border-radius:14px;">';
+      preview.innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;object-fit:cover;border-radius:' + window._currentLogoRadiusCss() + ';">';
+      // o container tracejado também acompanha o formato (círculo fica redondo)
+      var shape = (document.getElementById('tourn-logo-shape') || {}).value;
+      preview.style.borderRadius = shape === 'circle' ? '50%' : window._currentLogoRadiusCss();
     }
     if (hidden) hidden.value = dataUrl;
+  };
+
+  // Atualiza só o border-radius do preview (sem re-injetar a imagem).
+  window._updateLogoPreviewShape = function() {
+    var preview = document.getElementById('logo-preview');
+    if (!preview) return;
+    var img = preview.querySelector('img');
+    var shape = (document.getElementById('tourn-logo-shape') || {}).value;
+    var css = window._currentLogoRadiusCss();
+    if (img) img.style.borderRadius = css;
+    preview.style.borderRadius = shape === 'circle' ? '50%' : css;
+  };
+
+  window._setLogoShape = function(shape) {
+    var shapeEl = document.getElementById('tourn-logo-shape');
+    if (shapeEl) shapeEl.value = shape;
+    var sq = document.getElementById('logo-shape-square');
+    var ci = document.getElementById('logo-shape-circle');
+    var on = function(b) { if (!b) return; b.style.border = '1px solid rgba(99,102,241,0.4)'; b.style.background = 'rgba(99,102,241,0.18)'; b.style.color = '#a5b4fc'; };
+    var off = function(b) { if (!b) return; b.style.border = '1px solid rgba(255,255,255,0.1)'; b.style.background = 'rgba(255,255,255,0.05)'; b.style.color = 'var(--text-muted)'; };
+    if (shape === 'circle') { on(ci); off(sq); } else { on(sq); off(ci); }
+    var radWrap = document.getElementById('logo-radius-wrap');
+    if (radWrap) radWrap.style.opacity = shape === 'circle' ? '0.4' : '1';
+    var radRange = document.getElementById('logo-radius-range');
+    if (radRange) radRange.disabled = (shape === 'circle');
+    window._updateLogoPreviewShape();
+  };
+
+  window._setLogoRadius = function(v) {
+    var radEl = document.getElementById('tourn-logo-radius');
+    if (radEl) radEl.value = v;
+    // mexer no slider implica formato quadrado
+    var shapeEl = document.getElementById('tourn-logo-shape');
+    if (shapeEl && shapeEl.value !== 'square') window._setLogoShape('square');
+    else window._updateLogoPreviewShape();
   };
 
   window._clearTournamentLogo = function() {
@@ -3506,6 +3567,12 @@ function setupCreateTournamentModal() {
     if (t.venueLat && t.venueLon) {
       setTimeout(function() { window._initVenueCreateMap(parseFloat(t.venueLat), parseFloat(t.venueLon), t.venue || ''); }, 300);
     }
+    // Restore logo shape/radius BEFORE applying logo (preview usa esses inputs)
+    var _shapeEl = document.getElementById('tourn-logo-shape');
+    var _radEl = document.getElementById('tourn-logo-radius');
+    if (_shapeEl) _shapeEl.value = (t.logoShape === 'circle') ? 'circle' : 'square';
+    if (_radEl) _radEl.value = (t.logoRadius != null && t.logoRadius !== '') ? t.logoRadius : 14;
+    if (typeof window._setLogoShape === 'function') window._setLogoShape(_shapeEl ? _shapeEl.value : 'square');
     // Restore logo
     document.getElementById('tourn-logo-data').value = t.logoData || '';
     if (t.logoData) {
@@ -3818,6 +3885,8 @@ function setupCreateTournamentModal() {
         const venuePhotoUrlVal = document.getElementById('tourn-venue-photo-url').value || '';
         const logoDataVal = document.getElementById('tourn-logo-data').value || '';
         const logoLockedVal = document.getElementById('tourn-logo-locked').value === '1';
+        const logoShapeVal = (document.getElementById('tourn-logo-shape') || {}).value === 'circle' ? 'circle' : 'square';
+        const logoRadiusVal = parseInt((document.getElementById('tourn-logo-radius') || {}).value, 10);
         const courtCountVal = parseInt(document.getElementById('tourn-court-count').value) || 1;
         const courtNamesRaw = document.getElementById('tourn-court-names').value.trim();
         const courtNamesVal = courtNamesRaw ? courtNamesRaw.split(',').map(c => c.trim()).filter(c => c) : [];
@@ -3875,6 +3944,8 @@ function setupCreateTournamentModal() {
           venuePhotoUrl: venuePhotoUrlVal,
           logoData: logoDataVal,
           logoLocked: logoLockedVal,
+          logoShape: logoShapeVal,
+          logoRadius: isNaN(logoRadiusVal) ? 14 : logoRadiusVal,
           courtCount: courtCountVal,
           courtNames: courtNamesVal,
           callTime: callTimeVal,
@@ -5136,7 +5207,10 @@ window._prefillFromTemplate = function(tpl) {
   _setV('tourn-venue-place-id', tpl.venuePlaceId);
   _setV('tourn-venue-photo-url', tpl.venuePhotoUrl);
   // Logo
-  if (tpl.logoData) { _setV('tourn-logo-data', tpl.logoData); _setV('tourn-logo-locked', tpl.logoLocked ? '1' : '0'); if (typeof window._renderLogoPreview === 'function') { try { window._renderLogoPreview(); } catch (e) {} } }
+  _setV('tourn-logo-shape', tpl.logoShape === 'circle' ? 'circle' : 'square');
+  _setV('tourn-logo-radius', (tpl.logoRadius != null && tpl.logoRadius !== '') ? tpl.logoRadius : 14);
+  if (typeof window._setLogoShape === 'function') { try { window._setLogoShape(tpl.logoShape === 'circle' ? 'circle' : 'square'); } catch (e) {} }
+  if (tpl.logoData) { _setV('tourn-logo-data', tpl.logoData); _setV('tourn-logo-locked', tpl.logoLocked ? '1' : '0'); if (typeof window._applyTournamentLogo === 'function') { try { window._applyTournamentLogo(tpl.logoData); } catch (e) {} } }
   // Liga / Suíço — formato de rodada, temporada, intervalo de sorteio, manual
   _setV('liga-round-format', tpl.ligaRoundFormat);
   _setV('liga-season-months', tpl.ligaSeasonMonths);
@@ -5482,6 +5556,8 @@ window._saveCurrentFormAsTemplate = function() {
       venuePhotoUrl: get('tourn-venue-photo-url') || '',
       logoData: get('tourn-logo-data') || '',
       logoLocked: get('tourn-logo-locked') === '1',
+      logoShape: get('tourn-logo-shape') === 'circle' ? 'circle' : 'square',
+      logoRadius: (function(){ var r = parseInt(get('tourn-logo-radius'), 10); return isNaN(r) ? 14 : r; })(),
       ligaRoundFormat: get('liga-round-format') || '',
       ligaSeasonMonths: get('liga-season-months') || '',
       drawIntervalDays: get('liga-draw-interval') || get('suico-draw-interval') || '',

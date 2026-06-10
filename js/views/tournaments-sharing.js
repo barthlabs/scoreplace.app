@@ -356,7 +356,7 @@ window._openTournamentInvitePrint = function(tournamentId) {
   var m = String(t.startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
   if (m) { var ds = m[3] + '/' + m[2] + '/' + m[1]; if (m[4]) ds += ' às ' + m[4] + ':' + m[5]; subParts.push('📅 ' + ds); }
   if (t.venue) subParts.push('📍 ' + t.venue);
-  window._openInvitePrint({ kind: 'tournament', url: url, title: t.name || 'Torneio', subtitle: subParts.join('\n'), logo: t.logoData || '' });
+  window._openInvitePrint({ kind: 'tournament', url: url, title: t.name || 'Torneio', subtitle: subParts.join('\n'), logo: t.logoData || '', logoRadius: window._tournamentLogoRadius(t) });
 };
 
 // Abre o overlay de configuração do flyer. opts:
@@ -385,6 +385,24 @@ window._openInvitePrint = function(opts) {
     ? '<div style="text-align:left;margin-bottom:14px;">' +
         '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">✏️ Mensagem do convite</label>' +
         '<textarea id="flyer-phrase" rows="3" style="width:100%;box-sizing:border-box;min-width:0;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;font-family:inherit;resize:vertical;">' + _safe(defaultPhrase) + '</textarea>' +
+      '</div>'
+    : '';
+
+  // Sliders de tamanho — só pro flyer de torneio (logo scoreplace fica fixo;
+  // logo do torneio, fonte do nome, QR e textos são ajustáveis).
+  var _slider = function(id, label, min, max, val) {
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
+      '<span style="font-size:0.74rem;color:var(--text-muted,#94a3b8);width:96px;flex-shrink:0;">' + label + '</span>' +
+      '<input type="range" id="' + id + '" min="' + min + '" max="' + max + '" value="' + val + '" style="flex:1;min-width:0;accent-color:#6366f1;">' +
+    '</div>';
+  };
+  var sizeBlock = (opts.kind === 'tournament')
+    ? '<div id="flyer-size-block" style="margin-bottom:18px;padding:12px;border:1px solid var(--border-color,#2a2f45);border-radius:10px;">' +
+        '<div style="font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:10px;">Tamanhos (flyer completo)</div>' +
+        _slider('flyer-logosize', 'Logo torneio', 0, 44, 26) +
+        _slider('flyer-namesize', 'Nome', 20, 50, 34) +
+        _slider('flyer-qrsize', 'QR Code', 32, 70, 52) +
+        _slider('flyer-textsize', 'Textos', 80, 140, 100) +
       '</div>'
     : '';
 
@@ -427,6 +445,7 @@ window._openInvitePrint = function(opts) {
           '<option value="landscape">Paisagem (horizontal)</option>' +
         '</select>' +
       '</div>' +
+      sizeBlock +
       '<div style="display:flex;gap:8px;">' +
         '<button onclick="document.getElementById(\'flyer-print-overlay\').remove()" class="btn btn-sm" style="flex:0 0 auto;background:rgba(148,163,184,0.15);color:var(--text-muted,#94a3b8);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 16px;font-size:0.85rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
         '<button onclick="window._doInvitePrint()" class="btn btn-sm hover-lift" style="flex:1;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:0.88rem;font-weight:700;cursor:pointer;">🖨️ Imprimir / Salvar PDF</button>' +
@@ -450,6 +469,13 @@ window._doInvitePrint = function() {
   var orientEl = document.getElementById('flyer-orient');
   var orient = orientEl ? orientEl.value : 'portrait';
   var phrase = phraseEl ? phraseEl.value : '';
+  var _num = function(id, dflt) { var el = document.getElementById(id); var n = el ? Number(el.value) : NaN; return isNaN(n) ? dflt : n; };
+  var sizes = {
+    logo: _num('flyer-logosize', 26),
+    name: _num('flyer-namesize', 34),
+    qr: _num('flyer-qrsize', 52),
+    text: _num('flyer-textsize', 100)
+  };
 
   var ov = document.getElementById('flyer-print-overlay');
   if (ov) ov.remove();
@@ -464,7 +490,9 @@ window._doInvitePrint = function() {
     paper: paper,
     color: color,
     orient: orient,
-    logo: opts.logo || ''
+    logo: opts.logo || '',
+    logoRadius: opts.logoRadius || '14%',
+    sizes: sizes
   });
 
   var win = window.open('', '_blank');
@@ -492,6 +520,17 @@ function _buildFlyerPrintHtml(o) {
   var qrOnly = o.content === 'qr';
 
   var isLandscape = o.orient === 'landscape';
+  var isTourn = o.kind === 'tournament';
+
+  // Tamanhos ajustáveis (só torneio). O logo do scoreplace (topo) é fixo; o
+  // logo do torneio, a fonte do nome, o QR e os textos seguem os sliders.
+  var sz = o.sizes || {};
+  var tLogoSize = (sz.logo != null) ? Number(sz.logo) : 26;   // % do bloco do nome
+  var tNameSize = (sz.name != null) ? Number(sz.name) : 34;   // teto em pt
+  var tQrSize = (sz.qr != null) ? Number(sz.qr) : 52;         // % (vw)
+  var tTextScale = ((sz.text != null) ? Number(sz.text) : 100) / 100;
+  var hasTLogo = !!o.logo && tLogoSize > 2;
+  var tLogoRadius = o.logoRadius || '14%';
 
   // Título principal por tipo de convite. Fontes em clamp(vw) → escalam com o
   // tamanho do papel (A6 menor, A4 maior) mantendo proporção e uma só página.
@@ -514,9 +553,9 @@ function _buildFlyerPrintHtml(o) {
     // tournament — nome em destaque (fonte maior, mais respiro acima/abaixo).
     // Logo do torneio à esquerda do nome quando houver; o conjunto fica em
     // ~70% da largura da página. Nomes longos quebram em 2-3 linhas.
-    var tLogo = o.logo ? '<img class="t-logo" src="' + esc(o.logo) + '" alt="" />' : '';
+    var tLogo = hasTLogo ? '<img class="t-logo" src="' + esc(o.logo) + '" alt="" />' : '';
     heading = '<div class="t-label">🏆 Convite para o torneio</div>' +
-              '<div class="name-block' + (o.logo ? ' has-logo' : '') + '">' + tLogo +
+              '<div class="name-block' + (hasTLogo ? ' has-logo' : '') + '">' + tLogo +
                 '<div class="t-name">' + esc(o.title || 'Torneio') + '</div>' +
               '</div>';
     sub = o.subtitle ? '<div class="t-sub">' + esc(o.subtitle) + '</div>' : '';
@@ -548,14 +587,15 @@ function _buildFlyerPrintHtml(o) {
   // Em paisagem o logo fica em 70% da COLUNA (≈metade da página); em retrato,
   // 70% da página inteira. QR limitado por largura e altura da viewport pra
   // nunca transbordar pra uma 2ª página.
-  // 78% da coluna ≈ 70% da página inteira (descontada a margem de 5%).
-  // No flyer de torneio o herói é o bloco logo+nome, então a marca scoreplace
-  // do topo fica menor pra não competir.
-  var isTourn = o.kind === 'tournament';
-  var logoW = qrOnly ? '78%' : (isLandscape ? (isTourn ? '64%' : '90%') : (isTourn ? '50%' : '78%'));
-  var qrW = qrOnly
-    ? 'min(80vw,72vh)'
-    : (isLandscape ? 'min(40vw,60vh)' : (isTourn ? 'min(50vw,36vh)' : 'min(56vw,42vh)'));
+  // Logo scoreplace do topo: SEMPRE ~70% da página (fixo, não-ajustável) —
+  // 78% da coluna ≈ 70% da página (descontada a margem de 5%).
+  var logoW = qrOnly ? '78%' : (isLandscape ? '90%' : '78%');
+  // QR: nunca pode ultrapassar as bordas. Limitado por largura E altura da
+  // página. Em paisagem fica ≤46vw pra dividir espaço com a coluna esquerda.
+  var qrW;
+  if (qrOnly) qrW = 'min(80vw,80vh)';
+  else if (isLandscape) qrW = isTourn ? 'min(' + tQrSize + 'vw,46vw,80vh)' : 'min(40vw,60vh)';
+  else qrW = isTourn ? 'min(' + tQrSize + 'vw,86vw,80vh)' : 'min(56vw,42vh)';
   var pageDir = (isLandscape && !qrOnly) ? 'row' : 'column';
   var pageGap = (isLandscape && !qrOnly) ? '6%' : '4vh';
   // Em retrato as colunas ocupam a largura inteira (logo = 70% da página).
@@ -593,9 +633,17 @@ function _buildFlyerPrintHtml(o) {
       '.t-name { font-size:clamp(18pt,7vw,42pt); font-weight:800; color:#0f172a; line-height:1.12; word-break:break-word; }' +
       '.name-block.has-logo .t-name { text-align:left; }' +
       '.t-sub { font-size:clamp(9pt,2.4vw,13pt); color:#475569; white-space:pre-line; }' +
-      // Paisagem: coluna esquerda estreita e baixa → nome menor, bloco mais
-      // largo (92% da coluna) e menos margem vertical pra caber numa página.
-      (isLandscape && isTourn ? '.t-name { font-size:clamp(13pt,3vw,24pt); } .name-block { width:92%; margin:3vh auto; gap:4%; } .t-logo { width:22%; }' : '') +
+      // Sliders (retrato): logo do torneio, fonte do nome e escala dos textos.
+      (isTourn ?
+        '.t-logo { width:' + tLogoSize + '%; border-radius:' + tLogoRadius + '; }' +
+        '.t-name { font-size:clamp(16pt,7vw,' + tNameSize + 'pt); }' +
+        '.t-label { font-size:calc(' + tTextScale + ' * clamp(10pt,2.4vw,14pt)); }' +
+        '.t-sub { font-size:calc(' + tTextScale + ' * clamp(9pt,2.4vw,13pt)); }' +
+        '.caption { font-size:calc(' + tTextScale + ' * clamp(8pt,2.2vw,12pt)); }'
+      : '') +
+      // Paisagem: coluna esquerda estreita e baixa → nome e logo limitados pra
+      // caber numa página (respeitam o slider até um teto seguro).
+      (isLandscape && isTourn ? '.t-name { font-size:clamp(13pt,3vw,' + Math.min(tNameSize, 28) + 'pt); } .name-block { width:92%; margin:3vh auto; gap:4%; } .t-logo { width:' + Math.min(tLogoSize, 24) + '%; }' : '') +
     '</style>' +
     '</head><body><div class="page">' + inner + '</div></body></html>';
 }
