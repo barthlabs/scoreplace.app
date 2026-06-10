@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.51-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Gênero · nível · faixa etária do inscrito em todos os torneios (pro organizador).</b> Os badges de perfil agora aparecem pro(s) <b>organizador(es)</b> em <b>qualquer estado</b> do torneio — tanto na lista de inscrição quanto na <b>chamada/check-in</b> com o torneio já em andamento. Esses dados de perfil ficam visíveis só pro organizador, não pros demais participantes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.50-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Card de inscrito mostra gênero, nível e faixa etária.</b> No card de cada inscrito, logo abaixo do nome, aparecem badges com o <b>gênero</b> (♀/♂/⚥), a <b>categoria/nível</b> (A/B/C/D/FUN) e a <b>faixa etária</b> (40+/50+/…) do perfil de cada participante, seguidos do <b>modo de inscrição</b>. Em duplas, uma linha por parceiro.</li>' +

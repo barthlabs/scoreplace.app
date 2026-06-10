@@ -1381,6 +1381,11 @@ function renderParticipants(container, tournamentId) {
   }
   // Slot(s) de meta pra um inscrito (1 linha pra individual, 1 por membro em duplas).
   function _metaSlotsFor(p, pName, isTeam) {
+    // v2.3.51: meta de perfil (gênero/nível/idade) é visível só pro(s)
+    // organizador(es) — em todos os torneios e em qualquer estado (grid de
+    // inscrição OU lista de chamada/check-in). Dado de perfil (gênero/idade)
+    // não é exposto pros demais participantes.
+    if (!isOrg) return '';
     var members = isTeam ? pName.split('/').map(function (n) { return n.trim(); }).filter(Boolean) : [pName];
     return members.map(function (mn, mi) {
       var lc = mn.toLowerCase();
@@ -1438,7 +1443,7 @@ function renderParticipants(container, tournamentId) {
       slot.innerHTML = _metaBadgesHtml(gender, skill, birth, prefixName);
     });
   }
-  _loadPartProfiles(parts).then(_patchPartMeta).catch(function () {});
+  if (isOrg) _loadPartProfiles(parts).then(_patchPartMeta).catch(function () {});
 
   // ── Check-in logic ──
   const hasMatches = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);
@@ -1961,10 +1966,11 @@ function renderParticipants(container, tournamentId) {
         }
         const _ciNameSafe = ind.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         if (isOrg) {
+          // v2.3.51: dropdown de atribuição de nível pelo org. O nível também
+          // aparece no badge de meta (gênero · nível · idade) abaixo do nome —
+          // não duplica como pill read-only pra não-org.
           const _ciOpts = _ciSkillCats.map(sk => `<option value="${sk}" ${_ciCurrentSkill === sk ? 'selected' : ''}>${sk}</option>`).join('');
           _ciSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${tId}','${_ciNameSafe}',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:3px;"><option value="" ${!_ciCurrentSkill ? 'selected' : ''}>— nível</option>${_ciOpts}</select>`;
-        } else if (_ciCurrentSkill) {
-          _ciSkillHtml = `<span style="font-size:0.68rem;font-weight:700;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);margin-top:3px;display:inline-block;">${_ciCurrentSkill}</span>`;
         }
       }
 
@@ -1974,6 +1980,7 @@ function renderParticipants(container, tournamentId) {
             <div style="flex:1;overflow:hidden;">
                 ${standbyHeader}
                 ${infoBlock}
+                ${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}
                 ${_ciSkillHtml}
             </div>
             <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
