@@ -9,8 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.69-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Flyer não corta mais os textos.</b> No convite impresso, o rótulo, o nome do torneio e o restante ficam sempre visíveis (nada é truncado ou escondido), com o logo do scoreplace fixo no topo.</li>' +
         '<li><b>O que você vê na pré-visualização é o que sai impresso.</b> A impressão agora usa exatamente o flyer da pré-visualização (mesmo documento, em tamanho A4), então não há mais diferença entre o previsto e o impresso. Dica: pra um resultado perfeito, deixe as <b>margens em "Nenhuma"</b> e desligue <b>cabeçalhos/rodapés</b> no diálogo de impressão.</li>' +
         '<li><b>Imprimir convite reorganizado.</b> A tela agora segue a ordem: <b>configurações</b> (conteúdo, papel, cor, orientação) no topo → <b>pré-visualização</b> no meio → <b>sliders de tamanho</b> embaixo. Mais natural de usar no celular.</li>' +
         '<li><b>Impressão: logo do scoreplace fixo no topo.</b> Agora o logo do scoreplace.app fica com <b>tamanho e posição fixos</b> no topo do flyer — aumentar o logo ou o nome do torneio não empurra mais o logo do app pra cima.</li>' +

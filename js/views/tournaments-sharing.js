@@ -648,7 +648,10 @@ function _buildFlyerPrintHtml(o) {
   // _flyerSizeCss (slider), injetado num <style> separado que sobrescreve.
   var qrWBase = qrOnly ? 'min(80vw,80vh)' : (isLandscape ? 'min(40vw,60vh)' : 'min(56vw,42vh)');
   var bodyDir = (isLandscape && !qrOnly) ? 'row' : 'column';
-  var bodyGap = (isLandscape && !qrOnly) ? '6%' : '4vh';
+  var bodyGap = (isLandscape && !qrOnly) ? '6%' : '3vh';
+  // Retrato: conteúdo ancorado no topo (logo do scoreplace acima) → o rótulo e
+  // o nome NUNCA são cortados. Paisagem: centraliza a linha.
+  var bodyJustify = (isLandscape && !qrOnly) ? 'center' : 'flex-start';
   // Largura/flex dos blocos dentro do corpo. Paisagem → 2 colunas; retrato →
   // empilhados em largura total.
   var colCss = (isLandscape && !qrOnly)
@@ -670,7 +673,7 @@ function _buildFlyerPrintHtml(o) {
         ' gap:0; text-align:center; padding:5%; }' +
       '.logo { width:100%; flex:0 0 auto; margin:0 0 4% 0; display:flex; justify-content:center; }' +
       '.logo svg { width:' + logoW + '; height:auto; max-height:26vh; }' +
-      '.flyer-body { flex:1 1 auto; min-height:0; width:100%; overflow:hidden; display:flex; flex-direction:' + bodyDir + '; align-items:center; justify-content:center; gap:' + bodyGap + '; }' +
+      '.flyer-body { flex:1 1 auto; min-height:0; width:100%; display:flex; flex-direction:' + bodyDir + '; align-items:center; justify-content:' + bodyJustify + '; gap:' + bodyGap + '; }' +
       '.col-qr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; }' +
       colCss +
       '.heading { min-width:0; }' +
@@ -680,7 +683,7 @@ function _buildFlyerPrintHtml(o) {
       '.brand { margin-top:4%; font-size:clamp(7pt,1.8vw,9pt); color:#94a3b8; letter-spacing:0.5px; }' +
       // Bloco de nome do torneio (estrutura estática; tamanhos vêm do size-style).
       '.t-label { font-size:clamp(10pt,2.4vw,14pt); font-weight:700; color:#b45309; letter-spacing:1px; text-transform:uppercase; }' +
-      '.name-block { width:80%; margin:5vh auto; display:flex; align-items:center; justify-content:center; gap:5%; }' +
+      '.name-block { width:80%; margin:2.5vh auto; display:flex; align-items:center; justify-content:center; gap:5%; }' +
       '.name-block.has-logo { text-align:left; }' +
       '.t-logo { width:20vw; max-width:none; height:auto; flex:0 0 auto; border-radius:14%; }' +
       '.t-name { font-size:6vw; font-weight:800; color:#0f172a; line-height:1.12; word-break:break-word; flex:1 1 auto; min-width:0; }' +
