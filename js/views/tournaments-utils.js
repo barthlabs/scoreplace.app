@@ -700,7 +700,17 @@ window._buildProgressInner = function(t) {
     if (_rTotal > 0) { prog = { total: _rTotal, completed: _rDone, pct: Math.round(_rDone / _rTotal * 100) }; progFrac = _rDone / _rTotal; }
     _roundNum = _ri + 1;
     _roundComplete = _rTotal > 0 && _rDone === _rTotal;
-    _roundCompletedMs = _curR.completedAt ? (+_curR.completedAt) : null;
+    // v2.3.60: quando a rodada está 100% (todos os placares lançados), o "final
+    // estimado" vira "FINAL REAL" = o momento em que o ÚLTIMO placar foi
+    // concluído (último m.resultAt, gravado tanto no placar ao vivo quanto no
+    // lançamento direto). Não depende de fechamento formal da rodada. Fallback
+    // pro completedAt (set no _doCloseRound) pra rodadas legadas.
+    var _lastResultMs = null;
+    if (_roundComplete) {
+      var _resEnds = _rMatches.map(function(m){ return m.resultAt ? (+m.resultAt) : 0; }).filter(function(x){ return x; });
+      if (_resEnds.length) _lastResultMs = Math.max.apply(null, _resEnds);
+    }
+    _roundCompletedMs = _lastResultMs || (_curR.completedAt ? (+_curR.completedAt) : null);
     var _starts = _rMatches.map(function(m){ return m.startedAt ? (+m.startedAt) : 0; }).filter(function(x){ return x; });
     var _roundStart = _starts.length ? Math.min.apply(null, _starts) : null;
     var _fdStr2 = String(t.drawFirstDate || '').indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate ? (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')) : '');
@@ -785,7 +795,7 @@ window._buildProgressInner = function(t) {
   else if (progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
   else estEndMs = plannedEnd;
 
-  var _endLabel = _roundEndReal ? 'final da rodada' : (isFinished ? 'final' : 'final estimado');
+  var _endLabel = _roundEndReal ? 'final real' : (isFinished ? 'final real' : 'final estimado');
   var _elapsedLabel = (_roundEndReal || isFinished) ? 'durou' : 'decorrido';
   // mostra DATA quando início e fim caem em dias diferentes
   var _multiDay = _date(actualStart) !== _date(estEndMs);

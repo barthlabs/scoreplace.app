@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.60-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Rodada concluída mostra o "Final Real".</b> Quando todos os jogos da rodada têm placar lançado (100%), o "Final estimado" vira <b>Final Real</b> e congela no horário em que o <b>último placar foi concluído</b> (placar ao vivo ou lançamento direto) — o cronômetro para de correr e passa a mostrar quanto a rodada durou.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.59-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Logo do torneio: círculo ou quadrado (com arredondamento ajustável).</b> No criar/editar torneio dá pra escolher o <b>formato do logo</b> — quadrado (com slider de quanto arredondar) ou círculo. O formato vale em <b>todo o app</b> (dashboard, cards, detalhe) e na impressão.</li>' +
