@@ -10533,8 +10533,11 @@ window._openCasualMatch = function(restoreOpts) {
     // OFF via _formTeam(), so there is no reason to block the listeners when
     // shuffle is still ON. Without this, the cards look draggable (cursor:grab)
     // but fire no events — the bug reported in v1.3.44-beta.
+    // v2.3.75: síncrono (os cards já existem após o innerHTML acima). Antes era
+    // setTimeout(30) — deixava uma janela de ~30ms logo após clicar 🔗 (quebrar
+    // duplas) em que arrastar não fazia nada, exigindo várias tentativas.
     if (isDoubles) {
-      setTimeout(function() { _setupDragDrop(); }, 30);
+      _setupDragDrop();
     }
     // v1.3.32-beta: hidrata "Últimas três partidas"
     setTimeout(function() {
@@ -10746,6 +10749,18 @@ window._openCasualMatch = function(restoreOpts) {
     var cards = document.querySelectorAll('[data-casual-idx]');
     if (!cards.length) return;
 
+    // v2.3.75: durante um arraste, neutraliza os <textarea> dos cards
+    // (pointer-events:none) pra que o campo editável NÃO capture o gesto de
+    // drop. Sem isso, soltar sobre o textarea de um jogador genérico (editável)
+    // era intermitente — exigia 2-3 tentativas. Estilo injetado uma única vez.
+    if (!document.getElementById('casual-drag-style')) {
+      var _ds = document.createElement('style');
+      _ds.id = 'casual-drag-style';
+      _ds.textContent = '#casual-team-cards.casual-drag-active textarea{pointer-events:none !important;}';
+      document.head.appendChild(_ds);
+    }
+    var _cardsContainer = document.getElementById('casual-team-cards');
+
     // Helper: form team from two card indices
     function _formTeam(idx1, idx2) {
       if (idx1 === idx2) return;
@@ -10791,29 +10806,42 @@ window._openCasualMatch = function(restoreOpts) {
     cards.forEach(function(card) {
       card.addEventListener('dragstart', function(e) {
         _teamDragIdx = parseInt(card.getAttribute('data-casual-idx'));
-        card.style.opacity = '0.4';
+        // setData é OBRIGATÓRIO: um arraste sem dados é rejeitado por campos
+        // editáveis (textarea) como alvo de drop no WebKit → drop não dispara.
+        try { e.dataTransfer.setData('text/plain', String(_teamDragIdx)); } catch (_e) {}
         e.dataTransfer.effectAllowed = 'move';
+        card.style.opacity = '0.4';
+        if (_cardsContainer) _cardsContainer.classList.add('casual-drag-active');
       });
       card.addEventListener('dragend', function() {
         card.style.opacity = '1';
         _teamDragIdx = null;
+        if (_cardsContainer) _cardsContainer.classList.remove('casual-drag-active');
         document.querySelectorAll('[data-casual-idx]').forEach(function(c) { c.style.transform = ''; });
       });
       card.addEventListener('dragover', function(e) {
         e.preventDefault();
         if (_teamDragIdx === null) return;
-        var targetIdx = parseInt(card.getAttribute('data-casual-idx'));
-        if (targetIdx !== _teamDragIdx) card.style.transform = 'scale(1.05)';
+        e.dataTransfer.dropEffect = 'move';
+        // Resolve o card-alvo por closest() — soltar sobre o textarea, o ícone
+        // de gênero ou o avatar ainda destaca/forma a dupla corretamente.
+        var tc = (e.target && e.target.closest) ? e.target.closest('[data-casual-idx]') : card;
+        if (tc && parseInt(tc.getAttribute('data-casual-idx')) !== _teamDragIdx) tc.style.transform = 'scale(1.05)';
       });
       card.addEventListener('dragleave', function() { card.style.transform = ''; });
       card.addEventListener('drop', function(e) {
         e.preventDefault();
-        card.style.transform = '';
-        if (_teamDragIdx === null) return;
-        var targetIdx = parseInt(card.getAttribute('data-casual-idx'));
-        if (targetIdx === _teamDragIdx) return;
+        var tc = (e.target && e.target.closest) ? e.target.closest('[data-casual-idx]') : card;
+        if (tc) tc.style.transform = '';
         var srcIdx = _teamDragIdx;
+        if (srcIdx === null || isNaN(srcIdx)) {
+          try { srcIdx = parseInt(e.dataTransfer.getData('text/plain')); } catch (_e) {}
+        }
         _teamDragIdx = null;
+        if (_cardsContainer) _cardsContainer.classList.remove('casual-drag-active');
+        if (!tc || srcIdx === null || isNaN(srcIdx)) return;
+        var targetIdx = parseInt(tc.getAttribute('data-casual-idx'));
+        if (isNaN(targetIdx) || targetIdx === srcIdx) return;
         _formTeam(srcIdx, targetIdx);
       });
     });
