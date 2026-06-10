@@ -3421,42 +3421,106 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     floor: '⚓ Piso (mín. 0)',
     sitout_avg: '🪑 Folga (média das rodadas jogadas)'
   };
-  var rows = '';
-  if (result.breakdown.length === 0) {
-    rows = '<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--text-muted);">Sem partidas computadas.</td></tr>';
-  } else {
-    result.breakdown.forEach(function(mb) {
-      var resIcon = mb.draw ? '🤝' : (mb.won ? '✅' : '❌');
-      var oppLabel = (mb.opponent || 'BYE');
-      var itemsHtml = mb.items.map(function(it) {
-        var lbl = itemLabels[it.key] || it.key;
-        var sign = it.value >= 0 ? '+' : '';
-        return '<div style="font-size:0.72rem;color:var(--text-muted);">' + lbl + ' × ' + it.count + ' = <b style="color:' + (it.value >= 0 ? '#4ade80' : '#f87171') + ';">' + sign + it.value + '</b></div>';
-      }).join('');
-      // v2.3.12: linha de compensação de folga (não é uma partida) — rótulo próprio
-      var _firstCell = mb.isSitOutComp
-        ? '🪑 Folga'
-        : ('R' + (mb.round || '?') + ' ' + resIcon);
-      var _oppCell = mb.isSitOutComp ? '— média das jogadas' : window._safeHtml(oppLabel);
-      rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">' +
-        '<td style="padding:8px 10px;font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">' + _firstCell + '</td>' +
-        '<td style="padding:8px 10px;font-size:0.8rem;color:var(--text-bright);">' + _oppCell + '</td>' +
-        '<td style="padding:8px 10px;">' + itemsHtml + '</td>' +
-        '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#fbbf24;font-size:0.9rem;">' + mb.total + '</td>' +
-        '</tr>';
+  // v2.3.49: matriz — linhas = categoria de pontos, colunas = rodadas (R1, R2…),
+  // com total por linha (à direita) e por coluna (rodada, embaixo) + total geral.
+  // Pedido do usuário: tabela com linha/coluna em vez da lista por partida.
+  var CAT_ORDER = ['participation', 'match_won', 'game_won', 'game_lost', 'tiebreak_point', 'killing_point', 'point_scored', 'floor'];
+  var roundSet = {};      // roundNum -> true
+  var cellVal = {};       // catKey -> { roundNum -> somaValores }
+  var cellCount = {};     // catKey -> { roundNum -> somaContagens }
+  var catUnit = {};       // catKey -> valor unitário (constante por categoria)
+  var roundTotals = {};   // roundNum -> total da rodada
+  var catTotals = {};     // catKey -> total da categoria
+  var sitOutComp = null;  // { value, count, unit }
+
+  result.breakdown.forEach(function(mb) {
+    if (mb.isSitOutComp) {
+      var sit = (mb.items && mb.items[0]) || null;
+      sitOutComp = { value: mb.total, count: mb.sitOutRounds || (sit && sit.count) || 0, unit: sit ? sit.unit : 0 };
+      return;
+    }
+    var rk = mb.round || 0;
+    roundSet[rk] = true;
+    roundTotals[rk] = (roundTotals[rk] || 0) + (mb.total || 0);
+    (mb.items || []).forEach(function(it) {
+      if (!cellVal[it.key]) { cellVal[it.key] = {}; cellCount[it.key] = {}; }
+      cellVal[it.key][rk] = (cellVal[it.key][rk] || 0) + it.value;
+      cellCount[it.key][rk] = (cellCount[it.key][rk] || 0) + it.count;
+      catTotals[it.key] = (catTotals[it.key] || 0) + it.value;
+      catUnit[it.key] = it.unit;
     });
-  }
+  });
+
+  var rounds = Object.keys(roundSet).map(Number).sort(function(a, b) { return a - b; });
+  var cats = CAT_ORDER.filter(function(k) { return cellVal[k]; });
+  Object.keys(cellVal).forEach(function(k) { if (cats.indexOf(k) === -1) cats.push(k); });
+
+  var _fmtVal = function(v) {
+    if (v === 0 || v == null) return '<span style="color:var(--text-muted);opacity:0.35;">·</span>';
+    var sign = v > 0 ? '+' : '';
+    return '<span style="color:' + (v >= 0 ? '#4ade80' : '#f87171') + ';font-weight:700;">' + sign + v + '</span>';
+  };
+
   var summary = '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap;">' +
     '<span style="font-size:1.4rem;font-weight:900;color:#fbbf24;">💯 ' + (result.total || 0) + '</span>' +
-    '<span style="color:var(--text-muted);font-size:0.8rem;">pontos avançados em ' + result.breakdown.length + ' partida' + (result.breakdown.length === 1 ? '' : 's') + '</span>' +
+    '<span style="color:var(--text-muted);font-size:0.8rem;">pontos avançados em ' + rounds.length + ' rodada' + (rounds.length === 1 ? '' : 's') + (result.breakdown.length === 0 ? '' : ' jogada' + (rounds.length === 1 ? '' : 's')) + '</span>' +
     '</div>';
-  var tableHtml = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">' +
-    '<thead><tr style="border-bottom:2px solid var(--border-color);">' +
-    '<th style="padding:6px 10px;text-align:left;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;">Rodada</th>' +
-    '<th style="padding:6px 10px;text-align:left;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;">Adversário</th>' +
-    '<th style="padding:6px 10px;text-align:left;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;">Detalhamento</th>' +
-    '<th style="padding:6px 10px;text-align:right;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;">Total</th>' +
-    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+
+  var tableHtml;
+  if (result.breakdown.length === 0) {
+    tableHtml = '<div style="padding:14px;text-align:center;color:var(--text-muted);">Sem partidas computadas.</div>';
+  } else {
+    var _thBase = 'padding:7px 10px;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;font-weight:700;';
+    var _tdBase = 'padding:7px 10px;font-size:0.82rem;text-align:center;white-space:nowrap;';
+    // Colunas fixas: Categoria (esquerda) e Total (direita) ficam visíveis
+    // enquanto as colunas de rodada rolam horizontalmente no meio.
+    var _stkL = 'position:sticky;left:0;background:var(--bg-card);z-index:1;';
+    var _stkR = 'position:sticky;right:0;background:var(--bg-card);z-index:1;box-shadow:-6px 0 8px -6px rgba(0,0,0,0.5);';
+    // Cabeçalho: Categoria | R1 | R2 | … | Total
+    var head = '<thead><tr style="border-bottom:2px solid var(--border-color);">' +
+      '<th style="' + _thBase + 'text-align:left;' + _stkL + 'z-index:2;">Categoria</th>';
+    rounds.forEach(function(rk) {
+      head += '<th style="' + _thBase + 'text-align:center;">R' + rk + '</th>';
+    });
+    head += '<th style="' + _thBase + 'text-align:right;color:#fbbf24;' + _stkR + 'z-index:2;">Total</th></tr></thead>';
+
+    // Corpo: uma linha por categoria
+    var body = '<tbody>';
+    cats.forEach(function(catKey) {
+      var lbl = itemLabels[catKey] || catKey;
+      body += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">' +
+        '<td style="' + _tdBase + 'text-align:left;color:var(--text-bright);' + _stkL + '">' + lbl + '</td>';
+      rounds.forEach(function(rk) {
+        var v = (cellVal[catKey] && cellVal[catKey][rk] != null) ? cellVal[catKey][rk] : null;
+        var cnt = (cellCount[catKey] && cellCount[catKey][rk]) || 0;
+        var ttl = (v != null && cnt) ? (' title="' + cnt + ' × ' + ((catUnit[catKey] >= 0 ? '+' : '') + catUnit[catKey]) + '"') : '';
+        body += '<td style="' + _tdBase + '"' + ttl + '>' + _fmtVal(v) + '</td>';
+      });
+      body += '<td style="' + _tdBase + 'text-align:right;font-weight:800;color:var(--text-bright);' + _stkR + '">' + _fmtVal(catTotals[catKey] || 0) + '</td>' +
+        '</tr>';
+    });
+
+    // Linha de Folga (compensação) — não é por rodada; valor só na coluna Total.
+    if (sitOutComp) {
+      body += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(245,158,11,0.05);">' +
+        '<td style="' + _tdBase + 'text-align:left;color:#fbbf24;' + _stkL + '" title="' + sitOutComp.count + ' folga(s) × média ' + (sitOutComp.unit >= 0 ? '+' : '') + sitOutComp.unit + '">🪑 Folga (média)</td>';
+      rounds.forEach(function() {
+        body += '<td style="' + _tdBase + '"><span style="color:var(--text-muted);opacity:0.35;">—</span></td>';
+      });
+      body += '<td style="' + _tdBase + 'text-align:right;font-weight:800;color:#fbbf24;' + _stkR + '">' + _fmtVal(sitOutComp.value) + '</td></tr>';
+    }
+    body += '</tbody>';
+
+    // Rodapé: linha Total por coluna (rodada) + total geral
+    var foot = '<tfoot><tr style="border-top:2px solid var(--border-color);">' +
+      '<td style="' + _tdBase + 'text-align:left;font-weight:800;color:var(--text-muted);text-transform:uppercase;' + _stkL + 'z-index:2;">Total</td>';
+    rounds.forEach(function(rk) {
+      foot += '<td style="' + _tdBase + 'font-weight:800;color:#fbbf24;">' + (roundTotals[rk] || 0) + '</td>';
+    });
+    foot += '<td style="' + _tdBase + 'text-align:right;font-weight:900;color:#fbbf24;font-size:0.95rem;' + _stkR + 'z-index:2;">' + (result.total || 0) + '</td></tr></tfoot>';
+
+    tableHtml = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:max-content;">' + head + body + foot + '</table></div>';
+  }
   showAlertDialog('💯 Pontos Avançados — ' + playerName, summary + tableHtml, null, { type: 'info' });
 };
 

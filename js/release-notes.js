@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.49-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Detalhamento de Pontos Avançados agora é uma tabela.</b> Ao clicar no PA de um jogador, o detalhamento vira uma <b>matriz</b>: cada <b>coluna</b> é uma rodada (R1, R2, R3…) e cada <b>linha</b> é uma categoria de ponto (Participação, Vitória, Game ganho/perdido, etc.), com <b>total por linha</b> (à direita) e <b>por rodada</b> (embaixo) e o total geral. As colunas Categoria e Total ficam fixas enquanto as rodadas rolam na horizontal.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.48-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(9 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Fim do toast falso "Sorteio realizado".</b> Ao desativar um jogador (ou qualquer ação na página do torneio com a chave já montada), não aparece mais o aviso espúrio "🎲 Sorteio realizado!" nem o redirecionamento indevido pro chaveamento. O aviso agora só aparece pra quem está <b>esperando</b> o sorteio acontecer — quando a chave realmente surge na tela. Nenhum sorteio é disparado por desativar jogador: a próxima rodada continua sendo sorteada automaticamente no horário agendado.</li>' +
