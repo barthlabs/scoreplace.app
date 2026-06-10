@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.47-beta';
+window.SCOREPLACE_VERSION = '2.3.48-beta';
 
 // ─── v2.1.43: sentinela de pico de leituras Firestore (reporta ao Sentry) ─────
 // Conta leituras (snap.size) numa janela deslizante de 10s. Quando a taxa passa
@@ -263,11 +263,27 @@ window._softRefreshView = function() {
         var _hasDraw = (Array.isArray(_tNow.matches) && _tNow.matches.length > 0) ||
                        (Array.isArray(_tNow.rounds)  && _tNow.rounds.length  > 0) ||
                        (Array.isArray(_tNow.groups)  && _tNow.groups.length  > 0);
-        // Só redireciona se nunca esteve no bracket desse torneio nessa sessão
+        // v2.3.48 — CAUSA-RAIZ do toast espúrio "🎲 Sorteio realizado!" ao
+        // desativar um jogador (ou qualquer ação que dispare soft-refresh) na
+        // página de detalhe com a chave já montada. O redirect serve SÓ pra
+        // quem está ESPERANDO o sorteio: deve disparar quando a chave TRANSICIONA
+        // de ausente → presente nesta sessão de visualização — NÃO quando o
+        // usuário já chega com a chave montada (organizador gerenciando). Antes
+        // a condição era "tem chave E não redirecionou ainda", e o key de sessão
+        // só era setado pela rota #bracket/ — nunca pelo bracket inline em
+        // #tournaments/:id — então o organizador, que vê a chave inline, nunca
+        // setava o key e levava o redirect no primeiro soft-refresh não-suprimido.
+        if (!window._drawStateSeen) window._drawStateSeen = {};
+        var _prevSeen = window._drawStateSeen[_tId];
+        window._drawStateSeen[_tId] = _hasDraw; // registra estado atual
         var _ssKey = 'sp_bracketRedirected_' + _tId;
         var _alreadyRedirected = false;
         try { _alreadyRedirected = sessionStorage.getItem(_ssKey) === '1'; } catch(_se) {}
-        if (_hasDraw && !_alreadyRedirected) {
+        // Transição real: na observação anterior NÃO havia chave e agora há.
+        // Primeira observação (_prevSeen === undefined) nunca redireciona — só
+        // registra o estado — pra não disparar pra quem já abriu com a chave.
+        var _justAppeared = (_prevSeen === false) && _hasDraw;
+        if (_justAppeared && !_alreadyRedirected) {
           try { sessionStorage.setItem(_ssKey, '1'); } catch(_se) {}
           window._bracketRedirectedFor = _tId; // compat
           if (typeof showNotification === 'function') {
