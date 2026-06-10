@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.55-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Flyer de convite mais bonito e com orientação.</b> O <b>logotipo</b> agora ocupa <b>70% da largura</b> da página (bem maior e legível). Nova opção <b>Retrato ou Paisagem</b>: em paisagem o flyer se reorganiza em duas colunas (logo + texto à esquerda, QR à direita) e em retrato fica empilhado — sempre <b>numa única página</b>, em qualquer tamanho de papel (A4, A5, A6 ou Carta).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.54-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Convite imprimível vira um flyer bonito.</b> Ao imprimir um convite — de torneio, de partida casual ou do app — agora sai um flyer pronto: <b>logotipo colorido no topo</b>, o <b>nome do torneio / partida</b> (ou uma <b>frase editável</b> no convite genérico do app, já pré-preenchida com "Já conhece o scoreplace.app? Jogue em outro nível!") e o <b>QR Code</b> abaixo. Na hora de imprimir você escolhe o <b>tamanho do papel</b> (A4, A5, A6 ou Carta), <b>colorido ou preto e branco</b>, e se quer o <b>flyer completo ou só o QR Code</b>. Manda direto pra impressora (local ou de rede) ou salva em <b>PDF</b> pelo diálogo do navegador.</li>' +

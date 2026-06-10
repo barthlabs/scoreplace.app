@@ -283,7 +283,11 @@ window._downloadQRCode = function(tournamentId) {
 // Logo wordmark inline com texto escuro (imprime bem em papel branco).
 // A versão de icons/logo-wordmark.svg usa currentColor — aqui fixamos #0f172a.
 function _flyerLogoSvg() {
-  return '<svg width="300" height="90" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="scoreplace.app">' +
+  // viewBox cortado à arte real (pódio+wordmark vão de x≈22 a x≈300; o
+  // viewBox original 400 de largura deixava ~30% de vazio à direita, fazendo
+  // o logo parecer pequeno). Buffer à direita cobre variação de fonte entre
+  // sistemas. height window cobre estrela (topo) até base do texto.
+  return '<svg width="282" height="70" viewBox="20 28 282 70" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="scoreplace.app">' +
     '<rect x="25" y="65" width="22" height="30" rx="3" fill="#CBD5E1"/>' +
     '<rect x="52" y="45" width="22" height="50" rx="3" fill="#F59E0B"/>' +
     '<rect x="79" y="75" width="22" height="20" rx="3" fill="#FB923C"/>' +
@@ -357,6 +361,14 @@ window._openInvitePrint = function(opts) {
           '<option value="bw">Preto e branco</option>' +
         '</select>' +
       '</div>' +
+      // Orientação
+      '<div style="margin-bottom:20px;">' +
+        '<label style="display:block;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:6px;">Orientação</label>' +
+        '<select id="flyer-orient" style="width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--border-color,#2a2f45);border-radius:10px;padding:10px 12px;color:var(--text-bright,#fff);font-size:0.85rem;">' +
+          '<option value="portrait">Retrato (vertical)</option>' +
+          '<option value="landscape">Paisagem (horizontal)</option>' +
+        '</select>' +
+      '</div>' +
       '<div style="display:flex;gap:8px;">' +
         '<button onclick="document.getElementById(\'flyer-print-overlay\').remove()" class="btn btn-sm" style="flex:0 0 auto;background:rgba(148,163,184,0.15);color:var(--text-muted,#94a3b8);border:1px solid rgba(148,163,184,0.25);border-radius:10px;padding:10px 16px;font-size:0.85rem;font-weight:600;cursor:pointer;">Cancelar</button>' +
         '<button onclick="window._doInvitePrint()" class="btn btn-sm hover-lift" style="flex:1;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:0.88rem;font-weight:700;cursor:pointer;">🖨️ Imprimir / Salvar PDF</button>' +
@@ -377,6 +389,8 @@ window._doInvitePrint = function() {
   var content = contentEl ? contentEl.value : 'full';
   var paper = paperEl ? paperEl.value : 'A4';
   var color = colorEl ? colorEl.value : 'color';
+  var orientEl = document.getElementById('flyer-orient');
+  var orient = orientEl ? orientEl.value : 'portrait';
   var phrase = phraseEl ? phraseEl.value : '';
 
   var ov = document.getElementById('flyer-print-overlay');
@@ -390,7 +404,8 @@ window._doInvitePrint = function() {
     phrase: phrase,
     content: content,
     paper: paper,
-    color: color
+    color: color,
+    orient: orient
   });
 
   var win = window.open('', '_blank');
@@ -417,33 +432,37 @@ function _buildFlyerPrintHtml(o) {
   var isBW = o.color === 'bw';
   var qrOnly = o.content === 'qr';
 
-  // Título principal por tipo de convite.
+  var isLandscape = o.orient === 'landscape';
+
+  // Título principal por tipo de convite. Fontes em clamp(vw) → escalam com o
+  // tamanho do papel (A6 menor, A4 maior) mantendo proporção e uma só página.
   var heading = '';
   var sub = '';
   if (o.kind === 'app') {
     // Frase configurável — cada linha vira um parágrafo com peso decrescente.
     var lines = String(o.phrase || window._flyerDefaultAppPhrase()).split('\n').filter(function(l) { return l.trim() !== ''; });
     heading = lines.map(function(l, i) {
-      var size = i === 0 ? '26pt' : (i === 1 ? '20pt' : '14pt');
+      var size = i === 0 ? 'clamp(15pt,5vw,30pt)' : (i === 1 ? 'clamp(12pt,3.6vw,22pt)' : 'clamp(9pt,2.4vw,15pt)');
       var weight = i === 0 ? '800' : (i === 1 ? '700' : '500');
       var col = i === 0 ? '#0f172a' : (i === 1 ? '#4f46e5' : '#475569');
-      return '<div style="font-size:' + size + ';font-weight:' + weight + ';color:' + col + ';line-height:1.25;margin:2px 0;">' + esc(l) + '</div>';
+      return '<div style="font-size:' + size + ';font-weight:' + weight + ';color:' + col + ';line-height:1.2;margin:1.5% 0;">' + esc(l) + '</div>';
     }).join('');
   } else if (o.kind === 'casual') {
-    heading = '<div style="font-size:14pt;font-weight:700;color:#0891b2;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">⚡ Partida Casual</div>' +
-              (o.title ? '<div style="font-size:24pt;font-weight:800;color:#0f172a;line-height:1.2;">' + esc(o.title) + '</div>' : '');
-    sub = o.subtitle ? '<div style="font-size:13pt;color:#475569;margin-top:8px;">' + esc(o.subtitle) + '</div>' : '';
+    heading = '<div style="font-size:clamp(10pt,2.6vw,15pt);font-weight:700;color:#0891b2;letter-spacing:1px;text-transform:uppercase;margin-bottom:1.5%;">⚡ Partida Casual</div>' +
+              (o.title ? '<div style="font-size:clamp(14pt,4.6vw,26pt);font-weight:800;color:#0f172a;line-height:1.15;">' + esc(o.title) + '</div>' : '');
+    sub = o.subtitle ? '<div style="font-size:clamp(9pt,2.4vw,13pt);color:#475569;margin-top:2%;white-space:pre-line;">' + esc(o.subtitle) + '</div>' : '';
   } else {
     // tournament
-    heading = '<div style="font-size:13pt;font-weight:700;color:#b45309;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">🏆 Convite para o torneio</div>' +
-              '<div style="font-size:26pt;font-weight:800;color:#0f172a;line-height:1.2;">' + esc(o.title || 'Torneio') + '</div>';
-    sub = o.subtitle ? '<div style="font-size:13pt;color:#475569;margin-top:8px;white-space:pre-line;">' + esc(o.subtitle) + '</div>' : '';
+    heading = '<div style="font-size:clamp(10pt,2.4vw,14pt);font-weight:700;color:#b45309;letter-spacing:1px;text-transform:uppercase;margin-bottom:1.5%;">🏆 Convite para o torneio</div>' +
+              '<div style="font-size:clamp(15pt,5vw,28pt);font-weight:800;color:#0f172a;line-height:1.15;">' + esc(o.title || 'Torneio') + '</div>';
+    sub = o.subtitle ? '<div style="font-size:clamp(9pt,2.4vw,13pt);color:#475569;margin-top:2%;white-space:pre-line;">' + esc(o.subtitle) + '</div>' : '';
   }
 
   var caption = o.kind === 'tournament' ? 'Escaneie para acessar o torneio'
     : (o.kind === 'casual' ? 'Escaneie para entrar na partida' : 'Escaneie o QR Code para acessar');
 
-  // Corpo do flyer.
+  // Corpo do flyer. Em paisagem: logo + texto à esquerda, QR à direita (2 colunas).
+  // Em retrato: empilhado e centralizado. Em ambos cabe numa única página.
   var inner;
   if (qrOnly) {
     inner =
@@ -451,31 +470,53 @@ function _buildFlyerPrintHtml(o) {
       '<div class="caption">' + esc(caption) + '</div>';
   } else {
     inner =
-      '<div class="logo">' + _flyerLogoSvg() + '</div>' +
-      '<div class="heading">' + heading + sub + '</div>' +
-      '<div class="qr-wrap"><img class="qr" src="' + esc(qrUrl) + '" alt="QR Code" /></div>' +
-      '<div class="caption">' + esc(caption) + '</div>' +
-      '<div class="brand">scoreplace.app · Jogue em outro nível</div>';
+      '<div class="col-main">' +
+        '<div class="logo">' + _flyerLogoSvg() + '</div>' +
+        '<div class="heading">' + heading + sub + '</div>' +
+      '</div>' +
+      '<div class="col-qr">' +
+        '<div class="qr-wrap"><img class="qr" src="' + esc(qrUrl) + '" alt="QR Code" /></div>' +
+        '<div class="caption">' + esc(caption) + '</div>' +
+        '<div class="brand">scoreplace.app · Jogue em outro nível</div>' +
+      '</div>';
   }
+
+  // Em paisagem o logo fica em 70% da COLUNA (≈metade da página); em retrato,
+  // 70% da página inteira. QR limitado por largura e altura da viewport pra
+  // nunca transbordar pra uma 2ª página.
+  // 78% da coluna ≈ 70% da página inteira (descontada a margem de 5%).
+  var logoW = (isLandscape && !qrOnly) ? '90%' : '78%';
+  var qrW = qrOnly
+    ? 'min(80vw,72vh)'
+    : (isLandscape ? 'min(40vw,60vh)' : 'min(56vw,42vh)');
+  var pageDir = (isLandscape && !qrOnly) ? 'row' : 'column';
+  var pageGap = (isLandscape && !qrOnly) ? '6%' : '4vh';
+  // Em retrato as colunas ocupam a largura inteira (logo = 70% da página).
+  // Em paisagem viram colunas lado a lado (logo = 88% da coluna esquerda).
+  var colCss = (isLandscape && !qrOnly)
+    ? '.col-main { flex:1 1 0; width:auto; } .col-qr { flex:0 0 auto; width:auto; }'
+    : '.col-main, .col-qr { width:100%; }';
 
   return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">' +
     '<title>Convite — scoreplace.app</title>' +
     '<style>' +
-      '@page { size: ' + paperSize + ' portrait; margin: 0; }' +
+      '@page { size: ' + paperSize + ' ' + (isLandscape ? 'landscape' : 'portrait') + '; margin: 0; }' +
       '* { box-sizing:border-box; }' +
-      'html,body { margin:0; padding:0; height:100%; background:#fff; }' +
+      'html,body { margin:0; padding:0; height:100%; background:#fff; overflow:hidden; }' +
       'body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
         (isBW ? ' filter:grayscale(100%);' : '') +
         ' -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
-      '.page { width:100%; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;' +
-        ' text-align:center; padding:14mm; }' +
-      '.logo { margin-bottom:10mm; }' +
-      '.logo svg { width:62mm; height:auto; }' +
-      '.heading { margin-bottom:12mm; max-width:90%; }' +
-      '.qr-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:6mm; padding:6mm; display:inline-block; }' +
-      '.qr { width:62mm; height:62mm; display:block; }' +
-      '.caption { margin-top:7mm; font-size:12pt; color:#64748b; }' +
-      '.brand { margin-top:10mm; font-size:9pt; color:#94a3b8; letter-spacing:0.5px; }' +
+      '.page { width:100%; height:100vh; display:flex; flex-direction:' + pageDir + '; align-items:center; justify-content:center;' +
+        ' gap:' + pageGap + '; text-align:center; padding:5%; }' +
+      '.col-main, .col-qr { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; }' +
+      colCss +
+      '.logo { width:100%; margin-bottom:5%; display:flex; justify-content:center; }' +
+      '.logo svg { width:' + logoW + '; height:auto; max-height:30vh; }' +
+      '.heading { max-width:96%; }' +
+      '.qr-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:5mm; padding:4mm; display:inline-block; }' +
+      '.qr { width:' + qrW + '; height:auto; display:block; }' +
+      '.caption { margin-top:3%; font-size:clamp(8pt,2.2vw,12pt); color:#64748b; }' +
+      '.brand { margin-top:4%; font-size:clamp(7pt,1.8vw,9pt); color:#94a3b8; letter-spacing:0.5px; }' +
     '</style>' +
     '</head><body><div class="page">' + inner + '</div></body></html>';
 }
