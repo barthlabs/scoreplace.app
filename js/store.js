@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.4-beta';
+window.SCOREPLACE_VERSION = '2.4.5-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -2449,10 +2449,12 @@ window.AppStore = {
     // v1.9.43: sinaliza que estamos aguardando o primeiro snapshot antes de
     // esconder o boot loader. router.js respeita esse flag e não esconde antes.
     window._waitingForFirstSnapshot = true;
-    // Fallback: se o Firestore nunca responder (offline/erro), esconde após 5s.
+    // Fallback: se o Firestore nunca responder (offline/erro), revela após 5s.
     setTimeout(function() {
       if (window._waitingForFirstSnapshot) {
         window._waitingForFirstSnapshot = false;
+        // Sem dados do servidor — revela o que houver (cache) mesmo assim.
+        window._bootReady = true;
         if (typeof window._hideBootLoader === 'function') window._hideBootLoader();
       }
     }, 5000);
@@ -2520,12 +2522,18 @@ window.AppStore = {
           if (_firstSnapView !== 'novo-torneio') {
             if (typeof initRouter === 'function') initRouter();
           }
-          // v1.9.43: boot loader esperou o primeiro snapshot — agora esconde.
-          // Evita o flash de dashboard vazia seguido de re-render com dados.
+          // v1.9.43: boot loader esperou o primeiro snapshot.
+          // v2.4.5: NÃO esconde aqui. Espera o settle — a query complementar
+          // (abaixo) + um respiro pras hidratações async da dashboard
+          // (presença, movimento, descoberta) assentarem ATRÁS do splash —
+          // e só então marca _bootReady=true. Assim a dashboard é revelada
+          // estável, sem o re-render visível que travava o scroll na abertura.
           window._waitingForFirstSnapshot = false;
-          if (typeof window._hideBootLoader === 'function') {
-            setTimeout(window._hideBootLoader, 120);
-          }
+          var _finalizeBootReady = function() {
+            requestAnimationFrame(function() {
+              setTimeout(function() { window._bootReady = true; }, 550);
+            });
+          };
           // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
           // Auto-fix stale names after tournaments are loaded (no currentUser check needed)
           if (typeof window._autoFixStaleNames === 'function') {
@@ -2557,7 +2565,13 @@ window.AppStore = {
                   store._saveToCache();
                   if (typeof window._softRefreshView === 'function') window._softRefreshView();
                 }
-              }).catch(function() {});
+              })
+              .catch(function() {})
+              // v2.4.5: só libera o boot loader DEPOIS que a query complementar
+              // assenta (o _softRefreshView dela roda atrás do splash).
+              .then(function() { _finalizeBootReady(); });
+          } else {
+            _finalizeBootReady();
           }
           return;
         }

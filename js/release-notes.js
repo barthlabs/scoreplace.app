@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.5-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Abertura mais suave — sem travar ao rolar a tela.</b> Ao abrir o app, a tela de carregamento (bola de tênis girando, logo acima e uma <b>barra de progresso</b> abaixo) agora <b>fica até tudo carregar de verdade</b> — dados, seus torneios e a dashboard estabilizada. Só então a dashboard aparece, já pronta. Acabou aquele engasgo de re-renderizar a página quando você rolava pra procurar seus torneios logo na abertura.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.4-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Ocultou o contato? Então escolha um nome.</b> Se o seu nome de exibição é o próprio <b>e-mail</b> ou <b>telefone</b> e você ativa a ocultação correspondente, o app agora <b>pede um nome de exibição</b> antes de salvar — assim ninguém aparece como "Usuário" pros outros. É a sua escolha: <b>ou você dá um nome</b>, <b>ou o contato continua sendo mostrado</b> (desligando a ocultação).</li>' +

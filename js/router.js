@@ -425,8 +425,12 @@ function initRouter() {
   // (_waitingForFirstSnapshot), o boot loader só some depois que os dados
   // chegarem (startRealtimeListener). Para usuários não-logados ou quando
   // Firestore não é usado, esconde aqui normalmente.
-  if (typeof window._hideBootLoader === 'function' && !window._waitingForFirstSnapshot) {
-    setTimeout(window._hideBootLoader, 150);
+  // v2.4.5: sinaliza pronto via _bootReady (o loader preenche a barra e revela).
+  // Em sessões com Firestore, quem marca pronto é o startRealtimeListener,
+  // após o settle dos dados — aqui só marcamos quando NÃO estamos aguardando o
+  // primeiro snapshot (landing, logout, ou Firestore não usado).
+  if (!window._waitingForFirstSnapshot) {
+    setTimeout(function() { window._bootReady = true; }, 150);
   }
 
   // Safety net: never leave a blank screen — if view-container is empty after 5s, go to dashboard
