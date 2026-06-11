@@ -1805,15 +1805,16 @@ function renderDashboard(container) {
         '</div>';
 
       return '<div style="min-width:300px;max-width:360px;display:flex;flex-direction:column;gap:0.6rem;">' +
-        '<div style="display:flex;align-items:center;gap:8px;">' +
-          '<h4 style="color:' + faseColor + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + faseColor + ';padding-left:8px;flex:1;">' +
-            (faseLower.indexOf('final') !== -1 ? '🏆 ' : '') + _sf(faseStr) +
-            '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(item.tName) + '</span>' +
-          '</h4>' +
-        '</div>' +
+        (opts.hideFaseHeader ? '' :
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<h4 style="color:' + faseColor + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + faseColor + ';padding-left:8px;flex:1;">' +
+              (faseLower.indexOf('final') !== -1 ? '🏆 ' : '') + _sf(faseStr) +
+              '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(item.tName) + '</span>' +
+            '</h4>' +
+          '</div>') +
         '<div id="card-' + mId + '" style="background:' + cardBgStr + ';border:2px solid ' + cardBorderStr + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;gap:6px;">' +
-            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;">' + _sf(matchLabel) + '</span>' +
+            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;">' + _sf(opts.boxLabelOverride || matchLabel) + '</span>' +
             '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;min-width:0;">' + finalHeaderBtns + '</div>' +
           '</div>' +
           '<div style="' + rowStyle + '">' + _teamHtml(p1) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
@@ -1914,8 +1915,47 @@ function renderDashboard(container) {
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.04em;">⚔️ Próximos jogos (' + allUpcoming.length + ')</p>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
-      shown3.forEach(function(entry) {
-        html += _miniBracketCard(entry.item, entry.canLaunch);
+      // v2.3.80: agrupa por (grupo + torneio) — o rótulo "GRUPO · TORNEIO"
+      // aparece UMA vez no topo e cada card mostra só "JOGO N". Espelha o
+      // comportamento já usado em "Últimos resultados". Antes cada card repetia
+      // "R3 GRUPO D · JOGO N · TESTE DE LIGA" no topo E no header (regressão).
+      var _splitFaseU = function(s) {
+        s = String(s || '');
+        var mm = s.match(/^(.*?)[\s·•\-]*\b([Jj][Oo][Gg][Oo]\s*\d+)\s*$/);
+        if (mm && mm[1].trim()) return { group: mm[1].replace(/[\s·•\-]+$/, '').trim(), jogo: mm[2].trim() };
+        return { group: s.trim(), jogo: '' };
+      };
+      var _upUnits = shown3.map(function(entry) {
+        var tRefU = participacoes.find(function(tt) { return tt.id === entry.item.tId; });
+        var faseStrU = tRefU ? _elabFaseLabel(tRefU, entry.item.m) : (entry.item.subLine || '');
+        var fl = faseStrU.toLowerCase();
+        var col = fl.indexOf('final') !== -1 ? '#fbbf24' : fl.indexOf('semi') !== -1 ? '#06b6d4' : fl.indexOf('quarta') !== -1 ? '#4ade80' : '#818cf8';
+        var sp = _splitFaseU(faseStrU);
+        return { entry: entry, group: sp.group, jogo: sp.jogo, tName: entry.item.tName, color: col };
+      });
+      var _upGroups = []; var _upIdx = {};
+      _upUnits.forEach(function(u) {
+        var canGroup = !!(u.group && u.jogo);
+        var key = (u.group || '').toLowerCase() + '||' + (u.tName || '').toLowerCase();
+        if (canGroup && _upIdx[key] != null) { _upGroups[_upIdx[key]].units.push(u); return; }
+        if (canGroup) _upIdx[key] = _upGroups.length;
+        _upGroups.push({ group: u.group, tName: u.tName, color: u.color, grouped: canGroup, units: [u] });
+      });
+      _upGroups.forEach(function(g) {
+        if (g.grouped) {
+          html += '<div style="flex-basis:100%;width:100%;display:flex;align-items:center;gap:8px;margin:6px 0 -2px;">' +
+            '<h4 style="color:' + g.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + g.color + ';padding-left:8px;flex:1;">' +
+              _sf(g.group) +
+              '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(g.tName) + '</span>' +
+            '</h4></div>';
+          g.units.forEach(function(u) {
+            html += _miniBracketCard(u.entry.item, u.entry.canLaunch, { hideFaseHeader: true, boxLabelOverride: u.jogo });
+          });
+        } else {
+          g.units.forEach(function(u) {
+            html += _miniBracketCard(u.entry.item, u.entry.canLaunch);
+          });
+        }
       });
       html += '</div>';
       if (allUpcoming.length > 3) {

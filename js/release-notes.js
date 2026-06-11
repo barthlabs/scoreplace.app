@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.80-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Próximos jogos sem repetição.</b> Na seção “Meus Resultados → Próximos jogos”, o nome do torneio + rodada + grupo (ex.: “R3 Grupo D · Teste de Liga”) agora aparece <b>uma única vez</b> no topo dos jogos, e cada card mostra só <b>“Jogo N”</b> no cabeçalho — antes repetia tudo em cima e dentro de cada card.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.79-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Co-organizadores não somem mais ao editar o torneio.</b> Tinha um bug: salvar a edição do torneio apagava a lista de co-organizadores (e podia mexer no dono). Corrigido — editar agora preserva os co-organizadores e a posse do torneio. <i>Obs.: os co-organizadores que já tinham sido apagados precisam ser adicionados de novo — a correção evita que isso volte a acontecer.</i></li>' +
