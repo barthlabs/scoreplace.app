@@ -210,7 +210,54 @@ window._processWoSubstitutions = function(tId) {
   return { ok: subCount > 0, subCount, subDetails };
 };
 
+// v2.3.82: chokepoint de permissão da presença. Regras:
+//   • organizador / co-org / árbitro confirmado → marca/retira de QUALQUER um;
+//   • torneio com placar pelos participantes (resultEntry players/all) → o
+//     jogador marca a PRÓPRIA presença, exigindo GPS no local pra MARCAR
+//     presente (retirar a própria presença é livre);
+//   • qualquer outro caso → bloqueado com aviso.
+// O organizador sempre pode dar/retirar (cai no 1º caso).
 window._toggleCheckIn = function (tId, playerName) {
+  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  if (!t) return;
+  const user = window.AppStore && window.AppStore.currentUser;
+
+  // 1) Autoridade (org/co-org/árbitro): controla a presença de todos.
+  if (window._canManagePresence && window._canManagePresence(t, user)) {
+    return window._applyCheckInToggle(tId, playerName);
+  }
+
+  // 2) Auto-presença do próprio jogador (só em torneios com placar pelos
+  //    participantes e quando o nome é o do próprio usuário).
+  const _canSelf = window._participantsSelfPresence && window._participantsSelfPresence(t) &&
+    window._isMyOwnPlayerName && window._isMyOwnPlayerName(t, playerName, user);
+  if (!_canSelf) {
+    if (typeof showNotification === 'function') {
+      showNotification('Presença', 'Apenas o organizador ou o árbitro pode marcar a presença.', 'info');
+    }
+    return;
+  }
+  const _wasIn = !!(t.checkedIn && t.checkedIn[playerName]);
+  if (_wasIn) {
+    // Retirar a própria presença é livre (você pode dizer que saiu).
+    return window._applyCheckInToggle(tId, playerName);
+  }
+  // Marcar a própria presença → confirma pelo GPS que está no local.
+  if (typeof showNotification === 'function') {
+    showNotification('📍 Verificando local…', 'Confirmando pelo GPS que você está no local.', 'info');
+  }
+  window._isUserAtTournamentVenue(t).then(function (atVenue) {
+    if (!atVenue) {
+      if (typeof showNotification === 'function') {
+        showNotification('📍 Fora do local', 'Ative o GPS e esteja no local do torneio pra marcar sua presença.', 'warning');
+      }
+      return;
+    }
+    window._applyCheckInToggle(tId, playerName);
+  });
+};
+
+window._applyCheckInToggle = function (tId, playerName) {
   const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
   if (!t) return;
   if (!t.checkedIn) t.checkedIn = {};
@@ -266,6 +313,14 @@ window._toggleCheckIn = function (tId, playerName) {
 window._markAbsent = function (tId, playerName) {
   const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
   if (!t) return;
+  // v2.3.82: W.O. (declarar ausente / reverter) só por autoridade (org/co-org/
+  // árbitro). O W.O. por consenso entre participantes virá num próximo passo.
+  if (window._canManagePresence && !window._canManagePresence(t, window.AppStore && window.AppStore.currentUser)) {
+    if (typeof showNotification === 'function') {
+      showNotification('W.O.', 'Apenas o organizador ou o árbitro pode declarar W.O.', 'info');
+    }
+    return;
+  }
   if (!t.absent) t.absent = {};
   if (!t.checkedIn) t.checkedIn = {};
   // v1.0.79-beta: revert completo. Detecta orphan (W.O.'d via woHistory) e,
@@ -677,6 +732,14 @@ window._declareAbsent = function (tId, playerName) {
   // entre dialog-open e confirm.
   let t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
   if (!t) return;
+  // v2.3.82: W.O. só por autoridade (org/co-org/árbitro). Consenso de
+  // participantes virá num próximo passo.
+  if (window._canManagePresence && !window._canManagePresence(t, window.AppStore && window.AppStore.currentUser)) {
+    if (typeof showNotification === 'function') {
+      showNotification('W.O.', 'Apenas o organizador ou o árbitro pode declarar W.O.', 'info');
+    }
+    return;
+  }
 
   // Encontrar o time/entry e o match deste participante
   let partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});

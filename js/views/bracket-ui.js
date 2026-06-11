@@ -560,6 +560,75 @@ function _isUserAuthority(t, user) {
 }
 window._isUserAuthority = _isUserAuthority;
 
+// ── v2.3.82: Presença — permissões ──────────────────────────────────────────
+// Quem pode marcar/retirar a presença de QUALQUER inscrito: organizador,
+// co-organizador ou árbitro confirmado. (Atalho legível pra _isUserAuthority.)
+window._canManagePresence = function(t, user) {
+  user = user || (window.AppStore && window.AppStore.currentUser);
+  return _isUserAuthority(t, user);
+};
+
+// Torneio onde os PARTICIPANTES lançam o placar (resultEntry players/all) — só
+// nesses o jogador pode marcar a PRÓPRIA presença (com GPS no local).
+window._participantsSelfPresence = function(t) {
+  var re = (t && t.resultEntry) || 'organizer';
+  return re === 'players' || re === 'all' ||
+    (Array.isArray(re) && (re.indexOf('players') !== -1 || re.indexOf('all') !== -1));
+};
+
+// `name` (indivíduo) é o PRÓPRIO usuário inscrito em t? Casamento seguro:
+// (a) nome == displayName do usuário E o usuário é membro do torneio; ou
+// (b) sub-participante com uid == user.uid e nome batendo. Falso-negativo só
+// significa "peça ao organizador"; evita falso-positivo (marcar o parceiro).
+window._isMyOwnPlayerName = function(t, name, user) {
+  user = user || (window.AppStore && window.AppStore.currentUser);
+  if (!t || !name || !user) return false;
+  var uid = user.uid || '';
+  var email = (user.email || '').toLowerCase();
+  var dn = user.displayName || '';
+  var isMember =
+    (Array.isArray(t.memberUids) && uid && t.memberUids.indexOf(uid) !== -1) ||
+    (Array.isArray(t.memberEmails) && email && t.memberEmails.indexOf(email) !== -1);
+  if (dn && name === dn && isMember) return true;
+  // uid no objeto do participante (top-level ou sub-participante de dupla)
+  if (uid && Array.isArray(t.participants)) {
+    for (var i = 0; i < t.participants.length; i++) {
+      var p = t.participants[i];
+      if (!p || typeof p !== 'object') continue;
+      var pn = p.displayName || p.name || '';
+      if (pn === name && (p.uid === uid)) return true;
+      if (Array.isArray(p.participants)) {
+        for (var k = 0; k < p.participants.length; k++) {
+          var sub = p.participants[k];
+          if (sub && (sub.displayName || sub.name) === name && sub.uid === uid) return true;
+        }
+      }
+    }
+  }
+  return false;
+};
+
+// GPS: o usuário está fisicamente no local do torneio? Promise<bool>. Exige
+// venueLat/venueLon no torneio e permissão de localização. Raio 500m (quadras
+// são grandes e o GPS é impreciso). Sem coords ou sem permissão → false.
+window._isUserAtTournamentVenue = function(t) {
+  return new Promise(function(resolve) {
+    if (!t || t.venueLat == null || t.venueLon == null) { resolve(false); return; }
+    if (!navigator.geolocation) { resolve(false); return; }
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      var toRad = function(d) { return d * Math.PI / 180; };
+      var lat1 = pos.coords.latitude, lon1 = pos.coords.longitude;
+      var lat2 = Number(t.venueLat), lon2 = Number(t.venueLon);
+      if (isNaN(lat2) || isNaN(lon2)) { resolve(false); return; }
+      var dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      var dist = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      resolve(dist <= 500);
+    }, function() { resolve(false); }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+  });
+};
+
 // Helper: re-render bracket preserving scroll position (zero jump)
 // Uses anchor-based approach: saves the viewport-relative offset of a reference
 // element, re-renders, then scrolls so the same element is at the same offset.
