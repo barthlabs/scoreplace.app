@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.91-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Sorteio automático da Liga 100% correto — agora também no servidor.</b> O sorteio automático passou a rodar a <b>mesma lógica do app</b> no servidor: <b>Rei/Rainha</b> (grupos de 4 com parceiros rotativos), <b>duplas</b>, sorteio <b>equilibrado</b>, categorias, folgas justas e critérios de desempate — tudo respeitando exatamente a configuração do organizador. Ele dispara no horário agendado <b>mesmo que ninguém esteja com o app aberto</b>. Antes, o sorteio automático do servidor montava confrontos simples 1×1 — isso foi substituído. Validado com 73, 140 e 142 jogadores.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Configuração completa do torneio à vista.</b> O card do torneio (na dashboard e na página de detalhe) agora tem uma caixa <b>⚙️ Configuração</b> que mostra <b>todas</b> as definições escolhidas pelo organizador — formato, modo de sorteio, tipo de jogo (1×1 / 2×2 / as duas categorias), modo de inscrição, sistema de pontuação, forma do W.O., como os resultados são lançados, critérios de desempate e, na Liga, também temporada, sorteio equilibrado, cluster, pontuação de novos inscritos, regra de inatividade, playoffs, agendamento e periodicidade do sorteio. Tudo se atualiza sozinho quando o organizador edita o torneio — assim qualquer um (organizador, participantes ou curiosos) confere exatamente como o torneio foi montado.</li>' +

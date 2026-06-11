@@ -1,1 +1,14 @@
-{ "functions": { "source": "." } }
+{
+  "functions": {
+    "source": ".",
+    "predeploy": [
+      "node \"$RESOURCE_DIR/copy-vendor.js\""
+    ],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "test-draw.js"
+    ]
+  }
+}
