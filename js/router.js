@@ -182,9 +182,15 @@ function initRouter() {
           // Cache presente, Firebase ainda não resolveu (pode ser sessão real
           // no IndexedDB com localStorage limpo pelo iOS) → spinner.
           // onAuthStateChanged chamará initRouter() quando resolver.
-          viewContainer.innerHTML = (typeof window._renderBallLoader === 'function')
-            ? window._renderBallLoader('Carregando…', { minHeight: '60vh' })
-            : '<div style="text-align:center;padding:60vh 0 0;">Carregando…</div>';
+          // v2.4.7: enquanto o boot splash (tela de carregamento de abertura)
+          // ainda cobre a tela, NÃO renderiza o loader antigo atrás dele —
+          // senão ele "vaza" quando o splash some (a "página de loading
+          // anterior" interrompendo a nova). O splash é o único loader visível.
+          viewContainer.innerHTML = document.getElementById('scoreplace-boot-loader')
+            ? ''
+            : ((typeof window._renderBallLoader === 'function')
+              ? window._renderBallLoader('Carregando…', { minHeight: '60vh' })
+              : '<div style="text-align:center;padding:60vh 0 0;">Carregando…</div>');
           _firstRoute = false;
           return;
         }
@@ -194,9 +200,12 @@ function initRouter() {
         // Sem cache mas Firebase ainda não respondeu — pode ser usuário
         // com sessão no IndexedDB mas localStorage limpo pelo iOS.
         // Mostra spinner e aguarda até 3 s pelo onAuthStateChanged.
-        viewContainer.innerHTML = (typeof window._renderBallLoader === 'function')
-          ? window._renderBallLoader('Carregando…', { minHeight: '60vh' })
-          : '<div style="text-align:center;padding:60vh 0 0;">Carregando…</div>';
+        // v2.4.7: idem — não desenha o loader antigo atrás do boot splash.
+        viewContainer.innerHTML = document.getElementById('scoreplace-boot-loader')
+          ? ''
+          : ((typeof window._renderBallLoader === 'function')
+            ? window._renderBallLoader('Carregando…', { minHeight: '60vh' })
+            : '<div style="text-align:center;padding:60vh 0 0;">Carregando…</div>');
         clearTimeout(window._authNoCacheFallback);
         window._authNoCacheFallback = setTimeout(function() {
           window._authNoCacheFallback = null;

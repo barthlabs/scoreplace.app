@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.7-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Tela de abertura sem aquele "pisca" de loading.</b> A tela de carregamento nova (logo, bola girando e barra) agora fica <b>sozinha na tela o tempo todo</b> — a tela de loading antiga não aparece mais por cima. E a <b>barra reflete o carregamento de verdade</b>: enche da esquerda pra direita conforme o app carrega (app → login → dados → tela pronta), avança devagarinho até ~95% se a internet estiver lenta e só <b>crava 100% quando tudo está pronto</b>, aí revela a dashboard.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.6-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Papel da organização e título da série no gênero certo.</b> Na <b>Organização</b> do torneio, o rótulo deixou de mostrar a dupla "Organizador/Organizadora". Agora segue a regra do português: <b>basta um homem</b> na organização pra ficar no masculino (<b>Organizador / Co-organizador</b>); só vira feminino (<b>Organizadora / Co-organizadora</b>) quando <b>toda</b> a organização é de mulheres. Mesma lógica no <b>Rei/Rainha</b>: a série com homens e mulheres é <b>👑 Rei/Rainha</b>, só mulheres é <b>👑 Rainha</b>, e só homens é <b>👑 Rei</b>.</li>' +

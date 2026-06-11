@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.6-beta';
+window.SCOREPLACE_VERSION = '2.4.7-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -2546,6 +2546,8 @@ window.AppStore = {
         // First snapshot = initial load → full render needed
         if (isFirstSnapshot) {
           isFirstSnapshot = false;
+          // v2.4.7: marco real pra barra do boot splash (dados em memória).
+          window._firstSnapshotDone = true;
           // v1.4.13-beta: se o usuário já navegou pra uma rota stateful
           // (#novo-torneio) antes do primeiro snapshot chegar, NÃO chamar
           // initRouter() — isso limparia o viewContainer e fecharia o formulário.
