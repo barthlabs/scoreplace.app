@@ -2814,8 +2814,9 @@ function renderDashboard(container) {
           </button>
           ${(typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ twoLine: true, extra: 'height:58px;padding:0 18px;font-size:0.92rem;letter-spacing:0.01em;border:1px solid rgba(255,255,255,0.25);' }) : ''}
         </div>
-        <!-- Linha: Apoie (Pro volta aqui quando reativarmos) -->
+        <!-- Linha: Instalar app (some se já instalado) + Apoie -->
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: -2px;">
+          ${(typeof window._installButtonHtml === 'function') ? window._installButtonHtml({ cls: 'btn hover-lift', label: '📲 Instalar app', style: 'background:#1e3a8a;color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.78rem;font-weight:600;padding:0 14px;height:34px;border-radius:9px;' }) : ''}
           <button id="btn-support-pix" class="btn hover-lift" title="${_t('common.support')}" style="background: #047857; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.78rem; font-weight: 600; padding: 0 14px; height: 34px; border-radius: 9px; opacity: 0.9;" onclick="window.location.hash='#support'">💚 ${_t('common.support')}</button>
         </div>
       </div>

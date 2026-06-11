@@ -49,6 +49,11 @@
           '<span class="landing-cta-l1">' + _ctaL1 + '</span>' +
           (_ctaL2 ? '<span class="landing-cta-l2">' + _ctaL2 + '</span>' : '') +
         '</button>' +
+        // v2.3.98: botão proativo de instalar (some se já instalado). Dica: instalar
+        // ANTES de entrar evita ter que logar de novo no app instalado (iOS).
+        ((typeof window._installButtonHtml === 'function')
+          ? window._installButtonHtml({ cls: 'btn btn-outline', label: '📲 Instalar na tela inicial', style: 'margin-top:10px;font-size:0.92rem;font-weight:600;padding:10px 18px;border-radius:12px;' })
+          : '') +
         '<div class="landing-sports-row">' +
           _SPORTS_LANDING.map(function(s) {
             var icon = window._sportIcon ? window._sportIcon(s) : '';

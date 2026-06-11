@@ -1788,7 +1788,76 @@ window.addEventListener('appinstalled', function() {
   window._markInstallBannerInstalled();
   var ban = document.getElementById('scoreplace-android-install-banner');
   if (ban) ban.remove();
+  // some o botão proativo de instalar, se estiver na tela
+  document.querySelectorAll('[data-install-app-btn]').forEach(function(b){ b.style.display='none'; });
 });
+
+// ── v2.3.98: botão PROATIVO de instalar (não-gated) — o usuário toca quando quer,
+// sem precisar abrir menu do navegador. Android/desktop com prompt nativo → instala
+// em 1 toque. iOS Safari → overlay com instruções (Apple NÃO permite install
+// programático). Já instalado → avisa. ─────────────────────────────────────────
+window._promptAppInstall = async function () {
+  if (window._isInstalledAsPWA && window._isInstalledAsPWA()) {
+    if (typeof showNotification === 'function') showNotification('✅ Já está instalado', 'O scoreplace.app já está na sua tela inicial.', 'info');
+    return;
+  }
+  if (window._deferredInstallPrompt) { // Android Chrome/Edge, desktop → install real
+    try {
+      window._deferredInstallPrompt.prompt();
+      var choice = await window._deferredInstallPrompt.userChoice;
+      if (choice && choice.outcome === 'accepted' && window._markInstallBannerInstalled) window._markInstallBannerInstalled();
+      window._deferredInstallPrompt = null;
+      return;
+    } catch (e) {}
+  }
+  window._showInstallInstructions(); // iOS Safari sempre; Android quando o evento não disparou
+};
+
+window._showInstallInstructions = function () {
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isNonSafariIOS = /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  var isAndroid = /Android/.test(ua);
+  var title, steps;
+  if (isNonSafariIOS) {
+    title = '🧭 Abra no Safari para instalar';
+    steps = 'No iPhone, instalar como app só funciona pelo <b>Safari</b>. Abra <b>scoreplace.app</b> no Safari e toque em <b>Instalar</b> de novo.';
+  } else if (isIOS) {
+    title = '📲 Instalar no iPhone (Safari)';
+    steps =
+      '<b>1.</b> Toque no <b>Compartilhar</b> <span style="display:inline-block;border:1px solid currentColor;border-radius:4px;padding:0 5px;margin:0 2px;vertical-align:middle;">⬆</span> (barra de baixo do Safari; no iOS 17+ pode estar nos <b>•••</b> à direita, ou no <b>"Aa"</b> ao lado do endereço).<br><br>' +
+      '<b>2.</b> Role e toque em <b>"Adicionar à Tela de Início"</b>.<br><br>' +
+      '<b>3.</b> Toque em <b>Adicionar</b>. O ícone aparece na tela inicial.<br><br>' +
+      '<span style="color:#fbbf24;font-size:0.82rem;">💡 Dica: <b>instale primeiro e entre depois</b> — assim você fica logado no app e não precisa entrar de novo. (Não funciona em aba Privada.)</span>';
+  } else if (isAndroid) {
+    title = '📲 Instalar no Android';
+    steps = 'Toque nos <b>três pontinhos ⋮</b> no canto superior direito do Chrome → <b>"Instalar app"</b> (ou <b>"Adicionar à tela inicial"</b>).';
+  } else {
+    title = '📲 Instalar no computador';
+    steps = 'No Chrome/Edge, clique no ícone de <b>instalar</b> (⊕/monitor) na barra de endereço (à direita) → <b>Instalar</b>.';
+  }
+  var old = document.getElementById('sp-install-overlay'); if (old) old.remove();
+  var ov = document.createElement('div');
+  ov.id = 'sp-install-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10060;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML = '<div style="background:var(--bg-card,#1a2235);color:var(--text-main,#fff);border-radius:16px;padding:22px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;">' +
+    '<div style="font-size:1.1rem;font-weight:800;color:#fbbf24;margin-bottom:10px;">' + title + '</div>' +
+    '<div style="font-size:0.9rem;line-height:1.6;">' + steps + '</div>' +
+    '<button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="var o=document.getElementById(\'sp-install-overlay\');if(o)o.remove();">Entendi</button>' +
+    '</div>';
+  ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+};
+
+// HTML de um botão de instalar (vazio se já instalado). opts.style / opts.label.
+window._installButtonHtml = function (opts) {
+  opts = opts || {};
+  if (window._isInstalledAsPWA && window._isInstalledAsPWA()) return '';
+  var style = opts.style || '';
+  var cls = opts.cls || '';
+  var label = opts.label || '📲 Instalar na tela inicial';
+  return '<button type="button" data-install-app-btn class="' + cls + '" onclick="window._promptAppInstall()" style="' + style + '">' + label + '</button>';
+};
 
 window._showAndroidInstallBanner = function() {
   try {
