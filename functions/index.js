@@ -2018,31 +2018,37 @@ exports.notifyLeagueRoundWhatsApp = onCall(
 
     // Resolve phone for a player name: first from participants map, then
     // from users collection (by uid or by email_lower).
+    // v2.4.3: respeita a privacidade — usuário com omitPhone===true NÃO entra no
+    // grupo de WhatsApp (grupo revelaria o número aos demais). Retorna null → ele
+    // fica de fora do grupo, mas segue avisado por notificação 1:1 + plataforma/email.
+    // Ordem uid-first (autoridade) pra checar omitPhone antes do phone informal.
     async function resolvePhone(playerName) {
       const key = normalize(playerName);
       const entry = participantMap[key];
       if (!entry) return null;
-      // Direct phone on participant record
-      if (entry.phone) return _normalizePhone(entry.phone);
-      // Look up by uid
+      // 1. uid → perfil (fonte da verdade; checa omitPhone)
       if (entry.uid) {
         try {
           const userDoc = await db.collection("users").doc(entry.uid).get();
           if (userDoc.exists) {
-            const phone = (userDoc.data() || {}).phone;
-            if (phone) return _normalizePhone(phone);
+            const d = userDoc.data() || {};
+            if (d.omitPhone === true) return null; // privacidade: fora do grupo
+            if (d.phone) return _normalizePhone(d.phone);
           }
         } catch (_) {}
       }
-      // Look up by email_lower (field stored by the app)
+      // 2. phone direto no participante (informal, sem conta — omitPhone não se aplica)
+      if (entry.phone) return _normalizePhone(entry.phone);
+      // 3. email_lower → perfil (checa omitPhone)
       if (entry.email) {
         try {
           const emailLower = String(entry.email).toLowerCase().trim();
           const q = await db.collection("users")
             .where("email_lower", "==", emailLower).limit(1).get();
           if (!q.empty) {
-            const phone = (q.docs[0].data() || {}).phone;
-            if (phone) return _normalizePhone(phone);
+            const d = q.docs[0].data() || {};
+            if (d.omitPhone === true) return null; // privacidade: fora do grupo
+            if (d.phone) return _normalizePhone(d.phone);
           }
         } catch (_) {}
       }

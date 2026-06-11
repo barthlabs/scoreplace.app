@@ -3240,7 +3240,10 @@ async function simulateLoginSuccess(user) {
       // v1.3.41-beta: default ON se já tem telefone cadastrado e não escolheu OFF explicitamente
       { id: 'profile-notify-whatsapp', val: cu.notifyWhatsApp === true || (cu.notifyWhatsApp !== false && !!(cu.phone && String(cu.phone).replace(/\D/g,'').length >= 8)) },
       { id: 'profile-hints-enabled', val: _hintsEnabled },
-      { id: 'profile-presence-auto-checkin', val: !!cu.presenceAutoCheckin }
+      { id: 'profile-presence-auto-checkin', val: !!cu.presenceAutoCheckin },
+      // v2.4.3: privacidade — ocultar e-mail/telefone (default OFF).
+      { id: 'profile-omit-email', val: cu.omitEmail === true },
+      { id: 'profile-omit-phone', val: cu.omitPhone === true }
     ].forEach(function(t) { var el = document.getElementById(t.id); if (el) el.checked = t.val; });
     window._profileLocations = Array.isArray(cu.preferredLocations) ? cu.preferredLocations.slice() : [];
     var cepsEl = document.getElementById('profile-edit-ceps'); if (cepsEl) cepsEl.value = cu.preferredCeps || '';
@@ -5308,6 +5311,11 @@ function setupProfileModal() {
             '</div>' +
             '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Você receberá um link de verificação nesse e-mail. Clicando, ele será vinculado à sua conta.</span>' +
           '</div>' +
+          // v2.4.3: privacidade — ocultar e-mail(s) de outros usuários (default OFF).
+          '<div style="margin:0 0 1rem 0;padding:8px 10px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:8px;">' +
+            (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-email', label: 'Ocultar meu(s) e-mail(s) de outros usuários', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
+            '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:block;margin-top:4px;">Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente.</span>' +
+          '</div>' +
           '<form id="form-edit-profile" onsubmit="event.preventDefault(); saveUserProfile()" style="overflow: hidden;">' +
             // Telefone: País + Número
             '<div class="form-group" style="margin-bottom: 10px;">' +
@@ -5318,6 +5326,14 @@ function setupProfileModal() {
                 '</select>' +
                 '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
               '</div>' +
+            '</div>' +
+            // v2.4.3: privacidade — ocultar telefone de outros usuários (default OFF).
+            // Liga: também tira a pessoa do GRUPO automático de WhatsApp (grupo
+            // revela o número aos membros). Ela segue avisada por notificação 1:1
+            // do app + plataforma/e-mail — número fica privado.
+            '<div style="margin:0 0 10px 0;padding:8px 10px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:8px;">' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar meu telefone de outros usuários', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
+              '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:block;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app <b>e você fica fora dos grupos automáticos de WhatsApp</b> (assim seu número não aparece pra ninguém). Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual.</span>' +
             '</div>' +
             // Row: Sexo + Nascimento (2 colunas)
             '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">' +
@@ -6491,6 +6507,9 @@ function setupProfileModal() {
       var notifyWhatsApp = _chk('profile-notify-whatsapp', false);
       var presenceAutoCheckin = _chk('profile-presence-auto-checkin', false);
       var hintsEnabled = _chk('profile-hints-enabled', true);
+      // v2.4.3: privacidade de contato (default OFF).
+      var omitEmail = _chk('profile-omit-email', false);
+      var omitPhone = _chk('profile-omit-phone', false);
 
       // v1.7.9-beta: auto-enable notifyWhatsApp quando celular está sendo adicionado
       // e auto-enable notifyEmail quando e-mail está sendo adicionado ao perfil.
@@ -6693,6 +6712,9 @@ function setupProfileModal() {
       payload.presenceMuteDays = muteDays;
       payload.presenceMuteUntil = muteUntil;
       payload.presenceAutoCheckin = presenceAutoCheckin;
+      // v2.4.3: privacidade de contato (default OFF).
+      payload.omitEmail = omitEmail;
+      payload.omitPhone = omitPhone;
 
       // Denormalizados para lookups case-insensitive
       if (payload.displayName) payload.displayName_lower = String(payload.displayName).toLowerCase();

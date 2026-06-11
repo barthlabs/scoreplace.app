@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.2-beta';
+window.SCOREPLACE_VERSION = '2.4.3-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -1171,10 +1171,12 @@ window._friendlyDisplayName = function(u) {
   if (!u) return 'Usuário';
   var name = String(u.displayName || '').trim();
   if (name && !window._isUnfriendlyName(name)) return name;
+  // v2.4.3: privacidade — quando o usuário ocultou o e-mail/telefone, ele NÃO é
+  // usado como nome público (fallback). Só afeta quem não tem nome amigável.
   // Full email is the clearest identifier for email-link users
-  if (u.email) return u.email;
+  if (u.email && u.omitEmail !== true) return u.email;
   // Phone — strip country code before formatting for display
-  if (u.phone) {
+  if (u.phone && u.omitPhone !== true) {
     var cc = u.phoneCountry || '55';
     var ph = (typeof window._phoneLocalDigits === 'function')
       ? window._phoneLocalDigits(u.phone, cc)
@@ -1187,7 +1189,7 @@ window._friendlyDisplayName = function(u) {
     }
   }
   // E.164 from Firebase Auth (SMS users who never loaded their profile)
-  if (u.phoneNumber) return u.phoneNumber;
+  if (u.phoneNumber && u.omitPhone !== true) return u.phoneNumber;
   return name || 'Usuário';
 };
 
@@ -2957,6 +2959,9 @@ window.AppStore = {
         if (profile.presenceMuteDays !== undefined) this.currentUser.presenceMuteDays = profile.presenceMuteDays;
         if (profile.presenceMuteUntil !== undefined) this.currentUser.presenceMuteUntil = profile.presenceMuteUntil;
         if (profile.presenceAutoCheckin !== undefined) this.currentUser.presenceAutoCheckin = profile.presenceAutoCheckin;
+        // v2.4.3: privacidade de contato.
+        if (profile.omitEmail !== undefined) this.currentUser.omitEmail = profile.omitEmail;
+        if (profile.omitPhone !== undefined) this.currentUser.omitPhone = profile.omitPhone;
         // v0.17.86: bug crítico — acceptedTerms* não estavam na lista de merge.
         // Toda vez que simulateLoginSuccess re-rodava (ex: onAuthStateChanged
         // por token refresh), currentUser = user (4 campos) wipeava o
@@ -3206,6 +3211,8 @@ window.AppStore = {
       presenceMuteDays: user.presenceMuteDays,
       presenceMuteUntil: user.presenceMuteUntil,
       presenceAutoCheckin: user.presenceAutoCheckin,
+      omitEmail: user.omitEmail,
+      omitPhone: user.omitPhone,
       updatedAt: new Date().toISOString()
     };
     // Strip undefined so merge-save preserves existing Firestore values
