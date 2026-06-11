@@ -6593,6 +6593,40 @@ function setupProfileModal() {
         }
       }
 
+      // ── 2a. PRIVACIDADE × NOME (v2.4.4) ────────────────────────────────
+      // Se o usuário ativou "ocultar e-mail/telefone" mas o nome de exibição
+      // É justamente o contato (não tem nome real), bloqueia o save e exige
+      // um nome — senão ele apareceria como "Usuário" pros outros. Escolha
+      // dele: ou dá um nome de exibição, ou desliga a ocultação (e o contato
+      // continua sendo mostrado). Ninguém fica sem identificação.
+      var _fnTrim = String(finalName || '').trim();
+      var _nameIsEmail = /@/.test(_fnTrim);
+      var _nameIsPhone = !_nameIsEmail && /^\+?[\d\s().\-]{6,}$/.test(_fnTrim);
+      if (omitEmail && _nameIsEmail) {
+        if (typeof showAlertDialog === 'function') {
+          showAlertDialog(
+            'Escolha um nome de exibição',
+            'Você ativou "ocultar meu e-mail", mas seu nome de exibição é o próprio e-mail. ' +
+            'Digite um nome pra aparecer pros outros usuários — ou desligue a ocultação pra continuar mostrando o e-mail.',
+            function () { var _el = document.getElementById('profile-edit-name'); if (_el) { try { _el.focus(); } catch (e) {} } },
+            { type: 'warning' }
+          );
+        }
+        return;
+      }
+      if (omitPhone && _nameIsPhone) {
+        if (typeof showAlertDialog === 'function') {
+          showAlertDialog(
+            'Escolha um nome de exibição',
+            'Você ativou "ocultar meu telefone", mas seu nome de exibição é o próprio telefone. ' +
+            'Digite um nome pra aparecer pros outros usuários — ou desligue a ocultação pra continuar mostrando o telefone.',
+            function () { var _el = document.getElementById('profile-edit-name'); if (_el) { try { _el.focus(); } catch (e) {} } },
+            { type: 'warning' }
+          );
+        }
+        return;
+      }
+
       // v1.1.3-beta: validação anti-placeholder revertida (estava em v1.1.2).
       // User: 'as pessoas já tem dificuldade de entrar no programa e vc vai
       // implementar uma trava? melhor deixar entrar e depois editamos o
