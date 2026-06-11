@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "scoreplace-app"
+  },
   "targets": {},
   "etags": {
     "scoreplace-app": {

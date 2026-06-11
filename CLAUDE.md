@@ -1107,6 +1107,35 @@ As features iniciais (v0.1-v0.4 da lista antiga) estao todas **FEITAS**. O proje
 3. Seguir o padrao vanilla JS + AppStore + views globais + i18n (`_t(chave)`).
 4. Bumpar versao, atualizar cache-busters, release notes no manual (main.js) e este CLAUDE.md **na mesma leva**.
 
+## Cloud Functions (ESTÃO NESTE REPOSITÓRIO — não deferir por "não estão no repo")
+
+**IMPORTANTE — leia antes de dizer que algo depende de backend "fora do repo".**
+As Cloud Functions são versionadas AQUI. O `.gitignore` só ignora `node_modules`,
+nunca o código-fonte. Dois codebases:
+
+- **`functions/`** — codebase `default` (nodejs20, ver `firebase.json`). É o grande
+  (`functions/index.js`, ~160KB). Contém, entre outras: `processWhatsAppQueue`
+  (consome `whatsapp_queue/{id}` → POSTa pra Evolution API), `notifyLeagueRoundWhatsApp`,
+  `sendMagicLink`, `sendWhatsAppMagicLink`, `setParticipantsProfile`,
+  `backupFirestore`, e vários `cleanup*`/`scheduled*`.
+- **`functions-autodraw/`** — deployment SEPARADO (tem `firebase.json` + `.firebaserc`
+  próprios). Contém `autoDraw` (onSchedule every 1 hour — sorteia a próxima rodada
+  de Liga e notifica) e `sendPushNotification` (FCM). A notificação genérica
+  "Nova rodada sorteada automaticamente!" sai daqui.
+
+**Deploy das functions (o `firebase` CLI está instalado e autenticado nesta máquina
+como `rstbarth@gmail.com`; deploy é ação outward-facing → confirmar com o usuário):**
+- `functions/`: `firebase deploy --only functions --project scoreplace-app`
+  (o `.firebaserc` raiz agora tem `default: scoreplace-app`).
+- `functions-autodraw/`: `cd functions-autodraw && firebase deploy --only functions`.
+- Antes de mexer em função que roda em produção (ex.: `autoDraw` de hora em hora num
+  torneio ao vivo), validar com o emulador (`firebase emulators:start --only functions`).
+
+**Segredos** (Evolution API, Stripe, etc.) vivem em `firebase functions:secrets:set …`,
+NUNCA no git. `infra/whatsapp/` tem o Evolution API (Railway). O número que envia
+WhatsApp e o do "Fale com o Desenvolvedor" é **barthlabs +55 11 91693-6454**
+(`SCOREPLACE_DEV_WHATSAPP = '5511916936454'` em store.js).
+
 ## Deploy
 
 Deploy automatico via `git push` para o repositorio `rstbarth/scoreplace.app` (branch `main`). GitHub Pages serve o site em `scoreplace.app` com CNAME configurado.
