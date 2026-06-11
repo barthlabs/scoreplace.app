@@ -1121,7 +1121,16 @@ nunca o código-fonte. Dois codebases:
 - **`functions-autodraw/`** — deployment SEPARADO (tem `firebase.json` + `.firebaserc`
   próprios). Contém `autoDraw` (onSchedule every 1 hour — sorteia a próxima rodada
   de Liga e notifica) e `sendPushNotification` (FCM). A notificação genérica
-  "Nova rodada sorteada automaticamente!" sai daqui.
+  "Nova rodada sorteada!" sai daqui.
+  - **IMPORTANTE (v2.3.91+):** `autoDraw` NÃO é mais um stub 1×1 — ele roda a
+    lógica REAL de sorteio do cliente (Rei/Rainha, duplas, equilíbrio, categorias,
+    folgas, desempate) via `draw-core.js` (shim Node `window=globalThis`) que dá
+    `require()` em cópias dos arquivos do app em `functions-autodraw/vendor/`.
+    O `vendor/` é sincronizado de `js/views/*` no **predeploy** (`copy-vendor.js`,
+    hook em `firebase.json`) → zero drift. `bracket-logic.js` expõe
+    `window._generateNextRound` só pra isso. Validar com
+    `cd functions-autodraw && node test-draw.js` antes de deployar. Ver memória
+    `project_autodraw_server_parity`.
 
 **Deploy das functions (o `firebase` CLI está instalado e autenticado nesta máquina
 como `rstbarth@gmail.com`; deploy é ação outward-facing → confirmar com o usuário):**
