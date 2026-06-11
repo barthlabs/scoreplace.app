@@ -34,6 +34,9 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
     if (t.drawManual) continue;
     if (!t.drawFirstDate) continue;
     if (t.status === 'finished') continue;
+    // v2.3.96: já há um sorteio em revisão (rede de segurança) aguardando o
+    // organizador publicar/anular — não re-sortear (senão re-randomiza a cada hora).
+    if (t.pendingDraw) { console.log(`Auto-draw: ${tId} tem pendingDraw em revisão — skip`); continue; }
 
     // Check participants
     const participants = Array.isArray(t.participants) ? t.participants : [];
@@ -92,6 +95,33 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
         if (!res.ok) {
           console.log(`Auto-draw: skip ${tId} (${res.reason})`);
           continue;
+        }
+
+        // ── REDE DE SEGURANÇA (v2.3.96): sorteio em revisão ────────────────────
+        // Se t.stagedDraw, o sorteio NÃO vai a público nem notifica. Grava SÓ em
+        // `pendingDraw` — o doc público (rounds/status/standings) fica INTOCADO,
+        // então participantes não veem nada. O organizador revisa no app e clica
+        // "Publicar" (move pendingDraw → rounds + notifica) ou "Anular".
+        if (t.stagedDraw) {
+          const pendingDraw = {
+            rounds: t.rounds || [],
+            standings: t.standings || null,
+            sitOutHistory: t.sitOutHistory || null,
+            opponentHistory: t.opponentHistory || null,
+            status: 'active',
+            roundIndex: res.roundIndex,
+            roundNumber: res.roundNumber,
+            firstDraw: !!res.firstDraw,
+            generatedAt: now.toISOString(),
+            source: 'autoDraw',
+          };
+          await db.collection('tournaments').doc(tId).update({
+            pendingDraw: pendingDraw,
+            lastAutoDrawAt: t.lastAutoDrawAt,
+            updatedAt: t.updatedAt,
+          });
+          console.log(`Auto-draw STAGED (review): round ${res.roundNumber} held in pendingDraw for ${tId} — no public, no notify`);
+          continue; // não publica, não notifica
         }
 
         // Persiste só os campos que o sorteio mutou (evita reescrever o doc todo

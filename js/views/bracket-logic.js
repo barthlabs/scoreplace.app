@@ -2847,6 +2847,9 @@ window._checkLigaAutoDraws = async function() {
     // Must be auto-scheduled with a first date
     if (t.drawManual) continue;
     if (!t.drawFirstDate) continue;
+    // v2.3.96: rede de segurança — sorteio em revisão é tratado SÓ pelo servidor
+    // (autoDraw escreve em pendingDraw). O cliente nunca publica um sorteio staged.
+    if (t.stagedDraw) continue;
 
     // Skip finished
     if (t.status === 'finished') continue;
@@ -2901,6 +2904,107 @@ window._checkLigaAutoDraws = async function() {
       window._warn('[auto-draw] failed for tournament ' + t.id, e);
     }
   }
+};
+
+// ─── Rede de segurança: sorteio em revisão (pendingDraw) — v2.3.96 ────────────
+// Quando t.stagedDraw, o autoDraw do servidor escreve o sorteio em t.pendingDraw
+// (NÃO em t.rounds) e não notifica — nada vai a público. O organizador revisa e:
+//  • Publicar → move pendingDraw → rounds + dispara notificações (vai a público)
+//  • Anular   → descarta pendingDraw (nada público aconteceu); re-sorteia depois.
+// Preview read-only da chave sorteada (grupos Rei/Rainha ou jogos), pra validar.
+window._renderPendingDrawPreview = function (t) {
+  var pd = t && t.pendingDraw;
+  if (!pd || !Array.isArray(pd.rounds) || !pd.rounds.length) return '<div style="color:var(--text-muted);font-size:0.8rem;">(sem dados)</div>';
+  var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+  var html = '';
+  pd.rounds.forEach(function (round, ri) {
+    html += '<div style="font-weight:700;color:var(--text-bright);margin:10px 0 4px;font-size:0.85rem;">Rodada ' + (round.round || ri + 1) + '</div>';
+    if (Array.isArray(round.monarchGroups) && round.monarchGroups.length) {
+      round.monarchGroups.forEach(function (g) {
+        html += '<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;margin-bottom:6px;">' +
+          '<div style="font-size:0.78rem;font-weight:700;color:#22d3ee;margin-bottom:4px;">' + esc(g.name || '') + '</div>';
+        (g.matches || []).forEach(function (m) {
+          html += '<div style="font-size:0.78rem;color:var(--text-main);">' + esc(m.p1) + ' <span style="opacity:0.55;">×</span> ' + esc(m.p2) + '</div>';
+        });
+        html += '</div>';
+      });
+    } else {
+      (round.matches || []).filter(function (m) { return m && !m.isSitOut; }).forEach(function (m) {
+        if (m.isBye) { html += '<div style="font-size:0.78rem;color:var(--text-muted);">' + esc(m.p1) + ' — BYE</div>'; return; }
+        html += '<div style="font-size:0.78rem;color:var(--text-main);">' + esc(m.p1) + ' <span style="opacity:0.55;">×</span> ' + esc(m.p2) + '</div>';
+      });
+    }
+    var folgas = (round.matches || []).filter(function (m) { return m && m.isSitOut; });
+    if (folgas.length) html += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Folga: ' + folgas.map(function (m) { return esc(m.p1); }).join(', ') + '</div>';
+  });
+  return html;
+};
+
+window._renderPendingDrawBanner = function (t) {
+  if (!t || !t.pendingDraw) return '';
+  var store = window.AppStore;
+  if (!(store && store.isOrganizer && store.isOrganizer(t))) return '';
+  var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+  var preview = window._renderPendingDrawPreview ? window._renderPendingDrawPreview(t) : '';
+  return '<div style="border:2px solid #f59e0b;background:rgba(245,158,11,0.10);border-radius:14px;padding:14px 16px;margin:0 0 1rem;">' +
+    '<div style="font-size:1rem;font-weight:800;color:#fbbf24;margin-bottom:4px;">🔒 Sorteio em revisão — só você vê</div>' +
+    '<div style="font-size:0.82rem;color:var(--text-main);line-height:1.45;margin-bottom:10px;">O sorteio foi realizado mas <b>não foi publicado</b> e <b>ninguém foi notificado</b>. Confira a chave abaixo. Se estiver tudo certo, clique <b>Publicar</b> — aí sim vai a público e os participantes são avisados. Se houver erro, clique <b>Anular</b>.</div>' +
+    '<details style="margin-bottom:10px;"><summary style="cursor:pointer;font-weight:700;color:var(--text-bright);font-size:0.85rem;">👁️ Ver a chave sorteada</summary>' +
+      '<div style="margin-top:8px;max-height:380px;overflow:auto;">' + preview + '</div>' +
+    '</details>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
+      '<button class="btn btn-outline" style="color:#f87171;border-color:rgba(248,113,113,0.5);" onclick="event.stopPropagation(); window._annulPendingDraw(\'' + esc(t.id) + '\')">✕ Anular</button>' +
+    '</div>' +
+  '</div>';
+};
+
+window._publishPendingDraw = async function (tId) {
+  var store = window.AppStore;
+  var t = store && store.tournaments.find(function (x) { return String(x.id) === String(tId); });
+  if (!t || !t.pendingDraw) return;
+  if (!(store.isOrganizer && store.isOrganizer(t))) return;
+  var pd = t.pendingDraw;
+  // Move o sorteio pra produção (vira público).
+  t.rounds = Array.isArray(pd.rounds) ? pd.rounds : [];
+  if (pd.standings) t.standings = pd.standings;
+  if (pd.sitOutHistory) t.sitOutHistory = pd.sitOutHistory;
+  if (pd.opponentHistory) t.opponentHistory = pd.opponentHistory;
+  t.status = pd.status || 'active';
+  t.drawVisibility = t.drawVisibility || 'public';
+  t.lastAutoDrawAt = pd.generatedAt || t.lastAutoDrawAt || new Date().toISOString();
+  t.pendingDraw = null;
+  t.updatedAt = new Date().toISOString();
+  try { await store.syncImmediate(t.id); } catch (e) { window._warn('[publishPendingDraw] save falhou', e); }
+  // Agora SIM dispara as notificações (idênticas ao sorteio normal).
+  var roundIndex = (typeof pd.roundIndex === 'number') ? pd.roundIndex : (t.rounds.length - 1);
+  try { if (window._notifyDrawPersonalized) window._notifyDrawPersonalized(t, t.id, { type: pd.firstDraw ? 'draw' : 'new_round', roundIndex: roundIndex }); } catch (e) {}
+  try { _notifyLigaRoundWhatsApp(t, roundIndex); } catch (e) {}
+  if (typeof window.showNotification === 'function') window.showNotification('🚀 Sorteio publicado!', 'A chave e as notificações foram liberadas para os participantes.', 'success');
+  try {
+    var _vc = document.getElementById('view-container');
+    var _h = (window.location && window.location.hash) || '';
+    if (_vc && _h.indexOf('#tournaments/' + t.id) === 0 && typeof window.renderTournaments === 'function') window.renderTournaments(_vc, t.id);
+    else if (_h.indexOf('#bracket/' + t.id) === 0 && typeof window._rerenderBracket === 'function') window._rerenderBracket(t.id);
+  } catch (e) {}
+};
+
+window._annulPendingDraw = function (tId) {
+  var store = window.AppStore;
+  var t = store && store.tournaments.find(function (x) { return String(x.id) === String(tId); });
+  if (!t || !t.pendingDraw) return;
+  if (!(store.isOrganizer && store.isOrganizer(t))) return;
+  var go = function () {
+    t.pendingDraw = null;
+    t.lastAutoDrawAt = null; // libera re-sorteio no próximo ciclo do servidor
+    t.updatedAt = new Date().toISOString();
+    try { store.syncImmediate(t.id); } catch (e) {}
+    if (typeof window.showNotification === 'function') window.showNotification('Sorteio anulado', 'O sorteio em revisão foi descartado (nada foi publicado). Um novo será gerado automaticamente.', 'info');
+    try { var _vc = document.getElementById('view-container'); if (_vc && typeof window.renderTournaments === 'function') window.renderTournaments(_vc, t.id); } catch (e) {}
+  };
+  if (typeof window.showConfirmDialog === 'function') {
+    window.showConfirmDialog('Anular sorteio?', 'O sorteio em revisão será descartado (nada foi publicado). Um novo será gerado automaticamente no próximo ciclo.', go, null, { confirmText: 'Anular', cancelText: 'Cancelar', danger: true });
+  } else { go(); }
 };
 
 async function _fireLigaAutoDraw(t, scheduledTime) {

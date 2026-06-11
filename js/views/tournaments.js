@@ -1814,6 +1814,8 @@ function renderTournaments(container, tournamentId = null) {
             ${/* v2.3.85: linha direta com o desenvolvedor — logo abaixo do nome,
                   só pro organizador na página de detalhe do torneio. */ ''}
             ${(tournamentId && isOrg && typeof window._devWhatsAppBtnHtml === 'function') ? '<div style="margin:2px 0 12px;">' + window._devWhatsAppBtnHtml({ extra: 'height:38px;padding:0 16px;font-size:0.82rem;' }) + '</div>' : ''}
+            ${/* v2.3.96: rede de segurança — sorteio em revisão (só organizador) */ ''}
+            ${(typeof window._renderPendingDrawBanner === 'function') ? window._renderPendingDrawBanner(t) : ''}
             ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
             ${(tournamentId && isFinished) ? podiumHtml : ''}
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">

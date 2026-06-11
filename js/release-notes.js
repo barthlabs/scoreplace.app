@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.96-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Rede de segurança no sorteio automático (revisão antes de publicar).</b> Em torneios marcados para revisão, o sorteio automático roda normalmente no horário, mas em vez de ir a público ele fica <b>só para o organizador conferir</b> — sem chave pública e <b>sem nenhuma notificação</b>. O organizador vê a chave sorteada e clica <b>🚀 Publicar sorteio</b> (aí sim vai a público e os participantes são avisados) ou <b>Anular</b> (descarta, nada foi publicado). Ativado para o primeiro sorteio do <b>Ranking Confra 2026</b> de domingo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.95-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Fase Final (Playoffs) da Liga — primeira parte.</b> O botão de fase final agora mostra <b>“Configurar Playoffs (Fase Final)”</b> em duas linhas: fica <b>âmbar</b> enquanto a Liga está rolando e vira <b>verde com o brilho padrão do app</b> quando todos os jogos de todas as rodadas já têm placar (Liga encerrada). Na tela de configuração, o bloco virou <b>Playoffs</b> com <b>Data</b> e <b>Local</b> em linhas separadas (sem o campo de observação). <i>(A revisão/publicação da chave e a fase final no topo do chaveamento vêm na próxima atualização.)</i></li>' +
