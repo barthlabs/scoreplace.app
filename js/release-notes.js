@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.78-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Análise de Inscritos: nova lista com busca, ordenação e filtros.</b> Na 📊 Análise agora tem a seção <b>📋 Inscritos</b> com: <b>busca dinâmica</b> (filtra conforme você digita o nome, sem ligar pra acento); <b>ordenação</b> por ordem de inscrição (↑/↓) ou nome (A→Z / Z→A); e <b>filtros</b> por gênero (masculino / feminino / misto / sem gênero) e por habilidade (A / B / C / D / FUN / sem habilidade). Cada inscrito aparece com o nº de inscrição, gênero e habilidade. Tudo na hora, sem recarregar.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.77-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Mais caixas de leitura nos cards com foto do local.</b> Agora também ganham a caixa escura discreta: a linha <i>“Atualizado em…”</i>, o botão <i>Ativado</i> (liga/temporada) e o bloco do <i>local do torneio</i> (nome + endereço) — na página do torneio e nos cards da dashboard. A foto continua à mostra; só os textos de baixo contraste recebem o fundo pra facilitar a leitura.</li>' +

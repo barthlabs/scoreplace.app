@@ -384,6 +384,7 @@
       }
 
       return {
+        order: idx + 1,                     // ordem de inscrição (1-based)
         name: name,
         email: email,
         uid: uid,
@@ -871,6 +872,108 @@
     return html;
   }
 
+  // ─── v2.3.78: Lista de inscritos com busca + sort + filtros ──────────
+  // Estado vivo (rows + torneio atual) usado pelo re-render client-side dos
+  // filtros/sort/busca. Setado em _renderPage; lido por _erRenderInscritos.
+  var _liveState = null;
+
+  function _norm(s) {
+    return String(s == null ? '' : s).toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function _inscritoItemHtml(r) {
+    var gMap = { Fem: { l: '♀ Fem', c: '236,72,153' }, Masc: { l: '♂ Masc', c: '59,130,246' }, Misto: { l: '⚥ Misto', c: '168,85,247' } };
+    var gl = _genderLabel(r.gender);
+    var gBadge = (gl && gMap[gl])
+      ? '<span style="font-size:0.68rem;font-weight:700;color:rgb(' + gMap[gl].c + ');background:rgba(' + gMap[gl].c + ',0.14);border-radius:6px;padding:2px 7px;">' + gMap[gl].l + '</span>'
+      : '<span style="font-size:0.68rem;font-weight:600;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">? Sem gên.</span>';
+    var skills = (r.effectiveSkills && r.effectiveSkills.length > 0)
+      ? r.effectiveSkills.map(function (s) { return '<span style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border-radius:6px;padding:2px 7px;">' + _esc(s) + '</span>'; }).join('')
+      : '<span style="font-size:0.68rem;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">sem hab.</span>';
+    var ageBadge = (r.age != null) ? '<span style="font-size:0.68rem;color:#fbbf24;background:rgba(245,158,11,0.12);border-radius:6px;padding:2px 7px;">' + r.age + ' anos</span>' : '';
+    return '<div style="padding:8px 10px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(255,255,255,0.02);">' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);min-width:24px;flex-shrink:0;">#' + r.order + '</span>' +
+        '<span style="flex:1;min-width:0;font-size:0.84rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(r.name) + '</span>' +
+      '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding-left:32px;">' + gBadge + skills + ageBadge + '</div>' +
+    '</div>';
+  }
+
+  // Re-renderiza só a lista conforme busca/sort/filtros — sem refetch nem
+  // re-render da página. Chamado por oninput/onchange dos controles.
+  window._erRenderInscritos = function () {
+    if (!_liveState) return;
+    var rows = _liveState.rows || [];
+    var listEl = document.getElementById('er-inscritos-list');
+    if (!listEl) return;
+    var gv = function (id, d) { var e = document.getElementById(id); return e ? e.value : d; };
+    var q = _norm(gv('er-search', ''));
+    var sort = gv('er-sort', 'order-asc');
+    var gf = gv('er-gender', 'all');
+    var sf = gv('er-skill', 'all');
+
+    var filtered = rows.filter(function (r) {
+      if (q && _norm(r.name).indexOf(q) === -1 && _norm(r.email).indexOf(q) === -1) return false;
+      if (gf !== 'all') {
+        var gl = _genderLabel(r.gender);
+        if (gf === 'none') { if (gl) return false; }
+        else if (gl !== gf) return false;
+      }
+      if (sf !== 'all') {
+        var sk = r.effectiveSkills || [];
+        if (sf === 'none') { if (sk.length > 0) return false; }
+        else if (sk.indexOf(sf) === -1) return false;
+      }
+      return true;
+    });
+
+    filtered.sort(function (a, b) {
+      if (sort === 'order-asc') return a.order - b.order;
+      if (sort === 'order-desc') return b.order - a.order;
+      var an = _norm(a.name), bn = _norm(b.name);
+      if (sort === 'name-asc') return an < bn ? -1 : an > bn ? 1 : a.order - b.order;
+      if (sort === 'name-desc') return an > bn ? -1 : an < bn ? 1 : a.order - b.order;
+      return 0;
+    });
+
+    var countEl = document.getElementById('er-inscritos-count');
+    if (countEl) countEl.textContent = (filtered.length === rows.length)
+      ? '(' + rows.length + ')'
+      : '(' + filtered.length + ' de ' + rows.length + ')';
+
+    listEl.innerHTML = filtered.length
+      ? filtered.map(_inscritoItemHtml).join('')
+      : '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:0.8rem;">Nenhum inscrito com esses filtros.</div>';
+  };
+
+  function _renderInscritosList(rows, t) {
+    if (!rows || rows.length === 0) return '';
+    var _ctrlStyle = 'width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text-bright);';
+    var sel = function (id, label, optsHtml) {
+      return '<div style="flex:1 1 108px;min-width:108px;">' +
+        '<label style="display:block;font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">' + label + '</label>' +
+        '<select id="' + id + '" onchange="window._erRenderInscritos()" style="' + _ctrlStyle + 'padding:7px 8px;font-size:0.76rem;">' + optsHtml + '</select>' +
+      '</div>';
+    };
+    var sortOpts = '<option value="order-asc">Inscrição ↑</option><option value="order-desc">Inscrição ↓</option>' +
+      '<option value="name-asc">Nome A→Z</option><option value="name-desc">Nome Z→A</option>';
+    var genderOpts = '<option value="all">Todos</option><option value="Masc">♂ Masculino</option>' +
+      '<option value="Fem">♀ Feminino</option><option value="Misto">⚥ Misto</option><option value="none">? Sem gênero</option>';
+    var skillList = (t.skillCategories && t.skillCategories.length > 0) ? t.skillCategories.slice() : ['A', 'B', 'C', 'D', 'FUN'];
+    var skillOpts = '<option value="all">Todas</option>' +
+      skillList.map(function (s) { return '<option value="' + _esc(s) + '">' + _esc(s) + '</option>'; }).join('') +
+      '<option value="none">Sem habilidade</option>';
+
+    return '<div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.18);border-radius:12px;padding:14px 16px;margin-bottom:14px;">' +
+      '<p style="margin:0 0 10px;font-size:0.74rem;color:#818cf8;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Inscritos <span id="er-inscritos-count" style="color:var(--text-muted);font-weight:600;"></span></p>' +
+      '<input id="er-search" type="text" oninput="window._erRenderInscritos()" placeholder="🔎 Buscar por nome…" autocomplete="off" style="' + _ctrlStyle + 'padding:9px 12px;font-size:0.82rem;margin-bottom:8px;">' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">' + sel('er-sort', 'Ordenar', sortOpts) + sel('er-gender', 'Gênero', genderOpts) + sel('er-skill', 'Habilidade', skillOpts) + '</div>' +
+      '<div id="er-inscritos-list" style="display:flex;flex-direction:column;gap:6px;"></div>' +
+    '</div>';
+  }
+
   // v1.3.9-beta: render no view-container — page-route #analise/<tId>.
   // Topbar fica visível, _renderBackHeader cuida do cabeçalho com hamburger
   // funcional. Padrão centralizado (vide CLAUDE.md "REGRA CRITICA v1.3.5").
@@ -887,14 +990,21 @@
     var tName = _esc(t.name || 'Torneio');
     var subtitle = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">' + tName + '</div>';
 
+    // Estado vivo pra busca/sort/filtros da lista de inscritos.
+    _liveState = { rows: rows, t: t };
+
     container.innerHTML = hdr +
       '<div style="max-width:760px;margin:0 auto;padding:1rem;">' +
       subtitle +
       _renderOverview(rows, t) +
       _renderCategoryTable(rows, t) +
+      _renderInscritosList(rows, t) +
       _renderIncomplete(rows, t) +
       _renderDiagnostic(t, rows, profileMap || {}, parts || [], resolvedFor || {}) +
       '</div>';
+
+    // Popula a lista (defaults: ordem de inscrição ↑, sem filtros).
+    if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
 
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
   }
