@@ -281,7 +281,17 @@
       return;
     }
 
-    container.innerHTML = hdr + _renderConfigBody(t);
+    // v2.3.97: botão "Gerar fase final" fixo no topo, abaixo do cabeçalho.
+    // Verde + brilho padrão, SÓ visível quando a fase de Liga terminou (todos os
+    // jogos com placar). Antes disso, mostra um aviso no lugar.
+    var _scored = (typeof _ligaSeasonScored === 'function') && _ligaSeasonScored(t);
+    var _topBar = _scored
+      ? '<div style="position:sticky;top:60px;z-index:20;background:var(--bg-dark);padding:10px 1rem;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;">' +
+          '<button type="button" class="btn btn-shine" onclick="window._reviewPlayoff(\'' + _esc(t.id) + '\')" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;min-width:240px;">🏆 ' + (_t('playoff.generate') || 'Gerar fase final') + '</button>' +
+        '</div>'
+      : '<div style="padding:10px 1rem;text-align:center;font-size:0.8rem;color:var(--text-muted);background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);">⏳ O botão <b>Gerar fase final</b> aparece aqui quando todos os jogos da Liga tiverem placar.</div>';
+
+    container.innerHTML = hdr + _topBar + _renderConfigBody(t);
     if (window._reflowChrome) window._reflowChrome();
     // popula previews iniciais
     setTimeout(function () { _refreshAllPreviews(t); }, 30);
@@ -332,11 +342,10 @@
       html += _renderCatConfigBlock(t, cat, idx, multiCat);
     });
 
-    // Botão gerar
-    html += '<div style="margin-top:1.2rem;text-align:center;">' +
-      '<button type="button" class="btn btn-primary btn-lg" onclick="window._generatePlayoff(\'' + _esc(t.id) + '\')" style="min-width:240px;">🏆 ' + (_t('playoff.generate') || 'Gerar fase final') + '</button>' +
-      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + (_t('playoff.generateHint') || 'A classificação será congelada neste momento.') + '</div>' +
-    '</div>';
+    // v2.3.97: o botão "Gerar fase final" agora é fixo no topo (renderFaseFinalPage).
+    // Aqui fica só a dica de que a classificação congela ao gerar.
+    html += '<div style="margin-top:1rem;text-align:center;font-size:0.72rem;color:var(--text-muted);">' +
+      (_t('playoff.generateHint') || 'Ao gerar a fase final, a classificação da temporada é congelada.') + '</div>';
 
     html += '</div>';
     return html;
@@ -564,14 +573,14 @@
   // ───────────────────────────────────────────────────────────────────────────
   // GERAÇÃO (confirmar)
   // ───────────────────────────────────────────────────────────────────────────
-  window._generatePlayoff = function (tId) {
-    var t = _findT(tId);
-    if (!t || !_isOrg(t)) return;
+  // Builds pendentes (entre "Gerar fase final" → revisão → "Publicar"), por tId.
+  var _pendingBuilds = {};
 
-    // Lê evento
+  // Lê a config do DOM e monta a chave SEM gravar nada. Retorna o build ou null.
+  function _buildPlayoffFromDom(t) {
+    function multiLabel(cat) { return cat == null ? (_t('playoff.singleBracket') || 'Fase final') : cat; }
     var evDate = (document.getElementById('po-event-date') || {}).value || '';
     var evVenue = (document.getElementById('po-event-venue') || {}).value || '';
-    var evNote = (document.getElementById('po-event-note') || {}).value || '';
 
     var cats = _playoffCats(t);
     var configByCat = {};
@@ -604,7 +613,7 @@
       if (qualify < 2 || standings.length < 2) {
         if (typeof showNotification === 'function') {
           showNotification('⚠️ ' + (_t('playoff.tooFew') || 'Poucos classificados'),
-            (multiLabel(cat) ) + ' — ' + (_t('playoff.tooFewDesc') || 'são necessários ao menos 2.'), 'warning');
+            (multiLabel(cat)) + ' — ' + (_t('playoff.tooFewDesc') || 'são necessários ao menos 2.'), 'warning');
         }
         continue;
       }
@@ -617,7 +626,6 @@
       qualifiedByCat[ck] = qualifiedNames.slice();
       waitlistByCat[ck] = standings.slice(qualify).map(function (s) { return s.name; });
 
-      // Entrants: indivíduos OU duplas formadas (best_worst / sequential).
       var entrants = qualifiedNames;
       if (pairMode && pairMode !== 'individual' && pairMode !== 'rei_rainha') {
         entrants = _formPairs(qualifiedNames, pairMode);
@@ -625,12 +633,10 @@
           if (typeof showNotification === 'function') {
             showNotification('⚠️', (multiLabel(cat)) + ' — ' + (_t('playoff.pairTooFew') || 'duplas insuficientes (mínimo 2 duplas).'), 'warning');
           }
-          anyActive = anyActive; // mantém outras categorias
           continue;
         }
       }
 
-      // Geração (1º corte: simples; dupla/grupos caem em simples por ora)
       var built = _buildSingleElim(entrants, cat, seedMode, String(t.id).slice(-4) + '-' + ck.replace(/[^a-z0-9]/gi, '').slice(0, 6));
       allMatches = allMatches.concat(built);
     }
@@ -639,41 +645,68 @@
       if (typeof showNotification === 'function') {
         showNotification('⚠️ ' + (_t('playoff.nothing') || 'Nada a gerar'), (_t('playoff.nothingDesc') || 'Ative ao menos uma categoria com 2+ classificados.'), 'warning');
       }
+      return null;
+    }
+    return {
+      event: { date: evDate, venue: evVenue },
+      configByCat: configByCat, snapshot: snapshot,
+      qualifiedByCat: qualifiedByCat, waitlistByCat: waitlistByCat,
+      allMatches: allMatches
+    };
+  }
+
+  // "Gerar fase final" → revisa (chave montada do config) com Voltar/Publicar.
+  window._reviewPlayoff = function (tId) {
+    var t = _findT(tId);
+    if (!t || !_isOrg(t)) return;
+    if (typeof _ligaSeasonScored === 'function' && !_ligaSeasonScored(t)) {
+      if (typeof showNotification === 'function') showNotification('Liga ainda em andamento', 'A fase final só pode ser gerada quando todos os jogos da Liga tiverem placar.', 'warning');
       return;
     }
-
-    function multiLabel(cat) { return cat == null ? (_t('playoff.singleBracket') || 'Fase final') : cat; }
-
-    // Confirmação (congela a temporada)
-    var doIt = function () {
-      t.playoffConfigByCat = configByCat;
-      t.playoffSnapshot = snapshot;
-      t.playoffQualified = qualifiedByCat;
-      t.playoffWaitlist = waitlistByCat;
-      t.playoffEvent = { date: evDate, venue: evVenue, note: evNote };
-      t.playoffStartedAt = new Date().toISOString();
-      t.playoffEnabled = true;
-      // Grava a chave em t.matches (Liga não usa) + marca o estágio.
-      t.matches = (t.matches || []).filter(function (m) { return m && m.phase !== 'playoff'; }).concat(allMatches);
-      t.currentStage = 'playoffs';
-      try { if (window.AppStore && window.AppStore.syncImmediate) window.AppStore.syncImmediate(t.id); } catch (e) {}
-      // Notifica classificados
-      try { _notifyQualified(t); } catch (e) {}
-      if (typeof showNotification === 'function') {
-        showNotification('🏆 ' + (_t('playoff.created') || 'Fase final criada!'), (_t('playoff.createdDesc') || 'A chave está na página do torneio.'), 'success');
-      }
-      window.location.hash = '#tournaments/' + t.id;
-    };
-
-    if (typeof showConfirmDialog === 'function') {
-      showConfirmDialog(
-        '🏆 ' + (_t('playoff.confirmTitle') || 'Gerar fase final?'),
-        (_t('playoff.confirmMsg') || 'A classificação da temporada será congelada e a chave eliminatória será criada. A Liga não terá mais rodadas.'),
-        doIt, null,
-        { confirmText: (_t('playoff.confirmYes') || 'Gerar'), cancelText: (_t('btn.cancel') || 'Cancelar') }
-      );
-    } else { doIt(); }
+    var build = _buildPlayoffFromDom(t);
+    if (!build) return; // avisos já mostrados
+    _pendingBuilds[String(tId)] = build;
+    var tPrev = Object.assign({}, t, {
+      matches: (t.matches || []).filter(function (m) { return m && m.phase !== 'playoff'; }).concat(build.allMatches),
+      currentStage: 'playoffs',
+      playoffStatus: 'preview',
+      playoffEvent: build.event,
+      playoffSnapshot: build.snapshot
+    });
+    var container = document.getElementById('view-container');
+    if (!container) return;
+    var hdr = window._renderBackHeader ? window._renderBackHeader({ href: '#fase-final/' + tId, label: 'Voltar', middleHtml: '<span style="font-size:0.9rem;font-weight:700;color:var(--text-bright);">🔍 Revisar fase final</span>' }) : '';
+    container.innerHTML = hdr + '<div style="padding:1rem;max-width:680px;margin:0 auto;">' + window._renderPlayoffSection(tPrev, 'review') + '</div>';
+    if (window._reflowChrome) window._reflowChrome();
+    window.scrollTo(0, 0);
   };
+
+  // "Publicar torneio" → grava a chave em PREVIEW (aguardando Iniciar) e vai ao chaveamento.
+  window._publishPlayoff = function (tId) {
+    var t = _findT(tId);
+    if (!t || !_isOrg(t)) return;
+    var build = _pendingBuilds[String(tId)];
+    if (!build) { window._reviewPlayoff(tId); return; } // perdeu o build → recomputa
+    t.playoffConfigByCat = build.configByCat;
+    t.playoffSnapshot = build.snapshot;
+    t.playoffQualified = build.qualifiedByCat;
+    t.playoffWaitlist = build.waitlistByCat;
+    t.playoffEvent = build.event;
+    t.playoffStartedAt = new Date().toISOString();
+    t.playoffEnabled = true;
+    t.playoffStatus = 'preview'; // publicado, mas só vale após "Iniciar torneio"
+    t.matches = (t.matches || []).filter(function (m) { return m && m.phase !== 'playoff'; }).concat(build.allMatches);
+    t.currentStage = 'playoffs';
+    delete _pendingBuilds[String(tId)];
+    try { if (window.AppStore && window.AppStore.syncImmediate) window.AppStore.syncImmediate(t.id); } catch (e) {}
+    if (typeof showNotification === 'function') {
+      showNotification('🏆 ' + (_t('playoff.published') || 'Fase final publicada!'), (_t('playoff.publishedDesc') || 'A chave está no topo do chaveamento. Clique "Iniciar torneio" para liberar os placares.'), 'success');
+    }
+    window.location.hash = '#tournaments/' + t.id;
+  };
+
+  // Back-compat: o nome antigo agora abre a revisão.
+  window._generatePlayoff = function (tId) { window._reviewPlayoff(tId); };
 
   window._redoPlayoff = function (tId) {
     var t = _findT(tId);
@@ -805,11 +838,18 @@
   // RENDERIZAÇÃO — card injetado no layout da Liga (abaixo da classificação).
   // Chamado por bracket.js. Reusa renderMatchCard (matches estão em t.matches).
   // ───────────────────────────────────────────────────────────────────────────
-  window._renderPlayoffSection = function (t) {
+  window._renderPlayoffSection = function (t, mode) {
     if (!t || !_hasPlayoff(t)) return '';
     var isOrg = _isOrg(t);
     var re = t.resultEntry || 'organizer';
     var canEnter = isOrg || re === 'players' || re === 'all';
+    // v2.3.97: 'preview' = chave gerada mas aguardando o organizador clicar
+    // "Iniciar torneio" (sem lançar placar). 'active'/ausente = valendo.
+    // mode === 'review' = tela de revisão antes de publicar (botões Voltar/Publicar).
+    var isReview = (mode === 'review');
+    var poStatus = t.playoffStatus || 'active';
+    var isPreview = (poStatus === 'preview');
+    if (isPreview || isReview) canEnter = false;
 
     var poMatches = t.matches.filter(function (m) { return m && m.phase === 'playoff'; });
     if (!poMatches.length) return '';
@@ -828,7 +868,29 @@
         (isOrg && !_playoffHasResult(t) ? '<button type="button" class="btn btn-outline btn-sm" onclick="window.location.hash=\'#fase-final/' + _esc(t.id) + '\'" style="color:#f87171;border-color:rgba(248,113,113,0.4);">↺ ' + (_t('playoff.redo') || 'Refazer') + '</button>' : '') +
       '</div>';
 
-    // Banner de confraternização
+    // v2.3.97: controles do organizador. Em REVIEW (antes de publicar): Voltar/Publicar.
+    // Em PREVIEW (já publicado, aguardando iniciar): Voltar/Iniciar torneio.
+    if (isReview && isOrg) {
+      html += '<div style="border:2px solid #6366f1;background:rgba(99,102,241,0.10);border-radius:12px;padding:12px 14px;margin-bottom:0.9rem;">' +
+        '<div style="font-size:0.9rem;font-weight:800;color:#a5b4fc;margin-bottom:3px;">🔍 Confira a chave antes de publicar</div>' +
+        '<div style="font-size:0.8rem;color:var(--text-main);line-height:1.4;margin-bottom:10px;">A chave abaixo foi montada conforme suas configurações. Se estiver tudo certo, clique <b>Publicar torneio</b>. Para ajustar, <b>Voltar às configurações</b>.</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button type="button" class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="window._publishPlayoff(\'' + _esc(t.id) + '\')">🚀 ' + (_t('playoff.publish') || 'Publicar torneio') + '</button>' +
+          '<button type="button" class="btn btn-outline" onclick="window.location.hash=\'#fase-final/' + _esc(t.id) + '\'">↩ ' + (_t('playoff.backToConfig') || 'Voltar às configurações') + '</button>' +
+        '</div>' +
+      '</div>';
+    } else if (isPreview && isOrg) {
+      html += '<div style="border:2px solid #f59e0b;background:rgba(245,158,11,0.10);border-radius:12px;padding:12px 14px;margin-bottom:0.9rem;">' +
+        '<div style="font-size:0.9rem;font-weight:800;color:#fbbf24;margin-bottom:3px;">👀 Fase final em pré-visualização</div>' +
+        '<div style="font-size:0.8rem;color:var(--text-main);line-height:1.4;margin-bottom:10px;">A chave foi publicada e está no topo do chaveamento. Clique <b>Iniciar torneio</b> para liberar o lançamento de placares, ou <b>Voltar às configurações</b> para refazer.</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button type="button" class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="window._startPlayoff(\'' + _esc(t.id) + '\')">▶️ ' + (_t('playoff.start') || 'Iniciar torneio') + '</button>' +
+          '<button type="button" class="btn btn-outline" onclick="window.location.hash=\'#fase-final/' + _esc(t.id) + '\'">↩ ' + (_t('playoff.backToConfig') || 'Voltar às configurações') + '</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Banner do evento de playoffs
     if (evt.date || evt.venue || evt.note) {
       var when = '';
       if (evt.date) { try { when = new Date(evt.date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { when = evt.date; } }
@@ -888,9 +950,27 @@
     html += '</div>';
 
     // Side effect controlado: marca campeão/encerra quando todas as finais decididas.
-    try { _maybeFinishPlayoff(t, byCat); } catch (e) {}
+    // Nunca em preview/review (chave ainda não iniciada / não publicada).
+    if (!isPreview && !isReview) { try { _maybeFinishPlayoff(t, byCat); } catch (e) {} }
 
     return html;
+  };
+
+  // v2.3.97: organizador clica "Iniciar torneio" → fase final passa a valer.
+  window._startPlayoff = function (tId) {
+    var t = _findT(tId);
+    if (!t || !_isOrg(t) || !_hasPlayoff(t)) return;
+    t.playoffStatus = 'active';
+    t.updatedAt = new Date().toISOString();
+    try { if (window.AppStore && window.AppStore.syncImmediate) window.AppStore.syncImmediate(t.id); } catch (e) {}
+    try { if (window._notifyQualified) _notifyQualified(t); } catch (e) {}
+    if (typeof window.showNotification === 'function') window.showNotification('▶️ Fase final iniciada!', 'Os participantes já podem lançar os placares.', 'success');
+    try {
+      var _vc = document.getElementById('view-container');
+      var _h = (window.location && window.location.hash) || '';
+      if (_vc && _h.indexOf('#bracket/' + t.id) === 0 && typeof window._rerenderBracket === 'function') window._rerenderBracket(t.id);
+      else if (_vc && typeof window.renderTournaments === 'function') window.renderTournaments(_vc, t.id);
+    } catch (e) {}
   };
 
   function _maybeFinishPlayoff(t, byCat) {

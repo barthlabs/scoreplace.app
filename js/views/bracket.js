@@ -3245,7 +3245,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // Liga: user's matches at the top, then the round's standings table, then
   // the collapsible "Demais jogos da rodada" card.
   if (isLigaFmt) {
-    // Fase Final da temporada (playoffs): injetada logo após a classificação.
+    // Fase Final da temporada (playoffs): v2.3.97 — vai no TOPO do chaveamento
+    // (empurrando toda a fase de Liga pra baixo). Pra Liga SEM playoff, retorna
+    // '' (no-op — a ordem do bracket de Liga normal fica idêntica).
     var _playoffHtml = (typeof window._renderPlayoffSection === 'function') ? window._renderPlayoffSection(t) : '';
     // v2.3.19: quando a rodada atual já está concluída, a classificação geral
     // sobe pra cima dos jogos da rodada (rodada vira "histórico" — o que importa
@@ -3257,9 +3259,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     // placares da rodada forem lançados." Combina com o lançamento in-place
     // (_finalizeRoundCardInPlace) que mantém a página estática durante a rodada.
     if (allComplete) {
-      return _phaseBannerHtml + _progressBar + _readyBanner + standingsTablesHtml + _playoffHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+      return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + standingsTablesHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
     }
-    return _phaseBannerHtml + _progressBar + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + standingsTablesHtml + _playoffHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+    return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
   }
   return _phaseBannerHtml + _progressBar + standingsTablesHtml + _readyBanner + currentRoundHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
 }
