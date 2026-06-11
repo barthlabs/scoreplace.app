@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.86-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Botões do dashboard mais compactos.</b> “Ler QR Code” e “Fale com o Desenvolvedor” agora têm o texto em duas linhas (ex.: “Ler” / “QR Code”), ficando mais estreitos e lado a lado. O ícone do QR Code virou um desenho com mais cara de QR de verdade.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Classificação recalcula a cada placar.</b> Na Liga/Suíço, lançou um resultado, a <b>tabela de pontos já recalcula e mostra os novos valores</b> na hora (antes ficava congelada até a rodada terminar). A página não “pula”: o scroll fica ancorado no jogo lançado e as seções abertas (“Demais jogos”, “Rodadas anteriores”) continuam como você deixou.</li>' +
