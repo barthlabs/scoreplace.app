@@ -8,7 +8,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
-    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+    '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
+      '<div style="font-weight:800; color:#fbbf24; font-size:1.05rem; margin-bottom:8px;">🎉 v2.4.0-beta — Marco de lançamento <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li>Versão de marco pro lançamento real. Reúne o trabalho da série 2.3.x: <b>sorteio automático correto no servidor</b> (Rei/Rainha, duplas, equilíbrio), <b>rede de segurança de revisão</b> antes de publicar o sorteio, <b>inscrição por categoria que preenche o perfil</b> e cobra dados que faltam, <b>Fase Final (Playoffs)</b> completa, <b>botão de instalar na tela inicial</b> (e o "Entrar" que já instala no Android), e <b>todo inscrito sempre com nome</b>. Identidade unificada por uid em todo o app e nas funções de servidor.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.99-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>"Entrar" agora instala e já entra (no Android).</b> No Android/computador (Chrome/Edge), tocar em <b>Entrar</b> instala o app na tela inicial e segue direto pro login — tudo num passo. No <b>iPhone</b> (onde a Apple não deixa instalar por botão), o <b>Entrar</b> só faz login e o botão <b>📲 Instalar na tela inicial</b> continua ali pra você instalar e entrar depois.</li>' +
