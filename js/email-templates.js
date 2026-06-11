@@ -118,16 +118,24 @@
     } else if (type === 'tournament_finished' && data.champion) {
       extra += '<p style="margin:16px 0 0;font-size:1rem;">🏆 <b>' + _escape(data.champion) + '</b> é o campeão!</p>';
     } else if (type === 'draw' || type === 'new_round') {
-      // Rich draw block: player's match highlighted + full match list
+      // Rich draw block: os jogos DO JOGADOR (time numa linha, adversário na
+      // outra) + prazo p/ lançar resultados (próximo sorteio) + lista completa.
       var _drawLines = Array.isArray(data.matchLines) ? data.matchLines : [];
-      var _pmNum = data.playerMatchNum || 0;
       var _pName = data.playerName || '';
-      var _pm = data.playerMatch || null;
+      // v2.3.83: prefere playerMatches[] (todos os jogos do jogador). Fallback
+      // pro playerMatch único (compat com payloads antigos).
+      var _pMatches = Array.isArray(data.playerMatches) ? data.playerMatches : [];
+      if (_pMatches.length === 0 && data.playerMatch) {
+        _pMatches = [{ label: 'Seu Jogo ' + (data.playerMatchNum || ''), p1: data.playerMatch.p1, p2: data.playerMatch.p2 }];
+      }
 
-      // Venue + date meta line
+      // Meta: local + PRAZO (data e hora até o próximo sorteio). Fallback p/
+      // startDate (formatos sem próximo sorteio) só como data.
       var _metaParts = [];
       if (data.venue) _metaParts.push('📍 ' + _escape(data.venue));
-      if (data.startDate) {
+      if (data.deadline) {
+        _metaParts.push('⏰ Resultados até ' + _escape(data.deadline));
+      } else if (data.startDate) {
         try {
           var _sd = new Date(data.startDate);
           if (!isNaN(_sd)) _metaParts.push('📅 ' + _sd.toLocaleDateString('pt-BR'));
@@ -137,26 +145,33 @@
         extra += '<p style="margin:0 0 14px;font-size:0.88rem;color:' + MUTED_COLOR + ';">' + _metaParts.join(' &nbsp;·&nbsp; ') + '</p>';
       }
 
-      // Highlighted "seu jogo" block
-      if (_pm && _pmNum) {
-        var _mp1 = _escape(_pm.p1 || '');
-        var _mp2 = _escape(_pm.p2 || '');
-        if (_pName) {
-          var _epn = _escape(_pName);
-          _mp1 = _mp1.split(_epn).join('<b>' + _epn + ' (você)</b>');
-          _mp2 = _mp2.split(_epn).join('<b>' + _epn + ' (você)</b>');
-        }
-        extra += '<div style="margin-bottom:14px;padding:14px 16px;background:rgba(59,130,246,0.15);border-left:3px solid ' + BRAND_COLOR + ';border-radius:6px;">' +
-          '<p style="margin:0 0 5px;font-size:0.78rem;color:' + MUTED_COLOR + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">Seu Jogo ' + _pmNum + '</p>' +
-          '<p style="margin:0;font-size:1.05rem;font-weight:600;color:#f3f4f6;">' + _mp1 +
-            ' <span style="color:' + MUTED_COLOR + ';font-weight:400;"> vs </span>' + _mp2 + '</p>' +
-        '</div>';
+      // Bloco dos jogos do jogador — cada jogo: rótulo + TIME (linha) / vs / ADVERSÁRIO (linha)
+      if (_pMatches.length) {
+        var _epn = _pName ? _escape(_pName) : '';
+        var _hl = function(side) {
+          var s = _escape(side || '');
+          if (_epn) s = s.split(_epn).join('<b>' + _epn + ' (você)</b>');
+          return s;
+        };
+        var _gamesHtml = _pMatches.map(function(pm) {
+          return '<div style="margin-bottom:10px;padding:13px 16px;background:rgba(59,130,246,0.15);border-left:3px solid ' + BRAND_COLOR + ';border-radius:6px;">' +
+            '<p style="margin:0 0 6px;font-size:0.74rem;color:' + MUTED_COLOR + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">' + _escape(pm.label || 'Seu jogo') + '</p>' +
+            '<p style="margin:0;font-size:1.02rem;font-weight:600;color:#f3f4f6;">' + _hl(pm.p1) + '</p>' +
+            '<p style="margin:3px 0;font-size:0.78rem;color:' + MUTED_COLOR + ';font-weight:400;">vs</p>' +
+            '<p style="margin:0;font-size:1.02rem;font-weight:600;color:#f3f4f6;">' + _hl(pm.p2) + '</p>' +
+          '</div>';
+        }).join('');
+        extra += '<p style="margin:0 0 8px;font-size:0.78rem;color:' + MUTED_COLOR + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">' +
+          (_pMatches.length > 1 ? 'Seus jogos nesta rodada' : 'Seu jogo') + '</p>' + _gamesHtml;
       }
 
       // All matches in round
       if (_drawLines.length > 0) {
+        var _myNums = {};
+        _pMatches.forEach(function(pm) { if (pm && pm.num) _myNums[pm.num] = true; });
+        if (data.playerMatchNum) _myNums[data.playerMatchNum] = true;
         var _allRows = _drawLines.reduce(function(acc, line, i) {
-          var isMe = (_pmNum === i + 1);
+          var isMe = !!_myNums[i + 1];
           var rowStyle = isMe
             ? 'padding:8px 10px;border-radius:5px;margin-bottom:3px;background:rgba(59,130,246,0.08);font-weight:600;font-size:0.88rem;color:#f3f4f6;'
             : 'padding:8px 10px;border-radius:5px;margin-bottom:3px;font-size:0.88rem;color:#d1d5db;';

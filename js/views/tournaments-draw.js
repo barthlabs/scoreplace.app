@@ -1915,7 +1915,7 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
             var r0 = Array.isArray(g.rounds) && g.rounds[0];
             if (r0 && Array.isArray(r0.matches)) {
                 r0.matches.forEach(function(m) {
-                    if (!m.isSitOut) allMatches.push({ p1: m.p1 || '', p2: m.p2 || '', groupName: gName });
+                    if (!m.isSitOut) allMatches.push({ p1: m.p1 || '', p2: m.p2 || '', groupName: gName, label: m.label || '' });
                 });
             }
         });
@@ -1924,18 +1924,27 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
         var _ri = (opts.roundIndex !== undefined) ? opts.roundIndex : (t.rounds.length - 1);
         var _rnd = t.rounds[_ri] || {};
         (_rnd.matches || []).forEach(function(m) {
-            if (!m.isSitOut) allMatches.push({ p1: m.p1 || '', p2: m.p2 || '' });
+            if (!m.isSitOut) allMatches.push({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '' });
         });
     } else if (Array.isArray(t.matches)) {
         // Eliminatórias / Dupla Elim — round 1 only, skip BYEs
         t.matches.forEach(function(m) {
             if (m.round === 1 && !m.isBye && !m.isSitOut && (m.p1 || m.p2)) {
-                allMatches.push({ p1: m.p1 || '', p2: m.p2 || '' });
+                allMatches.push({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '' });
             }
         });
     }
 
     if (!allMatches.length) return;
+
+    // ── v2.3.83: prazo p/ lançar resultados = PRÓXIMO SORTEIO (data + hora).
+    // Antes o e-mail mostrava t.startDate (data de início do torneio) — errado.
+    var _nextDraw = (typeof window._calcNextDrawDate === 'function') ? window._calcNextDrawDate(t) : null;
+    var deadlineLabel = '';
+    if (_nextDraw && !isNaN(_nextDraw.getTime())) {
+        deadlineLabel = _nextDraw.toLocaleDateString('pt-BR') + ' às ' +
+            _nextDraw.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
 
     // ── Build matchLines for email (Jogo N: P1 vs P2) ───────────────────
     var matchLines = allMatches.map(function(m, i) {
@@ -1977,27 +1986,35 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
         var pName = p.displayName || p.name || '';
         if (!pName) continue;
 
-        // Find this player's match
-        var playerMatch = null;
-        var playerMatchNum = 0;
+        // v2.3.83: TODOS os jogos deste jogador na rodada (em Rei/Rainha são 3).
+        var playerMatches = [];
         for (var _mi = 0; _mi < allMatches.length; _mi++) {
             var am = allMatches[_mi];
             if (_isInSide(pName, am.p1) || _isInSide(pName, am.p2)) {
-                playerMatch = am;
-                playerMatchNum = _mi + 1;
-                break;
+                playerMatches.push({
+                    num: _mi + 1,
+                    label: am.label || ('Jogo ' + (_mi + 1)),
+                    p1: am.p1 || '',
+                    p2: am.p2 || ''
+                });
             }
         }
+        // Compat: 1º jogo do jogador (campos antigos ainda usados como fallback).
+        var playerMatch = playerMatches.length ? { p1: playerMatches[0].p1, p2: playerMatches[0].p2 } : null;
+        var playerMatchNum = playerMatches.length ? playerMatches[0].num : 0;
 
-        // Personalized plain-text (WhatsApp)
+        // Personalized plain-text (WhatsApp): lista os jogos com time numa linha
+        // e adversário na outra, + prazo de lançamento (próximo sorteio).
         var msg = baseMsg;
-        if (playerMatch && playerMatchNum) {
-            var _gmatch = playerMatch.groupName ? (' (' + playerMatch.groupName + ')') : '';
+        if (playerMatches.length) {
+            var _gamesText = playerMatches.map(function(pm) {
+                return pm.label + ':\n' + (pm.p1 || '?') + '\nvs\n' + (pm.p2 || '?');
+            }).join('\n\n');
             msg = notifIcon + ' ' + (_isNewRound ? 'Nova rodada no torneio' : 'Chaveamento do torneio') +
                 ' ' + tName + '!' +
-                '\n\nSeu Jogo ' + playerMatchNum + _gmatch + ': ' + playerMatch.p1 + ' vs ' + playerMatch.p2 +
-                (venue ? '\n📍 ' + venue : '') +
-                (startDate ? '\n📅 ' + _fmtDate(startDate) : '');
+                '\n\n' + _gamesText +
+                (venue ? '\n\n📍 ' + venue : '') +
+                (deadlineLabel ? '\n⏰ Lance os resultados até ' + deadlineLabel : '');
         }
 
         try {
@@ -2013,6 +2030,8 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
                 matchLines: matchLines,
                 playerMatch: playerMatch || undefined,
                 playerMatchNum: playerMatchNum || 0,
+                playerMatches: playerMatches,
+                deadline: deadlineLabel,
                 playerName: pName,
                 venue: venue,
                 startDate: startDate

@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>E-mail de nova rodada: prazo correto + todos os seus jogos.</b> O e-mail de nova rodada agora mostra <b>até quando lançar os resultados</b> — data <b>e hora</b> do <b>próximo sorteio</b> (antes mostrava a data de início do torneio, que estava errada). E lista <b>todos os seus jogos da rodada</b> (na Liga Rei/Rainha são 3), cada um com o <b>seu time numa linha e o adversário na outra</b>, com você destacado. O WhatsApp também passa a enviar os jogos e o prazo no mesmo formato.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.82-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Presença: quem pode marcar agora segue regras.</b> A presença na chamada/inscritos só pode ser marcada pelo <b>organizador</b> ou por um <b>árbitro confirmado</b> — eles dão/retiram de qualquer inscrito. Nos torneios em que <b>o placar é lançado pelos participantes</b>, cada jogador pode marcar a <b>própria presença</b>, desde que o <b>GPS confirme que ele está no local</b> (retirar a própria presença é livre). O W.O. continua restrito a organizador/árbitro por enquanto. <i>(Próximos passos: W.O. por consenso entre os jogadores da partida e presença automática por GPS atribuída ao torneio.)</i></li>' +
