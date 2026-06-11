@@ -755,6 +755,11 @@ function setupHelpModal() {
       title: 'Apoio e Suporte',
       icon: '💚',
       content: '<p>O scoreplace.app é <b>gratuito</b>. Todo o desenvolvimento, infra (Firebase, Sentry, Cloud Functions, hospedagem) e manutenção é mantido pelo criador do app.</p>' +
+        '<div style="background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:10px;padding:12px;margin-bottom:10px;">' +
+          '<div style="font-weight:700;font-size:0.85rem;color:#25d366;margin-bottom:8px;">💬 Fale com o Desenvolvedor (WhatsApp)</div>' +
+          '<p>Botão verde <b>"Fale com o Desenvolvedor"</b> ao lado do <b>Ler QR Code</b> no dashboard (e logo abaixo do nome do torneio, pra organizadores). É a sua <b>linha direta</b> com o desenvolvedor do scoreplace.app pelo WhatsApp.</p>' +
+          '<p>Tem dúvida, crítica ou sugestão? Achou algo que não funcionou como esperava? Precisa de ajuda com algo no app? <b>Fale conosco</b> — estamos em versão beta e queremos muito te ouvir!</p>' +
+        '</div>' +
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:#10b981;margin-bottom:8px;">💚 Apoie via PIX</div>' +
           '<p>Página: <b>Apoie</b> (botão verde no dashboard ou rota <code>#support</code>).</p>' +

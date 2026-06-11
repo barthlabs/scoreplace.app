@@ -1811,6 +1811,9 @@ function renderTournaments(container, tournamentId = null) {
               </div>
               ${!tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" style="font-size:1.8rem;cursor:pointer;flex-shrink:0;color:${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '♥' : '♡'}</span>` : ''}
             </div>
+            ${/* v2.3.85: linha direta com o desenvolvedor — logo abaixo do nome,
+                  só pro organizador na página de detalhe do torneio. */ ''}
+            ${(tournamentId && isOrg && typeof window._devWhatsAppBtnHtml === 'function') ? '<div style="margin:2px 0 12px;">' + window._devWhatsAppBtnHtml({ extra: 'height:38px;padding:0 16px;font-size:0.82rem;' }) + '</div>' : ''}
             ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
             ${(tournamentId && isFinished) ? podiumHtml : ''}
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">

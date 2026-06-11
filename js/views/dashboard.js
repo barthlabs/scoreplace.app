@@ -2799,11 +2799,12 @@ function renderDashboard(container) {
         <!-- v2.1.7-beta: leitor de QR GERAL — entra em partida casual OU em
              torneio conforme o destino do QR. Botão com volume (padrão .btn),
              posicionado entre os CTAs (Place) e as estatísticas. -->
-        <div style="display:flex;justify-content:center;width:100%;">
+        <div style="display:flex;justify-content:center;gap:10px;width:100%;flex-wrap:wrap;">
           <button id="btn-scan-qr" class="btn btn-shine hover-lift" aria-label="Ler QR Code" title="Leia um QR code para entrar em uma partida casual ou em um torneio" style="--shine-delay:1.5s;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:1rem;font-weight:700;height:58px;padding:0 30px;border-radius:14px;display:inline-flex;align-items:center;gap:10px;letter-spacing:0.01em;" onclick="if(typeof window._openScanQR==='function')window._openScanQR();">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M20 16v2a2 2 0 0 1-2 2h-2"/><path d="M8 20H6a2 2 0 0 1-2-2v-2"/><rect x="8" y="8" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="13" y="8" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="8" y="13" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"/><rect x="13.5" y="13.5" width="2" height="2" rx="0.3" fill="currentColor" stroke="none"/></svg>
             Ler QR Code
           </button>
+          ${(typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ extra: 'height:58px;padding:0 26px;font-size:0.98rem;letter-spacing:0.01em;border:1px solid rgba(255,255,255,0.25);' }) : ''}
         </div>
         <!-- v0.17.46: Row 2 (interativos: Pessoas + Convidar) e Row 3
              (utilitários: Pro + Apoie, mais discretos) separados em linhas

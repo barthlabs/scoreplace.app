@@ -717,6 +717,15 @@ function _rerenderBracket(tId, anchorMatchId) {
 
   var container = inlineContainer || document.getElementById('view-container');
 
+  // v2.3.85: preserva o estado aberto/fechado dos <details> (ex.: "Demais jogos
+  // da rodada", "Rodadas Anteriores") por índice — assim recalcular a
+  // classificação a cada placar NÃO colapsa as seções que o usuário deixou
+  // abertas/fechadas.
+  var _detailsState = [];
+  if (container) {
+    try { container.querySelectorAll('details').forEach(function(d) { _detailsState.push(!!d.open); }); } catch (e) {}
+  }
+
   // 4. Lock container height to prevent flash
   var prevHeight = container ? container.offsetHeight : 0;
   if (container && prevHeight > 0) {
@@ -756,6 +765,16 @@ function _rerenderBracket(tId, anchorMatchId) {
         }
       }
     }
+  }
+
+  // v2.3.85: restaura o estado dos <details> capturado antes do re-render.
+  if (container && _detailsState.length) {
+    try {
+      var _newDetails = container.querySelectorAll('details');
+      for (var _di = 0; _di < _newDetails.length && _di < _detailsState.length; _di++) {
+        _newDetails[_di].open = _detailsState[_di];
+      }
+    } catch (e) {}
   }
 
   // v0.16.96: restaura valores typed-but-unsaved capturados antes do
@@ -1952,11 +1971,14 @@ window._saveResultInline = function (tId, matchId) {
           }
         }, 0);
       } else if (!_thisComplete) {
-        // v2.3.46: rodada ainda incompleta → atualiza só este card in-place.
-        // A classificação só recomputa/sobe quando o último placar da rodada
-        // for lançado (rerender completo via _closeRound ou no caminho de
-        // rodada-completa-não-última abaixo).
-        _inPlaceFinalize = true;
+        // v2.3.85: a CLASSIFICAÇÃO precisa recalcular a CADA placar lançado
+        // (pedido do usuário: "lançou um resultado já calcula e mostra os
+        // valores"). Antes (v2.3.46) a tabela ficava congelada até a rodada
+        // completar. Agora deixamos cair no rerender completo (_rerenderBracket),
+        // que recomputa _computeStandings — e ele preserva scroll (âncora no
+        // card) + estado dos <details> ("Demais jogos"), então a página não
+        // "pula" nem colapsa as seções abertas.
+        _inPlaceFinalize = false;
       }
       // _thisComplete && !_isLast → cai no rerender completo no fim (classificação
       // sobe + próxima rodada gerada), comportamento preservado.
