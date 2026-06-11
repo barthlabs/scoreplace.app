@@ -1828,16 +1828,19 @@ function renderTournaments(container, tournamentId = null) {
               var _hasUpdated = !!(tournamentId && t.updatedAt);
               if (!_hasUpdated && !ligaActiveToggleHtml) return '';
               var _updatedHtml = _hasUpdated
-                ? `<div style="display:flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:400;opacity:0.5;">
+                ? `<div style="display:inline-flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:400;${_pReadBg ? 'background:'+_pReadBg+';border-radius:10px;padding:6px 10px;' : 'opacity:0.5;'}">
                      <span>🔄</span>
                      <span>Atualizado em ${(() => { try { var d = new Date(t.updatedAt); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}); } catch(e) { return t.updatedAt; } })()}</span>
                    </div>`
                 : '<div></div>';
-              return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();">${_updatedHtml}${ligaActiveToggleHtml}</div>`;
+              var _toggleWrapped = ligaActiveToggleHtml
+                ? (_pReadBg ? '<span style="background:'+_pReadBg+';border-radius:10px;padding:5px 9px;display:inline-flex;align-items:center;">'+ligaActiveToggleHtml+'</span>' : ligaActiveToggleHtml)
+                : '';
+              return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();">${_updatedHtml}${_toggleWrapped}</div>`;
             })()}
             ${(typeof window._buildTimeEstimation === 'function') ? window._buildTimeEstimation(t) : ''}
             ${t.venue ? `
-            <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; opacity: 0.65; margin-top: 6px;">
+            <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 6px; ${_pReadBg ? 'background:'+_pReadBg+';border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
                <span style="font-size: 1rem; flex-shrink:0;">📍</span>
                <span style="display:flex; flex-direction:column; gap:1px;">
                  <span>${window._safeHtml(t.venue)}${t.courtCount > 1 ? ' — ' + t.courtCount + ' quadras' : t.courtCount === 1 ? ' — 1 quadra' : ''}</span>

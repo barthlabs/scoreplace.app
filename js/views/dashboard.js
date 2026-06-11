@@ -670,7 +670,7 @@ function renderDashboard(container) {
 
             ${t.venueName ? `
             <!-- Local -->
-            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; opacity: 0.6; margin-top: -0.8rem;">
+            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: -0.8rem; ${_pReadBg ? 'background:'+_pReadBg+';border-radius:10px;padding:6px 10px;max-width:100%;' : 'opacity: 0.6;'}">
                <span style="font-size: 1rem;">📍</span>
                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window._safeHtml(t.venueName)}</span>
             </div>
@@ -763,8 +763,11 @@ function renderDashboard(container) {
                 // v0.16.92: stopPropagation no wrapper da row pra cobrir
                 // cliques fora do toggle (área vazia à esquerda). Caso
                 // contrário a row inteira é "área quente" do card click.
+                var _toggleInner = _ligaToggleDash && _pReadBg
+                  ? '<span style="background:' + _pReadBg + ';border-radius:10px;padding:5px 9px;display:inline-flex;align-items:center;">' + _ligaToggleDash + '</span>'
+                  : _ligaToggleDash;
                 var _toggleRowDash = _ligaToggleDash
-                  ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
+                  ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _toggleInner + '</div>'
                   : '';
                 return _toggleRowDash +
                   '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
