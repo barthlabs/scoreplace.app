@@ -1645,7 +1645,7 @@ window._translations['pt'] = {
   'playoff.title': 'Fase Final da Temporada',
   'playoff.orgOnly': 'Apenas o organizador configura a fase final.',
   'playoff.intro': 'Configure a disputa final entre os melhores colocados da temporada. Você decide quantos entram, o formato e os confrontos.',
-  'playoff.eventSection': 'Confraternização (opcional)',
+  'playoff.eventSection': 'Playoffs',
   'playoff.eventDate': 'Data',
   'playoff.eventVenue': 'Local',
   'playoff.eventVenuePh': 'Onde será',

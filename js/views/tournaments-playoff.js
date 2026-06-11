@@ -70,6 +70,28 @@
     });
   }
 
+  // v2.3.95: temporada da Liga "fechada" pra fase final = TODA partida de TODA
+  // rodada já tem placar (winner/BYE/folga). Nenhum jogo pendente. Exige ao
+  // menos um jogo real lançado. Dispara a cor verde + brilho dos botões e a
+  // visibilidade do "Gerar fase final".
+  function _ligaSeasonScored(t) {
+    if (!_isLiga(t)) return false;
+    var rounds = Array.isArray(t.rounds) ? t.rounds : [];
+    if (!rounds.length) return false;
+    var anyReal = false;
+    for (var i = 0; i < rounds.length; i++) {
+      var ms = (rounds[i] && rounds[i].matches) || [];
+      for (var j = 0; j < ms.length; j++) {
+        var m = ms[j];
+        if (!m || m.isSitOut || m.isBye) continue;
+        anyReal = true;
+        if (!m.winner) return false; // jogo pendente → temporada não fechou
+      }
+    }
+    return anyReal;
+  }
+  window._ligaSeasonScored = _ligaSeasonScored;
+
   // ───────────────────────────────────────────────────────────────────────────
   // SEEDING — ordem de slots padrão (1 vs N, 2 vs N-1, cabeças distribuídos).
   // Gera a sequência de seeds para um bracket de tamanho potência de 2.
@@ -292,22 +314,16 @@
     html += '<p style="color:var(--text-muted);font-size:0.85rem;line-height:1.5;margin:0 0 1rem;">' +
       (_t('playoff.intro') || 'Configure a disputa final entre os melhores colocados da temporada. Você decide quantos entram, o formato e os confrontos.') + '</p>';
 
-    // Bloco de confraternização (opcional, único)
+    // Bloco Playoffs: data (1 linha) e local (outra linha) do evento da fase final.
     html += '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:0.9rem;margin-bottom:1rem;">' +
-      '<p style="margin:0 0 0.6rem;font-size:0.78rem;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.5px;">🎉 ' + (_t('playoff.eventSection') || 'Confraternização (opcional)') + '</p>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-        '<div class="form-group" style="margin:0;flex:1;min-width:150px;">' +
-          '<label class="form-label" style="font-size:0.7rem;">' + (_t('playoff.eventDate') || 'Data') + '</label>' +
-          '<input type="datetime-local" class="form-control" id="po-event-date" value="' + _esc((t.playoffEvent && t.playoffEvent.date) || '') + '" style="padding:6px 8px;font-size:0.85rem;box-sizing:border-box;min-width:0;width:100%;">' +
-        '</div>' +
-        '<div class="form-group" style="margin:0;flex:1;min-width:150px;">' +
-          '<label class="form-label" style="font-size:0.7rem;">' + (_t('playoff.eventVenue') || 'Local') + '</label>' +
-          '<input type="text" class="form-control" id="po-event-venue" value="' + _esc((t.playoffEvent && t.playoffEvent.venue) || t.venue || '') + '" placeholder="' + (_t('playoff.eventVenuePh') || 'Onde será') + '" style="padding:6px 8px;font-size:0.85rem;box-sizing:border-box;min-width:0;width:100%;">' +
-        '</div>' +
+      '<p style="margin:0 0 0.6rem;font-size:0.78rem;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.5px;">🏆 ' + (_t('playoff.eventSection') || 'Playoffs') + '</p>' +
+      '<div class="form-group" style="margin:0 0 0.6rem;">' +
+        '<label class="form-label" style="font-size:0.7rem;">' + (_t('playoff.eventDate') || 'Data') + '</label>' +
+        '<input type="datetime-local" class="form-control" id="po-event-date" value="' + _esc((t.playoffEvent && t.playoffEvent.date) || '') + '" style="padding:6px 8px;font-size:0.85rem;box-sizing:border-box;min-width:0;width:100%;">' +
       '</div>' +
-      '<div class="form-group" style="margin:0.5rem 0 0;">' +
-        '<label class="form-label" style="font-size:0.7rem;">' + (_t('playoff.eventNote') || 'Observação') + '</label>' +
-        '<input type="text" class="form-control" id="po-event-note" value="' + _esc((t.playoffEvent && t.playoffEvent.note) || '') + '" placeholder="' + (_t('playoff.eventNotePh') || 'Ex: churrasco após os jogos, levar prato') + '" style="padding:6px 8px;font-size:0.85rem;box-sizing:border-box;min-width:0;width:100%;">' +
+      '<div class="form-group" style="margin:0;">' +
+        '<label class="form-label" style="font-size:0.7rem;">' + (_t('playoff.eventVenue') || 'Local') + '</label>' +
+        '<input type="text" class="form-control" id="po-event-venue" value="' + _esc((t.playoffEvent && t.playoffEvent.venue) || t.venue || '') + '" placeholder="' + (_t('playoff.eventVenuePh') || 'Onde será') + '" style="padding:6px 8px;font-size:0.85rem;box-sizing:border-box;min-width:0;width:100%;">' +
       '</div>' +
     '</div>';
 

@@ -1633,7 +1633,7 @@ window._translations['en'] = {
   'playoff.title': 'Season Finals',
   'playoff.orgOnly': 'Only the organizer can configure the finals.',
   'playoff.intro': 'Set up the final showdown between the season\'s top players. You decide how many qualify, the format and the matchups.',
-  'playoff.eventSection': 'Get-together (optional)',
+  'playoff.eventSection': 'Playoffs',
   'playoff.eventDate': 'Date',
   'playoff.eventVenue': 'Venue',
   'playoff.eventVenuePh': 'Where',

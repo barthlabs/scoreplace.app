@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.95-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Fase Final (Playoffs) da Liga — primeira parte.</b> O botão de fase final agora mostra <b>“Configurar Playoffs (Fase Final)”</b> em duas linhas: fica <b>âmbar</b> enquanto a Liga está rolando e vira <b>verde com o brilho padrão do app</b> quando todos os jogos de todas as rodadas já têm placar (Liga encerrada). Na tela de configuração, o bloco virou <b>Playoffs</b> com <b>Data</b> e <b>Local</b> em linhas separadas (sem o campo de observação). <i>(A revisão/publicação da chave e a fase final no topo do chaveamento vêm na próxima atualização.)</i></li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.94-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Botões da Liga não cortam mais o texto.</b> Nos botões de configuração da Liga (Equilíbrio, Pontuação de novos, Inatividade), rótulos longos como “Jogador individual” e “Org. decide” agora <b>quebram em duas linhas e ficam centralizados dentro do botão</b>, com os botões da mesma linha na mesma altura — nada de texto vazando pra fora.</li>' +
