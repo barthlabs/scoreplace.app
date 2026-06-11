@@ -2746,6 +2746,7 @@ function renderTournaments(container, tournamentId = null) {
                    </h3>
                    ${checkInControls}
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
+                   ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> segure e arraste um inscrito até a <b>estrela dourada</b> que aparece no canto inferior direito (ela surge assim que você começa a arrastar). Funciona durante o torneio também.</div>' : ''}
                    <div data-merge-container="${t.id}" style="${gridStyle}">
                       ${cardsStr}
                    </div>

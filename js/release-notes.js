@@ -8,6 +8,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Presença entre os jogadores (Liga com placar pelos participantes).</b> No card do jogo, o próprio jogador marca <b>📍 Cheguei</b> (confirmado pelo <b>GPS</b> no local) — sem chamada do organizador. Os sorteados juntos veem pelos pontos de presença quem já chegou e quem ainda falta.</li>' +
+        '<li><b>Compartilhar organização durante o torneio — agora fácil de achar.</b> Na lista de inscritos do card de detalhe (inclusive com o torneio em andamento), uma dica explica: arraste um inscrito até a <b>estrela dourada ⭐</b> pra torná-lo co-organizador.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fbbf24; font-size:1.05rem; margin-bottom:8px;">🎉 v2.4.0-beta — Marco de lançamento <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

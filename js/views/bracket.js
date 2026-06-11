@@ -1796,6 +1796,20 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
         title="${_t('bracket.liveScore')}">${_t('bracket.liveBtn')}</button>`
     : '';
 
+  // v2.4.1: presença PEER — em torneio onde os JOGADORES lançam o placar
+  // (resultEntry inclui players), o próprio jogador marca a sua presença no card
+  // do jogo (confirmada pelo GPS via _toggleCheckIn → _isUserAtTournamentVenue).
+  // Os sorteados juntos veem o status uns dos outros pelos pontos de presença
+  // (ciDot) que já existem. Não há "chamada do organizador" aqui — é peer.
+  let _arrivedBtn = '';
+  if (typeof window._participantsSelfPresence === 'function' && window._participantsSelfPresence(t) &&
+      _isMyMatch && !isDecided && !isByeMatch && !hasTBD && _cuName) {
+    const _meHere = !!(t && t.checkedIn && t.checkedIn[_cuName]);
+    _arrivedBtn = _meHere
+      ? `<span style="font-size:0.66rem;font-weight:700;color:#34d399;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;">✅ ${_t('bracket.youArrived') || 'Você chegou'}</span>`
+      : `<button onclick="event.stopPropagation(); window._toggleCheckIn('${_esc(tId)}','${_esc(_cuName)}')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:#34d399;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;" title="${_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)'}">📍 ${_t('bracket.arrived') || 'Cheguei'}</button>`;
+  }
+
   // User's own matches: indigo border + glow (distinct from amber partial)
   if (_isMyMatch) {
     cardBorder = 'rgba(99,102,241,0.6)';
@@ -1898,7 +1912,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
     _headerHtml = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
         <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-        <div id="header-btns-${m.id}" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
+        <div id="header-btns-${m.id}" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
       </div>`;
   }
 
