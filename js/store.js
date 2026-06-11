@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.5-beta';
+window.SCOREPLACE_VERSION = '2.4.6-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -1079,6 +1079,40 @@ window._genderWord = function(profileOrGender, masculine, feminine) {
     return masculine + '/' + feminine;
   }
   return masculine || feminine || '';
+};
+
+// v2.4.6: título "Rei/Rainha" de uma série (grupo de 4 do formato Rei/Rainha)
+// conforme a composição de gênero dos jogadores da série:
+//   homens + mulheres → 'Rei/Rainha'
+//   só mulheres        → 'Rainha'
+//   só homens          → 'Rei'
+//   indefinido         → 'Rei/Rainha' (sem regressão — mantém ambos)
+// playerNames: array de nomes de exibição. tournament: pra resolver o gênero
+// de cada nome em t.participants[] (gravado na inscrição).
+window._monarchGroupTitle = function(playerNames, tournament) {
+  var names = Array.isArray(playerNames) ? playerNames : [];
+  var parr = tournament && (Array.isArray(tournament.participants)
+    ? tournament.participants
+    : (tournament.participants ? Object.values(tournament.participants) : [])) || [];
+  var byName = {};
+  parr.forEach(function(p) {
+    if (p && typeof p === 'object' && p.gender) {
+      var k1 = String(p.displayName || '').toLowerCase().trim();
+      var k2 = String(p.name || '').toLowerCase().trim();
+      var gg = String(p.gender).toLowerCase().trim();
+      if (k1) byName[k1] = gg;
+      if (k2) byName[k2] = gg;
+    }
+  });
+  var hasMale = false, hasFemale = false;
+  names.forEach(function(n) {
+    var g = byName[String(n || '').toLowerCase().trim()];
+    if (g === 'masculino' || g === 'm') hasMale = true;
+    else if (g === 'feminino' || g === 'f') hasFemale = true;
+  });
+  if (hasMale && !hasFemale) return 'Rei';
+  if (hasFemale && !hasMale) return 'Rainha';
+  return 'Rei/Rainha';
 };
 
 window._isUnfriendlyName = function(name) {

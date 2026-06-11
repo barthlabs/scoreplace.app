@@ -2650,8 +2650,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var groupBorderLeft = gDone ? '#4ade80' : (isMyGroup ? '#22d3ee' : '#fbbf24');
           var groupBg = isMyGroup ? 'rgba(34,211,238,0.06)' : 'rgba(251,191,36,0.03)';
           var groupBorder = isMyGroup ? 'rgba(34,211,238,0.25)' : 'rgba(251,191,36,0.15)';
+          // v2.4.6: título gendered da série — 👑 Rei / 👑 Rainha / 👑 Rei/Rainha
+          // conforme a composição de gênero dos 4 jogadores do grupo.
+          var _monarchTitle = (typeof window._monarchGroupTitle === 'function') ? window._monarchGroupTitle(g.players, t) : 'Rei/Rainha';
+          var _monarchBadge = '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
           return '<div style="background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + _monarchBadge + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + '</div>' +
             '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">Jogadores: ' + g.players.map(function(n){return window._safeHtml(n);}).join(', ') + '</div>' +
             '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">' + gCards + '</div>' +
           '</div>';

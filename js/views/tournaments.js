@@ -2168,17 +2168,44 @@ function renderTournaments(container, tournamentId = null) {
         }
 
         // Primary organizer — always shown in Organização, regardless of self-enrollment
-        // Gênero do organizador — busca no perfil em memória se for o usuário logado
         var _gw = typeof window._genderWord === 'function' ? window._genderWord : function(_,m){return m;};
-        var _orgGender = '';
         var _cu2 = window.AppStore && window.AppStore.currentUser;
-        if (_cu2 && (_cu2.email === _t.organizerEmail || _cu2.uid === _t.creatorUid)) _orgGender = _cu2.gender || '';
-        var _orgRoleLabel = _gw({gender:_orgGender}, 'Organizador', 'Organizadora');
+        // v2.4.6: rótulo de papel usa o gênero COLETIVO da organização. Em
+        // português, basta UM homem na organização pra a forma ir pro masculino
+        // ("Organizador"/"Co-organizador"); só vira feminino ("Organizadora"/
+        // "Co-organizadora") quando TODA a organização é do gênero feminino.
+        // Resolve o gênero de cada membro: usuário logado → participante → co-host.
+        var _resolveOrgGender = function(email, uid) {
+          var e = (email || '').toLowerCase();
+          if (_cu2 && ((e && _cu2.email && String(_cu2.email).toLowerCase() === e) || (uid && _cu2.uid === uid)) && _cu2.gender) return _cu2.gender;
+          var _pa = Array.isArray(_t.participants) ? _t.participants : (_t.participants ? Object.values(_t.participants) : []);
+          for (var _gi = 0; _gi < _pa.length; _gi++) {
+            var _pp = _pa[_gi];
+            if (_pp && typeof _pp === 'object' && _pp.gender) {
+              var _pe = (_pp.email || '').toLowerCase();
+              if ((e && _pe === e) || (uid && _pp.uid === uid)) return _pp.gender;
+            }
+          }
+          return '';
+        };
+        var _orgGenders = [_resolveOrgGender(_t.organizerEmail, _t.creatorUid)];
+        if (Array.isArray(_t.coHosts)) {
+          _t.coHosts.forEach(function(ch) {
+            if (ch.status === 'active') _orgGenders.push(ch.gender || _resolveOrgGender(ch.email, ch.uid));
+          });
+        }
+        var _gNorm = _orgGenders.map(function(g) { return String(g || '').toLowerCase().trim(); });
+        var _orgHasMale = _gNorm.some(function(g) { return g === 'masculino' || g === 'm'; });
+        var _orgHasFemale = _gNorm.some(function(g) { return g === 'feminino' || g === 'f'; });
+        // Misto ou indefinido → masculino (default do português). Feminino só se
+        // TODA a organização com gênero conhecido for feminina (e nenhum homem).
+        var _orgCollective = _orgHasMale ? 'masculino' : (_orgHasFemale ? 'feminino' : 'masculino');
+        var _orgRoleLabel = _gw(_orgCollective, 'Organizador', 'Organizadora');
         _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '');
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
             if (ch.status !== 'active') return;
-            var _chLabel = _gw({gender:''}, 'Co-organizador', 'Co-organizadora');
+            var _chLabel = _gw(_orgCollective, 'Co-organizador', 'Co-organizadora');
             _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.email);
           });
         }
