@@ -93,6 +93,26 @@ window._mergeDragStart = function(e, name, tId) {
     window._mergeDragData = { name: name, tId: tId };
     e.dataTransfer.effectAllowed = 'move';
     try { e.dataTransfer.setData('text/plain', name); } catch(ex) {}
+    // v2.3.79: revela a estrela de co-organização (#crown-org-btn) e popula
+    // window._participantDragData — assim arrastar um inscrito pós-sorteio
+    // (caminho merge, ex.: Liga já sorteada) também permite soltar na estrela
+    // pra torná-lo co-organizador. Antes só o caminho pré-sorteio
+    // (handleDragStart) fazia isso, então em torneios já sorteados a estrela
+    // nunca aparecia.
+    try {
+        var t = (window.AppStore && window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
+        var pObj = null;
+        if (t && Array.isArray(t.participants)) {
+            pObj = t.participants.find(function(p) {
+                var pn = (typeof p === 'string') ? p : (p.displayName || p.name || '');
+                return pn === name;
+            });
+        }
+        window._participantDragData = (pObj && typeof pObj === 'object') ? pObj : { displayName: name, name: name };
+        window._participantDragTId = tId;
+        var crownBtn = document.getElementById('crown-org-btn');
+        if (crownBtn) crownBtn.style.display = 'flex';
+    } catch (ex2) {}
     var card = e.target.closest('.participant-card') || e.target.closest('[draggable]');
     if (card) {
         card.style.opacity = '0.4';
@@ -102,6 +122,9 @@ window._mergeDragStart = function(e, name, tId) {
 
 window._mergeDragEnd = function(e) {
     window._mergeDragData = null;
+    window._participantDragData = null;
+    var crownBtn = document.getElementById('crown-org-btn');
+    if (crownBtn) crownBtn.style.display = 'none';
     var card = e.target.closest('.participant-card') || e.target.closest('[draggable]');
     if (card) { card.style.opacity = '1'; card.style.boxShadow = ''; }
     document.querySelectorAll('.participant-card, [draggable="true"]').forEach(function(el) {

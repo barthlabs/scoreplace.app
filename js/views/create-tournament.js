@@ -4165,8 +4165,14 @@ function setupCreateTournamentModal() {
                 _changes.push(_checkFields[k]);
               }
             });
-            // Aplica cada campo explicitamente
-            Object.keys(tourData).forEach(k => { t[k] = tourData[k]; });
+            // Aplica cada campo explicitamente.
+            // v2.3.79: NÃO sobrescrever co-organizadores nem a posse do torneio
+            // na edição. tourData traz coHosts:[] (default de criação) e
+            // creator/organizer derivados do currentUser — copiá-los apagava os
+            // co-organizadores já cadastrados (bug reportado: "sumiram") e poderia
+            // trocar o dono. Esses campos têm fluxo próprio (host-transfer.js).
+            var _editPreserve = { coHosts: true, creatorUid: true, creatorEmail: true, organizerEmail: true, organizerName: true };
+            Object.keys(tourData).forEach(k => { if (_editPreserve[k]) return; t[k] = tourData[k]; });
             window.AppStore.logAction(editId, `Regras atualizadas: formato ${format}, lançamento por ${resultEntryVal}`);
             // v2.1.67: se a data/hora/local mudou, sincroniza o "Planejar ida" do
             // próprio organizador (os demais participantes sincronizam ao abrir o

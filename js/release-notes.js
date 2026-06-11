@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.79-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Co-organizadores não somem mais ao editar o torneio.</b> Tinha um bug: salvar a edição do torneio apagava a lista de co-organizadores (e podia mexer no dono). Corrigido — editar agora preserva os co-organizadores e a posse do torneio. <i>Obs.: os co-organizadores que já tinham sido apagados precisam ser adicionados de novo — a correção evita que isso volte a acontecer.</i></li>' +
+        '<li><b>Estrela de co-organização volta a aparecer ao arrastar inscrito (mesmo após o sorteio).</b> Em torneios já sorteados (ex.: Liga em andamento), arrastar um inscrito não mostrava mais a estrela no card pra soltar e torná-lo co-organizador. Voltou a funcionar: ao arrastar, a estrela aparece no círculo dourado e soltar o inscrito ali abre o convite de co-organização.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.78-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Análise de Inscritos: nova lista com busca, ordenação e filtros.</b> Na 📊 Análise agora tem a seção <b>📋 Inscritos</b> com: <b>busca dinâmica</b> (filtra conforme você digita o nome, sem ligar pra acento); <b>ordenação</b> por ordem de inscrição (↑/↓) ou nome (A→Z / Z→A); e <b>filtros</b> por gênero (masculino / feminino / misto / sem gênero) e por habilidade (A / B / C / D / FUN / sem habilidade). Cada inscrito aparece com o nº de inscrição, gênero e habilidade. Tudo na hora, sem recarregar.</li>' +
