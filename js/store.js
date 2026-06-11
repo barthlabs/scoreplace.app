@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.7-beta';
+window.SCOREPLACE_VERSION = '2.4.8-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -2565,7 +2565,19 @@ window.AppStore = {
           // e só então marca _bootReady=true. Assim a dashboard é revelada
           // estável, sem o re-render visível que travava o scroll na abertura.
           window._waitingForFirstSnapshot = false;
+          var _finalizeBootTries = 0;
           var _finalizeBootReady = function() {
+            // v2.4.7b: não revela a dashboard antes do PERFIL terminar de
+            // carregar (loadUserProfile seta currentUser._profileLoaded). No
+            // fluxo normal o perfil já carregou antes do listener; este guard
+            // cobre ordering raro — espera até ~3s (25×120ms) e segue mesmo
+            // assim pra nunca travar.
+            var _cuf = window.AppStore && window.AppStore.currentUser;
+            if (_cuf && _cuf._profileLoaded !== true && _finalizeBootTries < 25) {
+              _finalizeBootTries++;
+              setTimeout(_finalizeBootReady, 120);
+              return;
+            }
             requestAnimationFrame(function() {
               setTimeout(function() { window._bootReady = true; }, 550);
             });
@@ -3071,6 +3083,7 @@ window.AppStore = {
       // renderizou antes do profile carregar, "Marque seus lugares favoritos"
       // apareceu mesmo com preferreds salvos.
       if (this.currentUser) this.currentUser._profileLoaded = true;
+      window._profileLoadDone = true; // v2.4.7b: marco real da barra do boot splash
       try {
         document.dispatchEvent(new CustomEvent('scoreplace:profile-loaded', { detail: { uid: uid } }));
       } catch (e) {}
@@ -3088,6 +3101,7 @@ window.AppStore = {
       // v0.17.3: mesmo em erro, marca como "tentativa concluída" pra views
       // não ficarem esperando indefinidamente. Erro real continua logado.
       if (this.currentUser) this.currentUser._profileLoaded = true;
+      window._profileLoadDone = true; // v2.4.7b: marco real da barra do boot splash
       try {
         document.dispatchEvent(new CustomEvent('scoreplace:profile-loaded', { detail: { uid: uid, error: true } }));
       } catch (e2) {}

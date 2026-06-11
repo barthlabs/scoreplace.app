@@ -429,16 +429,18 @@ function initRouter() {
   window.addEventListener('hashchange', handleRoute);
   handleRoute();
 
-  // v1.0.32-beta: sinaliza pro boot loader esconder após primeiro render.
-  // v1.9.43: se estiver aguardando o primeiro snapshot do Firestore
-  // (_waitingForFirstSnapshot), o boot loader só some depois que os dados
-  // chegarem (startRealtimeListener). Para usuários não-logados ou quando
-  // Firestore não é usado, esconde aqui normalmente.
-  // v2.4.5: sinaliza pronto via _bootReady (o loader preenche a barra e revela).
-  // Em sessões com Firestore, quem marca pronto é o startRealtimeListener,
-  // após o settle dos dados — aqui só marcamos quando NÃO estamos aguardando o
-  // primeiro snapshot (landing, logout, ou Firestore não usado).
-  if (!window._waitingForFirstSnapshot) {
+  // v2.4.7b: o boot splash só é finalizado AQUI quando chegamos num estado
+  // TERMINAL de DESLOGADO — o Firebase já resolveu (_authStateResolved) E não
+  // há usuário (a landing / view legal é a tela final). NÃO finaliza:
+  //   • enquanto esperamos o login (authCache rehidratando, auth não resolvido)
+  //     — senão o splash some cedo demais e o loader antigo pisca;
+  //   • quando logado — nesse caso quem finaliza é o startRealtimeListener,
+  //     após PERFIL + 1º snapshot + settle (senão a dashboard aparece antes do
+  //     perfil carregar).
+  // Antes, o setter genérico disparava no 1º route (antes do auth resolver,
+  // quando _waitingForFirstSnapshot ainda não existe), causando exatamente
+  // esses dois sintomas (flicker novo↔antigo + dashboard sem perfil).
+  if (window._authStateResolved && !(window.AppStore && window.AppStore.currentUser)) {
     setTimeout(function() { window._bootReady = true; }, 150);
   }
 
