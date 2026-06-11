@@ -3644,162 +3644,22 @@ async function simulateLoginSuccess(user) {
     window._pendingEnrollTournamentId = null;
     try { sessionStorage.removeItem('_pendingEnrollTournamentId'); } catch(e) {}
 
-    // Wait for tournaments to be loaded, then enroll
-    var _enrollAttempts = 0;
-    var _tryAutoEnroll = function() {
-      _enrollAttempts++;
-      var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(pendingEnrollId); });
-      if (!t && _enrollAttempts < 20) {
-        // Tournaments not loaded yet, retry
-        setTimeout(_tryAutoEnroll, 300);
-        return;
-      }
-      if (t && window.AppStore.currentUser) {
-        // v2.3.6 FIX (bug recorrente): NUNCA auto-inscrever o organizador/criador
-        // no PRÓPRIO torneio. O flag _pendingEnrollTournamentId é setado quando um
-        // visitante DESLOGADO abre #tournaments/<id> (router.js:67) — se quem abre
-        // é o próprio organizador (sessão expirada, bookmark, logout, ou abrir o
-        // próprio link de convite pra conferir), ao logar ele virava participante
-        // do torneio que criou, sem nunca ter se inscrito. Organizador que QUER
-        // jogar ainda pode usar o botão "Inscrever-se" manualmente.
-        var _cu = window.AppStore.currentUser;
-        var _isOrganizer = (t.creatorUid && _cu.uid && String(t.creatorUid) === String(_cu.uid)) ||
-                           (t.creatorEmail && _cu.email && String(t.creatorEmail).toLowerCase() === String(_cu.email).toLowerCase()) ||
-                           (t.organizerEmail && _cu.email && String(t.organizerEmail).toLowerCase() === String(_cu.email).toLowerCase());
-        if (_isOrganizer) {
-          window.location.hash = '#tournaments/' + pendingEnrollId;
-          if (typeof initRouter === 'function') initRouter();
-          window._simulateLoginInProgress = false;
-          return;
-        }
-        // Block auto-enrollment if enrollments are closed
-        var _isLigaFmt = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
-        var _ligaOpenEnroll = _isLigaFmt && t.ligaOpenEnrollment;
-        var _sorteioFeito = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                            (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                            (Array.isArray(t.groups) && t.groups.length > 0);
-        var _canEnroll = (t.status !== 'closed' && t.status !== 'finished' && !_sorteioFeito) || _ligaOpenEnroll;
-        if (!_canEnroll) {
-          // Enrollments closed — just navigate to tournament without enrolling
-          if (typeof showNotification === 'function') {
-            showNotification(_t('auth.enrollClosed'), _t('auth.enrollClosedMsg'), 'warning');
-          }
-          window.location.hash = '#tournaments/' + pendingEnrollId;
-          if (typeof initRouter === 'function') initRouter();
-          window._simulateLoginInProgress = false;
-          return;
-        }
-
-        var _u = window.AppStore.currentUser;
-        // v2.1.73 FIX: a inscrição via LINK DE CONVITE criava o participante SEM
-        // uid (só name+email+displayName) — então a pessoa entrava "sem conta
-        // vinculada" mesmo estando logada. Agora inclui uid/photoURL/selfEnrolled
-        // igual à auto-inscrição normal (tournaments-enrollment.js).
-        var participantObj = {
-          name: _u.displayName, email: _u.email, displayName: _u.displayName,
-          uid: _u.uid, selfEnrolled: true, ligaActive: true,
-          addedAt: new Date().toISOString()
-        };
-        if (_u.photoURL) participantObj.photoURL = _u.photoURL;
-
-        // Include gender if available (needed for category auto-assignment)
-        if (_u.gender) participantObj.gender = _u.gender;
-
-        // Auto-assign categories if tournament has them and user has gender
-        var hasCats = (t.combinedCategories && t.combinedCategories.length > 0) ||
-                      (t.genderCategories && t.genderCategories.length > 0) ||
-                      (t.skillCategories && t.skillCategories.length > 0);
-        if (hasCats && _u.gender && typeof window._userGenderToCatCodes === 'function') {
-          var genderCodes = window._userGenderToCatCodes(_u.gender);
-          var genderLabels = { fem: _t('auth.genderFem'), masc: _t('auth.genderMasc'), misto_aleatorio: _t('auth.genderMistoAl'), misto_obrigatorio: _t('auth.genderMistoOb') };
-          var combined = t.combinedCategories || [];
-          var genderCats = t.genderCategories || [];
-          var skillCats = t.skillCategories || [];
-          var eligible = [];
-          if (combined.length > 0) {
-            combined.forEach(function(c) {
-              var matchesGender = genderCodes.some(function(gc) {
-                return c.toLowerCase().startsWith((genderLabels[gc] || gc).toLowerCase());
-              });
-              if (matchesGender) eligible.push(c);
-            });
-          } else if (genderCats.length > 0 && skillCats.length === 0) {
-            genderCats.forEach(function(gc) {
-              if (genderCodes.indexOf(gc) !== -1) eligible.push(genderLabels[gc] || gc);
-            });
-          } else if (skillCats.length > 0 && genderCats.length === 0) {
-            eligible = skillCats.slice();
-          }
-          if (eligible.length > 0 && typeof window._groupEligibleCategories === 'function') {
-            var groups = window._groupEligibleCategories(eligible);
-            var autoCategories = [];
-            if (groups.exclusive.length === 1) autoCategories.push(groups.exclusive[0]);
-            autoCategories = autoCategories.concat(groups.nonExclusive);
-            if (autoCategories.length > 0) {
-              participantObj.categories = autoCategories;
-              participantObj.category = autoCategories[0];
-              participantObj.categorySource = 'perfil';
-            }
-          }
-        }
-
-        // Use atomic Firestore transaction to prevent race conditions
-        if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {
-          window.FirestoreDB.enrollParticipant(pendingEnrollId, participantObj).then(function(result) {
-            if (result.enrollmentClosed) {
-              if (typeof showNotification === 'function') showNotification(_t('auth.enrollClosed'), _t('auth.enrollClosedMsg'), 'warning');
-              window.location.hash = '#tournaments/' + pendingEnrollId;
-              if (typeof initRouter === 'function') initRouter();
-              return;
-            }
-            if (result.alreadyEnrolled) return;
-            t.participants = result.participants;
-            var catMsg = participantObj.categories ? ' na categoria ' + (typeof window._displayCategoryName === 'function' ? window._displayCategoryName(participantObj.categories[0]) : participantObj.categories[0]) : '';
-            if (typeof showNotification !== 'undefined') {
-              showNotification(_t('auth.enrolled'), _t('auth.enrolledMsg', {name: t.name, cat: catMsg}), 'success');
-            }
-            // Auto-amizade: apenas com quem convidou (ref no link)
-            if (_inviteRefUid) {
-              _autoFriendOnInvite(_inviteRefUid, window.AppStore.currentUser);
-              try { sessionStorage.removeItem('_inviteRefUid'); } catch(e) {}
-            }
-            // Notify organizer about new enrollment
-            if (t.organizerEmail && t.organizerEmail !== _u.email && typeof window._resolveOrganizerUid === 'function') {
-              window._resolveOrganizerUid(t).then(function(orgUid) {
-                if (orgUid && typeof window._sendUserNotification === 'function') {
-                  window._sendUserNotification(orgUid, {
-                    type: 'enrollment_new',
-                    message: _t('auth.participantEnrolledMsg', {name: _u.displayName || _t('auth.someParticipant'), tournament: t.name}),
-                    tournamentId: String(t.id),
-                    tournamentName: t.name || '',
-                    level: 'all'
-                  });
-                }
-              }).catch(function(e) { window._warn('Notify organizer error:', e); });
-            }
-            // Navigate to tournament details after enrollment
-            window.location.hash = '#tournaments/' + pendingEnrollId;
-            if (typeof initRouter === 'function') initRouter();
-          }).catch(function(err) {
-            window._warn('Auto-enroll transaction error:', err);
-          });
-        } else {
-          // Fallback: navigate to tournament page
-          window.location.hash = '#tournaments/' + pendingEnrollId;
-          if (typeof initRouter === 'function') initRouter();
-        }
-      } else {
-        // Tournament not found after retries — navigate and warn user
-        window.location.hash = '#tournaments/' + pendingEnrollId;
-        if (typeof initRouter === 'function') initRouter();
-        if (_enrollAttempts >= 20 && typeof showNotification === 'function') {
-          showNotification(_t('auth.enrollPending'), _t('auth.enrollPendingMsg'), 'warning');
-        }
-      }
-      // Clear flag after auto-enroll attempt completes (success or fallback)
-      window._simulateLoginInProgress = false;
-    };
-    setTimeout(_tryAutoEnroll, 300);
+    // v2.3.88: O SISTEMA NUNCA INSCREVE SOZINHO. A inscrição SEMPRE exige que a
+    // pessoa clique em "Inscrever-se" na página do torneio — inclusive vindo de
+    // convite (atender ao convite = abrir a página e clicar). Qualquer um pode
+    // se inscrever num torneio público de acesso livre; basta clicar.
+    // BUG reportado: algo auto-inscrevia o usuário num torneio que ele NÃO
+    // clicou (a conta de teste era re-inscrita todo dia). Aqui só LEVAMOS o
+    // usuário à página do torneio — ele decide se entra.
+    // A auto-amizade com quem convidou (ref no link) é mantida: é o propósito
+    // do convite e não significa "entrar no torneio".
+    if (_inviteRefUid && typeof _autoFriendOnInvite === 'function' && window.AppStore.currentUser) {
+      try { _autoFriendOnInvite(_inviteRefUid, window.AppStore.currentUser); } catch(e) {}
+      try { sessionStorage.removeItem('_inviteRefUid'); } catch(e) {}
+    }
+    window.location.hash = '#tournaments/' + pendingEnrollId;
+    if (typeof initRouter === 'function') initRouter();
+    window._simulateLoginInProgress = false;
     return;
   }
 
