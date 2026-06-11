@@ -883,11 +883,15 @@ function renderTournaments(container, tournamentId = null) {
                         arr.splice(idx, 1);
                         t.participants = arr;
 
-                        // Notify removed participant
+                        // Notify removed participant — v2.3.84: inclui QUEM removeu
+                        // e QUANDO (pedido do usuário).
                         if (_removedP && typeof _removedP === 'object' && _removedP.uid && typeof window._sendUserNotification === 'function') {
+                            var _cuRem = window.AppStore && window.AppStore.currentUser;
+                            var _remover = (_cuRem && (_cuRem.displayName || _cuRem.email)) || 'o organizador';
+                            var _whenStr = new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                             window._sendUserNotification(_removedP.uid, {
                                 type: 'participant_removed',
-                                message: _t('notif.youWereRemoved').replace('{name}', t.name || 'Torneio'),
+                                message: 'Você foi removido do torneio "' + (t.name || 'Torneio') + '" por ' + _remover + ' em ' + _whenStr + '.',
                                 tournamentId: String(t.id),
                                 tournamentName: t.name || '',
                                 level: 'fundamental'

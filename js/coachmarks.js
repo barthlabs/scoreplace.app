@@ -313,8 +313,8 @@
       card.querySelector('p').textContent = step.text || '';
       card.querySelector('.coach-skip').textContent = 'Pular dicas';
       card.querySelector('.coach-next').textContent = lastStep ? 'Entendi' : 'Próximo →';
-      card.querySelector('.coach-skip').addEventListener('click', function (e) { e.stopPropagation(); _skipAll(); });
-      card.querySelector('.coach-next').addEventListener('click', function (e) { e.stopPropagation(); _engaged(step); });
+      card.querySelector('.coach-skip').addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); _skipAll(); });
+      card.querySelector('.coach-next').addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); _engaged(step, true); });
       _overlay.appendChild(card);
 
       // posiciona o card
@@ -373,11 +373,16 @@
       else _armIdle(); // nada elegível agora (ex.: itens esperando o hamburger) → modo idle
     }, ms);
   }
-  function _engaged(step) {
+  // immediate=true (botão "Próximo →") avança DIRETO pra próxima dica do
+  // contexto. Sem o flag (clique no elemento destacado) mantém os 3s de respiro
+  // pra ação do app acontecer (ex.: menu terminar de abrir).
+  // v2.3.84 BUG: "Próximo" usava sempre 3s e, sem step pronto, nada aparecia →
+  // parecia que o botão não fazia nada.
+  function _engaged(step, immediate) {
     if (step) markSeen(step.id);
     _firstShow = false;
     _hide();
-    _scheduleNext(3000);
+    _scheduleNext(immediate ? 200 : 3000);
   }
   function _autoDismiss() {
     // não clicou durante o contador → some e volta após 15s parado
@@ -386,8 +391,14 @@
     _armIdle();
   }
   function _skipAll() {
-    // desliga as dicas de vez (reativa no perfil)
+    // desliga as dicas de vez (reativa no perfil). v2.3.84: feedback visível —
+    // antes o card só sumia e parecia que "não fazia nada".
     setEnabled(false);
+    try {
+      if (typeof showNotification === 'function') {
+        showNotification('Dicas desativadas', 'Você pode reativar quando quiser no seu perfil.', 'info');
+      }
+    } catch (e) {}
   }
 
   // ── completude do perfil ────────────────────────────────────────────────

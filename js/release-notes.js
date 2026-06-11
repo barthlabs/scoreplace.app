@@ -9,6 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.84-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Fim da auto-inscrição fantasma.</b> Tinha um bug em que abrir o app na página de um torneio re-agendava a inscrição automática — no carregamento o login é assíncrono e o usuário ficava “deslogado” por um instante, e isso bastava pra re-inscrever. (Era o caso da conta de teste sendo re-inscrita todo dia sozinha.) Agora a auto-inscrição só acontece quando se entra por um <b>link de convite de verdade</b> (com <code>?ref=</code>), nunca só por ver a página.</li>' +
+        '<li><b>Dicas (coachmarks): “Próximo” e “Pular” funcionam.</b> O botão <b>Próximo →</b> agora pula <b>direto</b> para a próxima dica do contexto (antes esperava 3s e muitas vezes não mostrava nada). O <b>Pular dicas</b> desativa e mostra um aviso de confirmação.</li>' +
+        '<li><b>“Você foi removido do torneio” com contexto.</b> A notificação de remoção agora diz <b>quem</b> removeu e <b>quando</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>E-mail de nova rodada: prazo correto + todos os seus jogos.</b> O e-mail de nova rodada agora mostra <b>até quando lançar os resultados</b> — data <b>e hora</b> do <b>próximo sorteio</b> (antes mostrava a data de início do torneio, que estava errada). E lista <b>todos os seus jogos da rodada</b> (na Liga Rei/Rainha são 3), cada um com o <b>seu time numa linha e o adversário na outra</b>, com você destacado. O WhatsApp também passa a enviar os jogos e o prazo no mesmo formato.</li>' +

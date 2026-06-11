@@ -61,10 +61,17 @@ function initRouter() {
     }
 
     // --- Auth gate: salva destino de convite para redirect pós-login ---
-    // Se visitante não logado tenta acessar torneio via link de convite,
+    // Se visitante não logado tenta acessar torneio via LINK DE CONVITE,
     // salva o ID para que o fluxo de auto-inscrição pós-login funcione.
+    // v2.3.84: exige marcador de convite (?ref=/?invite=/?convite=) na URL.
+    // BUG: antes bastava estar "deslogado" + ver um torneio. Mas no cold start
+    // o auth é assíncrono → um usuário JÁ logado fica transitoriamente deslogado,
+    // e só abrir o app na página de um torneio re-agendava a auto-inscrição.
+    // Resultado reportado: conta de teste sendo RE-INSCRITA todo dia sozinha.
     var _isLoggedInEarly = !!(window.AppStore && window.AppStore.currentUser);
-    if (!_isLoggedInEarly && view === 'tournaments' && cleanParam) {
+    var _hasInviteMarker = /[?&](ref|invite|convite)=/i.test(window.location.hash || '') ||
+      /[?&](ref|invite|convite)=/i.test(window.location.search || '');
+    if (!_isLoggedInEarly && view === 'tournaments' && cleanParam && _hasInviteMarker) {
       try { sessionStorage.setItem('_pendingEnrollTournamentId', cleanParam); } catch(e) {}
     }
 
