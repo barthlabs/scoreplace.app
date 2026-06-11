@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.81-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Liga: quem fica de fora por estar desativado faz 0 pts (e a rodada não conta na média).</b> Havia uma diferença importante entre os dois motivos de ficar de fora de uma rodada: quem sai <b>por sorteio</b> recebe a sua média (não muda o ranking) — isso continua. Mas quem ficou de fora <b>por estar desativado</b> (optou por sair) estava recebendo essa mesma média indevidamente. Agora o jogador desativado faz <b>0 pontos na rodada</b> e essa rodada <b>não entra no cálculo da média</b> dele — vale tanto pros pontos simples quanto pros Pontos Avançados (PA). A classificação se corrige sozinha (é recalculada na hora).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.80-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(10 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Próximos jogos sem repetição.</b> Na seção “Meus Resultados → Próximos jogos”, o nome do torneio + rodada + grupo (ex.: “R3 Grupo D · Teste de Liga”) agora aparece <b>uma única vez</b> no topo dos jogos, e cada card mostra só <b>“Jogo N”</b> no cabeçalho — antes repetia tudo em cima e dentro de cada card.</li>' +

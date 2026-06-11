@@ -116,12 +116,15 @@ function _checkGroupRoundComplete(t, groupIndex) {
 // compensação de folga). Uma rodada conta como "jogada" se o jogador disputou
 // qualquer partida nela; como "folga" se só folgou (sit-out) sem jogar.
 function _playerRoundStats(t, playerName, category) {
-  var played = 0, satOut = 0;
+  // v2.3.81: distingue folga COMPENSÁVEL (saiu por sorteio/remainder → recebe a
+  // média) de folga por INATIVIDADE (jogador desativado optou por sair → 0 pts e
+  // a rodada NÃO entra na média). satOutCompensable exclui as inativas.
+  var played = 0, satOut = 0, satOutCompensable = 0;
   (t.rounds || []).forEach(function(round) {
-    var didPlay = false, didSit = false;
+    var didPlay = false, didSit = false, sitInactive = false;
     (round.matches || []).forEach(function(m) {
       if (category && m.category !== category) return;
-      if (m.isSitOut) { if (m.p1 === playerName) didSit = true; return; }
+      if (m.isSitOut) { if (m.p1 === playerName) { didSit = true; if (m.sitOutReason === 'inactive') sitInactive = true; } return; }
       if (m.isBye || !m.winner) return;
       if (m.isMonarch && Array.isArray(m.team1) && Array.isArray(m.team2)) {
         if (m.team1.indexOf(playerName) !== -1 || m.team2.indexOf(playerName) !== -1) didPlay = true;
@@ -130,9 +133,9 @@ function _playerRoundStats(t, playerName, category) {
       }
     });
     if (didPlay) played++;
-    else if (didSit) satOut++;
+    else if (didSit) { satOut++; if (!sitInactive) satOutCompensable++; }
   });
-  return { played: played, satOut: satOut };
+  return { played: played, satOut: satOut, satOutCompensable: satOutCompensable };
 }
 window._playerRoundStats = _playerRoundStats;
 
@@ -280,13 +283,15 @@ function _calcAdvancedPoints(t, playerName, category) {
   // folga na rodada 1 não fica com 0: assim que joga, a média das rodadas
   // jogadas passa a valer também pelas rodadas de folga.
   var _rs = _playerRoundStats(t, playerName, category);
-  if (_rs.satOut > 0 && _rs.played > 0) {
+  // v2.3.81: só folgas COMPENSÁVEIS (sorteio) recebem a média. Folga por
+  // inatividade (desativado) = 0 e não conta.
+  if (_rs.satOutCompensable > 0 && _rs.played > 0) {
     var _advAvg = total / _rs.played;
-    var _comp = Math.round(_advAvg * _rs.satOut);
+    var _comp = Math.round(_advAvg * _rs.satOutCompensable);
     if (_comp !== 0) {
       breakdown.push({
-        round: 0, opponent: '', isSitOutComp: true, sitOutRounds: _rs.satOut, won: false, draw: false,
-        items: [{ key: 'sitout_avg', count: _rs.satOut, unit: Math.round(_advAvg), value: _comp }],
+        round: 0, opponent: '', isSitOutComp: true, sitOutRounds: _rs.satOutCompensable, won: false, draw: false,
+        items: [{ key: 'sitout_avg', count: _rs.satOutCompensable, unit: Math.round(_advAvg), value: _comp }],
         total: _comp
       });
       total += _comp;
@@ -551,9 +556,11 @@ function _computeStandings(t, category) {
   standings.forEach(function(s) {
     var _rsB = _playerRoundStats(t, s.name, category);
     s.sitOutRounds = _rsB.satOut;
-    if (_rsB.satOut > 0 && _rsB.played > 0) {
+    // v2.3.81: compensa só folgas por sorteio (satOutCompensable). Folga por
+    // inatividade (desativado) = 0 pts e não muda a média.
+    if (_rsB.satOutCompensable > 0 && _rsB.played > 0) {
       var _basicAvg = s.points / _rsB.played;
-      s.points += Math.round(_basicAvg * _rsB.satOut);
+      s.points += Math.round(_basicAvg * _rsB.satOutCompensable);
     }
   });
 
