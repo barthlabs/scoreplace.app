@@ -92,6 +92,26 @@
   }
   window._ligaSeasonScored = _ligaSeasonScored;
 
+  // v2.4.2: estado do botão de fase final, em 3 fases:
+  //  'pending'   → ainda há rodadas a SORTEAR (temporada não acabou) → âmbar, SEM brilho
+  //  'lastRound' → última rodada já sorteada, mas faltam placares     → âmbar, COM brilho
+  //  'complete'  → todos os placares lançados (temporada encerrada)   → verde, COM brilho
+  // "rodadas previstas" reusa _ligaTournamentProgress (mesma conta da barra roxa).
+  window._ligaPlayoffButtonState = function (t) {
+    if (!t || !_isLiga(t)) return 'pending';
+    var rounds = Array.isArray(t.rounds) ? t.rounds : [];
+    if (!rounds.length) return 'pending'; // nem sorteou ainda
+    var roundsPlanned = rounds.length;
+    try {
+      var prog = window._ligaTournamentProgress && window._ligaTournamentProgress(t);
+      if (prog && prog.roundsPlanned) roundsPlanned = prog.roundsPlanned;
+    } catch (e) {}
+    // Ainda há rodadas a sortear → temporada em andamento.
+    if (rounds.length < roundsPlanned) return 'pending';
+    // Última rodada sorteada: verde só quando TODOS os placares estão lançados.
+    return _ligaSeasonScored(t) ? 'complete' : 'lastRound';
+  };
+
   // ───────────────────────────────────────────────────────────────────────────
   // SEEDING — ordem de slots padrão (1 vs N, 2 vs N-1, cabeças distribuídos).
   // Gera a sequência de seeds para um bracket de tamanho potência de 2.
@@ -281,15 +301,19 @@
       return;
     }
 
-    // v2.3.97: botão "Gerar fase final" fixo no topo, abaixo do cabeçalho.
-    // Verde + brilho padrão, SÓ visível quando a fase de Liga terminou (todos os
-    // jogos com placar). Antes disso, mostra um aviso no lugar.
-    var _scored = (typeof _ligaSeasonScored === 'function') && _ligaSeasonScored(t);
-    var _topBar = _scored
+    // v2.3.97/v2.4.2: botão "Gerar fase final" fixo no topo, abaixo do cabeçalho.
+    // Verde + brilho, SÓ visível quando a TEMPORADA terminou ('complete' = última
+    // rodada sorteada E todos os placares lançados). Antes disso, aviso por fase.
+    var _poState = (typeof window._ligaPlayoffButtonState === 'function') ? window._ligaPlayoffButtonState(t) : 'pending';
+    var _topBar = (_poState === 'complete')
       ? '<div style="position:sticky;top:60px;z-index:20;background:var(--bg-dark);padding:10px 1rem;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;">' +
           '<button type="button" class="btn btn-shine" onclick="window._reviewPlayoff(\'' + _esc(t.id) + '\')" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;min-width:240px;">🏆 ' + (_t('playoff.generate') || 'Gerar fase final') + '</button>' +
         '</div>'
-      : '<div style="padding:10px 1rem;text-align:center;font-size:0.8rem;color:var(--text-muted);background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);">⏳ O botão <b>Gerar fase final</b> aparece aqui quando todos os jogos da Liga tiverem placar.</div>';
+      : '<div style="padding:10px 1rem;text-align:center;font-size:0.8rem;color:var(--text-muted);background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);">⏳ ' +
+          (_poState === 'lastRound'
+            ? 'Última rodada sorteada — o botão <b>Gerar fase final</b> aparece quando <b>todos os placares</b> forem lançados.'
+            : 'O botão <b>Gerar fase final</b> aparece quando a fase de Liga terminar (todas as rodadas sorteadas e com placar).') +
+        '</div>';
 
     container.innerHTML = hdr + _topBar + _renderConfigBody(t);
     if (window._reflowChrome) window._reflowChrome();
@@ -659,8 +683,8 @@
   window._reviewPlayoff = function (tId) {
     var t = _findT(tId);
     if (!t || !_isOrg(t)) return;
-    if (typeof _ligaSeasonScored === 'function' && !_ligaSeasonScored(t)) {
-      if (typeof showNotification === 'function') showNotification('Liga ainda em andamento', 'A fase final só pode ser gerada quando todos os jogos da Liga tiverem placar.', 'warning');
+    if (typeof window._ligaPlayoffButtonState === 'function' && window._ligaPlayoffButtonState(t) !== 'complete') {
+      if (typeof showNotification === 'function') showNotification('Liga ainda em andamento', 'A fase final só pode ser gerada quando a temporada terminar — todas as rodadas sorteadas e com placar.', 'warning');
       return;
     }
     var build = _buildPlayoffFromDom(t);

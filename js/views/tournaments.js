@@ -2022,12 +2022,15 @@ function renderTournaments(container, tournamentId = null) {
                 ${sortearAberto}
                 ${(!isFinished && hasDraw && !window._isLigaFormat(t)) ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window.finishTournament('${t.id}')">🏁 ${_t('org.finishTournament')}</button>` : ''}
                 ${(isOrg && window._isLigaFormat(t)) ? (() => {
-                  const _poScored = (window._ligaSeasonScored && window._ligaSeasonScored(t));
                   const _poDone = (window._playoffActive && window._playoffActive(t));
-                  // Amber enquanto a Liga roda; verde + brilho padrão (.btn-shine)
-                  // quando toda a fase de Liga já tem placar. Texto em 2 linhas.
-                  const _cls = _poScored ? 'btn btn-shine hover-lift' : 'btn btn-tool-amber hover-lift';
-                  const _sty = _poScored ? 'background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);' : '';
+                  // v2.4.2: 3 fases. 'pending' (ainda há rodadas a sortear) → âmbar SEM brilho;
+                  // 'lastRound' (última rodada sorteada, faltam placares) → âmbar COM brilho;
+                  // 'complete' (todos os placares lançados) → verde COM brilho.
+                  const _poState = (window._ligaPlayoffButtonState && window._ligaPlayoffButtonState(t)) || 'pending';
+                  const _shine = (_poState === 'lastRound' || _poState === 'complete');
+                  const _green = (_poState === 'complete');
+                  const _cls = 'btn ' + (_shine ? 'btn-shine ' : '') + (_green ? '' : 'btn-tool-amber ') + 'hover-lift';
+                  const _sty = _green ? 'background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);' : '';
                   return `<button class="${_cls}" style="${_sty}white-space:normal;line-height:1.1;padding-top:6px;padding-bottom:6px;" onclick="event.stopPropagation(); window.location.hash='#fase-final/${t.id}'"><span style="display:flex;flex-direction:column;align-items:center;gap:1px;">🏆 Configurar Playoffs<span style="font-size:0.82em;opacity:0.92;font-weight:600;">(Fase Final)${_poDone ? ' ✓' : ''}</span></span></button>`;
                 })() : ''}
                 ${window.AppStore.isCreator(t) ? `<button class="btn btn-danger hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window.deleteTournamentFunction('${t.id}')">🗑️ ${_t('enroll.deleteTournament') || 'Apagar Torneio'}</button>` : ''}
