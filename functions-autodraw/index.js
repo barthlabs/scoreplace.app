@@ -113,36 +113,41 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
 
         // Notify participants (push/in-app básico). A notificação rica/personalizada
         // (jogo específico + WhatsApp) continua saindo do cliente quando ele dispara.
+        // IDENTIDADE = uid (não email). Cada participante carrega seu(s) uid(s);
+        // duplas têm p1Uid/p2Uid. Notificamos TODOS os uids (espelha o
+        // window._participantUids do app). uid → users/{uid} é a fonte da verdade;
+        // email/celular saem do perfil, nunca o contrário.
         const activePlayers = (Array.isArray(t.participants) ? t.participants : [])
-          .map(p => (typeof p === 'string' ? { name: p } : p))
-          .filter(p => {
-            const name = p.displayName || p.name || p.email || '';
-            return name && name !== 'BYE' && p.ligaActive !== false;
-          });
+          .filter(p => p && typeof p === 'object' && p.ligaActive !== false);
+        const notifiedUids = new Set();
         for (const p of activePlayers) {
-          const email = p.email;
-          if (!email) continue;
-          try {
-            const userSnap = await db.collection('users').where('email', '==', email).limit(1).get();
-            if (!userSnap.empty) {
-              const uid = userSnap.docs[0].id;
-              const profile = userSnap.docs[0].data();
-              if (profile.notifyPlatform !== false) {
-                await db.collection('users').doc(uid).collection('notifications').add({
-                  type: 'draw',
-                  fromUid: 'system',
-                  fromName: 'scoreplace.app',
-                  fromPhoto: '',
-                  tournamentId: tId,
-                  tournamentName: t.name || '',
-                  message: 'Nova rodada sorteada! Confira seus jogos.',
-                  createdAt: now.toISOString(),
-                  read: false
-                });
-              }
+          const uids = [];
+          [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) uids.push(String(u)); });
+          if (Array.isArray(p.participants)) {
+            p.participants.forEach(sp => { if (sp && sp.uid) uids.push(String(sp.uid)); });
+          }
+          for (const uid of uids) {
+            if (notifiedUids.has(uid)) continue;
+            notifiedUids.add(uid);
+            try {
+              const userDoc = await db.collection('users').doc(uid).get();
+              if (!userDoc.exists) continue;
+              const profile = userDoc.data() || {};
+              if (profile.notifyPlatform === false) continue;
+              await db.collection('users').doc(uid).collection('notifications').add({
+                type: 'draw',
+                fromUid: 'system',
+                fromName: 'scoreplace.app',
+                fromPhoto: '',
+                tournamentId: tId,
+                tournamentName: t.name || '',
+                message: 'Nova rodada sorteada! Confira seus jogos.',
+                createdAt: now.toISOString(),
+                read: false
+              });
+            } catch (e) {
+              console.warn(`Notification error for uid ${uid}:`, e.message);
             }
-          } catch (e) {
-            console.warn(`Notification error for ${email}:`, e.message);
           }
         }
       } catch (err) {
