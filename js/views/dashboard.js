@@ -850,11 +850,13 @@ function renderDashboard(container) {
                    ${(typeof window._buildCategoryCountHtml === 'function') ? window._buildCategoryCountHtml(t) : ''}
                </div>
 
-               <!-- Formato, Regras e Categorias -->
-               <div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);"' : ''}>
+               <!-- Configuração Completa do Torneio (dinâmica, por formato) -->
+               ${(typeof window._buildTournamentConfigBox === 'function')
+                 ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: false })
+                 : `<div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);"' : ''}>
                   <div><strong>${_t('dashboard.labelFormat')}:</strong> ${t.format}</div>
                   <div><strong>${_t('dashboard.labelAccess')}:</strong> ${publicText}</div>
-               </div>
+               </div>`}
             </div>
 
             ${(() => {

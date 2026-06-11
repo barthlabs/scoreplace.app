@@ -1977,29 +1977,20 @@ function renderTournaments(container, tournamentId = null) {
                     ${(typeof window._buildCategoryCountHtml === 'function') ? window._buildCategoryCountHtml(t) : ''}
                 </div>
 
-               <!-- Formato, Regras e Categorias -->
-               <div class="info-box" style="font-size:0.75rem;padding:6px 10px;line-height:1.5;gap:2px;border-radius:8px;${_pReadBg ? 'background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);' : ''}">
-                  <div><strong>Formato:</strong> ${t.format} · <strong>Inscrição:</strong> ${enrollmentText} · <strong>Acesso:</strong> ${publicText}</div>
-                  ${(t.ligaSeasonMonths || t.rankingSeasonMonths) ? (() => {
+               <!-- Configuração Completa do Torneio (dinâmica, por formato) -->
+               ${(typeof window._buildTournamentConfigBox === 'function')
+                 ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: true })
+                 : ''}
+               ${(t.ligaSeasonMonths || t.rankingSeasonMonths) ? (() => {
                     const _sm = t.ligaSeasonMonths || t.rankingSeasonMonths;
-                    let _seasonInfo = `<div><strong>Temporada:</strong> ${_sm} meses`;
-                    if (t.startDate) {
-                      const _sd = new Date(t.startDate);
-                      if (!isNaN(_sd.getTime())) {
-                        const _ed = new Date(_sd); _ed.setMonth(_ed.getMonth() + parseInt(_sm));
-                        const _daysLeft = Math.ceil((_ed - new Date()) / 86400000);
-                        _seasonInfo += ` (encerra ${_ed.toLocaleDateString('pt-BR')})`;
-                        if (_daysLeft > 0 && _daysLeft <= 7) {
-                          _seasonInfo += ` <span style="color:#f59e0b;font-weight:700;">⚠️ ${_daysLeft}d restante${_daysLeft > 1 ? 's' : ''}</span>`;
-                        }
-                      }
-                    }
-                    return _seasonInfo + '</div>';
+                    if (!t.startDate) return '';
+                    const _sd = new Date(t.startDate);
+                    if (isNaN(_sd.getTime())) return '';
+                    const _ed = new Date(_sd); _ed.setMonth(_ed.getMonth() + parseInt(_sm));
+                    const _daysLeft = Math.ceil((_ed - new Date()) / 86400000);
+                    if (!(_daysLeft > 0 && _daysLeft <= 7)) return '';
+                    return `<div class="info-box" style="font-size:0.72rem;padding:5px 10px;border-radius:8px;margin-top:6px;color:#f59e0b;font-weight:700;${_pReadBg ? 'background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);' : ''}">⚠️ Temporada encerra em ${_daysLeft}d (${_ed.toLocaleDateString('pt-BR')})</div>`;
                   })() : ''}
-                  ${(window._isLigaFormat(t) && t.drawFirstDate) ? `<div><strong>1º Sorteio:</strong> ${(() => { try { var _dd = t.drawFirstDate.split('-'); return _dd[2] + '/' + _dd[1] + '/' + _dd[0]; } catch(e) { return t.drawFirstDate; } })()} às ${t.drawFirstTime || '19:00'}</div>` : ''}
-                  ${(window._isLigaFormat(t) && t.drawIntervalDays) ? `<div><strong>Intervalo:</strong> ${t.drawManual ? 'Manual' : 'A cada ' + t.drawIntervalDays + ' dia' + (t.drawIntervalDays > 1 ? 's' : '') + ' (automático)'}</div>` : ''}
-                  ${(!t.combinedCategories || t.combinedCategories.length === 0) ? `<div><strong>Categorias:</strong> ${cats}</div>` : ''}
-               </div>
             </div>
 
             ${(tournamentId && isOrg) ? (function() {

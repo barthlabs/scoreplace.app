@@ -1025,3 +1025,180 @@ window._initTournamentVenueMap = async function(el) {
         el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:0.75rem;">Mapa indisponível</div>';
     }
 };
+
+// ── Caixa de Configuração Completa do Torneio (dinâmica, por formato) ──────────
+// v2.3.90: mostra TODAS as configurações do organizador que ainda não aparecem
+// no card. Lê tudo de `t`, então atualiza sozinha quando o organizador edita.
+// Usada no card de detalhe (tournaments.js) e no card da dashboard (dashboard.js),
+// substituindo a antiga linha "Formato · Inscrição · Acesso".
+//   opts.bg    → fundo de legibilidade (sobre foto do local)
+//   opts.open  → abre o <details> por padrão (detalhe = true, dashboard = false)
+window._buildTournamentConfigBox = function (t, opts) {
+    if (!t) return '';
+    opts = opts || {};
+    var esc = window._safeHtml || function (s) { return s == null ? '' : String(s); };
+    var isLiga = window._isLigaFormat(t);
+    var fmt = t.format || '—';
+
+    // ── helpers de formatação ──
+    function fmtDrawMode() {
+        var dm = t.drawMode;
+        if (isLiga) {
+            if (t.ligaRoundFormat === 'rei_rainha' || dm === 'rei_rainha') return 'Rei/Rainha da Praia';
+            if (t.ligaDrawMode === 'round_robin' || dm === 'round_robin') {
+                var tn = parseInt(t.ligaTurnos) || 0;
+                return 'Todos contra todos' + (tn ? ' (' + tn + ' turno' + (tn > 1 ? 's' : '') + ')' : '');
+            }
+            return 'Sorteio aleatório';
+        }
+        if (dm === 'rei_rainha') return 'Rei/Rainha da Praia';
+        if (dm === 'round_robin') return 'Todos contra todos';
+        return 'Sorteio aleatório';
+    }
+    function fmtGameType() {
+        var gt = (t.gameTypes || '').toString().toLowerCase();
+        var hasS = gt.indexOf('simples') !== -1, hasD = gt.indexOf('duplas') !== -1;
+        if (!hasS && !hasD) { hasD = parseInt(t.teamSize) >= 2; hasS = !hasD; }
+        if (hasS && hasD) return 'Individual (1×1) e Duplas (2×2) — 2 categorias';
+        if (hasD) return 'Duplas (2×2)';
+        return 'Individual (1×1)';
+    }
+    function fmtEnroll() {
+        var m = t.enrollmentMode || 'individual';
+        return m === 'time' ? 'Apenas times' : m === 'misto' ? 'Misto (individual + times)' : 'Individual';
+    }
+    function fmtScoring() {
+        var s = t.scoring;
+        if (!s || s.type !== 'sets') return 'Placar simples';
+        var stw = parseInt(s.setsToWin) || 1;
+        var parts = [stw <= 1 ? '1 set' : 'Melhor de ' + (stw * 2 - 1) + ' sets'];
+        parts.push((parseInt(s.gamesPerSet) || 6) + ' games/set');
+        if (s.countingType === 'tennis') parts.push('15/30/40');
+        if (s.advantageRule) parts.push('com vantagem');
+        if (s.tiebreakEnabled) parts.push('tiebreak ' + (parseInt(s.tiebreakPoints) || 7) + 'pts');
+        if (s.superTiebreak) parts.push('super tiebreak ' + (parseInt(s.superTiebreakPoints) || 10) + 'pts');
+        return parts.join(' · ');
+    }
+    function fmtResultEntry() {
+        var v = t.resultEntry || 'organizer';
+        var arr = Array.isArray(v) ? v : [v];
+        var L = { organizer: 'Organizador', players: 'Participantes', referee: 'Árbitro' };
+        var out = arr.map(function (k) { return L[k] || k; });
+        return out.length ? out.join(' + ') : 'Organizador';
+    }
+    function fmtTiebreakers() {
+        if (!Array.isArray(t.tiebreakers) || !t.tiebreakers.length) return '';
+        var TB = {
+            pontos_avancados: 'Pontos avançados', confronto_direto: 'Confronto direto',
+            saldo_pontos: 'Saldo de pontos', saldo_sets: 'Saldo de sets', saldo_games: 'Saldo de games',
+            sets_vencidos: 'Sets vencidos', games_vencidos: 'Games vencidos', tiebreaks_vencidos: 'Tiebreaks vencidos',
+            vitorias: 'Vitórias', buchholz: 'Buchholz', sonneborn_berger: 'Sonneborn-Berger',
+            antiguidade: 'Antiguidade', juventude: 'Juventude', sorteio: 'Sorteio'
+        };
+        return t.tiebreakers.map(function (k) { return TB[k] || k; }).join(' › ');
+    }
+    function fmtCategories() {
+        var dn = window._displayCategoryName || function (c) { return c; };
+        var list = [];
+        if (Array.isArray(t.combinedCategories) && t.combinedCategories.length) list = t.combinedCategories.slice();
+        else {
+            [].concat(t.genderCategories || [], t.ageCategories || [], t.skillCategories || []).forEach(function (c) {
+                if (c && list.indexOf(c) === -1) list.push(c);
+            });
+        }
+        if (!list.length) return 'Sem categorias';
+        return list.map(function (c) { return esc(dn(c)); }).join(', ');
+    }
+    function fmtSchedule() {
+        if (!t.drawFirstDate) return '';
+        var d = t.drawFirstDate;
+        try { var p = d.split('-'); d = p[2] + '/' + p[1] + '/' + p[0]; } catch (e) { }
+        return d + ' às ' + (t.drawFirstTime || '19:00');
+    }
+    function fmtPeriodicity() {
+        if (t.drawManual) return 'Manual (organizador sorteia)';
+        var n = parseInt(t.drawIntervalDays) || 0;
+        if (!n) return '';
+        return 'A cada ' + n + ' dia' + (n > 1 ? 's' : '') + ' (automático)';
+    }
+
+    // ── monta as linhas ──
+    var rows = [];
+    function add(label, value) {
+        if (value === '' || value == null) return;
+        rows.push('<div><strong>' + label + ':</strong> ' + value + '</div>');
+    }
+
+    add('Formato', esc(fmt));
+    add('Modo de sorteio', fmtDrawMode());
+    add('Tipo de jogo', fmtGameType());
+    add('Modo de inscrição', fmtEnroll());
+    add('Visibilidade', t.isPublic !== false ? 'Público' : 'Privado');
+    var maxp = parseInt(t.maxParticipants) || 0;
+    add('Máximo de participantes', maxp > 0 ? String(maxp) : 'Sem limite');
+
+    if (isLiga) {
+        var season = t.ligaSeasonMonths || t.rankingSeasonMonths;
+        add('Temporada contínua', (t.temporada !== false)
+            ? ('Sim' + (season ? ' — ' + season + ' meses' : '')) : 'Não (evento único)');
+        var equil = (t.equilibrado !== false);
+        add('Sorteio equilibrado', equil ? 'Sim' : 'Não');
+        if (equil) {
+            if (t.clusterSize) add('Tamanho do cluster', String(t.clusterSize));
+            var bb = t.balanceBy || 'individual';
+            add('Equilibra por', bb === 'team' ? 'Time' : 'Jogador');
+        }
+        var nps = t.ligaNewPlayerScore || t.rankingNewPlayerScore;
+        var NPS = { zero: 'Zero', min: 'Mínima do grupo', avg: 'Média do grupo', organizer: 'Organizador decide' };
+        if (nps) add('Pontuação de novos inscritos', NPS[nps] || nps);
+        var inact = t.ligaInactivity || t.rankingInactivity;
+        var INA = { keep: 'Manter pontos', decay: 'Decaimento', remove: 'Remover da temporada' };
+        if (inact) {
+            var ix = t.ligaInactivityX || t.rankingInactivityX;
+            add('Regra de inatividade', (INA[inact] || inact) +
+                ((inact !== 'keep' && ix) ? ' (após ' + ix + ' rodadas)' : ''));
+        }
+        var openEnroll = (t.ligaOpenEnrollment !== undefined) ? t.ligaOpenEnrollment
+            : (t.rankingOpenEnrollment !== undefined ? t.rankingOpenEnrollment : true);
+        add('Inscrição durante a temporada', openEnroll !== false ? 'Permitida' : 'Fechada após início');
+        add('Fase final (playoffs)', t.playoffEnabled === true ? 'Sim' : 'Não');
+        add('Agendamento do 1º sorteio', fmtSchedule());
+        add('Periodicidade do sorteio', fmtPeriodicity());
+    } else if (fmt === 'Grupos + Eliminatórias' || fmt === 'Grupos') {
+        if (t.gruposCount) add('Número de grupos', String(t.gruposCount));
+        if (t.gruposClassified) add('Classificados por grupo', String(t.gruposClassified));
+    } else if (fmt === 'Suíço') {
+        if (t.swissRounds) add('Rodadas', String(t.swissRounds));
+        add('Agendamento do 1º sorteio', fmtSchedule());
+        add('Periodicidade do sorteio', fmtPeriodicity());
+    }
+
+    add('Formato da partida', fmtScoring());
+    add('Lançamento dos resultados', fmtResultEntry());
+    add('Forma do W.O.', (t.woScope || 'individual') === 'time'
+        ? 'Time inteiro leva W.O.' : 'Individual (substitui só o ausente)');
+    // Inscrições após início / novos confrontos (formatos de chave; Liga já tratou acima)
+    if (!isLiga) {
+        var le = t.lateEnrollment || 'closed';
+        if (le === 'expand') {
+            add('Inscrições após início', 'Abertas — geram novos confrontos');
+        } else {
+            add('Inscrições após início', 'Fechadas após o sorteio');
+        }
+    }
+    add('Categorias', fmtCategories());
+    add('Critérios de desempate', fmtTiebreakers());
+
+    var bgStyle = opts.bg ? ('background:' + opts.bg + ';border:1px solid rgba(255,255,255,0.12);') : '';
+    var openAttr = opts.open ? ' open' : '';
+    var summary = esc(fmt) + ' · ' + fmtGameType().replace(' — 2 categorias', ' (2 cat.)');
+
+    return '<details class="info-box tourn-config-box"' + openAttr +
+        ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;' + bgStyle + '">' +
+        '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;align-items:center;gap:6px;">' +
+        '<span>⚙️</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + summary + '</span>' +
+        '<span style="opacity:0.6;font-weight:500;font-size:0.68rem;">configuração ▾</span>' +
+        '</summary>' +
+        '<div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">' + rows.join('') + '</div>' +
+        '</details>';
+};
