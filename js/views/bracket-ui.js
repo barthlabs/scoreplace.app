@@ -12828,8 +12828,9 @@ window._renderCasualJoin = function(container, roomCode) {
   try {
     var _cuDbg = window.AppStore && window.AppStore.currentUser;
     var _dbg = { room: roomCode, hasUser: !!(_cuDbg && _cuDbg.uid), authResolved: !!window._authStateResolved, hasDB: !!(window.FirestoreDB && window.FirestoreDB.db) };
+    // v2.3.89: só breadcrumb (anexa a erros reais). Antes mandava _captureMessage
+    // 'info' que criava ISSUE no Sentry — poluía o painel com logs de rotina.
     if (window._log) window._log('[CasualJoin] start', _dbg);
-    if (window._captureMessage) window._captureMessage('[CasualJoin] start ' + JSON.stringify(_dbg), 'info');
   } catch(e) {}
   var _safe = window._safeHtml || function(s) { return s; };
   var _backHtml = typeof window._renderBackHeader === 'function'
@@ -12897,8 +12898,8 @@ window._renderCasualJoin = function(container, roomCode) {
   window.FirestoreDB.loadCasualMatch(roomCode).then(function(match) {
     try {
       var _md = match ? { found: true, status: match.status, players: (match.players||[]).length } : { found: false };
+      // v2.3.89: só breadcrumb — sem _captureMessage 'info' (poluía o Sentry).
       if (window._log) window._log('[CasualJoin] loadCasualMatch', roomCode, _md);
-      if (window._captureMessage) window._captureMessage('[CasualJoin] loaded ' + roomCode + ' ' + JSON.stringify(_md), 'info');
     } catch(e) {}
     if (!match) {
       // v2.1.75: sala não existe (dissolvida por inatividade 12h, cancelada, ou
