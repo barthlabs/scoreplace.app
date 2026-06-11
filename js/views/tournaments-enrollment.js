@@ -238,6 +238,26 @@ function _enrollToStandby(t, tId, participantObj, callback) {
   });
 }
 
+// v2.3.93: nome canônico de inscrito. Regra do dono: sem nome → e-mail; na falta
+// de e-mail → telefone (formatado +55 (DDD) XXXXX-XXXX). Garante que NENHUM
+// inscrito novo fique sem nome (o nome real vem do Google ou do que a pessoa
+// informa; este é o fallback dos casos legados). Usado em todos os builds de
+// participante self-enroll.
+window._enrollDisplayName = function (user) {
+    if (!user) return '';
+    if (user.displayName && String(user.displayName).trim()) return String(user.displayName).trim();
+    if (user.email && String(user.email).trim()) return String(user.email).trim();
+    if (user.phone) {
+        var d = String(user.phone).replace(/\D/g, '');
+        if (d.length > 11 && d.substring(0, 2) === '55') d = d.substring(2);
+        if (d.length > 11) d = d.substring(d.length - 11);
+        if (d.length === 11) return '+55 (' + d.substring(0, 2) + ') ' + d.substring(2, 7) + '-' + d.substring(7);
+        if (d.length === 10) return '+55 (' + d.substring(0, 2) + ') ' + d.substring(2, 6) + '-' + d.substring(6);
+        return String(user.phone);
+    }
+    return '';
+};
+
 window.enrollCurrentUser = function (tId) {
     // Busca no scoped list primeiro; se não achar, tenta no discovery feed
     // (torneios públicos que o usuário ainda não entrou). Torneios do
@@ -321,7 +341,8 @@ window.enrollCurrentUser = function (tId) {
         if (!inscricoesAbertas) {
             if (_allowsLateEnrollment(t) && t.status !== 'finished') {
                 // Late enrollment — send to standby
-                var participantObj = { name: user.displayName, email: user.email, displayName: user.displayName, uid: user.uid, ligaActive: true };
+                var _nmStandby = window._enrollDisplayName(user); // sem nome → e-mail/telefone
+                var participantObj = { name: _nmStandby, email: user.email, displayName: _nmStandby, uid: user.uid, ligaActive: true };
                 _enrollToStandby(t, tId, participantObj, function() {
                     const container = document.getElementById('view-container');
                     if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
@@ -404,7 +425,9 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
       return ph;
     }
     var _phoneFormatted = user.phone ? _fmtPhone(user.phone) : '';
-    var _dispName = user.displayName || _phoneFormatted || null;
+    // v2.3.93: regra do dono — sem nome → e-mail; na falta de e-mail → telefone.
+    // (Antes pulava o e-mail e ia direto pro telefone.)
+    var _dispName = window._enrollDisplayName(user) || null;
     // Somente persiste email se ele realmente pertence a este uid.
     // Quando um usuário phone-only faz login numa sessão que antes pertencia
     // a outra conta (ex: Google), AppStore.currentUser.email pode estar
