@@ -289,6 +289,19 @@ window.enrollCurrentUser = function (tId) {
             }
             return;
         }
+        // v2.3.92: torneio com categoria de idade e perfil sem data de nascimento —
+        // pede inline (e grava no perfil) ANTES da validação, em vez de bloquear
+        // com "vá no perfil". Ao confirmar, reentra a inscrição com a data já
+        // setada (a validação abaixo então cobra a idade mínima normalmente).
+        var _ageCatsE = t.ageCategories || [];
+        if (_ageCatsE.length > 0 && !user.birthDate && typeof window._askBirthDateForEnroll === 'function') {
+            window._askBirthDateForEnroll(t, function(bd) {
+                if (!bd) return; // cancelou → não inscreve
+                window.enrollCurrentUser(tId); // reentra com a data de nascimento
+            });
+            return;
+        }
+
         // Verifica elegibilidade por gênero e faixa etária antes de qualquer outra coisa.
         // Organizado cobre todas as rotas (inscrição direta, lista de espera, Liga aberta).
         var _elig = _checkEnrollmentEligibility(t, user);
@@ -334,7 +347,8 @@ window.enrollCurrentUser = function (tId) {
         // Check if tournament has categories — resolve before enrolling
         var hasCats = (t.combinedCategories && t.combinedCategories.length > 0) ||
                       (t.genderCategories && t.genderCategories.length > 0) ||
-                      (t.skillCategories && t.skillCategories.length > 0);
+                      (t.skillCategories && t.skillCategories.length > 0) ||
+                      (t.ageCategories && t.ageCategories.length > 0); // v2.3.92: idade também resolve categoria
         if (hasCats) {
             window._resolveEnrollmentCategory(tId, function(selectedCategories) {
                 if (!selectedCategories) return; // user cancelled

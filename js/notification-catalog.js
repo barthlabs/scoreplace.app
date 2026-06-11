@@ -37,6 +37,8 @@ window.NOTIF_CATALOG = {
   // Reminders
   tournament_reminder:         { level: 'fundamental', icon: '⏰', color: '#f59e0b' },
   tournament_nearby:           { level: 'all',         icon: '📍', color: 'var(--primary-color)' },
+  // v2.3.92: inscrição pendente — perfil incompleto pra encaixar em categoria.
+  'category-data-request':     { level: 'fundamental', icon: '👤', color: '#f59e0b' },
 
   // Organizer actions
   org_communication:           { level: 'important',   icon: '📣', color: '#f59e0b' },

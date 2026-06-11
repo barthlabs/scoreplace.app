@@ -398,6 +398,8 @@
         missing: missing,
         hasUid: hasUid,
         resolvedVia: resolvedVia,           // null | 'email' | 'displayName'
+        categoryCommAt: (p && p.categoryCommAt) || null,        // v2.3.92: quando a cobrança de perfil foi enviada
+        categoryCommFields: (p && p.categoryCommFields) || null,
       };
     });
   }
@@ -762,6 +764,12 @@
         html += '<span style="font-size:0.7rem;color:#f87171;flex:1;min-width:140px;">sem perfil vinculado — não dá pra atribuir</span>';
       }
       html += '<span style="font-size:0.68rem;color:var(--text-muted);flex:0 0 100%;">falta: ' + r.missing.map(_esc).join(', ') + '</span>';
+      if (r.categoryCommAt) {
+        var _cd = new Date(r.categoryCommAt);
+        var _cdLabel = isNaN(_cd.getTime()) ? String(r.categoryCommAt)
+          : (_cd.toLocaleDateString('pt-BR') + ' ' + _cd.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+        html += '<span style="font-size:0.66rem;color:#fbbf24;flex:0 0 100%;">📨 cobrança de perfil enviada em ' + _esc(_cdLabel) + '</span>';
+      }
       html += '</div>';
     });
     html += '</div>';

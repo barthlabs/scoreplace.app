@@ -85,6 +85,13 @@ function renderNotifications(container) {
           '<button class="btn btn-sm" style="background:#10b981;color:#fff;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✅ ' + (_t('notif.confirm') || 'Confirmar') + '</button>' +
           '<button class="btn btn-sm" style="background:#f59e0b;color:#1a1a2e;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✏️ ' + (_t('notif.editContest') || 'Editar / Contestar') + '</button>' +
         '</div>';
+      } else if (n.type === 'category-data-request') {
+        // v2.3.92: inscrição pendente por falta de dado no perfil. Botão principal
+        // abre o perfil; secundário leva ao torneio.
+        actionHtml = '<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap:wrap;">' +
+          '<button class="btn btn-sm" style="background:#f59e0b;color:#1a1a2e;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#profile\'; _markNotifRead(\'' + safeNotifId + '\')">👤 Abrir meu perfil</button>' +
+          (n.tournamentId ? '<button class="btn btn-sm" style="background: var(--primary-color); color: #fff; border: none; padding: 6px 14px; font-size: 0.78rem; font-weight: 600;" onclick="event.stopPropagation(); window.location.hash=\'#tournaments/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">' + (_t('notif.viewTournament') || 'Ver torneio') + '</button>' : '') +
+        '</div>';
       } else if (n.tournamentId && n.type !== 'tournament_deleted') {
         // For draw/result/new_round: navigate to bracket; for others: tournament detail
         var _navTarget = (n.type === 'draw' || n.type === 'new_round' || n.type === 'result' || n.type === 'tournament_finished') ? '#bracket/' : '#tournaments/';

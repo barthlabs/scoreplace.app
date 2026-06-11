@@ -144,6 +144,125 @@ window._groupEligibleCategories = function(eligibleCats) {
     return { exclusive: exclusive, nonExclusive: nonExclusive };
 };
 
+// ── Categoria ↔ Perfil (v2.3.92) ──────────────────────────────────────────────
+// Parse os tokens de uma categoria combinada: gênero / habilidade / idade.
+//   "Masc 40+ B" → { gender:'masc', skill:'B', age:40 }
+//   "Fem A/B"    → { gender:'fem', skill:'A', age:null }  (skill = primeiro token)
+//   "50+"        → { gender:null, skill:null, age:50 }
+window._categoryAxisTokens = function(cat, skillRef) {
+    var out = { gender: null, skill: null, age: null };
+    if (!cat) return out;
+    var low = String(cat).toLowerCase();
+    if (low.indexOf('misto') === 0) out.gender = 'misto';
+    else if (low.indexOf('fem') === 0) out.gender = 'fem';
+    else if (low.indexOf('masc') === 0) out.gender = 'masc';
+    var ageM = String(cat).match(/(\d+)\+/);
+    if (ageM) out.age = parseInt(ageM[1]);
+    var skillSet = {};
+    var ref = (Array.isArray(skillRef) && skillRef.length > 0) ? skillRef : ['A', 'B', 'C', 'D', 'FUN'];
+    ref.forEach(function(s) { skillSet[String(s).toUpperCase()] = 1; });
+    String(cat).split(/[\s/]+/).forEach(function(tok) {
+        var up = tok.trim().toUpperCase();
+        if (!out.skill && skillSet[up]) out.skill = up;
+    });
+    return out;
+};
+
+// Quais dados do perfil FALTAM pra encaixar o participante nas categorias do
+// torneio. Retorna { missing:['gênero','habilidade','idade'], usesGender, usesSkill, usesAge }.
+// "Falta" = a categoria usa aquele eixo E o participante não tem o dado.
+window._categoryMissingFields = function(p, t) {
+    var res = { missing: [], usesGender: false, usesSkill: false, usesAge: false };
+    if (!p || !t) return res;
+    var allCats = (typeof window._getTournamentCategories === 'function')
+        ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+    if (!Array.isArray(allCats) || allCats.length === 0) return res;
+    var skillRef = (Array.isArray(t.skillCategories) && t.skillCategories.length > 0) ? t.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
+    allCats.forEach(function(cat) {
+        var tk = window._categoryAxisTokens(cat, skillRef);
+        if (tk.gender === 'fem' || tk.gender === 'masc') res.usesGender = true;
+        if (tk.skill) res.usesSkill = true;
+        if (tk.age) res.usesAge = true;
+    });
+    // Habilidade do participante (por modalidade, com fallback legado defaultCategory)
+    var tSport = t.sport ? String(t.sport).trim() : null;
+    var hasSkill = false;
+    if (p.skillBySport && typeof p.skillBySport === 'object' && tSport && p.skillBySport[tSport]) hasSkill = true;
+    if (!hasSkill && p.defaultCategory) hasSkill = true;
+
+    if (res.usesGender && !p.gender) res.missing.push('gênero');
+    if (res.usesSkill && !hasSkill) res.missing.push('habilidade');
+    if (res.usesAge && !p.birthDate) res.missing.push('data de nascimento');
+    return res;
+};
+
+// Escreve no perfil do usuário ATUAL os dados implicados pela categoria escolhida
+// na inscrição (categoria → perfil). gênero e habilidade-por-modalidade. A data de
+// nascimento (categorias de idade) é tratada à parte no fluxo de inscrição.
+// Idempotente: só grava o que ainda não está no perfil (não sobrescreve à toa).
+window._applyCategoryToProfile = async function(cat, t) {
+    var user = window.AppStore && window.AppStore.currentUser;
+    if (!user || !cat || !t) return;
+    var skillRef = (Array.isArray(t.skillCategories) && t.skillCategories.length > 0) ? t.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
+    var tk = window._categoryAxisTokens(cat, skillRef);
+    var patch = {};
+    if ((tk.gender === 'fem' || tk.gender === 'masc') && !user.gender) {
+        user.gender = tk.gender === 'fem' ? 'feminino' : 'masculino';
+        patch.gender = user.gender;
+    }
+    var tSport = t.sport ? String(t.sport).trim() : null;
+    if (tk.skill && tSport) {
+        if (!user.skillBySport || typeof user.skillBySport !== 'object') user.skillBySport = {};
+        if (!user.skillBySport[tSport]) {
+            user.skillBySport[tSport] = tk.skill;
+            patch.skillBySport = user.skillBySport;
+        }
+    }
+    if (Object.keys(patch).length === 0) return;
+    try {
+        if (user.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+            await window.FirestoreDB.saveUserProfile(user.uid, patch);
+        }
+    } catch (e) { window._warn('[_applyCategoryToProfile] save falhou', e); }
+};
+
+// Pede a data de nascimento na inscrição (torneio com categoria de idade) e
+// grava no perfil. cb(birthDate 'YYYY-MM-DD') ou cb(null) se cancelar.
+window._askBirthDateForEnroll = function(t, cb) {
+    var modalId = 'modal-birthdate-enroll';
+    var old = document.getElementById(modalId);
+    if (old) old.remove();
+    var maxDate = new Date().toISOString().slice(0, 10);
+    var html = '<div class="modal" id="' + modalId + '" style="display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10040;justify-content:center;align-items:center;padding:16px;">' +
+        '<div class="modal-content" style="background:var(--bg-card,#1a2235);color:var(--text-main,#fff);border-radius:15px;padding:24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.4);box-sizing:border-box;">' +
+        '<h2 style="margin:0 0 8px;font-size:1.1rem;">🎂 Data de nascimento</h2>' +
+        '<p style="margin:0 0 16px;opacity:0.8;font-size:0.9rem;line-height:1.45;">Este torneio tem categorias por idade. Informe sua data de nascimento para concluir a inscrição — ela também fica salva no seu perfil.</p>' +
+        '<input type="date" id="birthdate-enroll-input" max="' + maxDate + '" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,#0f1626);color:var(--text-main,#fff);font-size:1rem;margin-bottom:18px;">' +
+        '<div style="display:flex;gap:10px;">' +
+        '<button class="btn btn-outline" id="birthdate-enroll-cancel" style="flex:1;cursor:pointer;">Cancelar</button>' +
+        '<button class="btn btn-primary" id="birthdate-enroll-ok" style="flex:1;cursor:pointer;">Confirmar</button>' +
+        '</div></div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+    var modal = document.getElementById(modalId);
+    function close() { if (modal) modal.remove(); }
+    document.getElementById('birthdate-enroll-cancel').addEventListener('click', function() { close(); if (cb) cb(null); });
+    document.getElementById('birthdate-enroll-ok').addEventListener('click', function() {
+        var val = (document.getElementById('birthdate-enroll-input') || {}).value || '';
+        if (!val) { if (typeof window.showNotification === 'function') window.showNotification('Informe a data', 'Selecione sua data de nascimento.', 'warning'); return; }
+        var user = window.AppStore && window.AppStore.currentUser;
+        if (user) {
+            user.birthDate = val;
+            try {
+                if (user.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+                    window.FirestoreDB.saveUserProfile(user.uid, { birthDate: val });
+                }
+            } catch (_e) {}
+        }
+        close();
+        if (cb) cb(val);
+    });
+};
+
 // Resolve enrollment category for a participant.
 // Shows a modal if multiple eligible categories. Auto-picks if only one.
 window._resolveEnrollmentCategory = function(tId, callback) {
@@ -157,12 +276,38 @@ window._resolveEnrollmentCategory = function(tId, callback) {
         if (callback) callback(null); // No categories
         return;
     }
+
+    var user = window.AppStore.currentUser;
+
+    // ── v2.3.92: categorias de idade exigem data de nascimento ────────────────
+    // Se o torneio tem categoria N+ e o usuário não tem birthDate no perfil,
+    // pede agora (e grava no perfil) — sem isso não dá pra encaixar na faixa.
+    var _mf = (typeof window._categoryMissingFields === 'function') ? window._categoryMissingFields(user || {}, t) : { usesAge: false };
+    if (_mf.usesAge && user && !user.birthDate && typeof window._askBirthDateForEnroll === 'function') {
+        window._askBirthDateForEnroll(t, function(bd) {
+            if (!bd) { if (callback) callback(null); return; } // cancelou → não inscreve
+            user.birthDate = bd;
+            window._resolveEnrollmentCategory(tId, callback); // reprocessa com a data
+        });
+        return;
+    }
+
+    // ── v2.3.92: a categoria resolvida (auto ou escolhida) grava no perfil ────
+    // (gênero/habilidade). Mutação de currentUser é síncrona antes do callback,
+    // então o snapshot do participante na inscrição já sai preenchido.
+    var _origCallback = callback;
+    callback = function(selectedCat) {
+        if (selectedCat && typeof window._applyCategoryToProfile === 'function') {
+            try { window._applyCategoryToProfile(selectedCat, t); } catch (_e) {}
+        }
+        if (_origCallback) _origCallback(selectedCat);
+    };
+
     if (allCats.length === 1) {
         if (callback) callback(allCats[0]);
         return;
     }
 
-    var user = window.AppStore.currentUser;
     var eligible = allCats.slice();
 
     // ── 1. Filtrar por gênero ──────────────────────────────────────────────
@@ -2353,7 +2498,74 @@ window._autoAssignCategoriesAsync = async function(tId) {
         }
     }
 
+    // v2.3.92: depois de enriquecer perfis e atribuir quem deu, dispara a
+    // comunicação FUNDAMENTAL pra quem ficou sem categoria por falta de dado.
+    try { await window._dispatchCategoryDataRequests(t); } catch (_e) { window._warn('[catDataReq] falhou', _e); }
+
     return n;
+};
+
+// v2.3.92: comunicação automática FUNDAMENTAL pros inscritos que não puderam ser
+// encaixados em nenhuma categoria por falta de dado no perfil (gênero/habilidade/
+// idade). Diz QUAL dado falta, vai pelos canais que o usuário escolheu
+// (plataforma/email/WhatsApp via _sendUserNotification) e registra data/hora no
+// participante (mostrada na Análise de Inscritos). Dedup: só reenvia se o conjunto
+// de campos faltantes mudou.
+window._dispatchCategoryDataRequests = async function(t) {
+    if (!t) return 0;
+    var allCats = (typeof window._getTournamentCategories === 'function') ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+    if (!Array.isArray(allCats) || allCats.length === 0) return 0;
+    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    if (parts.length === 0) return 0;
+
+    var tName = t.name || 'torneio';
+    var sent = 0, changed = false;
+
+    for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        if (!p || typeof p !== 'object') continue;
+        // Já tem categoria válida? então está regularizado.
+        var existing = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : (p.categories || (p.category ? [p.category] : []));
+        var hasValid = existing.some(function(c) { return allCats.indexOf(c) !== -1; });
+        if (hasValid) {
+            // Regularizou desde a última cobrança — limpa o registro de pendência.
+            if (p.categoryCommAt) { delete p.categoryCommPending; changed = true; }
+            continue;
+        }
+        var mf = window._categoryMissingFields(p, t);
+        if (!mf.missing || mf.missing.length === 0) continue; // ambíguo mas com dados → decisão do organizador, não cobra
+
+        var uid = p.uid || p.p1Uid || null;
+        if (!uid) continue; // sem conta → não há canal pra avisar
+
+        var fieldKey = mf.missing.slice().sort().join(',');
+        if (p.categoryCommPending === fieldKey) continue; // já cobrado por exatamente esses campos
+
+        var nowIso = new Date().toISOString();
+        var faltam = mf.missing.join(', ');
+        try {
+            await window._sendUserNotification(uid, {
+                type: 'category-data-request',
+                level: 'fundamental',
+                tournamentId: String(t.id),
+                tournamentName: tName,
+                openProfile: true,
+                missingFields: mf.missing,
+                message: 'Para confirmar sua inscrição em "' + tName + '", complete no seu perfil: ' + faltam + '. Toque em "Abrir meu perfil".'
+            });
+            p.categoryCommAt = nowIso;
+            p.categoryCommFields = mf.missing.slice();
+            p.categoryCommPending = fieldKey;
+            sent++;
+            changed = true;
+        } catch (e) { window._warn('[catDataReq] envio falhou p/ uid ' + uid, e); }
+    }
+
+    if (changed && window.FirestoreDB && window.FirestoreDB.saveTournament) {
+        if (!Array.isArray(t.participants)) t.participants = parts;
+        try { window.FirestoreDB.saveTournament(t); } catch (_e) {}
+    }
+    return sent;
 };
 
 // Check and show category notifications for current user

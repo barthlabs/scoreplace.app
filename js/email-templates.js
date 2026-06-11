@@ -262,6 +262,11 @@
           data.message = 'Você tem uma nova notificação em ' + name + '.';
       }
     }
+    // v2.3.92: cobrança de perfil → botão do e-mail abre o PERFIL (não o torneio).
+    if (type === 'category-data-request') {
+      data.ctaText = 'Abrir meu perfil';
+      data.tournamentUrl = 'https://scoreplace.app/#profile';
+    }
     return _wrap(type, data);
   };
 })();

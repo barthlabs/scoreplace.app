@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.92-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Inscrição por categoria preenche seu perfil — e cobra o que falta.</b> Ao se inscrever num torneio com categorias, escolher a categoria (ex.: <i>Fem B</i>) agora <b>preenche seu perfil</b> automaticamente (gênero e habilidade na modalidade). Em torneios por <b>idade</b>, o app pede sua <b>data de nascimento</b> na hora da inscrição e salva no perfil. Se o organizador criar categorias com gente já inscrita, o sistema distribui todo mundo pelo perfil; e quem estiver <b>sem dado</b> (gênero, habilidade ou idade) recebe automaticamente uma comunicação <b>fundamental</b> — pelos canais que escolheu (plataforma, e-mail ou WhatsApp) — dizendo exatamente o que falta, com botão <b>“Abrir meu perfil”</b>. Na <b>Análise de Inscritos</b>, aparece a data/hora em que essa cobrança foi enviada ao lado do nome.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid rgba(52,211,153,0.25);border-radius:12px;padding:14px 16px;background:rgba(16,185,109,0.04);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.3.91-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(11 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Sorteio automático da Liga 100% correto — agora também no servidor.</b> O sorteio automático passou a rodar a <b>mesma lógica do app</b> no servidor: <b>Rei/Rainha</b> (grupos de 4 com parceiros rotativos), <b>duplas</b>, sorteio <b>equilibrado</b>, categorias, folgas justas e critérios de desempate — tudo respeitando exatamente a configuração do organizador. Ele dispara no horário agendado <b>mesmo que ninguém esteja com o app aberto</b>. Antes, o sorteio automático do servidor montava confrontos simples 1×1 — isso foi substituído. Validado com 73, 140 e 142 jogadores.</li>' +
