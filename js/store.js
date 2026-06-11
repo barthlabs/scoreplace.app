@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.86-beta';
+window.SCOREPLACE_VERSION = '2.3.87-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454

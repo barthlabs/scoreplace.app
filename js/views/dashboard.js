@@ -2796,27 +2796,24 @@ function renderDashboard(container) {
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">Place</span>
           </button>
         </div>
-        <!-- v2.1.7-beta: leitor de QR GERAL — entra em partida casual OU em
-             torneio conforme o destino do QR. Botão com volume (padrão .btn),
-             posicionado entre os CTAs (Place) e as estatísticas. -->
+        <!-- v2.3.87: ordem do hero box reorganizada — (1) Convidar + Pessoas,
+             (2) Ler QR Code + Fale com o Desenvolvedor, (3) Apoie. O botão Pro
+             saiu por ora (volta quando reativarmos o plano Pro). -->
+        <!-- Linha: Convidar + Pessoas -->
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center;">
+          <button id="btn-invite-app" class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="--shine-delay:1.5s;background: #7c3aed; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">📱 ${_t('invite.inviteFriends')}</button>
+          <button id="btn-people" class="btn btn-shine hover-lift" title="Encontre jogadores e expanda sua rede" style="--shine-delay:1.8s;background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#explore'">👥 ${_t('dashboard.people') || 'Pessoas'}</button>
+        </div>
+        <!-- Linha: Ler QR Code + Fale com o Desenvolvedor -->
         <div style="display:flex;justify-content:center;gap:10px;width:100%;flex-wrap:wrap;">
-          <button id="btn-scan-qr" class="btn btn-shine hover-lift" aria-label="Ler QR Code" title="Leia um QR code para entrar em uma partida casual ou em um torneio" style="--shine-delay:1.5s;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.92rem;font-weight:700;height:58px;padding:0 18px;border-radius:14px;display:inline-flex;align-items:center;gap:9px;letter-spacing:0.01em;" onclick="if(typeof window._openScanQR==='function')window._openScanQR();">
+          <button id="btn-scan-qr" class="btn btn-shine hover-lift" aria-label="Ler QR Code" title="Leia um QR code para entrar em uma partida casual ou em um torneio" style="--shine-delay:2.1s;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.92rem;font-weight:700;height:58px;padding:0 18px;border-radius:14px;display:inline-flex;align-items:center;gap:9px;letter-spacing:0.01em;" onclick="if(typeof window._openScanQR==='function')window._openScanQR();">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0;"><rect x="3" y="3" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="5.4" y="5.4" width="2.2" height="2.2" rx="0.4"/><rect x="14" y="3" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="16.4" y="5.4" width="2.2" height="2.2" rx="0.4"/><rect x="3" y="14" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="5.4" y="16.4" width="2.2" height="2.2" rx="0.4"/><rect x="13.5" y="13.5" width="2" height="2" rx="0.3"/><rect x="17.5" y="13.5" width="2" height="2" rx="0.3"/><rect x="15.5" y="15.5" width="2" height="2" rx="0.3"/><rect x="19.5" y="15.6" width="1.5" height="1.5" rx="0.3"/><rect x="13.5" y="17.5" width="2" height="2" rx="0.3"/><rect x="17.5" y="17.5" width="2" height="2" rx="0.3"/><rect x="19.5" y="19.5" width="1.5" height="1.5" rx="0.3"/></svg>
             <span style="display:flex;flex-direction:column;line-height:1.08;text-align:left;white-space:nowrap;"><span>Ler</span><span>QR Code</span></span>
           </button>
           ${(typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ twoLine: true, extra: 'height:58px;padding:0 18px;font-size:0.92rem;letter-spacing:0.01em;border:1px solid rgba(255,255,255,0.25);' }) : ''}
         </div>
-        <!-- v0.17.46: Row 2 (interativos: Pessoas + Convidar) e Row 3
-             (utilitários: Pro + Apoie, mais discretos) separados em linhas
-             próprias. Apoie/Pro ficam em uma linha menor — não competem
-             visualmente com Pessoas/Convidar que são uso mais frequente. -->
-        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center;">
-          <button id="btn-people" class="btn btn-shine hover-lift" title="Encontre jogadores e expanda sua rede" style="--shine-delay:1.8s;background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#explore'">👥 ${_t('dashboard.people') || 'Pessoas'}</button>
-          <button id="btn-invite-app" class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="--shine-delay:2.4s;background: #7c3aed; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">📱 ${_t('invite.inviteFriends')}</button>
-        </div>
-        <!-- Row 3: Pro + Apoie (utilitários menores, mais discretos) -->
+        <!-- Linha: Apoie (Pro volta aqui quando reativarmos) -->
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: -2px;">
-          <button id="btn-upgrade-pro" class="btn hover-lift" title="${_t('common.pro')}" style="display: none; background: linear-gradient(135deg,#3b82f6,#6366f1); color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.78rem; font-weight: 600; padding: 0 14px; height: 34px; border-radius: 9px; opacity: 0.9;" onclick="window._showUpgradeModal()">🚀 ${_t('common.pro')}</button>
           <button id="btn-support-pix" class="btn hover-lift" title="${_t('common.support')}" style="background: #047857; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.78rem; font-weight: 600; padding: 0 14px; height: 34px; border-radius: 9px; opacity: 0.9;" onclick="window.location.hash='#support'">💚 ${_t('common.support')}</button>
         </div>
       </div>
