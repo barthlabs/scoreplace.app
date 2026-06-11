@@ -45,14 +45,15 @@
         '<h1 class="landing-title">scoreplace<span class="landing-dot">.app</span></h1>' +
         (ver ? '<div class="landing-version" style="font-size:0.78rem;color:var(--text-muted,#9ca3af);margin-top:-4px;margin-bottom:14px;letter-spacing:0.3px;">v' + ver + '</div>' : '') +
         '<p class="landing-tagline">' + t('landing.tagline') + '</p>' +
-        '<button class="btn btn-cta btn-success landing-cta-btn landing-cta-hero" data-landing-cta onclick="if(window.openModal)window.openModal(\'modal-login\');else if(window.handleGoogleLogin)window.handleGoogleLogin();">' +
+        '<button class="btn btn-cta btn-success landing-cta-btn landing-cta-hero" data-landing-cta onclick="if(window._enterApp)window._enterApp();else if(window.openModal)window.openModal(\'modal-login\');else if(window.handleGoogleLogin)window.handleGoogleLogin();">' +
           '<span class="landing-cta-l1">' + _ctaL1 + '</span>' +
           (_ctaL2 ? '<span class="landing-cta-l2">' + _ctaL2 + '</span>' : '') +
         '</button>' +
-        // v2.3.98: botão proativo de instalar (some se já instalado). Dica: instalar
-        // ANTES de entrar evita ter que logar de novo no app instalado (iOS).
+        // v2.3.99: no Android/desktop o próprio "Entrar" instala (via _enterApp);
+        // o botão separado fica SÓ no iPhone (iosOnly), onde "Entrar" não consegue
+        // instalar (Apple) — e instalar antes de entrar evita re-login no app.
         ((typeof window._installButtonHtml === 'function')
-          ? window._installButtonHtml({ cls: 'btn btn-outline', label: '📲 Instalar na tela inicial', style: 'margin-top:10px;font-size:0.92rem;font-weight:600;padding:10px 18px;border-radius:12px;' })
+          ? window._installButtonHtml({ iosOnly: true, cls: 'btn btn-outline', label: '📲 Instalar na tela inicial', style: 'margin-top:10px;font-size:0.92rem;font-weight:600;padding:10px 18px;border-radius:12px;' })
           : '') +
         '<div class="landing-sports-row">' +
           _SPORTS_LANDING.map(function(s) {
@@ -149,9 +150,12 @@
 
   function _ctaBottom(t) {
     return '<section class="landing-cta-section">' +
-      '<button class="btn btn-cta btn-success landing-cta-btn" data-landing-cta onclick="if(window.openModal)window.openModal(\'modal-login\');else if(window.handleGoogleLogin)window.handleGoogleLogin();">' +
+      '<button class="btn btn-cta btn-success landing-cta-btn" data-landing-cta onclick="if(window._enterApp)window._enterApp();else if(window.openModal)window.openModal(\'modal-login\');else if(window.handleGoogleLogin)window.handleGoogleLogin();">' +
         t('landing.ctaBottom') +
       '</button>' +
+      ((typeof window._installButtonHtml === 'function')
+        ? window._installButtonHtml({ iosOnly: true, cls: 'btn btn-outline', label: '📲 Instalar na tela inicial', style: 'margin-top:10px;font-size:0.88rem;font-weight:600;padding:9px 16px;border-radius:12px;' })
+        : '') +
     '</section>';
   }
 

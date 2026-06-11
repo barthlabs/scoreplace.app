@@ -1850,13 +1850,37 @@ window._showInstallInstructions = function () {
 };
 
 // HTML de um botão de instalar (vazio se já instalado). opts.style / opts.label.
+// opts.iosOnly: só renderiza no iPhone/iPad (onde o "Entrar" NÃO consegue instalar
+// — Apple. No Android/desktop o próprio "Entrar" instala via _enterApp).
 window._installButtonHtml = function (opts) {
   opts = opts || {};
   if (window._isInstalledAsPWA && window._isInstalledAsPWA()) return '';
+  if (opts.iosOnly) {
+    var _ua = navigator.userAgent || '';
+    var _isIOS = /iPhone|iPad|iPod/.test(_ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!_isIOS) return '';
+  }
   var style = opts.style || '';
   var cls = opts.cls || '';
   var label = opts.label || '📲 Instalar na tela inicial';
   return '<button type="button" data-install-app-btn class="' + cls + '" onclick="window._promptAppInstall()" style="' + style + '">' + label + '</button>';
+};
+
+// v2.3.99: "Entrar" que JÁ INSTALA antes de logar quando há prompt nativo
+// (Android Chrome/Edge, desktop) — "instala e já entra". No iOS Safari (sem prompt
+// nativo) só abre o login; o botão separado de instalar continua na tela.
+window._enterApp = async function () {
+  try {
+    if (window._deferredInstallPrompt && !(window._isInstalledAsPWA && window._isInstalledAsPWA())) {
+      window._deferredInstallPrompt.prompt();
+      try { await window._deferredInstallPrompt.userChoice; } catch (e) {}
+      if (window._markInstallBannerInstalled) window._markInstallBannerInstalled();
+      window._deferredInstallPrompt = null;
+    }
+  } catch (e) {}
+  // Entra (login)
+  if (typeof window.openModal === 'function') window.openModal('modal-login');
+  else if (typeof window.handleGoogleLogin === 'function') window.handleGoogleLogin();
 };
 
 window._showAndroidInstallBanner = function() {
