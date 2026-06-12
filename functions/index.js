@@ -1791,8 +1791,13 @@ function _normalizePhoneE164(raw) {
 // Send single WhatsApp text via Evolution. Retorna { ok, messageId?, error? }.
 async function _sendWhatsAppText(apiUrl, apiKey, instance, phone, text) {
   const url = apiUrl.replace(/\/+$/, "") + "/message/sendText/" + encodeURIComponent(instance);
+  // v2.4.37: Evolution/Baileys quer o número SÓ EM DÍGITOS (country code + DDD +
+  // número), sem "+". A ficha guarda em E.164 ("+5511..."), então normaliza aqui.
+  // (O único envio que já funcionou tinha "5511..." sem "+"; os 200+ que falharam
+  // vinham com "+5511...".)
+  const num = String(phone || "").replace(/[^\d]/g, "");
   const body = {
-    number: phone,
+    number: num,
     text: text,
     // Evolution-specific options:
     delay: 1200, // ms entre msgs (parece + humano, evita ban)
