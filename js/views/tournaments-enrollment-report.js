@@ -125,49 +125,82 @@
 
   // ─── Sugestão de formato + tempo ─────────────────────────────────────
 
-  // Calc # de partidas baseado no formato canônico mais provável pra N pessoas.
-  // Não tenta replicar todo o _buildTimeEstimation (que considera gameDuration,
-  // courtCount, callTime, warmupTime); usa defaults razoáveis (30min/partida,
-  // 1 quadra) pra dar um número orientativo.
+  // v2.4.38: estimativa por categoria RESPEITA o formato que o organizador
+  // escolheu (t.format) — não "sugere" eliminatórias. Liga/Ranking é temporada
+  // contínua → estimativa POR RODADA (Rei/Rainha = grupos de 4; padrão = duplas).
+  // Tempo é orientativo (usa gameDuration/courtCount; defaults 30min/1 quadra).
   function _suggestForCount(n, t) {
     var gameDur = parseInt(t && t.gameDuration) || 30;
     var courts = Math.max(parseInt(t && t.courtCount) || 1, 1);
-
     if (n < 2) return { format: '— insuficiente', desc: 'Precisa de pelo menos 2 inscritos.', matches: 0, durationMin: 0, color: '#64748b' };
-    if (n === 2) return { format: 'Final única', desc: '1 partida (BO3).', matches: 1, durationMin: gameDur, color: '#a855f7' };
 
-    if (n >= 3 && n <= 4) {
-      var mLg = (n * (n - 1)) / 2;
-      var slotsLg = Math.ceil(mLg / courts);
-      return { format: 'Liga (round-robin)', desc: mLg + ' partidas.', matches: mLg, durationMin: slotsLg * gameDur, color: '#10b981' };
+    var fmt = String((t && t.format) || '');
+    var lf = fmt.toLowerCase();
+    var isLiga = (typeof window._isLigaFormat === 'function') ? window._isLigaFormat(t) : (fmt === 'Liga' || fmt === 'Ranking');
+    var isSuico = lf.indexOf('su') === 0 && (lf.indexOf('suí') !== -1 || lf.indexOf('sui') !== -1);
+    var isDupla = lf.indexOf('dupla') !== -1;
+    var isGrupos = lf.indexOf('grupo') !== -1;
+    var isMonarchFmt = fmt === 'Rei/Rainha da Praia';
+
+    // ── LIGA / RANKING — temporada contínua: estimativa POR RODADA ──────────
+    if (isLiga) {
+      if (t.ligaRoundFormat === 'rei_rainha') {
+        var grp = Math.floor(n / 4), folga = n % 4, games = grp * 3;
+        return { format: 'Liga (Rei/Rainha)', perRound: true, matches: games, color: '#10b981',
+          durationMin: Math.ceil(games / courts) * gameDur,
+          desc: 'Por rodada: ' + grp + ' grupo' + (grp !== 1 ? 's' : '') + ' de 4 = ' + games + ' jogo' + (games !== 1 ? 's' : '') + (folga ? ' (+' + folga + ' folga' + (folga !== 1 ? 's' : '') + ')' : '') + '.' };
+      }
+      var perGame = (parseInt(t.teamSize) || 1) >= 2 ? 4 : 2;
+      var gms = Math.max(1, Math.floor(n / perGame)), rem = n % perGame;
+      return { format: 'Liga', perRound: true, matches: gms, color: '#10b981',
+        durationMin: Math.ceil(gms / courts) * gameDur,
+        desc: 'Por rodada: ' + gms + ' jogo' + (gms !== 1 ? 's' : '') + (rem ? ' (+' + rem + ' folga' + (rem !== 1 ? 's' : '') + ')' : '') + '.' };
     }
 
-    // 5+: prefere eliminatórias
-    var nextPow2 = Math.pow(2, Math.ceil(Math.log2(n)));
-    var rounds = Math.ceil(Math.log2(Math.max(n, 2)));
-    var totalMin = 0;
-    for (var r = 0; r < rounds; r++) {
-      var matchesInRound = Math.ceil(n / Math.pow(2, r + 1));
-      totalMin += Math.ceil(matchesInRound / courts) * gameDur;
+    // ── SUÍÇO — rodadas suíças (~log2 n rodadas, n/2 jogos cada) ─────────────
+    if (isSuico) {
+      var sr = Math.max(1, Math.ceil(Math.log2(Math.max(n, 2))));
+      var sper = Math.floor(n / 2), stotal = sper * sr;
+      return { format: 'Suíço', matches: stotal, color: '#8b5cf6',
+        durationMin: sr * Math.ceil(sper / courts) * gameDur,
+        desc: sr + ' rodada' + (sr !== 1 ? 's' : '') + ' × ~' + sper + ' jogos = ' + stotal + ' jogos.' };
     }
 
-    if (n >= 5 && n <= 7) {
-      return { format: 'Eliminatórias com BYEs', desc: 'Bracket de ' + nextPow2 + '. ' + (n - 1) + ' partidas. Considere Liga curta como alternativa.', matches: n - 1, durationMin: totalMin, color: '#f59e0b' };
+    // ── REI/RAINHA DA PRAIA (formato standalone) ────────────────────────────
+    if (isMonarchFmt) {
+      var rg = Math.floor(n / 4), rgames = rg * 3, rem2 = n % 4, gem0 = Math.max(0, rg - 1);
+      var tot0 = rgames + gem0;
+      return { format: 'Rei/Rainha da Praia', matches: tot0, color: '#fbbf24',
+        durationMin: Math.ceil(tot0 / courts) * gameDur,
+        desc: rg + ' grupo' + (rg !== 1 ? 's' : '') + ' de 4 (' + rgames + ' jogos)' + (rem2 ? ' (+' + rem2 + ' sobra' + (rem2 !== 1 ? 's' : '') + ')' : '') + ' + final.' };
     }
 
-    if (n === 8) {
-      return { format: 'Eliminatórias Simples', desc: 'Bracket de 8 cheio. 7 partidas.', matches: 7, durationMin: totalMin, color: '#3b82f6' };
+    // ── ELIMINATÓRIAS (Simples / Dupla / Grupos+Elim) — bracket ─────────────
+    var nextPow2 = Math.pow(2, Math.ceil(Math.log2(Math.max(n, 2))));
+    var nrounds = Math.max(1, Math.ceil(Math.log2(Math.max(n, 2))));
+    var elimMin = 0;
+    for (var r = 0; r < nrounds; r++) {
+      var mir = Math.ceil(n / Math.pow(2, r + 1));
+      elimMin += Math.ceil(mir / courts) * gameDur;
     }
-
-    if (n >= 9 && n <= 15) {
-      return { format: 'Eliminatórias com BYEs ou Grupos+Elim', desc: 'Bracket de ' + nextPow2 + '. ' + (n - 1) + ' partidas (BYEs no R1).', matches: n - 1, durationMin: totalMin, color: '#3b82f6' };
+    if (isDupla) {
+      var dm = Math.round((n - 1) * 1.9);
+      return { format: 'Dupla Eliminatória', matches: dm, color: '#ef4444',
+        durationMin: Math.round(elimMin * 1.9),
+        desc: 'Bracket de ' + nextPow2 + ' (upper + lower). ~' + dm + ' partidas.' };
     }
-
-    if (n === 16) {
-      return { format: 'Eliminatórias Simples', desc: 'Bracket de 16 cheio. 15 partidas.', matches: 15, durationMin: totalMin, color: '#3b82f6' };
+    if (isGrupos) {
+      var ng = Math.max(1, Math.round(n / 4));
+      var groupGames = ng * 6, qualifiers = ng * 2, gem = Math.max(0, qualifiers - 1);
+      var gtot = groupGames + gem;
+      return { format: 'Grupos + Eliminatória', matches: gtot, color: '#3b82f6',
+        durationMin: Math.ceil(gtot / courts) * gameDur,
+        desc: '~' + ng + ' grupo' + (ng !== 1 ? 's' : '') + ' de 4 (' + groupGames + ' jogos) + elim (' + gem + ' partidas).' };
     }
-
-    return { format: 'Eliminatórias Simples ou Grupos+Elim', desc: 'Bracket de ' + nextPow2 + '. ' + (n - 1) + ' partidas (com BYEs).', matches: n - 1, durationMin: totalMin, color: '#3b82f6' };
+    // Eliminatórias Simples (default / formato não-reconhecido)
+    return { format: fmt && /elimin/i.test(fmt) ? fmt : 'Eliminatórias Simples', matches: n - 1, color: '#3b82f6',
+      durationMin: elimMin,
+      desc: 'Bracket de ' + nextPow2 + '. ' + (n - 1) + ' partidas' + (nextPow2 > n ? ' (com BYEs)' : '') + '.' };
   }
 
   function _fmtDuration(min) {
@@ -689,7 +722,7 @@
     html += '<p style="margin:0 0 4px;font-size:0.74rem;color:#818cf8;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Distribuição por Categoria' + (derivedSource ? ' <span style="color:var(--text-muted);font-weight:500;text-transform:none;letter-spacing:0;font-size:0.66rem;">(sugeridas pelos perfis)</span>' : '') + '</p>';
     var subtxt = derivedSource
       ? 'Categorias derivadas automaticamente dos perfis dos inscritos (gênero × habilidade do perfil + idade computada da data de nascimento). Configure manualmente em ✏️ Editar → Categorias do Torneio se quiser fixar quais valem.'
-      : 'Cada linha = 1 categoria. Sugestão de formato e tempo são orientativos (defaults: 30min/partida, ' + Math.max(parseInt(t.courtCount) || 1, 1) + ' quadra' + ((Math.max(parseInt(t.courtCount) || 1, 1) > 1) ? 's' : '') + '). Inscritos podem aparecer em mais de uma categoria.';
+      : 'Cada linha = 1 categoria, no formato do torneio (' + _esc(String(t.format || '—')) + '). O tempo é orientativo (' + (parseInt(t.gameDuration) || 30) + 'min/partida, ' + Math.max(parseInt(t.courtCount) || 1, 1) + ' quadra' + ((Math.max(parseInt(t.courtCount) || 1, 1) > 1) ? 's' : '') + ')' + ((typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) ? ' — na Liga, é por rodada' : '') + '. Inscritos podem aparecer em mais de uma categoria.';
     html += '<p style="font-size:0.7rem;color:var(--text-muted);margin:0 0 10px;">' + subtxt + '</p>';
 
     // Render bucket-by-bucket
@@ -713,7 +746,7 @@
         // Format suggestion
         html += '<div style="flex:1;min-width:180px;font-size:0.78rem;color:' + bgColor + ';font-weight:600;">' + _esc(sugg.format) + '</div>';
         // Duration
-        html += '<div style="font-size:0.78rem;color:var(--text-bright);font-weight:700;flex:0 0 auto;">' + (sugg.matches > 0 ? '⏱ ' + _fmtDuration(sugg.durationMin) : '—') + '</div>';
+        html += '<div style="font-size:0.78rem;color:var(--text-bright);font-weight:700;flex:0 0 auto;">' + (sugg.matches > 0 ? '⏱ ' + _fmtDuration(sugg.durationMin) + (sugg.perRound ? '/rodada' : '') : '—') + '</div>';
         html += '</div>';
         if (sugg.desc) {
           html += '<div style="font-size:0.7rem;color:var(--text-muted);margin:2px 0 0 12px;font-style:italic;">' + _esc(sugg.desc) + '</div>';
