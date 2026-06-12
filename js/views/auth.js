@@ -4735,8 +4735,20 @@ window._autoFixStaleNames = async function(forceTournamentId) {
   if (uids.length === 0 && emails.length === 0) return;
 
   // v2.2.9: cache de sessão para evitar re-buscar profiles já conhecidos.
-  // forceTournamentId contorna o cache para garantir dados frescos ao forçar fix.
-  if (!window._autoFixNamesCache || forceTournamentId) {
+  // v2.4.19-beta: forceTournamentId NÃO reseta mais o cache inteiro. O único
+  // caller forçado (tournaments.js, automático ao abrir um torneio) rodava com
+  // force → o cache era zerado a cada visualização → todos os perfis dos
+  // participantes eram relidos do Firestore (ex: ~84 reads por abertura do
+  // Confra), e o cache dos OUTROS torneios era jogado fora junto, sem nunca
+  // render benefício. Isso gerava picos recorrentes de leitura (Sentry "read
+  // spike: autofix-uid=84..138" na rota do torneio ativo). O force já pula o
+  // throttle de 30s (linha ~4660) e o flag _tournChecks já limita a 1x por
+  // sessão/torneio — então NÃO precisa zerar o cache. Agora o force reutiliza
+  // o cache e só busca uids/emails ainda não carregados; reabrir um torneio já
+  // visto custa ~0 leituras. Trade-off aceito: um participante que renomeia o
+  // perfil no meio da sessão só é repescado no próximo carregamento da página
+  // (a correção de nomes é best-effort, não sync em tempo real).
+  if (!window._autoFixNamesCache) {
     window._autoFixNamesCache = { profileMap: {}, emailProfileMap: {}, uidsLoaded: {}, emailsLoaded: {} };
   }
   var _cache = window._autoFixNamesCache;

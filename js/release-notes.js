@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.18-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>App mais leve ao abrir um torneio (menos consumo de dados/servidor).</b> Ao abrir a página de um torneio, o app verifica se os nomes dos participantes estão atualizados. Essa verificação estava recarregando o perfil de todos os participantes a cada abertura — e ainda descartava o que já tinha carregado dos outros torneios. Em torneios grandes isso gerava picos de leitura desnecessários. Agora o app reaproveita o que já carregou na sessão e só busca quem é novo, então reabrir um torneio que você já viu fica praticamente instantâneo e sem custo extra.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.18-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Botão "Inscrever-se" que ficava girando sem inscrever — corrigido.</b> Em alguns celulares (principalmente iPhone com bloqueio de rastreamento, proxy ou rede instável), uma peça interna do app que conversa com o servidor podia não carregar a tempo. Quando isso acontecia, boa parte do código de login e inscrição deixava de existir silenciosamente — então o botão de inscrição girava pra sempre e a pessoa não conseguia entrar no torneio. Agora o app aguenta essa falha sem travar: se a conexão com o servidor realmente não vier, a pessoa vê uma mensagem de erro clara em vez do botão girando sem fim; e quando é só um soluço momentâneo, a inscrição funciona normalmente.</li>' +
       '</ul>' +
