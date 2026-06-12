@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.38-beta';
+window.SCOREPLACE_VERSION = '2.4.39-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -2144,9 +2144,41 @@ window._profileMetaAgeBadge = function(birthDate, t) {
   return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,0.16);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);line-height:1.5;">' + window._safeHtml(bucket) + '</span>';
 };
 
+// v2.4.39: tag "sem cat" na COR do eixo que está faltando (no lugar onde o badge
+// daquele eixo apareceria). Verde = gênero (azul/rosa já são masc/fem), roxo =
+// habilidade, amarelo = idade.
+window._profileMetaSemCatTag = function(rgb) {
+  return '<span style="font-size:0.6rem;font-weight:700;padding:1px 7px;border-radius:6px;background:rgba(' + rgb + ',0.12);color:rgb(' + rgb + ');border:1px dashed rgba(' + rgb + ',0.5);line-height:1.5;" title="sem categoria no perfil">sem cat</span>';
+};
+
+// Quais eixos de categoria o TORNEIO usa (pra decidir quando mostrar "sem cat").
+window._profileMetaTournamentAxes = function(t) {
+  var axes = { gender: false, skill: false, age: false };
+  if (!t) return axes;
+  var cats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : (t.combinedCategories || []);
+  var skillRef = (t.skillCategories && t.skillCategories.length) ? t.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
+  (cats || []).forEach(function(c) {
+    var tk = (typeof window._categoryAxisTokens === 'function') ? window._categoryAxisTokens(c, skillRef) : null;
+    if (!tk) return;
+    if (tk.gender === 'fem' || tk.gender === 'masc') axes.gender = true;
+    if (tk.skill) axes.skill = true;
+    if (tk.age) axes.age = true;
+  });
+  if (!axes.gender && Array.isArray(t.genderCategories) && t.genderCategories.some(function(g) { return /fem|masc/i.test(String(g)); })) axes.gender = true;
+  if (!axes.skill && Array.isArray(t.skillCategories) && t.skillCategories.length) axes.skill = true;
+  if (!axes.age && Array.isArray(t.ageCategories) && t.ageCategories.length) axes.age = true;
+  return axes;
+};
+
 window._profileMetaBadgesHtml = function(gender, skill, birth, prefixName, t) {
   var prefix = prefixName ? '<span style="font-size:0.6rem;color:var(--text-muted);font-weight:700;margin-right:1px;">' + window._safeHtml(prefixName) + ':</span>' : '';
-  var badges = window._profileMetaGenderBadge(gender) + window._profileMetaSkillBadge(skill) + window._profileMetaAgeBadge(birth, t);
+  var axes = window._profileMetaTournamentAxes(t);
+  // Cada eixo: o badge do perfil OU, se faltando E o torneio usa esse eixo,
+  // a tag "sem cat" na cor do eixo — sempre na MESMA POSIÇÃO do badge.
+  var gB = window._profileMetaGenderBadge(gender) || (axes.gender ? window._profileMetaSemCatTag('16,185,129') : '');
+  var sB = window._profileMetaSkillBadge(skill) || (axes.skill ? window._profileMetaSemCatTag('99,102,241') : '');
+  var aB = window._profileMetaAgeBadge(birth, t) || (axes.age ? window._profileMetaSemCatTag('245,158,11') : '');
+  var badges = gB + sB + aB;
   return badges ? (prefix + badges) : '';
 };
 

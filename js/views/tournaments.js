@@ -2556,18 +2556,27 @@ function renderTournaments(container, tournamentId = null) {
                     const _pCats = _validCats ? _pCatsRaw.filter(function(c) { return _validCats.indexOf(c) !== -1; }) : _pCatsRaw;
                     const _pCatSource = typeof p === 'object' ? (p.categorySource || '') : '';
                     const _pWasUncat = typeof p === 'object' ? (p.wasUncategorized || false) : false;
+                    // v2.4.39: a linha de cima (_profileMetaSlots) já mostra TUDO do
+                    // perfil — gênero/habilidade/idade + tag "sem cat" colorida pros
+                    // eixos que faltam. A linha de baixo é SÓ a atribuição do
+                    // ORGANIZADOR pro torneio (categorySource 'organizador'), com
+                    // "(org.)", quando ela difere da habilidade do perfil.
                     let catBadgeRow = '';
                     const _hasCatsForBadge = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0);
-                    if (_hasCatsForBadge) {
-                        if (_pCats.length > 0) {
-                            var srcLabel = _pCatSource === 'perfil' ? ' <span style="font-size:0.55rem;color:var(--text-muted);opacity:0.7;">(perfil)</span>'
-                                : (_pWasUncat ? ' <span style="font-size:0.55rem;color:var(--text-muted);opacity:0.7;">(sem cat.)</span>' : '');
+                    if (_hasCatsForBadge && _pCatSource === 'organizador' && _pCats.length > 0) {
+                        var _orgSkill = window._profileMetaExtractSkill ? window._profileMetaExtractSkill(_pCats[0], t) : '';
+                        var _profDoc = (window._partProfileByName && window._partProfileByName[String(pName).toLowerCase()]) || null;
+                        var _profSkillRaw = (_profDoc && _profDoc.skillBySport && t.sport && _profDoc.skillBySport[t.sport])
+                            || (typeof p === 'object' && p.skillBySport && t.sport ? p.skillBySport[t.sport] : '') || '';
+                        var _profSkill = window._profileMetaExtractSkill ? window._profileMetaExtractSkill(_profSkillRaw, t) : '';
+                        // mostra quando a categoria do org difere da habilidade do perfil
+                        // (ou quando o perfil não tem habilidade — aí o org definiu mesmo).
+                        if (!_profSkill || _profSkill !== _orgSkill) {
                             catBadgeRow = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;align-items:center;">' +
                                 window._sortCategoriesBySkillOrder(_pCats, t.skillCategories).map(function(c) {
                                     return '<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:600;background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.25);">' + (window._displayCategoryName ? window._displayCategoryName(c) : c) + '</span>';
-                                }).join('') + srcLabel + '</div>';
-                        } else {
-                            catBadgeRow = '<div style="margin-top:4px;"><span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:600;background:rgba(239,68,68,0.1);color:#fca5a5;border:1px solid rgba(239,68,68,0.2);">(sem cat.)</span></div>';
+                                }).join('') +
+                                ' <span style="font-size:0.55rem;color:var(--text-muted);opacity:0.7;">(org.)</span></div>';
                         }
                     }
                     // Enrollment type label — shown at bottom-left
