@@ -1826,6 +1826,25 @@ window._applyCategoryRenamesToMatches = function(t, renames) {
     return n;
 };
 
+// v2.4.13: há partida JÁ JOGADA nesta categoria? Usado pra nunca remover do
+// combinedCategories uma categoria com histórico (desmesclar/excluir) — senão os
+// jogos viram órfãos e somem da classificação.
+window._categoryHasPlayedMatches = function(t, cat) {
+    if (!t || !cat) return false;
+    var found = false;
+    var scan = function(m) {
+        if (!found && m && m.category === cat && m.winner && m.winner !== 'BYE' && !m.isBye && !m.isSitOut) found = true;
+    };
+    if (typeof window._collectAllMatches === 'function') {
+        window._collectAllMatches(t).forEach(scan);
+    } else {
+        (t.matches || []).forEach(scan);
+        (t.rounds || []).forEach(function(r) { (r.matches || []).forEach(scan); });
+        (t.groups || []).forEach(function(g) { if (g && Array.isArray(g.matches)) g.matches.forEach(scan); });
+    }
+    return found;
+};
+
 function _simplifySingletonCategories(t) {
     var cats = t.combinedCategories || [];
     if (cats.length === 0) return;
@@ -1944,6 +1963,13 @@ window._deleteEmptyCategory = function(tId, cat) {
     var hasParticipants = parts.some(function(p) { return typeof window._participantInCategory === 'function' && window._participantInCategory(p, cat); });
     if (hasParticipants) {
         if (typeof showNotification === 'function') showNotification('⚠️ Categoria não vazia', 'Mova os participantes antes de excluir.', 'error');
+        return;
+    }
+
+    // v2.4.13: refuse to delete if there are PLAYED matches under this category —
+    // excluí-la orfanaria esses jogos (somem da classificação). Histórico é sagrado.
+    if (typeof window._categoryHasPlayedMatches === 'function' && window._categoryHasPlayedMatches(t, cat)) {
+        if (typeof showNotification === 'function') showNotification('⚠️ Categoria com jogos disputados', 'Não dá pra excluir "' + (window._displayCategoryName ? window._displayCategoryName(cat) : cat) + '" — ela tem partidas já jogadas que seriam perdidas da classificação.', 'error');
         return;
     }
 
@@ -2125,22 +2151,18 @@ function _executeUnmerge(tId, mergeIdx) {
         }
     });
 
-    // Restore combinedCategories: remove merged, add back source and target
+    // Restore combinedCategories: add back source and target. v2.4.13: NÃO remover
+    // a categoria mesclada se ela tiver jogos JÁ JOGADOS — senão esses jogos viram
+    // órfãos e somem da classificação. Histórico preservado: os jogos disputados
+    // como mesclados continuam contando na categoria mesclada; as próximas rodadas
+    // usam as categorias separadas. (Confronto entre categorias diferentes não tem
+    // como ser remanejado pra uma única — fica na mesclada, que é onde foi jogado.)
+    var _keepMerged = window._categoryHasPlayedMatches(t, mergedName);
     var cats = t.combinedCategories || [];
-    var newCats = cats.filter(function(c) { return c !== mergedName; });
+    var newCats = cats.filter(function(c) { return c !== mergedName || _keepMerged; });
     if (newCats.indexOf(sourceCat) === -1) newCats.push(sourceCat);
     if (newCats.indexOf(targetCat) === -1) newCats.push(targetCat);
     t.combinedCategories = newCats;
-
-    // Revert rounds/matches category references
-    (t.rounds || []).forEach(function(r) {
-        (r.matches || []).forEach(function(m) {
-            if (m.category === mergedName) {
-                // Can't know which original — leave as merged for safety
-                // (matches shouldn't exist before a draw anyway)
-            }
-        });
-    });
 
     // Remove this merge record from history
     t.mergeHistory.splice(mergeIdx, 1);
@@ -2196,9 +2218,11 @@ function _executeInferredUnmerge(tId, mergedName, inferredCats) {
         }
     });
 
-    // Restore combinedCategories: remove merged, add back inferred originals
+    // Restore combinedCategories: add back inferred originals. v2.4.13: manter a
+    // categoria mesclada se tiver jogos JÁ JOGADOS (não orfanar histórico).
+    var _keepMergedInf = window._categoryHasPlayedMatches(t, mergedName);
     var cats = t.combinedCategories || [];
-    var newCats = cats.filter(function(c) { return c !== mergedName; });
+    var newCats = cats.filter(function(c) { return c !== mergedName || _keepMergedInf; });
     inferredCats.forEach(function(ic) {
         if (newCats.indexOf(ic) === -1) newCats.push(ic);
     });

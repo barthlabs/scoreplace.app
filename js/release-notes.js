@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.14-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.15-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Desmesclar ou excluir categoria não apaga mais jogos já disputados.</b> Ao desmesclar uma categoria que já teve partidas, os participantes voltam pras categorias originais e as próximas rodadas usam elas — mas os <b>jogos já jogados continuam contando</b> na categoria em que foram disputados. E excluir uma categoria com partidas disputadas agora é <b>bloqueado com aviso</b>, pra não perder esse histórico da classificação.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.14-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>O app se atualiza sozinho ao voltar pra ele — sem precisar fechar e reabrir.</b> No iPhone (app instalado na tela inicial), quando você voltava pro scoreplace pelo seletor de apps ele continuava rodando uma versão antiga até ser fechado por completo — foi o que travou uma inscrição com uma correção que já estava no ar. Agora, toda vez que o app volta pra frente (ou a aba reganha foco), ele checa se há versão nova e se atualiza na hora. A atualização nunca interrompe um placar ao vivo, partida casual ou um cadastro em andamento — nesses casos ela espera o momento seguro.</li>' +
       '</ul>' +
