@@ -229,9 +229,13 @@ function renderBracket(container, tournamentId, isInline) {
   // Waitlist panel — shown at the end of every bracket view (Liga/Suíço/Grupos/Monarch/Elim)
   const standbyHtml = _renderStandbyPanel(t, isOrg);
 
+  // v2.4.30: banner de convite pra substituir num grupo (W.O.) — aparece pro
+  // jogador convidado aceitar/recusar no topo do bracket da Liga.
+  var _ligaInviteBanner = (typeof window._ligaInviteBannerHtml === 'function') ? window._ligaInviteBannerHtml(t) : '';
+
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
-    container.innerHTML = headerHtml + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) + standbyHtml;
+    container.innerHTML = headerHtml + _ligaInviteBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) + standbyHtml;
     _applyMyMatchesFilter();
     return;
   }
@@ -2529,7 +2533,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _sitOuts = _allRoundMatches.filter(function(m) { return m && m.isSitOut; });
         if (_sitOuts.length === 0) return '';
         var _inactive = _sitOuts.filter(function(m) { return m.sitOutReason === 'inactive'; });
-        var _remainder = _sitOuts.filter(function(m) { return m.sitOutReason !== 'inactive'; });
+        var _wo = _sitOuts.filter(function(m) { return m.sitOutReason === 'wo'; }); // v2.4.30
+        var _remainder = _sitOuts.filter(function(m) { return m.sitOutReason !== 'inactive' && m.sitOutReason !== 'wo'; });
         // v0.16.97: cada pill mostra os pontos atribuídos. Inativos sempre
         // 0 pts (regra explícita do usuário: "deve fazer zero pontos na
         // rodada que estiver desativado"). Remainder recebe sua média até
@@ -2541,7 +2546,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // v2.3.45: respeita o sistema de pontuação (PA quando ativo), ao vivo.
             var _suT = window._currentBracketTournament;
             var _suAdv = !!(_suT && _suT.advancedScoring && _suT.advancedScoring.enabled);
-            var _pts = (_suAdv && typeof window._sitOutComp === 'function')
+            var _pts = (m.sitOutReason === 'wo') ? 0  // v2.4.30: W.O. é sempre 0, nunca média
+              : (_suAdv && typeof window._sitOutComp === 'function')
               ? window._sitOutComp(_suT, m.p1, m.category)
               : (m.sitOutPoints != null ? m.sitOutPoints : 0);
             var _ptsLbl = '<span style="font-size:0.7rem;font-weight:700;opacity:0.85;margin-left:4px;">+' + _pts + (_suAdv ? ' PA' : (' pt' + (_pts !== 1 ? 's' : ''))) + '</span>';
@@ -2564,11 +2570,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           '</div>';
         };
         var _inactiveHtml = _renderRow('Desativados', _inactive, '#f87171', 'rgba(239,68,68,0.05)', 'rgba(239,68,68,0.25)', '🔴', 'fizeram 0 pts (optaram por sair)');
+        var _woHtml = _renderRow('W.O.', _wo, '#f87171', 'rgba(239,68,68,0.05)', 'rgba(239,68,68,0.3)', '⚠️', 'não puderam jogar — 0 pts'); // v2.4.30
         var _remainderHtml = _renderRow('Sem grupo', _remainder, '#fbbf24', 'rgba(251,191,36,0.05)', 'rgba(251,191,36,0.25)', '😴', 'recebem sua média do torneio');
-        if (!_inactiveHtml && !_remainderHtml) return '';
+        if (!_inactiveHtml && !_woHtml && !_remainderHtml) return '';
         return '<details open style="margin-bottom:1rem;background:rgba(255,255,255,0.02);border:1px solid var(--border-color);border-radius:10px;padding:10px 14px;">' +
           '<summary style="cursor:pointer;user-select:none;font-size:0.82rem;font-weight:700;color:var(--text-bright);margin-bottom:8px;">📋 Ficaram de fora desta rodada</summary>' +
-          '<div style="margin-top:8px;">' + _inactiveHtml + _remainderHtml + '</div>' +
+          '<div style="margin-top:8px;">' + _woHtml + _inactiveHtml + _remainderHtml + '</div>' +
         '</details>';
       })()}
       ${_isReiRainhaRound ? (() => {
@@ -2638,11 +2645,14 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // do mesmo grupo. Grid com `auto-fill, minmax(280px, 1fr)` distribui
           // colunas iguais e o último card mantém a largura da coluna em vez
           // de "comer" o espaço restante da linha.
+          // v2.4.30: enquanto o grupo aguarda o aceite de um substituto (W.O.),
+          // trava o lançamento de placar (o grupo ainda não está completo).
+          var _gPending = (typeof window._ligaGroupPending === 'function') && window._ligaGroupPending(g);
           var gCards = g.matches.map(function(m) {
             // v1.0.64-beta: usa contador global em vez de mi+1 (que resetava por grupo)
             _monarchGlobalMatchNum++;
             // v2.3.19: grupo concluído → cards compactos (sem botão Editar).
-            return '<div>' + renderMatchCard(m, canEnterResult, t.id, _monarchGlobalMatchNum, gDone) + '</div>';
+            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, _monarchGlobalMatchNum, gDone) + '</div>';
           }).join('');
           var statusBadge = gDone ? '<span style="font-size:0.6rem;padding:2px 6px;border-radius:5px;background:rgba(16,185,129,0.15);color:#4ade80;font-weight:700;">✓</span>' : '<span style="font-size:0.6rem;padding:2px 6px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">' + _t('bracket.ongoing') + '</span>';
           // Highlight visual quando o grupo é do usuário logado.
@@ -2654,8 +2664,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // conforme a composição de gênero dos 4 jogadores do grupo.
           var _monarchTitle = (typeof window._monarchGroupTitle === 'function') ? window._monarchGroupTitle(g.players, t) : 'Rei/Rainha';
           var _monarchBadge = '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
+          var _ligaCtrl = (typeof window._ligaGroupControlsHtml === 'function') ? window._ligaGroupControlsHtml(t, currentRound - 1, g) : '';
           return '<div style="background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + _monarchBadge + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + _monarchBadge + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + (_ligaCtrl ? '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">' + _ligaCtrl + '</span>' : '') + '</div>' +
             '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">Jogadores: ' + g.players.map(function(n){return window._safeHtml(n);}).join(', ') + '</div>' +
             '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">' + gCards + '</div>' +
           '</div>';

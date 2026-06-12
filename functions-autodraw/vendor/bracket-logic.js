@@ -124,7 +124,10 @@ function _playerRoundStats(t, playerName, category) {
     var didPlay = false, didSit = false, sitInactive = false;
     (round.matches || []).forEach(function(m) {
       if (category && m.category !== category) return;
-      if (m.isSitOut) { if (m.p1 === playerName) { didSit = true; if (m.sitOutReason === 'inactive') sitInactive = true; } return; }
+      // v2.4.30: 'wo' (levou W.O. na rodada) = 0 pts, igual a 'inactive' — NÃO
+      // compensável (não entra na média de folga). Só 'remainder' (sobrou do
+      // sorteio) recebe a média.
+      if (m.isSitOut) { if (m.p1 === playerName) { didSit = true; if (m.sitOutReason === 'inactive' || m.sitOutReason === 'wo') sitInactive = true; } return; }
       if (m.isBye || !m.winner) return;
       if (m.isMonarch && Array.isArray(m.team1) && Array.isArray(m.team2)) {
         if (m.team1.indexOf(playerName) !== -1 || m.team2.indexOf(playerName) !== -1) didPlay = true;
@@ -368,6 +371,12 @@ window._computeStandings = _computeStandings; // expose globally for finishTourn
 function _computeStandings(t, category) {
   const scoreMap = {};
 
+  // v2.4.30: "Jogador X" (convidado preenchendo vaga de W.O. num grupo de Liga)
+  // nunca pontua e nunca entra na classificação. Os nomes ghost ficam em
+  // t.ligaGhosts. Auto-contido aqui pra valer também no Cloud Function autoDraw.
+  const _ghostSet = Array.isArray(t.ligaGhosts) ? t.ligaGhosts : [];
+  const _isGhost = function(name) { return name && _ghostSet.indexOf(name) !== -1; };
+
   const allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   allP.forEach(p => {
     const name = typeof p === 'string' ? p : (p.displayName || p.name || '');
@@ -390,6 +399,7 @@ function _computeStandings(t, category) {
 
       // Helper to ensure dynamic entry has GSM fields
       function _ensureEntry(name) {
+        if (_isGhost(name)) return; // Jogador X nunca entra na classificação
         if (!scoreMap[name]) scoreMap[name] = { name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, category: category || '', setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0 };
       }
 
@@ -436,6 +446,7 @@ function _computeStandings(t, category) {
           m.sets.forEach(function(st){ _g1 += parseInt(st.gamesP1) || 0; _g2 += parseInt(st.gamesP2) || 0; });
         } else { _g1 = ms1; _g2 = ms2; }
         m.team1.forEach(function(name) {
+          if (_isGhost(name)) return; // Jogador X joga mas não pontua
           _ensureEntry(name);
           scoreMap[name].played++;
           scoreMap[name].pointsDiff += (ms1 - ms2);
@@ -445,6 +456,7 @@ function _computeStandings(t, category) {
           else { scoreMap[name].losses++; }
         });
         m.team2.forEach(function(name) {
+          if (_isGhost(name)) return; // Jogador X joga mas não pontua
           _ensureEntry(name);
           scoreMap[name].played++;
           scoreMap[name].pointsDiff += (ms2 - ms1);

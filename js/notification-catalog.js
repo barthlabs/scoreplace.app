@@ -43,6 +43,9 @@ window.NOTIF_CATALOG = {
   'category-change-request':   { level: 'fundamental', icon: '🔼', color: '#f59e0b' },
   // v2.4.28: resultado da aprovação/recusa da mudança de categoria (pro participante).
   'category-change-result':    { level: 'all',         icon: '🏷️', color: 'var(--primary-color)' },
+  // v2.4.30: convite pra substituir num grupo de Liga (W.O.) + resultado do convite.
+  'liga-sub-invite':           { level: 'fundamental', icon: '📨', color: '#10b981' },
+  'liga-sub-result':           { level: 'all',         icon: '🔁', color: 'var(--primary-color)' },
 
   // Organizer actions
   org_communication:           { level: 'important',   icon: '📣', color: '#f59e0b' },
