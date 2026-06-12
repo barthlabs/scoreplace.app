@@ -19,6 +19,37 @@ try {
 initializeApp();
 const db = getFirestore();
 
+// v2.4.12: temporada encerrada? Espelha o cliente (tournaments.js season auto-
+// closure + bracket-logic poller endDate check). Sem isto, o autoDraw gerava
+// rodadas — e disparava notificações — PRA SEMPRE após o fim da temporada, se
+// nenhum cliente abrisse o torneio pra marcar status='finished' (que é lazy, só
+// no render). Horários em BRT (UTC-3), igual ao resto do autoDraw.
+function _ligaSeasonEnded(t, now) {
+  // Date-only ('2026-06-11') → interpreta como BRT (UTC-3). Se já tem 'T', usa
+  // como veio (granularidade de meses torna erro de fuso irrelevante).
+  function _parseBrt(s, dfltTime) {
+    s = String(s);
+    if (s.indexOf('T') === -1) s = s + 'T' + dfltTime + '-03:00';
+    return new Date(s);
+  }
+  // 1) endDate explícita
+  if (t.endDate) {
+    const endD = _parseBrt(t.endDate, '23:59:59');
+    if (!isNaN(endD.getTime()) && endD < now) return true;
+  }
+  // 2) ligaSeasonMonths / rankingSeasonMonths a partir de startDate
+  const months = parseInt(t.ligaSeasonMonths || t.rankingSeasonMonths);
+  if (months && t.startDate) {
+    const start = _parseBrt(t.startDate, '00:00:00');
+    if (!isNaN(start.getTime())) {
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + months);
+      if (now >= end) return true;
+    }
+  }
+  return false;
+}
+
 // ─── Auto-Draw: runs every hour, checks for pending draws ───────────────────
 exports.autoDraw = onSchedule('every 1 hours', async (event) => {
   const now = new Date();
@@ -34,6 +65,9 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
     if (t.drawManual) continue;
     if (!t.drawFirstDate) continue;
     if (t.status === 'finished') continue;
+    // v2.4.12: temporada acabou (endDate ou ligaSeasonMonths) → não gerar mais
+    // rodadas nem notificações. Pra temporada ativa não muda nada.
+    if (_ligaSeasonEnded(t, now)) { console.log(`Auto-draw: ${tId} — temporada encerrada, skip`); continue; }
     // v2.3.96: já há um sorteio em revisão (rede de segurança) aguardando o
     // organizador publicar/anular — não re-sortear (senão re-randomiza a cada hora).
     if (t.pendingDraw) { console.log(`Auto-draw: ${tId} tem pendingDraw em revisão — skip`); continue; }

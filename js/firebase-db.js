@@ -285,10 +285,13 @@ window.FirestoreDB = {
         });
       }
 
-      // Auto-close check
-      // Auto-close when maxParticipants is reached (always, no flag needed)
+      // Auto-close check — v2.4.12: RESPEITA o toggle autoCloseOnFull.
+      // Antes fechava sempre ao atingir maxParticipants ("always, no flag needed"),
+      // mas o caminho do cliente (tournaments-enrollment.js) só fecha quando o flag
+      // é verdadeiro. Inconsistência: desligar "Fechar quando lotar" não tinha efeito
+      // no caminho real de inscrição. Agora os dois lados usam a mesma regra.
       var _maxP = parseInt(data.maxParticipants, 10);
-      if (!isNaN(_maxP) && _maxP > 0 && participants.length >= _maxP) {
+      if (data.autoCloseOnFull && !isNaN(_maxP) && _maxP > 0 && participants.length >= _maxP) {
         updateData.status = 'closed';
       }
 
