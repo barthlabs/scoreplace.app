@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.24-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.25-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Pontos avançados só na Liga.</b> A seção de <b>pontos avançados</b> (bônus por killing point, ponto marcado, etc.) na criação/edição do torneio agora só aparece quando o formato é <b>Liga</b> (pontos corridos). Em eliminatórias (simples ou dupla) e fase de grupos + eliminatória ela some — nesses formatos não há ranking acumulado por pontos, então só complicava o formulário.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.24-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Não recebeu o e-mail de confirmação? Confirme pelo celular.</b> Alguns provedores (UOL, BOL, Terra) bloqueiam o e-mail de confirmação de conta antes mesmo de cair no spam. Agora a tela "Confirme seu e-mail" tem um botão <b>📱 Autenticar por celular</b>: você digita seu número e recebe um código por <b>SMS</b> e por <b>WhatsApp</b> — no WhatsApp ainda vem um botão que, tocado, já confirma e entra sem digitar nada. Confirmando, seu e-mail é validado e o telefone fica salvo no perfil.</li>' +
       '</ul>' +

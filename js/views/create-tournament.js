@@ -1862,14 +1862,16 @@ function setupCreateTournamentModal() {
     var estimContainer = document.getElementById('time-estimates-container');
     if (estimContainer) estimContainer.style.display = (isLiga || isSuico) ? 'none' : '';
 
-    // v2.3.3: Sistema de Pontos Avançado disponível em TODOS os formatos.
-    // Antes era restrito a Liga/Suíço; agora o cálculo (_calcAdvancedPoints)
-    // varre todas as partidas via _collectAllMatches — funciona em
-    // eliminatórias, grupos, Rei/Rainha, Liga e Suíço.
+    // Sistema de Pontos Avançado: só faz sentido em pontos corridos (Liga/Suíço).
+    // Em eliminatórias (simples/dupla) e grupos + eliminatória não há ranking
+    // acumulado por pontos — a seção só complica o formulário. Restrito a Liga
+    // (Suíço incluído por ser da mesma família de pontos corridos, embora hoje
+    // não seja mais selecionável no picker — preserva edição de torneios legados).
+    var advScoringStandings = isLiga || isSuico;
     var advSection = document.getElementById('adv-scoring-section');
-    if (advSection) advSection.style.display = 'block';
+    if (advSection) advSection.style.display = advScoringStandings ? 'block' : 'none';
     document.querySelectorAll('#tiebreaker-list li[data-tb="pontos_avancados"], #tiebreaker-excluded-list li[data-tb="pontos_avancados"]').forEach(function(tbAdv) {
-      tbAdv.style.display = '';
+      tbAdv.style.display = advScoringStandings ? '' : 'none';
     });
 
     window._updateAutoCloseVisibility();
@@ -4360,12 +4362,13 @@ function setupCreateTournamentModal() {
           tourData.tiebreakersExcluded = Array.from(tbExcl.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
         }
 
-        // Sistema de Pontos Avançado — v2.3.13: disponível em TODOS os formatos
-        // (a seção é sempre renderizada desde a v2.3.3). Antes o save só gravava
-        // quando drawMode !== 'rei_rainha', então Liga Rei/Rainha caía no else e
-        // zerava advancedScoring mesmo o organizador tendo ativado. Bug corrigido.
+        // Sistema de Pontos Avançado: só vale em pontos corridos (Liga/Suíço).
+        // A seção fica oculta nos demais formatos — aqui o save respeita o mesmo
+        // gate pra não persistir um estado ligado caso o torneio tenha sido
+        // trocado de Liga pra eliminatória/grupos depois de configurar pontos.
+        var _advStandings = (formatValue === 'liga' || formatValue === 'suico');
         var _advEnabled = document.getElementById('adv-scoring-enabled');
-        if (_advEnabled) {
+        if (_advStandings && _advEnabled) {
           var _advCats = {};
           Array.from(document.querySelectorAll('#adv-scoring-body .adv-row')).forEach(function(row) {
             var key = row.dataset.advKey;
