@@ -285,7 +285,11 @@ window._resolveEnrollmentCategory = function(tId, callback) {
     var _mf = (typeof window._categoryMissingFields === 'function') ? window._categoryMissingFields(user || {}, t) : { usesAge: false };
     if (_mf.usesAge && user && !user.birthDate && typeof window._askBirthDateForEnroll === 'function') {
         window._askBirthDateForEnroll(t, function(bd) {
-            if (!bd) { if (callback) callback(null); return; } // cancelou → não inscreve
+            // Cancelar é ação DELIBERADA do usuário → não inscreve e não chama o
+            // callback (mesmo comportamento do Cancelar do picker). callback(null)
+            // é reservado pra FALHA técnica — nesse caso o chamador inscreve sem
+            // categoria (fail-open). Ver enrollCurrentUser / dashboard.
+            if (!bd) { return; }
             user.birthDate = bd;
             window._resolveEnrollmentCategory(tId, callback); // reprocessa com a data
         });

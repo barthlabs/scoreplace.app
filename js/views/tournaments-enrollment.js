@@ -371,10 +371,27 @@ window.enrollCurrentUser = function (tId) {
                       (t.skillCategories && t.skillCategories.length > 0) ||
                       (t.ageCategories && t.ageCategories.length > 0); // v2.3.92: idade também resolve categoria
         if (hasCats) {
-            window._resolveEnrollmentCategory(tId, function(selectedCategories) {
-                if (!selectedCategories) return; // user cancelled
-                window._doEnrollCurrentUser(tId, selectedCategories);
-            });
+            // v2.4.9: FAIL-OPEN. A escolha de categoria é o caminho normal, mas se
+            // por QUALQUER motivo técnico não der pra obter a categoria (erro,
+            // picker não renderiza, exceção), inscreve SEM categoria — o organizador
+            // ajusta depois. Nunca deixar a pessoa de fora por causa da categoria.
+            // (Cancelar explícito do picker/data não chama o callback → não inscreve,
+            // pois é ação deliberada do usuário, não uma falha.)
+            var _failOpenEnroll = function(reason) {
+                window._warn('[enroll] categoria não resolvida (' + reason + ') — inscrevendo sem categoria; organizador ajusta depois');
+                window._doEnrollCurrentUser(tId, null);
+            };
+            try {
+                window._resolveEnrollmentCategory(tId, function(selectedCategories) {
+                    if (selectedCategories) window._doEnrollCurrentUser(tId, selectedCategories);
+                    else _failOpenEnroll('sem-categoria-resolvida');
+                });
+            } catch (e) {
+                if (typeof window._captureException === 'function') {
+                    try { window._captureException(e, { area: 'enroll-resolveCategory', tournamentId: tId }); } catch (_ce) {}
+                }
+                _failOpenEnroll('exceção');
+            }
             return;
         }
 

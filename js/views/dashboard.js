@@ -160,13 +160,32 @@ window._dashEnroll = function(tId) {
   // For team tournaments, skip the team modal — enroll as individual participant
   // (organizer enrolling from dashboard is always self-enrollment)
   var hasCats = (t.combinedCategories && t.combinedCategories.length > 0) ||
-                (t.genderCategories && t.genderCategories.length > 0);
+                (t.genderCategories && t.genderCategories.length > 0) ||
+                (t.skillCategories && t.skillCategories.length > 0) ||
+                (t.ageCategories && t.ageCategories.length > 0);
   if (hasCats) {
-    window._resolveEnrollmentCategory(tId, function(cats) {
-      if (!cats) return;
-      window._doEnrollCurrentUser(tId, cats);
+    // v2.4.9: FAIL-OPEN — ver enrollCurrentUser. Falha técnica na categoria
+    // inscreve sem categoria (organizador ajusta depois), nunca deixa de fora.
+    var _failOpenDash = function(reason) {
+      window._warn('[enroll/dash] categoria não resolvida (' + reason + ') — inscrevendo sem categoria');
+      window._doEnrollCurrentUser(tId, null);
       window.location.hash = '#tournaments/' + tId;
-    });
+    };
+    try {
+      window._resolveEnrollmentCategory(tId, function(cats) {
+        if (cats) {
+          window._doEnrollCurrentUser(tId, cats);
+          window.location.hash = '#tournaments/' + tId;
+        } else {
+          _failOpenDash('sem-categoria-resolvida');
+        }
+      });
+    } catch (e) {
+      if (typeof window._captureException === 'function') {
+        try { window._captureException(e, { area: 'enroll-dash-resolveCategory', tournamentId: tId }); } catch (_ce) {}
+      }
+      _failOpenDash('exceção');
+    }
     return;
   }
 

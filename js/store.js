@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.8-beta';
+window.SCOREPLACE_VERSION = '2.4.9-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -241,7 +241,14 @@ window._softRefreshView = function() {
                   document.getElementById('removal-subchoice-panel') ||
                   document.getElementById('simulation-panel') ||
                   document.getElementById('incomplete-teams-panel') ||
-                  document.getElementById('flyer-print-overlay');
+                  document.getElementById('flyer-print-overlay') ||
+                  // v2.4.9: escolha de categoria/dados na INSCRIÇÃO. Sem isto, o
+                  // snapshot do Firestore (frequente em torneio ao vivo) disparava
+                  // _softRefreshView → initRouter → _dismissAllOverlays e varria o
+                  // modal antes da pessoa escolher → "fica processando e não
+                  // inscreve". Mesma classe de bug da v0.15.89/v1.0.62/casual overlay.
+                  document.querySelector('[id^="modal-category-enroll-"]') ||
+                  document.getElementById('modal-birthdate-enroll');
   var active = document.activeElement;
   var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
   if (openModal || isTyping) {
