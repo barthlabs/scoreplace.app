@@ -107,6 +107,21 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
     const currentRodadas = Array.isArray(t.rodadas) ? t.rodadas.length : 0;
     const actualRounds = Math.max(currentRounds, currentRodadas);
 
+    // Horário agendado da rodada atual (base do firstDraw + intervalos completos).
+    const mostRecentScheduled = new Date(firstDraw.getTime() + intervalsCompleted * intervalMs);
+
+    // v2.4.17: dedup por TIMESTAMP — espelha o cliente (bracket-logic poller).
+    // Sem isto, se o organizador muda drawFirstDate/drawIntervalDays no meio da
+    // temporada, o gate por CONTAGEM (actualRounds < expectedRounds) dispara uma
+    // rodada POR HORA até a contagem alcançar o esperado — gerando rodadas em
+    // sequência (e notificações). O cliente só dispara se ainda não sorteou pro
+    // horário agendado atual; aqui igual: pula se já sorteamos pra este slot.
+    // Assim a cadência fica uma rodada por intervalo, mesmo após mudar a config.
+    const lastFired = t.lastAutoDrawAt ? new Date(t.lastAutoDrawAt) : null;
+    if (lastFired && !isNaN(lastFired.getTime()) && lastFired >= mostRecentScheduled) {
+      continue;
+    }
+
     // If we need more rounds, generate one
     if (actualRounds < expectedRounds) {
       console.log(`Auto-draw: generating round ${actualRounds + 1} for ${tId} (${t.name})`);
@@ -117,9 +132,6 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
         console.error(`Auto-draw: draw-core indisponível — pulando ${tId}`);
         continue;
       }
-
-      // Horário agendado desta rodada (= base do firstDraw + intervalos completos).
-      const mostRecentScheduled = new Date(firstDraw.getTime() + intervalsCompleted * intervalMs);
 
       try {
         // v2.3.91: usa o MESMO motor de sorteio do app (Rei/Rainha, duplas,
