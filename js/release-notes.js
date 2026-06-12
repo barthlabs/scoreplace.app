@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.30-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.31-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Liga com sorteio automático não mostra mais "chamada" nem botão de sortear.</b> Em torneios de Liga com <b>sorteio automático</b> (data e periodicidade definidas), a tela de inscritos não exibe mais a "Chamada antes do sorteio" nem o botão "Sortear entre os presentes" — o sorteio roda sozinho no horário agendado. Esses controles só aparecem no sorteio <b>manual</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.30-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>W.O. e substituto nos grupos da Liga.</b> Quando um jogador não consegue fazer seus jogos da rodada, os demais do grupo (ou o organizador) podem dar <b>W.O.</b> pra ele (fica com <b>0 pontos</b> na rodada) e preencher a vaga de duas formas: <b>(1)</b> convidar alguém da <b>mesma categoria</b> que ficou de fora no sorteio — a pessoa <b>aceita</b> e entra jogando e <b>pontuando de verdade</b>; ou <b>(2)</b> completar com um <b>Jogador X</b> (qualquer pessoa presente na arena) que <b>não pontua</b>, só permite que os demais joguem a rodada.</li>' +
         '<li>O convite chega como notificação; enquanto o convidado não aceita, o grupo fica aguardando. Dá pra <b>reverter</b> o W.O. a qualquer momento.</li>' +

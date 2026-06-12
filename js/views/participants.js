@@ -1414,7 +1414,12 @@ function renderParticipants(container, tournamentId) {
   // presentes. Diferente do check-in pós-início (canCheckIn), aqui a presença é
   // marcada por ENTRY (time ou individual) — a unidade que entra no sorteio.
   const isFinished = t.status === 'finished';
-  const canRollCall = isOrg && !drawDone && !isFinished;
+  // v2.4.31: Liga com SORTEIO AUTOMÁTICO (drawManual !== true + data/periodicidade
+  // configurada) NÃO tem chamada nem botão de sortear — o sorteio roda sozinho no
+  // horário agendado. A chamada pré-sorteio (roll-call) só vale pro sorteio
+  // MANUAL. Mesma regra de isLigaAutoDraw em tournaments.js:1508.
+  const _isLigaAutoDraw = (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) && t.drawManual !== true && !!t.drawFirstDate;
+  const canRollCall = isOrg && !drawDone && !isFinished && !_isLigaAutoDraw;
 
   if (!t.checkedIn) t.checkedIn = {};
   if (!t.absent) t.absent = {};
