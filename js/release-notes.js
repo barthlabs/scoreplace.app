@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.20-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Categoria/modalidade no perfil não some mais ao salvar.</b> Quem abria o perfil e já começava a preencher modalidade e categoria (nível A/B/C/D/FUN) podia perder o que digitou: ao terminar de carregar o perfil do servidor (1-2s, mais lento no celular), o app reescrevia os campos por cima e o Salvar gravava o estado vazio. Agora, assim que você toca em qualquer campo, o app <b>respeita o que você preencheu</b> e não sobrescreve mais.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.20-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Eliminatórias com inscrição aberta não fecham mais sozinhas no 1º jogo.</b> Em torneios de Eliminatórias configurados para manter inscrições abertas (lista de espera + novos confrontos a cada 4 / repescagem), completar uma partida estava encerrando o torneio por engano — e a partir daí ninguém mais conseguia ser inscrito, mesmo aparecendo "aberto" nos cards e na configuração. Agora o torneio <b>continua aberto</b> enquanto a inscrição tardia estiver ativa; só encerra quando o <b>organizador fecha as inscrições</b> e a chave chega ao campeão.</li>' +
       '</ul>' +

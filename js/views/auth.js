@@ -3412,6 +3412,14 @@ async function simulateLoginSuccess(user) {
     setTimeout(function () { if (typeof window._initProfileMap === 'function') window._initProfileMap(); }, 300);
 
     // Populate now (snappy, no blank flash) então refresh from Firestore.
+    // v2.4.21: reset do flag de edição ANTES da primeira população. O
+    // re-populate disparado quando loadUserProfile (async, lento em mobile)
+    // retorna só pode rodar se o usuário NÃO mexeu no form nesse intervalo —
+    // senão limpa modalidade/categoria/campos que ele acabou de preencher.
+    window._profileDirty = false;
+    if (typeof window._attachProfileDirtyTracking === 'function') {
+      window._attachProfileDirtyTracking(modalInner);
+    }
     if (typeof window._populateProfileModalFields === 'function') {
       window._populateProfileModalFields();
     }
@@ -3435,8 +3443,9 @@ async function simulateLoginSuccess(user) {
     if (window.AppStore && typeof window.AppStore.loadUserProfile === 'function' && cu.uid) {
       try {
         await window.AppStore.loadUserProfile(cu.uid);
-        // Re-populate só se ainda na rota #profile.
-        if (window.location.hash === '#profile') {
+        // Re-populate só se ainda na rota #profile E o usuário não começou a
+        // editar (v2.4.21 — senão sobrescreve modalidade/categoria em curso).
+        if (window.location.hash === '#profile' && !window._profileDirty) {
           window._populateProfileModalFields();
         }
       } catch (e) { window._warn('Profile refresh on open failed:', e); }
@@ -4506,7 +4515,23 @@ window._displayDateToIso = function(str) {
 // User pode ser C em tênis e D em beach tennis.
 window._SKILL_PILLS_PROFILE = ['A', 'B', 'C', 'D', 'FUN'];
 
+// v2.4.21: marca o form de perfil como "editado" no primeiro input/change do
+// usuário. Usado pra impedir que o re-populate disparado quando loadUserProfile
+// (async) retorna sobrescreva campos que ele já preencheu — bug reportado:
+// pessoas preenchendo categoria/modalidade e a informação não salvava porque
+// era limpa ~1-2s depois (janela do load) e o Salvar pegava o estado zerado.
+// Os botões de modalidade/categoria/árbitro setam o flag direto; este listener
+// cobre os campos de form (nome, gênero, cidade, nascimento, CEPs, toggles).
+window._attachProfileDirtyTracking = function(rootEl) {
+  if (!rootEl || rootEl._dirtyTrackingAttached) return;
+  rootEl._dirtyTrackingAttached = true;
+  var mark = function() { window._profileDirty = true; };
+  rootEl.addEventListener('input', mark, true);
+  rootEl.addEventListener('change', mark, true);
+};
+
 window._toggleProfileSport = function(sport) {
+  window._profileDirty = true; // v2.4.21
   if (!Array.isArray(window._profileSelectedSports)) window._profileSelectedSports = [];
   if (!window._profileSkillBySport || typeof window._profileSkillBySport !== 'object') {
     window._profileSkillBySport = {};
@@ -4531,6 +4556,7 @@ window._toggleProfileSport = function(sport) {
 };
 
 window._setProfileSkillForSport = function(sport, skill) {
+  window._profileDirty = true; // v2.4.21
   if (!window._profileSkillBySport || typeof window._profileSkillBySport !== 'object') {
     window._profileSkillBySport = {};
   }
@@ -4547,6 +4573,7 @@ window._setProfileSkillForSport = function(sport, skill) {
 
 // v1.6.1-beta: toggle "posso arbitrar" por modalidade.
 window._toggleProfileRefereeForSport = function(sport) {
+  window._profileDirty = true; // v2.4.21
   if (!window._profileCanRefereeBySport || typeof window._profileCanRefereeBySport !== 'object') {
     window._profileCanRefereeBySport = {};
   }
@@ -7141,6 +7168,12 @@ if (typeof window.renderProfilePage !== 'function') {
     setTimeout(function () { if (typeof window._setupProfileSearch === 'function') window._setupProfileSearch(); }, 100);
     setTimeout(function () { if (typeof window._initProfileMap === 'function') window._initProfileMap(); }, 300);
 
+    // v2.4.21: ver renderProfilePage — flag de edição evita que o re-populate
+    // pós-loadUserProfile limpe campos que o usuário preencheu nesse intervalo.
+    window._profileDirty = false;
+    if (typeof window._attachProfileDirtyTracking === 'function') {
+      window._attachProfileDirtyTracking(modalInner);
+    }
     if (typeof window._populateProfileModalFields === 'function') {
       window._populateProfileModalFields();
     }
@@ -7148,7 +7181,7 @@ if (typeof window.renderProfilePage !== 'function') {
     if (window.AppStore && typeof window.AppStore.loadUserProfile === 'function' && cu.uid) {
       try {
         await window.AppStore.loadUserProfile(cu.uid);
-        if (window.location.hash === '#profile' && typeof window._populateProfileModalFields === 'function') {
+        if (window.location.hash === '#profile' && !window._profileDirty && typeof window._populateProfileModalFields === 'function') {
           window._populateProfileModalFields();
         }
       } catch (e) { window._warn('Profile refresh on open failed:', e); }
