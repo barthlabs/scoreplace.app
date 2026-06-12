@@ -572,6 +572,11 @@ window._selectCommLevel = function(btn, tId) {
 };
 
 window._confirmSendComm = async function(tId) {
+    // v2.4.41: _t estava sendo declarado DENTRO do if(!message) — quando a
+    // mensagem não era vazia (caso normal), _t ficava undefined e a linha
+    // _t('org.commFullMsg', …) jogava "TypeError: _t is not a function",
+    // travando o envio. Por isso o botão "Enviar Comunicado" não funcionava.
+    var _t = window._t || function(k) { return k; };
     var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
     if (!t) return;
     var textEl = document.getElementById('org-comm-text-' + tId);
@@ -579,7 +584,6 @@ window._confirmSendComm = async function(tId) {
     var message = textEl ? textEl.value.trim() : '';
     var level = levelEl ? levelEl.value : 'important';
     if (!message) {
-        var _t = window._t || function(k) { return k; };
         if (typeof showAlertDialog !== 'undefined') showAlertDialog(_t('org.msgRequired'), _t('org.msgRequiredDesc'), null, { type: 'warning' });
         return;
     }
@@ -587,28 +591,142 @@ window._confirmSendComm = async function(tId) {
     var cu = window.AppStore.currentUser;
     var fullMsg = _t('org.commFullMsg', {name: t.name, message: message});
 
-    var result = await window._notifyTournamentParticipants(t, {
-        type: 'organizer_communication',
-        message: fullMsg,
-        level: level
-    }, cu ? cu.email : null);
+    // Desabilita o botão pra feedback (84 inscritos = ~84 writes assíncronos).
+    var _sendBtn = document.querySelector('#modal-org-comm-' + tId + ' .btn-primary');
+    if (_sendBtn) { _sendBtn.disabled = true; _sendBtn.textContent = 'Enviando…'; }
+
+    var result = null;
+    try {
+        result = await window._notifyTournamentParticipants(t, {
+            type: 'organizer_communication',
+            message: fullMsg,
+            level: level
+        }, cu ? cu.email : null);
+    } catch (e) {
+        window._warn && window._warn('[orgComm] erro ao enviar', e);
+        if (typeof showNotification !== 'undefined') showNotification('Erro', 'Não foi possível enviar o comunicado: ' + ((e && e.message) || e), 'error');
+        if (_sendBtn) { _sendBtn.disabled = false; _sendBtn.textContent = _t('org.sendComm'); }
+        return;
+    }
 
     var modalEl = document.getElementById('modal-org-comm-' + tId);
     if (modalEl) modalEl.remove();
 
-    var count = result ? result.emails.length + result.phones.length : 0;
-    if (typeof showNotification !== 'undefined') showNotification((window._t||function(k){return k;})('org.commSentTitle'), (window._t||function(k){return k;})('org.commSentMsg'), 'success');
+    // O envio já vai por TODOS os canais que cada inscrito escolheu (plataforma +
+    // e-mail via digest + WhatsApp via fila). Não abrimos mais mailto/WhatsApp do
+    // organizador (mailto com 84 BCC + navegação '_self' tirava o usuário do app).
+    var count = result ? (result.emails.length + result.phones.length) : 0;
+    if (typeof showNotification !== 'undefined') {
+        showNotification(_t('org.commSentTitle'), _t('org.commSentMsg'), 'success');
+    }
+};
 
-    // Open email/WhatsApp if collected
-    if (result && result.emails.length > 0) {
-        var emailSubject = encodeURIComponent('📢 ' + t.name + ' — Comunicado do Organizador');
-        var emailBody = encodeURIComponent(message + '\n\n---\nTorneio: ' + t.name + '\n' + window._tournamentUrl(t.id));
-        window.open('mailto:?bcc=' + result.emails.join(',') + '&subject=' + emailSubject + '&body=' + emailBody, '_self');
+// ─── v2.4.41: Falar com o organizador (de quem NÃO é o organizador) ─────────
+// Se o organizador tem telefone → abre uma conversa de WhatsApp (wa.me) direto.
+// Senão → abre um diálogo pra digitar e manda na PLATAFORMA (que já dispara
+// e-mail/WhatsApp pelos canais que o organizador escolheu).
+window._messageOrganizer = async function(tId) {
+  var t = window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  if (!t) return;
+  var orgName = t.organizerName || t.organizerEmail || 'o organizador';
+  var firstName = String(orgName).split(/[\s@]/)[0] || orgName;
+  if (typeof showNotification !== 'undefined') showNotification('', 'Buscando contato do organizador…', 'info');
+
+  var phoneDigits = '';
+  var orgEmail = t.organizerEmail || '';
+  try {
+    if (t.creatorUid && window.FirestoreDB && window.FirestoreDB.loadUserProfile) {
+      var prof = await window.FirestoreDB.loadUserProfile(t.creatorUid);
+      if (prof) {
+        if (prof.phone) phoneDigits = String(prof.phone).replace(/\D/g, '');
+        if (!orgEmail && prof.email) orgEmail = prof.email;
+      }
     }
-    if (result && result.phones.length > 0) {
-        var waMsg = '📢 ' + t.name + '\n' + message + '\n\n' + window._tournamentUrl(t.id);
-        window.open(window._whatsappShareUrl(waMsg), '_blank');
+  } catch (e) {}
+
+  // TEM telefone → abre a conversa de WhatsApp direto, com uma saudação que dá
+  // contexto (o usuário continua a conversa no próprio WhatsApp).
+  if (phoneDigits && phoneDigits.length >= 10) {
+    var cu = window.AppStore.currentUser;
+    var who = (cu && (cu.displayName || cu.name)) ? (cu.displayName || cu.name) : '';
+    var greet = 'Olá ' + firstName + '! ' + (who ? '(' + who + ') ' : '') + 'Sobre o torneio "' + (t.name || '') + '" no scoreplace.app: ';
+    window.open('https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(greet), '_blank');
+    return;
+  }
+
+  // SEM telefone → diálogo pra digitar e mandar pela plataforma + e-mail.
+  window._openMessageOrganizerDialog(tId, orgName, orgEmail);
+};
+
+window._openMessageOrganizerDialog = function(tId, orgName, orgEmail) {
+  var t = window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  if (!t) return;
+  var modalId = 'modal-msg-org-' + tId;
+  var old = document.getElementById(modalId); if (old) old.remove();
+  var html = '<div id="' + modalId + '" class="modal-overlay active" style="z-index:10000;">' +
+    '<div class="modal" style="max-width:460px;width:95%;">' +
+      '<div class="modal-header" style="padding:1.5rem 1.5rem 0;">' +
+        '<h2 class="card-title" style="margin:0;font-size:1rem;">💬 Falar com o organizador</h2>' +
+        '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +
+      '</div>' +
+      '<div class="modal-body" style="padding:1.5rem;">' +
+        '<p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 1rem;">Mensagem para <b>' + window._safeHtml(orgName) + '</b> sobre "' + window._safeHtml(t.name || '') + '". Vai na plataforma' + (orgEmail ? ' e por e-mail' : '') + '.</p>' +
+        '<textarea id="msg-org-text-' + tId + '" class="form-control" rows="4" placeholder="Escreva sua mensagem…" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>' +
+        '<div style="display:flex;gap:8px;margin-top:1rem;">' +
+          '<button type="button" class="btn btn-primary" style="flex:1;" onclick="window._sendMessageToOrganizerPlatform(\'' + tId + '\')">Enviar</button>' +
+          '<button type="button" class="btn btn-outline" style="flex:0.6;" onclick="document.getElementById(\'' + modalId + '\').remove();">Cancelar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window._sendMessageToOrganizerPlatform = async function(tId) {
+  var t = window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  if (!t) return;
+  var textEl = document.getElementById('msg-org-text-' + tId);
+  var message = textEl ? textEl.value.trim() : '';
+  if (!message) { if (typeof showAlertDialog !== 'undefined') showAlertDialog('Mensagem vazia', 'Escreva uma mensagem antes de enviar.', null, { type: 'warning' }); return; }
+  var cu = window.AppStore.currentUser;
+  var senderName = (cu && (cu.displayName || cu.name)) || 'Um participante';
+  var fullMsg = senderName + ' — mensagem sobre "' + (t.name || 'torneio') + '": ' + message;
+
+  var btn = document.querySelector('#modal-msg-org-' + tId + ' .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+
+  // Organizadores: criador + co-organizadores ativos.
+  var targets = [];
+  if (t.creatorUid) targets.push({ uid: t.creatorUid, email: t.organizerEmail || '' });
+  (Array.isArray(t.coHosts) ? t.coHosts : []).forEach(function(ch){ if (ch.status === 'active') targets.push({ uid: ch.uid || '', email: ch.email || '' }); });
+  if (targets.length === 0 && t.organizerEmail) targets.push({ uid: '', email: t.organizerEmail });
+
+  var sent = 0; var seen = {};
+  for (var i = 0; i < targets.length; i++) {
+    var o = targets[i]; var uid = o.uid;
+    if (!uid && o.email && window.FirestoreDB && window.FirestoreDB.db) {
+      try { var snap = await window.FirestoreDB.db.collection('users').where('email', '==', o.email).limit(1).get(); if (!snap.empty) uid = snap.docs[0].id; } catch (e) {}
     }
+    if (uid && !seen[uid]) {
+      seen[uid] = true;
+      try {
+        await window._sendUserNotification(uid, {
+          type: 'player_to_organizer', level: 'fundamental',
+          tournamentId: String(t.id), tournamentName: t.name || 'torneio',
+          message: fullMsg, fromName: senderName
+        });
+        sent++;
+      } catch (e) {}
+    }
+  }
+
+  var modalEl = document.getElementById('modal-msg-org-' + tId);
+  if (modalEl) modalEl.remove();
+  if (typeof showNotification !== 'undefined') {
+    showNotification(sent > 0 ? 'Mensagem enviada' : 'Não enviado',
+      sent > 0 ? 'O organizador foi avisado na plataforma (e por e-mail/WhatsApp se ele recebe por esses canais).' : 'Não encontramos o contato do organizador.',
+      sent > 0 ? 'success' : 'info');
+  }
 };
 
 // ─── Save as Template ─────────────────────────────────────────────────────

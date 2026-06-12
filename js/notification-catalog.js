@@ -46,6 +46,8 @@ window.NOTIF_CATALOG = {
   // v2.4.30: convite pra substituir num grupo de Liga (W.O.) + resultado do convite.
   'liga-sub-invite':           { level: 'fundamental', icon: '📨', color: '#10b981' },
   'liga-sub-result':           { level: 'all',         icon: '🔁', color: 'var(--primary-color)' },
+  // v2.4.41: mensagem de um inscrito/visitante pro organizador do torneio.
+  'player_to_organizer':       { level: 'fundamental', icon: '💬', color: '#3b82f6' },
 
   // Organizer actions
   org_communication:           { level: 'important',   icon: '📣', color: '#f59e0b' },
