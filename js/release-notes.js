@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.26-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.27-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Meus Resultados mostra os últimos 3 jogos.</b> A lista de "Últimos resultados" na tela inicial agora exibe apenas os <b>3 jogos mais recentes</b> que você jogou, somando todos os torneios (antes eram 5).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.26-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Detalhamento de Pontos Avançados reorganizado.</b> Ao tocar no PA de um jogador, a tabela agora abre com a coluna <b>Total</b> primeiro, depois <b>Média</b> (por rodada jogada) e em seguida as rodadas da <b>mais recente para a mais antiga</b>. As rodadas em que o jogador <b>folgou por sorteio</b> aparecem marcadas como <b>folga</b> com a média das rodadas jogadas em cada linha; as rodadas em que ficou de fora aparecem como <b>inativo</b> com zero. O total geral continua igual ao da classificação.</li>' +
       '</ul>' +

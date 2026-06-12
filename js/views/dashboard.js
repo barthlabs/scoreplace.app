@@ -1629,9 +1629,10 @@ function renderDashboard(container) {
       });
     });
 
-    // Recent confirmed: sort by confirmedAt desc, cap at 5
+    // Recent confirmed: sort by confirmedAt desc, cap at 3 (últimos 3 jogos
+    // jogados pelo usuário, somando todos os torneios). Pedido do usuário.
     recentConfirmed.sort(function(a, b) { return (b.confirmedAt || 0) - (a.confirmedAt || 0); });
-    recentConfirmed = recentConfirmed.slice(0, 5);
+    recentConfirmed = recentConfirmed.slice(0, 3);
 
     var totalSection = pendingForMe.length + pendingByMe.length + disputedMatches.length + noResult.length + upcoming.length + recentConfirmed.length;
     if (totalSection === 0) return '';
