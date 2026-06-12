@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.28-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.29-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Categoria apagada não fica mais grudada no inscrito.</b> Se uma categoria foi criada e depois removida do torneio (ex.: uma categoria personalizada abandonada), ela é <b>retirada dos participantes</b> que a tinham — eles passam a ficar <b>sem categoria</b> (ou com a categoria do próprio perfil, quando houver). Limpeza automática ao abrir as Categorias e ao excluir uma categoria.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.28-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Ninguém mais fica de fora do sorteio por falta de categoria.</b> Em torneios com categorias (ex.: C/D), todo inscrito que estava <b>sem categoria</b> — ou com uma categoria que não existe mais no torneio — agora entra no sorteio na <b>categoria mais fraca disponível</b> (respeitando gênero/habilidade do perfil quando houver). Antes, esses inscritos eram filtrados pra fora e ficavam sem jogo.</li>' +
         '<li><b>Pode subir de categoria, nunca cair sozinho.</b> Quem foi encaixado automaticamente na categoria mais fraca pode ser promovido a qualquer momento pelo organizador; o sistema nunca rebaixa automaticamente.</li>' +

@@ -158,9 +158,10 @@ assert(wrongFloor.length === 0, 'auto-encaixados SEM perfil foram pra D (mais fr
 // O sem-categoria com perfil C deve ter ido pra C (respeita perfil), não D.
 const skillC = tc.participants.find(p => p.skillBySport);
 assert(skillC && (skillC.categories || [])[0] === 'C', 'inscrito sem cat mas com perfil C foi pra C (got ' + (skillC && skillC.categories) + ')');
-// staleCat preservada nos de categoria morta.
-const staleKept = tc.participants.filter(p => p.staleCat && p.staleCat[0] === 'Fem TOP 500');
-assert(staleKept.length === 6, 'categoria morta preservada em staleCat (got ' + staleKept.length + ')');
+// Categoria morta NÃO permanece em lugar nenhum do participante.
+const stillHasDead = tc.participants.filter(p =>
+  (p.categories || []).indexOf('Fem TOP 500') !== -1 || p.category === 'Fem TOP 500' || (p.staleCat || []).indexOf('Fem TOP 500') !== -1);
+assert(stillHasDead.length === 0, 'categoria morta "Fem TOP 500" removida de todos (ainda em: ' + stillHasDead.length + ')');
 console.log('   colunas geradas: ' + tc.rounds.length + ' · jogadores sorteados: ' + drawn.size + '/' + totalParts);
 
 console.log('\n' + (failures === 0 ? '✅ TODOS OS TESTES PASSARAM' : '❌ ' + failures + ' FALHA(S)'));

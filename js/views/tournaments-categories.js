@@ -1107,6 +1107,19 @@ window.renderCategoryManagerPage = function(container, tId) {
         });
     };
 
+    // v2.4.29: ao abrir, limpa categorias mortas/abandonadas dos participantes
+    // (ex.: "Fem TOP 500" num torneio C/D) ANTES de renderizar, pra a tela já
+    // mostrar quem ficou sem categoria. Salva se mudou algo.
+    try {
+        var _tPurge = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+        if (_tPurge && typeof window._purgeInvalidParticipantCategories === 'function') {
+            var _purged = window._purgeInvalidParticipantCategories(_tPurge);
+            if (_purged > 0 && window.FirestoreDB && window.FirestoreDB.saveTournament) {
+                window.FirestoreDB.saveTournament(_tPurge);
+            }
+        }
+    } catch (_e) {}
+
     _renderModal();
 
     // Save reference for re-render
@@ -1993,6 +2006,11 @@ window._deleteEmptyCategory = function(tId, cat) {
 
     // Auto-reassign any remaining stale participant categories (safety net).
     _autoReconcileParticipantCategories(t);
+    // v2.4.29: remove de vez qualquer categoria que continuou inválida após o
+    // remap por gênero (categoria sem equivalente → participante fica sem categoria).
+    if (typeof window._purgeInvalidParticipantCategories === 'function') {
+        window._purgeInvalidParticipantCategories(t);
+    }
 
     window.AppStore.logAction(tId, 'Categoria excluída: ' + cat);
 
@@ -2389,6 +2407,13 @@ window._autoAssignCategories = function(tId, _preloadedT) {
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
     if (parts.length === 0) return 0;
 
+    // v2.4.29: ANTES de encaixar por perfil, remove categorias mortas/abandonadas
+    // que ficaram nos participantes (ex.: "Fem TOP 500" num torneio que virou C/D).
+    // Quem fica sem categoria válida é reencaixado pelo perfil logo abaixo; quem
+    // não tiver dado de perfil segue sem categoria (e o sorteio põe na mais fraca).
+    var purged = (typeof window._purgeInvalidParticipantCategories === 'function')
+        ? window._purgeInvalidParticipantCategories(t) : 0;
+
     var tSport = t.sport ? String(t.sport).trim() : null;
     var assigned = 0;
 
@@ -2431,7 +2456,7 @@ window._autoAssignCategories = function(tId, _preloadedT) {
         }
     });
 
-    if (assigned > 0) {
+    if (assigned > 0 || purged > 0) {
         if (!Array.isArray(t.participants)) t.participants = parts;
         if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
             window.FirestoreDB.saveTournament(t);
@@ -2623,6 +2648,48 @@ window._dispatchCategoryDataRequests = async function(t) {
 // inscritos pra fora de TODA rodada e eles ficam de fora do sorteio — foi o
 // desastre da Confra de 11/jun (≈56 de 83 inscritos sem jogo).
 
+// v2.4.29: remove dos participantes QUALQUER categoria que não existe mais no
+// torneio (criada e depois apagada — ex.: "Fem TOP 500" personalizada/abandonada).
+// Categoria morta NÃO permanece: sobra só a(s) válida(s); se não sobrar nenhuma,
+// o participante fica SEM categoria (e o auto-assign por perfil / sorteio cuidam
+// dele depois). Vale até pra quem foi posto na categoria morta pelo organizador —
+// não há como honrar "está na TOP 500" se a TOP 500 não existe mais. Não salva
+// (o chamador persiste). Retorna nº de participantes limpos.
+window._purgeInvalidParticipantCategories = function(t) {
+    if (!t) return 0;
+    var validCats = (typeof window._getTournamentCategories === 'function')
+        ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+    if (!Array.isArray(validCats) || validCats.length === 0) return 0;
+    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    var changed = 0;
+    parts.forEach(function(p) {
+        if (!p || typeof p !== 'object') return;
+        var cats = (typeof window._getParticipantCategories === 'function')
+            ? window._getParticipantCategories(p) : (p.categories || (p.category ? [p.category] : []));
+        if (!cats || cats.length === 0) return;
+        var valid = cats.filter(function(c) { return validCats.indexOf(c) !== -1; });
+        if (valid.length === cats.length) return; // nada inválido a remover
+        if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, valid);
+        else { p.categories = valid; p.category = valid[0] || ''; }
+        if (valid.length === 0) {
+            // A categoria morta era a única → fica "sem categoria". Limpa marcações
+            // pra que o auto-assign por perfil e o sorteio tratem como inscrito sem
+            // categoria (e reencaixem pelo perfil ou na mais fraca).
+            delete p.autoWeakestCat;
+            delete p.wasUncategorized;
+            delete p.staleCat;
+            if (p.categorySource === 'organizador' || p.categorySource === 'perfil' ||
+                p.categorySource === 'auto_fraca' || p.categorySource === 'inscricao' ||
+                p.categorySource === 'perfil_aprovado') {
+                delete p.categorySource;
+            }
+        }
+        changed++;
+    });
+    if (changed > 0 && !Array.isArray(t.participants)) t.participants = parts;
+    return changed;
+};
+
 // Categoria VÁLIDA mais fraca que o participante é elegível a ocupar. Respeita
 // gênero/idade/habilidade do perfil (via _eligibleCatsForParticipant): se o perfil
 // indica uma habilidade específica, ela já estreita a elegibilidade e a "mais
@@ -2663,9 +2730,7 @@ window._assignUncategorizedToWeakest = function(t) {
         if (validHeld.length > 0) return; // já tem categoria válida → não mexe
         var weakest = window._weakestEligibleCategory(p, t);
         if (!weakest) return;
-        // Preserva a(s) categoria(s) inválida(s) antiga(s) pra histórico/recuperação.
-        var staleNow = existing.filter(function(c) { return validCats.indexOf(c) === -1; });
-        if (staleNow.length > 0 && !p.staleCat) p.staleCat = staleNow.slice();
+        // Categoria morta/abandonada NÃO permanece — é substituída pela mais fraca.
         if (typeof window._setParticipantCategories === 'function') {
             window._setParticipantCategories(p, [weakest]);
         } else {
