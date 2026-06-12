@@ -303,7 +303,12 @@
       var profile = uid ? profileMap[uid] : null;
       // Profile vence — mantém report fresh quando user atualiza perfil
       // depois de se inscrever. Cai pra participantObj se profile não existe.
-      var gender = (profile && profile.gender) || (p && p.gender) || null;
+      // v2.4.32: EXCETO quando o organizador editou o gênero na ficha do inscrito
+      // (genderSource='organizador') — aí a edição do org é autoritativa e vence
+      // o perfil (e funciona pra inscrito SEM conta, que não tem profile).
+      var gender = (p && p.gender && p.genderSource === 'organizador')
+        ? p.gender
+        : ((profile && profile.gender) || (p && p.gender) || null);
       var name = (profile && profile.displayName)
         || p.displayName || p.name
         || (typeof p === 'string' ? p : '(sem nome)');
@@ -891,11 +896,25 @@
   }
 
   function _inscritoItemHtml(r) {
+    var isOrg = !!(_liveState && _liveState.isOrg);
+    var tIdEsc = String((_liveState && _liveState.t && _liveState.t.id) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var gMap = { Fem: { l: '♀ Fem', c: '236,72,153' }, Masc: { l: '♂ Masc', c: '59,130,246' }, Misto: { l: '⚥ Misto', c: '168,85,247' } };
     var gl = _genderLabel(r.gender);
-    var gBadge = (gl && gMap[gl])
-      ? '<span style="font-size:0.68rem;font-weight:700;color:rgb(' + gMap[gl].c + ');background:rgba(' + gMap[gl].c + ',0.14);border-radius:6px;padding:2px 7px;">' + gMap[gl].l + '</span>'
-      : '<span style="font-size:0.68rem;font-weight:600;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">? Sem gên.</span>';
+    var gBadge;
+    if (isOrg) {
+      // v2.4.32: gênero editável direto na ficha (vale pra inscrito sem conta).
+      var curG = gl === 'Fem' ? 'feminino' : (gl === 'Masc' ? 'masculino' : (gl === 'Misto' ? 'misto' : ''));
+      var gc = (gl && gMap[gl]) ? gMap[gl].c : '148,163,184';
+      var gOpt = function (v, lbl) { return '<option value="' + v + '"' + (curG === v ? ' selected' : '') + '>' + lbl + '</option>'; };
+      gBadge = '<select title="Editar gênero do inscrito" onchange="window._erSetGender(\'' + tIdEsc + '\',' + r.order + ',this.value)" ' +
+        'style="font-size:0.68rem;font-weight:700;color:rgb(' + gc + ');background:rgba(' + gc + ',0.14);border:1px solid rgba(' + gc + ',0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
+        gOpt('', '? Sem gên. ✎') + gOpt('feminino', '♀ Fem') + gOpt('masculino', '♂ Masc') + gOpt('misto', '⚥ Misto') +
+        '</select>';
+    } else {
+      gBadge = (gl && gMap[gl])
+        ? '<span style="font-size:0.68rem;font-weight:700;color:rgb(' + gMap[gl].c + ');background:rgba(' + gMap[gl].c + ',0.14);border-radius:6px;padding:2px 7px;">' + gMap[gl].l + '</span>'
+        : '<span style="font-size:0.68rem;font-weight:600;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">? Sem gên.</span>';
+    }
     var skills = (r.effectiveSkills && r.effectiveSkills.length > 0)
       ? r.effectiveSkills.map(function (s) { return '<span style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border-radius:6px;padding:2px 7px;">' + _esc(s) + '</span>'; }).join('')
       : '<span style="font-size:0.68rem;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">sem hab.</span>';
@@ -908,6 +927,42 @@
       '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding-left:32px;">' + gBadge + skills + ageBadge + '</div>' +
     '</div>';
   }
+
+  // v2.4.32: organizador edita o gênero do inscrito direto na lista. Grava na
+  // FICHA do inscrito (t.participants) com genderSource='organizador' — vence o
+  // perfil e funciona pra quem NÃO tem conta. Atualização instantânea (sem
+  // refetch). Reflete na categorização (auto-assign / sorteio leem p.gender).
+  window._erSetGender = function (tId, order, val) {
+    if (!_liveState || !_liveState.isOrg) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o organizador edita o gênero.', 'info'); return; }
+    var t = window.AppStore && window.AppStore.tournaments
+      ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); }) : null;
+    if (!t) return;
+    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    var row = (_liveState.rows || []).filter(function (r) { return r.order === order; })[0];
+    // Acha o participante por uid/email/nome (robusto a reordenação); fallback índice.
+    var p = null;
+    if (row) {
+      for (var i = 0; i < parts.length; i++) {
+        var cp = parts[i]; if (!cp || typeof cp !== 'object') continue;
+        if ((row.uid && cp.uid === row.uid) ||
+            (row.email && (cp.email || '').toLowerCase() === String(row.email).toLowerCase()) ||
+            (row.name && (cp.displayName || cp.name) === row.name)) { p = cp; break; }
+      }
+    }
+    if (!p) p = parts[order - 1];
+    if (!p || typeof p !== 'object') return;
+    var clean = (val === 'feminino' || val === 'masculino' || val === 'misto') ? val : '';
+    if (clean) { p.gender = clean; p.genderSource = 'organizador'; }
+    else { delete p.gender; delete p.genderSource; }
+    // espelha no row vivo pra re-render instantâneo
+    if (row) row.gender = clean || null;
+    try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) { if (!Array.isArray(t.participants)) t.participants = parts; window.FirestoreDB.saveTournament(t); } } catch (e) {}
+    if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
+    if (typeof showNotification === 'function') {
+      var lbl = clean === 'feminino' ? 'Feminino' : clean === 'masculino' ? 'Masculino' : clean === 'misto' ? 'Misto' : 'Sem gênero';
+      showNotification('Gênero atualizado', (row ? row.name : 'Inscrito') + ' → ' + lbl, 'success');
+    }
+  };
 
   // Re-renderiza só a lista conforme busca/sort/filtros — sem refetch nem
   // re-render da página. Chamado por oninput/onchange dos controles.
@@ -999,7 +1054,8 @@
     var subtitle = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">' + tName + '</div>';
 
     // Estado vivo pra busca/sort/filtros da lista de inscritos.
-    _liveState = { rows: rows, t: t };
+    var _isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    _liveState = { rows: rows, t: t, isOrg: _isOrg };
 
     container.innerHTML = hdr +
       '<div style="max-width:760px;margin:0 auto;padding:1rem;">' +

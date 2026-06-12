@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.31-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.32-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Editar o gênero do inscrito na Análise de Inscritos.</b> Na lista de inscritos, o organizador agora pode <b>tocar no selo de gênero</b> de qualquer inscrito e escolher Feminino / Masculino / Misto / Sem gênero — direto ali. Funciona inclusive pra <b>inscritos sem conta</b> (cadastrados na mão). A escolha vale na hora e é usada na categorização e no sorteio.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.31-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Liga com sorteio automático não mostra mais "chamada" nem botão de sortear.</b> Em torneios de Liga com <b>sorteio automático</b> (data e periodicidade definidas), a tela de inscritos não exibe mais a "Chamada antes do sorteio" nem o botão "Sortear entre os presentes" — o sorteio roda sozinho no horário agendado. Esses controles só aparecem no sorteio <b>manual</b>.</li>' +
       '</ul>' +
