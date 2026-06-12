@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.13-beta';
+window.SCOREPLACE_VERSION = '2.4.14-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -110,31 +110,82 @@ window._devWhatsAppBtnHtml = function (opts) {
 })();
 
 // ─── Auto-update: check if a newer version is deployed and force reload ────
-// Runs on EVERY page load (1s delay). Fetches store.js bypassing all caches.
-// If remote version differs, nukes SW caches, unregisters old SW, and reloads.
+// v2.4.14: antes rodava SÓ no load (1s). No PWA do iOS isso era o ponto cego:
+// quando a pessoa volta pro app pelo app switcher (resume, sem reload real),
+// o check nunca re-disparava e ela ficava presa numa versão antiga até fechar
+// e reabrir o app na unha. Agora o check também roda em visibilitychange/
+// pageshow/focus (eventos que o iOS PWA dispara no resume) e num intervalo,
+// com throttle. O reload é GUARDADO: nunca interrompe placar ao vivo, partida
+// casual, formulário de torneio ou digitação — nesses casos adia até ficar
+// seguro (ou até o próximo resume).
 (function() {
-  setTimeout(function() {
-    fetch('/js/store.js?_t=' + Date.now(), { cache: 'no-store' }).then(function(r) {
+  // É seguro recarregar agora? (não interromper ação crítica do usuário)
+  window._isSafeToReload = function() {
+    try {
+      if (document.querySelector('.modal-overlay.active')) return false;
+      if (document.getElementById('live-scoring-overlay')) return false;
+      if (document.getElementById('casual-match-overlay')) return false;
+      var v = (window.location.hash || '').replace('#', '').split('/')[0];
+      if (v === 'novo-torneio') return false;
+      var a = document.activeElement;
+      if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)) return false;
+    } catch (e) {}
+    return true;
+  };
+
+  // Aplica a atualização: nuke caches + unregister SW + reload. Se não for
+  // seguro e force!=true, marca pendente e tenta de novo quando ficar seguro.
+  window._applyUpdate = function(force) {
+    if (!force && !window._isSafeToReload()) {
+      window._pendingUpdateReload = true;
+      window._log('[AutoUpdate] Nova versão pronta — aguardando momento seguro pra recarregar.');
+      return;
+    }
+    window._pendingUpdateReload = false;
+    var p1 = ('caches' in window) ? caches.keys().then(function(keys) {
+      return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+    }) : Promise.resolve();
+    var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
+      return Promise.all(regs.map(function(r) { return r.unregister(); }));
+    }) : Promise.resolve();
+    Promise.all([p1, p2]).then(function() { window.location.reload(); });
+  };
+
+  // Busca store.js sem cache e compara a versão. Throttle de 60s salvo force.
+  window._lastUpdateCheck = 0;
+  window._checkForUpdate = function(opts) {
+    opts = opts || {};
+    var now = Date.now();
+    // Se já detectamos uma versão nova antes mas adiamos, tenta aplicar agora.
+    if (window._pendingUpdateReload) { window._applyUpdate(false); if (!opts.force) return; }
+    if (!opts.force && (now - window._lastUpdateCheck) < 60000) return;
+    window._lastUpdateCheck = now;
+    fetch('/js/store.js?_t=' + now, { cache: 'no-store' }).then(function(r) {
       if (!r.ok) throw new Error('fetch failed');
       return r.text();
     }).then(function(txt) {
       var m = txt.match(/SCOREPLACE_VERSION\s*=\s*'([^']+)'/);
       if (m && m[1] && m[1] !== window.SCOREPLACE_VERSION) {
-        window._log('[AutoUpdate] New version:', m[1], '(running:', window.SCOREPLACE_VERSION + '). Updating...');
-        // 1. Nuke all SW caches
-        var p1 = ('caches' in window) ? caches.keys().then(function(keys) {
-          return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-        }) : Promise.resolve();
-        // 2. Unregister all service workers
-        var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
-          return Promise.all(regs.map(function(r) { return r.unregister(); }));
-        }) : Promise.resolve();
-        Promise.all([p1, p2]).then(function() {
-          window.location.reload();
-        });
+        window._log('[AutoUpdate] New version:', m[1], '(running:', window.SCOREPLACE_VERSION + ').');
+        window._applyUpdate(!!opts.force);
       }
     }).catch(function() {});
-  }, 1000);
+  };
+
+  // 1. No load inicial: força (nada que o usuário tenha digitado ainda).
+  setTimeout(function() { window._checkForUpdate({ force: true }); }, 1000);
+
+  // 2. Resume do PWA / volta de aba (iOS PWA dispara visibilitychange + pageshow
+  //    ao voltar do app switcher). Aqui NÃO força — respeita ação em andamento.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') window._checkForUpdate({});
+  });
+  window.addEventListener('pageshow', function() { window._checkForUpdate({}); });
+  window.addEventListener('focus', function() { window._checkForUpdate({}); });
+
+  // 3. Periódico enquanto o app está aberto (timer pausa em background no iOS,
+  //    mas cobre sessões longas em desktop/Android).
+  setInterval(function() { window._checkForUpdate({}); }, 600000);
 })();
 
 // ─── Live countdown ticker ─────────────────────────────────────────────────
