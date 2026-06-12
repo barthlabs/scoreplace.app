@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.35-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.36-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Saudação e papéis concordam com o gênero.</b> Na tela inicial, quem não informou o gênero é recebido com <b>"Bem-vindo(a)"</b> (em vez de assumir masculino). E na organização do torneio cada pessoa aparece no seu gênero: <b>Organizador / Organizadora</b> e <b>Co-organizador / Co-organizadora</b> (ou "Organizador(a)" quando o gênero não é conhecido).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.35-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Atualizar o perfil vale na hora — aprovação só pra descer de categoria.</b> Se você estava <b>sem gênero, idade ou categoria</b> e preenche no perfil, isso passa a valer no torneio <b>na hora, sem aprovação</b> do organizador. Subir de categoria também é automático. O organizador só precisa <b>aprovar quando alguém quer descer pra uma categoria inferior</b> (evita "maquiar" o nível pra cair numa categoria mais fraca).</li>' +
       '</ul>' +

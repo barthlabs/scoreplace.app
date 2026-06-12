@@ -2219,24 +2219,18 @@ function renderTournaments(container, tournamentId = null) {
           }
           return '';
         };
-        var _orgGenders = [_resolveOrgGender(_t.organizerEmail, _t.creatorUid)];
-        if (Array.isArray(_t.coHosts)) {
-          _t.coHosts.forEach(function(ch) {
-            if (ch.status === 'active') _orgGenders.push(ch.gender || _resolveOrgGender(ch.email, ch.uid));
-          });
-        }
-        var _gNorm = _orgGenders.map(function(g) { return String(g || '').toLowerCase().trim(); });
-        var _orgHasMale = _gNorm.some(function(g) { return g === 'masculino' || g === 'm'; });
-        var _orgHasFemale = _gNorm.some(function(g) { return g === 'feminino' || g === 'f'; });
-        // Misto ou indefinido → masculino (default do português). Feminino só se
-        // TODA a organização com gênero conhecido for feminina (e nenhum homem).
-        var _orgCollective = _orgHasMale ? 'masculino' : (_orgHasFemale ? 'feminino' : 'masculino');
-        var _orgRoleLabel = _gw(_orgCollective, 'Organizador', 'Organizadora');
+        // v2.4.36: cada card de organização usa o gênero INDIVIDUAL daquela
+        // pessoa — Organizador/Organizadora pro principal conforme o gênero dele,
+        // Co-organizador/Co-organizadora pra cada co-org conforme o gênero dela.
+        // Sem gênero conhecido → forma neutra "Organizador(a)" / "Co-organizador(a)".
+        var _primaryGender = _resolveOrgGender(_t.organizerEmail, _t.creatorUid);
+        var _orgRoleLabel = _gw(_primaryGender, 'Organizador', 'Organizadora');
         _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '');
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
             if (ch.status !== 'active') return;
-            var _chLabel = _gw(_orgCollective, 'Co-organizador', 'Co-organizadora');
+            var _chGender = ch.gender || _resolveOrgGender(ch.email, ch.uid);
+            var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
             _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.email);
           });
         }

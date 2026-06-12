@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.35-beta';
+window.SCOREPLACE_VERSION = '2.4.36-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -1128,11 +1128,19 @@ window._genderWord = function(profileOrGender, masculine, feminine) {
   g = String(g).toLowerCase().trim();
   if (g === 'feminino' || g === 'f') return feminine;
   if (g === 'masculino' || g === 'm') return masculine;
-  // gênero não definido: forma neutra com barra ou parênteses
+  // gênero não definido: forma neutra com parênteses
   if (masculine && feminine) {
-    // se diferem só no final (o/a, or/ora, etc.) usa parênteses na diferença
+    // diferem só no último char (inscrito/inscrita) → "inscrit(o/a)"
     if (masculine.slice(0,-1) === feminine.slice(0,-1)) {
       return masculine.slice(0,-1) + '(' + masculine.slice(-1) + '/' + feminine.slice(-1) + ')';
+    }
+    // v2.4.36: feminino = masculino + sufixo (Organizador/Organizadora) →
+    // "Organizador(a)"; masculino = feminino + sufixo → idem ao contrário.
+    if (feminine.indexOf(masculine) === 0) {
+      return masculine + '(' + feminine.slice(masculine.length) + ')';
+    }
+    if (masculine.indexOf(feminine) === 0) {
+      return feminine + '(' + masculine.slice(feminine.length) + ')';
     }
     return masculine + '/' + feminine;
   }
@@ -1239,7 +1247,10 @@ window._welcomeWord = function(user) {
   if (lang === 'en') return 'Welcome';
   var u = user || (window.AppStore && window.AppStore.currentUser) || null;
   var g = u && u.gender ? String(u.gender).trim().toLowerCase() : '';
-  return (g === 'feminino' || g === 'female' || g === 'f') ? 'Bem-vinda' : 'Bem-vindo';
+  if (g === 'feminino' || g === 'female' || g === 'f') return 'Bem-vinda';
+  if (g === 'masculino' || g === 'male' || g === 'm') return 'Bem-vindo';
+  // v2.4.36: sem gênero no perfil → forma neutra "Bem-vindo(a)".
+  return 'Bem-vindo(a)';
 };
 
 // Normalizes any phone string to E.164 format with + prefix.
