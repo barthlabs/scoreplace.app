@@ -1665,6 +1665,14 @@ function _updateProgressiveClassification(t) {
 // ─── Auto-finish elimination tournament ──────────────────────────────────────
 function _maybeFinishElimination(t) {
   if (t.status === 'finished') return;
+  // v2.4.20: inscrição TARDIA ('standby'/'expand') mantém a Eliminatória ABERTA —
+  // completar os jogos atuais NÃO encerra o torneio. Novos confrontos da lista de
+  // espera (a cada 4), repescagem e a próxima rodada ainda podem entrar. Só encerra
+  // quando o organizador fecha as inscrições ("Encerrar Inscrições" → status='closed',
+  // ver toggleRegistrationStatus). Bug Vivi Hirata (Eliminatórias Simples + inscrição
+  // aberta): completar o 1º confronto marcava 'finished' e travava a inscrição em
+  // TODOS os caminhos, apesar de cards/config mostrarem aberto.
+  if ((t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand') && t.status !== 'closed') return;
   if (t.currentStage === 'groups') return;
   // v2.0.4: BUG — o formato salvo é 'Eliminatórias Simples' (plural), mas aqui
   // checava 'Eliminatória Simples' (singular) → a função saía cedo e o torneio

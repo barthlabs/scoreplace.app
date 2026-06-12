@@ -2425,6 +2425,11 @@ window.toggleRegistrationStatus = function (tId) {
             t.status = 'closed';
             if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(tId, 'Inscrições encerradas pelo organizador');
             if (typeof showNotification === 'function') showNotification('Inscrições encerradas', 'Ninguém mais pode se inscrever.', 'info');
+            // v2.4.20: com a inscrição fechada, o guard de inscrição-tardia em
+            // _maybeFinishElimination libera — se a chave já chegou ao campeão,
+            // encerra o torneio agora (não espera um próximo salvar de resultado,
+            // que pode nem existir).
+            if (typeof window._maybeFinishElimination === 'function') { try { window._maybeFinishElimination(t); } catch (e) {} }
         }
         _saveTournament(_refreshView);
         return;

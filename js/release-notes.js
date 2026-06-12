@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.20-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Eliminatórias com inscrição aberta não fecham mais sozinhas no 1º jogo.</b> Em torneios de Eliminatórias configurados para manter inscrições abertas (lista de espera + novos confrontos a cada 4 / repescagem), completar uma partida estava encerrando o torneio por engano — e a partir daí ninguém mais conseguia ser inscrito, mesmo aparecendo "aberto" nos cards e na configuração. Agora o torneio <b>continua aberto</b> enquanto a inscrição tardia estiver ativa; só encerra quando o <b>organizador fecha as inscrições</b> e a chave chega ao campeão.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>App mais leve ao abrir um torneio (menos consumo de dados/servidor).</b> Ao abrir a página de um torneio, o app verifica se os nomes dos participantes estão atualizados. Essa verificação estava recarregando o perfil de todos os participantes a cada abertura — e ainda descartava o que já tinha carregado dos outros torneios. Em torneios grandes isso gerava picos de leitura desnecessários. Agora o app reaproveita o que já carregou na sessão e só busca quem é novo, então reabrir um torneio que você já viu fica praticamente instantâneo e sem custo extra.</li>' +
       '</ul>' +
