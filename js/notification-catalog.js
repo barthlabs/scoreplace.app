@@ -39,6 +39,10 @@ window.NOTIF_CATALOG = {
   tournament_nearby:           { level: 'all',         icon: '📍', color: 'var(--primary-color)' },
   // v2.3.92: inscrição pendente — perfil incompleto pra encaixar em categoria.
   'category-data-request':     { level: 'fundamental', icon: '👤', color: '#f59e0b' },
+  // v2.4.28: participante mudou habilidade no perfil → organizador precisa aprovar.
+  'category-change-request':   { level: 'fundamental', icon: '🔼', color: '#f59e0b' },
+  // v2.4.28: resultado da aprovação/recusa da mudança de categoria (pro participante).
+  'category-change-result':    { level: 'all',         icon: '🏷️', color: 'var(--primary-color)' },
 
   // Organizer actions
   org_communication:           { level: 'important',   icon: '📣', color: '#f59e0b' },

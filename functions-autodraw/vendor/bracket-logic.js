@@ -1665,6 +1665,14 @@ function _updateProgressiveClassification(t) {
 // ─── Auto-finish elimination tournament ──────────────────────────────────────
 function _maybeFinishElimination(t) {
   if (t.status === 'finished') return;
+  // v2.4.20: inscrição TARDIA ('standby'/'expand') mantém a Eliminatória ABERTA —
+  // completar os jogos atuais NÃO encerra o torneio. Novos confrontos da lista de
+  // espera (a cada 4), repescagem e a próxima rodada ainda podem entrar. Só encerra
+  // quando o organizador fecha as inscrições ("Encerrar Inscrições" → status='closed',
+  // ver toggleRegistrationStatus). Bug Vivi Hirata (Eliminatórias Simples + inscrição
+  // aberta): completar o 1º confronto marcava 'finished' e travava a inscrição em
+  // TODOS os caminhos, apesar de cards/config mostrarem aberto.
+  if ((t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand') && t.status !== 'closed') return;
   if (t.currentStage === 'groups') return;
   // v2.0.4: BUG — o formato salvo é 'Eliminatórias Simples' (plural), mas aqui
   // checava 'Eliminatória Simples' (singular) → a função saía cedo e o torneio
@@ -2217,6 +2225,15 @@ window._drawFromRoundRobinSchedule = function(t, category) {
 
 // ─── Swiss pairing ────────────────────────────────────────────────────────────
 function _generateNextRound(t) {
+  // v2.4.28: ANTES de filtrar por categoria, encaixa quem está sem categoria
+  // VÁLIDA na mais fraca elegível — senão _computeStandings(t, cat) joga esses
+  // inscritos pra fora de TODA rodada e eles ficam de fora do sorteio (desastre
+  // Confra 11/jun). Roda igual no cliente e no Cloud Function autoDraw (vendor).
+  if (typeof window._assignUncategorizedToWeakest === 'function') {
+    try { window._assignUncategorizedToWeakest(t); }
+    catch (_e) { if (window._warn) window._warn('[draw] weakest-assign falhou', _e); }
+  }
+
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
 
   // "Todos contra todos" mode: pop next round from pre-generated schedule

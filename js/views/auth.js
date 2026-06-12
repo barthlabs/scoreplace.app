@@ -7149,6 +7149,23 @@ function setupProfileModal() {
         }
       }
 
+      // ── 6b. MUDANÇA DE CATEGORIA POR PERFIL → APROVAÇÃO (v2.4.28) ─────────
+      // Se a habilidade/gênero/idade que o usuário acabou de salvar implica uma
+      // categoria diferente da que ele tem em algum torneio ativo, NÃO muda
+      // direto: cria pedido pendente + notifica o organizador pra aprovar.
+      // Fire-and-forget, nunca bloqueia o save do perfil.
+      if (!saveError && typeof window._requestCategoryChangeFromProfile === 'function') {
+        try {
+          window._requestCategoryChangeFromProfile({
+            gender: cu.gender,
+            birthDate: cu.birthDate,
+            skillBySport: cu.skillBySport,
+            defaultCategory: cu.defaultCategory,
+            displayName: cu.displayName
+          }, uid);
+        } catch (_e) { window._warn && window._warn('[Profile] req cat change falhou', _e); }
+      }
+
       // ── 7. TOAST — sucesso simples; erro/divergência ainda mostram detalhe ──
       // Bugs de persistência foram fechados nas versões anteriores. A partir
       // daqui, sucesso = "Perfil atualizado" sem ruído; só mantemos o toast

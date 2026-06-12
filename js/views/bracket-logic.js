@@ -2225,6 +2225,15 @@ window._drawFromRoundRobinSchedule = function(t, category) {
 
 // ─── Swiss pairing ────────────────────────────────────────────────────────────
 function _generateNextRound(t) {
+  // v2.4.28: ANTES de filtrar por categoria, encaixa quem está sem categoria
+  // VÁLIDA na mais fraca elegível — senão _computeStandings(t, cat) joga esses
+  // inscritos pra fora de TODA rodada e eles ficam de fora do sorteio (desastre
+  // Confra 11/jun). Roda igual no cliente e no Cloud Function autoDraw (vendor).
+  if (typeof window._assignUncategorizedToWeakest === 'function') {
+    try { window._assignUncategorizedToWeakest(t); }
+    catch (_e) { if (window._warn) window._warn('[draw] weakest-assign falhou', _e); }
+  }
+
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
 
   // "Todos contra todos" mode: pop next round from pre-generated schedule

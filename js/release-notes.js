@@ -9,7 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.27-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.28-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Ninguém mais fica de fora do sorteio por falta de categoria.</b> Em torneios com categorias (ex.: C/D), todo inscrito que estava <b>sem categoria</b> — ou com uma categoria que não existe mais no torneio — agora entra no sorteio na <b>categoria mais fraca disponível</b> (respeitando gênero/habilidade do perfil quando houver). Antes, esses inscritos eram filtrados pra fora e ficavam sem jogo.</li>' +
+        '<li><b>Pode subir de categoria, nunca cair sozinho.</b> Quem foi encaixado automaticamente na categoria mais fraca pode ser promovido a qualquer momento pelo organizador; o sistema nunca rebaixa automaticamente.</li>' +
+        '<li><b>Mudança de categoria pelo perfil precisa de aprovação.</b> Se um inscrito muda a habilidade no próprio perfil e isso implica outra categoria, o <b>organizador é notificado e aprova ou recusa</b> nas Categorias — a mudança não acontece sozinha.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.27-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Meus Resultados mostra os últimos 3 jogos.</b> A lista de "Últimos resultados" na tela inicial agora exibe apenas os <b>3 jogos mais recentes</b> que você jogou, somando todos os torneios (antes eram 5).</li>' +
       '</ul>' +

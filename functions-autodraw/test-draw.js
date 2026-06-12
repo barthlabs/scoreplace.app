@@ -101,5 +101,67 @@ const g1keys = (r1.monarchGroups || []).map(g => g.players.slice().sort().join('
 const g2keys = (r2.monarchGroups || []).map(g => g.players.slice().sort().join(',')).sort();
 assert(JSON.stringify(g1keys) !== JSON.stringify(g2keys), 'R2 formou grupos diferentes de R1 (anti-repeat)');
 
+// 3) CONFRA REAL: torneio com categorias C/D + inscritos sem categoria válida.
+//    Reproduz o desastre de 11/jun: ~56 de 83 ficaram fora porque tinham
+//    categoria morta ("Fem TOP 500") ou nenhuma, e o sorteio por categoria os
+//    filtrava pra fora. Com o fix (v2.4.28), TODOS entram (na cat mais fraca).
+console.log('\n[CONFRA CATEGORIAS] C/D + sem-categoria/categoria-morta → ninguém fica de fora');
+function mkConfraCats() {
+  const parts = [];
+  let id = 1;
+  function add(n, cat, extra) {
+    for (let i = 0; i < n; i++) {
+      const p = { uid: 'u' + id, displayName: 'P' + id, name: 'P' + id, ligaActive: true };
+      if (cat) { p.categories = [cat]; p.category = cat; p.categorySource = 'organizador'; }
+      if (extra) Object.assign(p, extra);
+      parts.push(p); id++;
+    }
+  }
+  add(8, 'C');                                    // 8 já em C
+  add(8, 'D');                                    // 8 já em D
+  add(6, 'Fem TOP 500');                          // 6 com categoria MORTA (não existe em C/D)
+  add(5, null);                                   // 5 totalmente sem categoria
+  add(1, null, { skillBySport: { 'Beach Tennis': 'C' } }); // 1 sem cat mas perfil diz C → deve ir pra C
+  return {
+    id: 'mock-confra-cats', name: 'Ranking Confra 2026', format: 'Liga',
+    ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', ligaDrawMode: 'standard',
+    sport: 'Beach Tennis', teamSize: 2, gameTypes: 'duplas', enrollmentMode: 'individual',
+    temporada: true, combinedCategories: ['C', 'D'], skillCategories: ['C', 'D'],
+    participants: parts, rounds: [], standings: [],
+  };
+}
+const tc = mkConfraCats();
+const totalParts = tc.participants.length; // 28
+const rc = generateLigaRound(tc, new Date('2026-06-14T19:00:00-03:00'));
+assert(rc.ok, 'sorteio Confra-cats gerou rodada (reason=' + (rc.reason || 'ok') + ')');
+
+// Coleta TODOS os jogadores que apareceram em QUALQUER coluna (real ou folga).
+const drawn = new Set();
+(tc.rounds || []).forEach(col => (col.matches || []).forEach(m => {
+  if (m.isSitOut) { if (m.p1) drawn.add(m.p1); return; }
+  (m.team1 || []).forEach(x => drawn.add(x));
+  (m.team2 || []).forEach(x => drawn.add(x));
+}));
+const missing = tc.participants.map(p => p.name).filter(n => !drawn.has(n));
+assert(missing.length === 0, 'TODOS os ' + totalParts + ' inscritos entraram no sorteio (faltaram: ' + missing.length + (missing.length ? ' → ' + missing.join(',') : '') + ')');
+
+// Os sem-categoria-válida foram pra D (mais fraca), exceto o de perfil C.
+function catOf(name) {
+  const p = tc.participants.find(x => x.name === name);
+  return p ? (p.categories || []).join(',') : '?';
+}
+const staleAndUncat = tc.participants.filter(p => p.categorySource === 'auto_fraca');
+assert(staleAndUncat.length === 12, '12 inscritos auto-encaixados (6 morta + 5 sem cat + 1 sem cat c/ perfil) — got ' + staleAndUncat.length);
+// Quem não tem perfil de habilidade vai pra D (mais fraca); o de perfil C vai pra C.
+const wrongFloor = staleAndUncat.filter(p => !p.skillBySport && (p.categories || [])[0] !== 'D');
+assert(wrongFloor.length === 0, 'auto-encaixados SEM perfil foram pra D (mais fraca) — fora do esperado: ' + wrongFloor.map(p => p.name + '=' + p.categories).join(','));
+// O sem-categoria com perfil C deve ter ido pra C (respeita perfil), não D.
+const skillC = tc.participants.find(p => p.skillBySport);
+assert(skillC && (skillC.categories || [])[0] === 'C', 'inscrito sem cat mas com perfil C foi pra C (got ' + (skillC && skillC.categories) + ')');
+// staleCat preservada nos de categoria morta.
+const staleKept = tc.participants.filter(p => p.staleCat && p.staleCat[0] === 'Fem TOP 500');
+assert(staleKept.length === 6, 'categoria morta preservada em staleCat (got ' + staleKept.length + ')');
+console.log('   colunas geradas: ' + tc.rounds.length + ' · jogadores sorteados: ' + drawn.size + '/' + totalParts);
+
 console.log('\n' + (failures === 0 ? '✅ TODOS OS TESTES PASSARAM' : '❌ ' + failures + ' FALHA(S)'));
 process.exit(failures === 0 ? 0 : 1);

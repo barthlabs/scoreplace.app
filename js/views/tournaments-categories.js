@@ -990,8 +990,11 @@ window.renderCategoryManagerPage = function(container, tId) {
         // Conteúdo da página renderizado direto no view-container (sem
         // modal-overlay wrapper). Mantém o id="cat-manager-modal" no nó
         // interno pra preservar selectors usados pelo drag/drop.
+        var reqBanner = (typeof window._categoryRequestsBannerHtml === 'function')
+            ? window._categoryRequestsBannerHtml(t) : '';
         var pageHtml = hdr +
             '<div id="' + modalId + '" style="max-width:760px;margin:0 auto;padding:1rem;">' +
+            reqBanner +
             '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:1rem;">' + _t('cat.dragInstructions') + '</div>' +
             '<div id="cat-mgr-cards">' + catRowsHtml + '</div>' +
             uncatHtml +
@@ -2606,6 +2609,254 @@ window._dispatchCategoryDataRequests = async function(t) {
         try { window.FirestoreDB.saveTournament(t); } catch (_e) {}
     }
     return sent;
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// v2.4.28: inscrito SEM categoria válida entra na categoria MAIS FRACA no sorteio
+// ════════════════════════════════════════════════════════════════════════════
+// Regra do dono (Confra, jun/2026): no sorteio, qualquer participante que não
+// esteja em NENHUMA categoria VÁLIDA do torneio (combinedCategories) — seja por
+// não ter dado no perfil, seja por carregar uma categoria que não existe mais
+// (ex.: "Fem TOP 500" num torneio cujas categorias viraram C/D) — é colocado na
+// categoria mais fraca elegível. Pode subir depois (organizador / aprovação de
+// perfil), nunca descer sozinho. SEM isso, _computeStandings(t, cat) filtra esses
+// inscritos pra fora de TODA rodada e eles ficam de fora do sorteio — foi o
+// desastre da Confra de 11/jun (≈56 de 83 inscritos sem jogo).
+
+// Categoria VÁLIDA mais fraca que o participante é elegível a ocupar. Respeita
+// gênero/idade/habilidade do perfil (via _eligibleCatsForParticipant): se o perfil
+// indica uma habilidade específica, ela já estreita a elegibilidade e a "mais
+// fraca elegível" vira a própria. Sem dado discriminante → mais fraca geral.
+window._weakestEligibleCategory = function(p, t) {
+    var validCats = (typeof window._getTournamentCategories === 'function')
+        ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+    if (!Array.isArray(validCats) || validCats.length === 0) return null;
+    var tSport = t.sport ? String(t.sport).trim() : null;
+    var eligible = _eligibleCatsForParticipant(p, validCats, tSport);
+    if (!eligible || eligible.length === 0) eligible = validCats.slice();
+    var sorted = (typeof window._sortCategoriesBySkillOrder === 'function')
+        ? window._sortCategoriesBySkillOrder(eligible.slice(), t.skillCategories)
+        : eligible.slice();
+    // Mais fraca = último na ordem do organizador (A < B < C < D < FUN).
+    return sorted.length ? sorted[sorted.length - 1] : null;
+};
+
+// Atribui a categoria mais fraca aos inscritos sem categoria VÁLIDA do torneio.
+// Idempotente: só toca em quem está sem categoria válida (uncategorized OU com
+// categoria morta). Marca categorySource:'auto_fraca' + autoWeakestCat (o "piso":
+// nunca desce abaixo disso) + wasUncategorized. Preserva a categoria inválida
+// antiga em staleCat (recuperável). NÃO salva — o chamador (o sorteio) persiste t
+// depois. Retorna nº de atribuições.
+window._assignUncategorizedToWeakest = function(t) {
+    if (!t) return 0;
+    var validCats = (typeof window._getTournamentCategories === 'function')
+        ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+    if (!Array.isArray(validCats) || validCats.length === 0) return 0; // torneio sem categorias → todos jogam
+    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    if (parts.length === 0) return 0;
+    var assigned = 0;
+    parts.forEach(function(p) {
+        if (!p || typeof p !== 'object') return;
+        var existing = (typeof window._getParticipantCategories === 'function')
+            ? window._getParticipantCategories(p) : (p.categories || (p.category ? [p.category] : []));
+        var validHeld = existing.filter(function(c) { return validCats.indexOf(c) !== -1; });
+        if (validHeld.length > 0) return; // já tem categoria válida → não mexe
+        var weakest = window._weakestEligibleCategory(p, t);
+        if (!weakest) return;
+        // Preserva a(s) categoria(s) inválida(s) antiga(s) pra histórico/recuperação.
+        var staleNow = existing.filter(function(c) { return validCats.indexOf(c) === -1; });
+        if (staleNow.length > 0 && !p.staleCat) p.staleCat = staleNow.slice();
+        if (typeof window._setParticipantCategories === 'function') {
+            window._setParticipantCategories(p, [weakest]);
+        } else {
+            p.categories = [weakest]; p.category = weakest;
+        }
+        p.categorySource = 'auto_fraca';
+        p.autoWeakestCat = weakest;   // piso: nunca desce abaixo
+        p.wasUncategorized = true;
+        assigned++;
+    });
+    if (assigned > 0 && !Array.isArray(t.participants)) t.participants = parts;
+    return assigned;
+};
+
+// ── Mudança de categoria via perfil → aprovação do organizador ───────────────
+// Categoria que o PERFIL atual implica de forma ÚNICA no torneio. Retorna a
+// categoria (string) só quando o perfil aponta pra exatamente UMA categoria
+// exclusiva válida; null quando ambíguo (não dá pra inferir mudança automática).
+window._profileImpliedCategory = function(profileLike, t) {
+    var validCats = (typeof window._getTournamentCategories === 'function')
+        ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+    if (!Array.isArray(validCats) || validCats.length === 0) return null;
+    var tSport = t.sport ? String(t.sport).trim() : null;
+    var eligible = _eligibleCatsForParticipant(profileLike, validCats, tSport);
+    if (!eligible || eligible.length === 0) return null;
+    var grouped = (typeof window._groupEligibleCategories === 'function')
+        ? window._groupEligibleCategories(eligible) : { exclusive: eligible, nonExclusive: [] };
+    var pool = grouped.exclusive.length > 0 ? grouped.exclusive : eligible;
+    return pool.length === 1 ? pool[0] : null; // só infere quando é inequívoco
+};
+
+// Chamado após o usuário salvar o perfil. Pra cada torneio NÃO encerrado em que
+// ele é participante e que tem categorias, se o perfil agora implica UMA categoria
+// diferente da atual, NÃO muda direto: cria pedido pendente + notifica o
+// organizador pra aprovar. Regra do dono: "se a pessoa mudar a categoria no perfil
+// depois de já estar numa categoria no torneio, o organizador é notificado e
+// precisa aprovar." Dedup por uid; pedido pro mesmo destino não duplica.
+window._requestCategoryChangeFromProfile = function(profileLike, uid) {
+    if (!uid || !window.AppStore || !Array.isArray(window.AppStore.tournaments)) return 0;
+    profileLike = profileLike || {};
+    var made = 0;
+    window.AppStore.tournaments.forEach(function(t) {
+        if (!t) return;
+        if ((t.status || 'open') === 'finished') return;
+        var validCats = (typeof window._getTournamentCategories === 'function')
+            ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+        if (!Array.isArray(validCats) || validCats.length === 0) return;
+        var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+        var me = null;
+        for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            if (!p || typeof p !== 'object') continue;
+            var uids = (typeof window._participantUids === 'function')
+                ? window._participantUids(p) : [p.uid].filter(Boolean);
+            if (uids.indexOf(uid) !== -1) { me = p; break; }
+        }
+        if (!me) return;
+        var basis = {
+            gender: profileLike.gender || me.gender,
+            birthDate: profileLike.birthDate || me.birthDate,
+            skillBySport: profileLike.skillBySport || me.skillBySport,
+            defaultCategory: profileLike.defaultCategory || me.defaultCategory
+        };
+        var implied = window._profileImpliedCategory(basis, t);
+        if (!implied) return;
+        var current = (typeof window._getParticipantCategories === 'function')
+            ? window._getParticipantCategories(me) : (me.categories || (me.category ? [me.category] : []));
+        var currentValid = current.filter(function(c) { return validCats.indexOf(c) !== -1; });
+        if (currentValid.indexOf(implied) !== -1) return; // já está lá
+        if (!Array.isArray(t.categoryChangeRequests)) t.categoryChangeRequests = [];
+        var pendingSame = t.categoryChangeRequests.some(function(r) {
+            return r.uid === uid && r.status === 'pending' && r.toCat === implied;
+        });
+        if (pendingSame) return; // já pendente pro mesmo destino
+        // Substitui qualquer pendente antigo desse uid (destino mudou).
+        t.categoryChangeRequests = t.categoryChangeRequests.filter(function(r) {
+            return !(r.uid === uid && r.status === 'pending');
+        });
+        var fromCat = currentValid[0] || current[0] || '';
+        var playerName = me.displayName || me.name || profileLike.displayName || 'Participante';
+        t.categoryChangeRequests.push({
+            uid: uid, playerName: playerName,
+            fromCat: fromCat, toCat: implied,
+            requestedAt: new Date().toISOString(), status: 'pending'
+        });
+        made++;
+        var orgUid = t.creatorUid || null;
+        if (orgUid && typeof window._sendUserNotification === 'function') {
+            try {
+                window._sendUserNotification(orgUid, {
+                    type: 'category-change-request',
+                    level: 'fundamental',
+                    tournamentId: String(t.id),
+                    tournamentName: t.name || 'torneio',
+                    message: playerName + ' atualizou o perfil e pede mudança de categoria em "' +
+                        (t.name || 'torneio') + '": ' +
+                        ((fromCat ? window._displayCategoryName(fromCat) : 'sem categoria')) + ' → ' +
+                        window._displayCategoryName(implied) + '. Aprove ou recuse nas Categorias.'
+                });
+            } catch (_e) {}
+        }
+        if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
+            if (!Array.isArray(t.participants)) t.participants = parts;
+            try { window.FirestoreDB.saveTournament(t); } catch (_e) {}
+        }
+    });
+    return made;
+};
+
+// Helper interno: aplica/recusa um pedido pendente. approve=true aplica a toCat.
+function _resolveCategoryChange(tId, uid, approve) {
+    var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+    if (!t || !Array.isArray(t.categoryChangeRequests)) return;
+    var req = t.categoryChangeRequests.find(function(r) { return r.uid === uid && r.status === 'pending'; });
+    if (!req) return;
+    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    var me = null;
+    for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        if (!p || typeof p !== 'object') continue;
+        var us = (typeof window._participantUids === 'function')
+            ? window._participantUids(p) : [p.uid].filter(Boolean);
+        if (us.indexOf(uid) !== -1) { me = p; break; }
+    }
+    if (approve && me) {
+        if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(me, [req.toCat]);
+        else { me.categories = [req.toCat]; me.category = req.toCat; }
+        me.categorySource = 'perfil_aprovado';
+        delete me.autoWeakestCat;  // organizador aprovou — piso não se aplica mais
+        me.wasUncategorized = false;
+    }
+    req.status = approve ? 'approved' : 'rejected';
+    req.resolvedAt = new Date().toISOString();
+    t.categoryChangeRequests = t.categoryChangeRequests.filter(function(r) { return r.status === 'pending'; });
+    if (uid && typeof window._sendUserNotification === 'function') {
+        try {
+            window._sendUserNotification(uid, {
+                type: 'category-change-result',
+                level: 'all',
+                tournamentId: String(t.id),
+                tournamentName: t.name || 'torneio',
+                message: approve
+                    ? 'Sua categoria em "' + (t.name || 'torneio') + '" foi atualizada para ' + window._displayCategoryName(req.toCat) + '.'
+                    : 'Sua mudança de categoria em "' + (t.name || 'torneio') + '" foi recusada pelo organizador — você segue em ' + (req.fromCat ? window._displayCategoryName(req.fromCat) : 'sua categoria atual') + '.'
+            });
+        } catch (_e) {}
+    }
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
+        if (!Array.isArray(t.participants)) t.participants = parts;
+        try { window.FirestoreDB.saveTournament(t); } catch (_e) {}
+    }
+    if (typeof showNotification === 'function') {
+        showNotification(approve ? 'Categoria aprovada' : 'Mudança recusada',
+            (req.playerName || 'Participante') + (approve ? ' → ' + window._displayCategoryName(req.toCat) : ' mantido em ' + (req.fromCat ? window._displayCategoryName(req.fromCat) : 'sua categoria')),
+            approve ? 'success' : 'info');
+    }
+    // Re-render a tela de categorias se estiver aberta.
+    try {
+        var hash = (window.location && window.location.hash) || '';
+        var cont = document.getElementById('view-container');
+        if (hash.indexOf('#categorias/' + tId) === 0 && typeof window.renderCategoryManagerPage === 'function' && cont) {
+            window.renderCategoryManagerPage(cont, tId);
+        }
+    } catch (_e) {}
+}
+window._approveCategoryChange = function(tId, uid) { _resolveCategoryChange(tId, uid, true); };
+window._rejectCategoryChange = function(tId, uid) { _resolveCategoryChange(tId, uid, false); };
+
+// Banner HTML com os pedidos pendentes de mudança de categoria (pro organizador).
+// Retorna '' quando não há pendências. Usado na tela de Categorias.
+window._categoryRequestsBannerHtml = function(t) {
+    if (!t || !Array.isArray(t.categoryChangeRequests)) return '';
+    var pending = t.categoryChangeRequests.filter(function(r) { return r.status === 'pending'; });
+    if (pending.length === 0) return '';
+    var tid = String(t.id);
+    var rows = pending.map(function(r) {
+        var uidEsc = String(r.uid).replace(/'/g, "\\'");
+        var fromLbl = r.fromCat ? window._displayCategoryName(r.fromCat) : 'sem categoria';
+        var toLbl = window._displayCategoryName(r.toCat);
+        return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid rgba(245,158,11,0.25);">' +
+            '<span style="flex:1;min-width:160px;font-size:0.85rem;color:var(--text-bright);">' +
+            '<strong>' + window._safeHtml(r.playerName || 'Participante') + '</strong> · ' +
+            window._safeHtml(fromLbl) + ' → <strong>' + window._safeHtml(toLbl) + '</strong></span>' +
+            '<button onclick="window._approveCategoryChange(\'' + tid + '\',\'' + uidEsc + '\')" style="background:#10b981;color:#fff;border:none;padding:6px 12px;border-radius:8px;font-weight:700;font-size:0.78rem;cursor:pointer;">✅ Aprovar</button>' +
+            '<button onclick="window._rejectCategoryChange(\'' + tid + '\',\'' + uidEsc + '\')" style="background:transparent;color:#ef4444;border:1px solid rgba(239,68,68,0.5);padding:6px 12px;border-radius:8px;font-weight:700;font-size:0.78rem;cursor:pointer;">❌ Recusar</button>' +
+            '</div>';
+    }).join('');
+    return '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:12px;padding:12px 14px;margin-bottom:1rem;">' +
+        '<div style="font-weight:700;font-size:0.9rem;color:#f59e0b;margin-bottom:4px;">⏳ Mudanças de categoria por perfil — aprovação necessária (' + pending.length + ')</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:4px;">Estes inscritos mudaram a habilidade no perfil. Aprovar move a categoria; recusar mantém a atual.</div>' +
+        rows + '</div>';
 };
 
 // Check and show category notifications for current user
