@@ -1801,6 +1801,31 @@ window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
 // that category name carries no useful information — it should be just "Fem" / "Masc".
 // This function renames singleton-per-gender categories in combinedCategories AND in
 // each participant's stored assignment. Called in _deleteEmptyCategory and on catmgr open.
+// v2.4.10: aplica um mapa de renomeação {antiga: nova} a TODOS os jogos já
+// existentes (via _collectAllMatches) e à classificação. PRESERVA o histórico —
+// partidas jogadas, resultados e classificados continuam exatamente como estavam;
+// só o RÓTULO da categoria nos jogos acompanha a mudança, senão eles somem da
+// classificação (que filtra por m.category). Mesmo backfill que _executeMerge faz.
+window._applyCategoryRenamesToMatches = function(t, renames) {
+    if (!t || !renames || Object.keys(renames).length === 0) return 0;
+    var n = 0;
+    var apply = function(m) {
+        if (m && m.category && renames[m.category] !== undefined) { m.category = renames[m.category]; n++; }
+    };
+    if (typeof window._collectAllMatches === 'function') {
+        window._collectAllMatches(t).forEach(apply);
+    } else {
+        (t.rounds || []).forEach(function(r) { (r.matches || []).forEach(apply); });
+        (t.matches || []).forEach(apply);
+        (t.groups || []).forEach(function(g) { if (g && Array.isArray(g.matches)) g.matches.forEach(apply); });
+        if (t.thirdPlaceMatch) apply(t.thirdPlaceMatch);
+    }
+    (t.standings || []).forEach(function(s) {
+        if (s && s.category && renames[s.category] !== undefined) s.category = renames[s.category];
+    });
+    return n;
+};
+
 function _simplifySingletonCategories(t) {
     var cats = t.combinedCategories || [];
     if (cats.length === 0) return;
@@ -1843,6 +1868,13 @@ function _simplifySingletonCategories(t) {
             if (mh.mergedName && renames[mh.mergedName] !== undefined) mh.mergedName = renames[mh.mergedName];
         });
     }
+
+    // v2.4.10: CRÍTICO — o rótulo da categoria nos JOGOS já jogados acompanha o
+    // rename. Sem isto, renomear "Fem C" → "Fem" deixava os jogos como "Fem C" e
+    // a classificação (que filtra por m.category) os excluía → resultados somem.
+    // Histórico preservado; só o rótulo segue. (Era o killer silencioso do
+    // Gerenciador de Categorias, que dispara este rename automaticamente.)
+    window._applyCategoryRenamesToMatches(t, renames);
 }
 
 // When combinedCategories changes (via merge, delete, or form edit), participants

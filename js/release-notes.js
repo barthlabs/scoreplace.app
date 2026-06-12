@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.9-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.10-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Mexer em categorias nunca mais some com jogos já jogados.</b> Ao renomear/simplificar uma categoria (ex: quando sobra só uma do gênero, "Fem C" vira "Fem"), os <b>jogos já disputados e a classificação são preservados</b> — o rótulo da categoria acompanha a mudança, em vez de deixar os jogos órfãos e fora da tabela. Histórico intacto: resultados, vitórias/derrotas e classificados continuam exatamente como estavam.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.9-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Correção crítica: inscrição em torneio com categorias volta a funcionar.</b> Quando o torneio tem categorias (nível, gênero ou faixa de idade), a inscrição abre uma tela para você <b>escolher sua categoria na hora</b> — e o organizador pode trocar depois. Essa tela estava sendo <b>fechada sozinha</b> antes de aparecer, em torneios movimentados: a cada atualização ao vivo o app se redesenhava e varria o pop-up junto. Resultado: o botão "Inscrever-se" ficava processando e <b>não inscrevia</b>. Agora a tela de escolha é protegida do redesenho e aparece normalmente.</li>' +
       '</ul>' +
