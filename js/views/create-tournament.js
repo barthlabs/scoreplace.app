@@ -3936,6 +3936,102 @@ function setupCreateTournamentModal() {
     return true;
   };
 
+  // ── v2.4.16: Engine de reconciliação — TROCA DE FORMATO / GRUPOS ─────────────
+  // Caso "não adaptável": mudar Liga↔Eliminatórias↔Grupos troca a própria estrutura
+  // de dados (Liga usa t.rounds, Elim usa t.matches, Grupos usa t.groups). Os jogos
+  // já feitos NÃO têm como ser convertidos pro formato novo. Princípio do dono:
+  // avisa "vai ficar assim" e deixa o organizador decidir — Aplicar (recomeça o
+  // sorteio no formato novo, a chave atual é descartada) ou Manter o formato atual.
+  // Sem isto, trocar formato corrompia silenciosamente (a chave renderizava em
+  // branco porque o renderizador lê a estrutura errada).
+  window._tournamentHasDraw = function(t) {
+    return (Array.isArray(t.matches) && t.matches.length > 0) ||
+           (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+           (Array.isArray(t.groups) && t.groups.length > 0) ||
+           (Array.isArray(t.rodadas) && t.rodadas.length > 0);
+  };
+
+  // Reverte os controles de formato do form pro estado atual do torneio (pra
+  // "Manter o formato atual" re-rodar o save sem trocar o formato).
+  window._writeFormatToForm = function(t) {
+    var sel = document.getElementById('select-formato');
+    var dm = document.getElementById('draw-mode');
+    var gc = document.getElementById('grupos-count');
+    var inv = { 'Liga': 'liga', 'Suíço Clássico': 'suico', 'Eliminatórias Simples': 'elim_simples', 'Dupla Eliminatória': 'elim_dupla', 'Fase de Grupos + Eliminatórias': 'grupos_mata' };
+    if (t.format === 'Rei/Rainha da Praia') {
+      if (sel) sel.value = 'elim_simples';
+      if (dm) dm.value = 'rei_rainha';
+    } else {
+      if (sel && inv[t.format]) sel.value = inv[t.format];
+      if (dm) dm.value = (t.drawMode === 'rei_rainha' || t.ligaRoundFormat === 'rei_rainha') ? 'rei_rainha' : (t.drawMode || 'sorteio');
+    }
+    if (gc && t.gruposCount) gc.value = String(t.gruposCount);
+  };
+
+  window._showFormatChangePreview = function(t, oldFormat, newFormat, impact, onApply, onKeep) {
+    var modalId = 'modal-format-reconcile';
+    var old = document.getElementById(modalId); if (old) old.remove();
+    var dn = window._displayCategoryName || function(x){return x;};
+    var lines = '';
+    lines += '<li style="margin-bottom:6px;">A chave/rodadas atuais (<b>' + impact.totalMatches + ' jogo(s)' + (impact.playedCount > 0 ? ', ' + impact.playedCount + ' com resultado' : '') + '</b>) serão <b>descartadas</b> — a estrutura de "' + window._safeHtml(oldFormat) + '" não existe em "' + window._safeHtml(newFormat) + '".</li>';
+    lines += '<li style="margin-bottom:6px;">Os inscritos e as categorias <b>são mantidos</b>. Você vai <b>sortear de novo</b> no formato "' + window._safeHtml(newFormat) + '".</li>';
+    if (impact.playedCount > 0) {
+      lines += '<li style="margin-bottom:6px;color:#fbbf24;">⚠️ Os ' + impact.playedCount + ' resultado(s) já lançado(s) <b>não têm como ser convertidos</b> pro formato novo e serão perdidos. Se não quiser perder, escolha "Manter o formato atual".</li>';
+    }
+    var html =
+      '<div class="modal-overlay active" id="' + modalId + '" style="display:flex;align-items:center;justify-content:center;z-index:10045;">' +
+      '<div class="modal" style="max-width:460px;width:92%;background:var(--bg-card,#1a2235);color:var(--text-main,#fff);border-radius:15px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.45);box-sizing:border-box;">' +
+        '<h2 style="margin:0 0 6px;font-size:1.12rem;">🔀 Mudança de formato</h2>' +
+        '<p style="margin:0 0 12px;opacity:0.82;font-size:0.9rem;">De <b>' + window._safeHtml(oldFormat) + '</b> para <b>' + window._safeHtml(newFormat) + '</b>. Vai ficar assim:</p>' +
+        '<ul style="margin:0 0 16px;padding-left:1.1rem;font-size:0.88rem;line-height:1.5;">' + lines + '</ul>' +
+        '<div style="display:flex;flex-direction:column;gap:9px;">' +
+          '<button class="btn btn-primary" id="fmt-rec-apply" style="cursor:pointer;">Aplicar — recomeçar o sorteio no formato novo</button>' +
+          '<button class="btn btn-outline" id="fmt-rec-keep" style="cursor:pointer;">Manter o formato atual</button>' +
+          '<button class="btn btn-ghost" id="fmt-rec-cancel" style="cursor:pointer;opacity:0.8;">Voltar a editar</button>' +
+        '</div>' +
+      '</div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+    var close = function() { var m = document.getElementById(modalId); if (m) m.remove(); };
+    document.getElementById('fmt-rec-apply').addEventListener('click', function() { close(); onApply(); });
+    document.getElementById('fmt-rec-keep').addEventListener('click', function() { close(); onKeep(); });
+    document.getElementById('fmt-rec-cancel').addEventListener('click', function() { close(); });
+  };
+
+  // Retorna true se mostrou o preview (e o save deve abortar e esperar a decisão).
+  window._maybeShowFormatReconcile = function(t, newFormat, newGruposCount) {
+    if (!t || !newFormat) return false;
+    if (!window._tournamentHasDraw(t)) return false; // sem sorteio → troca livre
+    var formatChanged = String(newFormat) !== String(t.format || '');
+    var gruposChanged = newFormat === 'Fase de Grupos + Eliminatórias' &&
+                        Array.isArray(t.groups) && t.groups.length > 0 &&
+                        newGruposCount != null && t.gruposCount != null &&
+                        parseInt(newGruposCount) !== parseInt(t.gruposCount);
+    if (!formatChanged && !gruposChanged) return false;
+    var allMatches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+    var totalMatches = allMatches.filter(function(m){ return m && !m.isBye; }).length;
+    var playedCount = (typeof window._tournamentPlayedMatches === 'function') ? window._tournamentPlayedMatches(t).length : 0;
+    var impact = { totalMatches: totalMatches, playedCount: playedCount };
+    var oldFormat = t.format || '—';
+    window._showFormatChangePreview(t, oldFormat, newFormat, impact,
+      function onApply() {
+        // Descarta a chave incompatível — o organizador re-sorteia no formato novo.
+        // Inscritos e categorias ficam (não estão nessas estruturas).
+        t.matches = []; t.rounds = []; t.groups = []; t.rodadas = []; t.standings = [];
+        delete t.thirdPlaceMatch; delete t.currentStage; delete t.pendingDraw;
+        delete t.lastAutoDrawAt; delete t.sitOutHistory; delete t.opponentHistory;
+        if (t.status !== 'finished') t.status = 'open';
+        window._formatReconcileConfirmed = true;
+        window._saveTournamentClickHandler();
+      },
+      function onKeep() {
+        window._writeFormatToForm(t);
+        window._formatReconcileConfirmed = true;
+        window._saveTournamentClickHandler();
+      }
+    );
+    return true;
+  };
+
   // v1.4.20-beta: expose handler on window so _renderCreateTournamentHeader can
   // re-attach it after each host.innerHTML call (innerHTML destroys the old element
   // and its listener — the new btn-save-tournament needs a fresh attachment).
@@ -3957,9 +4053,7 @@ function setupCreateTournamentModal() {
         // + Aplicar/Manter anterior antes de gravar. O flag _scoringReconcileConfirmed
         // é setado pelos botões do preview, que re-invocam este handler. Consumido
         // (zerado) imediatamente pra não vazar pro próximo save.
-        var _scoringConfirmed = window._scoringReconcileConfirmed === true;
-        window._scoringReconcileConfirmed = false;
-        if (editId && !_scoringConfirmed && typeof window._maybeShowScoringReconcile === 'function') {
+        if (editId && window._scoringReconcileConfirmed !== true && typeof window._maybeShowScoringReconcile === 'function') {
           var _tForScoring = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(editId); });
           if (_tForScoring && window._maybeShowScoringReconcile(_tForScoring)) return;
         }
@@ -3992,6 +4086,23 @@ function setupCreateTournamentModal() {
         } else {
           format = formatMap[formatValue] || 'Eliminatórias Simples';
         }
+
+        // v2.4.16: reconciliação de FORMATO/grupos. Se o organizador trocou o
+        // formato (ou a config de grupos) de um torneio JÁ SORTEADO, mostra
+        // "vai ficar assim" + Aplicar(recomeça sorteio)/Manter formato/Voltar antes
+        // de gravar. Flag _formatReconcileConfirmed (setado pelos botões do preview)
+        // consumido imediatamente pra não vazar pro próximo save.
+        if (editId && window._formatReconcileConfirmed !== true && typeof window._maybeShowFormatReconcile === 'function') {
+          var _tForFormat = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(editId); });
+          var _newGruposCount = parseInt((document.getElementById('grupos-count') || {}).value) || null;
+          if (_tForFormat && window._maybeShowFormatReconcile(_tForFormat, format, _newGruposCount)) return;
+        }
+        // v2.4.16: passou pelos dois gates de reconciliação (pontuação + formato)
+        // → zera os flags. Próximo save começa limpo; os avisos reaparecem numa
+        // nova edição. (Não consumir nos gates evita prompt duplo quando os dois
+        // mudam no mesmo save.)
+        window._scoringReconcileConfirmed = false;
+        window._formatReconcileConfirmed = false;
 
         // Captura TODOS os valores do formulário antes de qualquer outra operação
         const sportRaw = document.getElementById('select-sport').value || '';
