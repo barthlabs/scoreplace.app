@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.12-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.13-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Botão "Inscrever-se" não trava mais em "⏳ Carregando…".</b> Em torneios grandes (muitos inscritos), o perfil de quem acabou de entrar às vezes demorava a carregar e o botão de inscrição ficava preso em "Carregando…" sem nunca virar clicável — dava a impressão de "fica processando e não inscreve". Agora, assim que o perfil termina de carregar, a tela do torneio se atualiza sozinha e o botão libera na hora.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.12-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>"Fechar quando lotar" agora é respeitado de verdade.</b> O servidor estava fechando as inscrições ao atingir o limite mesmo com a opção desligada. Agora só fecha automaticamente quando o organizador realmente marca a opção.</li>' +
         '<li><b>Liga não sorteia mais rodada depois que a temporada acaba.</b> O sorteio automático do servidor passou a respeitar o fim da temporada (data fim ou duração em meses) — antes podia continuar gerando rodadas e enviando avisos indefinidamente se ninguém abrisse o app. Temporadas em andamento não são afetadas.</li>' +

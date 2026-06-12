@@ -221,6 +221,37 @@ function renderTournaments(container, tournamentId = null) {
         });
     }
     var _t = window._t || function(k) { return k; };
+
+    // v2.4.13: se o perfil ainda não terminou de carregar, o botão de inscrição
+    // renderiza como "⏳ Carregando…" desabilitado (gate _profileReady abaixo).
+    // venues/dashboard/auth re-renderizam ao evento scoreplace:profile-loaded —
+    // a view de torneio NÃO escutava, então o botão ficava travado em "Carregando…"
+    // ("fica processando e não inscreve") até um snapshot não-relacionado disparar
+    // _softRefreshView. Sob carga (torneio com muitos inscritos satura as reads e
+    // atrasa o loadUserProfile), essa janela pode ser longa. Listener one-shot +
+    // safety-net espelham o padrão canônico do venues.js (v0.17.3).
+    var _cuTourn = window.AppStore && window.AppStore.currentUser;
+    if (_cuTourn && _cuTourn._profileLoaded !== true && !window._tournWaitingForProfile) {
+      window._tournWaitingForProfile = true;
+      var _onTournProfile = function() {
+        window._tournWaitingForProfile = false;
+        var _h = window.location.hash || '';
+        if (_h.indexOf('#tournaments') === 0) {
+          try { if (typeof window._softRefreshView === 'function') window._softRefreshView(); } catch (e) {}
+        }
+      };
+      document.addEventListener('scoreplace:profile-loaded', _onTournProfile, { once: true });
+      setTimeout(function() {
+        if (window._tournWaitingForProfile) {
+          window._tournWaitingForProfile = false;
+          var _h = window.location.hash || '';
+          if (_h.indexOf('#tournaments') === 0) {
+            try { if (typeof window._softRefreshView === 'function') window._softRefreshView(); } catch (e) {}
+          }
+        }
+      }, 5000);
+    }
+
     let visible = window.AppStore.getVisibleTournaments() || [];
 
     // ── Drag-drop para formar duplas na seção "Sem Dupla" ─────────────────
