@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.32-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.33-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Editar gênero e categoria na própria lista filtrável de inscritos.</b> A edição (gênero <b>e</b> categoria) agora acontece direto na lista de Inscritos da Análise — com a busca, a ordenação e os filtros de gênero/habilidade <b>no topo, atuando ali</b>. A seção separada de "Perfis Incompletos" foi removida (use os filtros "? Sem gênero" / "Sem habilidade" pra achar quem falta dado). Vale pra inscritos sem conta também.</li>' +
+        '<li><b>Idade não aparece mais — só a categoria por idade.</b> Os cards mostram a <b>categoria por faixa etária</b> que a pessoa entraria (ex.: "50+"), nunca a idade real. Em torneio sem categoria de idade, nada de idade.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.32-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Editar o gênero do inscrito na Análise de Inscritos.</b> Na lista de inscritos, o organizador agora pode <b>tocar no selo de gênero</b> de qualquer inscrito e escolher Feminino / Masculino / Misto / Sem gênero — direto ali. Funciona inclusive pra <b>inscritos sem conta</b> (cadastrados na mão). A escolha vale na hora e é usada na categorização e no sorteio.</li>' +
       '</ul>' +

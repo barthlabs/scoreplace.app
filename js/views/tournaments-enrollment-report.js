@@ -915,10 +915,29 @@
         ? '<span style="font-size:0.68rem;font-weight:700;color:rgb(' + gMap[gl].c + ');background:rgba(' + gMap[gl].c + ',0.14);border-radius:6px;padding:2px 7px;">' + gMap[gl].l + '</span>'
         : '<span style="font-size:0.68rem;font-weight:600;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">? Sem gên.</span>';
     }
-    var skills = (r.effectiveSkills && r.effectiveSkills.length > 0)
-      ? r.effectiveSkills.map(function (s) { return '<span style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border-radius:6px;padding:2px 7px;">' + _esc(s) + '</span>'; }).join('')
-      : '<span style="font-size:0.68rem;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">sem hab.</span>';
-    var ageBadge = (r.age != null) ? '<span style="font-size:0.68rem;color:#fbbf24;background:rgba(245,158,11,0.12);border-radius:6px;padding:2px 7px;">' + r.age + ' anos</span>' : '';
+    // v2.4.33: categoria editável direto na lista (org). Options = categorias do
+    // torneio. Pra inscrito sem conta também. Substitui o selo de habilidade.
+    var _catsList = (isOrg && typeof window._getTournamentCategories === 'function' && _liveState && _liveState.t)
+      ? (window._getTournamentCategories(_liveState.t) || []) : [];
+    var curCat = (r.assigned && r.assigned.length > 0) ? r.assigned[0] : '';
+    var skills;
+    if (isOrg && _catsList.length > 0) {
+      var cOpt = function (v, lbl) { return '<option value="' + _esc(v) + '"' + (curCat === v ? ' selected' : '') + '>' + _esc(lbl) + '</option>'; };
+      skills = '<select title="Editar categoria do inscrito" onchange="window._erSetCategory(\'' + tIdEsc + '\',' + r.order + ',this.value)" ' +
+        'style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
+        cOpt('', 'sem categoria ✎') +
+        _catsList.map(function (c) { return cOpt(c, (window._displayCategoryName ? window._displayCategoryName(c) : c)); }).join('') +
+        '</select>';
+    } else {
+      skills = (r.effectiveSkills && r.effectiveSkills.length > 0)
+        ? r.effectiveSkills.map(function (s) { return '<span style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border-radius:6px;padding:2px 7px;">' + _esc(s) + '</span>'; }).join('')
+        : '<span style="font-size:0.68rem;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">sem hab.</span>';
+    }
+    // v2.4.33: mostra a CATEGORIA por idade que a pessoa entraria (ex.: "50+"),
+    // nunca a idade real (privacidade). Sem categoria de idade no torneio → nada.
+    var ageBadge = (r.ageBuckets && r.ageBuckets.length > 0)
+      ? '<span style="font-size:0.68rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.12);border-radius:6px;padding:2px 7px;">' + _esc(r.ageBuckets[0]) + '</span>'
+      : '';
     return '<div style="padding:8px 10px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(255,255,255,0.02);">' +
       '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);min-width:24px;flex-shrink:0;">#' + r.order + '</span>' +
@@ -961,6 +980,54 @@
     if (typeof showNotification === 'function') {
       var lbl = clean === 'feminino' ? 'Feminino' : clean === 'masculino' ? 'Masculino' : clean === 'misto' ? 'Misto' : 'Sem gênero';
       showNotification('Gênero atualizado', (row ? row.name : 'Inscrito') + ' → ' + lbl, 'success');
+    }
+  };
+
+  // v2.4.33: organizador atribui a CATEGORIA do inscrito direto na lista. Grava
+  // na ficha (t.participants[].categories) com categorySource='organizador' —
+  // funciona pra inscrito sem conta, vale na hora e é lido pelo sorteio.
+  window._erSetCategory = function (tId, order, cat) {
+    if (!_liveState || !_liveState.isOrg) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o organizador edita a categoria.', 'info'); return; }
+    var t = window.AppStore && window.AppStore.tournaments
+      ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); }) : null;
+    if (!t) return;
+    var validCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
+    if (cat && validCats.indexOf(cat) === -1) { if (typeof showNotification === 'function') showNotification('Categoria inválida', 'Essa categoria não existe no torneio.', 'info'); return; }
+    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    var row = (_liveState.rows || []).filter(function (r) { return r.order === order; })[0];
+    var p = null;
+    if (row) {
+      for (var i = 0; i < parts.length; i++) {
+        var cp = parts[i]; if (!cp || typeof cp !== 'object') continue;
+        if ((row.uid && cp.uid === row.uid) ||
+            (row.email && (cp.email || '').toLowerCase() === String(row.email).toLowerCase()) ||
+            (row.name && (cp.displayName || cp.name) === row.name)) { p = cp; break; }
+      }
+    }
+    if (!p) p = parts[order - 1];
+    if (!p || typeof p !== 'object') return;
+    if (cat) {
+      if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, [cat]);
+      else { p.categories = [cat]; p.category = cat; }
+      p.categorySource = 'organizador';
+      delete p.wasUncategorized; delete p.autoWeakestCat; delete p.staleCat;
+    } else {
+      if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, []);
+      else { p.categories = []; p.category = ''; }
+      if (p.categorySource === 'organizador' || p.categorySource === 'auto_fraca' || p.categorySource === 'perfil') delete p.categorySource;
+      delete p.autoWeakestCat; delete p.wasUncategorized;
+    }
+    // espelha no row vivo (assigned + effectiveSkills) pro re-render instantâneo
+    if (row) {
+      row.assigned = cat ? [cat] : [];
+      var assignedSkills = [];
+      if (cat) { var d = _decomposeCat(cat, t); if (d && d.skill) assignedSkills.push(d.skill); }
+      row.effectiveSkills = assignedSkills.length > 0 ? assignedSkills : (row.profileSkill ? [row.profileSkill] : []);
+    }
+    try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) { if (!Array.isArray(t.participants)) t.participants = parts; window.FirestoreDB.saveTournament(t); } } catch (e) {}
+    if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
+    if (typeof showNotification === 'function') {
+      showNotification('Categoria atualizada', (row ? row.name : 'Inscrito') + ' → ' + (cat ? (window._displayCategoryName ? window._displayCategoryName(cat) : cat) : 'sem categoria'), 'success');
     }
   };
 
@@ -1063,7 +1130,10 @@
       _renderOverview(rows, t) +
       _renderCategoryTable(rows, t) +
       _renderInscritosList(rows, t) +
-      _renderIncomplete(rows, t) +
+      // v2.4.33: seção "Perfis Incompletos" editável removida — a edição de
+      // gênero E categoria agora vive na própria lista filtrável de Inscritos
+      // (acima). Pra achar quem falta dado, use os filtros "? Sem gênero" /
+      // "Sem habilidade". _renderIncomplete continua definida (não chamada).
       _renderDiagnostic(t, rows, profileMap || {}, parts || [], resolvedFor || {}) +
       '</div>';
 
