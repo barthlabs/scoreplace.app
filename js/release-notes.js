@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.22-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Inscrição não pede mais pra escolher categoria — clicou, está inscrito.</b> Em torneios com categorias (nível, gênero ou idade), o app abria uma telinha pedindo pra você escolher sua categoria — e em torneios movimentados essa tela às vezes era fechada sozinha pela atualização ao vivo, deixando o botão preso em "processando" sem nunca inscrever. Acabou: agora a categoria é <b>deduzida do seu perfil em silêncio</b> e, se não der pra deduzir, você é inscrito <b>sem categoria na hora</b> e o organizador ajusta depois na lista de inscritos. Ninguém mais fica travado.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Categoria/modalidade no perfil não some mais ao salvar.</b> Quem abria o perfil e já começava a preencher modalidade e categoria (nível A/B/C/D/FUN) podia perder o que digitou: ao terminar de carregar o perfil do servidor (1-2s, mais lento no celular), o app reescrevia os campos por cima e o Salvar gravava o estado vazio. Agora, assim que você toca em qualquer campo, o app <b>respeita o que você preencheu</b> e não sobrescreve mais.</li>' +
       '</ul>' +

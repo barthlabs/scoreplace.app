@@ -279,22 +279,13 @@ window._resolveEnrollmentCategory = function(tId, callback) {
 
     var user = window.AppStore.currentUser;
 
-    // ── v2.3.92: categorias de idade exigem data de nascimento ────────────────
-    // Se o torneio tem categoria N+ e o usuário não tem birthDate no perfil,
-    // pede agora (e grava no perfil) — sem isso não dá pra encaixar na faixa.
-    var _mf = (typeof window._categoryMissingFields === 'function') ? window._categoryMissingFields(user || {}, t) : { usesAge: false };
-    if (_mf.usesAge && user && !user.birthDate && typeof window._askBirthDateForEnroll === 'function') {
-        window._askBirthDateForEnroll(t, function(bd) {
-            // Cancelar é ação DELIBERADA do usuário → não inscreve e não chama o
-            // callback (mesmo comportamento do Cancelar do picker). callback(null)
-            // é reservado pra FALHA técnica — nesse caso o chamador inscreve sem
-            // categoria (fail-open). Ver enrollCurrentUser / dashboard.
-            if (!bd) { return; }
-            user.birthDate = bd;
-            window._resolveEnrollmentCategory(tId, callback); // reprocessa com a data
-        });
-        return;
-    }
+    // ── v2.4.22: NUNCA bloquear a inscrição pedindo escolha ───────────────────
+    // Decisão do dono: "tira essa porra de exigir que a pessoa escolha qualquer
+    // coisa e inscreve de qualquer jeito quem clicar". A resolução de categoria
+    // é 100% em silêncio: tenta deduzir do perfil (gênero/idade/habilidade); se
+    // ficar ambígua, inscreve SEM categoria (callback(null) → fail-open) e o
+    // organizador ajusta depois. Sem prompt de data de nascimento, sem picker.
+    // Categoria de idade só é aplicada se o birthDate JÁ existir no perfil.
 
     // ── v2.3.92: a categoria resolvida (auto ou escolhida) grava no perfil ────
     // (gênero/habilidade). Mutação de currentUser é síncrona antes do callback,
@@ -405,23 +396,12 @@ window._resolveEnrollmentCategory = function(tId, callback) {
     }
     if (eligible.length === 1) { if (callback) callback(eligible[0]); return; }
 
-    // ── 4. Ainda ambíguo — mostrar picker com opções já filtradas ──────────
-    var modalId = 'modal-category-enroll-' + tId;
-    var mod = document.getElementById(modalId);
-    if (mod) mod.remove();
-    var html = '<div class="modal" id="' + modalId + '" style="display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;justify-content:center;align-items:center;">' +
-        '<div class="modal-content" style="background:var(--bg-card,#1a2235);color:var(--text-main,#fff);border-radius:15px;padding:25px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
-        '<h2 style="margin:0 0 8px;font-size:1.1rem;">Selecionar Categoria</h2>' +
-        '<p style="margin:0 0 16px;opacity:0.75;font-size:0.9rem;">Escolha a categoria em que deseja se inscrever:</p>';
-    for (var k = 0; k < eligible.length; k++) {
-        var cat = eligible[k];
-        var escapedCat = cat.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/</g, '\\x3c').replace(/>/g, '\\x3e');
-        html += '<button class="btn btn-primary" style="display:block;width:100%;margin:10px 0;cursor:pointer;" onclick="(function(){var cb=' + (callback ? 'window._enrollCategoryCallback' : 'null') + ';var mod=document.getElementById(\'' + modalId + '\');if(mod)mod.remove();if(cb)cb(\'' + escapedCat + '\');})();">' + window._displayCategoryName(cat) + '</button>';
-    }
-    html += '<button class="btn btn-outline" style="display:block;width:100%;margin-top:15px;cursor:pointer;" onclick="var mod=document.getElementById(\'' + modalId + '\');if(mod)mod.remove();">Cancelar</button>' +
-        '</div></div>';
-    document.body.insertAdjacentHTML('beforeend', html);
-    window._enrollCategoryCallback = callback;
+    // ── 4. Ainda ambíguo — NÃO mostrar picker (v2.4.22) ────────────────────
+    // O dono decidiu que ninguém deve ser barrado pra escolher categoria. Quando
+    // o perfil não permite deduzir uma única categoria, inscreve SEM categoria
+    // (callback(null) → fail-open) e o organizador atribui depois na tela de
+    // inscritos. Zero modal, zero "processando".
+    if (callback) callback(null);
 };
 
 // Apply gender categories and update UI
