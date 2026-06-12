@@ -3812,6 +3812,130 @@ function setupCreateTournamentModal() {
   // A criação é feita via btn-create-tournament-in-box (dashboard.js) → modal-quick-create → main.js.
   // Bloco de dead code removido em v0.2.4-alpha.
 
+  // ── v2.4.11: Engine de reconciliação de edição — TROCA DE PONTUAÇÃO ──────────
+  // Princípio do dono: editar config NUNCA bloqueia. Aceita, recalcula o derivado
+  // e regrava como se sempre fosse assim, preservando o histórico (jogos jogados,
+  // V/D, classificados). Antes de aplicar uma troca de pontuação num torneio que
+  // já tem resultados, mostra "vai ficar assim" + Aplicar / Manter anterior.
+  // (Standings já recalculam pontos ao vivo de m.winner — V/D/pontos preservados;
+  // só o desempate por sets/games muda. Jogo sem sets contribui 0 nesses critérios,
+  // sem corromper nem travar — verificado em bracket-logic _accumulateGSM.)
+  window._scoringIsSets = function(s) { return !!(s && s.type && s.type !== 'simple'); };
+
+  window._readScoringFromForm = function() {
+    var g = function(id) { var e = document.getElementById(id); return e ? e.value : undefined; };
+    if (g('gsm-type') === undefined) return null; // form de GSM não está no DOM
+    return {
+      type: g('gsm-type') || 'simple',
+      setsToWin: parseInt(g('gsm-setsToWin')) || 1,
+      gamesPerSet: parseInt(g('gsm-gamesPerSet')) || 6,
+      tiebreakEnabled: g('gsm-tiebreakEnabled') === 'true',
+      tiebreakPoints: parseInt(g('gsm-tiebreakPoints')) || 7,
+      tiebreakMargin: parseInt(g('gsm-tiebreakMargin')) || 2,
+      superTiebreak: g('gsm-superTiebreak') === 'true',
+      superTiebreakPoints: parseInt(g('gsm-superTiebreakPoints')) || 10,
+      countingType: g('gsm-countingType') || 'numeric',
+      advantageRule: g('gsm-advantageRule') === 'true',
+      fixedSet: g('gsm-fixedSet') === 'true',
+      fixedSetGames: parseInt(g('gsm-fixedSetGames')) || 6
+    };
+  };
+
+  window._writeScoringToForm = function(s) {
+    if (!s) return;
+    var set = function(id, v) { var e = document.getElementById(id); if (e) e.value = String(v); };
+    set('gsm-type', s.type || 'simple');
+    set('gsm-setsToWin', s.setsToWin != null ? s.setsToWin : 1);
+    set('gsm-gamesPerSet', s.gamesPerSet != null ? s.gamesPerSet : 6);
+    set('gsm-tiebreakEnabled', s.tiebreakEnabled ? 'true' : 'false');
+    set('gsm-tiebreakPoints', s.tiebreakPoints != null ? s.tiebreakPoints : 7);
+    set('gsm-tiebreakMargin', s.tiebreakMargin != null ? s.tiebreakMargin : 2);
+    set('gsm-superTiebreak', s.superTiebreak ? 'true' : 'false');
+    set('gsm-superTiebreakPoints', s.superTiebreakPoints != null ? s.superTiebreakPoints : 10);
+    set('gsm-countingType', s.countingType || 'numeric');
+    set('gsm-advantageRule', s.advantageRule ? 'true' : 'false');
+    set('gsm-fixedSet', s.fixedSet ? 'true' : 'false');
+    set('gsm-fixedSetGames', s.fixedSetGames != null ? s.fixedSetGames : 6);
+  };
+
+  window._scoringMeaningfullyChanged = function(o, n) {
+    o = o || {}; n = n || {};
+    var keys = ['type','setsToWin','gamesPerSet','tiebreakEnabled','tiebreakPoints','tiebreakMargin','superTiebreak','superTiebreakPoints','countingType','advantageRule','fixedSet','fixedSetGames'];
+    return keys.some(function(k) { return String(o[k] == null ? '' : o[k]) !== String(n[k] == null ? '' : n[k]); });
+  };
+
+  window._tournamentPlayedMatches = function(t) {
+    var played = [];
+    var scan = function(m) { if (m && m.winner && m.winner !== 'BYE' && !m.isBye && !m.isSitOut) played.push(m); };
+    if (typeof window._collectAllMatches === 'function') {
+      window._collectAllMatches(t).forEach(scan);
+    } else {
+      (t.matches || []).forEach(scan);
+      (t.rounds || []).forEach(function(r) { (r.matches || []).forEach(scan); });
+      (t.groups || []).forEach(function(g) { if (g && Array.isArray(g.matches)) g.matches.forEach(scan); });
+    }
+    return played;
+  };
+
+  window._scoringReconcileImpact = function(t, oldS, newS) {
+    var played = window._tournamentPlayedMatches(t);
+    var oldSets = window._scoringIsSets(oldS), newSets = window._scoringIsSets(newS);
+    var noSetData = 0;
+    if (newSets) {
+      played.forEach(function(m) { if (!(Array.isArray(m.sets) && m.sets.length > 0)) noSetData++; });
+    }
+    return {
+      playedCount: played.length,
+      paradigm: (!oldSets && newSets) ? 'toSets' : (oldSets && !newSets ? 'toSimple' : 'same'),
+      noSetDataCount: noSetData
+    };
+  };
+
+  window._showScoringChangePreview = function(t, oldS, newS, impact, onApply, onRevert) {
+    var modalId = 'modal-scoring-reconcile';
+    var old = document.getElementById(modalId); if (old) old.remove();
+    var esc = window._safeHtml || function(x){ return x; };
+    var lines = '';
+    lines += '<li style="margin-bottom:6px;"><b>Vencedores, vitórias/derrotas e pontos não mudam.</b> O histórico dos ' + impact.playedCount + ' jogo(s) já disputado(s) é preservado.</li>';
+    lines += '<li style="margin-bottom:6px;">Os critérios de <b>desempate</b> (saldo de sets/games) são recalculados pela nova regra.</li>';
+    if (impact.paradigm === 'toSets' && impact.noSetDataCount > 0) {
+      lines += '<li style="margin-bottom:6px;color:#fbbf24;">⚠️ ' + impact.noSetDataCount + ' jogo(s) foram lançados como <b>placar simples</b> (sem sets). Eles continuam contando o resultado, mas <b>não entram</b> nos critérios de desempate por sets/games. Não dá pra convertê-los em sets — ficam como estão.</li>';
+    }
+    var html =
+      '<div class="modal-overlay active" id="' + modalId + '" style="display:flex;align-items:center;justify-content:center;z-index:10045;">' +
+      '<div class="modal" style="max-width:440px;width:92%;background:var(--bg-card,#1a2235);color:var(--text-main,#fff);border-radius:15px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.45);box-sizing:border-box;">' +
+        '<h2 style="margin:0 0 6px;font-size:1.12rem;">⚙️ Mudança no sistema de pontuação</h2>' +
+        '<p style="margin:0 0 12px;opacity:0.82;font-size:0.9rem;">Vai ficar assim:</p>' +
+        '<ul style="margin:0 0 16px;padding-left:1.1rem;font-size:0.88rem;line-height:1.5;">' + lines + '</ul>' +
+        '<div style="display:flex;flex-direction:column;gap:9px;">' +
+          '<button class="btn btn-primary" id="scoring-rec-apply" style="cursor:pointer;">Aplicar nova pontuação</button>' +
+          '<button class="btn btn-outline" id="scoring-rec-revert" style="cursor:pointer;">Manter a pontuação anterior</button>' +
+          '<button class="btn btn-ghost" id="scoring-rec-cancel" style="cursor:pointer;opacity:0.8;">Voltar a editar</button>' +
+        '</div>' +
+      '</div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+    var close = function() { var m = document.getElementById(modalId); if (m) m.remove(); };
+    document.getElementById('scoring-rec-apply').addEventListener('click', function() { close(); onApply(); });
+    document.getElementById('scoring-rec-revert').addEventListener('click', function() { close(); onRevert(); });
+    document.getElementById('scoring-rec-cancel').addEventListener('click', function() { close(); });
+  };
+
+  // Retorna true se mostrou o preview (e o save deve abortar e esperar a decisão).
+  window._maybeShowScoringReconcile = function(t) {
+    if (!t) return false;
+    var newS = window._readScoringFromForm();
+    if (!newS) return false;
+    var oldS = t.scoring || { type: 'simple' };
+    if (!window._scoringMeaningfullyChanged(oldS, newS)) return false;
+    var impact = window._scoringReconcileImpact(t, oldS, newS);
+    if (impact.playedCount === 0) return false; // sem resultados → nada a preservar, aplica direto
+    window._showScoringChangePreview(t, oldS, newS, impact,
+      function onApply() { window._scoringReconcileConfirmed = true; window._saveTournamentClickHandler(); },
+      function onRevert() { window._writeScoringToForm(oldS); window._scoringReconcileConfirmed = true; window._saveTournamentClickHandler(); }
+    );
+    return true;
+  };
+
   // v1.4.20-beta: expose handler on window so _renderCreateTournamentHeader can
   // re-attach it after each host.innerHTML call (innerHTML destroys the old element
   // and its listener — the new btn-save-tournament needs a fresh attachment).
@@ -3827,6 +3951,18 @@ function setupCreateTournamentModal() {
           return t.name && t.name.trim().toLowerCase() === name.toLowerCase();
         });
         if (nomeDuplicado) { showAlertDialog(window._t('create.nameDupe'), window._t('create.nameDupeMsg'), null, { type: 'warning' }); return; }
+
+        // v2.4.11: reconciliação de pontuação. Se o organizador trocou o sistema
+        // de pontuação num torneio que JÁ tem resultados, mostra "vai ficar assim"
+        // + Aplicar/Manter anterior antes de gravar. O flag _scoringReconcileConfirmed
+        // é setado pelos botões do preview, que re-invocam este handler. Consumido
+        // (zerado) imediatamente pra não vazar pro próximo save.
+        var _scoringConfirmed = window._scoringReconcileConfirmed === true;
+        window._scoringReconcileConfirmed = false;
+        if (editId && !_scoringConfirmed && typeof window._maybeShowScoringReconcile === 'function') {
+          var _tForScoring = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(editId); });
+          if (_tForScoring && window._maybeShowScoringReconcile(_tForScoring)) return;
+        }
 
         const formatValue = document.getElementById('select-formato').value;
         const drawModeValue = document.getElementById('draw-mode').value;
