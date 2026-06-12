@@ -2768,6 +2768,43 @@ window._profileImpliedCategory = function(profileLike, t) {
 // organizador pra aprovar. Regra do dono: "se a pessoa mudar a categoria no perfil
 // depois de já estar numa categoria no torneio, o organizador é notificado e
 // precisa aprovar." Dedup por uid; pedido pro mesmo destino não duplica.
+// v2.4.35: rank de habilidade de uma categoria (menor = mais FORTE; -1 = sem
+// token de skill). skillCategories vem ordenado do mais forte pro mais fraco
+// (ex.: ['C','D'] → C rank 0, D rank 1). Usado pra distinguir subida (não pede
+// aprovação) de rebaixamento (pede aprovação do organizador).
+function _skillRankOfCat(cat, t) {
+    if (!cat) return -1;
+    var skillRef = (Array.isArray(t.skillCategories) && t.skillCategories.length) ? t.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
+    var tk = (typeof window._categoryAxisTokens === 'function') ? window._categoryAxisTokens(cat, skillRef) : null;
+    var sk = (tk && tk.skill) ? String(tk.skill).toUpperCase() : null;
+    if (!sk) return -1;
+    return skillRef.map(function(s){ return String(s).toUpperCase(); }).indexOf(sk);
+}
+
+// v2.4.35: aplica DIRETO a categoria implicada pelo perfil (sem aprovação) —
+// usado quando o inscrito estava SEM categoria (preencheu o perfil) ou SUBIU de
+// categoria. Grava na ficha e avisa o participante.
+function _applyProfileCategoryDirect(t, me, parts, cat, uid, fromCat) {
+    if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(me, [cat]);
+    else { me.categories = [cat]; me.category = cat; }
+    me.categorySource = 'perfil';
+    delete me.wasUncategorized; delete me.autoWeakestCat; delete me.staleCat;
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
+        if (!Array.isArray(t.participants)) t.participants = parts;
+        try { window.FirestoreDB.saveTournament(t); } catch (_e) {}
+    }
+    if (uid && typeof window._sendUserNotification === 'function') {
+        try {
+            window._sendUserNotification(uid, {
+                type: 'category-change-result', level: 'all',
+                tournamentId: String(t.id), tournamentName: t.name || 'torneio',
+                message: 'Sua categoria em "' + (t.name || 'torneio') + '" foi atualizada para ' +
+                    window._displayCategoryName(cat) + ' com base no seu perfil.'
+            });
+        } catch (_e) {}
+    }
+}
+
 window._requestCategoryChangeFromProfile = function(profileLike, uid) {
     if (!uid || !window.AppStore || !Array.isArray(window.AppStore.tournaments)) return 0;
     profileLike = profileLike || {};
@@ -2800,6 +2837,31 @@ window._requestCategoryChangeFromProfile = function(profileLike, uid) {
             ? window._getParticipantCategories(me) : (me.categories || (me.category ? [me.category] : []));
         var currentValid = current.filter(function(c) { return validCats.indexOf(c) !== -1; });
         if (currentValid.indexOf(implied) !== -1) return; // já está lá
+        var fromCat = currentValid[0] || '';
+
+        // v2.4.35: REGRA — só pede aprovação do organizador quando é REBAIXAMENTO
+        // (categoria inferior à atual). Preencher perfil que estava vazio (sem
+        // categoria) OU subir de categoria OU mudança lateral (mesmo nível) =
+        // aplica DIRETO, sem aprovação.
+        var isDemotion = false;
+        if (fromCat) {
+            var rNew = _skillRankOfCat(implied, t);   // menor = mais forte
+            var rCur = _skillRankOfCat(fromCat, t);
+            if (rNew >= 0 && rCur >= 0 && rNew > rCur) isDemotion = true; // implied mais fraco
+        }
+
+        if (!isDemotion) {
+            // Aplica direto e limpa qualquer pedido pendente antigo (já resolvido).
+            if (Array.isArray(t.categoryChangeRequests)) {
+                t.categoryChangeRequests = t.categoryChangeRequests.filter(function(r) {
+                    return !(r.uid === uid && r.status === 'pending');
+                });
+            }
+            _applyProfileCategoryDirect(t, me, parts, implied, uid, fromCat);
+            return;
+        }
+
+        // ── REBAIXAMENTO → pedido de aprovação do organizador ─────────────────
         if (!Array.isArray(t.categoryChangeRequests)) t.categoryChangeRequests = [];
         var pendingSame = t.categoryChangeRequests.some(function(r) {
             return r.uid === uid && r.status === 'pending' && r.toCat === implied;
@@ -2809,7 +2871,6 @@ window._requestCategoryChangeFromProfile = function(profileLike, uid) {
         t.categoryChangeRequests = t.categoryChangeRequests.filter(function(r) {
             return !(r.uid === uid && r.status === 'pending');
         });
-        var fromCat = currentValid[0] || current[0] || '';
         var playerName = me.displayName || me.name || profileLike.displayName || 'Participante';
         t.categoryChangeRequests.push({
             uid: uid, playerName: playerName,
@@ -2825,10 +2886,10 @@ window._requestCategoryChangeFromProfile = function(profileLike, uid) {
                     level: 'fundamental',
                     tournamentId: String(t.id),
                     tournamentName: t.name || 'torneio',
-                    message: playerName + ' atualizou o perfil e pede mudança de categoria em "' +
+                    message: playerName + ' atualizou o perfil e quer DESCER de categoria em "' +
                         (t.name || 'torneio') + '": ' +
-                        ((fromCat ? window._displayCategoryName(fromCat) : 'sem categoria')) + ' → ' +
-                        window._displayCategoryName(implied) + '. Aprove ou recuse nas Categorias.'
+                        window._displayCategoryName(fromCat) + ' → ' +
+                        window._displayCategoryName(implied) + ' (categoria inferior). Aprove ou recuse nas Categorias.'
                 });
             } catch (_e) {}
         }
