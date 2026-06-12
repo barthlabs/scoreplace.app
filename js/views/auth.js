@@ -492,7 +492,17 @@ window._onLogoffBtnClick = function(e) {
 // to capture the credential + access token here (onAuthStateChanged won't give
 // us access to the OAuth credential). This also lets us finish pending account-
 // link operations just like the popup flow does.
-if (firebase && firebase.auth) {
+// v2.4.18-beta: `typeof firebase` — identificador NU `firebase` em código
+// top-level lança ReferenceError ("Can't find variable: firebase") quando o
+// SDK do gstatic.com falha/é bloqueado ao carregar (iOS Safari + Prevent
+// Cross-Site Tracking, proxy corporativo, rede móvel instável). Como auth.js
+// NÃO é IIFE, esse throw ABORTA todo o resto do arquivo — _verifiedCurrentUser,
+// simulateLoginSuccess, _tryAutoEnroll e dezenas de funções deixam de existir →
+// inscrição quebra e o botão "Inscrever-se" fica girando pra sempre (Sentry
+// SCOREPLACE-WEB-35). Com typeof, o bloco é pulado com segurança e o resto do
+// auth.js sempre carrega (sem firebase, a inscrição falha com toast + rollback,
+// não com spin infinito).
+if (typeof firebase !== 'undefined' && firebase.auth) {
   try {
     window._log('[scoreplace-auth] Checking getRedirectResult on page load...');
     firebase.auth().getRedirectResult().then(function(result) {
@@ -553,7 +563,10 @@ if (firebase && firebase.auth) {
 }
 
 // Listen for auth state changes to auto-login returning users
-if (firebase && firebase.auth) {
+// v2.4.18-beta: typeof guard — ver nota no getRedirectResult acima (linha ~495).
+// Identificador nu `firebase` aqui abortaria o resto do arquivo se o SDK não
+// carregasse.
+if (typeof firebase !== 'undefined' && firebase.auth) {
   // Debounce handler: Safari/iOS can emit transient null auth-state events
   // during IndexedDB rehydration or ITP cookie transients. Without debouncing,
   // a user who is actually signed-in sees the app briefly treat them as logged
