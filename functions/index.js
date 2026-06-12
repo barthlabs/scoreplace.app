@@ -827,7 +827,13 @@ exports.cleanupOldMagicLinks = onSchedule(
     const now = new Date();
     const query = db.collection("magicLinks").where("expiresAt", "<", now);
     const deleted = await _batchDeleteQuery(query);
-    console.log(`[cleanupOldMagicLinks] deleted ${deleted} docs (threshold: ${now.toISOString()})`);
+    // v2.4.24: limpa também os tokens/códigos expirados da autenticação por
+    // celular no gate (gateTokens/{token} e gateVerifications/{uid}).
+    const delGateTokens = await _batchDeleteQuery(
+      db.collection("gateTokens").where("expiresAt", "<", now));
+    const delGateVerif = await _batchDeleteQuery(
+      db.collection("gateVerifications").where("expiresAt", "<", now));
+    console.log(`[cleanupOldMagicLinks] deleted magicLinks=${deleted} gateTokens=${delGateTokens} gateVerifications=${delGateVerif} (threshold: ${now.toISOString()})`);
   }
 );
 
@@ -1819,6 +1825,176 @@ async function _sendWhatsAppText(apiUrl, apiKey, instance, phone, text) {
   const messageId = data && data.key && data.key.id ? data.key.id : null;
   return { ok: true, messageId: messageId };
 }
+
+// ─── Autenticação por celular no gate de verificação (v2.4.24) ───────────────
+// Alternativa pro usuário cujo e-mail de confirmação não chega (ex.: UOL filtra
+// e-mail transacional). Em vez de depender do link no e-mail, a pessoa confirma
+// a conta provando que controla um telefone. Dois canais, espelhando o login
+// por celular antigo:
+//   • SMS  → Firebase linkWithPhoneNumber (código do Firebase, digitado no app).
+//            O cliente faz o confirm() e depois chama verifyPhoneGate({afterPhoneLink:true}).
+//   • WhatsApp → sendPhoneVerifyWhatsApp manda um código NOSSO de 6 dígitos +
+//            um botão (?gv=TOKEN) que autentica com 1 clique, sem digitar nada.
+// Qualquer caminho marca emailVerified=true (server-side, só Admin pode) e salva
+// o telefone no perfil. O telefone é a prova de identidade — não há e-mail no loop.
+
+// Aplica a verificação: marca o e-mail como confirmado no Auth e grava o
+// telefone (E.164 com '+') no perfil. Chamado pelos 3 caminhos abaixo.
+async function _applyGateVerification(uid, phoneE164) {
+  await admin.auth().updateUser(uid, { emailVerified: true });
+  const update = { emailVerified: true, updatedAt: new Date().toISOString() };
+  if (phoneE164) { update.phone = phoneE164; update.phoneCountry = "55"; }
+  await admin.firestore().collection("users").doc(uid).set(update, { merge: true });
+}
+
+// Manda o código + botão pelo WhatsApp. Requer usuário logado (o gate só aparece
+// pra quem já está autenticado, só falta confirmar o e-mail).
+exports.sendPhoneVerifyWhatsApp = onCall(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
+  },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "login necessário");
+    const phone = _normalizePhoneE164((request.data && request.data.phone) || "");
+    if (!phone) return { ok: false, reason: "invalid-phone" };
+
+    const crypto = require("crypto");
+    const otp = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
+    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+    const token = crypto.randomBytes(18).toString("base64url");
+    const phoneE164 = "+" + phone;
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+    const db = admin.firestore();
+    try {
+      await db.collection("gateVerifications").doc(uid).set({
+        uid, phone: phoneE164, otpHash, token, attempts: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt,
+      });
+      await db.collection("gateTokens").doc(token).set({
+        uid, phone: phoneE164, expiresAt,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("[sendPhoneVerifyWhatsApp] store failed:", err.code || err.message);
+      return { ok: false, reason: "store-error" };
+    }
+
+    const wrapperUrl = "https://scoreplace.app/?gv=" + encodeURIComponent(token);
+    const message =
+      "🎾 *scoreplace.app*\n\n" +
+      "Seu código de confirmação: *" + otp + "*\n\n" +
+      "Digite ele no app — ou toque no link abaixo pra confirmar e entrar direto, sem digitar nada:\n\n" +
+      wrapperUrl + "\n\n" +
+      "_O código expira em 15 minutos. Se não foi você, ignore._";
+
+    let apiUrl, apiKey, instance;
+    try {
+      apiUrl = EVOLUTION_API_URL.value();
+      apiKey = EVOLUTION_API_KEY.value();
+      instance = EVOLUTION_INSTANCE.value();
+    } catch (err) {
+      console.error("[sendPhoneVerifyWhatsApp] secrets unavailable:", err.message);
+      return { ok: false, reason: "secrets-missing" };
+    }
+    const result = await _sendWhatsAppText(apiUrl, apiKey, instance, phone, message);
+    if (!result.ok) {
+      console.warn("[sendPhoneVerifyWhatsApp] WA send failed for", phone, ":", result.error);
+      return { ok: false, reason: "wa-send-failed", error: result.error };
+    }
+    console.log("[sendPhoneVerifyWhatsApp] sent to", phone, "uid:", uid);
+    return { ok: true };
+  }
+);
+
+// Verifica o código digitado no app. Dois modos:
+//   • { afterPhoneLink:true } → o SMS do Firebase já foi confirmado no cliente
+//     (linkWithPhoneNumber.confirm). Só confirmamos que o provider phone está
+//     vinculado e marcamos o e-mail.
+//   • { code:"123456" }       → código NOSSO que foi pelo WhatsApp.
+exports.verifyPhoneGate = onCall(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+  },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "login necessário");
+    const db = admin.firestore();
+    const data = request.data || {};
+
+    if (data.afterPhoneLink) {
+      const u = await admin.auth().getUser(uid);
+      const hasPhone = !!u.phoneNumber ||
+        (u.providerData || []).some((p) => p && p.providerId === "phone");
+      if (!hasPhone) return { ok: false, reason: "phone-not-linked" };
+      await _applyGateVerification(uid, u.phoneNumber || null);
+      await db.collection("gateVerifications").doc(uid).delete().catch(() => {});
+      return { ok: true };
+    }
+
+    const code = String(data.code || "").trim();
+    if (!/^\d{6}$/.test(code)) return { ok: false, reason: "bad-code" };
+    const ref = db.collection("gateVerifications").doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, reason: "no-pending" };
+    const v = snap.data();
+    const exp = v.expiresAt && v.expiresAt.toDate ? v.expiresAt.toDate() : v.expiresAt;
+    if (exp && new Date(exp) < new Date()) return { ok: false, reason: "expired" };
+    if ((v.attempts || 0) >= 6) return { ok: false, reason: "too-many" };
+    const crypto = require("crypto");
+    const hash = crypto.createHash("sha256").update(code).digest("hex");
+    if (hash !== v.otpHash) {
+      await ref.update({ attempts: (v.attempts || 0) + 1 }).catch(() => {});
+      return { ok: false, reason: "wrong-code" };
+    }
+    await _applyGateVerification(uid, v.phone || null);
+    await ref.delete().catch(() => {});
+    if (v.token) await db.collection("gateTokens").doc(v.token).delete().catch(() => {});
+    console.log("[verifyPhoneGate] code OK, verified uid:", uid);
+    return { ok: true };
+  }
+);
+
+// Resolve o botão do WhatsApp (?gv=TOKEN). NÃO requer auth — o token é o segredo
+// (vai só pro dono do telefone). Marca o e-mail verificado e devolve um custom
+// token pra logar a pessoa direto, sem digitar nada.
+exports.verifyPhoneGateToken = onCall(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+  },
+  async (request) => {
+    const token = String((request.data && request.data.token) || "").trim();
+    if (!token) return { ok: false, reason: "no-token" };
+    const db = admin.firestore();
+    const ref = db.collection("gateTokens").doc(token);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, reason: "invalid-token" };
+    const t = snap.data();
+    const exp = t.expiresAt && t.expiresAt.toDate ? t.expiresAt.toDate() : t.expiresAt;
+    if (exp && new Date(exp) < new Date()) return { ok: false, reason: "expired" };
+    await _applyGateVerification(t.uid, t.phone || null);
+    let customToken = null;
+    try {
+      customToken = await admin.auth().createCustomToken(t.uid, { source: "phone_gate" });
+    } catch (err) {
+      console.error("[verifyPhoneGateToken] createCustomToken failed:", err.code || err.message);
+    }
+    await ref.delete().catch(() => {});
+    await db.collection("gateVerifications").doc(t.uid).delete().catch(() => {});
+    console.log("[verifyPhoneGateToken] token OK, verified uid:", t.uid);
+    return { ok: true, customToken };
+  }
+);
 
 exports.processWhatsAppQueue = onDocumentCreated(
   {

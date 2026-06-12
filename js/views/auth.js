@@ -258,6 +258,69 @@
   }
 })();
 
+// ── Autenticação por celular pelo botão do WhatsApp (?gv=TOKEN) ──────────────
+// v2.4.24: alternativa ao link do e-mail quando o e-mail de confirmação não
+// chega (ex.: UOL filtra). A pessoa toca no botão que mandamos no WhatsApp →
+// o Cloud Function verifyPhoneGateToken marca emailVerified + salva o telefone
+// e devolve um custom token pra logar direto, sem digitar nada.
+(function _handlePhoneGateToken() {
+  try {
+    var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
+    var token = qs && qs.get('gv');
+    if (!token) return;
+
+    var bg = '#0f172a';
+    var fg = '#25d366';
+    document.documentElement.style.background = bg;
+    var showStatus = function(emoji, title, subtitle, isError) {
+      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + bg + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
+        '<div style="font-size:2.4rem;line-height:1;">' + emoji + '</div>' +
+        '<div style="font-size:1.05rem;font-weight:700;color:' + (isError ? '#ef4444' : fg) + ';">' + title + '</div>' +
+        (subtitle ? '<div style="font-size:0.85rem;color:#94a3b8;max-width:340px;line-height:1.5;">' + subtitle + '</div>' : '') +
+        (isError ? '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Voltar ao início</a>' : '') +
+        '</div>';
+    };
+
+    showStatus('💬', 'Confirmando sua conta...', 'Validando o código do WhatsApp');
+
+    var tries = 0;
+    (function resolve() {
+      var fb = window.firebase;
+      if (!fb || !fb.auth || !fb.functions) {
+        if (tries++ < 80) return setTimeout(resolve, 100); // até 8s
+        showStatus('⚠️', 'Não foi possível carregar', 'Verifique sua conexão e tente abrir o link de novo.', true);
+        return;
+      }
+      var fn;
+      try { fn = fb.functions().httpsCallable('verifyPhoneGateToken'); }
+      catch (e) { showStatus('⚠️', 'Erro ao carregar', 'Tente abrir o link de novo.', true); return; }
+      fn({ token: token }).then(function(res) {
+        var d = (res && res.data) || {};
+        if (!d.ok) {
+          if (d.reason === 'expired') { showStatus('⏱️', 'Link expirado', 'O código do WhatsApp expirou. Abra o app e peça um novo.', true); return; }
+          showStatus('🔗', 'Link inválido', 'Esse link não é mais válido. Abra o app e tente de novo.', true);
+          return;
+        }
+        if (d.customToken) {
+          fb.auth().signInWithCustomToken(d.customToken).then(function() {
+            showStatus('✅', 'Conta confirmada!', 'Entrando no app...');
+            setTimeout(function() { window.location.replace('/#dashboard'); }, 500);
+          }).catch(function() {
+            showStatus('✅', 'Conta confirmada!', 'Volte ao app e faça login com seu e-mail e senha.', false);
+          });
+        } else {
+          showStatus('✅', 'Conta confirmada!', 'Volte ao app e faça login com seu e-mail e senha.', false);
+        }
+      }).catch(function(err) {
+        if (window._error) window._error('[gvToken] failed:', err);
+        showStatus('⚠️', 'Erro ao confirmar', 'Tente abrir o link de novo. Se persistir, entre pelo app.', true);
+      });
+    })();
+  } catch (e) {
+    if (window._error) window._error('[gvToken] handler crashed:', e);
+  }
+})();
+
 const firebaseConfig = {
   apiKey: "AIzaSyB7AyOojV_Pm50Kr7bovVY4jVTTNbKOK0A",
   authDomain: "scoreplace-app.firebaseapp.com",
@@ -2489,6 +2552,7 @@ function _sendRichVerificationEmail(firebaseUser, name) {
 // nada. Google/telefone já entram verificados.
 window._showEmailVerificationGate = function(email, name) {
   if (name) window._pendingVerifyName = name;
+  window._gateEmail = email || '';
   var existing = document.getElementById('email-verify-gate');
   if (existing) existing.remove();
   var ov = document.createElement('div');
@@ -2503,9 +2567,201 @@ window._showEmailVerificationGate = function(email, name) {
       '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:18px;">Abra seu e-mail e clique em <b>Confirmar minha conta</b>. Enquanto não confirmar, você não pode usar o scoreplace.app. <span style="opacity:0.8;">(confira também a caixa de spam)</span></div>' +
       '<button onclick="window._checkEmailVerified()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:10px;">✅ Já confirmei</button>' +
       '<button onclick="window._resendVerifyEmail()" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.88rem;font-weight:700;padding:11px;margin-bottom:10px;">📨 Reenviar e-mail</button>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Confirme pelo seu celular — recebe um código por SMS e WhatsApp.</div>' +
+      '<button onclick="window._gatePhoneStart()" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-size:0.92rem;font-weight:800;padding:12px;margin-bottom:12px;">📱 Autenticar por celular</button>' +
       '<button onclick="window.handleLogout && window.handleLogout()" style="background:none;border:none;color:var(--text-muted);font-size:0.8rem;cursor:pointer;text-decoration:underline;">Sair</button>' +
     '</div>';
   document.body.appendChild(ov);
+};
+
+// ── Autenticação por celular no gate (v2.4.24) ──────────────────────────────
+// Alternativa pra quando o e-mail de confirmação não chega. A pessoa prova que
+// controla um telefone (SMS do Firebase + código/botão nosso pelo WhatsApp) e
+// a conta é confirmada (emailVerified=true) com o telefone salvo no perfil.
+window._gatePhoneConfirmation = null;
+window._gatePhonePending = null;
+
+window._gatePhoneStart = function() {
+  var card = document.querySelector('#email-verify-gate > div');
+  if (!card) return;
+  card.innerHTML =
+    '<div style="font-size:2.2rem;margin-bottom:8px;">📱</div>' +
+    '<div style="font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">Confirmar por celular</div>' +
+    '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px;">Digite seu número com DDD. Você recebe um código por <b>SMS</b> e por <b>WhatsApp</b> (com botão de 1 toque).</div>' +
+    '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:12px;">' +
+      '<span style="display:flex;align-items:center;padding:0 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);border-radius:10px;font-size:0.95rem;font-weight:700;color:var(--text-bright);">🇧🇷 +55</span>' +
+      '<input id="gate-phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-8888" style="flex:1;min-width:0;box-sizing:border-box;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:1rem;" />' +
+    '</div>' +
+    '<button id="gate-phone-send-btn" onclick="window._gatePhoneSend()" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-size:0.95rem;font-weight:800;padding:12px;margin-bottom:10px;">Enviar código</button>' +
+    '<div id="gate-phone-status" style="min-height:18px;font-size:0.74rem;margin-bottom:8px;"></div>' +
+    '<button onclick="window._showEmailVerificationGate(window._gateEmail)" style="background:none;border:none;color:var(--text-muted);font-size:0.8rem;cursor:pointer;text-decoration:underline;">← Voltar</button>';
+  var inp = document.getElementById('gate-phone-input');
+  if (inp) inp.focus();
+};
+
+window._gatePhoneSend = function() {
+  var inp = document.getElementById('gate-phone-input');
+  var statusEl = document.getElementById('gate-phone-status');
+  var btn = document.getElementById('gate-phone-send-btn');
+  var raw = inp ? inp.value.trim() : '';
+  var digits = raw.replace(/\D/g, '');
+  if (digits.length < 10) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Digite DDD + número (ex: 11 99999-8888).</span>';
+    if (inp) inp.focus();
+    return;
+  }
+  // _normalizePhoneE164(raw, '55') já devolve no formato '+5511999998888'.
+  var phoneE164 = (typeof window._normalizePhoneE164 === 'function')
+    ? window._normalizePhoneE164(raw, '55')
+    : ('+55' + digits);
+  if (!phoneE164 || phoneE164.replace(/\D/g, '').length < 12) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Número inválido. Confira o DDD + número.</span>';
+    if (btn) { btn.disabled = false; btn.textContent = 'Enviar código'; }
+    if (inp) inp.focus();
+    return;
+  }
+
+  var u = firebase.auth().currentUser;
+  if (!u) { if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Sessão expirada. Entre de novo.</span>'; return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Enviando código por SMS e WhatsApp...</span>';
+  window._gatePhonePending = phoneE164;
+
+  // (1) WhatsApp em paralelo (código nosso + botão de 1 toque).
+  try {
+    if (firebase.functions) {
+      firebase.functions().httpsCallable('sendPhoneVerifyWhatsApp')({ phone: phoneE164 })
+        .then(function(r) { window._log && window._log('[gatePhone] WA:', JSON.stringify(r && r.data)); })
+        .catch(function(e) { window._warn && window._warn('[gatePhone] WA falhou:', e && (e.code || e.message)); });
+    }
+  } catch (e) {}
+
+  // (2) SMS via Firebase — vincula o telefone à conta atual (mantém o e-mail).
+  try {
+    if (typeof _ensureRecaptchaInBody === 'function') _ensureRecaptchaInBody();
+    if (typeof _resetPhoneRecaptcha === 'function') _resetPhoneRecaptcha();
+    window._gateRecaptcha = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+      size: 'invisible',
+      callback: function() {},
+      'expired-callback': function() {}
+    });
+    window._gateRecaptcha.render().then(function() {
+      return u.linkWithPhoneNumber(phoneE164, window._gateRecaptcha);
+    }).then(function(confirmationResult) {
+      window._gatePhoneConfirmation = confirmationResult;
+      window._gateShowCodeStep(phoneE164);
+    }).catch(function(error) {
+      window._warn && window._warn('[gatePhone] SMS/link falhou:', error && (error.code || error.message));
+      // SMS pode falhar (reCAPTCHA iOS, número já vinculado, quota). O WhatsApp
+      // já foi enviado — então seguimos pro passo do código mesmo assim.
+      window._gatePhoneConfirmation = null;
+      window._gateShowCodeStep(phoneE164, error && error.code);
+    });
+  } catch (e) {
+    window._warn && window._warn('[gatePhone] recaptcha/link crash:', e && e.message);
+    window._gatePhoneConfirmation = null;
+    window._gateShowCodeStep(phoneE164, 'recaptcha-error');
+  }
+};
+
+window._gateShowCodeStep = function(phoneE164, smsErrCode) {
+  var card = document.querySelector('#email-verify-gate > div');
+  if (!card) return;
+  var smsNote = smsErrCode
+    ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:10px;">Não foi possível enviar SMS agora — use o código ou o botão do WhatsApp.</div>'
+    : '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;">Enviamos um código por <b>SMS</b> e por <b>WhatsApp</b>. Digite qualquer um deles — ou toque no botão da mensagem do WhatsApp pra entrar direto.</div>';
+  card.innerHTML =
+    '<div style="font-size:2.2rem;margin-bottom:8px;">🔑</div>' +
+    '<div style="font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Digite o código</div>' +
+    '<div style="font-size:0.85rem;color:#25d366;font-weight:700;margin-bottom:12px;">' + window._safeHtml(phoneE164 || '') + '</div>' +
+    smsNote +
+    '<input id="gate-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:8px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:1.4rem;font-weight:800;margin-bottom:12px;" />' +
+    '<button id="gate-code-verify-btn" onclick="window._gatePhoneVerify()" class="btn btn-success btn-block" style="font-size:0.95rem;font-weight:800;padding:12px;margin-bottom:10px;">✅ Confirmar</button>' +
+    '<div id="gate-code-status" style="min-height:18px;font-size:0.74rem;margin-bottom:8px;"></div>' +
+    '<button onclick="window._gatePhoneStart()" style="background:none;border:none;color:var(--text-muted);font-size:0.8rem;cursor:pointer;text-decoration:underline;">← Trocar número</button>';
+  var ci = document.getElementById('gate-code-input');
+  if (ci) ci.focus();
+};
+
+window._gatePhoneVerify = function() {
+  var ci = document.getElementById('gate-code-input');
+  var statusEl = document.getElementById('gate-code-status');
+  var btn = document.getElementById('gate-code-verify-btn');
+  var code = ci ? ci.value.replace(/\D/g, '') : '';
+  if (code.length !== 6) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">O código tem 6 dígitos.</span>';
+    if (ci) ci.focus();
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Verificando...</span>';
+
+  var _fail = function(msg) {
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar'; }
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira no SMS/WhatsApp.') + '</span>';
+    if (ci) { ci.focus(); ci.select && ci.select(); }
+  };
+
+  // 1) Tenta como código NOSSO (WhatsApp) via Cloud Function.
+  var tryWhatsAppCode = function() {
+    if (!firebase.functions) return _fail();
+    return firebase.functions().httpsCallable('verifyPhoneGate')({ code: code })
+      .then(function(r) {
+        var d = (r && r.data) || {};
+        if (d.ok) { window._gateEnterApp(); return true; }
+        return false;
+      })
+      .catch(function() { return false; });
+  };
+
+  // 2) Tenta como código do Firebase (SMS) — confirma o link e finaliza no server.
+  var tryFirebaseSms = function() {
+    if (!window._gatePhoneConfirmation) return Promise.resolve(false);
+    return window._gatePhoneConfirmation.confirm(code)
+      .then(function() {
+        // Telefone vinculado. Agora marca emailVerified no server.
+        if (!firebase.functions) return false;
+        return firebase.functions().httpsCallable('verifyPhoneGate')({ afterPhoneLink: true })
+          .then(function(r) {
+            var d = (r && r.data) || {};
+            if (d.ok) { window._gateEnterApp(); return true; }
+            return false;
+          });
+      })
+      .catch(function() { return false; });
+  };
+
+  tryWhatsAppCode().then(function(done) {
+    if (done) return;
+    tryFirebaseSms().then(function(done2) {
+      if (!done2) _fail();
+    });
+  });
+};
+
+// Entra no app depois que o server marcou emailVerified=true. Espelha o
+// caminho de sucesso de _checkEmailVerified: recarrega o usuário (pra pegar o
+// emailVerified novo) e segue pro perfil.
+window._gateEnterApp = function() {
+  var u = firebase.auth().currentUser;
+  var finish = function(u2) {
+    var g = document.getElementById('email-verify-gate'); if (g) g.remove();
+    if (typeof _resetPhoneRecaptcha === 'function') { try { _resetPhoneRecaptcha(); } catch (e) {} }
+    window._pendingVerifyName = null;
+    window._postVerifyGoToProfile = true;
+    if (window.showNotification) window.showNotification('✅ Conta confirmada!', 'Telefone autenticado. Vamos completar seu perfil.', 'success');
+    Promise.resolve(simulateLoginSuccess({ uid: u2.uid, email: u2.email, displayName: u2.displayName, photoURL: u2.photoURL }))
+      .then(function() {
+        window.location.hash = '#profile';
+        if (typeof initRouter === 'function') initRouter();
+      });
+  };
+  if (!u) { window.location.reload(); return; }
+  u.reload().then(function() {
+    finish(firebase.auth().currentUser || u);
+  }).catch(function() { finish(u); });
 };
 
 window._resendVerifyEmail = function() {
