@@ -855,7 +855,7 @@ window.addParticipantFunction = function (tId) {
     if (!t) return;
     // Block if enrollments are closed (except Liga with open enrollment)
     var _isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
-    var _ligaOpen = _isLiga && t.ligaOpenEnrollment;
+    var _ligaOpen = _isLiga && t.ligaOpenEnrollment !== false; // v2.4.17: Liga aberta por default (só fecha se explicitamente false) — alinha com cards/form/enrollCurrentUser
     var _sorteio = (Array.isArray(t.matches) && t.matches.length > 0) ||
                    (Array.isArray(t.rounds) && t.rounds.length > 0) ||
                    (Array.isArray(t.groups) && t.groups.length > 0);
@@ -927,7 +927,7 @@ window.addTeamFunction = function (tId) {
     if (!t) return;
     // Block if enrollments are closed (except Liga with open enrollment)
     var _isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
-    var _ligaOpen = _isLiga && t.ligaOpenEnrollment;
+    var _ligaOpen = _isLiga && t.ligaOpenEnrollment !== false; // v2.4.17: Liga aberta por default (só fecha se explicitamente false) — alinha com cards/form/enrollCurrentUser
     var _sorteio = (Array.isArray(t.matches) && t.matches.length > 0) ||
                    (Array.isArray(t.rounds) && t.rounds.length > 0) ||
                    (Array.isArray(t.groups) && t.groups.length > 0);

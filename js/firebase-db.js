@@ -228,7 +228,13 @@ window.FirestoreDB = {
       // Block enrollment if tournament is closed, active (draw done), or finished
       // Liga with open enrollment is the only exception
       var _isLiga = data.format && (data.format === 'Liga' || data.format === 'Ranking' || data.format === 'liga' || data.format === 'ranking');
-      var _ligaOpen = _isLiga && data.ligaOpenEnrollment;
+      // v2.4.17: Liga é inscrição-aberta por DEFAULT — só fecha se explicitamente
+      // false. Antes era truthy (data.ligaOpenEnrollment), então docs com o campo
+      // undefined/null bloqueavam a inscrição assim que o sorteio acontecia, MESMO
+      // com os cards/config mostrando "aberta" (que usam !== false). Bug da Vivi
+      // Hirata: organizador não conseguia inscrever após o 1º confronto. Alinhado
+      // com enrollCurrentUser, cards e form (todos !== false).
+      var _ligaOpen = _isLiga && data.ligaOpenEnrollment !== false;
       var _sorteioRealizado = (Array.isArray(data.matches) && data.matches.length > 0) ||
                               (Array.isArray(data.rounds) && data.rounds.length > 0) ||
                               (Array.isArray(data.groups) && data.groups.length > 0);

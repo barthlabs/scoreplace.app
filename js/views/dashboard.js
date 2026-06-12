@@ -147,7 +147,7 @@ window._dashEnroll = function(tId) {
 
   // Block enrollment if inscriptions are closed
   var _isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
-  var _ligaOpen = _isLiga && t.ligaOpenEnrollment;
+  var _ligaOpen = _isLiga && t.ligaOpenEnrollment !== false; // v2.4.17: Liga aberta por default — alinha com cards/form
   var _sorteio = (Array.isArray(t.matches) && t.matches.length > 0) ||
                  (Array.isArray(t.rounds) && t.rounds.length > 0) ||
                  (Array.isArray(t.groups) && t.groups.length > 0);

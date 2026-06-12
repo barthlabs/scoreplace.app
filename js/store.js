@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.16-beta';
+window.SCOREPLACE_VERSION = '2.4.17-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -2225,9 +2225,11 @@ window._autoCloseExpiredEnrollments = function() {
                   (Array.isArray(t.rounds) && t.rounds.length > 0) ||
                   (Array.isArray(t.groups) && t.groups.length > 0);
     if (hasDraw) return;
-    // Skip Liga with open enrollment
+    // Skip Liga with open enrollment. v2.4.17: !== false (aberta por default) —
+    // antes era truthy, então uma Liga com ligaOpenEnrollment undefined era
+    // auto-fechada quando o prazo passava, mesmo sendo conceitualmente aberta.
     var isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking');
-    if (isLiga && t.ligaOpenEnrollment) return;
+    if (isLiga && t.ligaOpenEnrollment !== false) return;
     // Check if deadline passed
     if (new Date(t.registrationLimit) < now) {
       t.status = 'closed';
