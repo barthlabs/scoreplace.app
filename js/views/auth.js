@@ -5497,17 +5497,26 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
 
   if (modifiedTournaments.length > 0 && window.FirestoreDB && window.FirestoreDB.saveTournament) {
     window._debug('[PropageName] Saving ' + modifiedTournaments.length + ' tournament(s) to Firestore');
+    // v2.4.40: o toast SÓ aparece quando um save REALMENTE persiste. Bug
+    // reportado: torneio onde o usuário é só participante (não organizador) não
+    // pode ser salvo pelas regras do Firestore → o save falhava em silêncio, o
+    // nome nunca persistia e o fix re-disparava + re-toastava A CADA abertura do
+    // app ("o nome da Cocozza foi atualizado", toda vez). Agora conta sucessos
+    // reais; se nenhum save passou (sem permissão), nada de toast nem refresh.
     var savePromises = modifiedTournaments.map(function(t) {
       t.updatedAt = new Date().toISOString();
-      return window.FirestoreDB.saveTournament(t).catch(function(err) { window._warn('[PropageName] Save error for ' + t.id + ':', err); });
+      return window.FirestoreDB.saveTournament(t).then(function() { return true; }).catch(function(err) { window._warn('[PropageName] Save error for ' + t.id + ':', err); return false; });
     });
-    Promise.all(savePromises).then(function() {
-      window._debug('[PropageName] All saves complete, refreshing UI');
-      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    Promise.all(savePromises).then(function(results) {
+      var _okCount = results.filter(Boolean).length;
+      window._debug('[PropageName] saves complete — persistidos:', _okCount, 'de', results.length);
+      if (_okCount > 0) {
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        if (typeof showNotification !== 'undefined') {
+          showNotification(_t('auth.nameUpdated'), _t('auth.nameUpdatedMsg', {old: oldName, new: newName, n: _okCount}), 'info');
+        }
+      }
     });
-    if (typeof showNotification !== 'undefined') {
-      showNotification(_t('auth.nameUpdated'), _t('auth.nameUpdatedMsg', {old: oldName, new: newName, n: modifiedTournaments.length}), 'info');
-    }
   } else {
     window._debug('[PropageName] No tournaments needed updating');
   }

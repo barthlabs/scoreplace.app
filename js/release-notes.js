@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.39-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.40-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Fase do jogo certa em "Meus Resultados".</b> Nos próximos jogos de eliminatórias, a fase não aparece mais como "Final" para todo mundo. Agora o app calcula a fase pelo <b>tamanho do chaveamento</b> — então a primeira rodada de um bracket grande aparece como <b>Rodada 1</b>, e Oitavas/Quartas/Semi/Final só quando é realmente a fase.</li>' +
+        '<li><b>Fim do aviso repetido de nome atualizado.</b> O toast "o nome de [pessoa] foi atualizado no torneio" não aparece mais <b>toda vez</b> que você abre o app. Ele só aparece quando a atualização realmente foi salva — antes, em torneios onde você é apenas participante (sem permissão pra salvar), o aviso se repetia a cada abertura.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.39-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>"sem cat" colorido no card do inscrito.</b> Quando falta um dado de categoria no perfil, em vez do genérico "(sem cat.)" aparece uma etiqueta <b>"sem cat"</b> na <b>cor do eixo que falta</b> e na <b>posição</b> em que o selo apareceria: <b>verde</b> = gênero, <b>roxo</b> = habilidade, <b>amarelo</b> = idade. Em cima fica tudo do perfil da pessoa; se o organizador atribuiu uma categoria diferente pro torneio, ela aparece embaixo com <b>(org.)</b>.</li>' +
       '</ul>' +

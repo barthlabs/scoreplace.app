@@ -1676,21 +1676,31 @@ function renderDashboard(container) {
       var realMatches = allM.filter(function(mm) {
         return mm && mm.p1 && mm.p2 && mm.p1 !== 'BYE' && mm.p2 !== 'BYE' && mm.p1 !== 'TBD' && mm.p2 !== 'TBD';
       });
-      // Número de rodadas = log2(times) para single elim. Derivamos do round máximo.
+      // v2.4.40: o TOTAL de rodadas vem do TAMANHO do bracket (nº de inscritos),
+      // não do round máximo já gerado. Antes, um bracket só com R1 tinha maxRound=1
+      // → fromEnd=0 → TODO jogo virava "Final" (bug do torneio da Vivi Hirata).
       var maxRound = 0;
       realMatches.forEach(function(mm) { if ((mm.round || 0) > maxRound) maxRound = mm.round || 0; });
+      var _parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
+      var _entries = _parts.length;
+      var totalRounds = maxRound;
+      if (_entries >= 2) {
+        var _byEntries = Math.ceil(Math.log2(_entries)); // bracket de N → log2(N) rodadas
+        if (_byEntries > totalRounds) totalRounds = _byEntries;
+      }
       var curRound = m.round || 0;
       // fromEnd: 0 = final, 1 = semi, 2 = quartas, 3 = oitavas
-      var fromEnd = maxRound - curRound;
+      var fromEnd = totalRounds - curRound;
       var phaseStr = '';
-      if (maxRound > 0) {
+      if (totalRounds > 0) {
         if (fromEnd === 0) phaseStr = 'Final';
         else if (fromEnd === 1) phaseStr = 'Semifinal';
         else if (fromEnd === 2) phaseStr = 'Quartas de Final';
         else if (fromEnd === 3) phaseStr = 'Oitavas de Final';
         else phaseStr = 'Rodada ' + curRound;
-        // Sufixo (R<n>) quando o nome genérico seria ambíguo
-        if (maxRound > 1) phaseStr += ' (R' + curRound + ')';
+        // Sufixo (R<n>) só nas fases nomeadas Semi/Quartas/Oitavas — Final e
+        // "Rodada N" não precisam (a Final é óbvia; Rodada N já tem o número).
+        if (totalRounds > 1 && fromEnd >= 1 && fromEnd <= 3) phaseStr += ' (R' + curRound + ')';
       } else if (m.label) {
         phaseStr = m.label;
       } else if (m.roundLabel) {
