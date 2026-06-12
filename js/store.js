@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.22-beta';
+window.SCOREPLACE_VERSION = '2.4.23-beta';
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
@@ -1228,6 +1228,18 @@ window._firstNameOnly = function(name) {
   if (s.indexOf('@') > -1 || s.indexOf('(') > -1 || s.indexOf('+') > -1 || /\d{3,}/.test(s)) return s;
   var first = s.split(/\s+/)[0];
   return first || s;
+};
+
+// v2.4.23: saudação concordante com o gênero do perfil.
+// PT: "Bem-vinda" pra gênero feminino, "Bem-vindo" pra masculino/desconhecido.
+// EN: sempre "Welcome" (sem flexão). Usada nas chaves i18n via {greeting}.
+// Aceita user explícito; default = AppStore.currentUser.
+window._welcomeWord = function(user) {
+  var lang = window._lang || 'pt';
+  if (lang === 'en') return 'Welcome';
+  var u = user || (window.AppStore && window.AppStore.currentUser) || null;
+  var g = u && u.gender ? String(u.gender).trim().toLowerCase() : '';
+  return (g === 'feminino' || g === 'female' || g === 'f') ? 'Bem-vinda' : 'Bem-vindo';
 };
 
 // Normalizes any phone string to E.164 format with + prefix.

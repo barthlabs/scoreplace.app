@@ -516,7 +516,7 @@ if (typeof firebase !== 'undefined' && firebase.auth) {
 
       try {
         if (typeof showNotification === 'function') {
-          showNotification(_t('auth.loginDone'), _t('auth.welcomeName', {name: user.displayName || user.email}), 'success');
+          showNotification(_t('auth.loginDone'), _t('auth.welcomeName', {greeting: window._welcomeWord(user), name: user.displayName || user.email}), 'success');
         }
       } catch(e) {}
       if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
@@ -783,7 +783,7 @@ function handleGoogleLogin() {
       // away the moment Google auth returns.
       _forceCloseLoginModal();
 
-      showNotification(_t('auth.loginDone'), _t('auth.welcomeName', {name: user.displayName}), 'success');
+      showNotification(_t('auth.loginDone'), _t('auth.welcomeName', {greeting: window._welcomeWord(user), name: user.displayName}), 'success');
 
       // Save auth provider + displayName/photoURL to Firestore on first Google login
       if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
@@ -1384,7 +1384,7 @@ function _completeEmailLinkSignIn() {
         }
         window.FirestoreDB.saveUserProfile(user.uid, profileData).catch(function() {});
       }
-      showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {name: user.displayName}) : _t('auth.welcome'), 'success');
+      showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {greeting: window._welcomeWord(user), name: user.displayName}) : _t('auth.welcome', {greeting: window._welcomeWord(user)}), 'success');
       // v1.8.65: verificar se este login é resultado de um pedido de vinculação de email
       if (user.email && typeof window._checkEmailLinkIntent === 'function') {
         setTimeout(function() { window._checkEmailLinkIntent(user.email); }, 1500);
@@ -1721,7 +1721,7 @@ function handlePhoneVerifyCode() {
       }
       window._phoneConfirmationResult = null;
       _resetPhoneRecaptcha();
-      showNotification(_t('auth.loginDone'), _t('auth.welcome'), 'success');
+      showNotification(_t('auth.loginDone'), _t('auth.welcome', {greeting: window._welcomeWord(user)}), 'success');
       var modal = document.getElementById('modal-login');
       if (modal) modal.classList.remove('active');
       _resetPhoneLoginUI();
@@ -1867,7 +1867,7 @@ function handleEmailLogin() {
         _pwCache.authProvider = 'password';
         localStorage.setItem('scoreplace_authCache', JSON.stringify(_pwCache));
       } catch(e) {}
-      showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {name: user.displayName}) : _t('auth.welcome'), 'success');
+      showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {greeting: window._welcomeWord(user), name: user.displayName}) : _t('auth.welcome', {greeting: window._welcomeWord(user)}), 'success');
       var modal = document.getElementById('modal-login');
       if (modal) modal.classList.remove('active');
     })

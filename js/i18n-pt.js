@@ -11,7 +11,7 @@ window._translations['pt'] = {
   'nav.participant': 'Participante',
 
   // Dashboard
-  'dashboard.welcome': 'Bem-vindo, {name}!',
+  'dashboard.welcome': '{greeting}, {name}!',
   'dashboard.newTournament': 'Novo Torneio',
   'dashboard.filterAll': 'Todos',
   'dashboard.filterOrganized': 'Organizados',
@@ -1337,8 +1337,8 @@ window._translations['pt'] = {
   'auth.connecting': 'Conectando...',
   'auth.connectingMsg': 'Abrindo popup do Google...',
   'auth.loginDone': 'Login Realizado',
-  'auth.welcomeName': 'Bem-vindo(a), {name}!',
-  'auth.welcome': 'Bem-vindo(a)!',
+  'auth.welcomeName': '{greeting}, {name}!',
+  'auth.welcome': '{greeting}!',
   'auth.popupBlocked': 'Popup Bloqueado',
   'auth.popupBlockedMsg': 'Permita popups para este site nas configurações do navegador.',
   'auth.googleError': 'Erro no Auth',

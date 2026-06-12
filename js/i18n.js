@@ -19,7 +19,7 @@
 
   // Tracking de loads em voo pra evitar dupla injeção
   var _loadingPromises = {};
-  var _LANG_CACHE_BUSTER = '0.17.70'; // bumpar quando dicts mudarem
+  var _LANG_CACHE_BUSTER = '2.4.23-beta'; // bumpar quando dicts mudarem
 
   /**
    * Translate a key, with optional parameter interpolation.
