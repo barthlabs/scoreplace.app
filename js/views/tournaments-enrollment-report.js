@@ -889,6 +889,8 @@
   // Estado vivo (rows + torneio atual) usado pelo re-render client-side dos
   // filtros/sort/busca. Setado em _renderPage; lido por _erRenderInscritos.
   var _liveState = null;
+  // v2.4.34: mudanças staged (gênero/categoria) por order, aplicadas só no "Salvar".
+  var _pendingEdits = {};
 
   function _norm(s) {
     return String(s == null ? '' : s).toLowerCase()
@@ -897,16 +899,20 @@
 
   function _inscritoItemHtml(r) {
     var isOrg = !!(_liveState && _liveState.isOrg);
-    var tIdEsc = String((_liveState && _liveState.t && _liveState.t.id) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    // v2.4.34: edição em LOTE — o <select> só MARCA a mudança (staged em
+    // _pendingEdits); nada é gravado/re-renderizado até o organizador clicar em
+    // "Salvar alterações". Por isso o <select> mostra o valor STAGED se houver.
+    var pe = _pendingEdits[r.order] || null;
     var gMap = { Fem: { l: '♀ Fem', c: '236,72,153' }, Masc: { l: '♂ Masc', c: '59,130,246' }, Misto: { l: '⚥ Misto', c: '168,85,247' } };
     var gl = _genderLabel(r.gender);
+    var rowGVal = gl === 'Fem' ? 'feminino' : (gl === 'Masc' ? 'masculino' : (gl === 'Misto' ? 'misto' : ''));
+    var curG = (pe && 'gender' in pe) ? pe.gender : rowGVal;
     var gBadge;
     if (isOrg) {
-      // v2.4.32: gênero editável direto na ficha (vale pra inscrito sem conta).
-      var curG = gl === 'Fem' ? 'feminino' : (gl === 'Masc' ? 'masculino' : (gl === 'Misto' ? 'misto' : ''));
-      var gc = (gl && gMap[gl]) ? gMap[gl].c : '148,163,184';
+      var glCur = curG === 'feminino' ? 'Fem' : (curG === 'masculino' ? 'Masc' : (curG === 'misto' ? 'Misto' : null));
+      var gc = (glCur && gMap[glCur]) ? gMap[glCur].c : '148,163,184';
       var gOpt = function (v, lbl) { return '<option value="' + v + '"' + (curG === v ? ' selected' : '') + '>' + lbl + '</option>'; };
-      gBadge = '<select title="Editar gênero do inscrito" onchange="window._erSetGender(\'' + tIdEsc + '\',' + r.order + ',this.value)" ' +
+      gBadge = '<select title="Editar gênero do inscrito" onchange="window._erStageGender(' + r.order + ',this.value)" ' +
         'style="font-size:0.68rem;font-weight:700;color:rgb(' + gc + ');background:rgba(' + gc + ',0.14);border:1px solid rgba(' + gc + ',0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
         gOpt('', '? Sem gên. ✎') + gOpt('feminino', '♀ Fem') + gOpt('masculino', '♂ Masc') + gOpt('misto', '⚥ Misto') +
         '</select>';
@@ -915,15 +921,14 @@
         ? '<span style="font-size:0.68rem;font-weight:700;color:rgb(' + gMap[gl].c + ');background:rgba(' + gMap[gl].c + ',0.14);border-radius:6px;padding:2px 7px;">' + gMap[gl].l + '</span>'
         : '<span style="font-size:0.68rem;font-weight:600;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">? Sem gên.</span>';
     }
-    // v2.4.33: categoria editável direto na lista (org). Options = categorias do
-    // torneio. Pra inscrito sem conta também. Substitui o selo de habilidade.
     var _catsList = (isOrg && typeof window._getTournamentCategories === 'function' && _liveState && _liveState.t)
       ? (window._getTournamentCategories(_liveState.t) || []) : [];
-    var curCat = (r.assigned && r.assigned.length > 0) ? r.assigned[0] : '';
+    var rowCat = (r.assigned && r.assigned.length > 0) ? r.assigned[0] : '';
+    var curCat = (pe && 'category' in pe) ? pe.category : rowCat;
     var skills;
     if (isOrg && _catsList.length > 0) {
       var cOpt = function (v, lbl) { return '<option value="' + _esc(v) + '"' + (curCat === v ? ' selected' : '') + '>' + _esc(lbl) + '</option>'; };
-      skills = '<select title="Editar categoria do inscrito" onchange="window._erSetCategory(\'' + tIdEsc + '\',' + r.order + ',this.value)" ' +
+      skills = '<select title="Editar categoria do inscrito" onchange="window._erStageCategory(' + r.order + ',this.value)" ' +
         'style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
         cOpt('', 'sem categoria ✎') +
         _catsList.map(function (c) { return cOpt(c, (window._displayCategoryName ? window._displayCategoryName(c) : c)); }).join('') +
@@ -938,27 +943,24 @@
     var ageBadge = (r.ageBuckets && r.ageBuckets.length > 0)
       ? '<span style="font-size:0.68rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.12);border-radius:6px;padding:2px 7px;">' + _esc(r.ageBuckets[0]) + '</span>'
       : '';
-    return '<div style="padding:8px 10px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(255,255,255,0.02);">' +
+    var _mod = !!(pe && Object.keys(pe).length > 0); // card com mudança não-salva
+    var _cBorder = _mod ? '1px solid rgba(245,158,11,0.6)' : '1px solid rgba(255,255,255,0.08)';
+    var _cBg = _mod ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.02)';
+    var _modDot = _mod ? '<span title="alteração não salva" style="color:#fbbf24;font-size:0.9rem;line-height:1;flex-shrink:0;">●</span>' : '';
+    return '<div style="padding:8px 10px;border:' + _cBorder + ';border-radius:10px;background:' + _cBg + ';">' +
       '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);min-width:24px;flex-shrink:0;">#' + r.order + '</span>' +
-        '<span style="flex:1;min-width:0;font-size:0.84rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(r.name) + '</span>' +
+        '<span style="flex:1;min-width:0;font-size:0.84rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(r.name) + '</span>' + _modDot +
       '</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding-left:32px;">' + gBadge + skills + ageBadge + '</div>' +
     '</div>';
   }
 
-  // v2.4.32: organizador edita o gênero do inscrito direto na lista. Grava na
-  // FICHA do inscrito (t.participants) com genderSource='organizador' — vence o
-  // perfil e funciona pra quem NÃO tem conta. Atualização instantânea (sem
-  // refetch). Reflete na categorização (auto-assign / sorteio leem p.gender).
-  window._erSetGender = function (tId, order, val) {
-    if (!_liveState || !_liveState.isOrg) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o organizador edita o gênero.', 'info'); return; }
-    var t = window.AppStore && window.AppStore.tournaments
-      ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); }) : null;
-    if (!t) return;
-    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    var row = (_liveState.rows || []).filter(function (r) { return r.order === order; })[0];
-    // Acha o participante por uid/email/nome (robusto a reordenação); fallback índice.
+  // v2.4.34: EDIÇÃO EM LOTE. Os <select> de gênero/categoria só STAGE a mudança
+  // em _pendingEdits — nada grava nem re-renderiza. O organizador corrige vários
+  // e clica "Salvar alterações": aí sim grava na ficha do inscrito (sorteio usa)
+  // E manda gênero+habilidade pro PERFIL dos jogadores com conta (Cloud Function).
+  function _erFindParticipant(parts, row, order) {
     var p = null;
     if (row) {
       for (var i = 0; i < parts.length; i++) {
@@ -969,65 +971,105 @@
       }
     }
     if (!p) p = parts[order - 1];
-    if (!p || typeof p !== 'object') return;
-    var clean = (val === 'feminino' || val === 'masculino' || val === 'misto') ? val : '';
-    if (clean) { p.gender = clean; p.genderSource = 'organizador'; }
-    else { delete p.gender; delete p.genderSource; }
-    // espelha no row vivo pra re-render instantâneo
-    if (row) row.gender = clean || null;
-    try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) { if (!Array.isArray(t.participants)) t.participants = parts; window.FirestoreDB.saveTournament(t); } } catch (e) {}
-    if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
-    if (typeof showNotification === 'function') {
-      var lbl = clean === 'feminino' ? 'Feminino' : clean === 'masculino' ? 'Masculino' : clean === 'misto' ? 'Misto' : 'Sem gênero';
-      showNotification('Gênero atualizado', (row ? row.name : 'Inscrito') + ' → ' + lbl, 'success');
-    }
+    return (p && typeof p === 'object') ? p : null;
+  }
+
+  window._erStageGender = function (order, val) {
+    if (!_liveState || !_liveState.isOrg) return;
+    if (!_pendingEdits[order]) _pendingEdits[order] = {};
+    _pendingEdits[order].gender = val;
+    _erMarkCardModified(order);
+    window._erUpdateSaveBar();
+  };
+  window._erStageCategory = function (order, val) {
+    if (!_liveState || !_liveState.isOrg) return;
+    if (!_pendingEdits[order]) _pendingEdits[order] = {};
+    _pendingEdits[order].category = val;
+    _erMarkCardModified(order);
+    window._erUpdateSaveBar();
   };
 
-  // v2.4.33: organizador atribui a CATEGORIA do inscrito direto na lista. Grava
-  // na ficha (t.participants[].categories) com categorySource='organizador' —
-  // funciona pra inscrito sem conta, vale na hora e é lido pelo sorteio.
-  window._erSetCategory = function (tId, order, cat) {
-    if (!_liveState || !_liveState.isOrg) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o organizador edita a categoria.', 'info'); return; }
+  function _erPendingCount() {
+    var n = 0;
+    Object.keys(_pendingEdits).forEach(function (k) { var pe = _pendingEdits[k]; if (pe && Object.keys(pe).length > 0) n++; });
+    return n;
+  }
+  window._erUpdateSaveBar = function () {
+    var bar = document.getElementById('er-save-bar');
+    var btn = document.getElementById('er-save-btn');
+    if (!bar || !btn) return;
+    var n = _erPendingCount();
+    if (n > 0) { bar.style.display = ''; btn.disabled = false; btn.textContent = '💾 Salvar alterações (' + n + ')'; }
+    else { bar.style.display = 'none'; btn.disabled = true; btn.textContent = '💾 Salvar alterações'; }
+  };
+  // Realça o card editado sem re-render da lista (o ● aparece só no próximo render).
+  function _erMarkCardModified(order) {
+    try {
+      var sel = document.querySelector('[onchange*="_erStageGender(' + order + ',"]');
+      var card = sel; while (card && !(card.parentElement && card.parentElement.id === 'er-inscritos-list')) card = card.parentElement;
+      if (card) { card.style.border = '1px solid rgba(245,158,11,0.6)'; card.style.background = 'rgba(245,158,11,0.07)'; }
+    } catch (e) {}
+  }
+
+  // Aplica TODAS as mudanças staged de uma vez.
+  window._erSaveEdits = function (tId, sport) {
+    if (!_liveState || !_liveState.isOrg) return;
     var t = window.AppStore && window.AppStore.tournaments
       ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); }) : null;
     if (!t) return;
-    var validCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
-    if (cat && validCats.indexOf(cat) === -1) { if (typeof showNotification === 'function') showNotification('Categoria inválida', 'Essa categoria não existe no torneio.', 'info'); return; }
     var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    var row = (_liveState.rows || []).filter(function (r) { return r.order === order; })[0];
-    var p = null;
-    if (row) {
-      for (var i = 0; i < parts.length; i++) {
-        var cp = parts[i]; if (!cp || typeof cp !== 'object') continue;
-        if ((row.uid && cp.uid === row.uid) ||
-            (row.email && (cp.email || '').toLowerCase() === String(row.email).toLowerCase()) ||
-            (row.name && (cp.displayName || cp.name) === row.name)) { p = cp; break; }
+    var validCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
+    var rows = _liveState.rows || [];
+    var profileAssignments = [];
+    Object.keys(_pendingEdits).forEach(function (orderKey) {
+      var pe = _pendingEdits[orderKey]; if (!pe || Object.keys(pe).length === 0) return;
+      var order = parseInt(orderKey, 10);
+      var row = rows.filter(function (r) { return r.order === order; })[0];
+      var p = _erFindParticipant(parts, row, order);
+      if (!p) return;
+      var asg = {};
+      if ('gender' in pe) {
+        var gv = (pe.gender === 'feminino' || pe.gender === 'masculino' || pe.gender === 'misto') ? pe.gender : '';
+        if (gv) { p.gender = gv; p.genderSource = 'organizador'; } else { delete p.gender; delete p.genderSource; }
+        if (row) row.gender = gv || null;
+        if (gv === 'feminino' || gv === 'masculino') asg.gender = gv; // CF só aceita masc/fem/outro
       }
-    }
-    if (!p) p = parts[order - 1];
-    if (!p || typeof p !== 'object') return;
-    if (cat) {
-      if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, [cat]);
-      else { p.categories = [cat]; p.category = cat; }
-      p.categorySource = 'organizador';
-      delete p.wasUncategorized; delete p.autoWeakestCat; delete p.staleCat;
-    } else {
-      if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, []);
-      else { p.categories = []; p.category = ''; }
-      if (p.categorySource === 'organizador' || p.categorySource === 'auto_fraca' || p.categorySource === 'perfil') delete p.categorySource;
-      delete p.autoWeakestCat; delete p.wasUncategorized;
-    }
-    // espelha no row vivo (assigned + effectiveSkills) pro re-render instantâneo
-    if (row) {
-      row.assigned = cat ? [cat] : [];
-      var assignedSkills = [];
-      if (cat) { var d = _decomposeCat(cat, t); if (d && d.skill) assignedSkills.push(d.skill); }
-      row.effectiveSkills = assignedSkills.length > 0 ? assignedSkills : (row.profileSkill ? [row.profileSkill] : []);
-    }
+      if ('category' in pe) {
+        var cv = pe.category;
+        if (cv && validCats.indexOf(cv) !== -1) {
+          if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, [cv]);
+          else { p.categories = [cv]; p.category = cv; }
+          p.categorySource = 'organizador'; delete p.wasUncategorized; delete p.autoWeakestCat; delete p.staleCat;
+          var d = _decomposeCat(cv, t);
+          if (row) { row.assigned = [cv]; row.effectiveSkills = (d && d.skill) ? [d.skill] : (row.profileSkill ? [row.profileSkill] : []); }
+          if (d && d.skill) asg.category = d.skill; // o perfil guarda a HABILIDADE
+        } else if (!cv) {
+          if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, []);
+          else { p.categories = []; p.category = ''; }
+          if (['organizador', 'auto_fraca', 'perfil'].indexOf(p.categorySource) !== -1) delete p.categorySource;
+          delete p.autoWeakestCat; delete p.wasUncategorized;
+          if (row) { row.assigned = []; row.effectiveSkills = row.profileSkill ? [row.profileSkill] : []; }
+        }
+      }
+      if (p.uid && (asg.gender || asg.category)) { asg.uid = p.uid; profileAssignments.push(asg); }
+    });
+    var nEdits = _erPendingCount();
+    // grava a ficha do torneio (sorteio + inscritos sem conta)
     try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) { if (!Array.isArray(t.participants)) t.participants = parts; window.FirestoreDB.saveTournament(t); } } catch (e) {}
-    if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
-    if (typeof showNotification === 'function') {
-      showNotification('Categoria atualizada', (row ? row.name : 'Inscrito') + ' → ' + (cat ? (window._displayCategoryName ? window._displayCategoryName(cat) : cat) : 'sem categoria'), 'success');
+    _pendingEdits = {};
+    var btn = document.getElementById('er-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
+    var finish = function (extra) {
+      window._erUpdateSaveBar();
+      if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
+      if (typeof showNotification === 'function') showNotification('✅ Alterações salvas', nEdits + ' inscrito(s) atualizado(s).' + (extra ? ' ' + extra : ''), 'success');
+    };
+    if (profileAssignments.length > 0 && window.firebase && firebase.functions) {
+      firebase.functions().httpsCallable('setParticipantsProfile')({ tournamentId: String(tId), sport: String(sport || ''), assignments: profileAssignments })
+        .then(function (res) { var r = (res && res.data) || {}; finish('Perfis: ' + (r.written || 0) + ' atualizado(s).'); })
+        .catch(function (err) { finish('(perfis não gravados: ' + ((err && err.message) || 'falha') + ')'); });
+    } else {
+      finish('');
     }
   };
 
@@ -1076,6 +1118,7 @@
     listEl.innerHTML = filtered.length
       ? filtered.map(_inscritoItemHtml).join('')
       : '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:0.8rem;">Nenhum inscrito com esses filtros.</div>';
+    window._erUpdateSaveBar(); // mantém o botão Salvar coerente após filtrar/ordenar
   };
 
   function _renderInscritosList(rows, t) {
@@ -1096,11 +1139,24 @@
       skillList.map(function (s) { return '<option value="' + _esc(s) + '">' + _esc(s) + '</option>'; }).join('') +
       '<option value="none">Sem habilidade</option>';
 
+    var _isOrgList = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _tIdEsc = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var _sportEsc = String(t.sport || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    // v2.4.34: barra de salvar (só org) — fica oculta até haver alteração staged.
+    var saveBar = _isOrgList
+      ? '<div id="er-save-bar" style="display:none;margin-top:12px;position:sticky;bottom:8px;">' +
+          '<button id="er-save-btn" disabled onclick="window._erSaveEdits(\'' + _tIdEsc + '\',\'' + _sportEsc + '\')" class="btn btn-success hover-lift" style="width:100%;font-weight:800;padding:12px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;box-shadow:0 4px 14px rgba(16,185,129,0.35);">💾 Salvar alterações</button>' +
+          '<p style="font-size:0.66rem;color:var(--text-muted);margin:6px 0 0;text-align:center;">As mudanças vão para o perfil dos jogadores (quem tem conta) e valem no sorteio.</p>' +
+        '</div>'
+      : '';
+
     return '<div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.18);border-radius:12px;padding:14px 16px;margin-bottom:14px;">' +
       '<p style="margin:0 0 10px;font-size:0.74rem;color:#818cf8;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Inscritos <span id="er-inscritos-count" style="color:var(--text-muted);font-weight:600;"></span></p>' +
+      (_isOrgList ? '<p style="margin:-4px 0 10px;font-size:0.68rem;color:var(--text-muted);">Edite gênero e categoria de quantos quiser e clique em <b>Salvar alterações</b> no fim.</p>' : '') +
       '<input id="er-search" type="text" oninput="window._erRenderInscritos()" placeholder="🔎 Buscar por nome…" autocomplete="off" style="' + _ctrlStyle + 'padding:9px 12px;font-size:0.82rem;margin-bottom:8px;">' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">' + sel('er-sort', 'Ordenar', sortOpts) + sel('er-gender', 'Gênero', genderOpts) + sel('er-skill', 'Habilidade', skillOpts) + '</div>' +
       '<div id="er-inscritos-list" style="display:flex;flex-direction:column;gap:6px;"></div>' +
+      saveBar +
     '</div>';
   }
 
@@ -1123,6 +1179,7 @@
     // Estado vivo pra busca/sort/filtros da lista de inscritos.
     var _isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
     _liveState = { rows: rows, t: t, isOrg: _isOrg };
+    _pendingEdits = {}; // v2.4.34: cada carga da página começa sem edições pendentes
 
     container.innerHTML = hdr +
       '<div style="max-width:760px;margin:0 auto;padding:1rem;">' +
