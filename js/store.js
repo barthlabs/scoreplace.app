@@ -1,4 +1,64 @@
-window.SCOREPLACE_VERSION = '2.4.47-beta';
+window.SCOREPLACE_VERSION = '2.4.48-beta';
+
+// ─── Plataforma de execução + Feature Flags ──────────────────────────────────
+// Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
+// entra LIGADA só pras identidades de teste (testar no escuro em produção real),
+// depois abre pra todos. Sem flag definida em SP_FLAGS → _flag() sempre false →
+// ZERO mudança de comportamento. É inerte por padrão de propósito.
+//
+// Plataforma: 'web' hoje. O build nativo (Capacitor) sobrescreve pra 'ios'/
+// 'android' ANTES deste script carregar. Seam pra gates específicos de plataforma
+// (ex: esconder a venda do Pro no iOS → modelo "reader app" web-only / IAP).
+window.SCOREPLACE_PLATFORM = window.SCOREPLACE_PLATFORM || 'web';
+
+// Identidades de teste/dev — recebem flags `test:true` antes de todo mundo.
+// Aceita e-mail (minúsculo) OU uid. Adicione aqui os UIDs dos 4 usuários de teste.
+window.SP_TEST_IDENTITIES = ['rstbarth@gmail.com'];
+
+// Catálogo de flags. Cada chave controla se uma mudança arriscada está LIGADA
+// pro usuário atual. Opções por flag (precedência de cima pra baixo):
+//   on: true            → liga pra TODO MUNDO (rollout completo)
+//   platforms: ['ios']  → liga só nessa(s) plataforma(s)
+//   test: true          → liga só pras SP_TEST_IDENTITIES (teste no escuro)
+// Override manual por dispositivo (DevTools), vence tudo:
+//   localStorage.setItem('spflag_<nome>', '1'|'0')
+window.SP_FLAGS = {
+  // 'safe-area': { test: true },   // ex: testar notch só pras contas de teste
+  // 'pro-iap':   { platforms: ['ios'] },
+};
+
+// Usuário atual é uma identidade de teste/dev?
+window._isTestIdentity = function () {
+  try {
+    var cu = (window.AppStore && window.AppStore.currentUser) || null;
+    if (!cu) return false;
+    var list = window.SP_TEST_IDENTITIES || [];
+    var email = String(cu.email || '').toLowerCase();
+    var uid = String(cu.uid || '').toLowerCase();
+    for (var i = 0; i < list.length; i++) {
+      var id = String(list[i] || '').toLowerCase();
+      if (id && (id === email || id === uid)) return true;
+    }
+    return false;
+  } catch (e) { return false; }
+};
+
+// Flag ligada pro usuário atual? Use em qualquer gate:
+//   if (window._flag('safe-area')) { ...novo caminho... } else { ...atual... }
+window._flag = function (name) {
+  try {
+    var def = (window.SP_FLAGS && window.SP_FLAGS[name]) || null;
+    if (!def) return false;
+    var ls = null;
+    try { ls = localStorage.getItem('spflag_' + name); } catch (e) {}
+    if (ls === '1') return true;
+    if (ls === '0') return false;
+    if (def.on === true) return true;
+    if (Array.isArray(def.platforms) && def.platforms.indexOf(window.SCOREPLACE_PLATFORM) !== -1) return true;
+    if (def.test === true && window._isTestIdentity()) return true;
+    return false;
+  } catch (e) { return false; }
+};
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
