@@ -9,9 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.60-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.61-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>W.O. da Liga mais claro na chave + não trava esperando.</b> Quando alguém leva W.O. e um folga é convidado, o grupo mostra isso <b>na própria chave</b>: o ausente aparece <b>riscado com "W.O."</b> e uma faixa indica <b>"[convidado] — aguardando confirmação"</b>. E se o convidado demora ou recusa, o grupo não fica travado: aparecem os botões <b>"📨 Convidar outro"</b> e <b>"🎾 Jogador X"</b> pra resolver na hora.</li>' +
+        '<li><b>Correção: estado de W.O./substituição na Liga sumia da chave.</b> O chaveamento recriava os grupos da Liga descartando o estado de W.O. — então um folga convidado não aparecia, e o grupo voltava a mostrar "Faltou alguém?" como se nada tivesse acontecido (só o Jogador X sobrevivia, porque ele troca o jogador de fato). Agora o estado é preservado: o ausente aparece <b>riscado com "W.O."</b>, uma faixa mostra <b>"[convidado] — aguardando confirmação"</b>, e há botões <b>"📨 Convidar outro"</b> e <b>"🎾 Jogador X"</b> se o convidado demorar ou recusar.</li>' +
         '<li><b>Botão W.O. padronizado em todo o app.</b> O botão de W.O. (declarar que faltou alguém) agora tem o <b>visual de botão padrão do app — vermelho sólido, com volume e fonte branca</b> — igual em todos os lugares: inscritos, lista de espera e grupos da Liga.</li>' +
       '</ul>' +
     '</div>' +

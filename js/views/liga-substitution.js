@@ -192,6 +192,11 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
   _addGhost(t, gname);
   group.woAbsent = absentName; group.subStatus = 'filled'; group.subName = gname; group.subIsGuest = true;
   delete group.pendingInviteId;
+  // Completar com Jogador X supera qualquer convite pendente do grupo — cancela
+  // pra não deixar convite órfão (que um jogador real poderia aceitar depois).
+  if (Array.isArray(t.ligaSubInvites)) {
+    t.ligaSubInvites.forEach(function (iv) { if (iv.groupName === groupName && iv.roundIndex === roundIndex && iv.status === 'pending') iv.status = 'cancelled'; });
+  }
   t.updatedAt = new Date().toISOString();
   _save(t);
   if (window.showNotification) window.showNotification('Rodada liberada', absentName + ' levou W.O. · ' + gname + ' completa o grupo (sem pontuar).', 'success');
