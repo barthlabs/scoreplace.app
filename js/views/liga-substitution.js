@@ -339,28 +339,31 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   var gDone = (group.matches || []).length > 0 && (group.matches || []).every(function (m) { return !!m.winner; });
   var manage = _canManageGroup(t, group);
   var tE = _esc(t.id), gE = _esc(group.name);
+  // Botões de AÇÃO = classe de botão padrão do app (.btn .btn-outline .btn-sm),
+  // com tom suave por inline. Indicadores de STATUS continuam como pills.
+  var poBtnStyle = 'font-size:0.72rem;padding:3px 11px;';
   // Estado: pendente de aceite
   if (group.subStatus === 'pending') {
     var who = '';
     if (Array.isArray(t.ligaSubInvites)) { var iv = t.ligaSubInvites.filter(function (x) { return x.id === group.pendingInviteId; })[0]; if (iv) who = iv.inviteeName; }
     var s = '<span style="font-size:0.66rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:6px;">⏳ ' + _safe(group.woAbsent) + ' W.O. · aguardando ' + _safe(who || 'substituto') + '</span>';
-    if (manage) s += ' <button onclick="window._ligaCancelInvite(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="font-size:0.64rem;font-weight:700;color:#f87171;background:transparent;border:1px solid rgba(239,68,68,0.4);padding:2px 8px;border-radius:6px;cursor:pointer;">trocar</button>';
+    if (manage) s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaCancelInvite(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#f87171;border-color:rgba(239,68,68,0.4);">Trocar substituto</button>';
     return s;
   }
   // Estado: preenchido (W.O. ativo)
   if (group.subStatus === 'filled' && group.woAbsent) {
     var lbl = group.subIsGuest ? (_safe(group.subName) + ' (Jogador X)') : _safe(group.subName);
     var s2 = '<span style="font-size:0.66rem;font-weight:700;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:2px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O. → ' + lbl + '</span>';
-    if (manage) s2 += ' <button onclick="window._ligaRevertWo(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="font-size:0.64rem;font-weight:700;color:#60a5fa;background:transparent;border:1px solid rgba(59,130,246,0.4);padding:2px 8px;border-radius:6px;cursor:pointer;">↩️ reverter</button>';
+    if (manage) s2 += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaRevertWo(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#60a5fa;border-color:rgba(59,130,246,0.4);">↩️ Reverter W.O.</button>';
     return s2;
   }
   // Estado: W.O. declarado mas sem substituto (recusa) — precisa preencher
   if (group.woAbsent && (group.subStatus === 'open' || !group.subStatus) && manage) {
-    return '<button onclick="window._ligaPickFill(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\',\'' + _esc(group.woAbsent) + '\')" style="font-size:0.66rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.4);padding:3px 9px;border-radius:6px;cursor:pointer;">⚠️ ' + _safe(group.woAbsent) + ' W.O. · escolher substituto</button>';
+    return '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaPickFill(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\',\'' + _esc(group.woAbsent) + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">⚠️ ' + _safe(group.woAbsent) + ' levou W.O. · escolher substituto</button>';
   }
   // Estado normal: oferece declarar ausência (só se grupo não terminou)
   if (!gDone && manage) {
-    return '<button onclick="window._ligaAbsentFlow(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="font-size:0.66rem;font-weight:600;color:#f87171;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);padding:3px 9px;border-radius:6px;cursor:pointer;" title="Algum jogador não pôde vir? Dê W.O. e chame um substituto.">⚠️ Jogador ausente</button>';
+    return '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaAbsentFlow(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);" title="Algum jogador não pôde vir? Dê W.O. e chame um substituto.">⚠️ Faltou alguém?</button>';
   }
   return '';
 };
