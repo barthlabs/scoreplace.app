@@ -5636,8 +5636,8 @@ function setupProfileModal() {
           '</div>' +
           // v2.4.3: privacidade — ocultar e-mail(s) de outros usuários (default OFF).
           '<div style="margin:0 0 1rem 0;padding:8px 10px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:8px;">' +
-            (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-email', label: 'Ocultar meu(s) e-mail(s) de outros usuários', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
-            '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:block;margin-top:4px;">Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente.</span>' +
+            (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-email', label: 'Ocultar seu(s) e-mail(s) <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-email\')" title="Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
+            '<span id="hint-omit-email" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente.</span>' +
           '</div>' +
           '<form id="form-edit-profile" onsubmit="event.preventDefault(); saveUserProfile()" style="overflow: hidden;">' +
             // Telefone: País + Número
@@ -5655,8 +5655,8 @@ function setupProfileModal() {
             // revela o número aos membros). Ela segue avisada por notificação 1:1
             // do app + plataforma/e-mail — número fica privado.
             '<div style="margin:0 0 10px 0;padding:8px 10px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:8px;">' +
-              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar meu telefone de outros usuários', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
-              '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:block;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app <b>e você fica fora dos grupos automáticos de WhatsApp</b> (assim seu número não aparece pra ninguém). Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual.</span>' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar seu telefone <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-phone\')" title="Quando ligado, ninguém vê seu telefone no app e você fica fora dos grupos automáticos de WhatsApp. Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
+              '<span id="hint-omit-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app <b>e você fica fora dos grupos automáticos de WhatsApp</b> (assim seu número não aparece pra ninguém). Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual.</span>' +
             '</div>' +
             // Row: Sexo + Nascimento (2 colunas)
             '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">' +
@@ -5755,10 +5755,9 @@ function setupProfileModal() {
                 (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-presence-auto-checkin', label: 'Auto check-in ao chegar no local (usa GPS)', icon: '📡', checked: false, color: '#10b981', desc: 'Se você estiver em um local preferido, registra presença automaticamente. Senão, o app sugere.' }) : '') +
               '</div>' +
               '<div id="presence-mute-wrap" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;">' +
-                '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.78rem;color:var(--text-bright);">' +
-                  '<input type="checkbox" id="profile-presence-mute-toggle" onchange="window._onPresenceMuteToggle(this.checked)" style="width:16px;height:16px;cursor:pointer;">' +
-                  '<span>🔕 Silenciar presença temporariamente</span>' +
-                '</label>' +
+                '<div style="flex:1 1 100%;">' +
+                  (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-presence-mute-toggle', label: 'Silenciar presença temporariamente', icon: '🔕', checked: false, color: '#f59e0b', onchange: 'window._onPresenceMuteToggle(this.checked)' }) : '') +
+                '</div>' +
                 '<div id="profile-presence-mute-days-wrap" style="display:none;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-muted);">' +
                   '<span>por</span>' +
                   '<input type="number" id="profile-presence-mute-days" min="1" max="365" value="7" style="width:64px;padding:6px 8px;border-radius:8px;background:var(--bg-darker);border:1px solid var(--border-color);color:var(--text-bright);font-size:0.82rem;text-align:center;">' +
@@ -5995,6 +5994,16 @@ function setupProfileModal() {
     window._onPresenceMuteToggle = function(checked) {
       var wrap = document.getElementById('profile-presence-mute-days-wrap');
       if (wrap) wrap.style.display = checked ? 'flex' : 'none';
+    };
+
+    // ⓘ tooltip de campo: mostra/esconde o texto explicativo ao clicar/tocar.
+    // Funciona em desktop (clique) e mobile (toque); o title= dá hover no desktop.
+    window._toggleFieldHint = function(ev, id) {
+      if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+      var el = document.getElementById(id);
+      if (!el) return;
+      var open = (el.style.display && el.style.display !== 'none');
+      el.style.display = open ? 'none' : 'block';
     };
 
     window._applyPresenceMuteUI = function(state) {
