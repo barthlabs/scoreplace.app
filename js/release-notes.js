@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.65-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.66-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Convidado do W.O. já aparece na chave da Liga.</b> Enquanto um substituto convidado ainda não aceitou, o nome dele agora surge <b>em amarelo no lugar do jogador que levou W.O.</b>, com a tag <b>"aguardando resposta"</b> direto no card do jogo. O aviso de convite não aparece mais duplicado — fica só uma vez, no controle do grupo. E o organizador pode <b>"Reverter W.O." também enquanto aguarda a resposta</b> (antes do jogo começar).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.65-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>W.O. não pode mais ser revertido depois que o jogo aconteceu.</b> Antes dava pra reverter um W.O. mesmo com a partida já jogada — e reverter <b>zerava um resultado real</b>. Agora, assim que o placar é lançado, os sets são preenchidos ou o <b>placar ao vivo é iniciado</b>, o W.O. trava: o botão "Reverter W.O." some e a reversão é bloqueada. Vale para a chave eliminatória, a lista de inscritos e os grupos da Liga. Enquanto o jogo não começou, o W.O. recém-declarado continua reversível normalmente.</li>' +
       '</ul>' +

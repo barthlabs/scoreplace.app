@@ -1369,7 +1369,7 @@ async function _preloadPlayerPhotos(tournament) {
 }
 
 // ─── Player avatars helper for bracket cards ────────────────────────────────
-function _teamAvatarHtml(teamName) {
+function _teamAvatarHtml(teamName, pendingSub) {
   if (!teamName || teamName === 'TBD') {
     return `<span style="font-weight:600;font-size:0.85rem;opacity:0.4;font-style:italic;">A definir</span>`;
   }
@@ -1381,15 +1381,27 @@ function _teamAvatarHtml(teamName) {
 
   let html = members.length > 1 ? '<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden;">' : '';
   members.forEach(function(name) {
-    const seed = encodeURIComponent(name);
+    // v2.4.65: durante W.O. pendente, o slot do ausente exibe o substituto
+    // convidado em amarelo + tag "aguardando resposta" (avatar do convidado).
+    const _isPendingSlot = !!(pendingSub && pendingSub.absent && name === pendingSub.absent && pendingSub.invitee);
+    const dispName = _isPendingSlot ? pendingSub.invitee : name;
+    const seed = encodeURIComponent(dispName);
     // Check photo cache for real user photo
-    const rawCached = window._playerPhotoCache[name.toLowerCase()] || '';
+    const rawCached = window._playerPhotoCache[dispName.toLowerCase()] || '';
     const cachedPhoto = (rawCached && rawCached.indexOf('dicebear.com') === -1) ? rawCached : '';
     const initialsUrl = 'https://api.dicebear.com/9.x/initials/svg?seed=' + seed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
     const photoSrc = cachedPhoto || initialsUrl;
     const onerror = cachedPhoto ? `onerror="this.onerror=null;this.src='${initialsUrl}'"` : '';
     const size = members.length > 1 ? '20px' : '24px';
     const fontSize = members.length > 1 ? '0.78rem' : '0.85rem';
+    if (_isPendingSlot) {
+      html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
+        `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(dispName)}" style="width:${size};height:${size};border-radius:50%;flex-shrink:0;object-fit:cover;opacity:0.95;">` +
+        `<span style="font-weight:700;font-size:${fontSize};color:#fbbf24;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${window._safeHtml(dispName)}</span>` +
+        `<span style="font-size:0.52rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
+      `</div>`;
+      return;
+    }
     html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;">` +
       `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(name)}" style="width:${size};height:${size};border-radius:50%;flex-shrink:0;object-fit:cover;">` +
       `<span style="font-weight:600;font-size:${fontSize};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',{tournamentId:window._currentBracketTournamentId||''});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${window._safeHtml(name)}">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span>` +
@@ -1399,7 +1411,7 @@ function _teamAvatarHtml(teamName) {
   return html;
 }
 
-function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
+function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingSub) {
   var _t = window._t || function(k) { return k; };
   if (!m) return '';
 
@@ -1595,7 +1607,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1)}</div>
+      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1, pendingSub)}</div>
       ${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p1Score : (p1ScoreVal || '')}
@@ -1604,7 +1616,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2)}</div>
+      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2, pendingSub)}</div>
       ${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
         ${showInputs ? p2Score : (p2ScoreVal || '')}
@@ -2651,11 +2663,20 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // v2.4.30: enquanto o grupo aguarda o aceite de um substituto (W.O.),
           // trava o lançamento de placar (o grupo ainda não está completo).
           var _gPending = (typeof window._ligaGroupPending === 'function') && window._ligaGroupPending(g);
+          // v2.4.65: durante um W.O. pendente, mostra na CHAVE o substituto
+          // convidado (amarelo + "aguardando resposta") no lugar do ausente, já
+          // antes do aceite. Em 'filled' o slot já foi reescrito de verdade.
+          var _woName = g.woAbsent || null;
+          var _pendingSub = null;
+          if (_woName && g.subStatus === 'pending') {
+            var _invG = (Array.isArray(t.ligaSubInvites) ? t.ligaSubInvites.filter(function(iv){ return iv.id === g.pendingInviteId; })[0] : null);
+            _pendingSub = { absent: _woName, invitee: (_invG && _invG.inviteeName) || 'Substituto' };
+          }
           var gCards = g.matches.map(function(m) {
             // v1.0.64-beta: usa contador global em vez de mi+1 (que resetava por grupo)
             _monarchGlobalMatchNum++;
             // v2.3.19: grupo concluído → cards compactos (sem botão Editar).
-            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, _monarchGlobalMatchNum, gDone) + '</div>';
+            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, _monarchGlobalMatchNum, gDone, _pendingSub) + '</div>';
           }).join('');
           var statusBadge = gDone ? '<span style="font-size:0.6rem;padding:2px 6px;border-radius:5px;background:rgba(16,185,129,0.15);color:#4ade80;font-weight:700;">✓</span>' : '<span style="font-size:0.6rem;padding:2px 6px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">' + _t('bracket.ongoing') + '</span>';
           // Highlight visual quando o grupo é do usuário logado.
@@ -2668,19 +2689,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var _monarchTitle = (typeof window._monarchGroupTitle === 'function') ? window._monarchGroupTitle(g.players, t) : 'Rei/Rainha';
           var _monarchBadge = '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
           var _ligaCtrl = (typeof window._ligaGroupControlsHtml === 'function') ? window._ligaGroupControlsHtml(t, currentRound - 1, g) : '';
-          // v2.4.59: deixa a CHAVE clara durante um W.O. pendente — marca o ausente
-          // (riscado + W.O.) na lista de jogadores e mostra o convite aguardando
-          // confirmação, mesmo antes do substituto aceitar. Em 'filled' o slot já
-          // foi reescrito, então woAbsent não está mais na lista (sem marcação).
-          var _woName = g.woAbsent || null;
-          var _woPendingNote = '';
-          if (_woName && g.subStatus === 'pending') {
-            var _inv = (Array.isArray(t.ligaSubInvites) ? t.ligaSubInvites.filter(function(iv){ return iv.id === g.pendingInviteId; })[0] : null);
-            _woPendingNote = '<div style="font-size:0.68rem;color:#fbbf24;margin-bottom:0.5rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:8px;padding:5px 9px;">📨 <b>' + window._safeHtml((_inv && _inv.inviteeName) || 'Substituto') + '</b> foi convidado pra entrar no lugar de <b>' + window._safeHtml(_woName) + '</b> — aguardando confirmação.</div>';
-          }
+          // v2.4.65: a CHAVE marca o ausente riscado + W.O. na lista de jogadores;
+          // o convite pendente aparece UMA vez só no card de controle (_ligaCtrl) e
+          // o substituto convidado já surge nos cards de jogo (via _pendingSub).
+          // _woName já foi calculado acima.
           return '<div style="background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + _monarchBadge + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + (_ligaCtrl ? '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">' + _ligaCtrl + '</span>' : '') + '</div>' +
-            '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">Jogadores: ' + g.players.map(function(n){ return (_woName && n === _woName) ? ('<span style="text-decoration:line-through;opacity:0.6;">' + window._safeHtml(n) + '</span> <span style="color:#f87171;font-weight:800;font-size:0.66rem;">W.O.</span>') : window._safeHtml(n); }).join(', ') + '</div>' + _woPendingNote +
+            '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">Jogadores: ' + g.players.map(function(n){ return (_woName && n === _woName) ? ('<span style="text-decoration:line-through;opacity:0.6;">' + window._safeHtml(n) + '</span> <span style="color:#f87171;font-weight:800;font-size:0.66rem;">W.O.</span>') : window._safeHtml(n); }).join(', ') + '</div>' +
             '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">' + gCards + '</div>' +
           '</div>';
         };

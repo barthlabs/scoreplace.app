@@ -379,6 +379,11 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
     if (manage) {
       s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaCancelInvite(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#4ade80;border-color:rgba(16,185,129,0.4);">📨 Convidar outro</button>';
       s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaSwitchToGuest(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">🎾 Jogador X</button>';
+      // Reverter W.O. também no estado pendente — enquanto os jogos não começaram,
+      // o organizador pode desfazer o W.O. (cancela o convite e reabre o grupo).
+      var _woPlayedP = (typeof window._matchHasRealPlay === 'function')
+        && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
+      if (!_woPlayedP) s += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
     }
     return s;
   }
