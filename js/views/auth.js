@@ -321,7 +321,13 @@
   }
 })();
 
-const firebaseConfig = {
+// ─── Config Firebase: PRODUÇÃO por padrão, STAGING só por hostname ────────────
+// scoreplace.app (e qualquer host que NÃO seja o staging, incl. localhost de
+// preview) usa exatamente os valores de produção de sempre — INTOCADO. Só o
+// ambiente de staging (scoreplace-staging.web.app / .firebaseapp.com) aponta pro
+// 2º projeto Firebase isolado (scoreplace-staging), pra testar mudanças
+// arriscadas sem encostar nos dados reais do Confra. Ver docs/staging.md.
+var _firebaseConfigProd = {
   apiKey: "AIzaSyB7AyOojV_Pm50Kr7bovVY4jVTTNbKOK0A",
   authDomain: "scoreplace-app.firebaseapp.com",
   projectId: "scoreplace-app",
@@ -330,6 +336,19 @@ const firebaseConfig = {
   appId: "1:382268772878:web:7c164933f3beacba4be25f",
   measurementId: "G-PZ25D36JSV"
 };
+var _firebaseConfigStaging = {
+  apiKey: "AIzaSyDCFcrAr49iq3cDAh00Y_LlDLFsNJSsW8k",
+  authDomain: "scoreplace-staging.firebaseapp.com",
+  projectId: "scoreplace-staging",
+  storageBucket: "scoreplace-staging.firebasestorage.app",
+  messagingSenderId: "5066307789",
+  appId: "1:5066307789:web:b04d0b448b94eb1fb39184"
+};
+var _isStagingHost = (function () {
+  try { return /scoreplace-staging/.test(window.location.hostname || ''); } catch (e) { return false; }
+})();
+window.SCOREPLACE_ENV = _isStagingHost ? 'staging' : 'prod';
+const firebaseConfig = _isStagingHost ? _firebaseConfigStaging : _firebaseConfigProd;
 
 // ─── Safari detection ───────────────────────────────────────────────────────
 // Safari (desktop + iOS) has ITP that breaks popup-based OAuth when the auth

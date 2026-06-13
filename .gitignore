@@ -16,3 +16,6 @@ clear-match-results.js
 admin-delete-phone-accounts.js
 admin-delete-one-account.js
 functions-autodraw/node_modules/
+
+# Firebase CLI deploy cache
+.firebase/
