@@ -267,6 +267,149 @@
     return null;
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // GERAÇÃO — Dupla Eliminatória para uma categoria (fase final de Liga).
+  // Espelha a topologia de window._buildDoubleElimBracket (tournaments-draw.js),
+  // mas retorna um ARRAY PURO de matches phase:'playoff' — sem tocar colunas
+  // canônicas, t.matches, nem a Liga. Cada match traz bracket 'upper'|'lower'|
+  // 'grand'. Upper losers caem no lower via loserMatchId (o avanço resolve, agora
+  // que reconhece phase:'playoff' && bracket). Grande final liga upper-final→p1 e
+  // lower-final→p2. BYEs do upper R1 pré-resolvidos; o 'BYE' perdedor é dropado no
+  // lower pra _autoResolveBye limpar quando o slot adversário preencher.
+  // ───────────────────────────────────────────────────────────────────────────
+  function _buildDoubleElimPlayoff(entrants, cat, seedMode, stamp) {
+    var N = entrants.length;
+    if (N < 2) return [];
+    var size = _nextPow2(N);
+    var order = _seedOrder(size);
+    var bySeed = {};
+    var ordered = (seedMode === 'sorteio') ? _shuffle(entrants) : entrants.slice();
+    for (var s = 1; s <= size; s++) bySeed[s] = (s <= N) ? ordered[s - 1] : 'BYE';
+    var slots = order.map(function (seedNum) { return bySeed[seedNum]; });
+
+    var stp = stamp || 'po';
+    var catVal = (cat == null) ? undefined : cat;
+    var matches = [];
+    var totalUpperRounds = Math.round(Math.log(size) / Math.LN2);
+
+    function mk(id, round, bracket, p1, p2, label, isBye) {
+      var m = {
+        id: id, phase: 'playoff', category: catVal,
+        round: round, bracket: bracket, label: label,
+        p1: p1, p2: p2, scoreP1: null, scoreP2: null, winner: null,
+        nextMatchId: null, nextSlot: null, loserMatchId: null, isBye: !!isBye
+      };
+      matches.push(m);
+      return m;
+    }
+
+    // UPPER bracket
+    var upperRounds = {};
+    var u1 = [];
+    for (var i = 0; i < size; i += 2) {
+      var up1 = slots[i], up2 = slots[i + 1];
+      u1.push(mk('po-u1-' + (i / 2) + '-' + stp, 1, 'upper', up1, up2,
+        'Chave dos Vencedores — Rodada 1', (up1 === 'BYE' || up2 === 'BYE')));
+    }
+    upperRounds[1] = u1;
+    for (var ur = 2; ur <= totalUpperRounds; ur++) {
+      var prevU = upperRounds[ur - 1];
+      var curU = [];
+      for (var k = 0; k < prevU.length / 2; k++) {
+        var um = mk('po-u' + ur + '-' + k + '-' + stp, ur, 'upper', 'TBD', 'TBD',
+          'Chave dos Vencedores — Rodada ' + ur, false);
+        curU.push(um);
+        var a = prevU[k * 2], b = prevU[k * 2 + 1];
+        if (a) { a.nextMatchId = um.id; a.nextSlot = 'p1'; }
+        if (b) { b.nextMatchId = um.id; b.nextSlot = 'p2'; }
+      }
+      upperRounds[ur] = curU;
+    }
+
+    // LOWER bracket — rounds alternando "merge" (recebe upper losers) e "battle"
+    // (vencedores do lower se enfrentam). Espelha tournaments-draw.js.
+    var lowerRounds = {};
+    var lrNum = 1;
+    for (var ur2 = 1; ur2 <= totalUpperRounds; ur2++) {
+      if (ur2 === 1) {
+        var cnt1 = Math.ceil(upperRounds[1].length / 2);
+        var lr1 = [];
+        for (var li = 0; li < cnt1; li++) {
+          lr1.push(mk('po-l' + lrNum + '-' + li + '-' + stp, lrNum, 'lower', 'TBD', 'TBD',
+            'Repescagem — Rodada ' + lrNum, false));
+        }
+        lowerRounds[lrNum] = lr1;
+        upperRounds[1].forEach(function (um, idx) {
+          var lowerIdx = Math.floor(idx / 2);
+          if (lr1[lowerIdx]) um.loserMatchId = lr1[lowerIdx].id;
+        });
+        lrNum++;
+      } else {
+        var mergeCount = (lowerRounds[lrNum - 1] || []).length;
+        var lrM = [];
+        for (var mi = 0; mi < mergeCount; mi++) {
+          lrM.push(mk('po-l' + lrNum + '-' + mi + '-' + stp, lrNum, 'lower', 'TBD', 'TBD',
+            'Repescagem — Rodada ' + lrNum, false));
+        }
+        lowerRounds[lrNum] = lrM;
+        (lowerRounds[lrNum - 1] || []).forEach(function (lm, idx) {
+          if (lrM[idx]) lm.nextMatchId = lrM[idx].id;
+        });
+        upperRounds[ur2].forEach(function (um, idx) {
+          if (lrM[idx]) um.loserMatchId = lrM[idx].id;
+        });
+        lrNum++;
+        if (mergeCount > 1) {
+          var battleCount = Math.ceil(mergeCount / 2);
+          var lrB = [];
+          for (var bi = 0; bi < battleCount; bi++) {
+            lrB.push(mk('po-l' + lrNum + '-' + bi + '-' + stp, lrNum, 'lower', 'TBD', 'TBD',
+              'Repescagem — Rodada ' + lrNum, false));
+          }
+          lowerRounds[lrNum] = lrB;
+          (lowerRounds[lrNum - 1] || []).forEach(function (lm, idx) {
+            var nextIdx = Math.floor(idx / 2);
+            if (lrB[nextIdx]) lm.nextMatchId = lrB[nextIdx].id;
+          });
+          lrNum++;
+        }
+      }
+    }
+
+    // GRANDE FINAL — upper-final (p1) vs lower-final (p2). (Sem bracket reset no
+    // V1: jogo único, igual à dupla-elim normal de hoje — limitação documentada.)
+    var gf = mk('po-gf-' + stp, totalUpperRounds + 1, 'grand', 'TBD', 'TBD', '🏆 Grande Final', false);
+    var upperFinal = upperRounds[totalUpperRounds];
+    if (upperFinal && upperFinal[0]) { upperFinal[0].nextMatchId = gf.id; upperFinal[0].nextSlot = 'p1'; }
+    var lastLower = lowerRounds[lrNum - 1];
+    if (lastLower && lastLower[0]) { lastLower[0].nextMatchId = gf.id; lastLower[0].nextSlot = 'p2'; }
+
+    // Pré-resolve BYEs do upper R1: vencedor avança; 'BYE' perdedor cai no lower.
+    upperRounds[1].forEach(function (m) {
+      if (!m.isBye) return;
+      var real = (m.p1 === 'BYE') ? m.p2 : m.p1;
+      if (real && real !== 'BYE') {
+        m.winner = real;
+        if (m.nextMatchId) {
+          var nx = _matchById(matches, m.nextMatchId);
+          if (nx) {
+            if (m.nextSlot === 'p1') nx.p1 = real;
+            else if (m.nextSlot === 'p2') nx.p2 = real;
+          }
+        }
+      }
+      if (m.loserMatchId) {
+        var lm = _matchById(matches, m.loserMatchId);
+        if (lm) {
+          if (!lm.p1 || lm.p1 === 'TBD') lm.p1 = 'BYE';
+          else if (!lm.p2 || lm.p2 === 'TBD') lm.p2 = 'BYE';
+        }
+      }
+    });
+
+    return matches;
+  }
+
   // Total de rodadas (para rótulos Final/Semi/Quartas).
   function _roundLabel(roundNum, totalRounds) {
     var fromEnd = totalRounds - roundNum; // 0 = final
@@ -426,10 +569,10 @@
       '<input type="hidden" class="po-format" value="' + _esc(prev.format || 'simples') + '">' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
         _fmtBtn('simples', prev.format || 'simples', _t('playoff.fmtSingle') || 'Eliminatória Simples', false) +
-        _fmtBtn('dupla', prev.format || 'simples', _t('playoff.fmtDouble') || 'Dupla Eliminatória', true) +
+        _fmtBtn('dupla', prev.format || 'simples', _t('playoff.fmtDouble') || 'Dupla Eliminatória', !(window._flag && window._flag('playoff-double-elim'))) +
         _fmtBtn('grupos_elim', prev.format || 'simples', _t('playoff.fmtGroups') || 'Grupos + Elim.', true) +
       '</div>' +
-      '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px;">' + (_t('playoff.fmtSoon') || 'Dupla Eliminatória e Grupos+Elim. chegam em breve.') + '</div>' +
+      '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px;">' + ((window._flag && window._flag('playoff-double-elim')) ? 'Grupos+Elim. chega em breve.' : (_t('playoff.fmtSoon') || 'Dupla Eliminatória e Grupos+Elim. chegam em breve.')) + '</div>' +
     '</div>';
 
     // modo de disputa (duplas) — só relevante quando o esporte é de duplas.
@@ -661,7 +804,23 @@
         }
       }
 
-      var built = _buildSingleElim(entrants, cat, seedMode, String(t.id).slice(-4) + '-' + ck.replace(/[^a-z0-9]/gi, '').slice(0, 6));
+      var stamp = String(t.id).slice(-4) + '-' + ck.replace(/[^a-z0-9]/gi, '').slice(0, 6);
+      var useDouble = (format === 'dupla' && window._flag && window._flag('playoff-double-elim'));
+      // V1 da Dupla Eliminatória de playoff: exige potência de 2 (4/8/16/32).
+      // Com byes na chave de perdedores o auto-resolve do app é inconsistente
+      // (label de BYE divergente em todo o codebase) — restrição honesta até a
+      // limpeza dos byes. Eliminatória simples não tem essa restrição.
+      var en = entrants.length;
+      if (useDouble && (en & (en - 1)) !== 0) {
+        if (typeof showNotification === 'function') {
+          showNotification('⚠️ Dupla Eliminatória',
+            (multiLabel(cat)) + ' — por enquanto a Dupla Eliminatória exige um número potência de 2 (4, 8, 16, 32). Você tem ' + en + '. Ajuste "Quantos disputam" ou use Eliminatória Simples.', 'warning');
+        }
+        continue;
+      }
+      var built = useDouble
+        ? _buildDoubleElimPlayoff(entrants, cat, seedMode, stamp)
+        : _buildSingleElim(entrants, cat, seedMode, stamp);
       allMatches = allMatches.concat(built);
     }
 
@@ -671,6 +830,9 @@
       }
       return null;
     }
+    // Todas as categorias ativas foram puladas (ex.: Dupla Eliminatória sem
+    // potência de 2) — já avisamos por categoria; não gerar chave vazia.
+    if (!allMatches.length) return null;
     return {
       event: { date: evDate, venue: evVenue },
       configByCat: configByCat, snapshot: snapshot,
@@ -927,16 +1089,55 @@
     var cats = Object.keys(byCat);
     var multiCat = cats.length > 1;
 
+    // HTML de uma partida: skip de BYE já resolvido + card + botão Substituir/W.O.
+    // (compartilhado entre eliminatória simples e dupla eliminatória).
+    function _poMatchHtml(m, num) {
+      if (m.isBye && m.winner) {
+        return '<div style="font-size:0.78rem;color:var(--text-muted);padding:6px 10px;background:rgba(255,255,255,0.03);border-radius:8px;margin-bottom:6px;">' +
+          _esc(m.winner) + ' <span style="color:#34d399;">— BYE —</span></div>';
+      }
+      var s = (typeof renderMatchCard === 'function') ? renderMatchCard(m, canEnter, t.id, num) : '';
+      if (isOrg && !m.winner && !m.isBye &&
+          m.p1 && m.p1 !== 'TBD' && m.p1 !== 'BYE' &&
+          m.p2 && m.p2 !== 'TBD' && m.p2 !== 'BYE') {
+        s += '<div style="margin:-2px 0 10px;text-align:right;">' +
+          '<button type="button" class="btn btn-outline btn-sm" onclick="window._playoffSub(\'' + _esc(t.id) + '\',\'' + _esc(m.id) + '\')" style="font-size:0.7rem;padding:3px 10px;color:#fbbf24;border-color:rgba(245,158,11,0.4);">⚠️ ' + (_t('playoff.substitute') || 'Substituir / W.O.') + '</button>' +
+        '</div>';
+      }
+      return s;
+    }
+    function _poSecHeader(txt, color) {
+      return '<div style="font-size:0.82rem;font-weight:800;color:' + color + ';margin:0.9rem 0 0.4rem;text-transform:uppercase;letter-spacing:0.5px;">' + _esc(txt) + '</div>';
+    }
+    function _poBracketRoundsHtml(secMatches) {
+      var out = '';
+      var rounds = secMatches.map(function (m) { return m.round || 1; });
+      var maxR = Math.max.apply(null, rounds);
+      var minR = Math.min.apply(null, rounds);
+      var multiR = (maxR > minR);
+      for (var r = minR; r <= maxR; r++) {
+        var rms = secMatches.filter(function (m) { return (m.round || 1) === r; });
+        if (!rms.length) continue;
+        if (multiR) out += '<div style="font-size:0.74rem;font-weight:700;color:var(--text-muted);margin:0.5rem 0 0.3rem;text-transform:uppercase;letter-spacing:0.5px;">Rodada ' + r + '</div>';
+        var num = 0;
+        rms.forEach(function (m) { num++; out += _poMatchHtml(m, num); });
+      }
+      return out;
+    }
+
     cats.forEach(function (ck) {
       var matches = byCat[ck];
+      var isDE = matches.some(function (m) { return !!m.bracket; });
       var maxRound = matches.reduce(function (mx, m) { return Math.max(mx, m.round || 1); }, 1);
 
       if (multiCat) {
         html += '<div style="font-size:0.9rem;font-weight:800;color:#fbbf24;margin:0.8rem 0 0.4rem;">📂 ' + _esc(ck) + '</div>';
       }
 
-      // campeão?
-      var finalM = matches.filter(function (m) { return m.round === maxRound; })[0];
+      // campeão? (DE: vencedor da Grande Final; simples: vencedor da última rodada)
+      var finalM = isDE
+        ? matches.filter(function (m) { return m.bracket === 'grand'; })[0]
+        : matches.filter(function (m) { return m.round === maxRound; })[0];
       if (finalM && finalM.winner) {
         html += '<div style="background:linear-gradient(135deg,rgba(245,158,11,0.18),rgba(245,158,11,0.06));border:1px solid rgba(245,158,11,0.4);border-radius:12px;padding:12px 16px;margin-bottom:0.8rem;text-align:center;">' +
           '<div style="font-size:0.72rem;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;font-weight:700;">🏆 ' + (_t('playoff.champion') || 'Campeão da Temporada') + '</div>' +
@@ -944,30 +1145,23 @@
         '</div>';
       }
 
-      // rodadas
-      for (var r = 1; r <= maxRound; r++) {
-        var rms = matches.filter(function (m) { return m.round === r; });
-        if (!rms.length) continue;
-        html += '<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);margin:0.6rem 0 0.3rem;text-transform:uppercase;letter-spacing:0.5px;">' + _roundLabel(r, maxRound) + '</div>';
-        var num = 0;
-        rms.forEach(function (m) {
-          num++;
-          // pula render de BYE já resolvido sem adversário real
-          if (m.isBye && m.winner) {
-            html += '<div style="font-size:0.78rem;color:var(--text-muted);padding:6px 10px;background:rgba(255,255,255,0.03);border-radius:8px;margin-bottom:6px;">' +
-              _esc(m.winner) + ' <span style="color:#34d399;">— BYE —</span></div>';
-            return;
-          }
-          html += (typeof renderMatchCard === 'function') ? renderMatchCard(m, canEnter, t.id, num) : '';
-          // Ação do organizador: substituir / W.O. em partida pendente real.
-          if (isOrg && !m.winner && !m.isBye &&
-              m.p1 && m.p1 !== 'TBD' && m.p1 !== 'BYE' &&
-              m.p2 && m.p2 !== 'TBD' && m.p2 !== 'BYE') {
-            html += '<div style="margin:-2px 0 10px;text-align:right;">' +
-              '<button type="button" class="btn btn-outline btn-sm" onclick="window._playoffSub(\'' + _esc(t.id) + '\',\'' + _esc(m.id) + '\')" style="font-size:0.7rem;padding:3px 10px;color:#fbbf24;border-color:rgba(245,158,11,0.4);">⚠️ ' + (_t('playoff.substitute') || 'Substituir / W.O.') + '</button>' +
-            '</div>';
-          }
-        });
+      if (isDE) {
+        // Dupla Eliminatória: três seções — Vencedores / Repescagem / Grande Final.
+        var upperM = matches.filter(function (m) { return m.bracket === 'upper'; });
+        var lowerM = matches.filter(function (m) { return m.bracket === 'lower'; });
+        var grandM = matches.filter(function (m) { return m.bracket === 'grand'; });
+        if (upperM.length) html += _poSecHeader('🏆 Chave dos Vencedores', '#fbbf24') + _poBracketRoundsHtml(upperM);
+        if (lowerM.length) html += _poSecHeader('🔁 Repescagem', '#a5b4fc') + _poBracketRoundsHtml(lowerM);
+        if (grandM.length) { html += _poSecHeader('👑 Grande Final', '#34d399'); var gn = 0; grandM.forEach(function (m) { gn++; html += _poMatchHtml(m, gn); }); }
+      } else {
+        // Eliminatória simples — rodadas (comportamento original, intocado).
+        for (var r = 1; r <= maxRound; r++) {
+          var rms = matches.filter(function (m) { return m.round === r; });
+          if (!rms.length) continue;
+          html += '<div style="font-size:0.78rem;font-weight:700;color:var(--text-muted);margin:0.6rem 0 0.3rem;text-transform:uppercase;letter-spacing:0.5px;">' + _roundLabel(r, maxRound) + '</div>';
+          var num = 0;
+          rms.forEach(function (m) { num++; html += _poMatchHtml(m, num); });
+        }
       }
     });
 
@@ -1002,8 +1196,12 @@
     var allDone = true;
     Object.keys(byCat).forEach(function (ck) {
       var matches = byCat[ck];
+      var isDE = matches.some(function (m) { return !!m.bracket; });
       var maxRound = matches.reduce(function (mx, m) { return Math.max(mx, m.round || 1); }, 1);
-      var finalM = matches.filter(function (m) { return m.round === maxRound; })[0];
+      // DE: a "final" da categoria é a Grande Final; simples: a última rodada.
+      var finalM = isDE
+        ? matches.filter(function (m) { return m.bracket === 'grand'; })[0]
+        : matches.filter(function (m) { return m.round === maxRound; })[0];
       if (finalM && finalM.winner) champByCat[ck] = finalM.winner;
       else allDone = false;
     });

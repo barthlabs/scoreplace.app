@@ -789,7 +789,13 @@ function _autoResolveBye(t, match) {
 function _advanceWinner(t, completedMatch) {
   const winner = completedMatch.winner;
   const loser = winner === completedMatch.p1 ? completedMatch.p2 : completedMatch.p1;
-  const isDupla = t.format === 'Dupla Eliminatória';
+  // Loser-drop pra chave de perdedores. Vale pra Dupla Eliminatória de torneio
+  // normal E pra fase final (playoff) de Liga em Dupla Eliminatória — neste caso
+  // o match tem phase:'playoff' + bracket ('upper'/'lower'/'grand'). Aditivo e
+  // guardado: playoff de eliminatória simples não tem `bracket` → comportamento
+  // intocado; Liga/torneios normais idem.
+  const isDupla = t.format === 'Dupla Eliminatória'
+    || (completedMatch.phase === 'playoff' && !!completedMatch.bracket);
 
   if (completedMatch.nextMatchId) {
     const next = _findMatch(t, completedMatch.nextMatchId);

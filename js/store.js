@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.50-beta';
+window.SCOREPLACE_VERSION = '2.4.51-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -25,6 +25,7 @@ window.SP_TEST_IDENTITIES = ['rstbarth@gmail.com'];
 window.SP_FLAGS = {
   // 'safe-area': { test: true },   // ex: testar notch só pras contas de teste
   // 'pro-iap':   { platforms: ['ios'] },
+  'playoff-double-elim': { test: true },  // Dupla Eliminatória na fase final de Liga (em construção)
 };
 
 // Usuário atual é uma identidade de teste/dev?
