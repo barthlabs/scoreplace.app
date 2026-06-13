@@ -1712,6 +1712,13 @@ exports.sendOrgCommunication = onCall(
     const phones = [];
     let platformWritten = 0;
     const skipped = [];
+    // v2.4.63: manifesto por destinatário pro painel de controle de comunicados.
+    // Cada item: { uid, name, notifDocId, platform, email, whatsapp, phone }.
+    // "platform/email/whatsapp" = canal foi DISPARADO pra essa pessoa. A leitura
+    // (abriu) e a entrega de WhatsApp são computadas on-demand em
+    // getCommunicationStats (lê a notif + o doc da fila), então o manifesto é
+    // imutável — só registra o que foi enviado e por onde.
+    const recipientDetails = [];
 
     // Resolve UID por email quando o inscrito não tem uid no objeto.
     async function _resolveUid(r) {
@@ -1737,9 +1744,20 @@ exports.sendOrgCommunication = onCall(
           const userLevel = profile.notifyLevel || "todas";
           if (!_notifLevelAllowed(userLevel, level)) { skipped.push({ uid, reason: "level-filtered" }); return; }
 
+          const detail = {
+            uid: uid,
+            name: profile.displayName || profile.name || r.email || uid,
+            notifDocId: "",
+            platform: false,
+            email: false,
+            whatsapp: false,
+            phone: "",
+          };
+
           // Notificação na plataforma (idempotente via doc ID determinístico).
           if (profile.notifyPlatform !== false) {
-            await db.collection("users").doc(uid).collection("notifications").doc(_notifDocId(uid)).set({
+            const notifId = _notifDocId(uid);
+            await db.collection("users").doc(uid).collection("notifications").doc(notifId).set({
               type: "organizer_communication",
               fromUid: callerUid,
               fromName: "",
@@ -1751,10 +1769,17 @@ exports.sendOrgCommunication = onCall(
               read: false,
             });
             platformWritten++;
+            detail.platform = true;
+            detail.notifDocId = notifId;
           }
           // Canais externos: e-mail (digest) e WhatsApp (fila).
-          if (profile.notifyEmail !== false && profile.email) emails.push(profile.email);
-          if (profile.notifyWhatsApp === true && profile.phone) phones.push(profile.phone);
+          if (profile.notifyEmail !== false && profile.email) { emails.push(profile.email); detail.email = true; }
+          if (profile.notifyWhatsApp === true && profile.phone) {
+            phones.push(profile.phone);
+            detail.whatsapp = true;
+            detail.phone = String(profile.phone);
+          }
+          recipientDetails.push(detail);
         } catch (e) {
           skipped.push({ uid: r.uid || "", reason: "error:" + (e && e.message || e) });
         }
@@ -1784,19 +1809,192 @@ exports.sendOrgCommunication = onCall(
     }
 
     // ── Fila de WhatsApp (processada por processWhatsAppQueue) ──
+    let whatsappQueueId = "";
     if (phones.length) {
       const emoji = level === "fundamental" ? "🔴" : (level === "important" ? "🟠" : "🟢");
-      await db.collection("whatsapp_queue").add({
+      const waRef = await db.collection("whatsapp_queue").add({
         phones: phones,
         message: emoji + " " + fullMsg,
         createdAt: new Date().toISOString(),
         status: "pending",
       });
+      whatsappQueueId = waRef.id;
     }
 
-    console.log("[sendOrgCommunication] torneio", tournamentId, "| plataforma:", platformWritten,
-      "| emails:", emails.length, "| whatsapp:", phones.length, "| pulados:", skipped.length);
-    return { ok: true, platform: platformWritten, emails: emails.length, phones: phones.length, skipped: skipped.length };
+    // ── Manifesto do comunicado (pro painel de controle do organizador) ──
+    const commRef = await db.collection("tournaments").doc(tournamentId)
+      .collection("communications").add({
+        rawMessage: rawMessage,
+        fullMessage: fullMsg,
+        level: level,
+        sentByUid: callerUid,
+        sentByEmail: callerEmail,
+        sentAt: new Date().toISOString(),
+        sentAtMs: Date.now(),
+        totalRecipients: recipientDetails.length,
+        skippedCount: skipped.length,
+        whatsappQueueId: whatsappQueueId,
+        counts: {
+          platformSent: recipientDetails.filter((d) => d.platform).length,
+          emailSent: emails.length,
+          whatsappSent: phones.length,
+        },
+        recipients: recipientDetails,
+      });
+
+    console.log("[sendOrgCommunication] torneio", tournamentId, "| comm", commRef.id,
+      "| plataforma:", platformWritten, "| emails:", emails.length, "| whatsapp:", phones.length,
+      "| pulados:", skipped.length);
+    return {
+      ok: true, commId: commRef.id,
+      platform: platformWritten, emails: emails.length, phones: phones.length, skipped: skipped.length,
+    };
+  }
+);
+
+// ─── Estatísticas de um comunicado (painel de controle do organizador) ──────
+// v2.4.63: computa on-demand a partir do manifesto imutável em
+// tournaments/{tId}/communications/{commId}:
+//   • plataforma: lê a notificação de cada destinatário → read? = "abriu".
+//   • whatsapp: lê o doc da fila (whatsappQueueId) → deliveries[] por telefone.
+//   • email: só "enviado" (entrega/abertura por e-mail não é rastreada nesta v1).
+exports.getCommunicationStats = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const commId = String((request.data && request.data.commId) || "");
+    if (!tournamentId || !commId) throw new HttpsError("invalid-argument", "tournamentId e commId obrigatórios");
+
+    const db = admin.firestore();
+    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
+    if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = tSnap.data();
+    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
+    const coHostUids = Array.isArray(t.coHosts)
+      ? t.coHosts.filter((c) => c && c.status === "active").map((c) => String(c.uid || "")) : [];
+    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
+      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
+      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
+      (callerEmail && adminEmails.indexOf(callerEmail) !== -1) ||
+      (coHostUids.indexOf(callerUid) !== -1);
+    if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode ver os comunicados");
+
+    const cSnap = await db.collection("tournaments").doc(tournamentId)
+      .collection("communications").doc(commId).get();
+    if (!cSnap.exists) throw new HttpsError("not-found", "comunicado não existe");
+    const comm = cSnap.data();
+    const recips = Array.isArray(comm.recipients) ? comm.recipients : [];
+
+    // Entrega de WhatsApp: phone → ok, a partir do doc da fila.
+    const waDelivered = {};
+    if (comm.whatsappQueueId) {
+      try {
+        const waSnap = await db.collection("whatsapp_queue").doc(comm.whatsappQueueId).get();
+        if (waSnap.exists) {
+          const dels = waSnap.data().deliveries || [];
+          dels.forEach((d) => { if (d && d.phone) waDelivered[String(d.phone).replace(/\D/g, "")] = !!d.ok; });
+        }
+      } catch (e) { /* fila pode ter sido limpa após 30d */ }
+    }
+
+    // "Abriu" na plataforma: lê a notificação de cada destinatário (chunks de 20).
+    const out = [];
+    let platformOpened = 0; let whatsappDelivered = 0;
+    const CHUNK = 20;
+    for (let i = 0; i < recips.length; i += CHUNK) {
+      const slice = recips.slice(i, i + CHUNK);
+      await Promise.all(slice.map(async (r) => {
+        let opened = false;
+        if (r.platform && r.notifDocId && r.uid) {
+          try {
+            const nSnap = await db.collection("users").doc(r.uid)
+              .collection("notifications").doc(r.notifDocId).get();
+            opened = nSnap.exists && nSnap.data().read === true;
+          } catch (e) { /* notif pode ter sido limpa */ }
+        }
+        if (opened) platformOpened++;
+        const phoneKey = r.phone ? String(r.phone).replace(/\D/g, "") : "";
+        const waOk = r.whatsapp && phoneKey ? (waDelivered[phoneKey] === true) : false;
+        if (waOk) whatsappDelivered++;
+        out.push({
+          uid: r.uid, name: r.name || "",
+          platform: !!r.platform, platformOpened: opened,
+          email: !!r.email,
+          whatsapp: !!r.whatsapp, whatsappDelivered: waOk,
+        });
+      }));
+    }
+    // Ordena por nome pra exibição estável.
+    out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    return {
+      ok: true,
+      commId: commId,
+      rawMessage: comm.rawMessage || "",
+      level: comm.level || "all",
+      sentAt: comm.sentAt || "",
+      sentByEmail: comm.sentByEmail || "",
+      totalRecipients: comm.totalRecipients || recips.length,
+      skippedCount: comm.skippedCount || 0,
+      counts: {
+        platformSent: (comm.counts && comm.counts.platformSent) || 0,
+        platformOpened: platformOpened,
+        emailSent: (comm.counts && comm.counts.emailSent) || 0,
+        whatsappSent: (comm.counts && comm.counts.whatsappSent) || 0,
+        whatsappDelivered: whatsappDelivered,
+      },
+      recipients: out,
+    };
+  }
+);
+
+// ─── Lista de comunicados de um torneio (painel de controle) ────────────────
+exports.listCommunications = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId obrigatório");
+
+    const db = admin.firestore();
+    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
+    if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = tSnap.data();
+    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
+    const coHostUids = Array.isArray(t.coHosts)
+      ? t.coHosts.filter((c) => c && c.status === "active").map((c) => String(c.uid || "")) : [];
+    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
+      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
+      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
+      (callerEmail && adminEmails.indexOf(callerEmail) !== -1) ||
+      (coHostUids.indexOf(callerUid) !== -1);
+    if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode ver os comunicados");
+
+    const snap = await db.collection("tournaments").doc(tournamentId)
+      .collection("communications").orderBy("sentAtMs", "desc").limit(100).get();
+    const list = [];
+    snap.forEach((d) => {
+      const c = d.data();
+      list.push({
+        commId: d.id,
+        rawMessage: c.rawMessage || "",
+        level: c.level || "all",
+        sentAt: c.sentAt || "",
+        totalRecipients: c.totalRecipients || 0,
+        counts: {
+          platformSent: (c.counts && c.counts.platformSent) || 0,
+          emailSent: (c.counts && c.counts.emailSent) || 0,
+          whatsappSent: (c.counts && c.counts.whatsappSent) || 0,
+        },
+      });
+    });
+    return { ok: true, communications: list };
   }
 );
 

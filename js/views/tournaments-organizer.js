@@ -622,6 +622,137 @@ window._confirmSendComm = async function(tId) {
     }
 };
 
+// ─── v2.4.63: Painel de controle de comunicados ─────────────────────────────
+// Lista os comunicados enviados (via listCommunications) e, ao clicar num,
+// mostra o detalhamento por inscrito (via getCommunicationStats): pra quem foi,
+// por quais canais (📱 plataforma / ✉️ e-mail / 💬 WhatsApp), quem abriu na
+// plataforma e quem recebeu de fato no WhatsApp, com contagens.
+window._commLevelLabel = function(level) {
+    if (level === 'fundamental') return '🔴 Fundamental';
+    if (level === 'important') return '🟠 Importante';
+    return '🟢 Geral';
+};
+
+window._openCommunicationsPanel = async function(tId) {
+    var modalId = 'modal-comms-' + tId;
+    var existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+    var html = '<div id="' + modalId + '" class="modal-overlay active" style="z-index:10000;">' +
+      '<div class="modal" style="max-width:640px;width:96%;max-height:88vh;display:flex;flex-direction:column;">' +
+        '<div class="modal-header" style="padding:1.25rem 1.25rem 0;">' +
+          '<h2 class="card-title" style="margin:0;font-size:1rem;">📊 Comunicados enviados</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +
+        '</div>' +
+        '<div class="modal-body" id="comms-list-' + tId + '" style="padding:1.25rem;overflow-y:auto;">' +
+          '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:1.5rem 0;">Carregando…</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    var listEl = document.getElementById('comms-list-' + tId);
+    try {
+        var resp = await firebase.functions().httpsCallable('listCommunications')({ tournamentId: String(tId) });
+        var data = resp && resp.data ? resp.data : { communications: [] };
+        var comms = data.communications || [];
+        if (!listEl) return;
+        if (comms.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:1.5rem 0;">Nenhum comunicado enviado ainda.</div>';
+            return;
+        }
+        var rows = comms.map(function(c) {
+            var dt = c.sentAt ? new Date(c.sentAt) : null;
+            var when = dt ? (dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})) : '';
+            var preview = window._safeHtml((c.rawMessage || '').slice(0, 90)) + ((c.rawMessage || '').length > 90 ? '…' : '');
+            var cc = c.counts || {};
+            return '<div onclick="window._openCommunicationDetail(\'' + tId + '\',\'' + c.commId + '\')" style="cursor:pointer;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:10px;padding:12px 14px;margin-bottom:10px;transition:background .15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'transparent\'">' +
+                '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:6px;">' +
+                    '<span style="font-size:0.68rem;color:var(--text-muted);">' + window._commLevelLabel(c.level) + ' · ' + when + '</span>' +
+                    '<span style="font-size:0.68rem;color:var(--text-muted);">' + (c.totalRecipients || 0) + ' inscrito(s) →</span>' +
+                '</div>' +
+                '<div style="font-size:0.85rem;color:var(--text-main);margin-bottom:8px;">' + (preview || '<i style="color:var(--text-muted);">(sem texto)</i>') + '</div>' +
+                '<div style="display:flex;gap:12px;font-size:0.72rem;color:var(--text-muted);">' +
+                    '<span>📱 ' + (cc.platformSent || 0) + '</span>' +
+                    '<span>✉️ ' + (cc.emailSent || 0) + '</span>' +
+                    '<span>💬 ' + (cc.whatsappSent || 0) + '</span>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+        listEl.innerHTML = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;">📱 plataforma · ✉️ e-mail · 💬 WhatsApp — toque num comunicado pra ver quem recebeu e quem abriu.</div>' + rows;
+    } catch (e) {
+        if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#f87171;font-size:0.82rem;padding:1.5rem 0;">Erro ao carregar: ' + window._safeHtml((e && e.message) || String(e)) + '</div>';
+    }
+};
+
+window._openCommunicationDetail = async function(tId, commId) {
+    var modalId = 'modal-comm-detail-' + commId;
+    var existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+    var html = '<div id="' + modalId + '" class="modal-overlay active" style="z-index:10001;">' +
+      '<div class="modal" style="max-width:680px;width:96%;max-height:90vh;display:flex;flex-direction:column;">' +
+        '<div class="modal-header" style="padding:1.25rem 1.25rem 0;">' +
+          '<h2 class="card-title" style="margin:0;font-size:1rem;">📊 Detalhe do comunicado</h2>' +
+          '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +
+        '</div>' +
+        '<div class="modal-body" id="comm-detail-body-' + commId + '" style="padding:1.25rem;overflow-y:auto;">' +
+          '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:1.5rem 0;">Carregando…</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    var bodyEl = document.getElementById('comm-detail-body-' + commId);
+    try {
+        var resp = await firebase.functions().httpsCallable('getCommunicationStats')({ tournamentId: String(tId), commId: String(commId) });
+        var d = resp && resp.data ? resp.data : null;
+        if (!bodyEl) return;
+        if (!d) { bodyEl.innerHTML = '<div style="color:#f87171;">Sem dados.</div>'; return; }
+        var c = d.counts || {};
+        var dt = d.sentAt ? new Date(d.sentAt) : null;
+        var when = dt ? (dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})) : '';
+
+        function statCard(icon, title, lines) {
+            return '<div style="flex:1;min-width:130px;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:10px;padding:10px 12px;">' +
+                '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">' + icon + ' ' + title + '</div>' + lines + '</div>';
+        }
+        function bigNum(n, label) { return '<div style="font-size:1.3rem;font-weight:800;color:var(--text-main);line-height:1;">' + n + '<span style="font-size:0.68rem;font-weight:400;color:var(--text-muted);"> ' + label + '</span></div>'; }
+
+        var summary =
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + window._commLevelLabel(d.level) + ' · ' + when + '</div>' +
+            '<div style="font-size:0.9rem;color:var(--text-main);background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 12px;margin-bottom:14px;">' + (window._safeHtml(d.rawMessage || '') || '<i>(sem texto)</i>') + '</div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">' +
+                statCard('📱', 'Plataforma', bigNum(c.platformSent || 0, 'enviadas') + '<div style="font-size:0.78rem;color:#34d399;margin-top:4px;">' + (c.platformOpened || 0) + ' abriram</div>') +
+                statCard('✉️', 'E-mail', bigNum(c.emailSent || 0, 'enviados') + '<div style="font-size:0.66rem;color:var(--text-muted);margin-top:4px;">entrega/abertura não rastreada</div>') +
+                statCard('💬', 'WhatsApp', bigNum(c.whatsappSent || 0, 'enviadas') + '<div style="font-size:0.78rem;color:#34d399;margin-top:4px;">' + (c.whatsappDelivered || 0) + ' entregues</div>') +
+            '</div>';
+
+        var recips = d.recipients || [];
+        function chip(on, onTxt, offTxt) {
+            return on ? '<span style="color:#34d399;">' + onTxt + '</span>' : '<span style="color:var(--text-muted);opacity:0.5;">' + offTxt + '</span>';
+        }
+        var rowsHtml = recips.map(function(r) {
+            return '<tr style="border-top:1px solid var(--border-color,rgba(255,255,255,0.07));">' +
+                '<td style="padding:7px 6px;font-size:0.8rem;color:var(--text-main);">' + window._safeHtml(r.name || '') + '</td>' +
+                '<td style="padding:7px 6px;text-align:center;font-size:0.78rem;">' + (r.platform ? (r.platformOpened ? '<span style="color:#34d399;" title="abriu">✓ abriu</span>' : '<span style="color:var(--text-muted);" title="enviado, não aberto">enviado</span>') : '<span style="opacity:0.3;">—</span>') + '</td>' +
+                '<td style="padding:7px 6px;text-align:center;font-size:0.78rem;">' + chip(r.email, '✓', '—') + '</td>' +
+                '<td style="padding:7px 6px;text-align:center;font-size:0.78rem;">' + (r.whatsapp ? (r.whatsappDelivered ? '<span style="color:#34d399;" title="entregue">✓ entregue</span>' : '<span style="color:#f87171;" title="falhou/pendente">falhou</span>') : '<span style="opacity:0.3;">—</span>') + '</td>' +
+            '</tr>';
+        }).join('');
+        var table = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Por inscrito (' + recips.length + ')' + (d.skippedCount ? ' · ' + d.skippedCount + ' sem canal/elegibilidade' : '') + '</div>' +
+            '<table style="width:100%;border-collapse:collapse;">' +
+            '<thead><tr style="font-size:0.66rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">' +
+                '<th style="text-align:left;padding:4px 6px;">Inscrito</th>' +
+                '<th style="text-align:center;padding:4px 6px;">📱 Plataforma</th>' +
+                '<th style="text-align:center;padding:4px 6px;">✉️ E-mail</th>' +
+                '<th style="text-align:center;padding:4px 6px;">💬 WhatsApp</th>' +
+            '</tr></thead><tbody>' + rowsHtml + '</tbody></table>';
+
+        bodyEl.innerHTML = summary + table;
+    } catch (e) {
+        if (bodyEl) bodyEl.innerHTML = '<div style="text-align:center;color:#f87171;font-size:0.82rem;padding:1.5rem 0;">Erro ao carregar: ' + window._safeHtml((e && e.message) || String(e)) + '</div>';
+    }
+};
+
 // ─── v2.4.41: Falar com o organizador (de quem NÃO é o organizador) ─────────
 // Se o organizador tem telefone → abre uma conversa de WhatsApp (wa.me) direto.
 // Senão → abre um diálogo pra digitar e manda na PLATAFORMA (que já dispara
