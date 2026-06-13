@@ -1424,6 +1424,9 @@ button[data-spinning="1"] {
   color: var(--text-muted);
   margin-top: 2px;
 }
+/* Toggles "Ocultar e-mail/telefone" no perfil: espaço mínimo acima
+   (não colado no campo de referência), espaço de baixo preservado. */
+.omit-toggle .toggle-row { padding-top: 0; }
 /* Light theme overrides */
 [data-theme="light"] .toggle-switch .toggle-slider {
   background: rgba(0,0,0,0.12);
