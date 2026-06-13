@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.54-beta';
+window.SCOREPLACE_VERSION = '2.4.55-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -32,6 +32,8 @@ window.SP_FLAGS = {
   // 'safe-area': { test: true },   // ex: testar notch só pras contas de teste
   // 'pro-iap':   { platforms: ['ios'] },
   'playoff-double-elim': { test: true },  // Dupla Eliminatória na fase final de Liga (em construção)
+  'playoff-divisions': { test: true },    // Divisões Ouro/Prata na fase final de Liga (em construção)
+  'playoff-time-estimate': { test: true },// Estimativa de tempo na config do playoff (verificar e liberar p/ todos)
 };
 
 // Usuário atual é uma identidade de teste/dev?
