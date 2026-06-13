@@ -1904,39 +1904,45 @@ function renderTournaments(container, tournamentId = null) {
                   var _sd = new Date(t.startDate).getTime();
                   if (!isNaN(_sd) && _sd > _now) _ligaEvent = { ts: _sd, label: _t('tourn.ligaStart'), icon: '🏁', color: '#10b981' };
                 }
-                // 2. Já começou e tem próximo sorteio agendado? → countdown para próximo sorteio
-                if (!_ligaEvent && !t.drawManual && t.drawFirstDate && typeof window._calcNextDrawDate === 'function') {
-                  var _nextDraw = window._calcNextDrawDate(t);
-                  if (_nextDraw) {
-                    var _ndTs = _nextDraw.getTime();
-                    // Só mostra se o próximo sorteio está dentro do prazo da temporada (se houver)
-                    var _seasonEndTs = null;
-                    var _sm = t.ligaSeasonMonths || t.rankingSeasonMonths;
-                    if (_sm && t.startDate) {
-                      var _ssd = new Date(t.startDate);
-                      if (!isNaN(_ssd.getTime())) {
-                        var _se = new Date(_ssd);
-                        _se.setMonth(_se.getMonth() + parseInt(_sm));
-                        _seasonEndTs = _se.getTime();
-                      }
-                    }
-                    if (!isNaN(_ndTs) && _ndTs > _now && (!_seasonEndTs || _ndTs <= _seasonEndTs)) {
-                      _ligaEvent = { ts: _ndTs, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
+                // Fim do torneio: endDate (limite real, ex. "13/06 19:59") ou,
+                // na ausência dela, o fim da temporada (ligaSeasonMonths).
+                var _tEndTs = null;
+                if (t.endDate) {
+                  var _edStr = String(t.endDate).indexOf('T') > -1 ? t.endDate : (t.endDate + 'T23:59:59');
+                  var _edMs = new Date(_edStr).getTime();
+                  if (!isNaN(_edMs)) _tEndTs = _edMs;
+                }
+                if (_tEndTs == null) {
+                  var _smEnd = t.ligaSeasonMonths || t.rankingSeasonMonths;
+                  if (_smEnd && t.startDate) {
+                    var _ssdEnd = new Date(t.startDate);
+                    if (!isNaN(_ssdEnd.getTime())) {
+                      var _seEnd = new Date(_ssdEnd);
+                      _seEnd.setMonth(_seEnd.getMonth() + parseInt(_smEnd));
+                      _tEndTs = _seEnd.getTime();
                     }
                   }
                 }
-                // 3. Sem próximo sorteio dentro da temporada? → countdown para fim da temporada
-                if (!_ligaEvent) {
-                  var _sm2 = t.ligaSeasonMonths || t.rankingSeasonMonths;
-                  if (_sm2 && t.startDate) {
-                    var _ssd2 = new Date(t.startDate);
-                    if (!isNaN(_ssd2.getTime())) {
-                      var _seasonEnd = new Date(_ssd2);
-                      _seasonEnd.setMonth(_seasonEnd.getMonth() + parseInt(_sm2));
-                      var _seTs = _seasonEnd.getTime();
-                      if (!isNaN(_seTs) && _seTs > _now) _ligaEvent = { ts: _seTs, label: _t('tourn.seasonEnd'), icon: '🏁', color: '#8b5cf6' };
+                // 2. Já começou e AINDA HÁ sorteios por vir? → countdown para próximo sorteio.
+                // v2.4.68: o último sorteio já feito (rodada atual = última planejada)
+                // não tem "próximo sorteio" — cai pro countdown de fim do torneio (passo 3).
+                if (!_ligaEvent && !t.drawManual && t.drawFirstDate && typeof window._calcNextDrawDate === 'function') {
+                  var _lpDraw = (typeof window._ligaTournamentProgress === 'function') ? window._ligaTournamentProgress(t) : null;
+                  var _moreDraws = !_lpDraw || _lpDraw.currentRoundNum < _lpDraw.roundsPlanned;
+                  if (_moreDraws) {
+                    var _nextDraw = window._calcNextDrawDate(t);
+                    if (_nextDraw) {
+                      var _ndTs = _nextDraw.getTime();
+                      // Só mostra se o próximo sorteio está dentro do prazo do torneio (se houver)
+                      if (!isNaN(_ndTs) && _ndTs > _now && (_tEndTs == null || _ndTs <= _tEndTs)) {
+                        _ligaEvent = { ts: _ndTs, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
+                      }
                     }
                   }
+                }
+                // 3. Sem mais sorteios? → countdown para o fim do torneio
+                if (!_ligaEvent && _tEndTs != null && _tEndTs > _now) {
+                  _ligaEvent = { ts: _tEndTs, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
                 }
                 if (!_ligaEvent) return '';
                 var _countdownText = window._formatCountdown ? window._formatCountdown(_ligaEvent.ts - _now) : '';
@@ -2235,9 +2241,20 @@ function renderTournaments(container, tournamentId = null) {
             _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.email);
           });
         }
+        // "Falar com o organizador" — visível só pra quem NÃO faz parte da
+        // organização (participantes/visitantes logados). O próprio organizador
+        // e co-organizadores não veem o botão.
+        var _viewerIsOrg = (window.AppStore && typeof window.AppStore.isOrganizer === 'function') ? window.AppStore.isOrganizer(_t) : false;
+        var _contactBtnHtml = '';
+        if (_cu2 && !_viewerIsOrg) {
+          var _waIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true" style="flex-shrink:0;"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 1.67c2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.42 5.82c0 4.54-3.7 8.24-8.25 8.24a8.2 8.2 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24zm4.52 10.37c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.16.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.13-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18-.06-.1-.22-.16-.47-.28z"/></svg>';
+          _contactBtnHtml = '<button class="btn btn-whatsapp btn-sm hover-lift" style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;" onclick="event.stopPropagation();window._contactOrganizer(\'' + window._safeHtml(String(_t.id)) + '\')">' +
+            _waIcon + '<span>Falar com o organizador</span></button>';
+        }
         _organizersHtml = '<div style="margin-top:1.25rem;margin-bottom:0.5rem;">' +
           '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;">ORGANIZAÇÃO</div>' +
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + _orgCards + '</div></div>';
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + _orgCards + '</div>' +
+          _contactBtnHtml + '</div>';
       })();
     }
 
@@ -3231,3 +3248,52 @@ window._partnerPickerClear = function(tId) {
 function _escAttr(s) {
   return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 }
+
+// Linha direta participante → organização. Disparado pelo botão "Falar com o
+// organizador" da seção ORGANIZAÇÃO (detalhe do torneio). Resolve o telefone do
+// organizador no perfil dele (Firestore) e abre o WhatsApp com a mensagem já
+// preenchida; sem telefone cai pro e-mail; sem nenhum dos dois avisa o usuário.
+window._contactOrganizer = async function(tId) {
+  var t = window.AppStore && window.AppStore.tournaments &&
+          window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  if (!t) {
+    if (typeof showNotification !== 'undefined') showNotification('Torneio não encontrado', '', 'error');
+    return;
+  }
+  var firstName = t.organizerName ? String(t.organizerName).split(' ')[0] : '';
+  var msg = 'Olá' + (firstName ? ' ' + firstName : '') + '! Sou participante do torneio "' +
+            (t.name || '') + '" no scoreplace.app e gostaria de falar com a organização.';
+
+  // Resolve o perfil do organizador pelo uid (identidade primária) pra pegar
+  // telefone/e-mail atuais — o doc do torneio não guarda o telefone dele.
+  var profile = null;
+  try {
+    if (t.creatorUid && window.FirestoreDB && typeof window.FirestoreDB.loadUserProfile === 'function') {
+      profile = await window.FirestoreDB.loadUserProfile(t.creatorUid);
+    }
+  } catch (e) { profile = null; }
+
+  // 1) WhatsApp (preferido)
+  var phoneDigits = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
+  if (phoneDigits && (profile.notifyWhatsApp !== false)) {
+    var cc = (profile.phoneCountry ? String(profile.phoneCountry) : '55').replace(/\D/g, '') || '55';
+    // Telefone canônico já vem com DDI (+55 …) → >=12 dígitos. Sem DDI (legado)
+    // tem ~11 → prefixar o country code.
+    var full = phoneDigits.length >= 12 ? phoneDigits : (cc + phoneDigits);
+    try { window.open('https://wa.me/' + full + '?text=' + encodeURIComponent(msg), '_blank', 'noopener'); } catch (e) {}
+    return;
+  }
+
+  // 2) E-mail
+  var email = (profile && profile.email) || t.organizerEmail || '';
+  if (email && email.indexOf('@') !== -1) {
+    var subject = encodeURIComponent('Torneio: ' + (t.name || ''));
+    try { window.open('mailto:' + email + '?subject=' + subject + '&body=' + encodeURIComponent(msg), '_self'); } catch (e) {}
+    return;
+  }
+
+  // 3) Sem contato disponível
+  if (typeof showNotification !== 'undefined') {
+    showNotification('Contato indisponível', 'O organizador ainda não cadastrou telefone ou e-mail de contato.', 'info');
+  }
+};

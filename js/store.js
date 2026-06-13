@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.67-beta';
+window.SCOREPLACE_VERSION = '2.4.68-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada

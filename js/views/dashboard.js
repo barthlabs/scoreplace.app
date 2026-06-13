@@ -1398,8 +1398,42 @@ function renderDashboard(container) {
         var tFull = grouped[keyToIdx[key]].tRef;
         if (tFull && tFull.format === 'Liga' && !tFull.drawManual && tFull.drawFirstDate &&
             typeof window._calcNextDrawDate === 'function') {
-          var nd = window._calcNextDrawDate(tFull);
-          if (nd) grouped[keyToIdx[key]].nextDrawAt = nd.getTime();
+          // v2.4.68: fim do torneio (endDate, ou temporada por meses)
+          var _tEndW = null;
+          if (tFull.endDate) {
+            var _edW = String(tFull.endDate).indexOf('T') > -1 ? tFull.endDate : (tFull.endDate + 'T23:59:59');
+            var _edMsW = new Date(_edW).getTime();
+            if (!isNaN(_edMsW)) _tEndW = _edMsW;
+          }
+          if (_tEndW == null) {
+            var _smW = tFull.ligaSeasonMonths || tFull.rankingSeasonMonths;
+            if (_smW && tFull.startDate) {
+              var _ssdW = new Date(tFull.startDate);
+              if (!isNaN(_ssdW.getTime())) { var _seW = new Date(_ssdW); _seW.setMonth(_seW.getMonth() + parseInt(_smW)); _tEndW = _seW.getTime(); }
+            }
+          }
+          // Ainda há sorteios por vir? (rodada atual < última planejada)
+          var _lpW = (typeof window._ligaTournamentProgress === 'function') ? window._ligaTournamentProgress(tFull) : null;
+          var _moreDrawsW = !_lpW || _lpW.currentRoundNum < _lpW.roundsPlanned;
+          var _setNextW = false;
+          if (_moreDrawsW) {
+            var nd = window._calcNextDrawDate(tFull);
+            if (nd) {
+              var _ndMsW = nd.getTime();
+              if (_tEndW == null || _ndMsW <= _tEndW) {
+                grouped[keyToIdx[key]].nextDrawAt = _ndMsW;
+                grouped[keyToIdx[key]].countdownIcon = '⏱️';
+                grouped[keyToIdx[key]].countdownLabel = 'próximo sorteio em';
+                _setNextW = true;
+              }
+            }
+          }
+          // Último sorteio já feito → countdown para o fim do torneio
+          if (!_setNextW && _tEndW != null && _tEndW > Date.now()) {
+            grouped[keyToIdx[key]].nextDrawAt = _tEndW;
+            grouped[keyToIdx[key]].countdownIcon = '🏆';
+            grouped[keyToIdx[key]].countdownLabel = 'fim do torneio em';
+          }
         }
       }
     });
@@ -1458,8 +1492,10 @@ function renderDashboard(container) {
         var _toggleRow = _ligaToggleWidget
           ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleWidget + '</div>'
           : '';
+        var _cdIcon = g.countdownIcon || '⏱️';
+        var _cdLabel = g.countdownLabel || 'próximo sorteio em';
         ligaCountdownLine = _toggleRow +
-          '<div style="display:inline-flex;align-items:center;gap:6px;font-size:0.7rem;font-weight:600;color:' + color + ';background:' + bg + ';border:1px solid ' + border + ';border-radius:999px;padding:2px 10px;margin-top:6px;">⏱️ próximo sorteio em <span data-countdown-target="' + g.nextDrawAt + '">' + initialText + '</span></div>';
+          '<div style="display:inline-flex;align-items:center;gap:6px;font-size:0.7rem;font-weight:600;color:' + color + ';background:' + bg + ';border:1px solid ' + border + ';border-radius:999px;padding:2px 10px;margin-top:6px;">' + _cdIcon + ' ' + _cdLabel + ' <span data-countdown-target="' + g.nextDrawAt + '">' + initialText + '</span></div>';
       }
       // Linhas de confronto — uma por match no grupo
       var matchLines = '';
