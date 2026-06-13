@@ -588,20 +588,24 @@ window._confirmSendComm = async function(tId) {
         return;
     }
 
-    var cu = window.AppStore.currentUser;
-    var fullMsg = _t('org.commFullMsg', {name: t.name, message: message});
-
-    // Desabilita o botão pra feedback (84 inscritos = ~84 writes assíncronos).
+    // Desabilita o botão pra feedback.
     var _sendBtn = document.querySelector('#modal-org-comm-' + tId + ' .btn-primary');
     if (_sendBtn) { _sendBtn.disabled = true; _sendBtn.textContent = 'Enviando…'; }
 
+    // v2.4.61: fan-out SERVER-SIDE via Cloud Function. Antes o loop sequencial
+    // rodava no navegador (~1 ida ao Firestore por inscrito) — em torneios
+    // grandes demorava ~30s travado em "Enviando…" (parecia que "nada
+    // acontecia") e TRUNCAVA se a página fosse fechada antes do fim (inscritos
+    // do fim da lista não recebiam). Agora 1 chamada e o servidor entrega a
+    // todos (plataforma + e-mail digest + WhatsApp), independente da página.
     var result = null;
     try {
-        result = await window._notifyTournamentParticipants(t, {
-            type: 'organizer_communication',
-            message: fullMsg,
+        var _resp = await firebase.functions().httpsCallable('sendOrgCommunication')({
+            tournamentId: String(t.id),
+            message: message,
             level: level
-        }, cu ? cu.email : null);
+        });
+        result = _resp && _resp.data ? _resp.data : null;
     } catch (e) {
         window._warn && window._warn('[orgComm] erro ao enviar', e);
         if (typeof showNotification !== 'undefined') showNotification('Erro', 'Não foi possível enviar o comunicado: ' + ((e && e.message) || e), 'error');
@@ -612,12 +616,9 @@ window._confirmSendComm = async function(tId) {
     var modalEl = document.getElementById('modal-org-comm-' + tId);
     if (modalEl) modalEl.remove();
 
-    // O envio já vai por TODOS os canais que cada inscrito escolheu (plataforma +
-    // e-mail via digest + WhatsApp via fila). Não abrimos mais mailto/WhatsApp do
-    // organizador (mailto com 84 BCC + navegação '_self' tirava o usuário do app).
-    var count = result ? (result.emails.length + result.phones.length) : 0;
     if (typeof showNotification !== 'undefined') {
-        showNotification(_t('org.commSentTitle'), _t('org.commSentMsg'), 'success');
+        var _n = result ? (result.platform || 0) : 0;
+        showNotification(_t('org.commSentTitle'), _n ? ('Enviado para ' + _n + ' inscrito(s).') : _t('org.commSentMsg'), 'success');
     }
 };
 
