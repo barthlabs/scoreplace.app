@@ -2281,9 +2281,11 @@ function renderTournaments(container, tournamentId = null) {
             }).catch(function() {});
         }
         // v2.3.52: carrega perfis (gênero/nível/idade) e aplica nos badges de
-        // meta dos cards de inscritos — só pro organizador. Mesmos helpers
-        // compartilhados usados na página #participants (store.js).
-        if (isOrg && typeof window._loadParticipantProfilesByName === 'function') {
+        // meta dos cards de inscritos. Mesmos helpers compartilhados usados na
+        // página #participants (store.js).
+        // v2.4.70: hidrata pra TODOS os inscritos, não só o organizador — as
+        // categorias são informação pública da chave.
+        if (typeof window._loadParticipantProfilesByName === 'function') {
             window._loadParticipantProfilesByName(parts).then(function() {
                 if (typeof window._patchProfileMetaSlots === 'function') window._patchProfileMetaSlots(container, t);
             }).catch(function() {});

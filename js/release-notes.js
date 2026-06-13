@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.69-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏷️ Categorias dos inscritos visíveis pra todos.</b> Na lista de inscritos do torneio, as <b>tags de categoria</b> (gênero, nível e idade — ex.: <b>Fem</b>, <b>C</b>, <b>D</b>, <b>50+</b>, <b>40+</b>) agora aparecem pra <b>todos os inscritos</b>, não só pro organizador. Categoria é informação pública da chave, então qualquer participante consegue ver em que categoria cada um está. Só o organizador continua podendo <b>alterar</b> o nível pelo seletor.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.69-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>💬 "Falar com o organizador" na página do torneio.</b> Na seção <b>Organização</b> (detalhe do torneio), os inscritos agora têm um botão <b>"Falar com o organizador"</b> logo abaixo do card do organizador. Ele abre direto o <b>WhatsApp</b> do organizador com a mensagem já preenchida (e cai pro <b>e-mail</b> caso não haja telefone cadastrado). O botão aparece só pra quem <b>não faz parte da organização</b> — o próprio organizador e co-organizadores não o veem.</li>' +
       '</ul>' +

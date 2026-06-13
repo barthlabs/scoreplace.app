@@ -1427,7 +1427,9 @@ function renderParticipants(container, tournamentId) {
     return (typeof window._profileMetaSlots === 'function')
       ? window._profileMetaSlots(p, pName, isTeam, t, isOrg) : '';
   }
-  if (isOrg && typeof window._loadParticipantProfilesByName === 'function') {
+  // v2.4.70: hidrata os badges de meta (gênero/nível/idade) pra TODOS os inscritos,
+  // não só o organizador — as categorias são informação pública da chave.
+  if (typeof window._loadParticipantProfilesByName === 'function') {
     window._loadParticipantProfilesByName(parts).then(function () {
       if (typeof window._patchProfileMetaSlots === 'function') window._patchProfileMetaSlots(container, t);
     }).catch(function () {});

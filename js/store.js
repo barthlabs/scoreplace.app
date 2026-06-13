@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.69-beta';
+window.SCOREPLACE_VERSION = '2.4.70-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -2317,9 +2317,10 @@ window._profileMetaBadgesHtml = function(gender, skill, birth, prefixName, t) {
 var _attrEscMeta = function(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
 
 // Slot(s) de meta pra um inscrito (1 linha pra individual, 1 por membro em duplas).
-// Só renderiza pro organizador (isOrg). Retorna '' pra não-organizador.
+// Visível pra TODOS os inscritos do torneio (não só o organizador) — as categorias
+// (gênero · nível · idade) são informação pública da chave. O parâmetro isOrg é
+// mantido por compat de assinatura, mas não gateia mais a visibilidade.
 window._profileMetaSlots = function(p, pName, isTeam, t, isOrg) {
-  if (!isOrg) return '';
   var members = isTeam ? String(pName).split('/').map(function(n) { return n.trim(); }).filter(Boolean) : [pName];
   return members.map(function(mn, mi) {
     var lc = String(mn).toLowerCase();
