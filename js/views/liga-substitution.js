@@ -300,6 +300,20 @@ window._ligaCancelInvite = function (tId, roundIndex, groupName) {
   window._ligaPickFill(tId, roundIndex, groupName, group.woAbsent);
 };
 
+// Convidado demorou/vai recusar → cancela o convite pendente e completa JÁ com
+// Jogador X (sem esperar). O ausente continua com W.O. (0 pts).
+window._ligaSwitchToGuest = function (tId, roundIndex, groupName) {
+  var t = _findT(tId); if (!t) return;
+  var group = _getGroup(t, roundIndex, groupName); if (!group) return;
+  if (!_canManageGroup(t, group)) return;
+  if (Array.isArray(t.ligaSubInvites)) {
+    t.ligaSubInvites.forEach(function (iv) { if (iv.groupName === groupName && iv.roundIndex === roundIndex && iv.status === 'pending') iv.status = 'cancelled'; });
+  }
+  group.subStatus = 'open'; delete group.pendingInviteId;
+  _save(t);
+  window._ligaFillGuestPrompt(tId, roundIndex, groupName, group.woAbsent);
+};
+
 // Reverter o W.O. (desfaz tudo: substituto sai, ausente volta).
 window._ligaRevertWo = function (tId, roundIndex, groupName) {
   var t = _findT(tId); if (!t) return;
@@ -347,7 +361,12 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
     var who = '';
     if (Array.isArray(t.ligaSubInvites)) { var iv = t.ligaSubInvites.filter(function (x) { return x.id === group.pendingInviteId; })[0]; if (iv) who = iv.inviteeName; }
     var s = '<span style="font-size:0.66rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:6px;">⏳ ' + _safe(group.woAbsent) + ' levou W.O. · ' + _safe(who || 'substituto') + ' convidado, aguardando confirmação</span>';
-    if (manage) s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaCancelInvite(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#f87171;border-color:rgba(239,68,68,0.4);">Trocar substituto</button>';
+    // Demorou ou vai recusar? Os jogadores não ficam travados: convidam outro
+    // folga OU completam com Jogador X na hora.
+    if (manage) {
+      s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaCancelInvite(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#4ade80;border-color:rgba(16,185,129,0.4);">📨 Convidar outro</button>';
+      s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaSwitchToGuest(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">🎾 Jogador X</button>';
+    }
     return s;
   }
   // Estado: preenchido (W.O. ativo)
