@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.46-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.47-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>App mais consistente entre aparelhos.</b> A interface agora <b>escala proporcionalmente com o tamanho da tela</b> — telas menores mostram tudo um pouco menor (mantendo as mesmas proporções), telas maiores um pouco maior, com um teto pra não exagerar em tablet/desktop. A ideia é que o app pareça "o mesmo" num celular pequeno e num grande, em vez de apertado num e folgado no outro. Quem preferir pode ajustar o tamanho geral no <b>slider do Perfil</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.46-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Perfil mais limpo nas opções de privacidade.</b> Os controles agora se chamam <b>"Ocultar seu(s) e-mail(s)"</b> e <b>"Ocultar seu telefone"</b>, sem aquela caixa grande em volta — ocupam bem menos espaço. A explicação de cada um aparece ao tocar no ícone <b>ⓘ</b> ao lado (no computador, também ao passar o mouse) — sem mais o texto comprido sempre na tela.</li>' +
         '<li><b>"Silenciar presença" virou chave.</b> No perfil, a opção de silenciar presença temporariamente agora é um toggle, igual às demais.</li>' +

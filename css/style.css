@@ -424,22 +424,29 @@ a:hover {
   color: var(--text-muted) !important;
 }
 
-/* ─── v2.1.91: Dimensionamento global proporcional + configurável ──────────
- * Quase todo o app usa `rem` (3400+ font-sizes), então controlar o font-size
- * da RAIZ escala TUDO junto e proporcionalmente, em qualquer aparelho.
+/* ─── v2.4.47: "Encolher tudo junto" — escala proporcional à largura ────────
+ * Quase todo o app usa `rem` (4400+ font-sizes), então controlar o font-size
+ * da RAIZ escala TUDO junto e proporcionalmente, em qualquer aparelho —
+ * mesma ideia do placar ao vivo (tamanhos amarrados ao viewport).
  *
  *  font-size = BASE_FLUIDA  ×  var(--ui-scale)
  *
- * BASE_FLUIDA = clamp(min, base + termo-por-largura, max) → "auto por tela":
- *   telefone pequeno (~320px) ≈ 15.8px · telefone comum (~390px) ≈ 16px (=hoje,
- *   nada muda no padrão) · tablet/desktop ≈ 17.5px. Faixa gentil pra não estourar
- *   layouts afinados em 16px.
- * --ui-scale = controle do USUÁRIO (slider no perfil, 0.8–1.3). Padrão 1 = hoje.
+ * BASE_FLUIDA = clamp(piso, 3.74vw, teto). 3.74vw ancora o iPhone Pro Max
+ *   (~430px viewport → ~16px, o tamanho aprovado pelo dono) e escala
+ *   PROPORCIONALMENTE pra baixo em telas menores — assim um aparelho menor
+ *   mostra as MESMAS proporções, só que menor (como o placar):
+ *     320px (SE) ≈ 13px (piso) · 360px (Android comum) ≈ 13.5px ·
+ *     390px (iPhone comum) ≈ 14.6px · 430px (Pro Max) ≈ 16px ·
+ *     ≥454px (Pro Max+/tablet/desktop) ≈ 17px (teto, não explode).
+ *   Trade-off aceito: telefones menores que o Pro Max ficam com texto menor
+ *   (proporcional), em troca de consistência de proporção entre aparelhos.
+ * --ui-scale = controle do USUÁRIO (slider no perfil, 0.8–1.3). Padrão 1.
  *   Persistido em localStorage (instantâneo) + perfil (vale em todo dispositivo).
- * O zoom do placar ao vivo / da chave é um sistema SEPARADo, em cima disto.
+ *   Quem achar pequeno num aparelho menor pode subir o slider.
+ * O zoom do placar ao vivo / da chave é um sistema SEPARADO, em cima disto.
  * O fix de auto-zoom do iOS (inputs em 16px) fica intacto — não usa rem. */
 html {
-  font-size: calc(clamp(15px, 14.7px + 0.33vw, 17px) * var(--ui-scale, 1));
+  font-size: calc(clamp(13px, 3.74vw, 17px) * var(--ui-scale, 1));
 }
 
 /* Smooth theme transition */
