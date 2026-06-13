@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.49-beta';
+window.SCOREPLACE_VERSION = '2.4.50-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -59,6 +59,31 @@ window._flag = function (name) {
     return false;
   } catch (e) { return false; }
 };
+
+// ─── Selo STAGING (só no ambiente de teste) ──────────────────────────────────
+// Badge fixo e inconfundível pra NUNCA confundir staging com produção: evita
+// fazer teste destrutivo achando que está no staging (ou entrar em pânico
+// achando que quebrou o Confra quando está só no staging). Só aparece quando o
+// host é o de staging — INVISÍVEL na produção. pointer-events:none = não bloqueia
+// clique. Detecta por hostname (auto-suficiente, sem depender de timing).
+(function () {
+  try {
+    if (!/scoreplace-staging/.test(window.location.hostname || '')) return;
+    var inject = function () {
+      if (document.getElementById('sp-staging-badge')) return;
+      var b = document.createElement('div');
+      b.id = 'sp-staging-badge';
+      b.textContent = 'STAGING';
+      b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483647;' +
+        'background:#b91c1c;color:#fff;font:700 11px/1 -apple-system,BlinkMacSystemFont,sans-serif;' +
+        'letter-spacing:1.5px;padding:5px 9px;border-radius:6px;pointer-events:none;' +
+        'box-shadow:0 2px 8px rgba(0,0,0,0.45);opacity:0.92;';
+      (document.body || document.documentElement).appendChild(b);
+    };
+    if (document.body) inject();
+    else document.addEventListener('DOMContentLoaded', inject);
+  } catch (e) {}
+})();
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454
