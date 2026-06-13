@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.57-beta';
+window.SCOREPLACE_VERSION = '2.4.58-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -93,6 +93,24 @@ window._flag = function (name) {
     else document.addEventListener('DOMContentLoaded', inject);
   } catch (e) {}
 })();
+
+// ─── Botão W.O. PADRONIZADO em todo o app ─────────────────────────────────────
+// Declarar W.O. (faltou alguém) = botão VERMELHO SÓLIDO + fonte branca + volume
+// (classe padrão .btn .btn-danger). Reverter = outline azul (ação de desfazer).
+// onclick: a string JS do handler (sem aspas duplas). isDeclare: true=W.O.(vermelho),
+// false=Reverter(outline). opts: {label, title, size('btn-sm'|'btn-micro'), fontSize}.
+window._woBtnHtml = function (onclick, isDeclare, opts) {
+  opts = opts || {};
+  var size = opts.size || 'btn-sm';
+  var title = opts.title ? (' title="' + String(opts.title).replace(/"/g, '&quot;') + '"') : '';
+  var base = 'font-size:' + (opts.fontSize || '0.72rem') + ';padding:3px 11px;' + (opts.extraStyle || '');
+  if (isDeclare) {
+    return '<button type="button" class="btn btn-danger ' + size + '" onclick="' + onclick + '"' + title +
+      ' style="' + base + '">' + (opts.label || 'W.O.') + '</button>';
+  }
+  return '<button type="button" class="btn btn-outline ' + size + '" onclick="' + onclick + '"' + title +
+    ' style="' + base + 'color:#60a5fa;border-color:rgba(59,130,246,0.5);">' + (opts.label || '↩️ Reverter') + '</button>';
+};
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
 window.SCOREPLACE_DEV_WHATSAPP = '5511916936454'; // +55 11 91693-6454

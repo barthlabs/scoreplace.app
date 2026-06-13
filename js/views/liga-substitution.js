@@ -354,7 +354,7 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   if (group.subStatus === 'filled' && group.woAbsent) {
     var lbl = group.subIsGuest ? (_safe(group.subName) + ' (Jogador X)') : _safe(group.subName);
     var s2 = '<span style="font-size:0.66rem;font-weight:700;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:2px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O. → ' + lbl + '</span>';
-    if (manage) s2 += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaRevertWo(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#60a5fa;border-color:rgba(59,130,246,0.4);">↩️ Reverter W.O.</button>';
+    if (manage) s2 += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
     return s2;
   }
   // Estado: W.O. declarado mas sem substituto (recusa) — precisa preencher
@@ -363,7 +363,8 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   }
   // Estado normal: oferece declarar ausência (só se grupo não terminou)
   if (!gDone && manage) {
-    return '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaAbsentFlow(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);" title="Algum jogador não pôde vir? Dê W.O. e chame um substituto.">⚠️ Faltou alguém?</button>';
+    return window._woBtnHtml("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", true,
+      { label: '⚠️ Faltou alguém?', title: 'Algum jogador não pôde vir? Dê W.O. e chame um substituto.' });
   }
   return '';
 };

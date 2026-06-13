@@ -1833,7 +1833,7 @@ function renderParticipants(container, tournamentId) {
       // jogo já foi resolvido por W.O. mas que ainda não estão marcados ausentes.
       const _showWoBtn = isOrg && !mc;
       const woBtn = _showWoBtn
-        ? `<button class="btn btn-micro" onclick="event.stopPropagation(); ${woAction}" style="border:1px solid ${isAbsent ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.2)'};background:${isAbsent ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.08)'};color:${isAbsent ? '#60a5fa' : '#f87171'};font-weight:800;font-size:0.7rem;${isAbsent ? 'opacity:1;' : 'opacity:0.6;'}">${woLabel}</button>`
+        ? window._woBtnHtml('event.stopPropagation(); ' + woAction, !isAbsent, { label: woLabel, size: 'btn-micro', fontSize: '0.7rem' })
         : '';
       // v2.2.0: badge W.O. só aparece quando ESTE jogador está em t.absent —
       // não deve aparecer no parceiro presente nem em quem simplesmente não
@@ -2089,7 +2089,7 @@ function renderParticipants(container, tournamentId) {
         const _rcLabel = rcMc ? 'Presente' : rcAbs ? 'Ausente' : 'Aguardando';
         const _rcColor = rcMc ? '#4ade80' : rcAbs ? '#f87171' : '#cbd5e1';
         const _rcWoBtn = (!rcMc && isOrg)
-          ? `<button class="btn btn-micro" onclick="event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');" style="border:1px solid ${rcAbs ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.35)'};background:${rcAbs ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.1)'};color:${rcAbs ? '#60a5fa' : '#f87171'};font-weight:800;font-size:0.68rem;">${rcAbs ? 'Reverter' : 'W.O.'}</button>`
+          ? window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');`, !rcAbs, { label: rcAbs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem' })
           : '';
         rollCallRow = `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.14);" onclick="event.stopPropagation();">
           <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>
