@@ -1406,6 +1406,16 @@ function _attachCatManagerDragDrop(tId) {
     // Touch drag-and-drop support for mobile
     var _touchDragEl = null;
     var _touchClone = null;
+    // v2.4.71: long-press gate — uma ROLAGEM de tela não pode mais virar um
+    // arraste de categoria (mesclagem acidental, incidente Confra 13/jun). O
+    // arraste por toque só inicia após um toque longo deliberado (450ms) sem
+    // mover o dedo. Mover antes disso = intenção de rolar → cancela o arme.
+    var _lpTimer = null;        // timer do long-press
+    var _lpArmed = false;       // long-press concluído → arraste ativo
+    var _lpPending = null;      // alvo aguardando long-press
+    var _lpStartX = 0, _lpStartY = 0;
+    var _LP_MS = 450;           // duração do toque longo
+    var _LP_MOVE_TOL = 12;      // px de tolerância antes de tratar como rolagem
 
     function _getTouchTarget(x, y) {
         if (_touchClone) _touchClone.style.display = 'none';
@@ -1418,9 +1428,9 @@ function _attachCatManagerDragDrop(tId) {
         return el;
     }
 
-    function _onTouchStart(e) {
-        var target = e.target.closest('.cat-mgr-participant-in-cat, .cat-mgr-participant, .cat-mgr-card');
-        if (!target) return;
+    // Inicia o arraste de fato (chamado só após o long-press concluir).
+    function _beginTouchDrag(target) {
+        _lpArmed = true;
         _touchDragEl = target;
         if (target.classList.contains('cat-mgr-participant-in-cat')) {
             _dragData = {
@@ -1443,11 +1453,43 @@ function _attachCatManagerDragDrop(tId) {
         _touchClone.style.opacity = '0.8';
         _touchClone.style.zIndex = '99999';
         _touchClone.style.pointerEvents = 'none';
+        _touchClone.style.boxShadow = '0 8px 32px rgba(251,191,36,0.35)';
+        _touchClone.style.border = '2px solid #fbbf24';
+        _touchClone.style.borderRadius = '12px';
         document.body.appendChild(_touchClone);
         target.style.opacity = '0.3';
+        if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_v) {} }
+    }
+
+    function _onTouchStart(e) {
+        var target = e.target.closest('.cat-mgr-participant-in-cat, .cat-mgr-participant, .cat-mgr-card');
+        if (!target) return;
+        // Não inicia arraste imediatamente: arma um long-press. Rolar (mover o
+        // dedo) antes do tempo cancela — nunca vira arraste nem mesclagem.
+        _lpArmed = false;
+        _lpPending = target;
+        var tch = (e.touches && e.touches[0]) || e;
+        _lpStartX = tch.clientX; _lpStartY = tch.clientY;
+        if (_lpTimer) clearTimeout(_lpTimer);
+        _lpTimer = setTimeout(function() {
+            _lpTimer = null;
+            if (_lpPending) _beginTouchDrag(_lpPending);
+        }, _LP_MS);
     }
 
     function _onTouchMove(e) {
+        // Antes do long-press concluir: se o dedo se mover além da tolerância, é
+        // rolagem → cancela o arme e deixa a tela rolar normalmente.
+        if (!_lpArmed) {
+            if (_lpTimer) {
+                var tm = (e.touches && e.touches[0]) || e;
+                if (Math.abs(tm.clientX - _lpStartX) > _LP_MOVE_TOL ||
+                    Math.abs(tm.clientY - _lpStartY) > _LP_MOVE_TOL) {
+                    clearTimeout(_lpTimer); _lpTimer = null; _lpPending = null;
+                }
+            }
+            return; // permite rolagem nativa
+        }
         if (!_touchClone) return;
         e.preventDefault();
         var touch = e.touches[0];
@@ -1463,7 +1505,16 @@ function _attachCatManagerDragDrop(tId) {
     }
 
     function _onTouchEnd(e) {
-        if (!_touchClone) return;
+        if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+        _lpPending = null;
+        // Sem long-press concluído = foi toque/rolagem, não arraste → nada a fazer.
+        if (!_lpArmed || !_touchClone) {
+            if (_touchClone && _touchClone.parentElement) _touchClone.remove();
+            if (_touchDragEl) _touchDragEl.style.opacity = '1';
+            _touchClone = null; _touchDragEl = null; _dragData = null; _lpArmed = false;
+            return;
+        }
+        _lpArmed = false;
         _catMgrDropScrollY = window.scrollY || window.pageYOffset || 0;
         var touch = e.changedTouches[0];
         var targetEl = _getTouchTarget(touch.clientX, touch.clientY);
@@ -1577,14 +1628,22 @@ function _confirmMergeCategories(tId, sourceCat, targetCat) {
     }
 
     var _dn = window._displayCategoryName || function(c) { return c; };
-    showAlertDialog(
-        _t('cat.mergeDialogTitle'),
-        _t('cat.mergeDialogMsg', {src: _dn(sourceCat), target: _dn(targetCat), merged: _dn(mergedName)}),
-        function() {
-            _executeMerge(tId, sourceCat, targetCat, mergedName);
-        },
-        { type: 'warning', confirmText: _t('btn.merge'), cancelText: _t('btn.cancel'), showCancel: true }
-    );
+    // v2.4.71: confirmação SEMPRE explícita antes de mesclar. Se por algum motivo
+    // o diálogo rico não estiver disponível (cache antigo, erro de carga), cai no
+    // confirm() nativo — uma mesclagem NUNCA pode ocorrer sem um "sim" do usuário.
+    if (typeof showAlertDialog === 'function') {
+        showAlertDialog(
+            _t('cat.mergeDialogTitle'),
+            _t('cat.mergeDialogMsg', {src: _dn(sourceCat), target: _dn(targetCat), merged: _dn(mergedName)}),
+            function() {
+                _executeMerge(tId, sourceCat, targetCat, mergedName);
+            },
+            { type: 'warning', confirmText: _t('btn.merge'), cancelText: _t('btn.cancel'), showCancel: true }
+        );
+    } else {
+        var _ok = window.confirm('Mesclar ' + _dn(sourceCat) + ' com ' + _dn(targetCat) + ' → ' + _dn(mergedName) + '?\n\nTodos os participantes das duas categorias irão para a categoria mesclada. Você pode desfazer depois no botão ⤺ do card.');
+        if (_ok) _executeMerge(tId, sourceCat, targetCat, mergedName);
+    }
 }
 
 // Execute the actual merge
@@ -1683,7 +1742,7 @@ function _executeMerge(tId, sourceCat, targetCat, mergedName) {
     }
 
     if (typeof showNotification === 'function') {
-        showNotification(_t('cat.merged'), _t('cat.mergedMsg', { src: sourceCat, target: targetCat, merged: mergedName }), 'success');
+        showNotification(_t('cat.merged'), _t('cat.mergedMsg', { src: sourceCat, target: targetCat, merged: mergedName }) + ' — toque no ⤺ do card para desfazer.', 'success');
     }
 
     // Re-render the modal after a small delay to ensure data is settled

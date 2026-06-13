@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.71-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Mesclar categorias ficou à prova de acidente.</b> Antes, ao <b>rolar a tela</b> no celular dava pra, sem querer, arrastar uma categoria em cima da outra e <b>mesclá-las na hora</b>. Agora o arraste de categoria só começa com um <b>toque longo proposital</b> (segurar ~meio segundo) — uma rolagem normal nunca mais vira mesclagem. Toda mesclagem <b>sempre pede confirmação</b> antes de acontecer, e logo depois o app lembra que dá pra <b>desfazer no botão ⤺ do card</b> (volta a separar as categorias com os participantes originais).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🏷️ Categorias dos inscritos visíveis pra todos.</b> Na lista de inscritos do torneio, as <b>tags de categoria</b> (gênero, nível e idade — ex.: <b>Fem</b>, <b>C</b>, <b>D</b>, <b>50+</b>, <b>40+</b>) agora aparecem pra <b>todos os inscritos</b>, não só pro organizador. Categoria é informação pública da chave, então qualquer participante consegue ver em que categoria cada um está. Só o organizador continua podendo <b>alterar</b> o nível pelo seletor.</li>' +
       '</ul>' +
