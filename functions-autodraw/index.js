@@ -250,22 +250,33 @@ exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{
   const fcmToken = userData.fcmToken;
   if (!fcmToken) return;
 
+  // ⚠️ CONTRATO DATA-ONLY (NÃO REGREDIR) — ver memória notificacoes-dedup.
+  // A mensagem NÃO pode conter NENHUM payload `notification` (nem top-level,
+  // nem `webpush.notification`). Se contiver, o navegador exibe uma cópia
+  // AUTOMÁTICA *além* da que o `sw.js onBackgroundMessage` já mostra via
+  // showNotification → notificação DUPLICADA (chega 2x). Histórico: corrigido
+  // em v2.1.92, regrediu quando este codebase (functions-autodraw) foi
+  // re-deployado por cima do fix isolado, e voltou a duplicar em produção.
+  // Tudo (title/body/link/type/tournamentId/tag) vai em `data` e o sw.js
+  // renderiza a partir de `payload.data`. `tag` estável (inclui notifId) faz
+  // entregas repetidas do MESMO doc (at-least-once do onCreate) colapsarem.
+  const link = notifData.tournamentId
+    ? `https://scoreplace.app/#tournaments/${notifData.tournamentId}`
+    : 'https://scoreplace.app/#notifications';
+  const tag = 'scoreplace|' + String(notifData.type || '') + '|' +
+    String(notifData.tournamentId || '') + '|' + String(event.params.notifId || '');
   const message = {
     token: fcmToken,
-    notification: {
+    data: {
       title: notifData.tournamentName || 'scoreplace.app',
-      body: notifData.message || 'Você tem uma nova notificação.'
+      body: notifData.message || 'Você tem uma nova notificação.',
+      link: link,
+      type: String(notifData.type || ''),
+      tournamentId: String(notifData.tournamentId || ''),
+      tag: tag
     },
     webpush: {
-      fcmOptions: {
-        link: notifData.tournamentId
-          ? `https://scoreplace.app/#tournaments/${notifData.tournamentId}`
-          : 'https://scoreplace.app/#notifications'
-      },
-      notification: {
-        icon: 'https://scoreplace.app/icons/icon-192.svg',
-        badge: 'https://scoreplace.app/icons/icon-192.svg'
-      }
+      fcmOptions: { link: link }
     }
   };
 
