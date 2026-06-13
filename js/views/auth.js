@@ -5625,7 +5625,7 @@ function setupProfileModal() {
             '<span style="font-size:0.68rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">O e-mail será salvo ao clicar em Salvar.</span>' +
           '</div>' +
           // ── Emails vinculados ──
-          '<div style="margin:0 0 1rem 0;">' +
+          '<div style="margin:0 0 6px 0;">' +
             '<label class="form-label" style="font-size:0.75rem;">🔗 E-mails vinculados</label>' +
             '<div id="profile-linked-emails" style="margin-bottom:6px;display:flex;flex-direction:column;gap:4px;"></div>' +
             '<div style="display:flex;gap:8px;align-items:center;">' +
@@ -5635,13 +5635,13 @@ function setupProfileModal() {
             '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Você receberá um link de verificação nesse e-mail. Clicando, ele será vinculado à sua conta.</span>' +
           '</div>' +
           // v2.4.3: privacidade — ocultar e-mail(s) de outros usuários (default OFF).
-          '<div class="omit-toggle" style="margin:3px 0 6px 0;">' +
+          '<div class="omit-toggle" style="margin:0 0 6px 0;">' +
             (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-email', label: 'Ocultar seu(s) e-mail(s) <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-email\')" title="Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
             '<span id="hint-omit-email" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente.</span>' +
           '</div>' +
           '<form id="form-edit-profile" onsubmit="event.preventDefault(); saveUserProfile()" style="overflow: hidden;">' +
             // Telefone: País + Número
-            '<div class="form-group" style="margin-bottom: 10px;">' +
+            '<div class="form-group" style="margin-bottom: 6px;">' +
               '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
               '<div style="display: flex; gap: 6px;">' +
                 '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 120px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
@@ -5654,7 +5654,7 @@ function setupProfileModal() {
             // Liga: também tira a pessoa do GRUPO automático de WhatsApp (grupo
             // revela o número aos membros). Ela segue avisada por notificação 1:1
             // do app + plataforma/e-mail — número fica privado.
-            '<div class="omit-toggle" style="margin:3px 0 6px 0;">' +
+            '<div class="omit-toggle" style="margin:0 0 6px 0;">' +
               (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar seu telefone <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-phone\')" title="Quando ligado, ninguém vê seu telefone no app e você fica fora dos grupos automáticos de WhatsApp. Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
               '<span id="hint-omit-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app <b>e você fica fora dos grupos automáticos de WhatsApp</b> (assim seu número não aparece pra ninguém). Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual.</span>' +
             '</div>' +
