@@ -1687,10 +1687,16 @@ exports.sendOrgCommunication = onCall(
       }
     });
 
-    // Não notifica o próprio remetente (organizador que está enviando).
-    function _isCaller(r) {
-      return (r.uid && r.uid === callerUid) || (r.email && r.email === callerEmail);
-    }
+    // v2.4.64: o organizador também RECEBE o próprio comunicado (como um inscrito)
+    // pra conferir formatação/entrega e monitorar abertura no painel. Marca o
+    // organizador na lista (ou adiciona, se ele não for inscrito).
+    let orgInList = false;
+    recipients.forEach((r) => {
+      if ((r.uid && r.uid === callerUid) || (r.email && callerEmail && r.email === callerEmail)) {
+        r.isOrganizer = true; orgInList = true;
+      }
+    });
+    if (!orgInList) recipients.push({ uid: callerUid, email: callerEmail, isOrganizer: true });
 
     function _notifLevelAllowed(userLevel, notifLevel) {
       if (!userLevel || userLevel === "todas") return true;
@@ -1734,19 +1740,20 @@ exports.sendOrgCommunication = onCall(
       const slice = recipients.slice(i, i + CHUNK);
       await Promise.all(slice.map(async (r) => {
         try {
-          if (_isCaller(r)) { skipped.push({ uid: r.uid, reason: "self" }); return; }
           const uid = await _resolveUid(r);
           if (!uid) { skipped.push({ uid: "", email: r.email, reason: "no-uid" }); return; }
-          if (uid === callerUid) { skipped.push({ uid, reason: "self" }); return; }
           const profSnap = await db.collection("users").doc(uid).get();
           if (!profSnap.exists) { skipped.push({ uid, reason: "no-user" }); return; }
           const profile = profSnap.data() || {};
+          const isOrganizer = r.isOrganizer === true || uid === callerUid;
           const userLevel = profile.notifyLevel || "todas";
-          if (!_notifLevelAllowed(userLevel, level)) { skipped.push({ uid, reason: "level-filtered" }); return; }
+          // Organizador recebe sempre o próprio comunicado (bypassa filtro de nível).
+          if (!isOrganizer && !_notifLevelAllowed(userLevel, level)) { skipped.push({ uid, reason: "level-filtered" }); return; }
 
           const detail = {
             uid: uid,
             name: profile.displayName || profile.name || r.email || uid,
+            isOrganizer: isOrganizer,
             notifDocId: "",
             platform: false,
             email: false,
@@ -1755,7 +1762,8 @@ exports.sendOrgCommunication = onCall(
           };
 
           // Notificação na plataforma (idempotente via doc ID determinístico).
-          if (profile.notifyPlatform !== false) {
+          // Organizador sempre recebe a cópia in-app (mesmo com notifyPlatform off).
+          if (isOrganizer || profile.notifyPlatform !== false) {
             const notifId = _notifDocId(uid);
             await db.collection("users").doc(uid).collection("notifications").doc(notifId).set({
               type: "organizer_communication",
@@ -1921,7 +1929,7 @@ exports.getCommunicationStats = onCall(
         const waOk = r.whatsapp && phoneKey ? (waDelivered[phoneKey] === true) : false;
         if (waOk) whatsappDelivered++;
         out.push({
-          uid: r.uid, name: r.name || "",
+          uid: r.uid, name: r.name || "", isOrganizer: !!r.isOrganizer,
           platform: !!r.platform, platformOpened: opened,
           email: !!r.email,
           whatsapp: !!r.whatsapp, whatsappDelivered: waOk,

@@ -618,7 +618,7 @@ window._confirmSendComm = async function(tId) {
 
     if (typeof showNotification !== 'undefined') {
         var _n = result ? (result.platform || 0) : 0;
-        showNotification(_t('org.commSentTitle'), _n ? ('Enviado para ' + _n + ' inscrito(s).') : _t('org.commSentMsg'), 'success');
+        showNotification(_t('org.commSentTitle'), _n ? ('Enviado para ' + _n + ' pessoa(s) — você incluído(a) pra monitorar.') : _t('org.commSentMsg'), 'success');
     }
 };
 
@@ -731,8 +731,9 @@ window._openCommunicationDetail = async function(tId, commId) {
             return on ? '<span style="color:#34d399;">' + onTxt + '</span>' : '<span style="color:var(--text-muted);opacity:0.5;">' + offTxt + '</span>';
         }
         var rowsHtml = recips.map(function(r) {
-            return '<tr style="border-top:1px solid var(--border-color,rgba(255,255,255,0.07));">' +
-                '<td style="padding:7px 6px;font-size:0.8rem;color:var(--text-main);">' + window._safeHtml(r.name || '') + '</td>' +
+            var nameHtml = window._safeHtml(r.name || '') + (r.isOrganizer ? ' <span style="font-size:0.66rem;color:#a5b4fc;">(você · organizador)</span>' : '');
+            return '<tr style="border-top:1px solid var(--border-color,rgba(255,255,255,0.07));' + (r.isOrganizer ? 'background:rgba(99,102,241,0.06);' : '') + '">' +
+                '<td style="padding:7px 6px;font-size:0.8rem;color:var(--text-main);">' + nameHtml + '</td>' +
                 '<td style="padding:7px 6px;text-align:center;font-size:0.78rem;">' + (r.platform ? (r.platformOpened ? '<span style="color:#34d399;" title="abriu">✓ abriu</span>' : '<span style="color:var(--text-muted);" title="enviado, não aberto">enviado</span>') : '<span style="opacity:0.3;">—</span>') + '</td>' +
                 '<td style="padding:7px 6px;text-align:center;font-size:0.78rem;">' + chip(r.email, '✓', '—') + '</td>' +
                 '<td style="padding:7px 6px;text-align:center;font-size:0.78rem;">' + (r.whatsapp ? (r.whatsappDelivered ? '<span style="color:#34d399;" title="entregue">✓ entregue</span>' : '<span style="color:#f87171;" title="falhou/pendente">falhou</span>') : '<span style="opacity:0.3;">—</span>') + '</td>' +
