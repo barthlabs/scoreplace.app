@@ -5635,7 +5635,7 @@ function setupProfileModal() {
             '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Você receberá um link de verificação nesse e-mail. Clicando, ele será vinculado à sua conta.</span>' +
           '</div>' +
           // v2.4.3: privacidade — ocultar e-mail(s) de outros usuários (default OFF).
-          '<div style="margin:0 0 1rem 0;padding:8px 10px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:8px;">' +
+          '<div style="margin:6px 0;">' +
             (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-email', label: 'Ocultar seu(s) e-mail(s) <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-email\')" title="Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
             '<span id="hint-omit-email" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente.</span>' +
           '</div>' +
@@ -5654,7 +5654,7 @@ function setupProfileModal() {
             // Liga: também tira a pessoa do GRUPO automático de WhatsApp (grupo
             // revela o número aos membros). Ela segue avisada por notificação 1:1
             // do app + plataforma/e-mail — número fica privado.
-            '<div style="margin:0 0 10px 0;padding:8px 10px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:8px;">' +
+            '<div style="margin:6px 0;">' +
               (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar seu telefone <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-phone\')" title="Quando ligado, ninguém vê seu telefone no app e você fica fora dos grupos automáticos de WhatsApp. Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
               '<span id="hint-omit-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app <b>e você fica fora dos grupos automáticos de WhatsApp</b> (assim seu número não aparece pra ninguém). Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual.</span>' +
             '</div>' +
