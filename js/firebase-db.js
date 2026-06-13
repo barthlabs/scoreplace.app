@@ -296,8 +296,9 @@ window.FirestoreDB = {
       // mas o caminho do cliente (tournaments-enrollment.js) só fecha quando o flag
       // é verdadeiro. Inconsistência: desligar "Fechar quando lotar" não tinha efeito
       // no caminho real de inscrição. Agora os dois lados usam a mesma regra.
+      // Modo Vagas-por-sorteio (enrollmentLimitMode='draw') nunca fecha sozinho.
       var _maxP = parseInt(data.maxParticipants, 10);
-      if (data.autoCloseOnFull && !isNaN(_maxP) && _maxP > 0 && participants.length >= _maxP) {
+      if (data.autoCloseOnFull && data.enrollmentLimitMode !== 'draw' && !isNaN(_maxP) && _maxP > 0 && participants.length >= _maxP) {
         updateData.status = 'closed';
       }
 

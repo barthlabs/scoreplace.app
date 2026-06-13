@@ -2450,6 +2450,9 @@ window.toggleRegistrationStatus = function (tId) {
             // prazo em "Detalhes Avançados" do torneio.
             t.registrationLimit = null;
             delete t._pollSuspended;
+            // Sorteio de Vagas: ao reabrir, limpa a seleção pra um futuro
+            // fechamento re-sortear do zero (a lista de espera é promovida abaixo).
+            if (t.enrollmentLimitMode === 'draw') { t.drawSelectionDone = false; t.waitlistOrder = null; }
             // Auto-close active poll when reopening inscriptions
             if (t.activePollId && t.polls) {
                 for (var _pi = 0; _pi < t.polls.length; _pi++) {
@@ -2517,6 +2520,15 @@ window.toggleRegistrationStatus = function (tId) {
     var arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     if (arr.length < 2) {
         if (typeof showAlertDialog === 'function') showAlertDialog(_t('draw.tooFewTitle'), _t('draw.tooFewCloseMsg'), null, { type: 'warning' });
+        return;
+    }
+
+    // Sorteio de Vagas: inscrição ficou aberta a janela inteira (sem corrida).
+    // Ao encerrar, sorteia a ORDEM — os primeiros N (= targetSlots) entram e o
+    // resto vai pra lista de espera nessa ordem. Pré-etapa antes da chave normal.
+    if (t.enrollmentLimitMode === 'draw' && !t.drawSelectionDone && !_hasDrawNow &&
+        typeof window._showVagasDrawPanel === 'function') {
+        window._showVagasDrawPanel(tId);
         return;
     }
 
@@ -2658,6 +2670,146 @@ window.toggleRegistrationStatus = function (tId) {
             if (typeof showNotification === 'function') showNotification(_t('draw.enrollClosed'), _t('draw.enrollClosedMsg'), 'success');
         });
     });
+};
+
+// ─── Sorteio de Vagas (draw-based slots) ───
+// Painel de confirmação do sorteio de vagas, disparado pelo "Encerrar
+// Inscrições" quando enrollmentLimitMode === 'draw'. Mostra inscritos vs vagas,
+// VIPs garantidos e a política de chamada, e roda o sorteio em _runVagasDraw.
+window._showVagasDrawPanel = function (tId) {
+    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    if (!t) return;
+    var slots = parseInt(t.targetSlots) || 0;
+    if (slots <= 0) {
+        if (typeof showAlertDialog === 'function') showAlertDialog('Defina o número de vagas', 'Este torneio usa Sorteio de Vagas mas o número de vagas não foi definido. Abra Editar → Modelo de inscrição e informe quantas vagas (duplas/pessoas).', null, { type: 'warning' });
+        return;
+    }
+    var diag = (typeof window._diagnoseAll === 'function') ? window._diagnoseAll(t) : { effectiveTeams: 0, teamSize: 1 };
+    var entities = diag.effectiveTeams || 0;
+    var unit = (diag.teamSize > 1) ? 'duplas/times' : 'inscritos';
+    // VIPs garantidos (entidades)
+    var _vips = t.vips || {};
+    var pArr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
+    var vipCount = 0;
+    pArr.forEach(function(entry) {
+        var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
+        var members = nm.indexOf('/') !== -1 ? nm.split('/').map(function(n){ return n.trim(); }) : [nm];
+        if (members.some(function(m){ return !!_vips[m]; }) || _vips[nm]) vipCount++;
+    });
+    var waitlistPreview = Math.max(0, entities - slots);
+    var allFit = entities <= slots;
+    var policyLabel = (t.callPolicy === 'locked') ? '🔒 Ordem do sorteio (travada)' : '🏃 Quem chegar primeiro (presença)';
+
+    var existing = document.getElementById('vagas-draw-panel');
+    if (existing) existing.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'vagas-draw-panel';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10035;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,0.7);overflow-y:auto;';
+    var _row = function(label, val, color) {
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;margin-bottom:6px;">' +
+            '<span style="font-size:0.82rem;color:var(--text-muted);">' + label + '</span>' +
+            '<span style="font-size:1.05rem;font-weight:800;color:' + (color || 'var(--text-color)') + ';">' + val + '</span></div>';
+    };
+    var bodyMsg = allFit
+        ? '<div style="font-size:0.82rem;color:#34d399;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:8px 12px;margin-bottom:12px;">Há ' + entities + ' ' + unit + ' inscritos e ' + slots + ' vagas — <b>todos entram</b>. Nada vai pra lista de espera.</div>'
+        : '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">O sorteio define uma ordem aleatória. As primeiras <b>' + slots + '</b> ' + unit + ' entram; as outras <b>' + waitlistPreview + '</b> vão pra lista de espera nessa ordem.' + (vipCount > 0 ? ' VIPs entram garantidos.' : '') + '</div>';
+    overlay.innerHTML =
+        '<div style="background:var(--bg-card,#161b2e);border:1px solid rgba(167,139,250,0.3);border-radius:16px;max-width:440px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+            '<div style="font-size:1.2rem;font-weight:800;margin-bottom:4px;">🎲 Sorteio de Vagas</div>' +
+            '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;">' + window._safeHtml(t.name || '') + '</div>' +
+            _row('Inscritos', entities + ' ' + unit, '#60a5fa') +
+            _row('Vagas', String(slots), '#a78bfa') +
+            (vipCount > 0 ? _row('VIPs garantidos', String(vipCount), '#fbbf24') : '') +
+            (allFit ? '' : _row('Lista de espera', String(waitlistPreview), '#f59e0b')) +
+            _row('Chamada da fila', policyLabel, 'var(--text-color)') +
+            bodyMsg +
+            '<div style="display:flex;gap:10px;margin-top:6px;">' +
+                '<button type="button" onclick="document.getElementById(\'vagas-draw-panel\').remove();document.body.style.overflow=\'\';" class="btn btn-secondary" style="flex:1;">Cancelar</button>' +
+                '<button type="button" onclick="window._runVagasDraw(\'' + String(tId).replace(/'/g, "\\'") + '\')" class="btn btn-primary" style="flex:2;">' + (allFit ? 'Encerrar e sortear chave' : '🎲 Sortear vagas') + '</button>' +
+            '</div>' +
+        '</div>';
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+};
+
+// Executa o sorteio de vagas: embaralha os não-VIPs, mantém VIPs garantidos,
+// corta em targetSlots (em jogadores, preservando times), e manda o resto pra
+// lista de espera na ordem sorteada (t.waitlistOrder). Generaliza o ramo
+// 'standby' de _confirmP2Resolution, mas com corte definido pelo organizador.
+window._runVagasDraw = function (tId) {
+    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    if (!t) return;
+    var slots = parseInt(t.targetSlots) || 0;
+    if (slots <= 0) return;
+    var info = (typeof window._diagnoseAll === 'function') ? window._diagnoseAll(t) : { teamSize: parseInt(t.teamSize) || 1 };
+    var p = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
+    // Snapshot pré-sorteio (permite refazer o sorteio enquanto não houver chave)
+    t.preDrawEnrollees = p.slice();
+
+    var _vips = t.vips || {};
+    var vipEntries = [];
+    var nonVipEntries = [];
+    p.forEach(function(entry) {
+        var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
+        var members = nm.indexOf('/') !== -1 ? nm.split('/').map(function(n){ return n.trim(); }) : [nm];
+        var isVip = members.some(function(m){ return !!_vips[m]; }) || !!_vips[nm];
+        if (isVip) vipEntries.push(entry); else nonVipEntries.push(entry);
+    });
+
+    // Embaralha SEMPRE (este modo é sempre sorteio aleatório) — Fisher-Yates.
+    var pool = nonVipEntries.slice();
+    for (var i = pool.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }
+
+    // Corte em jogadores (indivíduo=1, time pré-formado=teamSize) → mantém times
+    // completos sem BYE. Igual à contabilidade do ramo standby existente.
+    var _ts = info.teamSize || 1;
+    var _playersOf = function(e) { var nm = typeof e === 'string' ? e : (e.displayName || e.name || ''); return nm.indexOf(' / ') !== -1 ? _ts : 1; };
+    var _targetPlayers = slots * _ts;
+    var _used = vipEntries.reduce(function(s, e) { return s + _playersOf(e); }, 0);
+    var kept = [];
+    var overflow = [];
+    pool.forEach(function(e) { var s = _playersOf(e); if (_used + s <= _targetPlayers) { kept.push(e); _used += s; } else { overflow.push(e); } });
+
+    // Persiste a ordem sorteada da sobra (nomes canônicos + índice por entrada).
+    var order = [];
+    overflow.forEach(function(e, idx) {
+        if (e && typeof e === 'object') e.drawOrder = idx;
+        var nm = (typeof window._pName === 'function') ? window._pName(e) : (typeof e === 'string' ? e : (e.displayName || e.name || ''));
+        order.push(nm);
+    });
+
+    t.participants = vipEntries.concat(kept);
+    t.standbyParticipants = (t.standbyParticipants || []).concat(overflow);
+    t.waitlistOrder = order;
+    t.standbyPick = 'random';
+    t.standbyMode = (_ts > 1) ? 'teams' : 'individual';
+    t.drawSelectionDone = true;
+    t.status = 'closed';
+
+    // VIPs > vagas: todos os VIPs ficam (garantidos), nenhum não-VIP entra.
+    if (kept.length === 0 && vipEntries.length > slots && typeof showNotification === 'function') {
+        showNotification('⚠️ VIPs excedem as vagas', vipEntries.length + ' VIP(s) para ' + slots + ' vaga(s) — todos os VIPs foram mantidos; a chave terá ' + t.participants.length + ' participantes.', 'warning');
+    }
+
+    if (window.AppStore && window.AppStore.logAction) {
+        window.AppStore.logAction(tId, 'Sorteio de vagas: ' + t.participants.length + ' selecionado(s), ' + overflow.length + ' na lista de espera (' + (t.callPolicy === 'locked' ? 'ordem travada' : 'por presença') + ')');
+    }
+
+    if (document.getElementById('vagas-draw-panel')) document.getElementById('vagas-draw-panel').remove();
+    document.body.style.overflow = '';
+
+    // Hand-off pro fluxo de sorteio de chave existente (igual ao botão Sortear):
+    // resolve grupos/Liga/eliminatória e o painel de resolução pra N≠potência de 2.
+    var _after = function() {
+        if (typeof window._handleSortearClick === 'function') { window._handleSortearClick(tId, false); }
+        else if (typeof window.showUnifiedResolutionPanel === 'function') { window.showUnifiedResolutionPanel(tId); }
+    };
+    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t).then(_after).catch(function(err) { window._error && window._error('[_runVagasDraw] save error:', err); _after(); });
+    } else {
+        try { window.AppStore.sync(); } catch (e) {}
+        _after();
+    }
 };
 
 window._handleClosureOption = function (tId, option) {

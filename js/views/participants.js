@@ -59,9 +59,16 @@ window._processWoSubstitutions = function(tId) {
   const standbyPool = _sp.slice();
   _wl.forEach(w => { const wn = _getName(w); if (wn && !_spNames.has(wn)) standbyPool.push(w); });
 
-  // Build presentList (FIFO by check-in timestamp). Tolerant a TIMESTAMP (number)
-  // OU TRUE (boolean): _toggleCheckIn seta Date.now() (number truthy), handlers
-  // de sub setam true (boolean). Ambos contam.
+  // Política de chamada da fila (Sorteio de Vagas): 'present' (padrão/legado) =
+  // FIFO por check-in; 'locked' = ordem travada do sorteio (t.waitlistOrder),
+  // entrando o próximo PRESENTE nessa ordem (ausente é pulado, não reordena).
+  const _policy = t.callPolicy || 'present';
+  const _ord = {};
+  if (_policy === 'locked' && Array.isArray(t.waitlistOrder)) {
+    t.waitlistOrder.forEach((nm, idx) => { _ord[nm] = idx; });
+  }
+  // Build presentList. Tolerant a TIMESTAMP (number) OU TRUE (boolean):
+  // _toggleCheckIn seta Date.now() (number truthy), handlers de sub setam true.
   const presentList = standbyPool
     .map(p => {
       const name = _getName(p);
@@ -69,8 +76,17 @@ window._processWoSubstitutions = function(tId) {
       const ts = typeof ci === 'number' ? ci : (ci ? 1 : 0);
       return { p, name, ts };
     })
-    .filter(o => o.ts > 0)
-    .sort((a, b) => a.ts - b.ts);
+    .filter(o => o.ts > 0 && !(_policy === 'locked' && t.absent && t.absent[o.name]));
+  if (_policy === 'locked') {
+    const _ordOf = (o) => {
+      if (_ord[o.name] !== undefined) return _ord[o.name];
+      if (o.p && typeof o.p === 'object' && typeof o.p.drawOrder === 'number') return o.p.drawOrder;
+      return 9999;
+    };
+    presentList.sort((a, b) => _ordOf(a) - _ordOf(b));
+  } else {
+    presentList.sort((a, b) => a.ts - b.ts);
+  }
 
   if (presentList.length === 0) {
     try {

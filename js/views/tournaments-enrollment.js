@@ -965,7 +965,8 @@ window.addTeamFunction = function (tId) {
             t.teamOrigins[teamString] = 'formada';
 
             window.FirestoreDB.saveTournament(t);
-            if (t.autoCloseOnFull && t.maxParticipants && arr.length >= parseInt(t.maxParticipants)) {
+            // No modo Vagas-por-sorteio a inscrição NUNCA fecha sozinha (sem corrida).
+            if (t.autoCloseOnFull && t.maxParticipants && t.enrollmentLimitMode !== 'draw' && arr.length >= parseInt(t.maxParticipants)) {
                 t.status = 'closed'; window.FirestoreDB.saveTournament(t);
                 if (typeof showNotification !== 'undefined') showNotification(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');
             }

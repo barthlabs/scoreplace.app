@@ -484,15 +484,46 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   const ci = t.checkedIn || {};
   const ab = t.absent || {};
 
-  // Sort waitlist: checked-in first (by check-in timestamp ascending = first arrived), then unchecked
-  const sorted = _merged.slice().sort((a, b) => {
-    const na = getName(a), nb = getName(b);
-    const tsa = ci[na], tsb = ci[nb];
-    if (tsa && tsb) return tsa - tsb; // both checked-in: earlier timestamp first
-    if (tsa) return -1;               // a checked in, b didn't → a first
-    if (tsb) return 1;                // b checked in, a didn't → b first
-    return 0;                         // neither checked in: preserve insertion order
-  });
+  // Política de chamada da fila (Sorteio de Vagas): 'present' (padrão/legado) =
+  // quem chega primeiro; 'locked' = ordem travada do sorteio (t.waitlistOrder).
+  const _policy = t.callPolicy || 'present';
+  const _ord = {};
+  if (_policy === 'locked' && Array.isArray(t.waitlistOrder)) {
+    t.waitlistOrder.forEach((nm, idx) => { _ord[nm] = idx; });
+  }
+  const _orderOf = (p) => {
+    const nm = getName(p);
+    if (_ord[nm] !== undefined) return _ord[nm];
+    if (p && typeof p === 'object' && typeof p.drawOrder === 'number') return p.drawOrder;
+    return 9999;
+  };
+
+  let sorted;
+  if (_policy === 'locked') {
+    // Ordem travada: posições fixas pela ordem sorteada — não reordena por check-in.
+    sorted = _merged.slice().sort((a, b) => _orderOf(a) - _orderOf(b));
+  } else {
+    // checked-in first (by check-in timestamp ascending = first arrived), then unchecked
+    sorted = _merged.slice().sort((a, b) => {
+      const na = getName(a), nb = getName(b);
+      const tsa = ci[na], tsb = ci[nb];
+      if (tsa && tsb) return tsa - tsb; // both checked-in: earlier timestamp first
+      if (tsa) return -1;               // a checked in, b didn't → a first
+      if (tsb) return 1;                // b checked in, a didn't → b first
+      return 0;                         // neither checked in: preserve insertion order
+    });
+  }
+
+  // "Próximo a entrar": no modo travado é o primeiro presente (não-ausente) na
+  // ordem sorteada; no modo presença é simplesmente o topo (índice 0).
+  let nextIdx = 0;
+  if (_policy === 'locked') {
+    nextIdx = -1;
+    for (let _k = 0; _k < sorted.length; _k++) {
+      const _nm = getName(sorted[_k]);
+      if (ci[_nm] && !ab[_nm]) { nextIdx = _k; break; }
+    }
+  }
 
   const listItems = sorted.map((p, i) => {
     const name = getName(p);
@@ -501,12 +532,13 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     const isAb = !!ab[name];
     const statusLabel = mc ? _t('bracket.checkedIn') : _t('bracket.notCheckedIn');
     const statusColor = mc ? '#4ade80' : '#64748b';
-    const isFirst = i === 0;
+    const isNext = (i === nextIdx);
+    const dimAbsent = (_policy === 'locked' && isAb); // travado: ausente mantém posição, mas esmaecido
 
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)'};border-radius:10px;border-left:4px solid ${isFirst ? '#f59e0b' : 'rgba(255,255,255,0.08)'};">
-        <div style="width:26px;height:26px;border-radius:50%;background:${isFirst ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${isFirst ? '#000' : '#94a3b8'};flex-shrink:0;">${i + 1}</div>
-        <span style="font-weight:600;font-size:0.88rem;color:${isFirst ? '#fbbf24' : '#94a3b8'};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}</span>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)'};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}">
+        <div style="width:26px;height:26px;border-radius:50%;background:${isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${isNext ? '#000' : '#94a3b8'};flex-shrink:0;">${i + 1}</div>
+        <span style="font-weight:600;font-size:0.88rem;color:${isNext ? '#fbbf24' : '#94a3b8'};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
         <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}');"`}><span class="toggle-slider"></span></label>
         <span style="font-size:0.65rem;font-weight:700;color:${statusColor};white-space:nowrap;">${statusLabel}</span>
         ${window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${_tIdSafe}', '${safeName}')`, !isAb, { label: isAb ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem' })}
@@ -520,6 +552,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
         <h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Lista de Espera</h3>
         <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${sorted.length}</span>
       </div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${listItems}
       </div>

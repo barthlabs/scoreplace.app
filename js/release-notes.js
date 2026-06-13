@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.66-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.67-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎲 Sorteio de Vagas — inscrição sem corrida.</b> Novo modelo de inscrição na criação do torneio. Em vez de um <b>limite que enche por ordem de chegada</b> (e vira corrida — quem clica primeiro leva), você deixa a <b>inscrição aberta o tempo todo</b> e define um <b>número de vagas</b>. Ao <b>encerrar as inscrições</b>, o app faz um <b>sorteio</b>: os primeiros sorteados ocupam as vagas e <b>os demais vão para a lista de espera na ordem sorteada</b> — assim mais gente tem tempo de se inscrever e o sorteio decide de forma justa. Funciona pra <b>individual, duplas ou times</b>. Os <b>VIPs entram garantidos</b> (o organizador pode reservar vaga pra si ou pra qualquer um). E você escolhe como a fila chama: <b>"quem chegar primeiro"</b> (por presença/check-in) ou <b>"ordem do sorteio travada"</b> (entra o próximo presente na ordem). Os torneios já existentes continuam exatamente como estavam — o modelo novo é opcional.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.66-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Convidado do W.O. já aparece na chave da Liga.</b> Enquanto um substituto convidado ainda não aceitou, o nome dele agora surge <b>em amarelo no lugar do jogador que levou W.O.</b>, com a tag <b>"aguardando resposta"</b> direto no card do jogo. O aviso de convite não aparece mais duplicado — fica só uma vez, no controle do grupo. E o organizador pode <b>"Reverter W.O." também enquanto aguarda a resposta</b> (antes do jogo começar).</li>' +
       '</ul>' +

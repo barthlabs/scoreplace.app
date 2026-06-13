@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.66-beta';
+window.SCOREPLACE_VERSION = '2.4.67-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -420,6 +420,7 @@ window._softRefreshView = function() {
                   document.getElementById('unified-resolution-panel') ||
                   document.getElementById('groups-config-panel') ||
                   document.getElementById('remainder-resolution-panel') ||
+                  document.getElementById('vagas-draw-panel') ||
                   document.getElementById('removal-subchoice-panel') ||
                   document.getElementById('simulation-panel') ||
                   document.getElementById('incomplete-teams-panel') ||

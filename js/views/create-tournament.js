@@ -554,9 +554,45 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
+              <!-- Modelo de inscrição: corrida (cap) vs sorteio de vagas (draw) -->
+              <div class="form-group mb-3">
+                <label class="form-label">Modelo de inscrição</label>
+                <input type="hidden" id="enrollment-limit-mode" value="cap">
+                <div style="display:flex;flex-direction:column;gap:8px;" id="enroll-limit-mode-buttons">
+                  <div class="toggle-row" id="elm-row-cap" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(96,165,250,0.25);background:rgba(96,165,250,0.08);">
+                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏁</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Limite com corrida</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">As vagas enchem por ordem de inscrição — pode gerar corrida.</div></div></div>
+                    <label class="toggle-switch" style="--toggle-on-bg:#60a5fa;--toggle-on-glow:rgba(96,165,250,0.3);--toggle-on-border:#60a5fa;"><input type="checkbox" id="elm-toggle-cap" aria-label="Limite com corrida" checked onchange="window._syncEnrollLimitMode('cap')"><span class="toggle-slider"></span></label>
+                  </div>
+                  <div class="toggle-row" id="elm-row-draw" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🎲</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Vagas com sorteio</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">Inscrição aberta sem corrida; ao encerrar, um sorteio define quem entra e a lista de espera.</div></div></div>
+                    <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="elm-toggle-draw" aria-label="Vagas com sorteio" onchange="window._syncEnrollLimitMode('draw')"><span class="toggle-slider"></span></label>
+                  </div>
+                </div>
+                <!-- Config do modo Vagas (oculto salvo no modo draw) -->
+                <div id="draw-slots-container" style="display:none;margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
+                  <label class="form-label" style="margin-bottom:4px;">Número de vagas</label>
+                  <input type="number" class="form-control" id="tourn-target-slots" min="1" placeholder="Ex.: 24" oninput="window._recalcDuration()">
+                  <small class="text-muted" style="display:block;margin-top:4px;" id="target-slots-hint">vagas = duplas/times</small>
+                  <div style="margin-top:10px;">
+                    <label class="form-label" style="margin-bottom:6px;">Chamada da lista de espera</label>
+                    <input type="hidden" id="call-policy" value="present">
+                    <div style="display:flex;flex-direction:column;gap:8px;" id="call-policy-buttons">
+                      <div class="toggle-row" id="cp-row-present" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.08);">
+                        <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏃</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.84rem;">Quem chegar primeiro</span><div class="toggle-desc" style="font-size:0.7rem;margin-top:2px;">O próximo da fila é quem fizer check-in primeiro (presença).</div></div></div>
+                        <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="cp-toggle-present" aria-label="Chamada por presença" checked onchange="window._syncCallPolicy('present')"><span class="toggle-slider"></span></label>
+                      </div>
+                      <div class="toggle-row" id="cp-row-locked" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                        <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🔒</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.84rem;">Ordem do sorteio (travada)</span><div class="toggle-desc" style="font-size:0.7rem;margin-top:2px;">A fila segue a ordem sorteada; entra o próximo presente nela.</div></div></div>
+                        <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="cp-toggle-locked" aria-label="Ordem travada do sorteio" onchange="window._syncCallPolicy('locked')"><span class="toggle-slider"></span></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Inscrição e Limite -->
               <div class="d-flex gap-2 mb-3">
-                <div class="form-group full-width">
+                <div class="form-group full-width" id="cap-max-container">
                   <label class="form-label">${_t('create.maxParticipants')}</label>
                   <input type="number" class="form-control" id="tourn-max-participants" min="2" placeholder="${_t('create.noLimit')}" oninput="window._updateAutoCloseVisibility(); window._recalcDuration()">
                 </div>
@@ -1339,6 +1375,70 @@ function setupCreateTournamentModal() {
       if (closed.checked) key = 'create.lateEnrollExpandDisabledDesc';
       else key = expand.checked ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc';
       expandDesc.textContent = _t(key);
+    }
+  };
+
+  // Sorteio de Vagas: alterna entre o modelo "corrida" (cap, atual) e "vagas
+  // com sorteio" (draw). No modo draw a inscrição fica aberta a janela inteira
+  // e o organizador define um número de vagas; o sorteio roda no fechamento.
+  window._syncEnrollLimitMode = function(source) {
+    var capT = document.getElementById('elm-toggle-cap');
+    var drawT = document.getElementById('elm-toggle-draw');
+    if (!capT || !drawT) return;
+    // Mutual exclusion (radio-like). Se source ausente (re-render), preserva.
+    if (source === 'cap' && capT.checked) drawT.checked = false;
+    else if (source === 'draw' && drawT.checked) capT.checked = false;
+    if (!capT.checked && !drawT.checked) capT.checked = true; // nunca os dois off
+    var mode = drawT.checked ? 'draw' : 'cap';
+    var hidden = document.getElementById('enrollment-limit-mode');
+    if (hidden) hidden.value = mode;
+    // Visual das rows
+    var capRow = document.getElementById('elm-row-cap');
+    if (capRow) {
+      capRow.style.border = capT.checked ? '1px solid rgba(96,165,250,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      capRow.style.background = capT.checked ? 'rgba(96,165,250,0.08)' : 'rgba(255,255,255,0.03)';
+    }
+    var drawRow = document.getElementById('elm-row-draw');
+    if (drawRow) {
+      drawRow.style.border = drawT.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      drawRow.style.background = drawT.checked ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.03)';
+    }
+    // Mostra/esconde o bloco de vagas e o limite por corrida
+    var slotsBox = document.getElementById('draw-slots-container');
+    if (slotsBox) slotsBox.style.display = (mode === 'draw') ? 'block' : 'none';
+    var capBox = document.getElementById('cap-max-container');
+    if (capBox) capBox.style.display = (mode === 'draw') ? 'none' : 'block';
+    // Auto-close (corrida) é incompatível com vagas-por-sorteio
+    window._updateAutoCloseVisibility();
+    // Atualiza a unidade da vaga conforme o modo de inscrição
+    var hint = document.getElementById('target-slots-hint');
+    if (hint) {
+      var enr = (document.getElementById('select-inscricao') || {}).value || 'individual';
+      hint.textContent = (enr === 'individual') ? 'vagas = pessoas' : 'vagas = duplas/times';
+    }
+    window._recalcDuration();
+  };
+
+  // Política de chamada da lista de espera (só no modo Vagas).
+  window._syncCallPolicy = function(source) {
+    var pres = document.getElementById('cp-toggle-present');
+    var lock = document.getElementById('cp-toggle-locked');
+    if (!pres || !lock) return;
+    if (source === 'present' && pres.checked) lock.checked = false;
+    else if (source === 'locked' && lock.checked) pres.checked = false;
+    if (!pres.checked && !lock.checked) pres.checked = true;
+    var mode = lock.checked ? 'locked' : 'present';
+    var hidden = document.getElementById('call-policy');
+    if (hidden) hidden.value = mode;
+    var presRow = document.getElementById('cp-row-present');
+    if (presRow) {
+      presRow.style.border = pres.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      presRow.style.background = pres.checked ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.03)';
+    }
+    var lockRow = document.getElementById('cp-row-locked');
+    if (lockRow) {
+      lockRow.style.border = lock.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      lockRow.style.background = lock.checked ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.03)';
     }
   };
 
@@ -2887,6 +2987,9 @@ function setupCreateTournamentModal() {
     const maxEl = document.getElementById('tourn-max-participants');
     const container = document.getElementById('auto-close-container');
     if (!fmt || !maxEl || !container) return;
+    // Modo Vagas-por-sorteio é incompatível com encerrar-ao-lotar (não há corrida).
+    var _elm = (document.getElementById('enrollment-limit-mode') || {}).value || 'cap';
+    if (_elm === 'draw') { container.style.display = 'none'; return; }
     const isElim = fmt.value === 'elim_simples' || fmt.value === 'elim_dupla';
     const maxVal = parseInt(maxEl.value);
     const isPow2 = maxVal > 0 && (maxVal & (maxVal - 1)) === 0;
@@ -2929,7 +3032,15 @@ function setupCreateTournamentModal() {
     const warmup = parseInt(document.getElementById('tourn-warmup-time').value) || 0;
     const gameDur = parseInt(document.getElementById('tourn-game-duration').value) || 0;
     const courts = parseInt(document.getElementById('tourn-court-count').value) || 1;
-    const maxParts = parseInt(document.getElementById('tourn-max-participants').value) || 0;
+    // No modo Vagas-por-sorteio o número de participantes vem de targetSlots
+    // (em unidade de entidade). Converte pra pessoas via teamSize p/ o cálculo.
+    const _elmDur = (document.getElementById('enrollment-limit-mode') || {}).value || 'cap';
+    let maxParts = parseInt(document.getElementById('tourn-max-participants').value) || 0;
+    if (_elmDur === 'draw') {
+      const _slots = parseInt((document.getElementById('tourn-target-slots') || {}).value) || 0;
+      const _tsDur = parseInt((document.getElementById('tourn-team-size') || {}).value) || 1;
+      maxParts = _slots * _tsDur;
+    }
     const fmt = document.getElementById('select-formato').value;
     const startDateStr = document.getElementById('tourn-start-date').value || '';
     const startTimeStr = document.getElementById('tourn-start-time').value || '';
@@ -3537,6 +3648,21 @@ function setupCreateTournamentModal() {
     });
     document.getElementById('tourn-max-participants').value = t.maxParticipants || '';
     document.getElementById('tourn-auto-close').checked = !!t.autoCloseOnFull;
+    // Sorteio de Vagas (read defensivo: ausente ⇒ 'cap', idêntico ao legado)
+    var _elmEdit = t.enrollmentLimitMode || 'cap';
+    var _capT = document.getElementById('elm-toggle-cap');
+    var _drawT = document.getElementById('elm-toggle-draw');
+    if (_capT) _capT.checked = _elmEdit === 'cap';
+    if (_drawT) _drawT.checked = _elmEdit === 'draw';
+    var _slotsEl = document.getElementById('tourn-target-slots');
+    if (_slotsEl) _slotsEl.value = t.targetSlots || '';
+    var _cpEdit = t.callPolicy || 'present';
+    var _cpPres = document.getElementById('cp-toggle-present');
+    var _cpLock = document.getElementById('cp-toggle-locked');
+    if (_cpPres) _cpPres.checked = _cpEdit === 'present';
+    if (_cpLock) _cpLock.checked = _cpEdit === 'locked';
+    if (typeof window._syncCallPolicy === 'function') window._syncCallPolicy();
+    if (typeof window._syncEnrollLimitMode === 'function') window._syncEnrollLimitMode();
     window._setVisibility(t.isPublic !== false ? 'public' : 'private');
     // W.O. Scope (single toggle: ON=individual, OFF=team)
     var _woScope = t.woScope || 'individual';
@@ -4122,6 +4248,11 @@ function setupCreateTournamentModal() {
         const teamSizeVal = parseInt(document.getElementById('tourn-team-size').value) || 1;
         const maxPartsVal = parseInt(document.getElementById('tourn-max-participants').value) || null;
         const autoCloseVal = document.getElementById('tourn-auto-close').checked;
+        // Sorteio de Vagas: modelo de inscrição + vagas + chamada da fila
+        const enrollLimitModeVal = (document.getElementById('enrollment-limit-mode') || {}).value || 'cap';
+        const targetSlotsVal = parseInt((document.getElementById('tourn-target-slots') || {}).value) || null;
+        const callPolicyVal = (document.getElementById('call-policy') || {}).value || 'present';
+        const isDrawMode = enrollLimitModeVal === 'draw';
         var _reRaw = document.getElementById('select-result-entry').value || 'organizer';
         var resultEntryVal;
         try { resultEntryVal = JSON.parse(_reRaw); } catch(e) { resultEntryVal = _reRaw; }
@@ -4184,8 +4315,13 @@ function setupCreateTournamentModal() {
           teamSize: teamSizeVal,
           gameTypes: (document.getElementById('tourn-game-types') || {}).value || 'duplas',
           thirdPlace: true,
-          maxParticipants: maxPartsVal,
-          autoCloseOnFull: autoCloseVal,
+          // No modo Vagas-por-sorteio nunca há corrida: zera limite/auto-close
+          // pra que os gatilhos de fechamento automático fiquem inertes.
+          maxParticipants: isDrawMode ? null : maxPartsVal,
+          autoCloseOnFull: isDrawMode ? false : autoCloseVal,
+          enrollmentLimitMode: enrollLimitModeVal,
+          targetSlots: isDrawMode ? targetSlotsVal : null,
+          callPolicy: isDrawMode ? callPolicyVal : 'present',
           resultEntry: resultEntryVal,
           woScope: (document.getElementById('wo-scope') || {}).value || 'individual',
           lateEnrollment: (document.getElementById('late-enrollment') || {}).value || 'closed',
@@ -5456,6 +5592,18 @@ window._prefillFromTemplate = function(tpl) {
   _setV('select-result-entry', tpl.resultEntry);
   if (typeof window._syncResultEntryUI === 'function') { try { window._syncResultEntryUI(); } catch (e) {} }
   if (tpl.autoCloseOnFull !== undefined) _setC('tourn-auto-close', tpl.autoCloseOnFull);
+  // Sorteio de Vagas: modelo de inscrição + vagas + chamada da fila
+  if (tpl.enrollmentLimitMode) {
+    var _elmTpl = tpl.enrollmentLimitMode;
+    _setC('elm-toggle-cap', _elmTpl === 'cap');
+    _setC('elm-toggle-draw', _elmTpl === 'draw');
+    _setV('tourn-target-slots', tpl.targetSlots);
+    var _cpTpl = tpl.callPolicy || 'present';
+    _setC('cp-toggle-present', _cpTpl === 'present');
+    _setC('cp-toggle-locked', _cpTpl === 'locked');
+    if (typeof window._syncCallPolicy === 'function') { try { window._syncCallPolicy(); } catch (e) {} }
+    if (typeof window._syncEnrollLimitMode === 'function') { try { window._syncEnrollLimitMode(); } catch (e) {} }
+  }
   // Tempos
   _setV('tourn-call-time', tpl.callTime);
   _setV('tourn-warmup-time', tpl.warmupTime);
@@ -5798,6 +5946,9 @@ window._saveCurrentFormAsTemplate = function() {
       gameTypes: get('tourn-game-types') || 'duplas',
       maxParticipants: parseInt(get('tourn-max-participants')) || '',
       autoCloseOnFull: getChecked('tourn-auto-close'),
+      enrollmentLimitMode: get('enrollment-limit-mode') || 'cap',
+      targetSlots: parseInt(get('tourn-target-slots')) || '',
+      callPolicy: get('call-policy') || 'present',
       resultEntry: get('select-result-entry') || 'organizer',
       woScope: get('wo-scope') || 'individual',
       lateEnrollment: get('late-enrollment') || 'closed',
