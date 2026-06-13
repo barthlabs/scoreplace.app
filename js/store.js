@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.52-beta';
+window.SCOREPLACE_VERSION = '2.4.53-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -14,11 +14,11 @@ window.SCOREPLACE_PLATFORM = window.SCOREPLACE_PLATFORM || 'web';
 // Identidades de teste/dev — recebem flags `test:true` antes de todo mundo.
 // Aceita e-mail (minúsculo) OU uid. Adicione aqui os UIDs dos 4 usuários de teste.
 window.SP_TEST_IDENTITIES = [
-  // Os 4 usuários de teste (email + uid — cobre login por e-mail OU por telefone).
-  'rstbarth@gmail.com',          'B17n7JCXYOfqahlcLZ0fKxGGyUu1', // Rodrigo Barth
-  'nelsonterrabarth@gmail.com',  '9r1I1brrTecENuQKXYWpAqTmBbQ2', // Nelson Barth
-  'kellyoliveirabarth@gmail.com','OkQJOEkLMchgKYFZb8nLJm7nLPH2', // Kelly Barth
-  'zquintas@hotmail.com',        'fuQ4MbHS03eI1G4yCk4WoDwKLTD2'  // Zilda Quintas
+  // SÓ contas de teste DO DONO (recebem recursos test:true em desenvolvimento).
+  // NUNCA incluir usuários reais aqui (Kelly/Zilda eram reais — removidas).
+  // Falta adicionar "Rodrigo Teste" (aguardando email/uid).
+  'rstbarth@gmail.com',         'B17n7JCXYOfqahlcLZ0fKxGGyUu1', // Rodrigo Barth
+  'nelsonterrabarth@gmail.com', '9r1I1brrTecENuQKXYWpAqTmBbQ2'  // Nelson
 ];
 
 // Catálogo de flags. Cada chave controla se uma mudança arriscada está LIGADA
