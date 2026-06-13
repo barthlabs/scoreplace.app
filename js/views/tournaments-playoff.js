@@ -500,10 +500,17 @@
         '<label class="form-label" style="font-size:0.7rem;">' + (_t('playoff.eventDate') || 'Data') + '</label>' +
         '<input type="datetime-local" class="form-control" id="po-event-date" value="' + _esc((t.playoffEvent && t.playoffEvent.date) || '') + '" style="padding:6px 8px;font-size:0.85rem;box-sizing:border-box;min-width:0;width:100%;">' +
       '</div>' +
-      '<div class="form-group" style="margin:0;">' +
+      '<div class="form-group" style="margin:0 0 0.6rem;">' +
         '<label class="form-label" style="font-size:0.7rem;">' + (_t('playoff.eventVenue') || 'Local') + '</label>' +
         '<input type="text" class="form-control" id="po-event-venue" value="' + _esc((t.playoffEvent && t.playoffEvent.venue) || t.venue || '') + '" placeholder="' + (_t('playoff.eventVenuePh') || 'Onde será') + '" style="padding:6px 8px;font-size:0.85rem;box-sizing:border-box;min-width:0;width:100%;">' +
       '</div>' +
+      ((window._flag && window._flag('playoff-time-estimate')) ?
+        '<div class="form-group" style="margin:0;">' +
+          '<label class="form-label" style="font-size:0.7rem;">' + (_t('playoff.eventCourts') || 'Quadras disponíveis na fase final') + '</label>' +
+          '<input type="number" min="1" class="form-control" id="po-event-courts" value="' + _esc(String((t.playoffEvent && t.playoffEvent.courts) || t.courtCount || 1)) + '" oninput="window._onPoCourtsChange && window._onPoCourtsChange()" style="padding:6px 8px;font-size:0.85rem;box-sizing:border-box;min-width:0;width:100%;">' +
+          '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px;">Puxado da Liga; ajuste se a disponibilidade for diferente na fase final. Usado na estimativa de tempo.</div>' +
+        '</div>'
+      : '') +
     '</div>';
 
     // Config por categoria (ou única)
@@ -681,36 +688,17 @@
     var t = window._poCurrentT; if (!t) return;
     _refreshPreview(t, input.closest('.po-cat-block'));
   };
+  // Quadras da fase final são compartilhadas (caixa Playoffs) → ao mudar,
+  // recalcula a estimativa de tempo de TODAS as categorias.
+  window._onPoCourtsChange = function () {
+    var t = window._poCurrentT; if (t) _refreshAllPreviews(t);
+  };
 
   // Preview de classificados + lista de espera por categoria.
   function _refreshAllPreviews(t) {
     window._poCurrentT = t;
     var blocks = document.querySelectorAll('.po-cat-block');
     Array.prototype.forEach.call(blocks, function (b) { _refreshPreview(t, b); });
-  }
-  // ── Estimativa de tempo da fase final — ajuda a decidir o formato ──────────
-  // Jogos por formato: simples = N−1; dupla ≈ 2(N−1) (exato p/ potência de 2).
-  // Tempo segue a mesma fórmula do app (_estimateTournamentMinutes): slots =
-  // ceil(jogos / quadras) × (duração + chamada + aquecimento + 5).
-  function _playoffGameCount(format, n) {
-    if (!n || n < 2) return 0;
-    if (format === 'dupla') return 2 * (n - 1);
-    return n - 1;
-  }
-  function _estimatePlayoffMinutes(t, games) {
-    if (!games || games < 1) return 0;
-    var gameDur = parseInt(t.gameDuration, 10) || 30;
-    var callTime = parseInt(t.callTime, 10) || 0;
-    var warmupTime = parseInt(t.warmupTime, 10) || 0;
-    var courts = Math.max(parseInt(t.courtCount, 10) || 1, 1);
-    return Math.ceil(games / courts) * (gameDur + callTime + warmupTime + 5);
-  }
-  function _fmtMins(mins) {
-    if (!mins || mins < 1) return '—';
-    var h = Math.floor(mins / 60), m = mins % 60;
-    if (h > 0 && m > 0) return h + 'h' + (m < 10 ? '0' : '') + m;
-    if (h > 0) return h + 'h';
-    return m + 'min';
   }
 
   function _refreshPreview(t, block) {
@@ -730,25 +718,38 @@
     var pairModeEl = block.querySelector('.po-pairmode');
     var pairMode = pairModeEl ? pairModeEl.value : 'individual';
 
-    // Estimativa de tempo conforme o formato + nº de participantes/duplas.
-    var entrantCount = qualified.length;
+    // Estimativa de tempo — REUSA o componente rico do app (_buildTimeEstimation,
+    // o mesmo das outras telas), alimentado com um torneio sintético que
+    // representa a fase final: formato escolhido + classificados (ou duplas) como
+    // participantes + QUADRAS do playoff (campo po-event-courts, que puxa da Liga
+    // e pode ser editado pra disponibilidade diferente na fase final).
+    var estParts;
     if (pairMode && pairMode !== 'individual' && pairMode !== 'rei_rainha') {
-      entrantCount = _formPairs(qualified.map(function (s) { return s.name; }), pairMode).length;
+      estParts = _formPairs(qualified.map(function (s) { return s.name; }), pairMode);
+    } else {
+      estParts = qualified.map(function (s) { return s.name; });
     }
-    var fmtEl = block.querySelector('.po-format');
-    var poFormat = fmtEl ? fmtEl.value : 'simples';
-    var estGames = _playoffGameCount(poFormat, entrantCount);
-    var estMin = _estimatePlayoffMinutes(t, estGames);
-    var estCourts = Math.max(parseInt(t.courtCount, 10) || 1, 1);
+    var poFormat = (block.querySelector('.po-format') || {}).value || 'simples';
+    var poFmtMap = { simples: 'Eliminatórias Simples', dupla: 'Dupla Eliminatória', grupos_elim: 'Fase de Grupos + Eliminatórias' };
+    var poCourtsEl = document.getElementById('po-event-courts');
+    var poCourts = Math.max(parseInt(poCourtsEl && poCourtsEl.value, 10) || parseInt(t.courtCount, 10) || 1, 1);
+    var poStartEl = document.getElementById('po-event-date');
+    var estHtml = '';
+    if (estParts.length >= 2 && window._buildTimeEstimation && window._flag && window._flag('playoff-time-estimate')) {
+      try {
+        estHtml = window._buildTimeEstimation({
+          format: poFmtMap[poFormat] || 'Eliminatórias Simples',
+          gameDuration: t.gameDuration, callTime: t.callTime, warmupTime: t.warmupTime,
+          courtCount: poCourts,
+          startDate: (poStartEl && poStartEl.value) || '',
+          endDate: '',
+          participants: estParts
+        });
+      } catch (e) { estHtml = ''; }
+    }
 
     var h = '<div style="background:rgba(0,0,0,0.18);border-radius:10px;padding:8px 10px;">';
-    if (estGames > 0 && window._flag && window._flag('playoff-time-estimate')) {
-      var fmtLabel = (poFormat === 'dupla') ? 'dupla elim.' : 'elim. simples';
-      h += '<div style="font-size:0.74rem;color:var(--text-bright);background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:8px;padding:5px 9px;margin-bottom:7px;">' +
-        '⏱️ <b>~' + _fmtMins(estMin) + '</b> · ' + estGames + ' jogo' + (estGames > 1 ? 's' : '') +
-        ' · ' + estCourts + ' quadra' + (estCourts > 1 ? 's' : '') +
-        ' <span style="color:var(--text-muted);">(' + fmtLabel + ')</span></div>';
-    }
+    if (estHtml) h += estHtml;
     h += '<div style="font-size:0.72rem;font-weight:700;color:#34d399;margin-bottom:4px;">✅ ' + (_t('playoff.qualified') || 'Classificados') + ' (' + qualified.length + ')</div>';
     h += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">';
     qualified.forEach(function (s, i) {
@@ -794,6 +795,7 @@
     function multiLabel(cat) { return cat == null ? (_t('playoff.singleBracket') || 'Fase final') : cat; }
     var evDate = (document.getElementById('po-event-date') || {}).value || '';
     var evVenue = (document.getElementById('po-event-venue') || {}).value || '';
+    var evCourts = Math.max(parseInt((document.getElementById('po-event-courts') || {}).value, 10) || parseInt(t.courtCount, 10) || 1, 1);
 
     var cats = _playoffCats(t);
     var configByCat = {};
@@ -880,7 +882,7 @@
     // potência de 2) — já avisamos por categoria; não gerar chave vazia.
     if (!allMatches.length) return null;
     return {
-      event: { date: evDate, venue: evVenue },
+      event: { date: evDate, venue: evVenue, courts: evCourts },
       configByCat: configByCat, snapshot: snapshot,
       qualifiedByCat: qualifiedByCat, waitlistByCat: waitlistByCat,
       allMatches: allMatches
