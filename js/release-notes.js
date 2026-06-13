@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.41-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.42-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>Fim do aviso repetido de "nome atualizado" (de vez).</b> A sincronização automática de nomes que roda em segundo plano ao abrir o app agora é <b>silenciosa</b> — não mostra mais o toast "o nome de [pessoa] foi atualizado". Você só recebe esse aviso quando <b>você mesmo</b> muda seu nome no perfil.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.41-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(12 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>Botão "Enviar Comunicado" voltou a funcionar.</b> O comunicado do organizador para os inscritos estava travando por um erro interno e não enviava. Corrigido — agora vai pelos canais de cada inscrito (plataforma, e-mail e WhatsApp, conforme a preferência de cada um).</li>' +
         '<li><b>Falar com o organizador.</b> Nos cards de torneios que você <b>não organiza</b>, há um botão <b>💬 Falar com o organizador</b>. Se ele tiver telefone, abre direto uma <b>conversa de WhatsApp</b>; se não, sua mensagem vai pra ele <b>na plataforma e por e-mail</b>.</li>' +

@@ -5236,7 +5236,9 @@ window._autoFixStaleNames = async function(forceTournamentId) {
   if (fixes.length > 0) {
     window._debug('[AutoFixNames] Fixing ' + fixes.length + ' stale name(s):', fixes.map(function(f) { return '"' + f.oldName + '" → "' + f.newName + '"'; }));
     fixes.forEach(function(f) {
-      window._propagateNameChange(f.oldName, f.newName, f.uid, f.email);
+      // v2.4.42: silent=true — sincronização automática de nomes (background) NÃO
+      // mostra toast. Só o rename feito pelo próprio usuário no perfil avisa.
+      window._propagateNameChange(f.oldName, f.newName, f.uid, f.email, true);
     });
     setTimeout(function() { if (typeof window._softRefreshView === 'function') window._softRefreshView(); }, 500);
   } else {
@@ -5363,7 +5365,7 @@ window._repairNullIdentityParticipants = async function() {
 };
 
 // ─── Propagate displayName change across all tournaments ─────────────────
-window._propagateNameChange = function _propagateNameChange(oldName, newName, targetUid, targetEmail) {
+window._propagateNameChange = function _propagateNameChange(oldName, newName, targetUid, targetEmail, silent) {
   if (!oldName || !newName || oldName === newName) return;
   if (!window.AppStore || !Array.isArray(window.AppStore.tournaments)) return;
   window._debug('[PropageName] "' + oldName + '" → "' + newName + '" (uid=' + (targetUid || 'none') + ', email=' + (targetEmail || 'none') + ')');
@@ -5512,7 +5514,11 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
       window._debug('[PropageName] saves complete — persistidos:', _okCount, 'de', results.length);
       if (_okCount > 0) {
         if (typeof window._softRefreshView === 'function') window._softRefreshView();
-        if (typeof showNotification !== 'undefined') {
+        // v2.4.42: toast SÓ quando a mudança partiu do PRÓPRIO usuário (renomeou
+        // no perfil). A sincronização automática de nomes de OUTROS inscritos
+        // (rodada em background a cada abertura do app) é silenciosa — senão o
+        // aviso "o nome da Cocozza foi atualizado" reaparecia toda vez.
+        if (!silent && typeof showNotification !== 'undefined') {
           showNotification(_t('auth.nameUpdated'), _t('auth.nameUpdatedMsg', {old: oldName, new: newName, n: _okCount}), 'info');
         }
       }
