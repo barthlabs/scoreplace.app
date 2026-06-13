@@ -1670,7 +1670,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone) {
   const _isAuthorityCard = (typeof window._isUserAuthority === 'function')
     ? window._isUserAuthority(t, _cu)
     : (window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
-  const headerWoRevertBtn = (m.wo && isDecided && _isAuthorityCard)
+  // Some depois que o jogo foi jogado de verdade (placar lançado / placar ao
+  // vivo iniciado) — nesse ponto o W.O. não é mais reversível.
+  const _woRevertable = !(typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m));
+  const headerWoRevertBtn = (m.wo && isDecided && _isAuthorityCard && _woRevertable)
     ? `<button onclick="window._revertWO('${_esc(tId)}','${_esc(m.id)}')"
           style="background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.4);color:#60a5fa;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:3px;"
           onmouseover="this.style.background='rgba(96,165,250,0.25)'" onmouseout="this.style.background='rgba(96,165,250,0.12)'"

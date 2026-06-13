@@ -2389,6 +2389,12 @@ window._revertWO = function(tId, matchId) {
   var m = _findMatch(t, matchId);
   if (!m) { showNotification('Jogo não encontrado', '', 'warning'); return; }
   if (!m.wo) { showNotification('Não é um W.O.', 'Esta partida não foi decidida por W.O.', 'warning'); return; }
+  // Trava: depois que o jogo foi jogado de verdade (placar lançado, sets, placar
+  // ao vivo aberto/usado, jogo iniciado), o W.O. não pode mais ser revertido.
+  if (typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m)) {
+    showNotification('W.O. não pode ser revertido', 'A partida já foi jogada (placar lançado ou placar ao vivo iniciado). O W.O. não é mais reversível.', 'warning');
+    return;
+  }
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
   if (typeof _isUserAuthority === 'function' && !_isUserAuthority(t, cu)) {

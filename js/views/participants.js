@@ -328,6 +328,20 @@ window._markAbsent = function (tId, playerName) {
   // substituto da chave, devolve ele à waitlist se aplicável.
   const _woMeta = t.woHistory && t.woHistory[playerName];
   if (t.absent[playerName] || _woMeta) {
+    // Trava: se o jogo do W.O. já foi jogado de verdade (placar lançado / placar
+    // ao vivo iniciado), não dá pra reverter — reverter zeraria um resultado real.
+    if (_woMeta && _woMeta.matchNum && typeof window._matchHasRealPlay === 'function') {
+      const _allMchk = (typeof window._collectAllMatches === 'function')
+        ? window._collectAllMatches(t)
+        : (Array.isArray(t.matches) ? t.matches.slice() : []);
+      const _woMatchChk = _allMchk[_woMeta.matchNum - 1];
+      if (_woMatchChk && window._matchHasRealPlay(_woMatchChk)) {
+        if (typeof showNotification === 'function') {
+          showNotification('W.O. não pode ser revertido', 'A partida já foi jogada (placar lançado ou placar ao vivo iniciado). O W.O. não é mais reversível.', 'warning');
+        }
+        return;
+      }
+    }
     // Desmarcar ausência → volta ao estado "sem confirmação"
     delete t.absent[playerName];
     if (_woMeta) {

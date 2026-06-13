@@ -328,6 +328,14 @@ window._ligaRevertWo = function (tId, roundIndex, groupName) {
   var cat = _groupCategory(group);
   var absent = group.woAbsent;
   if (!absent) return;
+  // Trava: se o substituto já jogou (algum jogo do grupo com placar lançado /
+  // placar ao vivo iniciado), não dá pra reverter — reverter zeraria resultados
+  // reais dos jogos do grupo.
+  if (group.subStatus === 'filled' && typeof window._matchHasRealPlay === 'function'
+      && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); })) {
+    if (window.showNotification) window.showNotification('W.O. não pode ser revertido', 'Os jogos do grupo já começaram (placar lançado ou placar ao vivo iniciado). O W.O. não é mais reversível.', 'warning');
+    return;
+  }
   var doRevert = function () {
     if (group.subStatus === 'filled' && group.subName) {
       _rewriteSlot(group, group.subName, absent, true); // substituto → ausente de volta
@@ -378,7 +386,10 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   if (group.subStatus === 'filled' && group.woAbsent) {
     var lbl = group.subIsGuest ? (_safe(group.subName) + ' (Jogador X)') : _safe(group.subName);
     var s2 = '<span style="font-size:0.66rem;font-weight:700;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:2px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O. → ' + lbl + '</span>';
-    if (manage) s2 += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
+    // Some quando os jogos do grupo já começaram — W.O. não é mais reversível.
+    var _woPlayed = (typeof window._matchHasRealPlay === 'function')
+      && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
+    if (manage && !_woPlayed) s2 += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
     return s2;
   }
   // Estado: W.O. declarado mas sem substituto (recusa) — precisa preencher

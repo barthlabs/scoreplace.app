@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.64-beta';
+window.SCOREPLACE_VERSION = '2.4.65-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -110,6 +110,25 @@ window._woBtnHtml = function (onclick, isDeclare, opts) {
   }
   return '<button type="button" class="btn btn-outline ' + size + '" onclick="' + onclick + '"' + title +
     ' style="' + base + 'color:#60a5fa;border-color:rgba(59,130,246,0.5);">' + (opts.label || '↩️ Reverter') + '</button>';
+};
+
+// ─── Trava de reversão de W.O. depois que o jogo aconteceu ────────────────────
+// Retorna true quando a partida JÁ foi jogada de verdade: placar lançado, sets
+// lançados, placar ao vivo aberto/usado, ou jogo iniciado. Regra do produto:
+// depois que o jogo rolou (ou começou ao vivo), o W.O. não pode mais ser
+// revertido — reverter zeraria um resultado real. O marcador PURO de W.O.
+// (scoreP1/P2 = 'W.O.'/0, sem startedAt/resultAt/liveScored) NÃO conta como
+// jogado, então o W.O. recém-declarado segue reversível.
+window._matchHasRealPlay = function (m) {
+  if (!m || typeof m !== 'object') return false;
+  if (m.liveScored === true) return true;                          // placar ao vivo finalizado
+  if (m.startedAt) return true;                                    // jogo iniciado (placar ao vivo aberto)
+  if (m.resultAt) return true;                                     // resultado real registrado
+  if (Array.isArray(m.sets) && m.sets.length > 0) return true;     // sets lançados
+  // Placar numérico real (> 0) lançado por jogo de verdade — exclui o W.O. puro.
+  var _num = function (v) { return typeof v === 'number' && v > 0; };
+  if ((_num(m.scoreP1) || _num(m.scoreP2)) && !m.wo) return true;
+  return false;
 };
 
 // ─── v2.3.85: Linha direta com o desenvolvedor (barthlabs) via WhatsApp ───────
