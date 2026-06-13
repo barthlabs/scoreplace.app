@@ -2665,9 +2665,19 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var _monarchTitle = (typeof window._monarchGroupTitle === 'function') ? window._monarchGroupTitle(g.players, t) : 'Rei/Rainha';
           var _monarchBadge = '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
           var _ligaCtrl = (typeof window._ligaGroupControlsHtml === 'function') ? window._ligaGroupControlsHtml(t, currentRound - 1, g) : '';
+          // v2.4.59: deixa a CHAVE clara durante um W.O. pendente — marca o ausente
+          // (riscado + W.O.) na lista de jogadores e mostra o convite aguardando
+          // confirmação, mesmo antes do substituto aceitar. Em 'filled' o slot já
+          // foi reescrito, então woAbsent não está mais na lista (sem marcação).
+          var _woName = g.woAbsent || null;
+          var _woPendingNote = '';
+          if (_woName && g.subStatus === 'pending') {
+            var _inv = (Array.isArray(t.ligaSubInvites) ? t.ligaSubInvites.filter(function(iv){ return iv.id === g.pendingInviteId; })[0] : null);
+            _woPendingNote = '<div style="font-size:0.68rem;color:#fbbf24;margin-bottom:0.5rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:8px;padding:5px 9px;">📨 <b>' + window._safeHtml((_inv && _inv.inviteeName) || 'Substituto') + '</b> foi convidado pra entrar no lugar de <b>' + window._safeHtml(_woName) + '</b> — aguardando confirmação.</div>';
+          }
           return '<div style="background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + _monarchBadge + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + (_ligaCtrl ? '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">' + _ligaCtrl + '</span>' : '') + '</div>' +
-            '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">Jogadores: ' + g.players.map(function(n){return window._safeHtml(n);}).join(', ') + '</div>' +
+            '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">Jogadores: ' + g.players.map(function(n){ return (_woName && n === _woName) ? ('<span style="text-decoration:line-through;opacity:0.6;">' + window._safeHtml(n) + '</span> <span style="color:#f87171;font-weight:800;font-size:0.66rem;">W.O.</span>') : window._safeHtml(n); }).join(', ') + '</div>' + _woPendingNote +
             '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">' + gCards + '</div>' +
           '</div>';
         };

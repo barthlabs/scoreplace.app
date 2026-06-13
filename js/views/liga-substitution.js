@@ -346,7 +346,7 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   if (group.subStatus === 'pending') {
     var who = '';
     if (Array.isArray(t.ligaSubInvites)) { var iv = t.ligaSubInvites.filter(function (x) { return x.id === group.pendingInviteId; })[0]; if (iv) who = iv.inviteeName; }
-    var s = '<span style="font-size:0.66rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:6px;">⏳ ' + _safe(group.woAbsent) + ' W.O. · aguardando ' + _safe(who || 'substituto') + '</span>';
+    var s = '<span style="font-size:0.66rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:6px;">⏳ ' + _safe(group.woAbsent) + ' levou W.O. · ' + _safe(who || 'substituto') + ' convidado, aguardando confirmação</span>';
     if (manage) s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaCancelInvite(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#f87171;border-color:rgba(239,68,68,0.4);">Trocar substituto</button>';
     return s;
   }
