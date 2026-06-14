@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.89-beta';
+window.SCOREPLACE_VERSION = '2.4.90-beta';
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
 // v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).
@@ -18,6 +18,52 @@ window._markBootReady = function(minMs) {
   if (_el < minMs) { setTimeout(function() { window._markBootReady(minMs); }, minMs - _el); return; }
   window._bootReady = true;
 };
+
+// v2.4.90: SPLASH controlado pela camada JS (store.js é network-first → sempre
+// fresco). O boot loader INLINE vive no index.html, que o PWA iOS guarda em
+// cache — e shells antigos escondiam a tela no `window.load`, IGNORANDO o
+// _bootReady. Por isso o piso de tempo (v2.4.88/89) "continuava rápido": o
+// splash velho sumia sozinho. Aqui criamos um overlay PRÓPRIO, idêntico, que
+// fica por cima e só sai quando _bootReady (que respeita o tempo mínimo).
+// Funciona mesmo com o esqueleto da página velho em cache, sem reinstalar.
+window._ensureBootOverlay = function() {
+  try {
+    if (window._bootReady === true) return;
+    if (document.getElementById('sp-js-boot-overlay')) return;
+    var host = document.body || document.documentElement;
+    if (!host) { setTimeout(window._ensureBootOverlay, 30); return; }
+    if (!document.getElementById('scoreplace-ball-keyframes')) {
+      var st = document.createElement('style');
+      st.id = 'scoreplace-ball-keyframes';
+      st.textContent = '@keyframes scoreplace-ball-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}@keyframes scoreplace-ball-pulse{0%,100%{filter:drop-shadow(0 0 0 transparent)}50%{filter:drop-shadow(0 0 12px rgba(212,244,60,0.6))}}';
+      (document.head || host).appendChild(st);
+    }
+    var ballSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%"><defs><radialGradient id="spjbball" cx="37%" cy="31%" r="80%"><stop offset="0" stop-color="#EFEA57"/><stop offset="46%" stop-color="#D2E000"/><stop offset="86%" stop-color="#A6C614"/><stop offset="100%" stop-color="#8CA811"/></radialGradient><clipPath id="spjbclip"><circle cx="24" cy="24" r="22"/></clipPath></defs><circle cx="24" cy="24" r="22" fill="url(#spjbball)"/><g clip-path="url(#spjbclip)"><path d="M24,-3 C58,18 -10,30 24,51" fill="none" stroke="#7a9410" stroke-width="3.4" opacity="0.4"/><path d="M24,-3 C58,18 -10,30 24,51" fill="none" stroke="#fff" stroke-width="2.6" opacity="0.97"/></g></svg>';
+    var ov = document.createElement('div');
+    ov.id = 'sp-js-boot-overlay';
+    ov.setAttribute('role', 'status');
+    ov.setAttribute('aria-label', 'Carregando scoreplace.app');
+    ov.style.cssText = 'position:fixed;inset:0;background:#0f172a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:100000;transition:opacity .35s ease;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+    ov.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;" aria-hidden="true">' +
+        '<svg width="40" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
+        '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;">scoreplace<span style="color:#fbbf24">.app</span></span>' +
+      '</div>' +
+      '<div aria-hidden="true" style="width:3rem;height:3rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite,scoreplace-ball-pulse 1.6s ease-in-out infinite;">' + ballSvg + '</div>' +
+      '<div style="font-size:.78rem;color:#64748b;">Carregando…</div>';
+    host.appendChild(ov);
+    var _tick = function() {
+      if (window._bootReady === true) {
+        ov.style.opacity = '0';
+        setTimeout(function() { if (ov.parentNode) ov.parentNode.removeChild(ov); }, 380);
+        return;
+      }
+      setTimeout(_tick, 80);
+    };
+    _tick();
+  } catch (e) {}
+};
+window._ensureBootOverlay();
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
