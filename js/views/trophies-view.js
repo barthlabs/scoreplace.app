@@ -522,7 +522,7 @@
   function _loadAndRenderRanking(metric, uid) {
     var container = document.getElementById('trophy-ranking-container');
     if (!container) return;
-    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;padding:8px 0;">Carregando...</p>';
+    container.innerHTML = (typeof window._renderBallLoader === 'function' ? window._renderBallLoader('Carregando…', { minHeight: '20vh', size: '2.2rem' }) : '<p style="color:var(--text-muted);font-size:0.85rem;padding:8px 0;">Carregando...</p>');
 
     if (window._loadFriendRanking) {
       window._loadFriendRanking(metric).then(function(entries) {

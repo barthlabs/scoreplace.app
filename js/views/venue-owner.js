@@ -900,7 +900,7 @@
         // ── List of existing courts ──
         '<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px;">Quadras cadastradas neste local</div>' +
         '<div id="courts-list-slot" data-venue-key="' + safeKey + '">' +
-          '<div style="font-size:0.8rem;color:var(--text-muted);padding:12px;">Carregando...</div>' +
+          (typeof window._renderBallLoaderInline === 'function' ? '<div style="padding:8px 0;">' + window._renderBallLoaderInline('Carregando…') + '</div>' : '<div style="font-size:0.8rem;color:var(--text-muted);padding:12px;">Carregando...</div>') +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);

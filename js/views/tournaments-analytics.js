@@ -45,7 +45,7 @@ window._openPlayerProfile = function(playerName, opts) {
           '<button onclick="document.getElementById(\'player-profile-overlay\').remove()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted,#94a3b8);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:0.82rem;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Voltar</button>' +
           '<div id="ppo-friend-btn"></div>' +
         '</div>' +
-        '<div id="ppo-body" style="padding:0;"><div style="text-align:center;padding:32px;color:var(--text-muted);">Carregando…</div></div>' +
+        '<div id="ppo-body" style="padding:0;">' + (typeof window._renderBallLoader === 'function' ? window._renderBallLoader('Carregando…', { minHeight: '22vh', size: '2.2rem' }) : '<div style="text-align:center;padding:32px;color:var(--text-muted);">Carregando…</div>') + '</div>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -145,7 +145,7 @@ window._openPlayerProfile = function(playerName, opts) {
       // histórico compartilhado
       sharedHtml +
       // troféus — só para amigos
-      (isFriend ? '<div id="ppo-trophies" style="padding:0 16px 4px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));"><div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;padding:12px 0 8px;">🏅 Conquistas</div><div id="ppo-trophies-inner" style="font-size:0.8rem;color:var(--text-muted);">Carregando…</div></div>' : '') +
+      (isFriend ? '<div id="ppo-trophies" style="padding:0 16px 4px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));"><div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;padding:12px 0 8px;">🏅 Conquistas</div><div id="ppo-trophies-inner" style="font-size:0.8rem;color:var(--text-muted);">' + (typeof window._renderBallLoaderInline === 'function' ? window._renderBallLoaderInline('Carregando…') : 'Carregando…') + '</div></div>' : '') +
       // stats
       '<div style="padding:12px 16px 20px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));text-align:center;">' +
         '<button id="ppo-stats-btn" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:10px;padding:8px 20px;font-size:0.82rem;cursor:pointer;">📊 Ver estatísticas detalhadas</button>' +

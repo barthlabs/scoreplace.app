@@ -652,7 +652,7 @@ window._openCommunicationsPanel = async function(tId) {
           '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +
         '</div>' +
         '<div class="modal-body" id="comms-list-' + tId + '" style="padding:1.25rem;overflow-y:auto;">' +
-          '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:1.5rem 0;">Carregando…</div>' +
+          (typeof window._renderBallLoader === 'function' ? window._renderBallLoader('Carregando…', { minHeight: '24vh', size: '2.4rem' }) : '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:1.5rem 0;">Carregando…</div>') +
         '</div>' +
       '</div>' +
     '</div>';
@@ -703,7 +703,7 @@ window._openCommunicationDetail = async function(tId, commId) {
           '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +
         '</div>' +
         '<div class="modal-body" id="comm-detail-body-' + commId + '" style="padding:1.25rem;overflow-y:auto;">' +
-          '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:1.5rem 0;">Carregando…</div>' +
+          (typeof window._renderBallLoader === 'function' ? window._renderBallLoader('Carregando…', { minHeight: '24vh', size: '2.4rem' }) : '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:1.5rem 0;">Carregando…</div>') +
         '</div>' +
       '</div>' +
     '</div>';
@@ -754,7 +754,7 @@ window._openCommunicationDetail = async function(tId, commId) {
             '</tr>';
         }).join('');
         var table = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Por inscrito (' + recips.length + ')' + (d.skippedCount ? ' · ' + d.skippedCount + ' sem canal/elegibilidade' : '') + '</div>' +
-            '<div style="font-size:0.66rem;color:var(--text-muted);margin-bottom:8px;"><span style="color:var(--text-muted);">✓</span> enviado · <span style="color:#34d399;font-weight:700;letter-spacing:-3px;">✓✓</span> entregue</div>' +
+            '<div style="font-size:0.66rem;color:var(--text-muted);margin-bottom:8px;line-height:1.55;"><span style="color:var(--text-muted);">✓</span> enviado · <span style="color:#34d399;font-weight:700;letter-spacing:-3px;">✓✓</span> entregue<br><span style="opacity:0.9;">✉️ No <b>e-mail</b> mostramos só <b>enviado</b> (✓) — a entrega na caixa não é rastreada, então o segundo ✓ nunca aparece. Um único ✓ é normal e <b>não</b> significa que falhou.</span></div>' +
             '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">' +
             '<colgroup><col><col style="width:48px;"><col style="width:48px;"><col style="width:48px;"></colgroup>' +
             '<thead><tr style="font-size:0.7rem;color:var(--text-muted);">' +

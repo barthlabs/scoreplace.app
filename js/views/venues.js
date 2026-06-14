@@ -1570,7 +1570,7 @@
       // quando o profile chegar.
       html += '<div style="background:rgba(251,191,36,0.04);border:1px dashed rgba(251,191,36,0.18);border-radius:14px;padding:10px 12px;margin-bottom:14px;">';
       html += '<div style="font-size:0.7rem;font-weight:700;color:rgba(251,191,36,0.6);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">⭐ Locais preferidos</div>';
-      html += '<div style="font-size:0.78rem;color:var(--text-muted);">Carregando perfil…</div>';
+      html += (typeof window._renderBallLoaderInline === 'function' ? window._renderBallLoaderInline('Carregando perfil…') : '<div style="font-size:0.78rem;color:var(--text-muted);">Carregando perfil…</div>');
       html += '</div>';
     }
 
