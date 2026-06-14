@@ -9,9 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.91-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>⏳ Tela de carregamento que realmente segura.</b> Agora a própria <b>parte que sempre atualiza</b> do app desenha a tela de abertura (bolinha + logo) e a mantém até as informações assentarem — então ela fica o tempo certo <b>mesmo se o app estiver guardado em cache</b>, sem precisar reinstalar. Objetivo: a dashboard aparecer já pronta, sem travar no scroll na abertura.</li>' +
+        '<li><b>🐞 Achado o motivo de a abertura sumir cedo.</b> Pra quem já está logado, havia um caminho que escondia a tela de carregamento em ~1,5s (tratando como se estivesse deslogado durante o login). Corrigido: agora, com sessão ativa, a tela segura até a dashboard montar (uns 3,5s). É a peça que faltava pra acabar com a travada no scroll na abertura.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⏳ Tela de carregamento controlada pela camada que sempre atualiza.</b> A abertura passou a ser desenhada pela parte do app que sempre atualiza, pra segurar o tempo certo mesmo com cache.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +

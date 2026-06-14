@@ -449,14 +449,22 @@ function initRouter() {
   // cedo demais. Agora esperamos ~600ms e só finalizamos se, passada a janela,
   // AINDA não há usuário (deslogado real). Logado → currentUser aparece nesse
   // meio-tempo e quem finaliza é o startRealtimeListener (após perfil + dados).
-  if (window._authStateResolved && !(window.AppStore && window.AppStore.currentUser)) {
+  // v2.4.91: NÃO revelar como deslogado quando há sessão em cache
+  // (scoreplace_authCache). Esse era o BUG do "continua rápido": num usuário
+  // LOGADO, durante o boot existe a janela (_authStateResolved && !currentUser)
+  // enquanto o login termina; este caminho disparava _markBootReady(1500) e
+  // escondia o splash em ~1,5s — ANTES do poller do dashboard (3,5s) e antes da
+  // dashboard montar. authCache presente = sessão logada (some no logout), então
+  // aqui só finaliza pra DESLOGADO de verdade (sem cache). Logado → quem revela
+  // é o startRealtimeListener, no tempo mínimo.
+  var _hasAuthCache0 = false;
+  try { _hasAuthCache0 = !!localStorage.getItem('scoreplace_authCache'); } catch (e) {}
+  if (window._authStateResolved && !_hasAuthCache0 && !(window.AppStore && window.AppStore.currentUser)) {
     setTimeout(function() {
-      // v2.4.89: só finaliza como DESLOGADO se, passada a janela maior (900ms),
-      // ainda não há usuário E o listener de dados (logado) não começou — senão
-      // é login lento e quem revela é o startRealtimeListener (poller), no tempo
-      // mínimo. Usa _markBootReady pra respeitar o piso mesmo com shell em cache.
-      if (!(window.AppStore && window.AppStore.currentUser) && !window._waitingForFirstSnapshot) {
-        if (typeof window._markBootReady === 'function') window._markBootReady(1500);
+      var _hasAuthCache1 = false;
+      try { _hasAuthCache1 = !!localStorage.getItem('scoreplace_authCache'); } catch (e) {}
+      if (!_hasAuthCache1 && !(window.AppStore && window.AppStore.currentUser) && !window._waitingForFirstSnapshot) {
+        if (typeof window._markBootReady === 'function') window._markBootReady(1500, 'router-logged-out');
         else window._bootReady = true;
       }
     }, 900);

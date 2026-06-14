@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.90-beta';
+window.SCOREPLACE_VERSION = '2.4.91-beta';
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
 // v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).
@@ -11,11 +11,14 @@ window.SCOREPLACE_VERSION = '2.4.90-beta';
 // shell velho em cache, a tela inicial respeita o tempo mínimo.
 window.__bootT0 = window.__bootT0 || Date.now();
 window._BOOT_MIN_MS = 3500;
-window._markBootReady = function(minMs) {
+window._markBootReady = function(minMs, _label) {
   if (window._bootReady === true) return;
   if (typeof minMs !== 'number') minMs = window._BOOT_MIN_MS;
   var _el = Date.now() - (window.__bootT0 || Date.now());
-  if (_el < minMs) { setTimeout(function() { window._markBootReady(minMs); }, minMs - _el); return; }
+  if (_el < minMs) { setTimeout(function() { window._markBootReady(minMs, _label); }, minMs - _el); return; }
+  // Diagnóstico: registra QUEM revelou e em quanto tempo (útil pra confirmar que
+  // o splash está segurando o tempo certo, inclusive no aparelho do usuário).
+  window._bootRevealInfo = { minMs: minMs, elapsedMs: Math.round(_el), label: _label || '?' };
   window._bootReady = true;
 };
 
@@ -2830,7 +2833,7 @@ window.AppStore = {
       if (window._waitingForFirstSnapshot) {
         window._waitingForFirstSnapshot = false;
         // Sem dados do servidor — revela o que houver (cache) mesmo assim.
-        window._markBootReady();
+        window._markBootReady(undefined, '5s-fallback');
         if (typeof window._hideBootLoader === 'function') window._hideBootLoader();
       }
     }, 5000);
@@ -2926,7 +2929,7 @@ window.AppStore = {
             var _onDash = (_hash0 === '' || _hash0 === 'dashboard');
             if (!_onDash) {
               requestAnimationFrame(function() {
-                setTimeout(function() { window._markBootReady(1000); }, 550);
+                setTimeout(function() { window._markBootReady(1000, 'deep-link'); }, 550);
               });
               return;
             }
@@ -2960,7 +2963,7 @@ window.AppStore = {
               if (_revealed) return; _revealed = true;
               if (_obs) { try { _obs.disconnect(); } catch (e) {} }
               requestAnimationFrame(function() {
-                setTimeout(function() { window._markBootReady(); }, 200);
+                setTimeout(function() { window._markBootReady(undefined, 'dash-poller'); }, 200);
               });
             };
             if (typeof MutationObserver === 'function' && _vc) {
