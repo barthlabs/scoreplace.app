@@ -2546,13 +2546,27 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   var _userIsOutOfRound = false;
   var _userSitOutReason = null;
   if (isLigaFmt && _curUser) {
-    var _curRoundSitOuts = (currentRoundData.matches || []).filter(function(m) { return m && m.isSitOut; });
-    for (var _soi = 0; _soi < _curRoundSitOuts.length; _soi++) {
-      var _so = _curRoundSitOuts[_soi];
-      if (_nameMatchesCurUser(_so.p1)) {
-        _userIsOutOfRound = true;
-        _userSitOutReason = _so.sitOutReason || 'remainder';
-        break;
+    // v2.4.73: se o usuário entrou num grupo desta rodada (ex.: substituiu um
+    // W.O. e está jogando), uma eventual partida de folga remanescente NÃO o
+    // torna "fora da rodada" — quem está num grupo joga. Checa engajamento real
+    // antes de marcar out-of-round.
+    var _userInGroupThisRound = (currentRoundData.monarchGroups || []).some(function(g) {
+      return g && Array.isArray(g.players) && g.players.some(_nameMatchesCurUser);
+    }) || (currentRoundData.matches || []).some(function(m) {
+      if (!m || m.isSitOut) return false;
+      if (Array.isArray(m.team1) && m.team1.some(_nameMatchesCurUser)) return true;
+      if (Array.isArray(m.team2) && m.team2.some(_nameMatchesCurUser)) return true;
+      return _nameMatchesCurUser(m.p1) || _nameMatchesCurUser(m.p2);
+    });
+    if (!_userInGroupThisRound) {
+      var _curRoundSitOuts = (currentRoundData.matches || []).filter(function(m) { return m && m.isSitOut; });
+      for (var _soi = 0; _soi < _curRoundSitOuts.length; _soi++) {
+        var _so = _curRoundSitOuts[_soi];
+        if (_nameMatchesCurUser(_so.p1)) {
+          _userIsOutOfRound = true;
+          _userSitOutReason = _so.sitOutReason || 'remainder';
+          break;
+        }
       }
     }
   }
@@ -2583,6 +2597,34 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _inactive = _sitOuts.filter(function(m) { return m.sitOutReason === 'inactive'; });
         var _wo = _sitOuts.filter(function(m) { return m.sitOutReason === 'wo'; }); // v2.4.30
         var _remainder = _sitOuts.filter(function(m) { return m.sitOutReason !== 'inactive' && m.sitOutReason !== 'wo'; });
+        // v2.4.73: invariante — quem entrou num grupo desta rodada NUNCA é "Sem
+        // grupo". Quando um folga substitui um W.O. (Rei/Rainha), ele é vinculado
+        // ao grupo via _rewriteSlot e pontua de verdade pelos 3 jogos, mas a
+        // antiga partida de folga ('remainder') pode permanecer em round.matches
+        // (convite ainda pendente, ou um caminho de substituição que não limpou).
+        // Resultado: o substituto aparecia em "Sem grupo (média do torneio)" ao
+        // mesmo tempo em que jogava no grupo. Guard: monta o conjunto de quem está
+        // efetivamente engajado na rodada (jogadores de grupos monarch + lados de
+        // qualquer partida real + convidado de W.O. pendente) e remove esses do
+        // remainder. Cada pessoa só participa de um único grupo por rodada.
+        var _engagedInRound = {};
+        var _markEngaged = function(n) { if (n) _engagedInRound[String(n)] = 1; };
+        (currentRoundData.monarchGroups || []).forEach(function(g) {
+          if (!g) return;
+          (g.players || []).forEach(_markEngaged);
+          // convidado de W.O. aguardando aceite também não é "sem grupo"
+          if (g.subStatus === 'pending' && g.pendingInviteId && Array.isArray(t.ligaSubInvites)) {
+            var _ivG = t.ligaSubInvites.filter(function(x) { return x.id === g.pendingInviteId; })[0];
+            if (_ivG && _ivG.inviteeName) _markEngaged(_ivG.inviteeName);
+          }
+        });
+        _allRoundMatches.forEach(function(m) {
+          if (!m || m.isSitOut) return;
+          if (Array.isArray(m.team1)) m.team1.forEach(_markEngaged);
+          if (Array.isArray(m.team2)) m.team2.forEach(_markEngaged);
+          _markEngaged(m.p1); _markEngaged(m.p2);
+        });
+        _remainder = _remainder.filter(function(m) { return !_engagedInRound[String(m.p1)]; });
         // v0.16.97: cada pill mostra os pontos atribuídos. Inativos sempre
         // 0 pts (regra explícita do usuário: "deve fazer zero pontos na
         // rodada que estiver desativado"). Remainder recebe sua média até

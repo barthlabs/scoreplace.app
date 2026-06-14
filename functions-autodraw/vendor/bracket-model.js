@@ -156,11 +156,15 @@
         matches: matches.slice(),
         subgroups: isMonarchRound && Array.isArray(r.monarchGroups)
           ? r.monarchGroups.map(function (g) {
-              return {
-                name: g.name,
+              // v2.4.61: preserva TODOS os campos do grupo (não só name/players/
+              // matches). Antes descartava o estado de W.O./substituição
+              // (woAbsent, subStatus, subName, subIsGuest, pendingInviteId), o
+              // que fazia o convite pendente sumir do render e o grupo voltar a
+              // mostrar "Faltou alguém?". slice() nos arrays pra não mutar o raw.
+              return Object.assign({}, g, {
                 players: (g.players || []).slice(),
                 matches: (g.matches || []).slice()
-              };
+              });
             })
           : undefined,
         category: null,

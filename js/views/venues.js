@@ -621,6 +621,12 @@
   function _tournamentOccupancy(t, dayKeyStr) {
     var out = [];
     if (!t || !t.startDate) return out;
+    // v2.4.72-beta: Liga/Ranking NÃO presume presença no local. Numa Liga o
+    // sorteio acontece e cada dupla combina o dia do seu jogo até o próximo
+    // sorteio — não é um evento de dia único em que todos estão no clube. Logo,
+    // nada de presença virtual ancorada no startDate. Vale só pra torneios de
+    // dia único (eliminatórias, grupos, etc.).
+    if (window._isLigaFormat && window._isLigaFormat(t)) return out;
     var start = new Date(t.startDate);
     if (isNaN(start.getTime())) return out;
     if (window.PresenceDB.dayKey(start) !== dayKeyStr) return out;
@@ -964,9 +970,15 @@
   // planejaram ir + ocupação virtual de torneios com startDate hoje. Portado
   // do #presence (renderUpcoming em presence.js linhas 659-740).
   // v0.16.28: aceita boxId direto pra ser reusável em cada card preferido.
-  function _renderUpcomingBox(boxId, presences, tournaments, dayKeyStr, realPid) {
+  // v2.4.72-beta: opts.maxChips (>0) limita quantos amigos aparecem
+  // nominalmente por grupo — os excedentes (ranqueados por menor interação)
+  // são dobrados no "+N". Usado no dashboard pra não listar dezenas de nomes.
+  // Sem opts/maxChips: mostra TODOS os nomes (detalhe do local).
+  function _renderUpcomingBox(boxId, presences, tournaments, dayKeyStr, realPid, opts) {
     var box = document.getElementById(boxId);
     if (!box) return;
+    var maxChips = (opts && opts.maxChips) || 0;
+    var _scoreCache = {};
     var now = Date.now();
     var rows = [];
     (presences || []).forEach(function(p) {
@@ -1019,6 +1031,29 @@
     var _plusPill = function(n) {
       return '<span style="background:rgba(107,114,128,0.18);border:1px solid rgba(107,114,128,0.3);color:var(--text-bright);font-size:0.72rem;font-weight:600;padding:2px 10px;border-radius:999px;">+' + n + '</span>';
     };
+    // v2.4.72-beta: ordena pessoas ("você" sempre 1º, depois amigos por
+    // interação desc), aplica o cap de maxChips e devolve os chips HTML + o
+    // número de excedentes pra somar ao "+N". scoreFn = _friendInteractionScore.
+    var _renderPeople = function(people, otherCount) {
+      people.sort(function(a, b) {
+        if (a.klass === 'me' && b.klass !== 'me') return -1;
+        if (b.klass === 'me' && a.klass !== 'me') return 1;
+        var sa = window._friendInteractionScore ? window._friendInteractionScore(a.p.uid, _scoreCache) : 0;
+        var sb = window._friendInteractionScore ? window._friendInteractionScore(b.p.uid, _scoreCache) : 0;
+        return sb - sa;
+      });
+      var extra = otherCount;
+      var shown = people;
+      if (maxChips > 0 && people.length > maxChips) {
+        shown = people.slice(0, maxChips);
+        extra += (people.length - maxChips);
+      }
+      return {
+        chips: shown.map(function(x) { return _personChip(x.p, x.klass); }).join(''),
+        extra: extra,
+        count: people.length
+      };
+    };
     var renderedAny = false;
     hours.forEach(function(h) {
       var list = groups[h];
@@ -1026,12 +1061,12 @@
       // vai DENTRO de um box com o nome do torneio — de quem tem presença avulsa
       // (não inscrita), que aparece FORA do box.
       var byTournament = {}; var tOrder = []; var enrolledUids = {};
-      var loose = { chips: [], seen: {}, other: 0 };
+      var loose = { people: [], seen: {}, other: 0 };
       // 1ª passada: inscritos (presenças do torneio), agrupados por torneio
       list.forEach(function(p) {
         if (p.type !== 'tournament') return;
         var tk = String(p._tournamentId || p._tournamentName || 'torneio');
-        if (!byTournament[tk]) { byTournament[tk] = { name: p._tournamentName || 'torneio', id: p._tournamentId || '', chips: [], seen: {}, other: 0 }; tOrder.push(tk); }
+        if (!byTournament[tk]) { byTournament[tk] = { name: p._tournamentName || 'torneio', id: p._tournamentId || '', people: [], seen: {}, other: 0 }; tOrder.push(tk); }
         var grp = byTournament[tk];
         if (p.uid) enrolledUids[p.uid] = true;
         var klass = _classifyPresence(p);
@@ -1039,7 +1074,7 @@
           var key = p.uid || p.displayName;
           if (grp.seen[key]) return;
           grp.seen[key] = true;
-          grp.chips.push(_personChip(p, klass));
+          grp.people.push({ p: p, klass: klass });
         } else { grp.other += 1; }
       });
       // 2ª passada: presenças avulsas (não-torneio), pulando quem já está inscrito
@@ -1051,10 +1086,10 @@
           var key = p.uid || p.displayName;
           if (loose.seen[key]) return;
           loose.seen[key] = true;
-          loose.chips.push(_personChip(p, klass));
+          loose.people.push({ p: p, klass: klass });
         } else if (p.visibility === 'public') { loose.other += 1; }
       });
-      var hasLoose = loose.chips.length > 0 || loose.other > 0;
+      var hasLoose = loose.people.length > 0 || loose.other > 0;
       if (tOrder.length === 0 && !hasLoose) return;
       renderedAny = true;
       var inner = '';
@@ -1063,19 +1098,21 @@
         var titleAttr = grp.id
           ? ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:#fbbf24;margin-bottom:6px;cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(grp.id) + '\'"'
           : ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:#fbbf24;margin-bottom:6px;"';
+        var grpR = _renderPeople(grp.people, grp.other);
         inner += '<div style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:8px 10px;">' +
           '<div' + titleAttr + '>🏆 ' + _safe(grp.name) + '</div>' +
           '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">' +
-            grp.chips.join('') +
-            (grp.other > 0 ? _plusPill(grp.other) : '') +
-            (grp.chips.length === 0 && grp.other === 0 ? '<span style="font-size:0.72rem;color:var(--text-muted);">Inscritos</span>' : '') +
+            grpR.chips +
+            (grpR.extra > 0 ? _plusPill(grpR.extra) : '') +
+            (grpR.count === 0 && grpR.extra === 0 ? '<span style="font-size:0.72rem;color:var(--text-muted);">Inscritos</span>' : '') +
           '</div>' +
         '</div>';
       });
       if (hasLoose) {
+        var looseR = _renderPeople(loose.people, loose.other);
         inner += '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">' +
-          loose.chips.join('') +
-          (loose.other > 0 ? _plusPill(loose.other) : '') +
+          looseR.chips +
+          (looseR.extra > 0 ? _plusPill(looseR.extra) : '') +
         '</div>';
       }
       html +=
@@ -1099,6 +1136,10 @@
   async function _hydrateAllPreferredMovement() {
     var cards = document.querySelectorAll('[data-pref-pid]');
     if (!cards || cards.length === 0) return;
+    // v2.4.72-beta: no dashboard, "Próximas horas" mostra no máx. 5 amigos
+    // nominalmente (top por interação) + "+N". No #place/detalhe mostra todos.
+    var _routeKey = String(window.location.hash || '').replace(/^#/, '').split(/[/?]/)[0];
+    var _upcomingOpts = (_routeKey === 'dashboard') ? { maxChips: 5 } : null;
     // v2.1.72: garante o cache de perfis de amigos (uid→nome) pra o match por
     // NOME funcionar em participantes de torneio sem uid (_classifyPresence).
     try { if (typeof window._loadFriendProfilesCached === 'function') await window._loadFriendProfilesCached(); } catch (e) {}
@@ -1210,7 +1251,7 @@
             dayLabel: dayLabel
           });
           _renderNowAtVenueBox('pref-now-' + safePid, presences, realPid);
-          _renderUpcomingBox('pref-upcoming-' + safePid, presences, matchTournaments, dayKeyStr, realPid);
+          _renderUpcomingBox('pref-upcoming-' + safePid, presences, matchTournaments, dayKeyStr, realPid, _upcomingOpts);
         }).catch(function(e) {
           window._warn('[venues movement] load failed for', realPid, e);
         });

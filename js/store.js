@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.71-beta';
+window.SCOREPLACE_VERSION = '2.4.73-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -1221,6 +1221,35 @@ window._participantUids = function(p) {
   _add(p.uid); _add(p.p1Uid); _add(p.p2Uid);
   if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s) _add(s.uid); });
   return uids;
+};
+
+// v2.4.72-beta: pontuação de "interação" entre o usuário logado e um amigo
+// (por uid) = nº de torneios em que ambos participaram. Usada pra rankear
+// quais amigos mostrar nominalmente quando há muitos no "Próximas horas" do
+// dashboard (top-5 por interação + "+X"). Aceita um cache opcional pra evitar
+// re-varrer a lista de torneios uma vez por uid no mesmo render.
+window._friendInteractionScore = function(friendUid, cache) {
+  if (!friendUid) return 0;
+  if (cache && cache[friendUid] != null) return cache[friendUid];
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var myUid = cu && cu.uid;
+  var ts = (window.AppStore && window.AppStore.tournaments) || [];
+  var n = 0;
+  for (var i = 0; i < ts.length; i++) {
+    var t = ts[i];
+    if (!t) continue;
+    var parts = Array.isArray(t.participants) ? t.participants : [];
+    var hasMe = !!(myUid && t.creatorUid === myUid);
+    var hasFriend = false;
+    for (var j = 0; j < parts.length; j++) {
+      var uids = window._participantUids(parts[j]);
+      if (myUid && uids.indexOf(myUid) !== -1) hasMe = true;
+      if (uids.indexOf(friendUid) !== -1) hasFriend = true;
+    }
+    if (hasMe && hasFriend) n++;
+  }
+  if (cache) cache[friendUid] = n;
+  return n;
 };
 
 window._avatarUrl = function(name, size) {

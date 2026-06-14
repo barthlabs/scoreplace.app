@@ -9,7 +9,19 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.71-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.73-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👑 Substituto de W.O. no Rei/Rainha entra no grupo de verdade.</b> Quando alguém leva <b>W.O.</b> numa rodada de <b>Rei/Rainha</b> e outro jogador entra no lugar, o substituto agora aparece <b>dentro do grupo</b> e <b>pontua normalmente</b> pelos jogos que disputa. Antes ele podia surgir por engano também na lista <b>"Sem grupo"</b> (que dá a média do torneio) ao mesmo tempo em que jogava — agora vale a regra simples: quem está num grupo da rodada nunca fica como "sem grupo".</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.72-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>💬 "Falar com o organizador" concorda com o gênero.</b> O botão de contato na seção <b>Organização</b> agora mostra o rótulo em <b>duas linhas</b> e na forma correta: <b>"Falar com o / Organizador"</b> (masculino), <b>"Falar com a / Organizadora"</b> (feminino) ou <b>"Falar com o(a) / Organizador(a)"</b> quando o gênero não é conhecido.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.71-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(13 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🛡️ Mesclar categorias ficou à prova de acidente.</b> Antes, ao <b>rolar a tela</b> no celular dava pra, sem querer, arrastar uma categoria em cima da outra e <b>mesclá-las na hora</b>. Agora o arraste de categoria só começa com um <b>toque longo proposital</b> (segurar ~meio segundo) — uma rolagem normal nunca mais vira mesclagem. Toda mesclagem <b>sempre pede confirmação</b> antes de acontecer, e logo depois o app lembra que dá pra <b>desfazer no botão ⤺ do card</b> (volta a separar as categorias com os participantes originais).</li>' +
       '</ul>' +

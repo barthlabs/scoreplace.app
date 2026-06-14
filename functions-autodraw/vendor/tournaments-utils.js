@@ -504,7 +504,7 @@ window._fixOrphanedMatchNames = function(t) {
                 var nm = p.displayName || p.name || '';
                 if (nm === f.newName) { uid = p.uid || null; email = p.email || null; }
             });
-            window._propagateNameChange(f.oldName, f.newName, uid, email);
+            window._propagateNameChange(f.oldName, f.newName, uid, email, true); // v2.4.42: silent (fix automático)
             fixCount++;
         }
     });

@@ -439,6 +439,10 @@
   function _tournamentOccupancy(t, dayKeyStr) {
     var out = [];
     if (!t || !t.startDate) return out;
+    // v2.4.72-beta: Liga/Ranking NÃO presume presença no local — o sorteio
+    // acontece e cada dupla combina o dia do seu jogo até o próximo sorteio;
+    // não é evento de dia único com todos no clube. Sem presença virtual.
+    if (window._isLigaFormat && window._isLigaFormat(t)) return out;
     var start = new Date(t.startDate);
     if (isNaN(start.getTime())) return out;
     if (window.PresenceDB.dayKey(start) !== dayKeyStr) return out;
