@@ -2908,11 +2908,14 @@ window._checkLigaAutoDraws = async function() {
       } catch (e) {}
     }
 
-    // Stop if end date has passed
-    if (t.endDate) {
-      var endD = new Date(t.endDate + 'T23:59:59');
-      if (!isNaN(endD.getTime()) && endD < now) continue;
-    }
+    // Stop if the league season has ended (endDate ou ligaSeasonMonths).
+    // v2.4.75: usa o helper canônico (BRT, respeita hora explícita no endDate).
+    // O check antigo `new Date(t.endDate + 'T23:59:59')` quebrava quando endDate
+    // já tinha hora (ex: '2026-06-13T19:59' → '...T19:59T23:59:59' = data inválida
+    // → isNaN → check ANULADO → o browser do organizador sorteava depois do fim).
+    // Bug "Teste de Liga": rodada extra no dia seguinte às 20h.
+    var _seasonEndMs = (typeof window._ligaSeasonEndMs === 'function') ? window._ligaSeasonEndMs(t) : null;
+    if (_seasonEndMs != null && now.getTime() > _seasonEndMs) continue;
 
     var firstDrawStr = t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00');
     var firstDraw = new Date(firstDrawStr);
@@ -2928,6 +2931,10 @@ window._checkLigaAutoDraws = async function() {
     var elapsed = now.getTime() - firstDraw.getTime();
     var intervals = Math.floor(elapsed / intervalMs);
     var mostRecentScheduled = new Date(firstDraw.getTime() + intervals * intervalMs);
+
+    // v2.4.75: defensivo — não disparar um sorteio cujo horário AGENDADO já é
+    // depois do fim do torneio (cobre o caso de now < fim mas o slot > fim).
+    if (_seasonEndMs != null && mostRecentScheduled.getTime() > _seasonEndMs) continue;
 
     // Skip if we already fired for this scheduled time
     var lastFired = t.lastAutoDrawAt ? new Date(t.lastAutoDrawAt) : null;

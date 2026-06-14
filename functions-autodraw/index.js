@@ -25,11 +25,15 @@ const db = getFirestore();
 // nenhum cliente abrisse o torneio pra marcar status='finished' (que é lazy, só
 // no render). Horários em BRT (UTC-3), igual ao resto do autoDraw.
 function _ligaSeasonEnded(t, now) {
-  // Date-only ('2026-06-11') → interpreta como BRT (UTC-3). Se já tem 'T', usa
-  // como veio (granularidade de meses torna erro de fuso irrelevante).
+  // Date-only ('2026-06-11') → fim do dia BRT (23:59:59). Com 'T' → hora exata
+  // informada, também em BRT. v2.4.75: antes, quando endDate já tinha 'T' o
+  // offset -03:00 NÃO era anexado e o servidor (UTC) lia como UTC → 3h de skew
+  // (endDate '2026-06-13T19:59' virava 16:59 BRT). Espelha _ligaSeasonEndMs do
+  // cliente (tournaments-utils.js).
   function _parseBrt(s, dfltTime) {
     s = String(s);
-    if (s.indexOf('T') === -1) s = s + 'T' + dfltTime + '-03:00';
+    if (s.indexOf('T') === -1) s = s + 'T' + dfltTime;
+    if (!/[+-]\d\d:?\d\d$/.test(s) && s.indexOf('Z') === -1) s = s + '-03:00';
     return new Date(s);
   }
   // 1) endDate explícita

@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.74-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.75-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎲 Os sorteios da Liga param quando o torneio termina.</b> Antes, uma Liga com <b>data e hora de término</b> (ex: termina dia 13 às 19:59) ainda mostrava "próximo sorteio" pro dia seguinte e podia até gerar uma rodada extra. Agora, assim que chega o fim do torneio, <b>os sorteios cessam</b> — nada de rodada fantasma nem aviso de sorteio depois do encerramento. Vale tanto pra hora exata de término quanto pra temporada por meses.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.74-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>👥 "Próximas horas" na tela inicial mostra até 5 nomes.</b> Quando muita gente planeja ir pro mesmo local, a tela inicial agora lista <b>no máximo 5 amigos pelo nome</b> (os com quem você mais joga) e o resto vira um <b>"+N"</b> — sem encher a tela de nomes. No <b>detalhe do local</b> (em Locais) continuam aparecendo <b>todos os nomes</b>.</li>' +
         '<li><b>🗓️ Liga não presume mais que todo mundo está no clube.</b> Numa <b>Liga</b>, o sorteio acontece e cada dupla combina o dia do seu jogo até o próximo sorteio — não é um evento de um dia só com todos no local. Por isso a Liga <b>não conta mais como "presença no local"</b> no gráfico de movimento nem em "Próximas horas". Torneios de dia único (eliminatórias, grupos etc.) seguem aparecendo normalmente.</li>' +

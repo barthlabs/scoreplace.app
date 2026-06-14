@@ -887,6 +887,44 @@ window._ensureProgressTicker = function() {
   window._progressTickerOn = true;
   setInterval(window._progressTick, 1000);
 };
+// v2.4.75: timestamp (ms) em que a temporada da Liga/Ranking encerra — ou null
+// se não há limite. Fonte ÚNICA da verdade pra "torneio acabou", espelhada na
+// Cloud Function autoDraw (_ligaSeasonEnded). Horários SEMPRE interpretados em
+// BRT (UTC-3), independente do fuso do browser/servidor. Respeita a hora
+// explícita quando endDate vem com 'T' (ex: '2026-06-13T19:59'); date-only vira
+// fim do dia (23:59:59). Bug que motivou: "Teste de Liga" com endDate
+// '2026-06-13T19:59' continuava exibindo/agendando sorteio no dia seguinte às
+// 20h porque os checks de fim ou ignoravam endDate ou quebravam ao concatenar
+// 'T23:59:59' num endDate que já tinha hora (→ data inválida → check anulado).
+window._ligaSeasonEndMs = function(t) {
+    if (!t) return null;
+    function _brt(s, dfltTime) {
+        s = String(s || '');
+        if (!s) return NaN;
+        if (s.indexOf('T') === -1) s = s + 'T' + dfltTime;
+        // Anexa offset BRT só se ainda não houver fuso explícito (-03:00 / Z / etc).
+        if (!/[+-]\d\d:?\d\d$/.test(s) && s.indexOf('Z') === -1) s = s + '-03:00';
+        var d = new Date(s);
+        return isNaN(d.getTime()) ? NaN : d.getTime();
+    }
+    // 1) endDate explícita (fim do dia se date-only; hora exata se vier com 'T')
+    if (t.endDate) {
+        var endMs = _brt(t.endDate, '23:59:59');
+        if (!isNaN(endMs)) return endMs;
+    }
+    // 2) ligaSeasonMonths / rankingSeasonMonths a partir de startDate
+    var months = parseInt(t.ligaSeasonMonths || t.rankingSeasonMonths);
+    if (months && t.startDate) {
+        var startMs = _brt(t.startDate, '00:00:00');
+        if (!isNaN(startMs)) {
+            var d = new Date(startMs);
+            d.setMonth(d.getMonth() + months);
+            return d.getTime();
+        }
+    }
+    return null;
+};
+
 // Calculate next automatic draw date for Ranking/Suíço tournaments
 window._calcNextDrawDate = function(t) {
     if (!t || !t.drawFirstDate) return null;
@@ -895,12 +933,21 @@ window._calcNextDrawDate = function(t) {
     if (isNaN(firstDraw.getTime())) return null;
     var intervalMs = (t.drawIntervalDays || 7) * 86400000;
     var now = new Date();
+    var next;
     // If first draw is in the future, that's the next one
-    if (firstDraw > now) return firstDraw;
-    // Calculate how many intervals have passed
-    var elapsed = now.getTime() - firstDraw.getTime();
-    var intervals = Math.floor(elapsed / intervalMs);
-    var next = new Date(firstDraw.getTime() + (intervals + 1) * intervalMs);
+    if (firstDraw > now) {
+        next = firstDraw;
+    } else {
+        // Calculate how many intervals have passed
+        var elapsed = now.getTime() - firstDraw.getTime();
+        var intervals = Math.floor(elapsed / intervalMs);
+        next = new Date(firstDraw.getTime() + (intervals + 1) * intervalMs);
+    }
+    // v2.4.75: temporada encerrada → não há próximo sorteio. Se o sorteio
+    // calculado cairia DEPOIS do fim do torneio (endDate/ligaSeasonMonths), os
+    // sorteios já cessaram — retorna null pra todo display de "próximo sorteio".
+    var seasonEnd = window._ligaSeasonEndMs(t);
+    if (seasonEnd != null && next.getTime() > seasonEnd) return null;
     return next;
 };
 
