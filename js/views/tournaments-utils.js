@@ -798,13 +798,15 @@ window._buildProgressInner = function(t) {
         _tCol(_lastPointMs, _tEndLabel, 'flex-end') +
       '</div>';
     }
-    // Limite (prazo do torneio). Quando há _durRow, vira só o lado direito.
+    // Limite (prazo do torneio). v2.4.79: torneio JÁ encerrado (100%) não mostra
+    // mais o prazo — o '🏁 limite' só interessa enquanto há jogos por lançar.
+    var _showLimite = !!_deadlineMs && !_tournDone;
     var _limiteLine = _durRow
-      ? (_deadlineMs ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:0.62rem;color:var(--text-muted);"><span>🏁 limite: ' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) + '</span></div>' : '')
-      : ((_firstPointMs || _deadlineMs)
+      ? (_showLimite ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:0.62rem;color:var(--text-muted);"><span>🏁 limite: ' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) + '</span></div>' : '')
+      : ((_firstPointMs || _showLimite)
           ? '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:0.62rem;color:var(--text-muted);">' +
               '<span>' + (_firstPointMs ? 'início: ' + _date(_firstPointMs) + ' ' + _time(_firstPointMs) : '') + '</span>' +
-              '<span style="text-align:right;">' + (_deadlineMs ? '🏁 limite: ' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) : '') + '</span>' +
+              '<span style="text-align:right;">' + (_showLimite ? '🏁 limite: ' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) : '') + '</span>' +
             '</div>'
           : '');
 
