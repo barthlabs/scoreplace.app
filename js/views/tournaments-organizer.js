@@ -730,7 +730,7 @@ window._openCommunicationDetail = async function(tId, commId) {
             '<div style="font-size:0.9rem;color:var(--text-main);background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 12px;margin-bottom:14px;">' + (window._safeHtml(d.rawMessage || '') || '<i>(sem texto)</i>') + '</div>' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">' +
                 statCard('📱', 'Plataforma', bigNum(c.platformSent || 0, 'enviadas') + '<div style="font-size:0.78rem;color:#34d399;margin-top:4px;">' + (c.platformOpened || 0) + ' abriram</div>') +
-                statCard('✉️', 'E-mail', bigNum(c.emailSent || 0, 'enviados') + '<div style="font-size:0.66rem;color:var(--text-muted);margin-top:4px;">entrega/abertura não rastreada</div>') +
+                statCard('✉️', 'E-mail', bigNum(c.emailSent || 0, 'enviados') + '<div style="font-size:0.78rem;color:#34d399;margin-top:4px;">' + ((c.emailDelivered != null) ? c.emailDelivered : (c.emailSent || 0)) + ' entregues' + (c.emailBounced ? ' · <span style="color:#f87171;">' + c.emailBounced + ' falharam</span>' : '') + '</div>') +
                 statCard('💬', 'WhatsApp', bigNum(c.whatsappSent || 0, 'enviadas') + '<div style="font-size:0.78rem;color:#34d399;margin-top:4px;">' + (c.whatsappDelivered || 0) + ' entregues</div>') +
             '</div>';
 
@@ -742,19 +742,28 @@ window._openCommunicationDetail = async function(tId, commId) {
             return '<span style="color:var(--text-muted);" title="' + sentTitle + '">✓</span>';
         }
         var cellSt = 'padding:6px 2px;text-align:center;font-size:0.95rem;';
+        // E-mail (v2.4.86): presume ENTREGUE (✓✓) — só rebaixa pra ✗ vermelho
+        // quando o servidor devolve falha (e-mail inválido / caixa cheia).
+        // Compat: comunicados servidos antes do deploy não trazem emailBounced/
+        // emailDelivered → tratamos como entregue (sem retorno de falha).
+        function emailCheck(r) {
+            if (!r.email) return '<span style="opacity:0.3;">—</span>';
+            if (r.emailBounced) return '<span style="color:#f87171;font-weight:700;" title="Falha na entrega: e-mail inválido ou caixa cheia (bounce)">✗</span>';
+            return '<span style="color:#34d399;font-weight:700;letter-spacing:-3px;padding-right:3px;white-space:nowrap;" title="Entregue (presumido — sem retorno de falha)">✓✓</span>';
+        }
         var rowsHtml = recips.map(function(r) {
             var nameHtml = window._safeHtml(r.name || '') + (r.isOrganizer ? ' <span style="font-size:0.62rem;color:#a5b4fc;">(você)</span>' : '');
             return '<tr style="border-top:1px solid var(--border-color,rgba(255,255,255,0.07));' + (r.isOrganizer ? 'background:rgba(99,102,241,0.06);' : '') + '">' +
                 '<td style="padding:6px 4px;font-size:0.78rem;color:var(--text-main);word-break:break-word;">' + nameHtml + '</td>' +
                 // Plataforma: aberto = entregue (✓✓)
                 '<td style="' + cellSt + '">' + deliveryCheck(r.platform, r.platformOpened, 'enviado', 'aberto') + '</td>' +
-                // E-mail: entrega não rastreada → só "enviado" (✓)
-                '<td style="' + cellSt + '">' + deliveryCheck(r.email, false, 'enviado (entrega não rastreada)', '') + '</td>' +
+                // E-mail: ✓✓ presumido, ✗ se bounce.
+                '<td style="' + cellSt + '">' + emailCheck(r) + '</td>' +
                 '<td style="' + cellSt + '">' + deliveryCheck(r.whatsapp, r.whatsappDelivered, 'enviado', 'entregue') + '</td>' +
             '</tr>';
         }).join('');
         var table = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Por inscrito (' + recips.length + ')' + (d.skippedCount ? ' · ' + d.skippedCount + ' sem canal/elegibilidade' : '') + '</div>' +
-            '<div style="font-size:0.66rem;color:var(--text-muted);margin-bottom:8px;line-height:1.55;"><span style="color:var(--text-muted);">✓</span> enviado · <span style="color:#34d399;font-weight:700;letter-spacing:-3px;">✓✓</span> entregue<br><span style="opacity:0.9;">✉️ No <b>e-mail</b> mostramos só <b>enviado</b> (✓) — a entrega na caixa não é rastreada, então o segundo ✓ nunca aparece. Um único ✓ é normal e <b>não</b> significa que falhou.</span></div>' +
+            '<div style="font-size:0.66rem;color:var(--text-muted);margin-bottom:8px;line-height:1.55;"><span style="color:var(--text-muted);">✓</span> enviado · <span style="color:#34d399;font-weight:700;letter-spacing:-3px;">✓✓</span> entregue · <span style="color:#f87171;font-weight:700;">✗</span> falhou<br><span style="opacity:0.9;">✉️ No <b>e-mail</b>, ✓✓ = <b>entregue</b> (presumido) — só vira <span style="color:#f87171;">✗</span> se o servidor devolver falha (<b>e-mail inválido</b> ou <b>caixa cheia</b>).</span></div>' +
             '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">' +
             '<colgroup><col><col style="width:48px;"><col style="width:48px;"><col style="width:48px;"></colgroup>' +
             '<thead><tr style="font-size:0.7rem;color:var(--text-muted);">' +

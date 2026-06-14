@@ -1781,7 +1781,10 @@ exports.sendOrgCommunication = onCall(
             detail.notifDocId = notifId;
           }
           // Canais externos: e-mail (digest) e WhatsApp (fila).
-          if (profile.notifyEmail !== false && profile.email) { emails.push(profile.email); detail.email = true; }
+          // v2.4.86: guarda o endereço de e-mail no manifesto pra o painel
+          // poder casar com bounces (delivery.state==='ERROR' na coleção `mail`)
+          // e rebaixar o ✓✓ presumido só quando há negativa real de entrega.
+          if (profile.notifyEmail !== false && profile.email) { emails.push(profile.email); detail.email = true; detail.emailAddr = String(profile.email).toLowerCase(); }
           if (profile.notifyWhatsApp === true && profile.phone) {
             phones.push(profile.phone);
             detail.whatsapp = true;
@@ -1909,9 +1912,33 @@ exports.getCommunicationStats = onCall(
       } catch (e) { /* fila pode ter sido limpa após 30d */ }
     }
 
+    // ── Entrega de E-MAIL (v2.4.86): presumimos ENTREGUE (✓✓) quando NÃO há
+    // negativa. A negativa = doc na coleção `mail` (extension firestore-send-
+    // email) com delivery.state==='ERROR' (e-mail inexistente, caixa cheia,
+    // rejeição SMTP) pro endereço do destinatário, criado a partir do envio
+    // deste comunicado. Sem erro → presume-se entregue. Otimização: só
+    // buscamos os endereços dos destinatários se EXISTIR algum bounce — quando
+    // não há bounce (caso comum), todo mundo é ✓✓ sem reads extras.
+    const bouncedEmails = new Set();
+    try {
+      const errSnap = await db.collection("mail").where("delivery.state", "==", "ERROR").limit(1000).get();
+      const sinceMs = (comm.sentAtMs || 0) - 60 * 1000; // buffer de 1 min antes do envio
+      errSnap.forEach((d) => {
+        const data = d.data() || {};
+        let createdMs = 0;
+        try { createdMs = (data.createdAt && data.createdAt.toMillis) ? data.createdAt.toMillis() : 0; } catch (e2) { createdMs = 0; }
+        // Ignora erros ANTERIORES a este comunicado (não atribuíveis a ele).
+        if (createdMs && sinceMs && createdMs < sinceMs) return;
+        const tos = Array.isArray(data.to) ? data.to : (data.to ? [data.to] : []);
+        tos.forEach((e) => { if (e) bouncedEmails.add(String(e).toLowerCase()); });
+      });
+    } catch (e) { /* sem índice/sem erros → presume tudo entregue */ }
+    const hasBounces = bouncedEmails.size > 0;
+
     // "Abriu" na plataforma: lê a notificação de cada destinatário (chunks de 20).
     const out = [];
     let platformOpened = 0; let whatsappDelivered = 0;
+    let emailDelivered = 0; let emailBounced = 0;
     const CHUNK = 20;
     for (let i = 0; i < recips.length; i += CHUNK) {
       const slice = recips.slice(i, i + CHUNK);
@@ -1928,10 +1955,28 @@ exports.getCommunicationStats = onCall(
         const phoneKey = r.phone ? String(r.phone).replace(/\D/g, "") : "";
         const waOk = r.whatsapp && phoneKey ? (waDelivered[phoneKey] === true) : false;
         if (waOk) whatsappDelivered++;
+
+        // E-mail: presume entregue; só rebaixa se o endereço bateu num bounce.
+        let emBounced = false;
+        if (r.email && hasBounces) {
+          let addr = (r.emailAddr || "").toLowerCase();
+          // Comunicados antigos não guardavam emailAddr — busca no perfil só
+          // quando há bounces a casar (caso raro), pra não custar reads à toa.
+          if (!addr && r.uid) {
+            try {
+              const pf = await db.collection("users").doc(r.uid).get();
+              if (pf.exists) addr = String((pf.data() || {}).email || "").toLowerCase();
+            } catch (e) { /* sem perfil → presume entregue */ }
+          }
+          if (addr && bouncedEmails.has(addr)) emBounced = true;
+        }
+        const emDelivered = !!r.email && !emBounced;
+        if (r.email) { if (emBounced) emailBounced++; else emailDelivered++; }
+
         out.push({
           uid: r.uid, name: r.name || "", isOrganizer: !!r.isOrganizer,
           platform: !!r.platform, platformOpened: opened,
-          email: !!r.email,
+          email: !!r.email, emailDelivered: emDelivered, emailBounced: emBounced,
           whatsapp: !!r.whatsapp, whatsappDelivered: waOk,
         });
       }));
@@ -1952,6 +1997,8 @@ exports.getCommunicationStats = onCall(
         platformSent: (comm.counts && comm.counts.platformSent) || 0,
         platformOpened: platformOpened,
         emailSent: (comm.counts && comm.counts.emailSent) || 0,
+        emailDelivered: emailDelivered,
+        emailBounced: emailBounced,
         whatsappSent: (comm.counts && comm.counts.whatsappSent) || 0,
         whatsappDelivered: whatsappDelivered,
       },
