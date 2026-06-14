@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.83-beta';
+window.SCOREPLACE_VERSION = '2.4.84-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -2855,9 +2855,34 @@ window.AppStore = {
               setTimeout(_finalizeBootReady, 120);
               return;
             }
-            requestAnimationFrame(function() {
-              setTimeout(function() { window._bootReady = true; }, 550);
-            });
+            // v2.4.84: deep-link pra fora da dashboard → revela rápido (a trava
+            // de scroll é fenômeno da dashboard; outras views não hidratam pesado).
+            var _hash0 = (window.location.hash || '').replace('#', '').split('/')[0];
+            var _onDash = (_hash0 === '' || _hash0 === 'dashboard');
+            if (!_onDash) {
+              requestAnimationFrame(function() {
+                setTimeout(function() { window._bootReady = true; }, 550);
+              });
+              return;
+            }
+            // v2.4.84: NÃO revela a dashboard só com a view MONTADA — espera as
+            // hidratações pesadas da 1ª render assentarem ATRÁS do splash. A
+            // descoberta pública dispara um RE-RENDER completo quando volta
+            // (_reRenderDashKeepScroll); se isso acontece DEPOIS de revelar, trava
+            // o scroll na cara do usuário. Gate na descoberta + respiro pros
+            // widgets async (presença/amigos/movimento), com teto de ~3s pra
+            // nunca prender o usuário.
+            var _settleStart = Date.now();
+            var _waitDashSettle = function() {
+              if (window._bootDiscoverySettled !== true && (Date.now() - _settleStart) < 3000) {
+                setTimeout(_waitDashSettle, 100);
+                return;
+              }
+              requestAnimationFrame(function() {
+                setTimeout(function() { window._bootReady = true; }, 650);
+              });
+            };
+            _waitDashSettle();
           };
           // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
           // Auto-fix stale names after tournaments are loaded (no currentUser check needed)

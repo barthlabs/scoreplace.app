@@ -3159,11 +3159,19 @@ function renderDashboard(container) {
             _reRenderDashKeepScroll();
           }
         }
+        // v2.4.84: marco pro boot splash — a descoberta (e o re-render que ela
+        // dispara) já assentou. Só então o boot revela a dashboard.
+        window._bootDiscoverySettled = true;
       }).catch(function(e) {
         window._error('[Discovery v0.16.60] re-fetch FAILED', e);
         window._lastDiscoveryError = String(e && e.message || e);
+        window._bootDiscoverySettled = true; // erro também conta como "assentou"
       });
+    } else {
+      window._bootDiscoverySettled = true; // throttled (já tem dados) → nada a esperar
     }
+  } else {
+    window._bootDiscoverySettled = true; // sem descoberta → não há o que esperar
   }
 
   // v1.9.91: refresh PERIÓDICO do feed público de descoberta. O feed não é
