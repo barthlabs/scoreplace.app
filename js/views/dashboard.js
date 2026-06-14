@@ -1881,9 +1881,11 @@ function renderDashboard(container) {
       }
       var finalHeaderBtns = headerBtns !== null ? headerBtns : defaultHeaderBtns;
 
-      var goToBtnFooter = '<div style="display:flex;justify-content:flex-end;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);">' +
-        '<button onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);color:#818cf8;border-radius:6px;padding:3px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;" onmouseover="this.style.background=\'rgba(99,102,241,0.2)\'" onmouseout="this.style.background=\'rgba(99,102,241,0.1)\'">Ir para Torneio →</button>' +
-        '</div>';
+      // v2.4.76: "Ir para Torneio" virou botão de verdade (padrão .btn do app —
+      // .btn-indigo .btn-sm com o volume almofadado), na MESMA linha do "JOGO N"
+      // (header), não mais como tag no rodapé. Fica FORA do #header-btns (que é
+      // reescrito in-place no fluxo de aprovação) pra nunca ser apagado.
+      var goToBtn = '<button onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" class="btn btn-indigo btn-sm" style="flex-shrink:0;">Ir para Torneio →</button>';
 
       return '<div style="min-width:300px;max-width:360px;display:flex;flex-direction:column;gap:0.6rem;">' +
         (opts.hideFaseHeader ? '' :
@@ -1894,14 +1896,16 @@ function renderDashboard(container) {
             '</h4>' +
           '</div>') +
         '<div id="card-' + mId + '" style="background:' + cardBgStr + ';border:2px solid ' + cardBorderStr + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;gap:6px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
             '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;">' + _sf(opts.boxLabelOverride || matchLabel) + '</span>' +
-            '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;min-width:0;">' + finalHeaderBtns + '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;min-width:0;">' +
+              '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">' + finalHeaderBtns + '</div>' +
+              goToBtn +
+            '</div>' +
           '</div>' +
           '<div style="' + rowStyle + '">' + _teamHtml(p1) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
           '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
           '<div style="' + rowStyle + '">' + _teamHtml(p2) + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
-          goToBtnFooter +
         '</div>' +
       '</div>';
     }
