@@ -1321,6 +1321,39 @@ window.handleUnifiedLogin = function() {
   }
 };
 
+// ─── Cadastro/login só com celular (v2.4.98) ─────────────────────────────────
+// O bloco "📱 Entrar ou cadastrar com celular" do modal de login chama estes
+// helpers. _maskPhoneInput aplica a máscara BR enquanto digita; _phoneSignupStart
+// copia os dígitos + DDI pros inputs ocultos e dispara o motor handlePhoneLogin
+// (SMS Firebase + link WhatsApp), que cria conta phone-only do zero ou loga.
+window._maskPhoneInput = function(el) {
+  if (!el) return;
+  var country = document.getElementById('login-unified-country');
+  var digits = el.value.replace(/\D/g, '');
+  if (!country || country.value === '55') {
+    el.value = (typeof window._maskBRPhone === 'function') ? window._maskBRPhone(digits) : digits;
+  } else {
+    el.value = digits;
+  }
+  if (typeof window._loginMutualExclude === 'function') window._loginMutualExclude();
+};
+
+window._phoneSignupStart = function() {
+  var inp = document.getElementById('login-unified');
+  var countrySel = document.getElementById('login-unified-country');
+  var digits = inp ? inp.value.replace(/\D/g, '') : '';
+  if (digits.length < 8) {
+    showNotification('Número incompleto', 'Digite o DDD + número do celular (ex: 11 99999-8888).', 'warning');
+    if (inp) inp.focus();
+    return;
+  }
+  var hiddenPhone = document.getElementById('login-phone');
+  var hiddenCountry = document.getElementById('login-phone-country');
+  if (hiddenPhone) hiddenPhone.value = digits;
+  if (hiddenCountry && countrySel) hiddenCountry.value = countrySel.value;
+  if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
+};
+
 // ─── Email Link (Passwordless) Login ────────────────────────────────────────
 function handleEmailLinkLogin() {
   var emailEl = document.getElementById('login-email-link');
@@ -4509,34 +4542,29 @@ function setupLoginModal() {
           // v1.9.73: link mágico + SMS REMOVIDOS do login. Login agora é só
           // e-mail+senha ou Google. Bloco mantido oculto (display:none) por
           // segurança — sua lógica não é mais acionada por nenhuma UI visível.
-          '<div id="login-unified-step" style="display:none;margin-bottom:4px;background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.22);border-radius:12px;padding:14px 14px 10px 14px;transition:opacity 0.2s;">' +
+          // v2.4.98-beta: cadastro/login SÓ COM CELULAR (sem e-mail) — pra quem
+          // usa UOL/Hotmail e não recebe e-mail de forma confiável. Reusa o motor
+          // handlePhoneLogin (SMS Firebase + link WhatsApp em paralelo). Este
+          // bloco estava oculto desde v1.9.73; voltou visível e agora é phone-only
+          // (sem o input de link mágico por e-mail, que tinha o mesmo problema).
+          '<div id="login-unified-step" style="margin-bottom:10px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.35);border-radius:12px;padding:16px 14px 12px;transition:opacity 0.2s;">' +
             '<div style="margin-bottom:10px;">' +
-              '<div style="font-size:0.9rem;font-weight:700;color:#22d3ee;line-height:1.3;">✉️📱 Entrar com 1 clique</div>' +
-              '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">(seu@email.com  ou  11 9999-8888)</div>' +
+              '<div style="font-size:0.95rem;font-weight:800;color:#25d366;line-height:1.3;">📱 Entrar ou cadastrar com celular</div>' +
+              '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:3px;line-height:1.45;">Sem e-mail. Você recebe um <b>código por SMS</b> e um <b>link pelo WhatsApp</b>. Ideal pra quem usa UOL ou Hotmail.</div>' +
             '</div>' +
-            '<form novalidate onsubmit="event.preventDefault(); handleUnifiedLogin();">' +
-              // v1.0.31-beta: DDI volta a ser oculto no estado inicial (UX
-              // da v1.0.27-beta). User clarificou: "ja aparecer direto a
-              // bandeira e o +55 induz o usuário a achar que apenas um
-              // telefone pode ser colocado ali no campo (quando um email
-              // tambem é permitido)". O DDI só aparece quando o usuário
-              // começa a digitar dígitos (modo phone detectado por
-              // _detectLoginInputMode). Antes da digitação, o campo é
-              // neutro — placeholder mostra os dois formatos possíveis.
-              '<div id="login-unified-row" style="display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;">' +
-                '<select id="login-unified-country" aria-label="DDI do telefone" class="form-control" style="display:none;width:auto;min-width:0;font-size:0.82rem;padding:8px 6px;">' +
+            '<form novalidate onsubmit="event.preventDefault(); window._phoneSignupStart && window._phoneSignupStart();">' +
+              '<div style="display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center;">' +
+                '<select id="login-unified-country" aria-label="DDI do telefone" class="form-control" style="width:auto;min-width:0;font-size:0.82rem;padding:10px 6px;">' +
                   (typeof _phoneCountries !== 'undefined' ? _phoneCountries.map(function(c) {
                     return '<option value="' + c.code + '"' + (c.code === '55' ? ' selected' : '') + '>' + c.flag + ' +' + c.code + '</option>';
                   }).join('') : '<option value="55">🇧🇷 +55</option>') +
                 '</select>' +
-                '<input type="text" id="login-unified" class="form-control" placeholder="seu@email.com  ou  11 99999-8888" required autocomplete="off" oninput="window._detectLoginInputMode && window._detectLoginInputMode()" style="width:100%;min-width:0;box-sizing:border-box;font-size:0.92rem;padding:11px 12px;">' +
-                '<button type="submit" id="btn-enviar-magic" class="btn btn-primary" style="font-size:0.82rem;white-space:nowrap;padding:9px 16px;font-weight:700;width:auto;justify-self:end;transition:background 0.2s,border-color 0.2s;">Enviar</button>' +
+                '<input type="tel" id="login-unified" class="form-control" placeholder="(11) 99999-8888" required inputmode="numeric" autocomplete="tel" oninput="window._maskPhoneInput && window._maskPhoneInput(this)" style="width:100%;min-width:0;box-sizing:border-box;font-size:0.95rem;padding:11px 12px;">' +
+                '<button type="submit" id="btn-enviar-magic" class="btn" style="background:#25d366;color:#0a1f12;font-size:0.82rem;white-space:nowrap;padding:10px 16px;font-weight:800;width:auto;justify-self:end;">Enviar código</button>' +
               '</div>' +
-              '<div id="login-unified-helper" style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.4;">' +
-                'Aceita <b>e-mail</b> (recebe link mágico) ou <b>celular com DDD</b> (recebe SMS com código). Pra celular, o seletor de país aparece automaticamente — padrão 🇧🇷 +55.' +
-              '</div>' +
+              '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;line-height:1.4;">Já tem conta com esse número? Entra também por aqui.</div>' +
             '</form>' +
-            // Hidden inputs — handlers existentes leem destes IDs.
+            // Hidden inputs — o motor handlePhoneLogin lê destes IDs.
             '<input type="hidden" id="login-email-link">' +
             '<input type="hidden" id="login-phone">' +
             '<input type="hidden" id="login-phone-country" value="55">' +
