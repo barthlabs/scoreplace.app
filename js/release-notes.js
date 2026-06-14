@@ -9,9 +9,21 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.92-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.94-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>🐞 Abertura: detecção de sessão à prova de iOS.</b> O iPhone às vezes limpa o cache local mantendo o login — e era por isso que a abertura ainda sumia em ~1,5s. Agora a checagem usa o sinal autoritativo do Firebase, então com você logado a tela segura até a dashboard montar. Embaixo da versão na dashboard aparece, por enquanto, <b>quem revelou a tela e em quantos ms</b> — pra confirmação.</li>' +
+        '<li><b>🎯 A CAUSA RAIZ da abertura instantânea.</b> Uma limpeza interna de janelas sobrepostas estava <b>arrancando a tela de carregamento</b> logo no início — por isso ela sumia na hora, ignorando todos os ajustes de tempo. Agora a tela de abertura é protegida dessa limpeza e fica o tempo certo (~3,5s, até a dashboard montar).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.93-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⏳ Tempo de abertura fixo e limitado.</b> ~3,5s, nunca mais que ~4,5s.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.92-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🐞 Detecção de sessão à prova de iOS.</b> A abertura passou a usar o sinal autoritativo do Firebase pra saber que você está logado (o iPhone às vezes limpa o cache local mantendo o login).</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +

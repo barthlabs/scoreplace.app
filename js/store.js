@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.92-beta';
+window.SCOREPLACE_VERSION = '2.4.94-beta';
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
 // v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).
@@ -67,6 +67,12 @@ window._ensureBootOverlay = function() {
   } catch (e) {}
 };
 window._ensureBootOverlay();
+
+// v2.4.93: TETO GLOBAL de splash. Garante que a tela inicial nunca passa de
+// ~4,5s desde o open do app, qualquer que seja o caminho (mesmo dados lentos,
+// _finalizeBootReady atrasado, etc.). Os caminhos mais rápidos (router=1,5s,
+// dash-poller=3,5s) revelam antes quando aplicáveis; este é só o limite.
+window._markBootReady(4500, 'global-cap');
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -1085,6 +1091,13 @@ window._dismissAllOverlays = function(opts) {
       if (el.id === 'hamburger-dropdown' || el.id === 'view-container' ||
           el.id === 'skip-link' || el.id === 'aria-live-region' ||
           el.id === 'scoreplace-global-loader' ||
+          // v2.4.94: PROTEGER os splashes de boot do sweep genérico. ESTE era o
+          // bug de "abre imediatamente": o _dismissAllOverlays roda no 1º
+          // handleRoute (render da dashboard) e arrancava o splash (fixed,
+          // full-screen, z alto) — ignorando todo o controle de tempo do hide()/
+          // _bootReady. Eles têm ciclo de vida próprio (removidos só quando
+          // _bootReady, respeitando o tempo mínimo).
+          el.id === 'scoreplace-boot-loader' || el.id === 'sp-js-boot-overlay' ||
           /^notification/i.test(el.id || '') || /^toast/i.test(el.id || '')) return;
       if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'LINK') return;
       var cs;
@@ -2933,57 +2946,14 @@ window.AppStore = {
               });
               return;
             }
-            // v2.4.87: NÃO revela a dashboard só com a view MONTADA. Em vez de
-            // gatear só na descoberta (v2.4.84 — não bastava: presença, amigos e
-            // gráficos de movimento continuavam injetando DEPOIS e travavam o
-            // scroll), agora seguramos o splash até o DOM da dashboard ficar
-            // QUIETO — ou seja, até as hidratações async pararem de mexer no
-            // conteúdo. Mecânica:
-            //   • FLOOR: espera mínima (cobre a janela de fetch+injeção dos
-            //     widgets, mesmo durante "lulls" sem mutação);
-            //   • QUIET: depois do floor, revela quando o DOM fica sem mutações
-            //     por QUIET ms (um MutationObserver reseta o timer a cada
-            //     injeção/re-render — inclui o _reRenderDashKeepScroll da
-            //     descoberta);
-            //   • CAP: teto absoluto pra nunca prender o usuário.
-            // FLOOR: espera mínima (cobre a janela típica de fetch+injeção dos
-            //   widgets — Firestore costuma voltar em <2s; o floor garante que
-            //   não revelamos durante um "lull" antes do widget injetar).
-            // QUIET: depois do floor, só revela quando o DOM passou QUIET ms SEM
-            //   mutações (cada injeção/re-render — inclusive o
-            //   _reRenderDashKeepScroll da descoberta — atualiza _lastMut).
-            // CAP: teto absoluto pra nunca prender o usuário (caso algo fique
-            //   mutando o DOM pra sempre, ex.: animação JS contínua).
-            var _vc = document.getElementById('view-container');
-            var _bootStart = Date.now();
-            var _lastMut = Date.now();
-            var FLOOR_MS = 2500, QUIET_MS = 700, CAP_MS = 8000;
-            var _revealed = false, _obs = null;
-            var _revealNow = function() {
-              if (_revealed) return; _revealed = true;
-              if (_obs) { try { _obs.disconnect(); } catch (e) {} }
-              requestAnimationFrame(function() {
-                setTimeout(function() { window._markBootReady(undefined, 'dash-poller'); }, 200);
-              });
-            };
-            if (typeof MutationObserver === 'function' && _vc) {
-              _obs = new MutationObserver(function() { _lastMut = Date.now(); });
-              try { _obs.observe(_vc, { childList: true, subtree: true, characterData: true }); }
-              catch (e) { _obs = null; }
-            }
-            var _poll = function() {
-              if (_revealed) return;
-              var _now = Date.now();
-              var _elapsed = _now - _bootStart;
-              var _quiet = _now - _lastMut;
-              // Revela quando passou o floor E o DOM está quieto — ou no teto.
-              if ((_elapsed >= FLOOR_MS && _quiet >= QUIET_MS) || _elapsed >= CAP_MS) {
-                _revealNow();
-                return;
-              }
-              setTimeout(_poll, 100);
-            };
-            _poll();
+            // v2.4.93: tempo FIXO de splash, simples e LIMITADO. A v2.4.87 usava
+            // um detector de "DOM quieto" — mas a dashboard tem timers/re-renders
+            // ~contínuos, então ele batia no teto e revelava só em ~9s (confirmado
+            // pelo diagnóstico: dash-poller @ 9002ms). Agora: revela no piso de
+            // 3,5s (desde o open do app). Um teto GLOBAL (_markBootReady(4500))
+            // garante que nunca passa de ~4,5s, mesmo com dados lentos. Quem
+            // realmente trava o scroll (re-render pós-reveal) é tratado separado.
+            window._markBootReady(3500, 'dash-poller');
           };
           // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
           // Auto-fix stale names after tournaments are loaded (no currentUser check needed)
