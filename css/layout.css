@@ -84,7 +84,10 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 2rem;
-  backdrop-filter: blur(10px);
+  /* v2.4.96: removido backdrop-filter:blur(10px). O fundo (--bg-darker) é OPACO,
+     então o blur era 100% invisível — mas, num elemento sticky, o navegador
+     re-borrava o backdrop a CADA frame de scroll (jank pesado no iOS). Tirar =
+     zero mudança visual + scroll bem mais leve. */
   flex-wrap: nowrap;
   overflow: visible;
   gap: 4px;

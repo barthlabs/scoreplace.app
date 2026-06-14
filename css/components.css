@@ -75,8 +75,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   background: var(--bg-darker);
   padding: 10px 2rem;
   border-bottom: 1px solid rgba(255,255,255,0.06);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* v2.4.96: removido backdrop-filter:blur (fundo opaco → blur invisível, mas
+     re-borrava a cada frame de scroll num elemento sticky = jank no iOS). */
   /* v2.1.40: barra ocupa a largura TODA (igual topbar/.view-container, padding
      2rem) — antes tinha max-width:1400 + margin:auto e ficava centralizada,
      deixando vãos nas laterais por onde o conteúdo (ex.: bracket) vazava. */
@@ -624,6 +624,18 @@ button[style*="linear-gradient"]:not(.btn):active {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
   border-color: var(--bg-card-hover);
+}
+
+/* v2.4.96: cards de listas longas (dashboard, explorar) pulam layout+paint
+   quando estão FORA da tela (content-visibility:auto). O navegador só renderiza
+   o que está perto da viewport — scroll bem mais leve quando há muitos cards.
+   contain-intrinsic-size reserva uma altura estimada (e `auto` lembra a real já
+   medida), evitando pulo de scroll. Zero mudança visual; só performance.
+   Ignorado em silêncio por navegadores sem suporte. */
+.cards-grid > .card,
+.cards-grid > div > .card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
 }
 
 .card-header {
