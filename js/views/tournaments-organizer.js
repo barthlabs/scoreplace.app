@@ -107,8 +107,16 @@ function _notifDedupCheck(uid, type, tId, matchId) {
     return false;
 }
 
+// _skipDispatch: `true` pula e-mail E WhatsApp (só plataforma in-app). Também
+// aceita um objeto `{ skipEmail, skipWhatsApp }` pra pular canais individuais —
+// usado por "Falar com o organizador" (abre o WhatsApp direto pelo wa.me, então
+// pula o auto-dispatch de WhatsApp mas mantém a cópia por e-mail).
 window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     if (!window.FirestoreDB || !window.FirestoreDB.db || !uid) return;
+    var _skipOpt = (_skipDispatch && typeof _skipDispatch === 'object') ? _skipDispatch : null;
+    var _skipAll = (_skipDispatch === true);
+    var _skipEmail = _skipAll || !!(_skipOpt && _skipOpt.skipEmail);
+    var _skipWhatsApp = _skipAll || !!(_skipOpt && _skipOpt.skipWhatsApp);
     // Dedup guard: mesma notificação pro mesmo uid dentro de 5 min é silenciada.
     if (_notifDedupCheck(uid, notifData.type || '', notifData.tournamentId || '', notifData.matchId || '')) {
         window._log('[notif] dedup suprimiu', notifData.type, 'para uid', uid.substring(0, 8) + '...');
@@ -169,17 +177,17 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         }
         // Email dispatch — writes to 'mail' Firestore collection, processed by
         // the "Trigger Email from Firestore" extension.
-        var email = (profile.notifyEmail !== false && profile.email) ? profile.email : null;
+        var email = (!_skipEmail && profile.notifyEmail !== false && profile.email) ? profile.email : null;
         // v1.3.37-beta: WhatsApp dispatch — Cloud Function processWhatsAppQueue
         // consome whatsapp_queue e POSTa pra Evolution API self-hosted no
         // Railway (infra/whatsapp/README.md). Só envia se opt-in explícito
         // (notifyWhatsApp=true) E telefone preenchido. Default é OFF —
         // notifyWhatsApp tem que ser truthy.
-        var phone = (profile.notifyWhatsApp === true && profile.phone) ? profile.phone : null;
+        var phone = (!_skipWhatsApp && profile.notifyWhatsApp === true && profile.phone) ? profile.phone : null;
 
         // Auto-dispatch email & WhatsApp for this individual notification
         // (skip when called from _notifyTournamentParticipants which does batch dispatch)
-        if (!_skipDispatch && (email || phone) && typeof window._dispatchChannels === 'function') {
+        if ((email || phone) && typeof window._dispatchChannels === 'function') {
             var tUrl = notifData.tournamentId ? 'https://scoreplace.app/#tournaments/' + notifData.tournamentId : 'https://scoreplace.app';
             // v1.8.1-beta: pass ALL notifData fields so rich email templates
             // can access player1/player2/score1/score2/matchLines/playerMatch etc.
@@ -762,48 +770,130 @@ window._openCommunicationDetail = async function(tId, commId) {
     }
 };
 
-// ─── v2.4.41: Falar com o organizador (de quem NÃO é o organizador) ─────────
-// Se o organizador tem telefone → abre uma conversa de WhatsApp (wa.me) direto.
-// Senão → abre um diálogo pra digitar e manda na PLATAFORMA (que já dispara
-// e-mail/WhatsApp pelos canais que o organizador escolheu).
-window._messageOrganizer = async function(tId) {
-  var t = window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
-  if (!t) return;
-  var orgName = t.organizerName || t.organizerEmail || 'o organizador';
-  var firstName = String(orgName).split(/[\s@]/)[0] || orgName;
-  if (typeof showNotification !== 'undefined') showNotification('', 'Buscando contato do organizador…', 'info');
+// ─── Falar com o organizador (de quem NÃO é o organizador) ──────────────────
+// v2.4.82: PADRONIZADO entre dashboard e detalhe do torneio. O botão é neutro
+// (azul) por default e é "hidratado" pra VERDE + ícone de WhatsApp quando o
+// organizador tem telefone — sinalizando o canal real antes do clique. O clique
+// abre SEMPRE um diálogo pra digitar; no envio a mensagem vai pela plataforma
+// (in-app) SEMPRE, mais o canal externo: WhatsApp (wa.me) se tiver telefone, ou
+// o compositor de e-mail (mailto) caso só haja e-mail. No caminho WhatsApp,
+// manda também uma cópia por e-mail (skipWhatsApp no dispatch evita duplicar o
+// WhatsApp, já que o wa.me entrega direto).
+var _WA_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true" style="flex-shrink:0;"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 1.67c2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.42 5.82c0 4.54-3.7 8.24-8.25 8.24a8.2 8.2 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24zm4.52 10.37c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.16.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.13-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18-.06-.1-.22-.16-.47-.28z"/></svg>';
 
-  var phoneDigits = '';
-  var orgEmail = t.organizerEmail || '';
-  try {
-    if (t.creatorUid && window.FirestoreDB && window.FirestoreDB.loadUserProfile) {
-      var prof = await window.FirestoreDB.loadUserProfile(t.creatorUid);
-      if (prof) {
-        if (prof.phone) phoneDigits = String(prof.phone).replace(/\D/g, '');
-        if (!orgEmail && prof.email) orgEmail = prof.email;
-      }
-    }
-  } catch (e) {}
-
-  // TEM telefone → abre a conversa de WhatsApp direto, com uma saudação que dá
-  // contexto (o usuário continua a conversa no próprio WhatsApp).
-  if (phoneDigits && phoneDigits.length >= 10) {
-    var cu = window.AppStore.currentUser;
-    var who = (cu && (cu.displayName || cu.name)) ? (cu.displayName || cu.name) : '';
-    var greet = 'Olá ' + firstName + '! ' + (who ? '(' + who + ') ' : '') + 'Sobre o torneio "' + (t.name || '') + '" no scoreplace.app: ';
-    window.open('https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(greet), '_blank');
-    return;
-  }
-
-  // SEM telefone → diálogo pra digitar e mandar pela plataforma + e-mail.
-  window._openMessageOrganizerDialog(tId, orgName, orgEmail);
+// Botão canônico — usado por dashboard.js e tournaments.js (detalhe). Começa
+// azul "Falar com o organizador"; _hydrateContactOrgButtons flipa pra verde
+// (WhatsApp) quando o organizador tem telefone.
+window._contactOrgButtonHtml = function(t, opts) {
+  opts = opts || {};
+  if (!t || (!t.creatorUid && !t.organizerEmail)) return '';
+  var tId = window._safeHtml(String(t.id));
+  var uid = window._safeHtml(String(t.creatorUid || ''));
+  var full = opts.fullWidth ? 'width:100%;' : '';
+  var mt = (opts.marginTop != null) ? opts.marginTop : '10px';
+  var html = '<button type="button" class="sp-contact-org-btn hover-lift" data-contact-org-uid="' + uid + '" ' +
+    'onclick="event.stopPropagation();window._contactOrganizer(\'' + tId + '\')" ' +
+    'style="' + full + 'margin-top:' + mt + ';display:inline-flex;align-items:center;justify-content:center;gap:8px;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.38);border-radius:10px;padding:9px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;transition:background 0.15s,border-color 0.15s,color 0.15s;">' +
+    '<span class="sp-contact-org-ic" style="display:inline-flex;align-items:center;">💬</span>' +
+    '<span class="sp-contact-org-lb">Falar com o organizador</span></button>';
+  // Auto-hidrata (debounced) — não precisa o caller chamar nada após inserir.
+  if (window._spContactHydrateTimer) clearTimeout(window._spContactHydrateTimer);
+  window._spContactHydrateTimer = setTimeout(function(){ try { window._hydrateContactOrgButtons(document); } catch(e){} }, 60);
+  return html;
 };
 
-window._openMessageOrganizerDialog = function(tId, orgName, orgEmail) {
+// Carrega o perfil do organizador (cacheado por sessão) e, se tiver telefone,
+// pinta o botão de verde + ícone WhatsApp. Idempotente por elemento.
+window._hydrateContactOrgButtons = async function(root) {
+  root = root || document;
+  var btns = root.querySelectorAll('.sp-contact-org-btn[data-contact-org-uid]');
+  if (!btns.length) return;
+  var cache = window._spOrgProfileCache = window._spOrgProfileCache || {};
+  for (var i = 0; i < btns.length; i++) {
+    var btn = btns[i];
+    if (btn._spHydrated) continue;
+    btn._spHydrated = true;
+    var uid = btn.getAttribute('data-contact-org-uid');
+    if (!uid) continue;
+    var prof = cache[uid];
+    if (prof === undefined) {
+      try { prof = (window.FirestoreDB && window.FirestoreDB.loadUserProfile) ? await window.FirestoreDB.loadUserProfile(uid) : null; }
+      catch (e) { prof = null; }
+      cache[uid] = prof || null;
+    }
+    var phone = (prof && prof.phone) ? String(prof.phone).replace(/\D/g, '') : '';
+    var waOk = phone.length >= 10 && prof && prof.notifyWhatsApp !== false;
+    if (waOk) {
+      btn.style.background = 'linear-gradient(135deg,#25D366,#128C7E)';
+      btn.style.color = '#fff';
+      btn.style.borderColor = 'rgba(18,140,126,0.6)';
+      var ic = btn.querySelector('.sp-contact-org-ic');
+      if (ic) ic.innerHTML = _WA_ICON_SVG;
+    }
+  }
+};
+
+// Entry point — resolve o contato do organizador e abre o diálogo.
+window._contactOrganizer = async function(tId) {
+  var t = window.AppStore && window.AppStore.tournaments &&
+          window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  if (!t) { if (typeof showNotification !== 'undefined') showNotification('Torneio não encontrado', '', 'error'); return; }
+
+  var profile = null;
+  try {
+    if (t.creatorUid && window.FirestoreDB && window.FirestoreDB.loadUserProfile) {
+      profile = await window.FirestoreDB.loadUserProfile(t.creatorUid);
+    }
+  } catch (e) { profile = null; }
+
+  var orgName = t.organizerName || (profile && profile.displayName) ||
+                (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador';
+  var phoneDigits = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
+  var email = (profile && profile.email) || t.organizerEmail || '';
+  var useWhatsApp = phoneDigits.length >= 10 && (!profile || profile.notifyWhatsApp !== false);
+  var phoneFull = '';
+  if (useWhatsApp) {
+    var cc = (profile && profile.phoneCountry ? String(profile.phoneCountry).replace(/\D/g, '') : '') || '55';
+    // Telefone canônico já vem com DDI (>=12 díg). Sem DDI (legado, ~11) → prefixa.
+    phoneFull = phoneDigits.length >= 12 ? phoneDigits : (cc + phoneDigits);
+  }
+  if (!useWhatsApp && !(email && email.indexOf('@') !== -1) && !t.creatorUid) {
+    if (typeof showNotification !== 'undefined') {
+      showNotification('Contato indisponível', 'O organizador ainda não cadastrou telefone ou e-mail de contato.', 'info');
+    }
+    return;
+  }
+  window._pendingContactOrg = { tId: String(tId), useWhatsApp: useWhatsApp, phoneFull: phoneFull, email: email, orgName: orgName };
+  window._openContactOrgDialog(tId);
+};
+
+// Alias retrocompat (chamado por código/links antigos).
+window._messageOrganizer = function(tId) { return window._contactOrganizer(tId); };
+
+window._openContactOrgDialog = function(tId) {
+  var pend = window._pendingContactOrg || {};
   var t = window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
   if (!t) return;
   var modalId = 'modal-msg-org-' + tId;
   var old = document.getElementById(modalId); if (old) old.remove();
+
+  var useWhatsApp = !!pend.useWhatsApp;
+  var hasEmail = !!(pend.email && pend.email.indexOf('@') !== -1);
+  var cu = window.AppStore.currentUser;
+  var senderName = (cu && (cu.displayName || cu.name)) || '';
+  var firstName = String(pend.orgName || '').split(/[\s@]/)[0] || '';
+  var greet = 'Olá' + (firstName ? ' ' + firstName : '') + '! ' +
+    (senderName ? 'Sou ' + senderName + ', participante' : 'Sou participante') +
+    ' do torneio "' + (t.name || '') + '" no scoreplace.app. ';
+
+  var channelNote = useWhatsApp ? 'Vai pela plataforma e abre o WhatsApp do organizador (com cópia por e-mail).' :
+                    hasEmail ? 'Vai pela plataforma e abre seu e-mail pro organizador.' :
+                    'Vai pela plataforma pro organizador.';
+  var sendLabel = useWhatsApp ? (_WA_ICON_SVG + '<span>Enviar pelo WhatsApp</span>') :
+                  hasEmail ? '✉️ Enviar por e-mail' : 'Enviar';
+  var sendStyle = useWhatsApp ? 'background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;border:none;' :
+                                'background:#3b82f6;color:#fff;border:none;';
+
   var html = '<div id="' + modalId + '" class="modal-overlay active" style="z-index:10000;">' +
     '<div class="modal" style="max-width:460px;width:95%;">' +
       '<div class="modal-header" style="padding:1.5rem 1.5rem 0;">' +
@@ -811,38 +901,48 @@ window._openMessageOrganizerDialog = function(tId, orgName, orgEmail) {
         '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove();">&times;</button>' +
       '</div>' +
       '<div class="modal-body" style="padding:1.5rem;">' +
-        '<p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 1rem;">Mensagem para <b>' + window._safeHtml(orgName) + '</b> sobre "' + window._safeHtml(t.name || '') + '". Vai na plataforma' + (orgEmail ? ' e por e-mail' : '') + '.</p>' +
-        '<textarea id="msg-org-text-' + tId + '" class="form-control" rows="4" placeholder="Escreva sua mensagem…" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>' +
+        '<p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 1rem;">Mensagem para <b>' + window._safeHtml(pend.orgName || 'o organizador') + '</b>. ' + channelNote + '</p>' +
+        '<textarea id="msg-org-text-' + tId + '" class="form-control" rows="4" placeholder="Escreva sua mensagem…" style="width:100%;box-sizing:border-box;resize:vertical;">' + window._safeHtml(greet) + '</textarea>' +
         '<div style="display:flex;gap:8px;margin-top:1rem;">' +
-          '<button type="button" class="btn btn-primary" style="flex:1;" onclick="window._sendMessageToOrganizerPlatform(\'' + tId + '\')">Enviar</button>' +
-          '<button type="button" class="btn btn-outline" style="flex:0.6;" onclick="document.getElementById(\'' + modalId + '\').remove();">Cancelar</button>' +
+          '<button type="button" class="sp-send-org hover-lift" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;' + sendStyle + 'border-radius:10px;padding:10px 14px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="window._submitContactOrg(\'' + tId + '\')">' + sendLabel + '</button>' +
+          '<button type="button" class="btn btn-outline" style="flex:0.5;" onclick="document.getElementById(\'' + modalId + '\').remove();">Cancelar</button>' +
         '</div>' +
       '</div>' +
     '</div>' +
   '</div>';
   document.body.insertAdjacentHTML('beforeend', html);
+  // Cursor no fim do texto pré-preenchido, pronto pra continuar.
+  setTimeout(function(){
+    var ta = document.getElementById('msg-org-text-' + tId);
+    if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch(e){} }
+  }, 30);
 };
 
-window._sendMessageToOrganizerPlatform = async function(tId) {
+window._submitContactOrg = async function(tId) {
+  var pend = window._pendingContactOrg || {};
   var t = window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
   if (!t) return;
   var textEl = document.getElementById('msg-org-text-' + tId);
-  var message = textEl ? textEl.value.trim() : '';
-  if (!message) { if (typeof showAlertDialog !== 'undefined') showAlertDialog('Mensagem vazia', 'Escreva uma mensagem antes de enviar.', null, { type: 'warning' }); return; }
+  var fullMsg = textEl ? textEl.value.trim() : '';
+  if (!fullMsg) {
+    if (typeof showAlertDialog !== 'undefined') showAlertDialog('Mensagem vazia', 'Escreva uma mensagem antes de enviar.', null, { type: 'warning' });
+    return;
+  }
   var cu = window.AppStore.currentUser;
   var senderName = (cu && (cu.displayName || cu.name)) || 'Um participante';
-  var fullMsg = senderName + ' — mensagem sobre "' + (t.name || 'torneio') + '": ' + message;
+  var btn = document.querySelector('#modal-msg-org-' + tId + ' .sp-send-org');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerHTML = 'Enviando…'; }
 
-  var btn = document.querySelector('#modal-msg-org-' + tId + ' .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
-
-  // Organizadores: criador + co-organizadores ativos.
+  // Plataforma (in-app) SEMPRE → criador + co-organizadores ativos. No caminho
+  // WhatsApp, manda cópia por e-mail mas pula o auto-WhatsApp (o wa.me entrega).
+  // No caminho e-mail/plataforma, só in-app (o mailto entrega o e-mail).
+  var skipOpt = pend.useWhatsApp ? { skipWhatsApp: true } : true;
   var targets = [];
   if (t.creatorUid) targets.push({ uid: t.creatorUid, email: t.organizerEmail || '' });
   (Array.isArray(t.coHosts) ? t.coHosts : []).forEach(function(ch){ if (ch.status === 'active') targets.push({ uid: ch.uid || '', email: ch.email || '' }); });
   if (targets.length === 0 && t.organizerEmail) targets.push({ uid: '', email: t.organizerEmail });
 
-  var sent = 0; var seen = {};
+  var seen = {};
   for (var i = 0; i < targets.length; i++) {
     var o = targets[i]; var uid = o.uid;
     if (!uid && o.email && window.FirestoreDB && window.FirestoreDB.db) {
@@ -855,18 +955,30 @@ window._sendMessageToOrganizerPlatform = async function(tId) {
           type: 'player_to_organizer', level: 'fundamental',
           tournamentId: String(t.id), tournamentName: t.name || 'torneio',
           message: fullMsg, fromName: senderName
-        });
-        sent++;
+        }, skipOpt);
       } catch (e) {}
     }
   }
 
   var modalEl = document.getElementById('modal-msg-org-' + tId);
   if (modalEl) modalEl.remove();
+
+  // Canal externo: conversa de WhatsApp OU compositor de e-mail, já preenchido.
+  try {
+    if (pend.useWhatsApp && pend.phoneFull) {
+      window.open('https://wa.me/' + pend.phoneFull + '?text=' + encodeURIComponent(fullMsg), '_blank', 'noopener');
+    } else if (pend.email && pend.email.indexOf('@') !== -1) {
+      var subject = encodeURIComponent('Torneio: ' + (t.name || ''));
+      window.open('mailto:' + pend.email + '?subject=' + subject + '&body=' + encodeURIComponent(fullMsg), '_self');
+    }
+  } catch (e) {}
+
   if (typeof showNotification !== 'undefined') {
-    showNotification(sent > 0 ? 'Mensagem enviada' : 'Não enviado',
-      sent > 0 ? 'O organizador foi avisado na plataforma (e por e-mail/WhatsApp se ele recebe por esses canais).' : 'Não encontramos o contato do organizador.',
-      sent > 0 ? 'success' : 'info');
+    showNotification('Mensagem enviada',
+      pend.useWhatsApp ? 'Abrimos o WhatsApp e avisamos o organizador na plataforma.' :
+      (pend.email && pend.email.indexOf('@') !== -1) ? 'Abrimos seu e-mail e avisamos o organizador na plataforma.' :
+      'O organizador foi avisado na plataforma.',
+      'success');
   }
 };
 

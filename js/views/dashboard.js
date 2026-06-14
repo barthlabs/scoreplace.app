@@ -933,18 +933,15 @@ function renderDashboard(container) {
                   _html += '</div>';
                 }
               }
-              // v2.4.41: "Falar com o organizador" — só pra quem NÃO é o
-              // organizador nem co-organizador. Abre WhatsApp (se o org tiver
-              // telefone) ou manda pela plataforma/e-mail.
+              // v2.4.82: "Falar com o organizador" — só pra quem NÃO é o
+              // organizador nem co-organizador. Botão canônico padronizado com
+              // o detalhe do torneio (azul=e-mail / verde=WhatsApp via hidratação).
               var _cuD = window.AppStore.currentUser;
               var _amOrg = isOrg ||
                 (_cuD && t.creatorUid && _cuD.uid === t.creatorUid) ||
                 (_cuD && Array.isArray(t.coHosts) && t.coHosts.some(function(ch){ return ch.status === 'active' && ((ch.uid && ch.uid === _cuD.uid) || (ch.email && ch.email === _cuD.email)); }));
-              if (!_amOrg && (t.creatorUid || t.organizerEmail)) {
-                _html += '<div style="margin-top:10px;">' +
-                  '<button onclick="event.stopPropagation(); if(window._messageOrganizer)window._messageOrganizer(\'' + t.id + '\')" ' +
-                  'style="width:100%;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);border-radius:10px;padding:8px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;">' +
-                  '💬 Falar com o organizador</button></div>';
+              if (!_amOrg && (t.creatorUid || t.organizerEmail) && typeof window._contactOrgButtonHtml === 'function') {
+                _html += '<div style="margin-top:10px;">' + window._contactOrgButtonHtml(t, { fullWidth: true, marginTop: '0' }) + '</div>';
               }
               return _html;
             })()}
