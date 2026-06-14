@@ -1953,9 +1953,14 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
     });
 
     // ── Check if playerName appears in a match side (handles "A / B" teams) ──
+    // v2.4.80: casa tanto o nome do TIME inteiro ("A / B") quanto um membro
+    // individual ("A"). O lado de uma partida de duplas é o displayName do time
+    // ("A / B"); sem a checagem de igualdade direta, o nome do time nunca casava
+    // (split daria ["A","B"], nenhum == "a / b") e a dupla ficava sem jogo.
     var _isInSide = function(playerName, side) {
         if (!playerName || !side) return false;
         var pn = playerName.trim().toLowerCase();
+        if (side.trim().toLowerCase() === pn) return true;
         return side.split(' / ').some(function(s) { return s.trim().toLowerCase() === pn; });
     };
 
@@ -1978,15 +1983,40 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
         ? t.participants
         : (t.participants ? Object.values(t.participants) : []);
 
+    // v2.4.80: helper canônico — TODOS os UIDs de um participante. Duplas
+    // pré-formadas são UM objeto com p1Uid/p2Uid e SEM uid de time; ler só
+    // `p.uid` pulava a dupla inteira (ninguém recebia a notificação de sorteio).
+    // Agora cada pessoa da dupla é notificada individualmente, com o jogo do time.
+    var _allUids = (typeof window._participantUids === 'function')
+        ? window._participantUids
+        : function(p) { return (p && p.uid) ? [p.uid] : []; };
+    var _seenUids = {};
+
     for (var _pi = 0; _pi < parts.length; _pi++) {
         var p = parts[_pi];
         if (typeof p === 'string') continue;
-        var uid = p.uid;
-        if (!uid) continue;
+
+        // Nome do TIME/participante = lado da partida ("A / B" para duplas).
         var pName = p.displayName || p.name || '';
         if (!pName) continue;
 
-        // v2.3.83: TODOS os jogos deste jogador na rodada (em Rei/Rainha são 3).
+        var uids = _allUids(p);
+        if (!uids.length) continue;
+
+        // Mapa uid → nome individual (duplas: p1Uid→p1Name, p2Uid→p2Name; e os
+        // sub-participantes em p.participants[]). Cada membro recebe seu próprio
+        // nome na notificação personalizada, mas o jogo é o do time.
+        var _uidName = {};
+        if (p.uid) _uidName[p.uid] = pName;
+        if (p.p1Uid) _uidName[p.p1Uid] = p.p1Name || pName;
+        if (p.p2Uid) _uidName[p.p2Uid] = p.p2Name || pName;
+        if (Array.isArray(p.participants)) {
+            p.participants.forEach(function(s) {
+                if (s && s.uid) _uidName[s.uid] = s.displayName || s.name || pName;
+            });
+        }
+
+        // v2.3.83: TODOS os jogos deste participante na rodada (Rei/Rainha são 3).
         var playerMatches = [];
         for (var _mi = 0; _mi < allMatches.length; _mi++) {
             var am = allMatches[_mi];
@@ -2017,27 +2047,33 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
                 (deadlineLabel ? '\n⏰ Lance os resultados até ' + deadlineLabel : '');
         }
 
-        try {
-            await window._sendUserNotification(uid, {
-                type: notifType,
-                level: 'fundamental',
-                title: notifTitle,
-                message: msg,
-                tournamentId: _tId,
-                tournamentName: tName,
-                ctaUrl: tUrl,
-                ctaText: ctaText,
-                matchLines: matchLines,
-                playerMatch: playerMatch || undefined,
-                playerMatchNum: playerMatchNum || 0,
-                playerMatches: playerMatches,
-                deadline: deadlineLabel,
-                playerName: pName,
-                venue: venue,
-                startDate: startDate
-            });
-        } catch(e) {
-            window._warn('[notifyDrawPersonalized] uid=' + uid, e);
+        // Notifica CADA UID individualmente (cada membro da dupla recebe a sua).
+        for (var _ui = 0; _ui < uids.length; _ui++) {
+            var uid = uids[_ui];
+            if (!uid || _seenUids[uid]) continue;
+            _seenUids[uid] = true;
+            try {
+                await window._sendUserNotification(uid, {
+                    type: notifType,
+                    level: 'fundamental',
+                    title: notifTitle,
+                    message: msg,
+                    tournamentId: _tId,
+                    tournamentName: tName,
+                    ctaUrl: tUrl,
+                    ctaText: ctaText,
+                    matchLines: matchLines,
+                    playerMatch: playerMatch || undefined,
+                    playerMatchNum: playerMatchNum || 0,
+                    playerMatches: playerMatches,
+                    deadline: deadlineLabel,
+                    playerName: _uidName[uid] || pName,
+                    venue: venue,
+                    startDate: startDate
+                });
+            } catch(e) {
+                window._warn('[notifyDrawPersonalized] uid=' + uid, e);
+            }
         }
     }
 };
