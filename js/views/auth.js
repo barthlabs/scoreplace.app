@@ -1936,16 +1936,17 @@ function _resetPhoneRecaptcha() {
 // Posicionado fora da tela mas NÃO display:none (reCAPTCHA precisa
 // estar no layout para o iframe receber dimensões reais).
 function _ensureRecaptchaInBody() {
-  var el = document.getElementById('recaptcha-container');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'recaptcha-container';
-    document.body.appendChild(el);
-  } else if (el.parentNode !== document.body) {
-    // Move para body — sai do interior do modal
-    document.body.appendChild(el);
-  }
+  // v2.5.0: SEMPRE recria o elemento do zero. O grecaptcha marca o elemento
+  // como "rendered" e NÃO solta esse estado com innerHTML='' nem com .clear() —
+  // no 2º envio dá "reCAPTCHA has already been rendered in this element"
+  // (bug que travava o SMS e prendia o reCAPTCHA cobrindo a tela). Remover o nó
+  // e criar um novo (mesmo id) garante um container pristine a cada tentativa.
+  var old = document.getElementById('recaptcha-container');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+  var el = document.createElement('div');
+  el.id = 'recaptcha-container';
   el.style.cssText = 'position:fixed;bottom:0;right:0;z-index:0;width:1px;height:1px;overflow:hidden;';
+  document.body.appendChild(el);
 }
 
 function _resetPhoneLoginUI() {
