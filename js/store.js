@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.86-beta';
+window.SCOREPLACE_VERSION = '2.4.87-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -2865,24 +2865,57 @@ window.AppStore = {
               });
               return;
             }
-            // v2.4.84: NÃO revela a dashboard só com a view MONTADA — espera as
-            // hidratações pesadas da 1ª render assentarem ATRÁS do splash. A
-            // descoberta pública dispara um RE-RENDER completo quando volta
-            // (_reRenderDashKeepScroll); se isso acontece DEPOIS de revelar, trava
-            // o scroll na cara do usuário. Gate na descoberta + respiro pros
-            // widgets async (presença/amigos/movimento), com teto de ~3s pra
-            // nunca prender o usuário.
-            var _settleStart = Date.now();
-            var _waitDashSettle = function() {
-              if (window._bootDiscoverySettled !== true && (Date.now() - _settleStart) < 3000) {
-                setTimeout(_waitDashSettle, 100);
-                return;
-              }
+            // v2.4.87: NÃO revela a dashboard só com a view MONTADA. Em vez de
+            // gatear só na descoberta (v2.4.84 — não bastava: presença, amigos e
+            // gráficos de movimento continuavam injetando DEPOIS e travavam o
+            // scroll), agora seguramos o splash até o DOM da dashboard ficar
+            // QUIETO — ou seja, até as hidratações async pararem de mexer no
+            // conteúdo. Mecânica:
+            //   • FLOOR: espera mínima (cobre a janela de fetch+injeção dos
+            //     widgets, mesmo durante "lulls" sem mutação);
+            //   • QUIET: depois do floor, revela quando o DOM fica sem mutações
+            //     por QUIET ms (um MutationObserver reseta o timer a cada
+            //     injeção/re-render — inclui o _reRenderDashKeepScroll da
+            //     descoberta);
+            //   • CAP: teto absoluto pra nunca prender o usuário.
+            // FLOOR: espera mínima (cobre a janela típica de fetch+injeção dos
+            //   widgets — Firestore costuma voltar em <2s; o floor garante que
+            //   não revelamos durante um "lull" antes do widget injetar).
+            // QUIET: depois do floor, só revela quando o DOM passou QUIET ms SEM
+            //   mutações (cada injeção/re-render — inclusive o
+            //   _reRenderDashKeepScroll da descoberta — atualiza _lastMut).
+            // CAP: teto absoluto pra nunca prender o usuário (caso algo fique
+            //   mutando o DOM pra sempre, ex.: animação JS contínua).
+            var _vc = document.getElementById('view-container');
+            var _bootStart = Date.now();
+            var _lastMut = Date.now();
+            var FLOOR_MS = 2500, QUIET_MS = 700, CAP_MS = 8000;
+            var _revealed = false, _obs = null;
+            var _revealNow = function() {
+              if (_revealed) return; _revealed = true;
+              if (_obs) { try { _obs.disconnect(); } catch (e) {} }
               requestAnimationFrame(function() {
-                setTimeout(function() { window._bootReady = true; }, 650);
+                setTimeout(function() { window._bootReady = true; }, 200);
               });
             };
-            _waitDashSettle();
+            if (typeof MutationObserver === 'function' && _vc) {
+              _obs = new MutationObserver(function() { _lastMut = Date.now(); });
+              try { _obs.observe(_vc, { childList: true, subtree: true, characterData: true }); }
+              catch (e) { _obs = null; }
+            }
+            var _poll = function() {
+              if (_revealed) return;
+              var _now = Date.now();
+              var _elapsed = _now - _bootStart;
+              var _quiet = _now - _lastMut;
+              // Revela quando passou o floor E o DOM está quieto — ou no teto.
+              if ((_elapsed >= FLOOR_MS && _quiet >= QUIET_MS) || _elapsed >= CAP_MS) {
+                _revealNow();
+                return;
+              }
+              setTimeout(_poll, 100);
+            };
+            _poll();
           };
           // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
           // Auto-fix stale names after tournaments are loaded (no currentUser check needed)
