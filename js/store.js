@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.94-beta';
+window.SCOREPLACE_VERSION = '2.4.95-beta';
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
 // v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).
@@ -32,6 +32,11 @@ window._markBootReady = function(minMs, _label) {
 window._ensureBootOverlay = function() {
   try {
     if (window._bootReady === true) return;
+    // v2.4.95: o overlay JS é só FALLBACK. Se o boot loader inline do shell está
+    // presente (caso normal — agora ele sobrevive ao sweep), ELE é o splash, com
+    // a barra de progresso. Não criamos um segundo overlay por cima (que escondia
+    // a barra e mostrava só "Carregando…"). Só entra se o inline sumiu.
+    if (document.getElementById('scoreplace-boot-loader')) return;
     if (document.getElementById('sp-js-boot-overlay')) return;
     var host = document.body || document.documentElement;
     if (!host) { setTimeout(window._ensureBootOverlay, 30); return; }
@@ -52,7 +57,7 @@ window._ensureBootOverlay = function() {
         '<svg width="40" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
         '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;">scoreplace<span style="color:#fbbf24">.app</span></span>' +
       '</div>' +
-      '<div aria-hidden="true" style="width:3rem;height:3rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite,scoreplace-ball-pulse 1.6s ease-in-out infinite;">' + ballSvg + '</div>' +
+      '<div aria-hidden="true" style="width:3rem;height:3rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite;">' + ballSvg + '</div>' +
       '<div style="font-size:.78rem;color:#64748b;">Carregando…</div>';
     host.appendChild(ov);
     var _tick = function() {
@@ -997,7 +1002,7 @@ window._renderBallLoader = function(label, opts) {
   var safeLabel = label ? String(label).replace(/[<>]/g, '') : 'Carregando…';
   return '<div class="scoreplace-ball-loader" style="display:flex;justify-content:center;align-items:center;min-height:' + minHeight + ';">' +
     '<div style="text-align:center;">' +
-      '<div aria-hidden="true" style="width:' + size + ';height:' + size + ';margin-bottom:0.85rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite, scoreplace-ball-pulse 1.6s ease-in-out infinite;">' + window._TENNIS_BALL_SVG(size) + '</div>' +
+      '<div aria-hidden="true" style="width:' + size + ';height:' + size + ';margin-bottom:0.85rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite;">' + window._TENNIS_BALL_SVG(size) + '</div>' +
       '<div role="status" aria-live="polite" style="color:var(--text-muted, #9ca3af);font-size:0.88rem;font-weight:600;">' + safeLabel + '</div>' +
     '</div>' +
   '</div>';
@@ -1016,7 +1021,7 @@ window._renderBallLoaderInline = function(label, opts) {
   var size = opts.size || '1.4rem';
   var safeLabel = label ? String(label).replace(/[<>]/g, '') : 'Carregando…';
   return '<div class="scoreplace-ball-loader-inline" style="display:inline-flex;align-items:center;gap:8px;padding:6px 0;color:var(--text-muted,#9ca3af);font-size:0.82rem;">' +
-    '<span aria-hidden="true" style="width:' + size + ';height:' + size + ';display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite, scoreplace-ball-pulse 1.6s ease-in-out infinite;">' + window._TENNIS_BALL_SVG(size) + '</span>' +
+    '<span aria-hidden="true" style="width:' + size + ';height:' + size + ';display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite;">' + window._TENNIS_BALL_SVG(size) + '</span>' +
     '<span role="status" aria-live="polite">' + safeLabel + '</span>' +
   '</div>';
 };
