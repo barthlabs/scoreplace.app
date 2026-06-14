@@ -2038,6 +2038,9 @@ exports.listCommunications = onCall(
 const EVOLUTION_API_URL = defineSecret("EVOLUTION_API_URL");
 const EVOLUTION_API_KEY = defineSecret("EVOLUTION_API_KEY");
 const EVOLUTION_INSTANCE = defineSecret("EVOLUTION_INSTANCE");
+// v2.4.65: token da API do Railway pra reiniciar o container da Evolution quando
+// a conexão Baileys trava (auto-heal). Criar em railway.app (Account/Project token).
+const RAILWAY_API_TOKEN = defineSecret("RAILWAY_API_TOKEN");
 
 // ─── WhatsApp Magic Link ──────────────────────────────────────────────────────
 // v1.3.83-beta: quando o usuário entra com telefone, o frontend também chama
@@ -2481,6 +2484,173 @@ exports.cleanupOldWhatsAppQueue = onSchedule(
       .where("processedAt", "<", threshold);
     const deleted = await _batchDeleteQuery(query);
     console.log(`[cleanupOldWhatsAppQueue] deleted ${deleted} docs (threshold: ${threshold})`);
+  }
+);
+
+// ═══ Auto-heal da conexão WhatsApp (Evolution/Baileys no Railway) ════════════
+// v2.4.65: a conexão Baileys trava periodicamente — reporta state=open mas todo
+// send falha com 500 "Connection Closed". O ÚNICO fix é reiniciar o container do
+// Railway (restart/logout/delete via Evolution API não revivem). Aqui:
+//   • whatsappHealthGuard (a cada 10 min): sonda o socket VIVO via
+//     /chat/whatsappNumbers (não envia msg). Se travado e fora da janela de
+//     cooldown → redeploy do container via API do Railway. Marca aviso pendente.
+//     Quando volta a ficar saudável após um restart → manda o aviso (WhatsApp+email).
+//   • whatsappNightlyRestart (04:30 BRT): redeploy preventivo diário.
+// IDs do Railway são estáveis (projeto scoreplace-whatsapp / serviço evolution-api).
+
+const RAILWAY_PROJECT_ID = "f9c9cc88-9b26-443a-ab01-58fc397c7e91";
+const RAILWAY_ENVIRONMENT_ID = "8cc8728f-6f6e-459a-a545-f434e73cebb6";
+const RAILWAY_SERVICE_ID = "823562f0-02c6-4447-97f1-0977223b7a97";
+const GUARD_DOC = "system/whatsappGuard";
+const RESTART_COOLDOWN_MS = 20 * 60 * 1000; // não reinicia 2x em < 20 min
+
+// Sonda não-intrusiva: usa o socket vivo, não envia mensagem. true = saudável.
+async function _probeWhatsAppHealth(apiUrl, apiKey, instance) {
+  const url = apiUrl.replace(/\/+$/, "") + "/chat/whatsappNumbers/" + encodeURIComponent(instance);
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": apiKey },
+      body: JSON.stringify({ numbers: ["5511916936454"] }),
+    });
+    if (!resp.ok) return { healthy: false, detail: "HTTP " + resp.status };
+    const data = await resp.json().catch(() => null);
+    // Resposta saudável é um array (lista de números checados).
+    if (Array.isArray(data)) return { healthy: true };
+    return { healthy: false, detail: "resposta inesperada" };
+  } catch (e) {
+    return { healthy: false, detail: "fetch: " + (e.message || String(e)) };
+  }
+}
+
+// Reinicia o container do serviço no Railway (mesmo efeito de `railway redeploy`).
+async function _railwayRedeploy(token) {
+  const query = "mutation($e:String!,$s:String!){serviceInstanceRedeploy(environmentId:$e,serviceId:$s)}";
+  try {
+    const resp = await fetch("https://backboard.railway.com/graphql/v2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+      body: JSON.stringify({ query, variables: { e: RAILWAY_ENVIRONMENT_ID, s: RAILWAY_SERVICE_ID } }),
+    });
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || (data && data.errors)) {
+      return { ok: false, error: "Railway HTTP " + resp.status + ": " + JSON.stringify(data && data.errors || resp.statusText) };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "fetch: " + (e.message || String(e)) };
+  }
+}
+
+// Enfileira aviso ao dev (WhatsApp + e-mail) sobre uma auto-recuperação.
+async function _notifyDevRecovery(db, title, body) {
+  try {
+    await db.collection("whatsapp_queue").add({
+      phones: ["5511916936454"],
+      message: "🩺 " + title + "\n" + body,
+      createdAt: new Date().toISOString(),
+      status: "pending",
+    });
+  } catch (e) { /* ignore */ }
+  try {
+    await db.collection("mail").add({
+      to: ["scoreplace.app@gmail.com"],
+      replyTo: "scoreplace.app@gmail.com",
+      message: { subject: "scoreplace — " + title, text: body, html: "<p>" + body.replace(/\n/g, "<br>") + "</p>" },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) { /* ignore */ }
+}
+
+exports.whatsappHealthGuard = onSchedule(
+  {
+    schedule: "every 10 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: "us-central1",
+    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE, RAILWAY_API_TOKEN],
+  },
+  async () => {
+    const db = admin.firestore();
+    const guardRef = db.doc(GUARD_DOC);
+    const apiUrl = EVOLUTION_API_URL.value();
+    const apiKey = EVOLUTION_API_KEY.value();
+    const instance = EVOLUTION_INSTANCE.value();
+    const railwayToken = RAILWAY_API_TOKEN.value();
+    if (!apiUrl || !apiKey || !instance) { console.error("[whatsappHealthGuard] secrets Evolution ausentes"); return; }
+
+    const probe = await _probeWhatsAppHealth(apiUrl, apiKey, instance);
+    const nowMs = Date.now();
+    const guardSnap = await guardRef.get();
+    const guard = guardSnap.exists ? guardSnap.data() : {};
+
+    if (probe.healthy) {
+      // Se acabamos de recuperar de um restart, avisa o dev (agora que dá pra enviar).
+      const upd = { lastHealthyAt: new Date().toISOString(), lastHealthyAtMs: nowMs };
+      if (guard.pendingRecoveryNotice) {
+        await _notifyDevRecovery(db, "WhatsApp recuperado automaticamente",
+          "A conexão do WhatsApp tinha caído (\"Connection Closed\") e foi reiniciada automaticamente. Já está entregando de novo.");
+        upd.pendingRecoveryNotice = false;
+        upd.lastRecoveryNoticeAt = new Date().toISOString();
+      }
+      await guardRef.set(upd, { merge: true });
+      console.log("[whatsappHealthGuard] saudável");
+      return;
+    }
+
+    // Travado. Respeita cooldown pra não reiniciar enquanto o container ainda sobe.
+    const sinceLast = guard.lastRestartAtMs ? (nowMs - guard.lastRestartAtMs) : Infinity;
+    if (sinceLast < RESTART_COOLDOWN_MS) {
+      console.warn("[whatsappHealthGuard] travado (" + probe.detail + ") mas em cooldown (" + Math.round(sinceLast / 60000) + " min) — aguardando subir");
+      return;
+    }
+    if (!railwayToken) {
+      console.error("[whatsappHealthGuard] travado (" + probe.detail + ") mas RAILWAY_API_TOKEN ausente — não dá pra reiniciar");
+      return;
+    }
+
+    console.warn("[whatsappHealthGuard] travado (" + probe.detail + ") → reiniciando container Railway");
+    const r = await _railwayRedeploy(railwayToken);
+    await guardRef.set({
+      lastRestartAt: new Date().toISOString(),
+      lastRestartAtMs: nowMs,
+      lastRestartReason: "auto: " + (probe.detail || "unhealthy"),
+      lastRestartOk: r.ok,
+      lastRestartError: r.ok ? admin.firestore.FieldValue.delete() : (r.error || "?"),
+      restartCount: (guard.restartCount || 0) + 1,
+      pendingRecoveryNotice: r.ok ? true : (guard.pendingRecoveryNotice || false),
+    }, { merge: true });
+
+    if (!r.ok) {
+      // Restart falhou (token inválido?). Avisa o dev por e-mail (WhatsApp está fora).
+      await _notifyDevRecovery(db, "Falha ao reiniciar WhatsApp automaticamente",
+        "Detectei o WhatsApp travado mas o restart automático no Railway falhou: " + r.error + ". Precisa reiniciar manualmente.");
+      console.error("[whatsappHealthGuard] redeploy falhou:", r.error);
+    } else {
+      console.log("[whatsappHealthGuard] redeploy disparado com sucesso");
+    }
+  }
+);
+
+exports.whatsappNightlyRestart = onSchedule(
+  {
+    schedule: "every day 04:30",
+    timeZone: "America/Sao_Paulo",
+    region: "us-central1",
+    secrets: [RAILWAY_API_TOKEN],
+  },
+  async () => {
+    const db = admin.firestore();
+    const railwayToken = RAILWAY_API_TOKEN.value();
+    if (!railwayToken) { console.error("[whatsappNightlyRestart] RAILWAY_API_TOKEN ausente"); return; }
+    const r = await _railwayRedeploy(railwayToken);
+    await db.doc(GUARD_DOC).set({
+      lastRestartAt: new Date().toISOString(),
+      lastRestartAtMs: Date.now(),
+      lastRestartReason: "preventivo noturno",
+      lastRestartOk: r.ok,
+      restartCount: admin.firestore.FieldValue.increment(1),
+    }, { merge: true });
+    console.log("[whatsappNightlyRestart] redeploy preventivo:", r.ok ? "ok" : ("falhou: " + r.error));
   }
 );
 
