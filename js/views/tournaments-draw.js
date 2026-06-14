@@ -1562,6 +1562,7 @@ window.handleDragStart = function (e, idx, tId) {
     // Show crown drop target while dragging
     var crownBtn = document.getElementById('crown-org-btn');
     if (crownBtn) crownBtn.style.display = 'flex';
+    if (typeof window._setOrgDropActive === 'function') window._setOrgDropActive(true);
 };
 
 window.handleDragEnd = function (e) {
@@ -1570,6 +1571,7 @@ window.handleDragEnd = function (e) {
     // Hide crown drop target
     var crownBtn = document.getElementById('crown-org-btn');
     if (crownBtn) crownBtn.style.display = 'none';
+    if (typeof window._setOrgDropActive === 'function') window._setOrgDropActive(false);
     // Restore original styles on all cards that might have been highlighted
     document.querySelectorAll('.participant-card').forEach(c => {
         if (c.dataset.originalBg) {

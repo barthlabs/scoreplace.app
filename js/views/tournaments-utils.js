@@ -88,6 +88,43 @@ window._executeMerge = function(sourceName, targetName, tId) {
     }
 };
 
+// ── v2.4.83: estrela de co-organização como ALVO DE SOLTAR no card do
+// organizador (seção ORGANIZAÇÃO). Antes o único alvo era a estrela flutuante
+// no canto inferior do card do torneio — o usuário arrastava até a estrela do
+// organizador e nada acontecia. Agora o card do organizador "transforma"
+// (pulsa âmbar + estrela com brilho) enquanto se arrasta um inscrito, e aceita
+// o soltar pra abrir o convite de co-organização.
+window._setOrgDropActive = function(on) {
+  try {
+    document.querySelectorAll('.sp-org-droptarget').forEach(function(el) {
+      el.classList.toggle('sp-org-drag-active', !!on);
+      if (!on) el.classList.remove('sp-org-drop-hover');
+    });
+  } catch (e) {}
+};
+
+// Retorna a entrada de co-host PENDENTE (aguardando aceite) que casa com este
+// participante — por uid, e-mail ou displayName (a entrada guarda os três).
+window._pendingCoHostFor = function(t, name, uid, email) {
+  if (!t || !Array.isArray(t.coHosts)) return null;
+  for (var i = 0; i < t.coHosts.length; i++) {
+    var ch = t.coHosts[i];
+    if (!ch || ch.status !== 'pending') continue;
+    if (uid && ch.uid && String(ch.uid) === String(uid)) return ch;
+    if (email && ch.email && String(ch.email).toLowerCase() === String(email).toLowerCase()) return ch;
+    if (name && ch.displayName && String(ch.displayName) === String(name)) return ch;
+  }
+  return null;
+};
+
+// Tag âmbar "Aguardando aceite" com a estrela de organizador à esquerda —
+// usada no card do convidado enquanto o convite de co-organização está pendente.
+window._pendingCoHostBadgeHtml = function() {
+  return '<span class="sp-pending-cohost" title="Convite de co-organização enviado — aguardando aceite" style="display:inline-flex;align-items:center;gap:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);color:#fbbf24;font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:6px;letter-spacing:0.3px;white-space:nowrap;vertical-align:middle;margin-left:4px;">' +
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
+    'Aguardando aceite</span>';
+};
+
 // ── Desktop HTML5 Drag-and-Drop handlers ──
 window._mergeDragStart = function(e, name, tId) {
     window._mergeDragData = { name: name, tId: tId };
@@ -112,6 +149,7 @@ window._mergeDragStart = function(e, name, tId) {
         window._participantDragTId = tId;
         var crownBtn = document.getElementById('crown-org-btn');
         if (crownBtn) crownBtn.style.display = 'flex';
+        window._setOrgDropActive(true);
     } catch (ex2) {}
     var card = e.target.closest('.participant-card') || e.target.closest('[draggable]');
     if (card) {
@@ -125,6 +163,7 @@ window._mergeDragEnd = function(e) {
     window._participantDragData = null;
     var crownBtn = document.getElementById('crown-org-btn');
     if (crownBtn) crownBtn.style.display = 'none';
+    window._setOrgDropActive(false);
     var card = e.target.closest('.participant-card') || e.target.closest('[draggable]');
     if (card) { card.style.opacity = '1'; card.style.boxShadow = ''; }
     document.querySelectorAll('.participant-card, [draggable="true"]').forEach(function(el) {

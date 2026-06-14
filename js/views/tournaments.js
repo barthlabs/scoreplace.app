@@ -2164,18 +2164,32 @@ function renderTournaments(container, tournamentId = null) {
         var _competitors = typeof window._getCompetitors === 'function' ? window._getCompetitors(_t) : (_t.participants ? (Array.isArray(_t.participants) ? _t.participants : Object.values(_t.participants)) : []);
 
         var _orgCards = '';
-        // Helper: build organizer card with avatar + crown next to name
-        function _buildOrgCard(name, role, bgStyle, canRemove, removeEmail) {
+        // Helper: build organizer card with avatar + crown next to name.
+        // v2.4.83: quando isDropTarget=true (card do organizador principal, visto
+        // pelo criador), o card vira ALVO DE SOLTAR — arrastar um inscrito até a
+        // estrela do organizador "transforma" o card (pulsa + estrela brilha) e o
+        // soltar abre o convite de co-organização (_handleCrownDrop).
+        function _buildOrgCard(name, role, bgStyle, canRemove, removeEmail, isDropTarget) {
           var _oSeed = encodeURIComponent(name);
           var _oFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _oSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
           var _oPhoto = (window._playerPhotoCache && window._playerPhotoCache[(name || '').toLowerCase()] && window._playerPhotoCache[(name || '').toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[(name || '').toLowerCase()] : _oFallback;
-          return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;min-width:160px;">' +
+          var _safeTId = window._safeHtml(String(_t.id));
+          var _dropCls = isDropTarget ? ' sp-org-droptarget' : '';
+          // Desktop: arrastar um inscrito até aqui promove. Mobile (sem HTML5
+          // drag no toque): tocar abre o seletor de quem promover.
+          var _dropAttrs = isDropTarget
+            ? ' data-org-drop="1" title="Arraste um inscrito aqui ou toque para co-organizar" ondragover="event.preventDefault();event.dataTransfer.dropEffect=\'move\';this.classList.add(\'sp-org-drop-hover\');" ondragleave="this.classList.remove(\'sp-org-drop-hover\');" ondrop="this.classList.remove(\'sp-org-drop-hover\');if(window._handleCrownDrop)window._handleCrownDrop(event,\'' + _safeTId + '\')" onclick="if(window._openOrgPickerDialog)window._openOrgPickerDialog(\'' + _safeTId + '\')"'
+            : '';
+          var _starSpan = '<span class="sp-org-star" style="display:inline-flex;align-items:center;flex-shrink:0;">' + _crownSvg + '</span>';
+          var _hint = isDropTarget ? '<div class="sp-org-drop-hint">⭐ Arraste ou toque p/ co-organizar</div>' : '';
+          return '<div class="sp-org-card' + _dropCls + '"' + _dropAttrs + ' style="position:relative;' + (isDropTarget ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;min-width:160px;">' +
             '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);" />' +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="display:flex;align-items:center;gap:4px;font-weight:700;font-size:0.82rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(name) + ' ' + _crownSvg + '</div>' +
+              '<div style="display:flex;align-items:center;gap:4px;font-weight:700;font-size:0.82rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(name) + ' ' + _starSpan + '</div>' +
               '<div style="font-size:0.65rem;color:var(--text-muted);">' + role + '</div>' +
             '</div>' +
             (canRemove ? '<button style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;padding:2px;line-height:1;" title="Remover co-organizador" onclick="event.stopPropagation();window._removeCoHost(\'' + window._safeHtml(String(_t.id)) + '\',\'' + window._safeHtml(removeEmail) + '\')">✕</button>' : '') +
+            _hint +
           '</div>';
         }
         var _orgBgPrimary = 'background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.1));border:1px solid rgba(99,102,241,0.3);';
@@ -2232,7 +2246,8 @@ function renderTournaments(container, tournamentId = null) {
         // Sem gênero conhecido → forma neutra "Organizador(a)" / "Co-organizador(a)".
         var _primaryGender = _resolveOrgGender(_t.organizerEmail, _t.creatorUid);
         var _orgRoleLabel = _gw(_primaryGender, 'Organizador', 'Organizadora');
-        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '');
+        // Card principal vira alvo de soltar só pro CRIADOR (quem pode promover).
+        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', _isCreatorNow);
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
             if (ch.status !== 'active') return;
@@ -2240,6 +2255,9 @@ function renderTournaments(container, tournamentId = null) {
             var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
             _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.email);
           });
+          // v2.4.83: convites PENDENTES não aparecem aqui — o convidado continua
+          // na lista de inscritos com a tag âmbar "Aguardando aceite" (estrela à
+          // esquerda) até aceitar; só então vira card de co-organizador ativo.
         }
         // "Falar com o organizador" — visível só pra quem NÃO faz parte da
         // organização (participantes/visitantes logados). O próprio organizador
@@ -2251,7 +2269,18 @@ function renderTournaments(container, tournamentId = null) {
         if (_cu2 && !_viewerIsOrg && typeof window._contactOrgButtonHtml === 'function') {
           _contactBtnHtml = window._contactOrgButtonHtml(_t, {});
         }
-        _organizersHtml = '<div style="margin-top:1.25rem;margin-bottom:0.5rem;">' +
+        var _orgDropCss = '<style>' +
+          '.sp-org-droptarget{transition:outline 0.15s,box-shadow 0.2s,transform 0.15s;}' +
+          '.sp-org-droptarget .sp-org-star{transition:transform 0.2s,filter 0.2s;}' +
+          '.sp-org-droptarget.sp-org-drag-active{outline:2px dashed rgba(251,191,36,0.7);outline-offset:3px;animation:spOrgPulse 1.3s ease-in-out infinite;}' +
+          '.sp-org-droptarget.sp-org-drag-active .sp-org-star{transform:scale(1.45);filter:drop-shadow(0 0 6px rgba(251,191,36,0.9));}' +
+          '.sp-org-droptarget.sp-org-drop-hover{outline:2px solid #fbbf24;outline-offset:4px;transform:scale(1.04);box-shadow:0 0 18px rgba(251,191,36,0.45);}' +
+          '.sp-org-droptarget.sp-org-drop-hover .sp-org-star{transform:scale(1.7);filter:drop-shadow(0 0 8px rgba(251,191,36,1));}' +
+          '.sp-org-drop-hint{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#1a1a2e;font-size:0.58rem;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.4);opacity:0;pointer-events:none;transition:opacity 0.15s;z-index:5;}' +
+          '.sp-org-droptarget.sp-org-drag-active .sp-org-drop-hint{opacity:1;}' +
+          '@keyframes spOrgPulse{0%,100%{box-shadow:0 0 0 rgba(251,191,36,0);}50%{box-shadow:0 0 16px rgba(251,191,36,0.4);}}' +
+          '</style>';
+        _organizersHtml = '<div style="margin-top:1.25rem;margin-bottom:0.5rem;">' + _orgDropCss +
           '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;">ORGANIZAÇÃO</div>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + _orgCards + '</div>' +
           _contactBtnHtml + '</div>';
@@ -2442,6 +2471,7 @@ function renderTournaments(container, tournamentId = null) {
                     const _ciSafeNameHtml = window._safeHtml(_ciSafeName);
                     const _ciIsOrg = typeof window._isOrgName === 'function' && window._isOrgName(ind.name, t);
                     const _ciCrownInline = _ciIsOrg ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;vertical-align:middle;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
+                    const _ciPendBadge = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, ind.name)) ? window._pendingCoHostBadgeHtml() : '';
                     var _ciMergeDrag = (isOrg && !_isWOOrphanCI) ? 'draggable="true" ondragstart="window._mergeDragStart(event, \'' + _ciSafeName + '\', \'' + t.id + '\')" ondragend="window._mergeDragEnd(event)" ondragover="event.preventDefault();event.dataTransfer.dropEffect=\'move\';" ondragenter="window._mergeDragEnter(event)" ondragleave="window._mergeDragLeave(event)" ondrop="event.stopPropagation();window._mergeDrop(event, \'' + _ciSafeName + '\', \'' + t.id + '\')"' : '';
 
                     if (_isWOOrphanCI && ind.woMeta) {
@@ -2463,7 +2493,7 @@ function renderTournaments(container, tournamentId = null) {
                           <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_ciSafeName}');"><span class="toggle-slider"></span></label>
                           <img src="${_ciAvatar}" onerror="this.onerror=null;this.src='${_ciFallback}'" data-player-name="${window._safeHtml(ind.name)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.1)'};" />
                           <div style="flex:1;overflow:hidden;">
-                              <div style="font-weight:600;font-size:0.92rem;color:${mc ? '#4ade80' : 'var(--text-bright)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${mc ? 'text-decoration:line-through;text-decoration-color:rgba(74,222,128,0.3);' : ''}">${window._safeHtml(ind.name)}${_ciCrownInline}${vipTagCI}</div>
+                              <div style="font-weight:600;font-size:0.92rem;color:${mc ? '#4ade80' : 'var(--text-bright)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${mc ? 'text-decoration:line-through;text-decoration-color:rgba(74,222,128,0.3);' : ''}">${window._safeHtml(ind.name)}${_ciCrownInline}${vipTagCI}${_ciPendBadge}</div>
                               ${teamLabel ? `<div style="font-size:0.7rem;color:var(--text-muted);opacity:0.5;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${window._safeHtml(teamLabel)}</div>` : ''}
                           </div>
                           <div style="font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:8px;${mc ? 'background:rgba(16,185,129,0.15);color:#4ade80;' : 'background:rgba(239,68,68,0.12);color:#f87171;'}">${mc ? 'Presente' : 'Ausente'}</div>
@@ -2531,8 +2561,9 @@ function renderTournaments(container, tournamentId = null) {
                             const _mFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _mSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                             const _mIsOrg = typeof window._isOrgName === 'function' && window._isOrgName(n, t);
                             const _mCrown = _mIsOrg ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
+                            const _mPend = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, n)) ? window._pendingCoHostBadgeHtml() : '';
                             const _mNSafe = n.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                            return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_mNSafe}',{tournamentId:'${t.id}'})" title="Ver perfil de ${window._safeHtml(n)}"><img src="${_mPhoto}" onerror="this.onerror=null;this.src='${_mFallback}'" data-player-name="${window._safeHtml(n)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.95rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${window._safeHtml(n)}</span>${_mCrown}</div>`;
+                            return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_mNSafe}',{tournamentId:'${t.id}'})" title="Ver perfil de ${window._safeHtml(n)}"><img src="${_mPhoto}" onerror="this.onerror=null;this.src='${_mFallback}'" data-player-name="${window._safeHtml(n)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.95rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${window._safeHtml(n)}</span>${_mCrown}${_mPend}</div>`;
                         }).join('');
                     } else {
                         const _pSeed = encodeURIComponent(pName);
@@ -2554,9 +2585,10 @@ function renderTournaments(container, tournamentId = null) {
                         var _crownInline = _isOrgParticipant ? ' <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
                         // Estrela VIP inline ao lado do nome (igual à coroa de organizador)
                         var _vipInline = isVip ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;margin-left:2px;" title="VIP"><path d="M12 2L2 9l10 13L22 9z"/></svg>' : '';
+                        var _pPendBadge = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, pName, _pUid, _pEmail)) ? window._pendingCoHostBadgeHtml() : '';
                         const _pNSafe = pName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
                         const _pUidOpts = _pUid ? (',uid:\''+_pUid+'\'') : '';
-                        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pNSafe}',{tournamentId:'${t.id}'${_pUidOpts}})" title="Ver perfil de ${window._safeHtml(pName)}"><img src="${_pPhoto}" onerror="this.onerror=null;this.src='${_pFallback}'" data-player-name="${window._safeHtml(pName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">${window._safeHtml(pName)}</span>${_crownInline}${_vipInline}</div>`;
+                        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pNSafe}',{tournamentId:'${t.id}'${_pUidOpts}})" title="Ver perfil de ${window._safeHtml(pName)}"><img src="${_pPhoto}" onerror="this.onerror=null;this.src='${_pFallback}'" data-player-name="${window._safeHtml(pName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">${window._safeHtml(pName)}</span>${_crownInline}${_vipInline}${_pPendBadge}</div>`;
                     }
 
                     const vipBadge = isVip ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;margin-left:4px;">💎 VIP</span>' : '';
@@ -2830,7 +2862,7 @@ function renderTournaments(container, tournamentId = null) {
                    </h3>
                    ${checkInControls}
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
-                   ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> segure e arraste um inscrito até a <b>estrela dourada</b> que aparece no canto inferior direito (ela surge assim que você começa a arrastar). Funciona durante o torneio também.</div>' : ''}
+                   ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela brilha quando você começa a arrastar. No celular, <b>toque na estrela do organizador</b> e escolha quem promover. Funciona durante o torneio também.</div>' : ''}
                    <div data-merge-container="${t.id}" style="${gridStyle}">
                       ${cardsStr}
                    </div>

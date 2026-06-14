@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.82-beta';
+window.SCOREPLACE_VERSION = '2.4.83-beta';
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -3949,9 +3949,14 @@ window._getCompetitors = function(t) {
   var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
   var orgEmail = (t.organizerEmail || '').toLowerCase();
   var orgName = (t.organizerName || '').toLowerCase();
+  // v2.4.83: só co-hosts ATIVOS deixam de ser competidores. Um convite de
+  // co-organização PENDENTE não muda o status do participante — ele continua
+  // inscrito (e competindo) até aceitar. Antes, qualquer co-host (mesmo pendente)
+  // era excluído na hora do convite, fazendo o inscrito "sumir" da lista assim
+  // que era arrastado pra promover — e impedindo a tag "Aguardando aceite".
   var coHostEmails = {};
   if (Array.isArray(t.coHosts)) {
-    t.coHosts.forEach(function(ch) { if (ch.email) coHostEmails[ch.email.toLowerCase()] = true; });
+    t.coHosts.forEach(function(ch) { if (ch.email && ch.status === 'active') coHostEmails[ch.email.toLowerCase()] = true; });
   }
   return parts.filter(function(p) {
     if (p && p.selfEnrolled) return true; // explicitly enrolled — always keep

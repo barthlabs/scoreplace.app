@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.82-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⭐ Promover co-organizador ficou claro.</b> Arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela <b>brilha e mostra "Soltar p/ co-organizar"</b> quando você começa a arrastar. No <b>celular</b>, basta <b>tocar na estrela</b> e escolher quem promover. Enquanto o convite não é aceito, o convidado continua na lista de inscritos com a tag âmbar <b>"⭐ Aguardando aceite"</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.82-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>💬 "Falar com o organizador" padronizado.</b> O botão agora é igual na <b>dashboard</b> e no <b>detalhe do torneio</b>, e mostra o canal certo: <b>verde com ícone do WhatsApp</b> quando o organizador tem celular (abre a conversa direto), ou <b>azul</b> quando só há e-mail (abre o e-mail). A mensagem vai <b>sempre também pela plataforma</b>, e o que você manda pelo WhatsApp segue <b>cópia por e-mail</b>. Corrigido o botão da dashboard, que não estava funcionando.</li>' +
       '</ul>' +
