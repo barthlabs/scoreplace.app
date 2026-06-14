@@ -94,6 +94,12 @@
     (function(){
       var el = document.getElementById('scoreplace-boot-loader');
       if (!el) return;
+      // v2.4.74: enquanto o boot está em andamento, o router NÃO desenha o
+      // loader ANTIGO (_renderBallLoader) — nem mesmo atrás do splash. Isso
+      // mata de vez o flicker "novo↔velho": o loader antigo nunca aparece
+      // durante a abertura, independente do timing do splash. Vira false só
+      // quando o boot revela a tela (hide()).
+      window._bootInProgress = true;
       var bar = document.getElementById('scoreplace-boot-bar-fill');
       var hidden = false;
       var progress = 0;   // % exibido (animado por frame)
@@ -120,6 +126,7 @@
       var hide = function(){
         if (hidden) return;
         hidden = true;
+        window._bootInProgress = false; // boot revelou a tela → loader antigo liberado pra navegação normal
         progress = 100;
         if (bar) bar.style.width = '100%';
         // Deixa a barra cheia visível um instante antes de revelar a tela.
@@ -296,7 +303,7 @@
   <!-- Árbitros do torneio (v1.6.1-beta) -->
   <script src="js/views/arbitros.js?v=2.4.0-beta" defer></script>
 
-  <script src="js/router.js?v=2.4.8-beta" defer></script>
+  <script src="js/router.js?v=2.4.74-beta" defer></script>
   <script src="js/main.js?v=2.4.0-beta" defer></script>
   <script>
     if ('serviceWorker' in navigator) {

@@ -182,11 +182,13 @@ function initRouter() {
           // Cache presente, Firebase ainda não resolveu (pode ser sessão real
           // no IndexedDB com localStorage limpo pelo iOS) → spinner.
           // onAuthStateChanged chamará initRouter() quando resolver.
-          // v2.4.7: enquanto o boot splash (tela de carregamento de abertura)
-          // ainda cobre a tela, NÃO renderiza o loader antigo atrás dele —
-          // senão ele "vaza" quando o splash some (a "página de loading
-          // anterior" interrompendo a nova). O splash é o único loader visível.
-          viewContainer.innerHTML = document.getElementById('scoreplace-boot-loader')
+          // v2.4.74: durante TODO o boot (window._bootInProgress), NÃO renderiza
+          // o loader antigo — nem atrás do splash. Antes checávamos só o
+          // elemento do splash no DOM; se o splash sumia cedo (janela do login
+          // em que _authStateResolved já é true mas currentUser ainda não), o
+          // loader antigo vazava e piscava. Com _bootInProgress o velho nunca
+          // aparece na abertura, independente do timing do splash.
+          viewContainer.innerHTML = window._bootInProgress
             ? ''
             : ((typeof window._renderBallLoader === 'function')
               ? window._renderBallLoader('Carregando…', { minHeight: '60vh' })
@@ -200,8 +202,8 @@ function initRouter() {
         // Sem cache mas Firebase ainda não respondeu — pode ser usuário
         // com sessão no IndexedDB mas localStorage limpo pelo iOS.
         // Mostra spinner e aguarda até 3 s pelo onAuthStateChanged.
-        // v2.4.7: idem — não desenha o loader antigo atrás do boot splash.
-        viewContainer.innerHTML = document.getElementById('scoreplace-boot-loader')
+        // v2.4.74: idem — durante o boot, o loader antigo nunca é desenhado.
+        viewContainer.innerHTML = window._bootInProgress
           ? ''
           : ((typeof window._renderBallLoader === 'function')
             ? window._renderBallLoader('Carregando…', { minHeight: '60vh' })
@@ -440,8 +442,19 @@ function initRouter() {
   // Antes, o setter genérico disparava no 1º route (antes do auth resolver,
   // quando _waitingForFirstSnapshot ainda não existe), causando exatamente
   // esses dois sintomas (flicker novo↔antigo + dashboard sem perfil).
+  // v2.4.74: RECHECK contra a janela do login. onAuthStateChanged seta
+  // _authStateResolved=true no TOPO, antes do simulateLoginSuccess setar o
+  // currentUser. Logo, durante o boot logado existe um intervalo em que
+  // (_authStateResolved && !currentUser) é true — e o setter escondia o splash
+  // cedo demais. Agora esperamos ~600ms e só finalizamos se, passada a janela,
+  // AINDA não há usuário (deslogado real). Logado → currentUser aparece nesse
+  // meio-tempo e quem finaliza é o startRealtimeListener (após perfil + dados).
   if (window._authStateResolved && !(window.AppStore && window.AppStore.currentUser)) {
-    setTimeout(function() { window._bootReady = true; }, 150);
+    setTimeout(function() {
+      if (!(window.AppStore && window.AppStore.currentUser)) {
+        window._bootReady = true;
+      }
+    }, 600);
   }
 
   // Safety net: never leave a blank screen — if view-container is empty after 5s, go to dashboard
