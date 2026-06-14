@@ -727,25 +727,33 @@ window._openCommunicationDetail = async function(tId, commId) {
             '</div>';
 
         var recips = d.recipients || [];
-        function chip(on, onTxt, offTxt) {
-            return on ? '<span style="color:#34d399;">' + onTxt + '</span>' : '<span style="color:var(--text-muted);opacity:0.5;">' + offTxt + '</span>';
+        // ✓ = enviado · ✓✓ = entregue. Sem canal = —.
+        function deliveryCheck(sent, delivered, sentTitle, deliveredTitle) {
+            if (!sent) return '<span style="opacity:0.3;">—</span>';
+            if (delivered) return '<span style="color:#34d399;font-weight:700;letter-spacing:-3px;padding-right:3px;white-space:nowrap;" title="' + deliveredTitle + '">✓✓</span>';
+            return '<span style="color:var(--text-muted);" title="' + sentTitle + '">✓</span>';
         }
+        var cellSt = 'padding:6px 2px;text-align:center;font-size:0.95rem;';
         var rowsHtml = recips.map(function(r) {
-            var nameHtml = window._safeHtml(r.name || '') + (r.isOrganizer ? ' <span style="font-size:0.66rem;color:#a5b4fc;">(você · organizador)</span>' : '');
+            var nameHtml = window._safeHtml(r.name || '') + (r.isOrganizer ? ' <span style="font-size:0.62rem;color:#a5b4fc;">(você)</span>' : '');
             return '<tr style="border-top:1px solid var(--border-color,rgba(255,255,255,0.07));' + (r.isOrganizer ? 'background:rgba(99,102,241,0.06);' : '') + '">' +
-                '<td style="padding:7px 6px;font-size:0.8rem;color:var(--text-main);">' + nameHtml + '</td>' +
-                '<td style="padding:7px 6px;text-align:center;font-size:0.78rem;">' + (r.platform ? (r.platformOpened ? '<span style="color:#34d399;" title="abriu">✓ abriu</span>' : '<span style="color:var(--text-muted);" title="enviado, não aberto">enviado</span>') : '<span style="opacity:0.3;">—</span>') + '</td>' +
-                '<td style="padding:7px 6px;text-align:center;font-size:0.78rem;">' + chip(r.email, '✓', '—') + '</td>' +
-                '<td style="padding:7px 6px;text-align:center;font-size:0.78rem;">' + (r.whatsapp ? (r.whatsappDelivered ? '<span style="color:#34d399;" title="entregue">✓ entregue</span>' : '<span style="color:#f87171;" title="falhou/pendente">falhou</span>') : '<span style="opacity:0.3;">—</span>') + '</td>' +
+                '<td style="padding:6px 4px;font-size:0.78rem;color:var(--text-main);word-break:break-word;">' + nameHtml + '</td>' +
+                // Plataforma: aberto = entregue (✓✓)
+                '<td style="' + cellSt + '">' + deliveryCheck(r.platform, r.platformOpened, 'enviado', 'aberto') + '</td>' +
+                // E-mail: entrega não rastreada → só "enviado" (✓)
+                '<td style="' + cellSt + '">' + deliveryCheck(r.email, false, 'enviado (entrega não rastreada)', '') + '</td>' +
+                '<td style="' + cellSt + '">' + deliveryCheck(r.whatsapp, r.whatsappDelivered, 'enviado', 'entregue') + '</td>' +
             '</tr>';
         }).join('');
-        var table = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Por inscrito (' + recips.length + ')' + (d.skippedCount ? ' · ' + d.skippedCount + ' sem canal/elegibilidade' : '') + '</div>' +
-            '<table style="width:100%;border-collapse:collapse;">' +
-            '<thead><tr style="font-size:0.66rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">' +
-                '<th style="text-align:left;padding:4px 6px;">Inscrito</th>' +
-                '<th style="text-align:center;padding:4px 6px;">📱 Plataforma</th>' +
-                '<th style="text-align:center;padding:4px 6px;">✉️ E-mail</th>' +
-                '<th style="text-align:center;padding:4px 6px;">💬 WhatsApp</th>' +
+        var table = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Por inscrito (' + recips.length + ')' + (d.skippedCount ? ' · ' + d.skippedCount + ' sem canal/elegibilidade' : '') + '</div>' +
+            '<div style="font-size:0.66rem;color:var(--text-muted);margin-bottom:8px;"><span style="color:var(--text-muted);">✓</span> enviado · <span style="color:#34d399;font-weight:700;letter-spacing:-3px;">✓✓</span> entregue</div>' +
+            '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">' +
+            '<colgroup><col><col style="width:48px;"><col style="width:48px;"><col style="width:48px;"></colgroup>' +
+            '<thead><tr style="font-size:0.7rem;color:var(--text-muted);">' +
+                '<th style="text-align:left;padding:4px 4px;">Inscrito</th>' +
+                '<th style="text-align:center;padding:4px 2px;font-size:1rem;" title="Plataforma">📱</th>' +
+                '<th style="text-align:center;padding:4px 2px;font-size:1rem;" title="E-mail">✉️</th>' +
+                '<th style="text-align:center;padding:4px 2px;font-size:1rem;" title="WhatsApp">💬</th>' +
             '</tr></thead><tbody>' + rowsHtml + '</tbody></table>';
 
         bodyEl.innerHTML = summary + table;
