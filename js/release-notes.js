@@ -9,9 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.87-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.88-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>🚀 Abertura mais estável (de novo).</b> A tela de carregamento agora segura a dashboard até o conteúdo <b>parar de se montar</b> — espera as informações (presença, amigos, movimento, descoberta) <b>assentarem</b> antes de revelar, em vez de só esperar a descoberta. Fica um pouco mais de tempo no carregamento, mas <b>acaba com as travadas no scroll</b> logo na abertura.</li>' +
+        '<li><b>⏳ Carregamento inicial mais longo e firme.</b> A tela de abertura agora tem um <b>tempo mínimo garantido</b> na frente — não some mais cedo demais por nenhum caminho — e ainda <b>estende</b> enquanto a dashboard estiver montando informações. Objetivo: a dashboard só aparece já pronta, sem aquela travada no scroll na abertura.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.87-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🚀 Abertura mais estável.</b> A tela de carregamento espera as informações (presença, amigos, movimento, descoberta) <b>assentarem</b> antes de revelar a dashboard.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
