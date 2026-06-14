@@ -1650,8 +1650,20 @@ function renderDashboard(container) {
         };
 
         if (m.winner) {
-          // Confirmed result — up to 10 recent
-          recentConfirmed.push(Object.assign({ confirmedAt: m.updatedAt || m.proposedAt || 0, inP1: inP1 }, matchInfo));
+          // Confirmed result — up to 10 recent.
+          // v2.4.77: além do timestamp, guarda rodada+jogo pra desempatar quando
+          // os matches não têm updatedAt/proposedAt (caso comum em Liga/Suíço com
+          // resultado lançado sem stamp por-match). Sem isto, todos ficam com
+          // confirmedAt=0 e o sort vira no-op → a PRIMEIRA rodada inserida aparece
+          // como "último resultado" (bug: R2 mostrada sendo a R5 a última jogada).
+          var _rNum = (m.round != null && !isNaN(Number(m.round))) ? Number(m.round) : 0;
+          if (!_rNum) {
+            var _rm = String(m.label || m.roundLabel || '').match(/R(?:odada)?\s*(\d+)/i);
+            if (_rm) _rNum = Number(_rm[1]);
+          }
+          var _gm = String(m.label || '').match(/Jogo\s*(\d+)/i);
+          var _gSeq = _gm ? Number(_gm[1]) : 0;
+          recentConfirmed.push(Object.assign({ confirmedAt: m.updatedAt || m.proposedAt || 0, roundNum: _rNum, gameSeq: _gSeq, inP1: inP1 }, matchInfo));
         } else if (m.pendingResult) {
           var pr = m.pendingResult;
           if (pr.disputed) {
@@ -1680,7 +1692,16 @@ function renderDashboard(container) {
 
     // Recent confirmed: sort by confirmedAt desc, cap at 3 (últimos 3 jogos
     // jogados pelo usuário, somando todos os torneios). Pedido do usuário.
-    recentConfirmed.sort(function(a, b) { return (b.confirmedAt || 0) - (a.confirmedAt || 0); });
+    // v2.4.77: empate de timestamp (inclusive quando ambos são 0, comum em
+    // Liga/Suíço sem stamp por-match) cai pra rodada mais recente e, dentro da
+    // mesma rodada, o jogo mais recente — assim a ÚLTIMA rodada jogada aparece.
+    recentConfirmed.sort(function(a, b) {
+      var ta = a.confirmedAt || 0, tb = b.confirmedAt || 0;
+      if (ta !== tb) return tb - ta;
+      var ra = a.roundNum || 0, rb = b.roundNum || 0;
+      if (ra !== rb) return rb - ra;
+      return (b.gameSeq || 0) - (a.gameSeq || 0);
+    });
     recentConfirmed = recentConfirmed.slice(0, 3);
 
     var totalSection = pendingForMe.length + pendingByMe.length + disputedMatches.length + noResult.length + upcoming.length + recentConfirmed.length;
