@@ -449,21 +449,24 @@ function initRouter() {
   // cedo demais. Agora esperamos ~600ms e só finalizamos se, passada a janela,
   // AINDA não há usuário (deslogado real). Logado → currentUser aparece nesse
   // meio-tempo e quem finaliza é o startRealtimeListener (após perfil + dados).
-  // v2.4.91: NÃO revelar como deslogado quando há sessão em cache
-  // (scoreplace_authCache). Esse era o BUG do "continua rápido": num usuário
-  // LOGADO, durante o boot existe a janela (_authStateResolved && !currentUser)
-  // enquanto o login termina; este caminho disparava _markBootReady(1500) e
-  // escondia o splash em ~1,5s — ANTES do poller do dashboard (3,5s) e antes da
-  // dashboard montar. authCache presente = sessão logada (some no logout), então
-  // aqui só finaliza pra DESLOGADO de verdade (sem cache). Logado → quem revela
-  // é o startRealtimeListener, no tempo mínimo.
-  var _hasAuthCache0 = false;
-  try { _hasAuthCache0 = !!localStorage.getItem('scoreplace_authCache'); } catch (e) {}
-  if (window._authStateResolved && !_hasAuthCache0 && !(window.AppStore && window.AppStore.currentUser)) {
+  // v2.4.92: NÃO revelar como deslogado quando há sessão logada. Sinal
+  // AUTORITATIVO = firebase.auth().currentUser (não depende do localStorage,
+  // que o iOS pode limpar — por isso a v2.4.91, que olhava só o authCache, não
+  // pegava). Esse era o BUG do "continua rápido / abre em ~1,5s": num usuário
+  // LOGADO, durante o boot há a janela (_authStateResolved && !AppStore.user)
+  // enquanto o login termina; este caminho 'deslogado' escondia o splash cedo.
+  // Só finaliza pra DESLOGADO DE VERDADE: sem fb user, sem authCache, sem
+  // AppStore.user. Logado → quem revela é o poller do dashboard, no tempo mínimo.
+  var _fbUser = function() {
+    try { return !!(typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser); } catch (e) { return false; }
+  };
+  var _hasCache = function() {
+    try { return !!localStorage.getItem('scoreplace_authCache'); } catch (e) { return false; }
+  };
+  var _appUser = function() { return !!(window.AppStore && window.AppStore.currentUser); };
+  if (window._authStateResolved && !_fbUser() && !_hasCache() && !_appUser()) {
     setTimeout(function() {
-      var _hasAuthCache1 = false;
-      try { _hasAuthCache1 = !!localStorage.getItem('scoreplace_authCache'); } catch (e) {}
-      if (!_hasAuthCache1 && !(window.AppStore && window.AppStore.currentUser) && !window._waitingForFirstSnapshot) {
+      if (!_fbUser() && !_hasCache() && !_appUser() && !window._waitingForFirstSnapshot) {
         if (typeof window._markBootReady === 'function') window._markBootReady(1500, 'router-logged-out');
         else window._bootReady = true;
       }
