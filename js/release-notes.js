@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.96-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.97-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📱 Redefinir senha pelo celular.</b> Pra quem não recebe o e-mail de redefinição (UOL, Hotmail e afins filtram), agora dá pra redefinir a senha pelo <b>celular cadastrado na conta</b>: digite o número (máscara automática) e receba um código por <b>SMS</b> e por <b>WhatsApp</b> (com botão de 1 toque). Confirmou? Define a nova senha e já entra. Por segurança, só funciona com o celular que já está cadastrado na conta.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.4.96-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(14 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⚡ Scroll mais leve.</b> Dois ganhos de performance, sem mudar nada visual: (1) os cards que estão <b>fora da tela</b> deixam de ser desenhados até você chegar perto (rolagem bem mais fluida em listas longas); (2) removido um <b>efeito de desfoque invisível</b> da barra do topo, que fazia o navegador trabalhar à toa a cada quadro do scroll no iPhone.</li>' +
       '</ul>' +

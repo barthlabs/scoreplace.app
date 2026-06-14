@@ -2441,6 +2441,231 @@ exports.verifyPhoneGateToken = onCall(
   }
 );
 
+// ─── Redefinir senha por celular (v2.4.97) ───────────────────────────────────
+// Alternativa ao link no e-mail pra quem NÃO consegue receber o e-mail de reset
+// (ex.: UOL/Hotmail filtram transacional). A pessoa prova que controla o
+// CELULAR JÁ CADASTRADO na conta e ganha o direito de definir uma nova senha.
+//
+// SEGURANÇA: o código/botão SÓ é enviado pro número JÁ cadastrado na conta
+// (Auth phoneNumber OU users/{uid}.phone). Se o celular digitado não confere,
+// ou a conta não tem celular cadastrado, NÃO enviamos nada — caso contrário
+// qualquer um que soubesse o e-mail + tivesse um celular poderia sequestrar a
+// conta. Dois canais, espelhando o gate de verificação:
+//   • WhatsApp → código NOSSO de 6 dígitos + botão (?pr=TOKEN) de 1 toque.
+//   • SMS      → Firebase signInWithPhoneNumber no cliente (prova via idToken).
+// Verificado qualquer caminho: marca emailVerified=true e devolve um custom
+// token da conta do e-mail pra logar e gravar a nova senha (updatePassword).
+
+// Compara dois telefones ignorando DDI/+/formatação: bate se os últimos 10-11
+// dígitos (DDD+número) forem iguais.
+function _phoneDigitsMatch(a, b) {
+  const da = String(a || "").replace(/\D/g, "");
+  const db = String(b || "").replace(/\D/g, "");
+  if (da.length < 10 || db.length < 10) return false;
+  const ta = da.slice(-11);
+  const tb = db.slice(-11);
+  // Aceita match em 11 (com 9º dígito) ou 10 (fixo/legado) dígitos finais.
+  if (ta === tb) return true;
+  return da.slice(-10) === db.slice(-10);
+}
+
+// Telefone cadastrado na conta: prefere o perfil (Firestore), cai no Auth.
+async function _registeredPhoneFor(uid, userRecord) {
+  try {
+    const snap = await admin.firestore().collection("users").doc(uid).get();
+    if (snap.exists) {
+      const p = snap.data() && snap.data().phone;
+      if (p) return p;
+    }
+  } catch (e) { /* ignore */ }
+  return (userRecord && userRecord.phoneNumber) || null;
+}
+
+exports.sendPasswordResetPhone = onCall(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
+  },
+  async (request) => {
+    const data = request.data || {};
+    const email = String(data.email || "").trim().toLowerCase();
+    const phoneDigits = _normalizePhoneE164(data.phone || "");
+    if (!email || email.indexOf("@") < 0) return { ok: false, reason: "bad-email" };
+    if (!phoneDigits) return { ok: false, reason: "bad-phone" };
+
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch (e) {
+      return { ok: false, reason: "no-account" };
+    }
+
+    const registered = await _registeredPhoneFor(userRecord.uid, userRecord);
+    if (!registered) return { ok: false, reason: "no-phone" };
+    if (!_phoneDigitsMatch(registered, phoneDigits)) return { ok: false, reason: "phone-mismatch" };
+
+    const crypto = require("crypto");
+    const otp = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
+    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+    const token = crypto.randomBytes(18).toString("base64url");
+    const phoneE164 = "+" + phoneDigits;
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+    const db = admin.firestore();
+    try {
+      await db.collection("passwordResetPhone").doc(userRecord.uid).set({
+        uid: userRecord.uid, email, phone: phoneE164, otpHash, token, attempts: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt,
+      });
+      await db.collection("passwordResetTokens").doc(token).set({
+        uid: userRecord.uid, email, phone: phoneE164, expiresAt,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("[sendPasswordResetPhone] store failed:", err.code || err.message);
+      return { ok: false, reason: "store-error" };
+    }
+
+    const wrapperUrl = "https://scoreplace.app/?pr=" + encodeURIComponent(token);
+    const message =
+      "🎾 *scoreplace.app*\n\n" +
+      "Você pediu pra redefinir sua senha.\n\n" +
+      "Seu código: *" + otp + "*\n\n" +
+      "Digite ele no app — ou toque no link abaixo pra redefinir e entrar direto:\n\n" +
+      wrapperUrl + "\n\n" +
+      "_O código expira em 15 minutos. Se não foi você, ignore._";
+
+    let apiUrl, apiKey, instance;
+    try {
+      apiUrl = EVOLUTION_API_URL.value();
+      apiKey = EVOLUTION_API_KEY.value();
+      instance = EVOLUTION_INSTANCE.value();
+    } catch (err) {
+      console.error("[sendPasswordResetPhone] secrets unavailable:", err.message);
+      return { ok: false, reason: "secrets-missing" };
+    }
+    const result = await _sendWhatsAppText(apiUrl, apiKey, instance, phoneDigits, message);
+    if (!result.ok) {
+      console.warn("[sendPasswordResetPhone] WA send failed for", phoneDigits, ":", result.error);
+      // Mesmo se o WhatsApp falhar, o SMS (Firebase, no cliente) pode ter ido.
+      // Devolve ok:true pra não bloquear — o pendente já está gravado.
+      return { ok: true, waFailed: true };
+    }
+    console.log("[sendPasswordResetPhone] sent to", phoneDigits, "uid:", userRecord.uid);
+    return { ok: true };
+  }
+);
+
+// Marca a verificação como aprovada e devolve um custom token da conta do
+// e-mail. Compartilhado pelos dois caminhos (código digitado / botão do WA).
+async function _approvePasswordResetPhone(uid, phoneE164, token) {
+  const db = admin.firestore();
+  await admin.auth().updateUser(uid, { emailVerified: true }).catch(() => {});
+  const upd = { emailVerified: true, updatedAt: new Date().toISOString() };
+  if (phoneE164) { upd.phone = phoneE164; upd.phoneCountry = "55"; }
+  await db.collection("users").doc(uid).set(upd, { merge: true }).catch(() => {});
+  let customToken = null;
+  try {
+    customToken = await admin.auth().createCustomToken(uid, { source: "pw_reset_phone" });
+  } catch (err) {
+    console.error("[pwResetPhone] createCustomToken failed:", err.code || err.message);
+  }
+  await db.collection("passwordResetPhone").doc(uid).delete().catch(() => {});
+  if (token) await db.collection("passwordResetTokens").doc(token).delete().catch(() => {});
+  return customToken;
+}
+
+// Verifica o código digitado no app. Aceita:
+//   • { email, code:"123456" } → código NOSSO que foi pelo WhatsApp.
+//   • { email, idToken }       → prova do SMS do Firebase (idToken da sessão
+//     de telefone criada por signInWithPhoneNumber). Confere se o phone_number
+//     do token bate com o pendente.
+exports.verifyPasswordResetPhone = onCall(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+  },
+  async (request) => {
+    const data = request.data || {};
+    const email = String(data.email || "").trim().toLowerCase();
+    if (!email || email.indexOf("@") < 0) return { ok: false, reason: "bad-email" };
+
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch (e) {
+      return { ok: false, reason: "no-account" };
+    }
+    const uid = userRecord.uid;
+    const db = admin.firestore();
+    const ref = db.collection("passwordResetPhone").doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, reason: "no-pending" };
+    const v = snap.data();
+    const exp = v.expiresAt && v.expiresAt.toDate ? v.expiresAt.toDate() : v.expiresAt;
+    if (exp && new Date(exp) < new Date()) { await ref.delete().catch(() => {}); return { ok: false, reason: "expired" }; }
+
+    if (data.idToken) {
+      let decoded;
+      try {
+        decoded = await admin.auth().verifyIdToken(String(data.idToken));
+      } catch (e) {
+        return { ok: false, reason: "bad-idtoken" };
+      }
+      const tokenPhone = decoded && decoded.phone_number;
+      if (!tokenPhone || !_phoneDigitsMatch(tokenPhone, v.phone)) {
+        return { ok: false, reason: "sms-mismatch" };
+      }
+      const ct = await _approvePasswordResetPhone(uid, v.phone || null, v.token);
+      console.log("[verifyPasswordResetPhone] SMS ok, uid:", uid);
+      return { ok: true, customToken: ct, email };
+    }
+
+    const code = String(data.code || "").trim();
+    if (!/^\d{6}$/.test(code)) return { ok: false, reason: "bad-code" };
+    if ((v.attempts || 0) >= 6) return { ok: false, reason: "too-many" };
+    const crypto = require("crypto");
+    const hash = crypto.createHash("sha256").update(code).digest("hex");
+    if (hash !== v.otpHash) {
+      await ref.update({ attempts: (v.attempts || 0) + 1 }).catch(() => {});
+      return { ok: false, reason: "wrong-code" };
+    }
+    const ct = await _approvePasswordResetPhone(uid, v.phone || null, v.token);
+    console.log("[verifyPasswordResetPhone] code ok, uid:", uid);
+    return { ok: true, customToken: ct, email };
+  }
+);
+
+// Resolve o botão do WhatsApp (?pr=TOKEN). NÃO requer auth — o token é o segredo
+// (vai só pro dono do telefone cadastrado). Devolve custom token pra logar e
+// definir a nova senha no app.
+exports.verifyPasswordResetPhoneToken = onCall(
+  {
+    region: "us-central1",
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+  },
+  async (request) => {
+    const token = String((request.data && request.data.token) || "").trim();
+    if (!token) return { ok: false, reason: "no-token" };
+    const db = admin.firestore();
+    const ref = db.collection("passwordResetTokens").doc(token);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, reason: "invalid-token" };
+    const t = snap.data();
+    const exp = t.expiresAt && t.expiresAt.toDate ? t.expiresAt.toDate() : t.expiresAt;
+    if (exp && new Date(exp) < new Date()) { await ref.delete().catch(() => {}); return { ok: false, reason: "expired" }; }
+    const ct = await _approvePasswordResetPhone(t.uid, t.phone || null, token);
+    console.log("[verifyPasswordResetPhoneToken] token ok, uid:", t.uid);
+    return { ok: true, customToken: ct, email: t.email };
+  }
+);
+
 exports.processWhatsAppQueue = onDocumentCreated(
   {
     document: "whatsapp_queue/{queueId}",

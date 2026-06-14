@@ -321,6 +321,71 @@
   }
 })();
 
+// ── Redefinir senha pelo botão do WhatsApp (?pr=TOKEN) ───────────────────────
+// v2.4.97: a pessoa pediu reset por celular e tocou no botão do WhatsApp →
+// verifyPasswordResetPhoneToken devolve um custom token; logamos a conta e
+// mostramos a tela de nova senha (e-mail pré-preenchido) direto aqui.
+(function _handlePasswordResetToken() {
+  try {
+    var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
+    var token = qs && qs.get('pr');
+    if (!token) return;
+
+    var bg = '#0f172a';
+    var fg = '#25d366';
+    document.documentElement.style.background = bg;
+    var showStatus = function(emoji, title, subtitle, isError) {
+      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + bg + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
+        '<div style="font-size:2.4rem;line-height:1;">' + emoji + '</div>' +
+        '<div style="font-size:1.05rem;font-weight:700;color:' + (isError ? '#ef4444' : fg) + ';">' + title + '</div>' +
+        (subtitle ? '<div style="font-size:0.85rem;color:#94a3b8;max-width:340px;line-height:1.5;">' + subtitle + '</div>' : '') +
+        (isError ? '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Voltar ao início</a>' : '') +
+        '</div>';
+    };
+
+    showStatus('💬', 'Validando…', 'Confirmando o código do WhatsApp');
+
+    var tries = 0;
+    (function resolve() {
+      var fb = window.firebase;
+      if (!fb || !fb.auth || !fb.functions) {
+        if (tries++ < 80) return setTimeout(resolve, 100); // até 8s
+        showStatus('⚠️', 'Não foi possível carregar', 'Verifique sua conexão e tente abrir o link de novo.', true);
+        return;
+      }
+      var fn;
+      try { fn = fb.functions().httpsCallable('verifyPasswordResetPhoneToken'); }
+      catch (e) { showStatus('⚠️', 'Erro ao carregar', 'Tente abrir o link de novo.', true); return; }
+      fn({ token: token }).then(function(res) {
+        var d = (res && res.data) || {};
+        if (!d.ok) {
+          if (d.reason === 'expired') { showStatus('⏱️', 'Link expirado', 'O código do WhatsApp expirou. Abra o app e peça um novo.', true); return; }
+          showStatus('🔗', 'Link inválido', 'Esse link não é mais válido. Abra o app e tente de novo.', true);
+          return;
+        }
+        if (d.customToken) {
+          fb.auth().signInWithCustomToken(d.customToken).then(function() {
+            if (typeof window._resetShowNewPassword === 'function') {
+              window._resetShowNewPassword(d.email || '');
+            } else {
+              showStatus('✅', 'Quase lá!', 'Volte ao app pra definir sua nova senha.', false);
+            }
+          }).catch(function() {
+            showStatus('⚠️', 'Erro ao entrar', 'Tente abrir o link de novo.', true);
+          });
+        } else {
+          showStatus('✅', 'Confirmado!', 'Volte ao app pra definir sua nova senha.', false);
+        }
+      }).catch(function(err) {
+        if (window._error) window._error('[prToken] failed:', err);
+        showStatus('⚠️', 'Erro ao confirmar', 'Tente abrir o link de novo. Se persistir, entre pelo app.', true);
+      });
+    })();
+  } catch (e) {
+    if (window._error) window._error('[prToken] handler crashed:', e);
+  }
+})();
+
 // ─── Config Firebase: PRODUÇÃO por padrão, STAGING só por hostname ────────────
 // scoreplace.app (e qualquer host que NÃO seja o staging, incl. localhost de
 // preview) usa exatamente os valores de produção de sempre — INTOCADO. Só o
@@ -2278,12 +2343,17 @@ function _sendPasswordResetEmail(email) {
   var _showSent = function() {
     var panel = document.getElementById('reset-password-panel');
     if (panel) {
+      var _safeResetEmail = (email || '').replace(/'/g, "\\'");
       panel.innerHTML =
         '<div style="text-align:center;padding:8px 0;">' +
           '<div style="font-size:1.4rem;margin-bottom:6px;">✅</div>' +
           '<div style="font-weight:700;color:var(--text-bright);font-size:0.9rem;margin-bottom:4px;">Link enviado!</div>' +
           '<div style="font-size:0.78rem;color:var(--text-muted);">Verifique <b>' + email + '</b> (e a caixa de <b>spam/lixo eletrônico</b>).<br>Clique no link do e-mail para criar sua nova senha.</div>' +
           '<button onclick="document.getElementById(\'reset-password-panel\').remove()" style="margin-top:10px;background:none;border:none;color:var(--primary-color);cursor:pointer;font-size:0.8rem;text-decoration:underline;">Fechar</button>' +
+          // v2.4.97: caminho alternativo por celular (e-mail não chega no UOL/Hotmail).
+          '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
+          '<div style="font-size:0.74rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Redefina pelo seu <b>celular cadastrado</b> — recebe um código por SMS e WhatsApp.</div>' +
+          '<button onclick="window._resetPhoneStart(\'' + _safeResetEmail + '\')" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-size:0.88rem;font-weight:800;padding:11px;">📱 Redefinir por celular</button>' +
         '</div>';
     }
   };
@@ -2329,6 +2399,293 @@ function _sendPasswordResetEmail(email) {
     _nativeReset();
   }
 }
+
+// ─── Redefinir senha por celular (v2.4.97) ───────────────────────────────────
+// Caminho alternativo dentro do painel "Link enviado!" pra quem não recebe o
+// e-mail de reset. A pessoa digita o celular CADASTRADO na conta → recebe
+// código por SMS (Firebase) + WhatsApp (código + botão) → confirma → define
+// nova senha (e-mail pré-preenchido) e entra. Espelha o gate por celular.
+window._resetPhoneEmail = '';
+window._resetSmsConfirmation = null;
+
+// Máscara BR ao digitar: aceita só dígitos e formata (11) 99999-8888 / (11) 9999-8888.
+window._fmtPhoneBR = function(digits) {
+  var d = String(digits || '').replace(/\D/g, '').slice(0, 11);
+  if (d.length === 0) return '';
+  if (d.length <= 2) return '(' + d;
+  var ddd = d.slice(0, 2);
+  var rest = d.slice(2);
+  if (rest.length <= 4) return '(' + ddd + ') ' + rest;
+  if (rest.length <= 8) return '(' + ddd + ') ' + rest.slice(0, 4) + '-' + rest.slice(4); // fixo 8 díg.
+  return '(' + ddd + ') ' + rest.slice(0, 5) + '-' + rest.slice(5); // celular 9 díg.
+};
+
+window._resetPhoneMask = function(el) {
+  if (!el) return;
+  var d = el.value.replace(/\D/g, '').slice(0, 11);
+  el.value = window._fmtPhoneBR(d);
+  var prev = document.getElementById('reset-phone-preview');
+  if (prev) {
+    prev.textContent = d.length >= 10
+      ? ('📞 +55 ' + window._fmtPhoneBR(d))
+      : 'Formato: (11) 99999-8888';
+  }
+};
+
+window._resetPhoneStart = function(email) {
+  if (email) window._resetPhoneEmail = email;
+  var email2 = window._resetPhoneEmail || '';
+  var panel = document.getElementById('reset-password-panel');
+  if (!panel) {
+    // Sem painel (caso raro) — cria um inline acima do form de login.
+    var anchor = document.getElementById('email-login-mode');
+    if (!anchor) return;
+    panel = document.createElement('div');
+    panel.id = 'reset-password-panel';
+    panel.style.cssText = 'margin-bottom:12px;padding:14px 16px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:12px;';
+    anchor.parentNode.insertBefore(panel, anchor);
+  }
+  panel.innerHTML =
+    '<div style="font-weight:700;font-size:0.9rem;color:var(--text-bright);margin-bottom:4px;">📱 Redefinir por celular</div>' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45;">Digite o celular <b>cadastrado nesta conta</b>. Você recebe um código por <b>SMS</b> e por <b>WhatsApp</b> (com botão de 1 toque).</div>' +
+    '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px;">' +
+      '<span style="display:flex;align-items:center;padding:0 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);border-radius:10px;font-size:0.9rem;font-weight:700;color:var(--text-bright);white-space:nowrap;">🇧🇷 +55</span>' +
+      '<input id="reset-phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-8888" oninput="window._resetPhoneMask(this)" style="flex:1;min-width:0;box-sizing:border-box;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright);font-size:1rem;" />' +
+    '</div>' +
+    '<div id="reset-phone-preview" style="font-size:0.74rem;color:var(--text-muted);min-height:16px;margin-bottom:10px;">Formato: (11) 99999-8888</div>' +
+    '<button id="reset-phone-send-btn" onclick="window._resetPhoneSend()" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-weight:800;font-size:0.88rem;padding:11px;margin-bottom:8px;">Enviar código</button>' +
+    '<div id="reset-phone-status" style="min-height:18px;font-size:0.74rem;margin-bottom:6px;"></div>' +
+    '<div style="text-align:center;">' +
+      '<button onclick="document.getElementById(\'reset-password-panel\').remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.78rem;text-decoration:underline;">Cancelar</button>' +
+    '</div>';
+  setTimeout(function() { var i = document.getElementById('reset-phone-input'); if (i) i.focus(); }, 50);
+};
+
+window._resetPhoneSend = function() {
+  var inp = document.getElementById('reset-phone-input');
+  var statusEl = document.getElementById('reset-phone-status');
+  var btn = document.getElementById('reset-phone-send-btn');
+  var email = window._resetPhoneEmail || '';
+  var raw = inp ? inp.value.trim() : '';
+  var digits = raw.replace(/\D/g, '');
+  if (!email) { if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">E-mail não informado. Volte e digite seu e-mail.</span>'; return; }
+  if (digits.length < 10) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Digite DDD + número (ex: 11 99999-8888).</span>';
+    if (inp) inp.focus();
+    return;
+  }
+  var phoneE164 = (typeof window._normalizePhoneE164 === 'function')
+    ? window._normalizePhoneE164(raw, '55')
+    : ('+55' + digits);
+  if (!phoneE164) { if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Número inválido. Confira o DDD + número.</span>'; return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Verificando o celular…</span>';
+
+  if (!firebase.functions) { if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Serviço indisponível. Tente o link no e-mail.</span>'; if (btn) { btn.disabled = false; btn.textContent = 'Enviar código'; } return; }
+
+  firebase.functions().httpsCallable('sendPasswordResetPhone')({ email: email, phone: phoneE164 })
+    .then(function(res) {
+      var d = (res && res.data) || {};
+      if (!d.ok) {
+        var msg = 'Não foi possível enviar. Tente o link no e-mail.';
+        if (d.reason === 'no-phone') msg = 'Esta conta não tem celular cadastrado. Use o link enviado no e-mail.';
+        else if (d.reason === 'phone-mismatch') msg = 'Esse celular não confere com o cadastrado nesta conta.';
+        else if (d.reason === 'no-account') msg = 'Não encontramos uma conta com esse e-mail.';
+        else if (d.reason === 'bad-phone') msg = 'Número inválido. Confira o DDD + número.';
+        if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">' + msg + '</span>';
+        if (btn) { btn.disabled = false; btn.textContent = 'Enviar código'; }
+        return;
+      }
+      // Celular confere → dispara SMS (Firebase) em paralelo, best-effort.
+      window._resetFireSms(phoneE164);
+      window._resetShowCodeStep(phoneE164);
+    })
+    .catch(function(err) {
+      window._warn && window._warn('[resetPhone] send falhou:', err && (err.code || err.message));
+      if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Erro ao enviar. Tente novamente.</span>';
+      if (btn) { btn.disabled = false; btn.textContent = 'Enviar código'; }
+    });
+};
+
+// SMS via Firebase (best-effort). Em caso de falha (reCAPTCHA iOS, quota), o
+// WhatsApp já cobre o fluxo — não bloqueia.
+window._resetFireSms = function(phoneE164) {
+  window._resetSmsConfirmation = null;
+  try {
+    if (typeof _ensureRecaptchaInBody === 'function') _ensureRecaptchaInBody();
+    if (typeof _resetPhoneRecaptcha === 'function') _resetPhoneRecaptcha();
+    window._phoneRecaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+      size: 'invisible', callback: function() {}, 'expired-callback': function() {}
+    });
+    window._phoneRecaptchaVerifier.render().then(function() {
+      return firebase.auth().signInWithPhoneNumber(phoneE164, window._phoneRecaptchaVerifier);
+    }).then(function(confirmation) {
+      window._resetSmsConfirmation = confirmation;
+    }).catch(function(e) {
+      window._warn && window._warn('[resetPhone] SMS falhou:', e && (e.code || e.message));
+      window._resetSmsConfirmation = null;
+    });
+  } catch (e) {
+    window._warn && window._warn('[resetPhone] recaptcha crash:', e && e.message);
+    window._resetSmsConfirmation = null;
+  }
+};
+
+window._resetShowCodeStep = function(phoneE164) {
+  var panel = document.getElementById('reset-password-panel');
+  if (!panel) return;
+  panel.innerHTML =
+    '<div style="font-weight:700;font-size:0.9rem;color:var(--text-bright);margin-bottom:4px;">🔑 Digite o código</div>' +
+    '<div style="font-size:0.8rem;color:#25d366;font-weight:700;margin-bottom:8px;">' + (window._safeHtml ? window._safeHtml(phoneE164 || '') : (phoneE164 || '')) + '</div>' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45;">Enviamos um código por <b>SMS</b> e por <b>WhatsApp</b>. Digite qualquer um — ou toque no botão da mensagem do WhatsApp pra redefinir direto.</div>' +
+    '<input id="reset-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:8px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright);font-size:1.3rem;font-weight:800;margin-bottom:10px;" />' +
+    '<button id="reset-code-verify-btn" onclick="window._resetPhoneVerify()" class="btn btn-success btn-block" style="font-size:0.9rem;font-weight:800;padding:11px;margin-bottom:8px;">✅ Confirmar</button>' +
+    '<div id="reset-code-status" style="min-height:18px;font-size:0.74rem;margin-bottom:6px;"></div>' +
+    '<div style="text-align:center;">' +
+      '<button onclick="window._resetPhoneStart()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.78rem;text-decoration:underline;">← Trocar número</button>' +
+    '</div>';
+  setTimeout(function() { var c = document.getElementById('reset-code-input'); if (c) c.focus(); }, 50);
+};
+
+window._resetPhoneVerify = function() {
+  var ci = document.getElementById('reset-code-input');
+  var statusEl = document.getElementById('reset-code-status');
+  var btn = document.getElementById('reset-code-verify-btn');
+  var email = window._resetPhoneEmail || '';
+  var code = ci ? ci.value.replace(/\D/g, '') : '';
+  if (code.length !== 6) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">O código tem 6 dígitos.</span>';
+    if (ci) ci.focus();
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Verificando…</span>';
+
+  var _fail = function(msg) {
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar'; }
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira no SMS/WhatsApp.') + '</span>';
+    if (ci) { ci.focus(); ci.select && ci.select(); }
+  };
+
+  if (!firebase.functions) { _fail('Serviço indisponível.'); return; }
+
+  // 1) Tenta o código NOSSO (WhatsApp).
+  firebase.functions().httpsCallable('verifyPasswordResetPhone')({ email: email, code: code })
+    .then(function(res) {
+      var d = (res && res.data) || {};
+      if (d.ok && d.customToken) { return window._resetSignInAndSetPwd(d.customToken, d.email || email); }
+      // 2) Tenta o código do Firebase (SMS) — confirma e prova via idToken.
+      if (window._resetSmsConfirmation) {
+        return window._resetSmsConfirmation.confirm(code).then(function() {
+          var u = firebase.auth().currentUser;
+          if (!u) throw new Error('no-sms-user');
+          return u.getIdToken().then(function(idToken) {
+            return firebase.functions().httpsCallable('verifyPasswordResetPhone')({ email: email, idToken: idToken })
+              .then(function(r2) {
+                var d2 = (r2 && r2.data) || {};
+                if (d2.ok && d2.customToken) { return window._resetSignInAndSetPwd(d2.customToken, d2.email || email); }
+                throw new Error('sms-verify-failed');
+              });
+          });
+        });
+      }
+      throw new Error('wrong-code');
+    })
+    .catch(function(err) {
+      window._warn && window._warn('[resetPhone] verify falhou:', err && (err.code || err.message));
+      _fail();
+    });
+};
+
+// Loga com o custom token da conta do e-mail e mostra a tela de nova senha.
+window._resetSignInAndSetPwd = function(customToken, email) {
+  return firebase.auth().signInWithCustomToken(customToken)
+    .then(function() {
+      var u = firebase.auth().currentUser;
+      return (u && u.reload) ? u.reload().catch(function() {}) : null;
+    })
+    .then(function() {
+      window._resetShowNewPassword(email);
+    });
+};
+
+// Tela de nova senha (e-mail pré-preenchido). Funciona em app E na página
+// standalone do botão do WhatsApp (?pr=). Overlay full-screen.
+window._resetShowNewPassword = function(email) {
+  var old = document.getElementById('reset-newpwd-overlay');
+  if (old) old.remove();
+  var safeEmail = (email || '').replace(/"/g, '&quot;');
+  var ov = document.createElement('div');
+  ov.id = 'reset-newpwd-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:100060;background:var(--bg-darker,#0a0e1a);display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto;box-sizing:border-box;';
+  ov.innerHTML =
+    '<div style="max-width:380px;width:100%;background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:26px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+      '<div style="font-size:2.2rem;text-align:center;margin-bottom:6px;">🔒</div>' +
+      '<div style="font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);text-align:center;margin-bottom:6px;">Defina sua nova senha</div>' +
+      '<div style="font-size:0.82rem;color:var(--text-muted);text-align:center;margin-bottom:16px;word-break:break-all;">' + (window._safeHtml ? window._safeHtml(email || '') : (email || '')) + '</div>' +
+      '<form id="reset-newpwd-form" autocomplete="on" onsubmit="event.preventDefault();window._resetSaveNewPassword()">' +
+        '<input type="email" name="email" autocomplete="username" value="' + safeEmail + '" readonly style="display:none;">' +
+        '<input type="password" id="reset-newpwd" name="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;margin-bottom:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
+        '<input type="password" id="reset-newpwd-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar nova senha" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;margin-bottom:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
+        '<div id="reset-newpwd-error" style="font-size:0.78rem;color:#f87171;margin-bottom:10px;display:none;"></div>' +
+        '<button type="submit" id="reset-newpwd-btn" class="btn btn-success btn-block" style="font-size:0.95rem;font-weight:800;padding:13px;">Salvar e entrar</button>' +
+      '</form>' +
+    '</div>';
+  document.body.appendChild(ov);
+  setTimeout(function() { var el = document.getElementById('reset-newpwd'); if (el) el.focus(); }, 80);
+};
+
+window._resetSaveNewPassword = function() {
+  var pwd = (document.getElementById('reset-newpwd') || {}).value || '';
+  var confirm = (document.getElementById('reset-newpwd-confirm') || {}).value || '';
+  var errEl = document.getElementById('reset-newpwd-error');
+  var btn = document.getElementById('reset-newpwd-btn');
+  var showErr = function(msg) { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } };
+  if (pwd.length < 6) { showErr('A senha precisa ter pelo menos 6 caracteres.'); return; }
+  if (pwd !== confirm) { showErr('As senhas não coincidem.'); return; }
+  if (errEl) errEl.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
+
+  var u = firebase.auth().currentUser;
+  if (!u) { showErr('Sessão expirada. Tente de novo pelo app.'); if (btn) { btn.disabled = false; btn.textContent = 'Salvar e entrar'; } return; }
+
+  // standalone = página do botão do WhatsApp (?pr=), onde o DOM do app foi
+  // substituído pela tela de status. Lá, recarrega pra entrar limpo.
+  var standalone = !document.getElementById('view-container');
+
+  u.updatePassword(pwd)
+    .then(function() {
+      if (window.FirestoreDB && window.FirestoreDB.db && u.uid) {
+        window.FirestoreDB.db.collection('users').doc(u.uid).set({
+          authProvider: 'password', emailVerified: true, updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(function() {});
+      }
+      if (typeof _resetPhoneRecaptcha === 'function') { try { _resetPhoneRecaptcha(); } catch (e) {} }
+      var ov = document.getElementById('reset-newpwd-overlay'); if (ov) ov.remove();
+      var rp = document.getElementById('reset-password-panel'); if (rp) rp.remove();
+      var ml = document.getElementById('modal-login'); if (ml) ml.classList.remove('active');
+      if (window.showNotification) window.showNotification('✅ Senha redefinida!', 'Você já está conectado.', 'success');
+
+      if (standalone) {
+        try { window.location.hash = '#dashboard'; } catch (e) {}
+        window.location.reload();
+        return;
+      }
+      Promise.resolve(simulateLoginSuccess({ uid: u.uid, email: u.email, displayName: u.displayName, photoURL: u.photoURL }))
+        .then(function() {
+          window.location.hash = '#dashboard';
+          if (typeof initRouter === 'function') initRouter();
+        });
+    })
+    .catch(function(err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Salvar e entrar'; }
+      var msg = 'Erro ao salvar a senha.';
+      if (err && err.code === 'auth/requires-recent-login') msg = 'Sessão expirou. Peça um novo código e tente de novo.';
+      else if (err && err.code === 'auth/weak-password') msg = 'Senha muito fraca. Use pelo menos 6 caracteres.';
+      showErr(msg);
+    });
+};
 
 // ─── Toggle between login and register mode ──────────────────────────────────
 function toggleEmailMode(mode) {
