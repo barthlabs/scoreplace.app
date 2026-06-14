@@ -451,10 +451,15 @@ function initRouter() {
   // meio-tempo e quem finaliza é o startRealtimeListener (após perfil + dados).
   if (window._authStateResolved && !(window.AppStore && window.AppStore.currentUser)) {
     setTimeout(function() {
-      if (!(window.AppStore && window.AppStore.currentUser)) {
-        window._bootReady = true;
+      // v2.4.89: só finaliza como DESLOGADO se, passada a janela maior (900ms),
+      // ainda não há usuário E o listener de dados (logado) não começou — senão
+      // é login lento e quem revela é o startRealtimeListener (poller), no tempo
+      // mínimo. Usa _markBootReady pra respeitar o piso mesmo com shell em cache.
+      if (!(window.AppStore && window.AppStore.currentUser) && !window._waitingForFirstSnapshot) {
+        if (typeof window._markBootReady === 'function') window._markBootReady(1500);
+        else window._bootReady = true;
       }
-    }, 600);
+    }, 900);
   }
 
   // Safety net: never leave a blank screen — if view-container is empty after 5s, go to dashboard

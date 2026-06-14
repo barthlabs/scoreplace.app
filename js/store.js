@@ -1,4 +1,23 @@
-window.SCOREPLACE_VERSION = '2.4.88-beta';
+window.SCOREPLACE_VERSION = '2.4.89-beta';
+
+// ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
+// v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).
+// Mas o index.html fica em cache no PWA (iOS) — o JS atualiza (network-first),
+// o shell HTML não. Resultado: o usuário roda JS novo dentro de um shell antigo,
+// e o boot loader antigo escondia a tela cedo demais. Por isso "continua rápido".
+// Solução: gatear _bootReady AQUI (store.js é network-first → sempre fresco).
+// TODOS os caminhos que liberam a tela chamam _markBootReady(min): só seta
+// _bootReady=true depois de `min` ms desde o open do app. Assim, mesmo com o
+// shell velho em cache, a tela inicial respeita o tempo mínimo.
+window.__bootT0 = window.__bootT0 || Date.now();
+window._BOOT_MIN_MS = 3500;
+window._markBootReady = function(minMs) {
+  if (window._bootReady === true) return;
+  if (typeof minMs !== 'number') minMs = window._BOOT_MIN_MS;
+  var _el = Date.now() - (window.__bootT0 || Date.now());
+  if (_el < minMs) { setTimeout(function() { window._markBootReady(minMs); }, minMs - _el); return; }
+  window._bootReady = true;
+};
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -2765,7 +2784,7 @@ window.AppStore = {
       if (window._waitingForFirstSnapshot) {
         window._waitingForFirstSnapshot = false;
         // Sem dados do servidor — revela o que houver (cache) mesmo assim.
-        window._bootReady = true;
+        window._markBootReady();
         if (typeof window._hideBootLoader === 'function') window._hideBootLoader();
       }
     }, 5000);
@@ -2861,7 +2880,7 @@ window.AppStore = {
             var _onDash = (_hash0 === '' || _hash0 === 'dashboard');
             if (!_onDash) {
               requestAnimationFrame(function() {
-                setTimeout(function() { window._bootReady = true; }, 550);
+                setTimeout(function() { window._markBootReady(1000); }, 550);
               });
               return;
             }
@@ -2895,7 +2914,7 @@ window.AppStore = {
               if (_revealed) return; _revealed = true;
               if (_obs) { try { _obs.disconnect(); } catch (e) {} }
               requestAnimationFrame(function() {
-                setTimeout(function() { window._bootReady = true; }, 200);
+                setTimeout(function() { window._markBootReady(); }, 200);
               });
             };
             if (typeof MutationObserver === 'function' && _vc) {
