@@ -10,8 +10,11 @@ const { getMessaging } = require('firebase-admin/messaging');
 // Require defensivo: se draw-core falhar ao carregar, NÃO derruba o módulo
 // (sendPushNotification continua funcionando); autoDraw apenas pula.
 let generateLigaRound = null;
+let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
 try {
-  ({ generateLigaRound } = require('./draw-core.js'));
+  const _dc = require('./draw-core.js');
+  generateLigaRound = _dc.generateLigaRound;
+  drawWindow = _dc._window;
 } catch (e) {
   console.error('[autoDraw] draw-core indisponível — autoDraw vai pular:', e && e.message);
 }
@@ -191,16 +194,69 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
         console.log(`Auto-draw: round ${res.roundNumber} created with ${res.matchCount} match(es)` +
           ` [${res.firstDraw ? 'first draw' : 'next round'}] for ${tId}`);
 
-        // Notify participants (push/in-app básico). A notificação rica/personalizada
-        // (jogo específico + WhatsApp) continua saindo do cliente quando ele dispara.
-        // IDENTIDADE = uid (não email). Cada participante carrega seu(s) uid(s);
-        // duplas têm p1Uid/p2Uid. Notificamos TODOS os uids (espelha o
-        // window._participantUids do app). uid → users/{uid} é a fonte da verdade;
-        // email/celular saem do perfil, nunca o contrário.
+        // Notify participants (push/in-app personalizado). IDENTIDADE = uid (não
+        // email). Cada participante carrega seu(s) uid(s); duplas têm p1Uid/p2Uid.
+        // Notificamos TODOS os uids (espelha window._participantUids do app).
+        // v2.4.80: notificação PERSONALIZADA com o jogo específico do jogador
+        // (igual ao _notifyDrawPersonalized do cliente). Antes era uma mensagem
+        // genérica "Nova rodada sorteada!" — agora cada membro da dupla recebe
+        // o seu confronto. O sendPushNotification usa notifData.message como
+        // corpo do push, então o push também fica personalizado.
+
+        // Matches da rodada recém-sorteada (Liga padrão/Suíço/Rei-Rainha → flat .matches).
+        const _newRound = (Array.isArray(t.rounds) && t.rounds[res.roundIndex]) || null;
+        const roundMatches = [];
+        if (_newRound && Array.isArray(_newRound.matches)) {
+          _newRound.matches.forEach(m => {
+            if (m && !m.isSitOut && !m.isBye) {
+              roundMatches.push({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '' });
+            }
+          });
+        }
+
+        // Casa nome do TIME inteiro ("A / B") OU membro individual ("A") contra o lado.
+        const _isInSide = (name, side) => {
+          if (!name || !side) return false;
+          const n = String(name).trim().toLowerCase();
+          const s = String(side).trim().toLowerCase();
+          if (s === n) return true;
+          return s.split(' / ').some(x => x.trim() === n);
+        };
+
+        // Prazo p/ lançar resultados = próximo sorteio (data + hora). Formatado em
+        // UTC pra ecoar o wall-clock pretendido (drawFirstTime é interpretado como
+        // hora local; no servidor=UTC, formatar em UTC devolve a hora original).
+        let deadlineLabel = '';
+        try {
+          if (drawWindow && typeof drawWindow._calcNextDrawDate === 'function') {
+            const nd = drawWindow._calcNextDrawDate(t);
+            if (nd && !isNaN(nd.getTime())) {
+              deadlineLabel = nd.toLocaleDateString('pt-BR', { timeZone: 'UTC' }) + ' às ' +
+                nd.toLocaleTimeString('pt-BR', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' });
+            }
+          }
+        } catch (e) { /* best-effort: sem prazo se o helper falhar */ }
+
+        // Monta o texto personalizado pro jogo(s) deste participante/time.
+        const buildPlayerMsg = (teamName) => {
+          const mine = roundMatches.filter(m => _isInSide(teamName, m.p1) || _isInSide(teamName, m.p2));
+          if (!mine.length) return null;
+          const gamesText = mine.map((pm, i) =>
+            (pm.label || ('Jogo ' + (i + 1))) + ':\n' + (pm.p1 || '?') + '\nvs\n' + (pm.p2 || '?')
+          ).join('\n\n');
+          return '🔄 Nova rodada no torneio ' + (t.name || '') + '!' +
+            '\n\n' + gamesText +
+            (t.venue ? '\n\n📍 ' + t.venue : '') +
+            (deadlineLabel ? '\n⏰ Lance os resultados até ' + deadlineLabel : '');
+        };
+
         const activePlayers = (Array.isArray(t.participants) ? t.participants : [])
           .filter(p => p && typeof p === 'object' && p.ligaActive !== false);
         const notifiedUids = new Set();
         for (const p of activePlayers) {
+          const teamName = p.displayName || p.name || '';
+          const personalMsg = buildPlayerMsg(teamName);
+          const message = personalMsg || 'Nova rodada sorteada! Confira seus jogos.';
           const uids = [];
           [p.uid, p.p1Uid, p.p2Uid].forEach(u => { if (u) uids.push(String(u)); });
           if (Array.isArray(p.participants)) {
@@ -221,7 +277,7 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
                 fromPhoto: '',
                 tournamentId: tId,
                 tournamentName: t.name || '',
-                message: 'Nova rodada sorteada! Confira seus jogos.',
+                message: message,
                 createdAt: now.toISOString(),
                 read: false
               });
