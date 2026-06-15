@@ -2091,6 +2091,13 @@ const EVOLUTION_INSTANCE = defineSecret("EVOLUTION_INSTANCE");
 // v2.4.65: token da API do Railway pra reiniciar o container da Evolution quando
 // a conexão Baileys trava (auto-heal). Criar em railway.app (Account/Project token).
 const RAILWAY_API_TOKEN = defineSecret("RAILWAY_API_TOKEN");
+// v2.6.x: API key de SERVIDOR (restrita à Identity Toolkit API, SEM restrição de
+// referer/IP) usada pra verificar senha server-side via accounts:signInWithPassword.
+// A web key tem restrição de referer e dá 403 quando chamada do servidor. Criar:
+//   gcloud services api-keys create --display-name=scoreplace-server-signin \
+//     --api-target=service=identitytoolkit.googleapis.com
+// e setar: firebase functions:secrets:set SIGNIN_API_KEY
+const SIGNIN_API_KEY = defineSecret("SIGNIN_API_KEY");
 
 // ─── WhatsApp Magic Link ──────────────────────────────────────────────────────
 // v1.3.83-beta: quando o usuário entra com telefone, o frontend também chama
@@ -2840,6 +2847,75 @@ exports.registerPhonePassword = onCall(
     await admin.firestore().collection("users").doc(uid).set(prof, { merge: true }).catch(() => {});
     console.log("[registerPhonePassword] set for uid:", uid);
     return { ok: true };
+  }
+);
+
+// ─── Login por celular uid-first (v2.6.x) ────────────────────────────────────
+// Resolve o identificador (celular OU e-mail) → conta/uid pelo NÚMERO/e-mail
+// (independe do e-mail sintético), verifica a senha SERVER-SIDE contra a
+// credencial REAL da conta (seja ela o e-mail real ou o sintético) e devolve um
+// custom token. Conserta o bug: conta de celular que vinculou e-mail real tinha
+// o e-mail primário trocado do sintético→real, mas o login por celular no cliente
+// entrava contra o sintético (que deixou de existir) → "senha errada". Aqui o
+// e-mail nunca volta pro cliente; o cliente só recebe o token. uid-first.
+exports.phonePasswordLogin = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    secrets: [SIGNIN_API_KEY] },
+  async (request) => {
+    const data = request.data || {};
+    const identifier = String(data.phone || data.identifier || "").trim();
+    const password = String(data.password || "");
+    if (!identifier) throw new HttpsError("invalid-argument", "identificador vazio");
+    if (password.length < 6) throw new HttpsError("invalid-argument", "senha precisa de 6+ caracteres");
+
+    const db = admin.firestore();
+    // Rate-limit por identificador (15/min) — fail-open em erro.
+    if (await _throttleHit(db, "phoneLoginThrottle", identifier.toLowerCase(), 15)) {
+      throw new HttpsError("resource-exhausted", "muitas tentativas — aguarde um momento");
+    }
+
+    // Resolve conta pelo número (getUserByPhoneNumber) ou e-mail — independe do
+    // e-mail sintético ter sido substituído pelo real.
+    const ur = await _resolveAccount(identifier);
+    if (!ur) return { ok: false, reason: "no-account" };
+    const signInEmail = ur.email; // e-mail REAL de login do Firebase Auth (real ou sintético)
+    if (!signInEmail || !_hasPasswordProvider(ur)) return { ok: false, reason: "no-password" };
+
+    // Verifica a senha server-side contra a credencial real da conta.
+    let verifyOk = false; let verifyLocalId = null;
+    try {
+      const apiKey = SIGNIN_API_KEY.value();
+      const resp = await fetch(
+        "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + encodeURIComponent(apiKey),
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: signInEmail, password: password, returnSecureToken: false }) }
+      );
+      if (resp.ok) {
+        const j = await resp.json();
+        verifyOk = true; verifyLocalId = j.localId || null;
+      } else {
+        // 400 = senha errada / e-mail inexistente (esperado). Outros = logar.
+        if (resp.status !== 400) {
+          const body = await resp.text().catch(() => "");
+          console.error("[phonePasswordLogin] signInWithPassword status:", resp.status, body.slice(0, 200));
+        }
+      }
+    } catch (e) {
+      console.error("[phonePasswordLogin] verify error:", (e && (e.code || e.message)) || e);
+      throw new HttpsError("internal", "falha ao verificar a senha");
+    }
+
+    if (!verifyOk) return { ok: false, reason: "wrong-password" };
+    // Sanidade: a credencial verificada tem que ser a MESMA conta resolvida.
+    if (verifyLocalId && verifyLocalId !== ur.uid) {
+      console.error("[phonePasswordLogin] uid mismatch resolve=", ur.uid, "verify=", verifyLocalId);
+      return { ok: false, reason: "mismatch" };
+    }
+
+    const token = await admin.auth().createCustomToken(ur.uid, { source: "phone_password_login" });
+    console.log("[phonePasswordLogin] ok uid:", ur.uid);
+    return { ok: true, token: token };
   }
 );
 

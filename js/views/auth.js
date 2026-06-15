@@ -1139,12 +1139,13 @@ window._verifiedCurrentUser = function() {
   // Se o uid não bate, a sessão está contaminada — não liberar dados pessoais
   if (fbUser.uid !== cu.uid) {
     window._warn('[LGPD] _verifiedCurrentUser: uid mismatch Firebase=' + fbUser.uid + ' AppStore=' + cu.uid + ' — retornando só uid Firebase');
-    return { uid: fbUser.uid, email: fbUser.email || null, displayName: fbUser.displayName || null, photoURL: fbUser.photoURL || null, phone: fbUser.phoneNumber || null };
+    return { uid: fbUser.uid, email: window._realEmailOrEmpty(fbUser.email) || null, displayName: fbUser.displayName || null, photoURL: fbUser.photoURL || null, phone: fbUser.phoneNumber || null };
   }
   // uid bate: complementar com dados do AppStore (tem campos extras do perfil)
-  // mas sobrescrever email com o do Firebase Auth (ground truth)
+  // mas sobrescrever email com o do Firebase Auth (ground truth).
+  // E-mail sintético de conta de celular nunca é tratado como e-mail real.
   return Object.assign({}, cu, {
-    email: fbUser.email || null,          // Firebase Auth é a fonte da verdade para email
+    email: window._realEmailOrEmpty(fbUser.email) || null,          // Firebase Auth é a fonte da verdade (sintético filtrado)
     displayName: fbUser.displayName || cu.displayName || null,
     photoURL: fbUser.photoURL || cu.photoURL || null,
     phone: fbUser.phoneNumber || cu.phone || null
@@ -1424,6 +1425,16 @@ window._entrarSyntheticEmail = function(e164withPlus) {
   if (!digits) return null;
   return 'phone_' + digits + '@phone.scoreplace.app';
 };
+// Detecta e-mail sintético de conta de celular (espelha _isSyntheticEmail do servidor).
+// O sintético é um placeholder interno do login por celular — NUNCA deve aparecer
+// pro usuário nem pra ninguém, nem ser persistido como identidade.
+window._isSyntheticEmail = function(email) {
+  return typeof email === 'string' && /@phone\.scoreplace\.app$/i.test(email.trim());
+};
+// E-mail "real" (não-sintético) ou '' — usar onde o e-mail é exibido ou persistido.
+window._realEmailOrEmpty = function(email) {
+  return (email && !window._isSyntheticEmail(email)) ? email : '';
+};
 
 window._entrarCheckAccount = function(identifier) {
   try {
@@ -1572,21 +1583,72 @@ window._handleEntrar = function() {
       if (code === 'auth/too-many-requests') { window._entrarStatus('Muitas tentativas. Aguarde um momento e tente de novo.', 'error'); return; }
       if (!loginFail) { window._entrarStatus((error && error.message) || 'Não foi possível entrar.', 'error'); return; }
       // Desambígua via checkAccount: existe? tem senha?
-      window._entrarStatus('Verificando…', 'info');
-      window._entrarCheckAccount(raw).then(function(info) {
-        if (!info || !info.exists) { window._entrarExpandRegister(mode, raw); return; }
-        if (info.hasPassword) {
-          window._entrarDispatchRecovery(raw).then(function(res) { window._entrarShowRecovery(res, false); });
+      function _entrarDisambiguate() {
+        window._entrarStatus('Verificando…', 'info');
+        window._entrarCheckAccount(raw).then(function(info) {
+          if (!info || !info.exists) { window._entrarExpandRegister(mode, raw); return; }
+          if (info.hasPassword) {
+            window._entrarDispatchRecovery(raw).then(function(res) { window._entrarShowRecovery(res, false); });
+            return;
+          }
+          // Existe, sem senha.
+          if (mode === 'phone') {
+            var e164b = window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55');
+            window._entrarSetupPhonePassword(e164b, pw, '');
+          } else {
+            window._entrarDispatchRecovery(raw).then(function(res) { window._entrarShowRecovery(res, true); });
+          }
+        });
+      }
+      // uid-first: login por celular resolve a conta pelo NÚMERO no servidor e
+      // autentica contra a credencial real da conta — conserta quem cadastrou por
+      // celular e depois vinculou e-mail real (o e-mail primário trocou do
+      // sintético→real, então o signIn local contra o sintético falhava). Só
+      // celular; e-mail já entra direto pela própria credencial.
+      if (mode === 'phone') {
+        var _e164try = window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55');
+        if (_e164try) {
+          window._entrarInFlight = true;
+          window._entrarStatus('Entrando…', 'info');
+          window._entrarPhonePasswordLogin(_e164try, pw).then(function(done) {
+            if (done) return; // logou via custom token; onAuthStateChanged cuida do resto
+            window._entrarInFlight = false;
+            _entrarDisambiguate();
+          });
           return;
         }
-        // Existe, sem senha.
-        if (mode === 'phone') {
-          var e164 = window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55');
-          window._entrarSetupPhonePassword(e164, pw, '');
-        } else {
-          window._entrarDispatchRecovery(raw).then(function(res) { window._entrarShowRecovery(res, true); });
-        }
-      });
+      }
+      _entrarDisambiguate();
+    });
+};
+
+// Login por celular uid-first: chama a Cloud Function que resolve a conta pelo
+// número e autentica server-side; entra com o custom token. Resolve com `true`
+// se logou, `false` se não autenticou (senha errada / sem conta) — aí o caller
+// segue pro fluxo de desambiguação/recuperação.
+window._entrarPhonePasswordLogin = function(e164, pw) {
+  try { if (!firebase.functions) return Promise.resolve(false); }
+  catch (e) { return Promise.resolve(false); }
+  return firebase.functions().httpsCallable('phonePasswordLogin')({ phone: e164, password: pw })
+    .then(function(res) {
+      var d = (res && res.data) || {};
+      if (d.ok && d.token) {
+        return firebase.auth().signInWithCustomToken(d.token).then(function() {
+          window._entrarInFlight = false;
+          window._entrarStatus('');
+          var modal = document.getElementById('modal-login');
+          if (modal) modal.classList.remove('active');
+          return true; // onAuthStateChanged → simulateLoginSuccess faz o resto
+        }).catch(function(err) {
+          window._warn && window._warn('[phoneLogin] signInWithCustomToken falhou:', err && (err.code || err.message));
+          return false;
+        });
+      }
+      return false; // wrong-password / no-account / no-password
+    })
+    .catch(function(err) {
+      window._warn && window._warn('[phoneLogin] phonePasswordLogin falhou:', err && (err.code || err.message));
+      return false;
     });
 };
 
@@ -1740,7 +1802,7 @@ function _completeEmailLinkSignIn() {
       // criada por bug) podem existir 2 docs distintos.
       if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
         var profileData = { authProvider: 'emailLink', updatedAt: new Date().toISOString() };
-        if (user.email) profileData.email = user.email;
+        if (window._realEmailOrEmpty(user.email)) profileData.email = user.email;
         try {
           if (user.email) {
             var snap = await window.FirestoreDB.db.collection('users')
@@ -2301,7 +2363,7 @@ function handleEmailLogin() {
       // recriada, perfil ainda não escrito), virava um usuário sem nome/e-mail.
       if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
         var _loginProf = { authProvider: 'password', updatedAt: new Date().toISOString() };
-        if (user.email) _loginProf.email = user.email;
+        if (window._realEmailOrEmpty(user.email)) _loginProf.email = user.email;
         if (user.displayName) _loginProf.displayName = user.displayName;
         window.FirestoreDB.saveUserProfile(user.uid, _loginProf).catch(function() {});
       }
@@ -3589,6 +3651,11 @@ async function simulateLoginSuccess(user) {
   window.AppStore.currentUser = sameUser
     ? Object.assign({}, existingUser, user)
     : Object.assign({}, user);
+  // E-mail sintético de conta de celular NUNCA é identidade visível: trata como
+  // "sem e-mail" no currentUser (perfil mostra o campo de adicionar e-mail).
+  if (window.AppStore.currentUser && window._isSyntheticEmail(window.AppStore.currentUser.email)) {
+    window.AppStore.currentUser.email = '';
+  }
   window._log('[scoreplace-auth] currentUser set (' + (sameUser ? 'merged' : 'replaced') + '), running early router refresh');
 
   // v0.17.93: atualizar topbar IMEDIATAMENTE com o user do Google.
@@ -3820,7 +3887,7 @@ async function simulateLoginSuccess(user) {
         if (legacyData.displayName && (!existingProfile || !existingProfile.displayName)) mergeData.displayName = legacyData.displayName;
         if (legacyData.photoURL && (!existingProfile || !existingProfile.photoURL)) mergeData.photoURL = legacyData.photoURL;
         if (Object.keys(mergeData).length > 0) {
-          mergeData.email = user.email;
+          if (window._realEmailOrEmpty(user.email)) mergeData.email = user.email;
           await window.FirestoreDB.db.collection('users').doc(uid).set(mergeData, { merge: true });
         }
         // Update all other users who reference the old email ID in their friends/requests
@@ -3896,7 +3963,7 @@ async function simulateLoginSuccess(user) {
       basicData.displayName = user.displayName; needsSave = true;
     }
     if (!existingProfile || !existingProfile.email) {
-      if (user.email) { basicData.email = user.email; needsSave = true; }
+      if (window._realEmailOrEmpty(user.email)) { basicData.email = user.email; needsSave = true; }
     }
     // Backfill the denormalized lowercase fields used by searchUsers() range
     // queries. Older profiles created before v0.14.57 won't have them.
@@ -4057,7 +4124,7 @@ async function simulateLoginSuccess(user) {
       if (fbUser) {
         if (!cu.displayName && fbUser.displayName) { cu.displayName = fbUser.displayName; }
         if (!cu.photoURL && fbUser.photoURL) { cu.photoURL = fbUser.photoURL; }
-        if (!cu.email && fbUser.email) { cu.email = fbUser.email; }
+        if (!cu.email && window._realEmailOrEmpty(fbUser.email)) { cu.email = fbUser.email; }
         if (!cu.phone && fbUser.phoneNumber) {
           cu.phone = (typeof window._normalizePhoneE164 === 'function')
             ? window._normalizePhoneE164(fbUser.phoneNumber, '55')
@@ -4133,9 +4200,10 @@ async function simulateLoginSuccess(user) {
     var emailText = document.getElementById('profile-email-text');
     var emailEditWrap = document.getElementById('profile-email-edit-wrap');
     var editEmailInp = document.getElementById('profile-edit-email');
+    var _cuRealEmail = window._realEmailOrEmpty(cu.email); // sintético = sem e-mail
     if (emailDisplay && emailText) {
-      if (cu.email) {
-        emailText.textContent = cu.email;
+      if (_cuRealEmail) {
+        emailText.textContent = _cuRealEmail;
         emailDisplay.style.display = '';
         if (emailEditWrap) { emailEditWrap.style.display = 'none'; }
         if (editEmailInp) { editEmailInp.value = ''; }

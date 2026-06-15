@@ -8,8 +8,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
-    '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.07);">' +
-      '<div style="font-weight:800; color:#fcd34d; font-size:1rem; margin-bottom:8px;">🏷️ v2.6.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Junho, 2026)</span></div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.6.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📱 Entrada por celular corrigida.</b> Quem <b>criou a conta pelo número</b> e depois <b>adicionou um e-mail</b> voltava a receber "senha errada" mesmo com a senha certa. Corrigido — o login por celular agora encontra sua conta pelo número, independente do e-mail.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.6.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🏆 Torneios em várias fases.</b> No criar/editar torneio agora dá pra montar <b>etapas encadeadas</b> — cada fase com seu formato, número de rodadas e origem própria. Por padrão o torneio continua com <b>1 fase</b>; é só adicionar fases extras quando quiser.</li>' +
         '<li><b>🥇🥈 Chaves Ouro &amp; Prata.</b> Um arranjo pronto: uma <b>fase classificatória</b> (Liga/Rei-Rainha em grupos) que vira <b>duplas fixas</b>, seguida de uma <b>eliminatória dividida em Ouro e Prata</b> — os melhores de cada grupo na chave Ouro, os demais na Prata — com <b>grande final</b> entre os campeões e disputa de <b>3º/4º</b>.</li>' +
