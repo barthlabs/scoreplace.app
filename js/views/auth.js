@@ -1581,9 +1581,10 @@ window._entrarShowGoogleSuggestion = function(provider) {
   window._entrarStatus('👋 Essa conta entra com <b>' + label + '</b> — a senha do ' + label + ' não funciona por aqui.' + (isGoogle ? ' Toque pra entrar:' : '') + btn, 'info');
 };
 
-// "Esqueci minha senha": dispara o reset SEM precisar errar a senha antes. Lê o
-// e-mail/celular do campo de cima e manda o link de redefinição (e-mail + WhatsApp).
-// Resposta mascarada/silenciosa (não revela se a conta existe).
+// "Esqueci minha senha": dispara o reset SEM precisar errar a senha antes. Checa
+// se a conta EXISTE primeiro (o app já assume enumeração — distingue entrar de
+// criar conta), pra dar a mensagem certa: sem conta → criar; Google sem senha →
+// entrar com Google; com senha/celular → manda o link por e-mail + WhatsApp.
 window._entrarForgotPassword = function() {
   var idEl = document.getElementById('login-identifier');
   var raw = idEl ? idEl.value.trim() : '';
@@ -1598,15 +1599,28 @@ window._entrarForgotPassword = function() {
     if (idEl) idEl.focus();
     return;
   }
-  window._entrarStatus('Enviando link de redefinição…', 'info');
-  window._entrarDispatchRecovery(raw).then(function(res) {
-    var ch = (res && res.channels) || {};
-    var esc = window._safeHtml || function(s){ return s; };
-    var parts = [];
-    if (ch.email) parts.push('e-mail <b>' + esc(ch.email) + '</b>');
-    if (ch.phone) parts.push('WhatsApp <b>' + esc(ch.phone) + '</b>');
-    var canais = parts.length ? (' por ' + parts.join(' e ')) : '';
-    window._entrarStatus('🔑 Se houver uma conta com esse contato, enviamos um link pra redefinir a senha' + canais + '.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha (com confirmação).</span>', 'success');
+  window._entrarStatus('Verificando…', 'info');
+  window._entrarCheckAccount(raw).then(function(info) {
+    if (!info || !info.exists) {
+      var what = (mode === 'phone') ? 'esse celular' : 'esse e-mail';
+      window._entrarStatus('🤔 Não encontramos nenhuma conta com ' + what + '. Pra <b>criar uma conta nova</b>, digite uma senha acima e toque em <b>Entrar</b>.', 'warning');
+      return;
+    }
+    // Google/Apple SEM senha: não há senha pra redefinir — manda pro provedor.
+    var social = (info.socialProviders) || [];
+    if (!info.hasPassword && social.indexOf('google.com') !== -1) { window._entrarShowGoogleSuggestion('google'); return; }
+    if (!info.hasPassword && social.indexOf('apple.com') !== -1) { window._entrarShowGoogleSuggestion('apple'); return; }
+    // Conta existe (com senha, ou celular/e-mail) → manda o link de redefinição.
+    window._entrarStatus('Enviando link de redefinição…', 'info');
+    window._entrarDispatchRecovery(raw).then(function(res) {
+      var ch = (res && res.channels) || {};
+      var esc = window._safeHtml || function(s){ return s; };
+      var parts = [];
+      if (ch.email) parts.push('e-mail <b>' + esc(ch.email) + '</b>');
+      if (ch.phone) parts.push('WhatsApp <b>' + esc(ch.phone) + '</b>');
+      var canais = parts.length ? (' por ' + parts.join(' e ')) : '';
+      window._entrarStatus('🔑 Enviamos um link pra redefinir a senha' + canais + '.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha (com confirmação). Não chegou? Veja o spam.</span>', 'success');
+    });
   });
 };
 
