@@ -438,6 +438,11 @@ let authProvider = null;
 try {
   if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
+    // v2.5.2: e-mails NATIVOS do Firebase (verificação/reset usados só como
+    // fallback quando a Cloud Function rica em PT não responde a tempo — ex.:
+    // cold start) saíam em INGLÊS por falta de locale. Força pt-BR pra qualquer
+    // e-mail do Firebase Auth vir em português.
+    try { firebase.auth().languageCode = 'pt-BR'; } catch (_lc) {}
     authProvider = new firebase.auth.GoogleAuthProvider();
     // NOTE: Sensitive People API scopes (gender, birthday, addresses, phone)
     // require Google OAuth app verification. Without verification, Google shows
