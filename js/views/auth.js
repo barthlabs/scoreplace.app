@@ -1646,32 +1646,41 @@ window._entrarForgotPassword = function() {
     return;
   }
   window._entrarStatus('Verificando…', 'info');
+  var esc = window._safeHtml || function(s){ return s; };
+  var _showSent = function(res) {
+    var ch = (res && res.channels) || {};
+    var parts = [];
+    if (ch.email) parts.push('e-mail <b>' + esc(ch.email) + '</b>');
+    if (ch.phone) parts.push('WhatsApp <b>' + esc(ch.phone) + '</b>');
+    var canais = parts.length ? (' por ' + parts.join(' e ')) : '';
+    window._entrarStatus('🔑 Enviamos um link pra redefinir a senha' + canais + '.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha (com confirmação). Não chegou? Veja o spam.</span>', 'success');
+  };
+  var _noAccount = function() {
+    // Sem conta, mas e-mail do Google → quase sempre a pessoa entra com Google.
+    if (mode !== 'phone' && /@(gmail|googlemail)\.com$/i.test(raw)) { window._entrarShowGoogleSuggestion('google'); return; }
+    var what = (mode === 'phone') ? 'esse celular' : 'esse e-mail';
+    window._entrarStatus('🤔 Não encontramos nenhuma conta com ' + what + '. Pra <b>criar uma conta nova</b>, digite uma senha acima e toque em <b>Entrar</b>.', 'warning');
+  };
   window._entrarCheckAccount(raw).then(function(info) {
-    if (!info || !info.exists) {
-      // Sem conta, mas é um e-mail do Google → quase sempre a pessoa "esqueceu
-      // a senha" porque entra com Google (sem senha aqui). Oferta o Google.
-      if (mode !== 'phone' && /@(gmail|googlemail)\.com$/i.test(raw)) {
-        window._entrarShowGoogleSuggestion('google');
-        return;
-      }
-      var what = (mode === 'phone') ? 'esse celular' : 'esse e-mail';
-      window._entrarStatus('🤔 Não encontramos nenhuma conta com ' + what + '. Pra <b>criar uma conta nova</b>, digite uma senha acima e toque em <b>Entrar</b>.', 'warning');
-      return;
+    // Conta social SEM senha (e a verificação funcionou) → manda pro provedor.
+    if (info && info.exists) {
+      var social = info.socialProviders || [];
+      if (!info.hasPassword && social.indexOf('google.com') !== -1) { window._entrarShowGoogleSuggestion('google'); return; }
+      if (!info.hasPassword && social.indexOf('apple.com') !== -1) { window._entrarShowGoogleSuggestion('apple'); return; }
     }
-    // Google/Apple SEM senha: não há senha pra redefinir — manda pro provedor.
-    var social = (info.socialProviders) || [];
-    if (!info.hasPassword && social.indexOf('google.com') !== -1) { window._entrarShowGoogleSuggestion('google'); return; }
-    if (!info.hasPassword && social.indexOf('apple.com') !== -1) { window._entrarShowGoogleSuggestion('apple'); return; }
-    // Conta existe (com senha, ou celular/e-mail) → manda o link de redefinição.
+    // Caso geral: tenta a recuperação — o SERVIDOR resolve a conta e decide se
+    // existe. NÃO concluímos "sem conta" a partir do checkAccount, porque ele
+    // pode ter FALHADO (info === null) e mostraria "crie conta" pra quem TEM conta.
     window._entrarStatus('Enviando link de redefinição…', 'info');
     window._entrarDispatchRecovery(raw).then(function(res) {
+      if (res === null) {
+        window._entrarStatus('⚠️ Não deu pra confirmar agora. Verifique sua conexão e toque de novo em "Esqueci minha senha".', 'warning');
+        return;
+      }
       var ch = (res && res.channels) || {};
-      var esc = window._safeHtml || function(s){ return s; };
-      var parts = [];
-      if (ch.email) parts.push('e-mail <b>' + esc(ch.email) + '</b>');
-      if (ch.phone) parts.push('WhatsApp <b>' + esc(ch.phone) + '</b>');
-      var canais = parts.length ? (' por ' + parts.join(' e ')) : '';
-      window._entrarStatus('🔑 Enviamos um link pra redefinir a senha' + canais + '.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha (com confirmação). Não chegou? Veja o spam.</span>', 'success');
+      if (ch.email || ch.phone) { _showSent(res); return; }
+      // A chamada funcionou e voltou SEM canais → realmente não existe conta.
+      _noAccount();
     });
   });
 };
@@ -1780,7 +1789,13 @@ window._handleEntrar = function() {
       function _entrarDisambiguate() {
         window._entrarStatus('Verificando…', 'info');
         window._entrarCheckAccount(raw).then(function(info) {
-          if (!info || !info.exists) { window._entrarExpandRegister(mode, raw); return; }
+          // info === null = a verificação FALHOU (rede/função) — NÃO concluir "sem
+          // conta" (empurraria "criar conta" pra quem só errou a senha). Pede retry.
+          if (info === null) {
+            window._entrarStatus('⚠️ Não deu pra verificar sua conta agora. Confira sua conexão e toque em <b>Entrar</b> de novo.', 'warning');
+            return;
+          }
+          if (!info.exists) { window._entrarExpandRegister(mode, raw); return; }
           // Conta criada via Google/Apple: a senha do provedor não vive aqui —
           // ofertar "Entrar com Google/Apple" em vez de recuperar/criar senha.
           var _social = (info.socialProviders) || [];
