@@ -2720,21 +2720,64 @@ exports.verifyPasswordResetPhoneToken = onCall(
 // ─── Login unificado (v2.5.x): checkAccount / registerPhonePassword / ─────────
 // dispatchAccountRecovery. Backend do campo único (e-mail OU celular) + senha.
 
-// Resolve um identificador (e-mail ou celular) → UserRecord. Celular tenta por
-// phoneNumber e cai no e-mail sintético.
+// v2.6.x: acha o uid de uma conta pelo e-mail no PERFIL (Firestore), cobrindo
+// e-mail primário (email_lower/email) E e-mails SECUNDÁRIOS/VINCULADOS (linkedEmails).
+// Resolve o gap em que getUserByEmail (Auth) só acha pelo e-mail primário.
+async function _uidByProfileEmail(db, raw) {
+  const lower = String(raw || "").trim().toLowerCase();
+  if (!lower) return null;
+  const tries = [
+    { f: "email_lower", op: "==", v: lower },
+    { f: "email", op: "==", v: lower },
+    { f: "linkedEmails", op: "array-contains", v: lower },
+    { f: "linkedEmails", op: "array-contains", v: String(raw).trim() },
+  ];
+  for (const t of tries) {
+    try {
+      const snap = await db.collection("users").where(t.f, t.op, t.v).limit(1).get();
+      if (!snap.empty) return snap.docs[0].id;
+    } catch (e) { /* índice ausente/erro → tenta próximo */ }
+  }
+  return null;
+}
+// Acha o uid pelo telefone (E.164) no PERFIL — cobre conta cujo número está só no
+// perfil Firestore, não no phoneNumber do Auth.
+async function _uidByProfilePhone(db, phoneE164) {
+  if (!phoneE164) return null;
+  try {
+    const snap = await db.collection("users").where("phone", "==", phoneE164).limit(1).get();
+    if (!snap.empty) return snap.docs[0].id;
+  } catch (e) { /* nada */ }
+  return null;
+}
+
+// Resolve um identificador (e-mail ou celular) → UserRecord. Tenta o Auth primeiro
+// (e-mail/telefone primário + e-mail sintético) e, se falhar, cai no PERFIL Firestore
+// (e-mail vinculado / telefone do perfil) → uid → getUser. Assim qualquer e-mail ou
+// celular que a pessoa cadastrou funciona pra login, reset e checkAccount.
 async function _resolveAccount(identifier) {
   const raw = String(identifier || "").trim();
   if (!raw) return null;
+  const db = admin.firestore();
   if (raw.indexOf("@") >= 0) {
-    try { return await admin.auth().getUserByEmail(raw.toLowerCase()); }
-    catch (e) { return null; }
+    // 1) e-mail primário do Auth
+    try { return await admin.auth().getUserByEmail(raw.toLowerCase()); } catch (e) { /* fallback abaixo */ }
+    // 2) e-mail secundário/vinculado no perfil
+    const euid = await _uidByProfileEmail(db, raw);
+    if (euid) { try { return await admin.auth().getUser(euid); } catch (e) { /* nada */ } }
+    return null;
   }
   const digits = _normalizePhoneE164(raw);
   if (!digits) return null;
+  // 1) phoneNumber do Auth
   try { return await admin.auth().getUserByPhoneNumber("+" + digits); }
-  catch (e) { /* tenta sintético abaixo */ }
+  catch (e) { /* tenta sintético/perfil abaixo */ }
+  // 2) e-mail sintético
   const syn = _syntheticEmailForPhone(digits);
   if (syn) { try { return await admin.auth().getUserByEmail(syn); } catch (e) { /* nada */ } }
+  // 3) telefone no perfil Firestore
+  const puid = await _uidByProfilePhone(db, "+" + digits);
+  if (puid) { try { return await admin.auth().getUser(puid); } catch (e) { /* nada */ } }
   return null;
 }
 
