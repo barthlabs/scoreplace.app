@@ -4156,6 +4156,35 @@ exports.mergePhoneAccount = onCall(
     const oldData = oldSnap.data();
     if (oldData.mergedInto) throw new HttpsError("failed-precondition", "Conta antiga já foi mesclada");
 
+    // v2.5.x SEGURANÇA: prova de posse de oldUid. Sem isso, qualquer um poderia
+    // absorver a conta de outra pessoa só passando o uid. Aceita duas provas:
+    //  (a) proofIdToken — ID token de quem se autenticou COMO oldUid (perfil:
+    //      a pessoa autentica o identificador novo numa instância separada);
+    //  (b) implícita — o caller se autenticou com um identificador (e-mail OU
+    //      celular no próprio token) que oldUid possui (cobre o auto-merge do
+    //      login por cross-ref, onde a posse do identificador já foi provada).
+    let _proven = false;
+    const _proofToken = request.data && request.data.proofIdToken;
+    if (_proofToken) {
+      try { const _dec = await admin.auth().verifyIdToken(String(_proofToken)); if (_dec && _dec.uid === oldUid) _proven = true; } catch (e) { /* inválido */ }
+    }
+    let _oldAuth = null;
+    try { _oldAuth = await admin.auth().getUser(oldUid); } catch (e) { /* sem Auth record */ }
+    if (!_proven) {
+      const _callerEmail = String((request.auth.token && request.auth.token.email) || "").toLowerCase();
+      const _callerPhone = request.auth.token && request.auth.token.phone_number;
+      if (_callerEmail) {
+        if (_oldAuth && _oldAuth.email && _oldAuth.email.toLowerCase() === _callerEmail) _proven = true;
+        if (!_proven && oldData.email && String(oldData.email).toLowerCase() === _callerEmail) _proven = true;
+        if (!_proven && Array.isArray(oldData.linkedEmails) && oldData.linkedEmails.map(e => String(e).toLowerCase()).indexOf(_callerEmail) !== -1) _proven = true;
+      }
+      if (!_proven && _callerPhone) {
+        if (_oldAuth && _oldAuth.phoneNumber && _phoneDigitsMatch(_callerPhone, _oldAuth.phoneNumber)) _proven = true;
+        if (!_proven) { const _op = await _registeredPhoneFor(oldUid, _oldAuth); if (_op && _phoneDigitsMatch(_callerPhone, _op)) _proven = true; }
+      }
+    }
+    if (!_proven) throw new HttpsError("permission-denied", "sem prova de posse da conta a mesclar");
+
     const newName = newData.displayName || newData.name || "";
     const newEmail = (newData.email || "").toLowerCase();
     const oldEmailRaw = oldData.email || "";
@@ -4377,9 +4406,10 @@ exports.mergePhoneAccount = onCall(
     });
     // v2.5.x: TELEFONE — se o sobrevivente não tem celular e o antigo tem, herda
     // (ex.: mescla conta-celular numa conta-e-mail → resultado fica com os dois).
-    if ((!newData.phone) && oldData.phone) {
-      surv.phone = oldData.phone;
-      if (oldData.phoneCountry) surv.phoneCountry = oldData.phoneCountry;
+    var _oldPhone = oldData.phone || (_oldAuth && _oldAuth.phoneNumber) || null;
+    if ((!newData.phone) && _oldPhone) {
+      surv.phone = _oldPhone;
+      surv.phoneCountry = oldData.phoneCountry || "55";
     }
     // PLANO/Pro — nunca rebaixar: Pro vence; mantém a validade mais longa.
     const _exp = (d) => { const v = d && d.planExpiresAt; const n = v ? Date.parse(v) : 0; return isNaN(n) ? 0 : n; };

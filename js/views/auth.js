@@ -6314,6 +6314,15 @@ function setupProfileModal() {
                 '</select>' +
                 '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
               '</div>' +
+              // v2.5.x: verificação de posse do celular. Adicionar/trocar exige
+              // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
+              // as duas (com confirmação). Sem isso, o número não vira válido.
+              '<div style="margin-top:6px;">' +
+                '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:#25d366;color:#0a1f12;border:none;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📱 Verificar e vincular</button>' +
+                '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS/WhatsApp. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
+                '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
+                '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
+              '</div>' +
             '</div>' +
             // v2.4.3: privacidade — ocultar telefone de outros usuários (default OFF).
             // Liga: também tira a pessoa do GRUPO automático de WhatsApp (grupo
@@ -7241,6 +7250,82 @@ function setupProfileModal() {
       if (inp) inp.value = '';
     };
 
+    // ── v2.5.x: Verificar e vincular CELULAR no perfil ────────────────────────
+    // Prova posse por SMS/WhatsApp numa instância SECUNDÁRIA do Firebase (não
+    // troca a sessão atual). Se o número já é de outra conta, o idToken dessa
+    // conta vira a PROVA pra mesclar ela na conta atual (sobrevivente). Número
+    // novo: o merge traz o telefone e o login por ele cai aqui (redirect).
+    window._profileVerifyPhone = function() {
+      var cu = window.AppStore && window.AppStore.currentUser;
+      if (!cu || !cu.uid) { showNotification('Sessão', 'Entre novamente.', 'warning'); return; }
+      var inp = document.getElementById('profile-edit-phone');
+      var country = (document.getElementById('profile-phone-country') || {}).value || '55';
+      var digits = inp ? String(inp.getAttribute('data-digits') || inp.value || '').replace(/\D/g, '') : '';
+      if (digits.length < 10) { showNotification('Número incompleto', 'Digite DDD + número do celular.', 'warning'); if (inp) inp.focus(); return; }
+      var e164 = (typeof window._normalizePhoneE164 === 'function') ? window._normalizePhoneE164(digits, country) : ('+' + country + digits);
+      var otpEl = document.getElementById('profile-phone-otp');
+      var recEl = document.getElementById('profile-phone-recaptcha');
+      if (otpEl) { otpEl.style.display = 'block'; otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Enviando código para ' + window._safeHtml(e164) + '…</div>'; }
+      var cfg = firebase.app().options;
+      var sapp = firebase.apps.find(function(a){ return a.name === 'profilephone'; }) || firebase.initializeApp(cfg, 'profilephone');
+      try { sapp.auth().setPersistence(firebase.auth.Auth.Persistence.NONE); } catch(e){}
+      window._profilePhoneSurvivor = cu.uid;
+      try { if (window._profilePhoneRecaptcha) window._profilePhoneRecaptcha.clear(); } catch(e){}
+      window._profilePhoneRecaptcha = new firebase.auth.RecaptchaVerifier(recEl, { size: 'invisible' }, sapp);
+      window._profilePhoneRecaptcha.render().then(function() {
+        return sapp.auth().signInWithPhoneNumber(e164, window._profilePhoneRecaptcha);
+      }).then(function(confirmation) {
+        window._profilePhoneConfirmation = confirmation;
+        if (otpEl) otpEl.innerHTML =
+          '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por SMS / WhatsApp:</div>' +
+          '<div style="display:flex;gap:8px;">' +
+            '<input id="profile-phone-code" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
+            '<button type="button" onclick="window._profileConfirmPhoneCode()" class="btn btn-success" style="white-space:nowrap;">Confirmar</button>' +
+          '</div>';
+        var c = document.getElementById('profile-phone-code'); if (c) { try { c.focus(); } catch(e){} }
+      }).catch(function(err) {
+        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(String((err && (err.code || err.message)) || 'erro')) + '</div>';
+      });
+    };
+
+    window._profileConfirmPhoneCode = function() {
+      var codeEl = document.getElementById('profile-phone-code');
+      var code = codeEl ? codeEl.value.trim() : '';
+      var otpEl = document.getElementById('profile-phone-otp');
+      if (!/^\d{6}$/.test(code)) { showNotification('Código', 'Digite os 6 dígitos.', 'warning'); return; }
+      if (!window._profilePhoneConfirmation) { showNotification('Sessão', 'Reenvie o código.', 'warning'); return; }
+      if (otpEl) otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Confirmando…</div>';
+      var sapp = firebase.app('profilephone');
+      var survivor = window._profilePhoneSurvivor;
+      window._profilePhoneConfirmation.confirm(code).then(function(result) {
+        var phoneUid = result.user.uid;
+        if (phoneUid === survivor) {
+          if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.8rem;">✅ Esse celular já é desta conta.</div>';
+          try { sapp.auth().signOut(); } catch(e){}
+          return;
+        }
+        return result.user.getIdToken().then(function(proofToken) {
+          return firebase.auth().currentUser.getIdToken().then(function(mainTok) {
+            return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/mergePhoneAccount', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
+              body: JSON.stringify({ data: { oldUid: phoneUid, proofIdToken: proofToken } })
+            });
+          });
+        }).then(function(r) { return r.json(); }).then(function(j) {
+          try { sapp.auth().signOut(); } catch(e){}
+          if (j && j.result && j.result.ok) {
+            if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.82rem;">✅ Celular confirmado e vinculado! Atualizando…</div>';
+            setTimeout(function() { window.location.reload(); }, 1600);
+          } else {
+            var msg = (j && j.error && (j.error.message || j.error.status)) || 'erro';
+            if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível vincular/unir: ' + window._safeHtml(String(msg)) + '</div>';
+          }
+        });
+      }).catch(function(err) {
+        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
+      });
+    };
+
     // ── Emails vinculados ─────────────────────────────────────────────────
     window._profileRenderLinkedEmails = function() {
       var cu = window.AppStore && window.AppStore.currentUser;
@@ -7692,9 +7777,21 @@ function setupProfileModal() {
       if (birthDate) payload.birthDate = birthDate;
       if (age != null) payload.age = age;
       if (cityIn) payload.city = cityIn;
-      if (phoneDigits) payload.phone = (typeof window._normalizePhoneE164 === 'function')
-        ? window._normalizePhoneE164(phoneDigits, phoneCountry || '55')
-        : phoneDigits;
+      // v2.5.x: celular NÃO é gravado direto quando MUDA — precisa ser verificado
+      // por SMS/WhatsApp (botão "Verificar e vincular", que prova posse e, se for
+      // de outra conta, mescla). Só persiste aqui se o número for IGUAL ao já
+      // verificado (re-save) — assim o save não regrava nem perde o número atual.
+      var _phoneChangedUnverified = false;
+      if (phoneDigits) {
+        var _newE164 = (typeof window._normalizePhoneE164 === 'function') ? window._normalizePhoneE164(phoneDigits, phoneCountry || '55') : phoneDigits;
+        var _curDigits = (cu.phone || '').replace(/\D/g, '');
+        var _curE164 = _curDigits ? ((typeof window._normalizePhoneE164 === 'function') ? window._normalizePhoneE164(_curDigits, cu.phoneCountry || '55') : cu.phone) : '';
+        if (_newE164 && _newE164 === _curE164) {
+          payload.phone = _newE164; // inalterado — ok regravar
+        } else {
+          _phoneChangedUnverified = true; // mudou → exige verificação; não grava
+        }
+      }
       // v1.7.9-beta: include email when user adds/changes it in profile
       if (_emailChanged) {
         payload.email = emailIn;
@@ -7874,6 +7971,12 @@ function setupProfileModal() {
             'Perfil — divergência',
             '⚠️ ' + desc,
             'error'
+          );
+        } else if (_phoneChangedUnverified) {
+          showNotification(
+            'Perfil salvo — falta confirmar o celular',
+            'O novo número ainda não foi salvo. Toque em "📱 Verificar e vincular" pra confirmar por SMS/WhatsApp.',
+            'warning'
           );
         } else {
           showNotification(
