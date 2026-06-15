@@ -1589,8 +1589,25 @@ window._entrarHighlightGoogleBtn = function() {
   try {
     var btn = document.getElementById('login-google-btn');
     if (!btn) return false;
+    var svg = btn.querySelector('svg');
+    // guarda os estilos originais pra reverter (ao clicar, ou se a pessoa ignorar)
+    if (!btn.hasAttribute('data-orig-style')) btn.setAttribute('data-orig-style', btn.getAttribute('style') || '');
+    if (svg && !svg.hasAttribute('data-orig-style')) svg.setAttribute('data-orig-style', svg.getAttribute('style') || '');
+    // Destaque só neste momento: verde CTA padrão. O VOLUME almofadado já vem da
+    // classe .btn (box-shadow inset) — só pintamos de verde + texto branco. O 'G'
+    // colorido ganha um chip branco pra contraste, e .btn-shine traz o brilho
+    // padrão do app (faixa de luz que varre o botão).
+    btn.style.background = '#047857';
+    btn.style.color = '#fff';
+    btn.style.borderColor = '#047857';
+    if (svg) { svg.style.background = '#fff'; svg.style.borderRadius = '3px'; svg.style.padding = '2px'; svg.style.boxSizing = 'content-box'; }
     btn.classList.add('btn-shine');
-    btn.addEventListener('click', function(){ try{sessionStorage.setItem('sp_googleEduHint','1')}catch(e){}; btn.classList.remove('btn-shine'); }, { once: true });
+    btn.addEventListener('click', function () {
+      try { sessionStorage.setItem('sp_googleEduHint', '1'); } catch (e) {}
+      btn.classList.remove('btn-shine');
+      btn.setAttribute('style', btn.getAttribute('data-orig-style') || '');
+      if (svg) svg.setAttribute('style', svg.getAttribute('data-orig-style') || '');
+    }, { once: true });
     try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
     return true;
   } catch (e) { return false; }
