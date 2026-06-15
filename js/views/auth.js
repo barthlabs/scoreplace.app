@@ -4291,10 +4291,14 @@ async function simulateLoginSuccess(user) {
     var emailEditWrap = document.getElementById('profile-email-edit-wrap');
     var editEmailInp = document.getElementById('profile-edit-email');
     var _cuRealEmail = window._realEmailOrEmpty(cu.email); // sintético = sem e-mail
+    var _fbUverif = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
     if (emailDisplay && emailText) {
       if (_cuRealEmail) {
         emailText.textContent = _cuRealEmail;
         emailDisplay.style.display = '';
+        // ✓ quando o e-mail está verificado (já confirmado).
+        var _emCheck = document.getElementById('profile-email-check');
+        if (_emCheck) _emCheck.style.display = (_fbUverif && _fbUverif.emailVerified) ? '' : 'none';
         if (emailEditWrap) { emailEditWrap.style.display = 'none'; }
         if (editEmailInp) { editEmailInp.value = ''; }
       } else {
@@ -4360,6 +4364,19 @@ async function simulateLoginSuccess(user) {
         phoneInput.value = digits;
       }
     }
+    // ✓ quando o celular está verificado = é o phoneNumber do Auth (já confirmado).
+    (function() {
+      var _fbU = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+      var _cuDig = ((cu.phone || '').replace(/\D/g, '')).slice(-10);
+      var _fbDig = ((_fbU && _fbU.phoneNumber) || '').replace(/\D/g, '');
+      var _verified = !!(_cuDig && _fbDig && _fbDig.indexOf(_cuDig) !== -1);
+      var _chk = document.getElementById('profile-phone-check');
+      var _btn = document.getElementById('profile-phone-verify-btn');
+      var _hint = document.getElementById('profile-phone-verify-hint');
+      if (_chk) _chk.style.display = _verified ? '' : 'none';
+      if (_btn) _btn.style.display = _verified ? 'none' : '';
+      if (_hint) _hint.style.display = _verified ? 'none' : 'block';
+    })();
     var _hintsEnabled = !(window._hintSystem && window._hintSystem.isDisabled());
     [
       { id: 'profile-accept-friends', val: cu.acceptFriendRequests !== false },
@@ -6435,6 +6452,7 @@ function setupProfileModal() {
               '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">' +
                 '<span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;opacity:0.7;flex-shrink:0;">📧</span>' +
                 '<span id="profile-email-text" style="font-family:var(--font-body);color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
+                '<span id="profile-email-check" title="E-mail verificado" style="display:none;color:#34d399;font-weight:800;flex-shrink:0;">✓</span>' +
               '</div>' +
               '<button type="button" onclick="window._profileShowEmailEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:3px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;white-space:nowrap;flex-shrink:0;line-height:1.4;">Alterar</button>' +
             '</div>' +
@@ -6481,8 +6499,9 @@ function setupProfileModal() {
               // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
               // as duas (com confirmação). Sem isso, o número não vira válido.
               '<div style="margin-top:6px;">' +
-                '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:#25d366;color:#0a1f12;border:none;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📱 Verificar e vincular</button>' +
-                '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS/WhatsApp. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
+                '<span id="profile-phone-check" style="display:none;color:#34d399;font-weight:700;font-size:0.82rem;">✓ Celular verificado</span>' +
+                '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:#25d366;color:#0a1f12;border:none;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📱 Verificar e vincular</button>' +
+                '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS/WhatsApp. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
                 '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
                 '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
               '</div>' +
@@ -6495,16 +6514,20 @@ function setupProfileModal() {
               (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar seu telefone <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-phone\')" title="Quando ligado, ninguém vê seu telefone no app e você fica fora dos grupos automáticos de WhatsApp. Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
               '<span id="hint-omit-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app <b>e você fica fora dos grupos automáticos de WhatsApp</b> (assim seu número não aparece pra ninguém). Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual.</span>' +
             '</div>' +
-            // ── Senha (v2.6.x): usuário logado define/troca a própria senha ──
-            '<div style="margin:8px 0 12px;padding:12px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:12px;">' +
-              '<div style="font-size:0.8rem;font-weight:700;color:var(--text-bright);margin-bottom:3px;">🔒 Senha</div>' +
-              '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px;">Defina ou troque sua senha de acesso.</div>' +
-              '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-                '<input type="password" id="profile-new-password" autocomplete="new-password" placeholder="Nova senha (mín. 6)" minlength="6" class="form-control" style="flex:1;min-width:130px;box-sizing:border-box;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
-                '<input type="password" id="profile-new-password2" autocomplete="new-password" placeholder="Repetir senha" minlength="6" class="form-control" style="flex:1;min-width:130px;box-sizing:border-box;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
+            // ── Senha (v2.6.x): link que expande os campos pra definir/trocar ──
+            '<div style="margin:8px 0 12px;">' +
+              '<button type="button" id="profile-change-pw-link" class="btn btn-ghost btn-micro" onclick="window._toggleChangePassword && window._toggleChangePassword()" style="text-decoration:underline;">🔒 Trocar senha</button>' +
+              '<div id="profile-change-pw-box" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:12px;">' +
+                '<label class="form-label" style="font-size:0.74rem;display:block;margin-bottom:4px;">Nova senha</label>' +
+                '<input type="password" id="profile-new-password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" minlength="6" class="form-control" style="width:100%;box-sizing:border-box;margin-bottom:10px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
+                '<label class="form-label" style="font-size:0.74rem;display:block;margin-bottom:4px;">Confirme a nova senha</label>' +
+                '<input type="password" id="profile-new-password2" autocomplete="new-password" placeholder="Repita a nova senha" minlength="6" class="form-control" style="width:100%;box-sizing:border-box;margin-bottom:10px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
+                '<div style="display:flex;gap:8px;">' +
+                  '<button type="button" onclick="window._toggleChangePassword && window._toggleChangePassword(false)" class="btn btn-outline btn-sm" style="flex:1;">Cancelar</button>' +
+                  '<button type="button" onclick="window._profileSetPassword && window._profileSetPassword()" class="btn btn-primary btn-sm" style="flex:1;">Confirmar</button>' +
+                '</div>' +
+                '<div id="profile-password-status" style="margin-top:8px;font-size:0.74rem;min-height:14px;"></div>' +
               '</div>' +
-              '<button type="button" onclick="window._profileSetPassword && window._profileSetPassword()" class="btn btn-primary" style="margin-top:8px;font-size:0.82rem;padding:8px 14px;">Salvar senha</button>' +
-              '<div id="profile-password-status" style="margin-top:6px;font-size:0.74rem;min-height:14px;"></div>' +
             '</div>' +
             // Row: Sexo + Nascimento (2 colunas)
             '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">' +
@@ -7461,6 +7484,24 @@ function setupProfileModal() {
           if (statusEl) statusEl.innerHTML = '<span style="color:#fca5a5;">Não foi possível: ' + window._safeHtml(String((err && (err.message || err.code)) || 'erro')) + '</span>';
         }
       });
+    };
+
+    // Abre/fecha o bloco de trocar senha (link → 2 campos + Confirmar/Cancelar).
+    window._toggleChangePassword = function(show) {
+      var box = document.getElementById('profile-change-pw-box');
+      var link = document.getElementById('profile-change-pw-link');
+      if (!box) return;
+      var willShow = (show === undefined) ? (box.style.display === 'none') : !!show;
+      box.style.display = willShow ? 'block' : 'none';
+      if (link) link.style.display = willShow ? 'none' : '';
+      var a = document.getElementById('profile-new-password');
+      var b = document.getElementById('profile-new-password2');
+      var st = document.getElementById('profile-password-status');
+      if (!willShow) {
+        if (a) a.value = ''; if (b) b.value = ''; if (st) st.textContent = '';
+      } else if (a) {
+        setTimeout(function() { try { a.focus(); } catch (e) {} }, 50);
+      }
     };
 
     // ── v2.6.x: Definir/trocar a própria senha (usuário logado) ───────────────
