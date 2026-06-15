@@ -3526,6 +3526,34 @@ async function simulateLoginSuccess(user) {
   window._simulateLoginInProgressUid = newUid || '';
   window._simulateLoginInProgress = true; // mantido pra compat com callers antigos
 
+  // v2.5.x: LOGIN PÓS-MERGE. Se esta conta foi mesclada em outra (mergedInto),
+  // a credencial (celular/e-mail) ficou nela — o Firebase não move credencial
+  // entre uids. Re-loga no SOBREVIVENTE via custom token (resolveMergedLogin só
+  // devolve o token pra quem provou ser dono desta conta, i.e. está logado nela).
+  try {
+    if (newUid && window.FirestoreDB && window.FirestoreDB.db && !window._mergedRedirectInProgress) {
+      var _mdoc = await window.FirestoreDB.db.collection('users').doc(newUid).get();
+      var _mergedInto = _mdoc.exists && _mdoc.data().mergedInto;
+      if (_mergedInto && _mergedInto !== newUid) {
+        window._mergedRedirectInProgress = true;
+        window._simulateLoginInProgress = false;
+        window._simulateLoginInProgressAt = 0;
+        window._simulateLoginInProgressUid = '';
+        window._log('[scoreplace-auth] conta mesclada — redirecionando login para o sobrevivente');
+        try {
+          var _resolveFn = firebase.functions().httpsCallable('resolveMergedLogin');
+          var _rr = await _resolveFn({});
+          if (_rr && _rr.data && _rr.data.merged && _rr.data.customToken) {
+            await firebase.auth().signInWithCustomToken(_rr.data.customToken);
+            window._mergedRedirectInProgress = false;
+            return; // onAuthStateChanged re-dispara com o sobrevivente
+          }
+        } catch (_re) { window._warn('[merged-login] resolveMergedLogin falhou:', _re); }
+        window._mergedRedirectInProgress = false;
+      }
+    }
+  } catch (e) { window._warn('[merged-login] checagem mergedInto falhou:', e); window._mergedRedirectInProgress = false; }
+
   // v1.9.78: GATE de verificação de e-mail. Conta e-mail/senha NÃO verificada
   // não entra no app — mostra o gate de confirmação (bloqueia tudo; sem merge/
   // sugestão). Google e telefone já entram verificados. Roda em todo caminho de

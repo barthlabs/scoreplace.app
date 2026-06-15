@@ -2922,6 +2922,41 @@ exports.dispatchAccountRecovery = onCall(
   }
 );
 
+// v2.5.x: login pós-merge. O Firebase não move credenciais entre uids, então a
+// credencial (celular/e-mail) da conta antiga continua nela após o merge. Se a
+// pessoa loga por esse identificador, cai no uid tombstoned (mergedInto). Esta
+// função devolve um custom token do SOBREVIVENTE pra o cliente re-logar nele —
+// só funciona pra quem JÁ provou ser dono da conta antiga (está autenticado nela).
+exports.resolveMergedLogin = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "login obrigatório");
+    const db = admin.firestore();
+    const snap = await db.collection("users").doc(uid).get();
+    const mergedInto = snap.exists && snap.data().mergedInto;
+    if (!mergedInto || typeof mergedInto !== "string" || mergedInto === uid) return { merged: false };
+    // Segue a cadeia (caso o sobrevivente também tenha sido mesclado depois).
+    let target = mergedInto; let guard = 0;
+    while (guard++ < 5) {
+      const ts = await db.collection("users").doc(target).get();
+      const next = ts.exists && ts.data().mergedInto;
+      if (next && typeof next === "string" && next !== target) { target = next; continue; }
+      if (!ts.exists) return { merged: false };
+      break;
+    }
+    let customToken;
+    try {
+      customToken = await admin.auth().createCustomToken(target, { source: "merged_login_redirect" });
+    } catch (err) {
+      console.error("[resolveMergedLogin] createCustomToken failed:", err.code || err.message);
+      throw new HttpsError("internal", "não foi possível redirecionar o login");
+    }
+    return { merged: true, survivorUid: target, customToken };
+  }
+);
+
 exports.processWhatsAppQueue = onDocumentCreated(
   {
     document: "whatsapp_queue/{queueId}",
@@ -4089,7 +4124,7 @@ exports.scheduledTrophyCheck = onSchedule(
 //
 // Deploy: firebase deploy --only functions:mergePhoneAccount
 exports.mergePhoneAccount = onCall(
-  { region: "us-central1", memory: "512MiB", timeoutSeconds: 120 },
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 300 },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
@@ -4098,7 +4133,15 @@ exports.mergePhoneAccount = onCall(
     if (!oldUid || typeof oldUid !== "string") throw new HttpsError("invalid-argument", "oldUid obrigatório");
     if (oldUid === callerUid) throw new HttpsError("invalid-argument", "oldUid deve ser diferente da conta atual");
 
+    // v2.5.x: dryRun=true → calcula e RELATA tudo que mudaria, sem escrever nada.
+    const dryRun = !!(request.data && request.data.dryRun);
     const db = admin.firestore();
+    const report = {
+      dryRun, tournaments: 0, memberUidsFixed: 0, casualMatches: 0,
+      friendRefsRepointed: 0, presences: 0, venues: 0, reviews: 0,
+      notifications: 0, matchHistoryDocs: 0, templates: 0, emailVerifications: 0,
+      profileUnion: false,
+    };
 
     // ── 1. Carrega dados de ambas as contas ──────────────────────────────────
     const [newSnap, oldSnap] = await Promise.all([
@@ -4111,20 +4154,19 @@ exports.mergePhoneAccount = onCall(
 
     const newData = newSnap.exists ? newSnap.data() : {};
     const oldData = oldSnap.data();
+    if (oldData.mergedInto) throw new HttpsError("failed-precondition", "Conta antiga já foi mesclada");
 
     const newName = newData.displayName || newData.name || "";
-    const newEmail = newData.email || "";
-    const oldEmail = oldData.email || oldData.phone || "";
+    const newEmail = (newData.email || "").toLowerCase();
+    const oldEmailRaw = oldData.email || "";
+    const oldEmail = (oldData.email || oldData.phone || "").toLowerCase();
     const oldName = oldData.displayName || oldData.name || "";
 
-    console.log(`[mergePhoneAccount] Merging oldUid=${oldUid} (${oldName}/${oldEmail}) → newUid=${callerUid} (${newName}/${newEmail})`);
+    console.log(`[mergePhoneAccount] ${dryRun ? "DRY-RUN " : ""}Merging oldUid=${oldUid} (${oldName}/${oldEmail}) → newUid=${callerUid} (${newName}/${newEmail})`);
 
-    let tournamentsUpdated = 0;
-    let casualMatchesUpdated = 0;
-
-    // ── 2. Torneios: busca por oldUid OU oldEmail em memberEmails/participants ─
+    // ── 2. Torneios: busca por oldUid OU oldEmail; re-aponta uid/email/nome ────
     const tourSnaps = await db.collection("tournaments").get();
-    const batch1 = db.batch();
+    let batch1 = db.batch();
     let batchCount = 0;
 
     for (const tourDoc of tourSnaps.docs) {
@@ -4145,25 +4187,57 @@ exports.mergePhoneAccount = onCall(
         changed = true;
       }
 
-      // 2b. participants[] — atualiza uid/email/displayName/name
+      // 2a-bis. memberUids[] (v2.5.x — antes não era migrado; quebrava visibilidade)
+      if (Array.isArray(t.memberUids) && t.memberUids.indexOf(oldUid) !== -1) {
+        const mu = t.memberUids.filter(x => x !== oldUid);
+        if (mu.indexOf(callerUid) === -1) mu.push(callerUid);
+        update.memberUids = mu;
+        changed = true;
+        report.memberUidsFixed++;
+      }
+      // 2a-ter. creatorUid / creatorEmail / organizerEmail / coHosts
+      if (t.creatorUid === oldUid) { update.creatorUid = callerUid; changed = true; }
+      if (oldEmail && t.creatorEmail && String(t.creatorEmail).toLowerCase() === oldEmail) { update.creatorEmail = newEmail || t.creatorEmail; changed = true; }
+      if (oldEmail && t.organizerEmail && String(t.organizerEmail).toLowerCase() === oldEmail) { update.organizerEmail = newEmail || t.organizerEmail; changed = true; }
+      if (Array.isArray(t.coHosts)) {
+        let chHit = false;
+        const ch = t.coHosts.map(c => {
+          if (c && (c.uid === oldUid || (oldEmail && String(c.email || "").toLowerCase() === oldEmail))) {
+            chHit = true;
+            return Object.assign({}, c, { uid: callerUid, email: newEmail || c.email, displayName: newName || c.displayName });
+          }
+          return c;
+        });
+        if (chHit) { update.coHosts = ch; changed = true; }
+      }
+
+      // 2b. participants[] — atualiza uid/p1Uid/p2Uid/email/displayName/name
       const participants = Array.isArray(t.participants) ? t.participants.map(p => {
+        if (typeof p !== "object" || !p) return p;
         const pUid = p.uid || p.id || "";
         const pEmail = (p.email || p.displayName || "").toLowerCase();
         const matches = (pUid && pUid === oldUid) ||
                         (oldEmail && pEmail === oldEmail.toLowerCase());
-        if (!matches) return p;
-        changed = true;
-        const updated = Object.assign({}, p);
-        if (callerUid) updated.uid = callerUid;
-        if (newEmail) updated.email = newEmail;
-        if (newName) { updated.displayName = newName; updated.name = newName; }
-        // Também atualiza p1/p2 string se for individual (displayName == oldName)
-        return updated;
+        let upd = p;
+        if (matches) {
+          changed = true;
+          upd = Object.assign({}, p);
+          if (callerUid) upd.uid = callerUid;
+          if (newEmail) upd.email = newEmail;
+          if (newName) { upd.displayName = newName; upd.name = newName; }
+        }
+        // p1Uid/p2Uid de duplas
+        if (upd.p1Uid === oldUid || upd.p2Uid === oldUid) {
+          changed = true;
+          upd = (upd === p) ? Object.assign({}, p) : upd;
+          if (upd.p1Uid === oldUid) upd.p1Uid = callerUid;
+          if (upd.p2Uid === oldUid) upd.p2Uid = callerUid;
+        }
+        return upd;
       }) : null;
       if (participants) update.participants = participants;
 
       // 2c. Strings p1/p2 em matches/rounds/groups que referenciam o nome antigo
-      //     (Liga, Suíço, Eliminatórias — p1/p2 são displayNames)
       if (oldName && newName && oldName !== newName) {
         function replaceNameInMatches(matches) {
           if (!Array.isArray(matches)) return { arr: matches, hit: false };
@@ -4173,94 +4247,250 @@ exports.mergePhoneAccount = onCall(
             if (nm.p1 === oldName) { nm.p1 = newName; hit = true; }
             if (nm.p2 === oldName) { nm.p2 = newName; hit = true; }
             if (nm.winner === oldName) { nm.winner = newName; hit = true; }
-            // Teams arrays (Rei/Rainha duplas)
             if (Array.isArray(nm.team1)) nm.team1 = nm.team1.map(x => x === oldName ? (hit = true, newName) : x);
             if (Array.isArray(nm.team2)) nm.team2 = nm.team2.map(x => x === oldName ? (hit = true, newName) : x);
             return nm;
           });
           return { arr, hit };
         }
-
         if (Array.isArray(t.matches)) {
           const r = replaceNameInMatches(t.matches);
           if (r.hit) { update.matches = r.arr; changed = true; }
         }
-        if (Array.isArray(t.rounds)) {
-          let roundsHit = false;
-          const rounds = t.rounds.map(round => {
-            if (!round || !Array.isArray(round.matches)) return round;
-            const r = replaceNameInMatches(round.matches);
-            if (r.hit) roundsHit = true;
-            return Object.assign({}, round, { matches: r.arr });
+        ["rounds", "groups", "rodadas"].forEach(structKey => {
+          if (!Array.isArray(t[structKey])) return;
+          let structHit = false;
+          const arr = t[structKey].map(col => {
+            if (!col || !Array.isArray(col.matches)) return col;
+            const r = replaceNameInMatches(col.matches);
+            if (r.hit) structHit = true;
+            return Object.assign({}, col, { matches: r.arr });
           });
-          if (roundsHit) { update.rounds = rounds; changed = true; }
-        }
-        if (Array.isArray(t.groups)) {
-          let groupsHit = false;
-          const groups = t.groups.map(g => {
-            if (!g || !Array.isArray(g.matches)) return g;
-            const r = replaceNameInMatches(g.matches);
-            if (r.hit) groupsHit = true;
-            return Object.assign({}, g, { matches: r.arr });
+          if (structHit) { update[structKey] = arr; changed = true; }
+        });
+        // standings[].name (classificação Liga/Suíço)
+        if (Array.isArray(t.standings)) {
+          let sHit = false;
+          const st = t.standings.map(s => {
+            if (s && s.name === oldName) { sHit = true; return Object.assign({}, s, { name: newName }); }
+            return s;
           });
-          if (groupsHit) { update.groups = groups; changed = true; }
+          if (sHit) { update.standings = st; changed = true; }
         }
-        if (Array.isArray(t.rodadas)) {
-          let rodadasHit = false;
-          const rodadas = t.rodadas.map(rod => {
-            if (!rod || !Array.isArray(rod.matches)) return rod;
-            const r = replaceNameInMatches(rod.matches);
-            if (r.hit) rodadasHit = true;
-            return Object.assign({}, rod, { matches: r.arr });
+        // waitlist / standbyParticipants (strings OU objetos {name/displayName/uid})
+        ["waitlist", "standbyParticipants"].forEach(wk => {
+          if (!Array.isArray(t[wk])) return;
+          let wHit = false;
+          const arr = t[wk].map(w => {
+            if (typeof w === "string") { if (w === oldName) { wHit = true; return newName; } return w; }
+            if (w && typeof w === "object") {
+              let ww = w;
+              if (w.name === oldName || w.displayName === oldName || w.uid === oldUid) {
+                wHit = true; ww = Object.assign({}, w);
+                if (ww.name === oldName) ww.name = newName;
+                if (ww.displayName === oldName) ww.displayName = newName;
+                if (ww.uid === oldUid) ww.uid = callerUid;
+              }
+              return ww;
+            }
+            return w;
           });
-          if (rodadasHit) { update.rodadas = rodadas; changed = true; }
-        }
+          if (wHit) { update[wk] = arr; changed = true; }
+        });
       }
 
       if (changed) {
-        batch1.update(tourDoc.ref, update);
-        tournamentsUpdated++;
+        if (!dryRun) batch1.update(tourDoc.ref, update);
+        report.tournaments++;
         batchCount++;
         if (batchCount >= 400) {
-          await batch1.commit();
+          if (!dryRun) await batch1.commit();
+          batch1 = db.batch();
           batchCount = 0;
         }
       }
     }
-    if (batchCount > 0) await batch1.commit();
+    if (!dryRun && batchCount > 0) await batch1.commit();
 
-    // ── 3. Partidas casuais ──────────────────────────────────────────────────
-    const casualSnap = await db.collection("casualMatches")
-      .where("creatorUid", "==", oldUid)
-      .get();
-    if (!casualSnap.empty) {
-      const batch2 = db.batch();
-      casualSnap.docs.forEach(doc => {
-        batch2.update(doc.ref, { creatorUid: callerUid });
+    // ── 3. Partidas casuais: creatorUid + playerUids[] + players[].uid ────────
+    const casualSnap = await db.collection("casualMatches").get();
+    let cbatch = db.batch(); let ccount = 0;
+    for (const doc of casualSnap.docs) {
+      const c = doc.data(); const cu = {}; let cChanged = false;
+      if (c.creatorUid === oldUid) { cu.creatorUid = callerUid; cChanged = true; }
+      if (Array.isArray(c.playerUids) && c.playerUids.indexOf(oldUid) !== -1) {
+        const pu = c.playerUids.filter(x => x !== oldUid);
+        if (pu.indexOf(callerUid) === -1) pu.push(callerUid);
+        cu.playerUids = pu; cChanged = true;
+      }
+      if (Array.isArray(c.players) && c.players.some(p => p && p.uid === oldUid)) {
+        cu.players = c.players.map(p => (p && p.uid === oldUid)
+          ? Object.assign({}, p, { uid: callerUid, displayName: newName || p.displayName, name: newName || p.name })
+          : p);
+        cChanged = true;
+      }
+      if (cChanged) {
+        if (!dryRun) cbatch.update(doc.ref, cu);
+        report.casualMatches++; ccount++;
+        if (ccount >= 400) { if (!dryRun) await cbatch.commit(); cbatch = db.batch(); ccount = 0; }
+      }
+    }
+    if (!dryRun && ccount > 0) await cbatch.commit();
+
+    // ── 4. users sobrevivente: UNIÃO de amigos/pedidos/e-mails/locais/sports ──
+    const unionArr = (a, b) => {
+      const out = Array.isArray(a) ? a.slice() : [];
+      (Array.isArray(b) ? b : []).forEach(x => { if (out.indexOf(x) === -1) out.push(x); });
+      return out;
+    };
+    const locKey = (l) => (l && typeof l === "object")
+      ? [String(l.label || "").trim().toLowerCase(), (l.lat != null ? Number(l.lat).toFixed(4) : ""), (l.lng != null ? Number(l.lng).toFixed(4) : "")].join("|")
+      : String(l);
+    const unionLocations = (a, b) => {
+      const out = Array.isArray(a) ? a.slice() : [];
+      const seen = {}; out.forEach(l => { seen[locKey(l)] = 1; });
+      (Array.isArray(b) ? b : []).forEach(l => { const k = locKey(l); if (!seen[k]) { seen[k] = 1; out.push(l); } });
+      return out;
+    };
+    const surv = {};
+    surv.friends = unionArr(newData.friends, oldData.friends).filter(u => u !== callerUid && u !== oldUid);
+    surv.friendRequestsSent = unionArr(newData.friendRequestsSent, oldData.friendRequestsSent).filter(u => u !== callerUid && u !== oldUid);
+    surv.friendRequestsReceived = unionArr(newData.friendRequestsReceived, oldData.friendRequestsReceived).filter(u => u !== callerUid && u !== oldUid);
+    surv.linkedEmails = unionArr(newData.linkedEmails, oldData.linkedEmails);
+    if (oldEmailRaw) {
+      const oe = oldEmailRaw.toLowerCase();
+      if (oe !== newEmail && surv.linkedEmails.indexOf(oe) === -1) surv.linkedEmails.push(oe);
+    }
+    surv.preferredSports = unionArr(newData.preferredSports, oldData.preferredSports);
+    surv.preferredCeps = unionArr(newData.preferredCeps, oldData.preferredCeps);
+    surv.preferredLocations = unionLocations(newData.preferredLocations, oldData.preferredLocations);
+    surv.skillBySport = Object.assign({}, oldData.skillBySport || {}, newData.skillBySport || {});
+    // matchHistory (campo-array legado): união por matchId
+    if (Array.isArray(oldData.matchHistory) && oldData.matchHistory.length) {
+      const mh = Array.isArray(newData.matchHistory) ? newData.matchHistory.slice() : [];
+      oldData.matchHistory.forEach(e => { if (!mh.some(x => x.matchId === e.matchId)) mh.push(e); });
+      surv.matchHistory = mh;
+    }
+    // Preenche lacunas de perfil (sobrevivente mantém o que já tem)
+    ["displayName", "photoURL", "city", "birthDate", "gender"].forEach(k => {
+      if ((newData[k] === undefined || newData[k] === null || newData[k] === "") && oldData[k]) surv[k] = oldData[k];
+    });
+    // v2.5.x: TELEFONE — se o sobrevivente não tem celular e o antigo tem, herda
+    // (ex.: mescla conta-celular numa conta-e-mail → resultado fica com os dois).
+    if ((!newData.phone) && oldData.phone) {
+      surv.phone = oldData.phone;
+      if (oldData.phoneCountry) surv.phoneCountry = oldData.phoneCountry;
+    }
+    // PLANO/Pro — nunca rebaixar: Pro vence; mantém a validade mais longa.
+    const _exp = (d) => { const v = d && d.planExpiresAt; const n = v ? Date.parse(v) : 0; return isNaN(n) ? 0 : n; };
+    if (oldData.plan === "pro" && (newData.plan !== "pro" || _exp(oldData) > _exp(newData))) {
+      surv.plan = "pro";
+      if (oldData.planExpiresAt) surv.planExpiresAt = oldData.planExpiresAt;
+    }
+    // TERMOS — se o sobrevivente ainda não aceitou e o antigo aceitou, herda.
+    if (!newData.acceptedTerms && oldData.acceptedTerms === true) {
+      surv.acceptedTerms = true;
+      if (oldData.acceptedTermsAt) surv.acceptedTermsAt = oldData.acceptedTermsAt;
+      if (oldData.acceptedTermsVersion) surv.acceptedTermsVersion = oldData.acceptedTermsVersion;
+    }
+    report.profileUnion = true;
+    if (!dryRun) await db.collection("users").doc(callerUid).set(surv, { merge: true });
+
+    // ── 5. Amizades de TERCEIROS apontando pra oldUid (full scan) ─────────────
+    const allUsers = await db.collection("users").get();
+    let fbatch = db.batch(); let fcount = 0;
+    for (const ud of allUsers.docs) {
+      if (ud.id === callerUid || ud.id === oldUid) continue;
+      const d = ud.data(); const fu = {}; let fChanged = false;
+      ["friends", "friendRequestsSent", "friendRequestsReceived"].forEach(field => {
+        if (Array.isArray(d[field]) && d[field].indexOf(oldUid) !== -1) {
+          const arr = d[field].filter(x => x !== oldUid);
+          if (arr.indexOf(callerUid) === -1) arr.push(callerUid);
+          fu[field] = arr; fChanged = true;
+        }
       });
-      await batch2.commit();
-      casualMatchesUpdated += casualSnap.size;
+      if (fChanged) {
+        if (!dryRun) fbatch.update(ud.ref, fu);
+        report.friendRefsRepointed++; fcount++;
+        if (fcount >= 400) { if (!dryRun) await fbatch.commit(); fbatch = db.batch(); fcount = 0; }
+      }
+    }
+    if (!dryRun && fcount > 0) await fbatch.commit();
+
+    // ── 6. Presenças ──────────────────────────────────────────────────────────
+    const presSnap = await db.collection("presences").where("uid", "==", oldUid).get();
+    if (!presSnap.empty) {
+      let pbatch = db.batch();
+      presSnap.docs.forEach(d => {
+        const u = { uid: callerUid };
+        if (newName) u.displayName = newName;
+        if (!dryRun) pbatch.update(d.ref, u);
+      });
+      if (!dryRun) await pbatch.commit();
+      report.presences = presSnap.size;
     }
 
-    // Também busca por matchHistory em users (snapshots de stats de casual)
-    if (oldData.matchHistory && Array.isArray(oldData.matchHistory) && newSnap.exists) {
-      const existingHistory = newData.matchHistory || [];
-      const merged = [...existingHistory];
-      oldData.matchHistory.forEach(entry => {
-        const alreadyExists = merged.some(e => e.matchId === entry.matchId);
-        if (!alreadyExists) merged.push(entry);
-      });
-      await db.collection("users").doc(callerUid).update({ matchHistory: merged });
+    // ── 7. Venues: ownerUid/createdByUid + review do oldUid ───────────────────
+    const venSnap = await db.collection("venues").get();
+    let vbatch = db.batch(); let vcount = 0;
+    for (const vd of venSnap.docs) {
+      const v = vd.data(); const vu = {}; let vChanged = false;
+      if (v.ownerUid === oldUid) { vu.ownerUid = callerUid; if (newEmail) vu.ownerEmail = newEmail; vChanged = true; }
+      if (v.createdByUid === oldUid) { vu.createdByUid = callerUid; if (newName) vu.createdByName = newName; vChanged = true; }
+      if (vChanged) {
+        if (!dryRun) vbatch.update(vd.ref, vu);
+        report.venues++; vcount++;
+        if (vcount >= 400) { if (!dryRun) await vbatch.commit(); vbatch = db.batch(); vcount = 0; }
+      }
+      const rev = await vd.ref.collection("reviews").doc(oldUid).get();
+      if (rev.exists) {
+        report.reviews++;
+        if (!dryRun) {
+          const rdata = Object.assign({}, rev.data(), { uid: callerUid });
+          if (newName) rdata.displayName = newName;
+          await vd.ref.collection("reviews").doc(callerUid).set(rdata, { merge: true });
+          await vd.ref.collection("reviews").doc(oldUid).delete();
+        }
+      }
+    }
+    if (!dryRun && vcount > 0) await vbatch.commit();
+
+    // ── 8. Copia subcoleções do oldUid → sobrevivente ────────────────────────
+    for (const sub of ["notifications", "matchHistory", "templates"]) {
+      const ssnap = await db.collection("users").doc(oldUid).collection(sub).get();
+      if (ssnap.empty) continue;
+      let sbatch = db.batch(); let scount = 0;
+      for (const sdoc of ssnap.docs) {
+        if (!dryRun) sbatch.set(db.collection("users").doc(callerUid).collection(sub).doc(sdoc.id), sdoc.data(), { merge: true });
+        scount++;
+        if (scount >= 400) { if (!dryRun) await sbatch.commit(); sbatch = db.batch(); scount = 0; }
+      }
+      if (!dryRun && scount > 0) await sbatch.commit();
+      if (sub === "notifications") report.notifications = ssnap.size;
+      else if (sub === "matchHistory") report.matchHistoryDocs = ssnap.size;
+      else report.templates = ssnap.size;
     }
 
-    // ── 4. Marca conta antiga como mesclada ──────────────────────────────────
-    await db.collection("users").doc(oldUid).set({
-      mergedInto: callerUid,
-      mergedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    // ── 9. emailVerifications pendentes do oldUid ─────────────────────────────
+    const evSnap = await db.collection("emailVerifications").where("ownerUid", "==", oldUid).get();
+    if (!evSnap.empty) {
+      let ebatch = db.batch();
+      evSnap.docs.forEach(d => { if (!dryRun) ebatch.update(d.ref, { ownerUid: callerUid }); });
+      if (!dryRun) await ebatch.commit();
+      report.emailVerifications = evSnap.size;
+    }
 
-    console.log(`[mergePhoneAccount] DONE tournaments=${tournamentsUpdated} casual=${casualMatchesUpdated}`);
-    return { ok: true, tournaments: tournamentsUpdated, casualMatches: casualMatchesUpdated };
+    // ── 10. Tombstone da conta antiga ─────────────────────────────────────────
+    if (!dryRun) {
+      await db.collection("users").doc(oldUid).set({
+        mergedInto: callerUid,
+        mergedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
+    console.log(`[mergePhoneAccount] ${dryRun ? "DRY-RUN " : ""}DONE ` + JSON.stringify(report));
+    // Compat: mantém os campos antigos (tournaments/casualMatches) no retorno.
+    return Object.assign({ ok: true }, report, { casualMatches: report.casualMatches });
   }
 );
 
