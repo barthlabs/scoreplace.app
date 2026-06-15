@@ -1396,6 +1396,9 @@ async function _queuePasswordResetEmail(db, email, link, name) {
       subject: "Redefinir sua senha no scoreplace.app",
       html: built.html,
       text: built.text,
+      // v2.5.x: List-Unsubscribe melhora reputação no Gmail/Outlook (sinal de
+      // remetente legítimo). A parte text/plain já existe (built.text).
+      headers: { "List-Unsubscribe": "<mailto:scoreplace.app@gmail.com?subject=Unsubscribe>" },
     },
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -2228,6 +2231,44 @@ function _normalizePhoneE164(raw) {
   return digits;
 }
 
+// ─── E-mail sintético para contas de CELULAR (v2.5.x) ────────────────────────
+// Firebase só faz senha nativa atrelada a um e-mail. Pra dar "celular + senha"
+// damos a cada conta de celular um e-mail sintético determinístico do número
+// E.164 (só dígitos). Esse e-mail NUNCA é deliverável, NUNCA é mostrado ao
+// usuário e NUNCA recebe verificação — o telefone é a prova de identidade.
+function _syntheticEmailForPhone(phoneDigits) {
+  const d = String(phoneDigits || "").replace(/\D/g, "");
+  if (!d) return null;
+  return "phone_" + d + "@phone.scoreplace.app";
+}
+function _isSyntheticEmail(email) {
+  return typeof email === "string" && /@phone\.scoreplace\.app$/i.test(email.trim());
+}
+// E-mail "real" do usuário (não-sintético) — null se ausente ou sintético.
+function _realEmailOf(userRecord) {
+  const e = userRecord && userRecord.email;
+  return (e && !_isSyntheticEmail(e)) ? e : null;
+}
+// Mascara e-mail/telefone pra UI sem vazar o valor cheio.
+function _maskEmail(email) {
+  if (!email || email.indexOf("@") < 0) return null;
+  const parts = email.split("@");
+  const local = parts[0];
+  const head = local.slice(0, Math.min(2, local.length));
+  return head + "***@" + parts[1];
+}
+function _maskPhone(phone) {
+  const d = String(phone || "").replace(/\D/g, "");
+  if (d.length < 4) return null;
+  const last2 = d.slice(-2);
+  return "(••) •••••-••" + last2;
+}
+// Conta cujo provedor inclui senha?
+function _hasPasswordProvider(userRecord) {
+  return !!(userRecord && Array.isArray(userRecord.providerData) &&
+    userRecord.providerData.some((p) => p && p.providerId === "password"));
+}
+
 // Send single WhatsApp text via Evolution. Retorna { ok, messageId?, error? }.
 async function _sendWhatsAppText(apiUrl, apiKey, instance, phone, text) {
   const url = apiUrl.replace(/\/+$/, "") + "/message/sendText/" + encodeURIComponent(instance);
@@ -2562,7 +2603,18 @@ exports.sendPasswordResetPhone = onCall(
 // e-mail. Compartilhado pelos dois caminhos (código digitado / botão do WA).
 async function _approvePasswordResetPhone(uid, phoneE164, token) {
   const db = admin.firestore();
-  await admin.auth().updateUser(uid, { emailVerified: true }).catch(() => {});
+  // v2.5.x: se a conta de celular ainda não tem e-mail (OTP legado), cria o
+  // e-mail sintético AGORA — sem um e-mail atrelado, o updatePassword do cliente
+  // não tem onde fixar a senha. O telefone é a prova, então emailVerified=true.
+  const authUpdate = { emailVerified: true };
+  try {
+    const ur = await admin.auth().getUser(uid);
+    if (!ur.email && phoneE164) {
+      const syn = _syntheticEmailForPhone(phoneE164);
+      if (syn) authUpdate.email = syn;
+    }
+  } catch (e) { /* segue só com emailVerified */ }
+  await admin.auth().updateUser(uid, authUpdate).catch(() => {});
   const upd = { emailVerified: true, updatedAt: new Date().toISOString() };
   if (phoneE164) { upd.phone = phoneE164; upd.phoneCountry = "55"; }
   await db.collection("users").doc(uid).set(upd, { merge: true }).catch(() => {});
@@ -2663,6 +2715,210 @@ exports.verifyPasswordResetPhoneToken = onCall(
     const ct = await _approvePasswordResetPhone(t.uid, t.phone || null, token);
     console.log("[verifyPasswordResetPhoneToken] token ok, uid:", t.uid);
     return { ok: true, customToken: ct, email: t.email };
+  }
+);
+
+// ─── Login unificado (v2.5.x): checkAccount / registerPhonePassword / ─────────
+// dispatchAccountRecovery. Backend do campo único (e-mail OU celular) + senha.
+
+// Resolve um identificador (e-mail ou celular) → UserRecord. Celular tenta por
+// phoneNumber e cai no e-mail sintético.
+async function _resolveAccount(identifier) {
+  const raw = String(identifier || "").trim();
+  if (!raw) return null;
+  if (raw.indexOf("@") >= 0) {
+    try { return await admin.auth().getUserByEmail(raw.toLowerCase()); }
+    catch (e) { return null; }
+  }
+  const digits = _normalizePhoneE164(raw);
+  if (!digits) return null;
+  try { return await admin.auth().getUserByPhoneNumber("+" + digits); }
+  catch (e) { /* tenta sintético abaixo */ }
+  const syn = _syntheticEmailForPhone(digits);
+  if (syn) { try { return await admin.auth().getUserByEmail(syn); } catch (e) { /* nada */ } }
+  return null;
+}
+
+// Rate-limit por chave (janela de 60s). true = bloqueado. Fail-open em erro.
+async function _throttleHit(db, coll, key, maxPerMin) {
+  const crypto = require("crypto");
+  const id = crypto.createHash("sha256").update(String(key)).digest("hex");
+  const ref = db.collection(coll).doc(id);
+  const now = Date.now();
+  let blocked = false;
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const d = snap.exists ? snap.data() : null;
+      const winStart = (d && d.windowStart) || 0;
+      let count = (d && d.count) || 0;
+      if (now - winStart > 60000) {
+        tx.set(ref, { windowStart: now, count: 1 });
+      } else {
+        count += 1;
+        if (count > maxPerMin) blocked = true;
+        tx.set(ref, { windowStart: winStart || now, count: count }, { merge: true });
+      }
+    });
+  } catch (e) { /* fail-open */ }
+  return blocked;
+}
+
+// Existência de conta + canais (mascarados). Oráculo de enumeração ACEITO pela
+// UX (distinguir "logar" de "cadastrar"); por isso rate-limit + resposta mascarada.
+exports.checkAccount = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  async (request) => {
+    const identifier = String((request.data && request.data.identifier) || "").trim();
+    if (!identifier) throw new HttpsError("invalid-argument", "identifier vazio");
+    const db = admin.firestore();
+    if (await _throttleHit(db, "checkAccountThrottle", identifier.toLowerCase(), 20)) {
+      throw new HttpsError("resource-exhausted", "muitas tentativas — aguarde");
+    }
+    const ur = await _resolveAccount(identifier);
+    if (!ur) return { exists: false };
+    const realEmail = _realEmailOf(ur);
+    const phone = await _registeredPhoneFor(ur.uid, ur);
+    return {
+      exists: true,
+      hasPassword: _hasPasswordProvider(ur),
+      channels: {
+        email: realEmail ? _maskEmail(realEmail) : null,
+        phone: phone ? _maskPhone(phone) : null,
+      },
+    };
+  }
+);
+
+// Define e-mail sintético + senha numa conta de CELULAR. Só roda APÓS prova de
+// posse: o cliente já está logado como o usuário do telefone (signInWithPhoneNumber
+// OU custom token do WhatsApp). Cobre cadastro novo E 1ª senha de OTP legado.
+exports.registerPhonePassword = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  async (request) => {
+    const auth = request.auth;
+    if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "sessão de telefone ausente");
+    const data = request.data || {};
+    const password = String(data.password || "");
+    const displayName = String(data.displayName || "").trim();
+    const phoneIn = _normalizePhoneE164(data.phone || "");
+    if (password.length < 6) throw new HttpsError("invalid-argument", "senha precisa de 6+ caracteres");
+    if (!phoneIn) throw new HttpsError("invalid-argument", "telefone inválido");
+
+    // Prova de posse: o número da sessão (claim phone_number do OTP, OU o
+    // phoneNumber do usuário no caso do custom token do WhatsApp) tem que bater.
+    let verifiedPhone = (auth.token && auth.token.phone_number) || null;
+    if (!verifiedPhone) {
+      try { const u = await admin.auth().getUser(auth.uid); verifiedPhone = u.phoneNumber || null; } catch (e) { /* nada */ }
+    }
+    if (!verifiedPhone || !_phoneDigitsMatch(verifiedPhone, phoneIn)) {
+      throw new HttpsError("permission-denied", "telefone não confere com a sessão verificada");
+    }
+
+    const uid = auth.uid;
+    const synthetic = _syntheticEmailForPhone(phoneIn);
+    const phoneE164 = "+" + phoneIn;
+    try {
+      const owner = await admin.auth().getUserByEmail(synthetic);
+      if (owner && owner.uid !== uid) throw new HttpsError("already-exists", "número já vinculado a outra conta");
+    } catch (e) {
+      if (e instanceof HttpsError) throw e; // user-not-found = ok
+    }
+
+    const upd = { email: synthetic, emailVerified: true, password: password, phoneNumber: phoneE164 };
+    if (displayName) upd.displayName = displayName;
+    try {
+      await admin.auth().updateUser(uid, upd);
+    } catch (err) {
+      console.error("[registerPhonePassword] updateUser failed:", err.code || err.message);
+      throw new HttpsError("internal", "não foi possível salvar: " + (err.code || err.message));
+    }
+    const prof = { phone: phoneE164, phoneCountry: "55", authProvider: "phone+password", updatedAt: new Date().toISOString() };
+    if (displayName) prof.displayName = displayName;
+    await admin.firestore().collection("users").doc(uid).set(prof, { merge: true }).catch(() => {});
+    console.log("[registerPhonePassword] set for uid:", uid);
+    return { ok: true };
+  }
+);
+
+// Recuperação automática (senha errada/ausente): dispara WhatsApp + e-mail nos
+// canais que a conta tem, com cooldown de 10 min/conta. SMS não é server-side.
+exports.dispatchAccountRecovery = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 45,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE] },
+  async (request) => {
+    const identifier = String((request.data && request.data.identifier) || "").trim();
+    if (!identifier) throw new HttpsError("invalid-argument", "identifier vazio");
+    const db = admin.firestore();
+    const ur = await _resolveAccount(identifier);
+    if (!ur) return { ok: true }; // silencioso (enumeração)
+
+    const realEmail = _realEmailOf(ur);
+    const phone = await _registeredPhoneFor(ur.uid, ur);
+
+    // Cooldown por conta (10 min).
+    const throttleRef = db.collection("recoveryThrottle").doc(ur.uid);
+    const tSnap = await throttleRef.get().catch(() => null);
+    const last = (tSnap && tSnap.exists && tSnap.data().lastSentAt) || 0;
+    if (last && (Date.now() - last) < 10 * 60 * 1000) {
+      return { ok: true, throttled: true,
+        channels: { email: realEmail ? _maskEmail(realEmail) : null, phone: phone ? _maskPhone(phone) : null } };
+    }
+
+    const out = { email: null, phone: null };
+
+    // Canal e-mail (só com e-mail REAL).
+    if (realEmail) {
+      try {
+        const link = await _genPasswordResetLink(realEmail);
+        if (link && link !== "USER_NOT_FOUND") {
+          await _queuePasswordResetEmail(db, realEmail, link, (ur.displayName || ""));
+          out.email = _maskEmail(realEmail);
+        }
+      } catch (e) { console.warn("[dispatchAccountRecovery] email leg:", e.message || e); }
+    }
+
+    // Canal WhatsApp (só com telefone) — mesma mecânica do sendPasswordResetPhone.
+    if (phone) {
+      try {
+        const phoneDigits = _normalizePhoneE164(phone);
+        const crypto = require("crypto");
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+        const token = crypto.randomBytes(18).toString("base64url");
+        const phoneE164 = "+" + phoneDigits;
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        const emailForReset = realEmail || _syntheticEmailForPhone(phoneDigits);
+        await db.collection("passwordResetPhone").doc(ur.uid).set({
+          uid: ur.uid, email: emailForReset, phone: phoneE164, otpHash, token, attempts: 0,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(), expiresAt,
+        });
+        await db.collection("passwordResetTokens").doc(token).set({
+          uid: ur.uid, email: emailForReset, phone: phoneE164, expiresAt,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const wrapperUrl = "https://scoreplace.app/?pr=" + encodeURIComponent(token);
+        const message =
+          "🎾 *scoreplace.app*\n\n" +
+          "Tentaram entrar e a senha não bateu.\n\n" +
+          "Código pra redefinir: *" + otp + "*\n\n" +
+          "Digite no app — ou toque pra redefinir e entrar direto:\n\n" +
+          wrapperUrl + "\n\n" +
+          "_Expira em 15 minutos. Se não foi você, ignore._";
+        const apiUrl = EVOLUTION_API_URL.value();
+        const apiKey = EVOLUTION_API_KEY.value();
+        const instance = EVOLUTION_INSTANCE.value();
+        const r = await _sendWhatsAppText(apiUrl, apiKey, instance, phoneDigits, message);
+        if (r.ok) out.phone = _maskPhone(phone);
+        else console.warn("[dispatchAccountRecovery] WA failed:", r.error);
+      } catch (e) { console.warn("[dispatchAccountRecovery] phone leg:", e.message || e); }
+    }
+
+    await throttleRef.set({ lastSentAt: Date.now() }, { merge: true }).catch(() => {});
+    return { ok: true, channels: out };
   }
 );
 

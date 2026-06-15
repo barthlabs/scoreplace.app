@@ -1354,6 +1354,237 @@ window._phoneSignupStart = function() {
   if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
 };
 
+// ─── Login unificado (v2.5.x): _handleEntrar e helpers ───────────────────────
+// Um único campo aceita e-mail OU celular (peso igual). Detecta o tipo, mostra o
+// DDI quando celular, e o botão Entrar resolve tudo: login, cadastro inline e
+// recuperação. Celular usa e-mail sintético + senha nativa (ver Cloud Functions
+// checkAccount / registerPhonePassword / dispatchAccountRecovery).
+
+// Status inline abaixo do botão Entrar.
+window._entrarStatus = function(html, kind) {
+  var el = document.getElementById('entrar-status');
+  if (!el) return;
+  if (!html) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  var color = kind === 'error' ? '#fca5a5' : (kind === 'success' ? '#6ee7b7' : (kind === 'info' ? 'var(--text-muted)' : '#fbbf24'));
+  el.style.display = 'block';
+  el.style.color = color;
+  el.innerHTML = html;
+};
+
+// Reset do modal pro estado inicial (fecha cadastro, limpa status, botão "Entrar").
+window._resetEntrarUI = function() {
+  var reg = document.getElementById('register-expand');
+  if (reg) reg.style.display = 'none';
+  var btn = document.getElementById('btn-entrar');
+  if (btn) btn.textContent = 'Entrar';
+  window._entrarRegisterMode = false;
+  window._entrarInFlight = false;
+  window._entrarStatus('');
+  var step = document.getElementById('phone-step-code');
+  if (step) step.style.display = 'none';
+  var main = document.getElementById('login-block-main');
+  if (main) main.style.display = '';
+};
+
+// Detecção + máscara no campo único.
+window._onIdentifierInput = function() {
+  var el = document.getElementById('login-identifier');
+  var countryEl = document.getElementById('login-identifier-country');
+  var rowEl = document.getElementById('login-id-row');
+  if (!el) return;
+  var mode = (typeof _detectInputModeRaw === 'function') ? _detectInputModeRaw(el.value) : null;
+  if (mode === 'phone') {
+    var ddi = (countryEl && countryEl.value) || '55';
+    if (ddi === '55') {
+      var raw = el.value.replace(/\D/g, '');
+      var masked = (typeof window._maskBRPhone === 'function') ? window._maskBRPhone(raw) : raw;
+      if (el.value !== masked) el.value = masked;
+    }
+  }
+  if (countryEl) countryEl.style.display = (mode === 'phone') ? '' : 'none';
+  if (rowEl) rowEl.style.gridTemplateColumns = (mode === 'phone') ? 'auto 1fr' : '1fr';
+};
+
+// E.164 (com +) do campo, usando o DDI selecionado.
+window._entrarPhoneE164 = function(raw, country) {
+  var cc = country || '55';
+  if (typeof window._normalizePhoneE164 === 'function') return window._normalizePhoneE164(raw, cc);
+  var d = String(raw).replace(/\D/g, '');
+  return (d.indexOf(cc) === 0) ? ('+' + d) : ('+' + cc + d);
+};
+
+// E-mail sintético da conta de celular (espelha _syntheticEmailForPhone do servidor).
+window._entrarSyntheticEmail = function(e164withPlus) {
+  var digits = String(e164withPlus || '').replace(/\D/g, '');
+  if (!digits) return null;
+  return 'phone_' + digits + '@phone.scoreplace.app';
+};
+
+window._entrarCheckAccount = function(identifier) {
+  try {
+    return firebase.functions().httpsCallable('checkAccount')({ identifier: identifier })
+      .then(function(r) { return (r && r.data) || null; }).catch(function() { return null; });
+  } catch (e) { return Promise.resolve(null); }
+};
+
+window._entrarDispatchRecovery = function(identifier) {
+  try {
+    return firebase.functions().httpsCallable('dispatchAccountRecovery')({ identifier: identifier })
+      .then(function(r) { return (r && r.data) || null; }).catch(function() { return null; });
+  } catch (e) { return Promise.resolve(null); }
+};
+
+// Abre a expansão de cadastro inline.
+window._entrarExpandRegister = function(mode, raw) {
+  var reg = document.getElementById('register-expand');
+  var hint = document.getElementById('register-expand-hint');
+  var btn = document.getElementById('btn-entrar');
+  if (reg) reg.style.display = 'block';
+  window._entrarRegisterMode = true;
+  if (btn) btn.textContent = 'Criar conta e entrar';
+  if (hint) {
+    hint.innerHTML = (mode === 'phone')
+      ? '✨ Número novo por aqui — vamos criar sua conta. Você vai receber um <b>código por SMS</b> e um <b>link no WhatsApp</b> pra confirmar o número.'
+      : '✨ E-mail novo por aqui — vamos criar sua conta. Confirme abaixo.';
+  }
+  window._entrarStatus('');
+  var nameEl = document.getElementById('reg-displayname');
+  if (nameEl) setTimeout(function() { try { nameEl.focus(); } catch(_e){} }, 30);
+};
+
+// "Enviamos recuperação" com os canais mascarados.
+window._entrarShowRecovery = function(res, noPassword) {
+  var ch = (res && res.channels) || {};
+  var esc = window._safeHtml || function(s){ return s; };
+  var parts = [];
+  if (ch.email) parts.push('e-mail <b>' + esc(ch.email) + '</b>');
+  if (ch.phone) parts.push('WhatsApp <b>' + esc(ch.phone) + '</b>');
+  var canais = parts.length ? parts.join(' e ') : 'seus contatos cadastrados';
+  var head = noPassword
+    ? '🔑 Essa conta ainda não tem senha. Enviamos um link pra você criar uma — por ' + canais + '.'
+    : '🔑 Senha incorreta. Enviamos um link pra redefinir — por ' + canais + '.';
+  window._entrarStatus(head + '<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha.</span>', 'warning');
+};
+
+// Prova de posse do celular + define a senha (cadastro novo OU 1ª senha de OTP legado).
+window._entrarSetupPhonePassword = function(e164withPlus, password, displayName) {
+  var country = (document.getElementById('login-identifier-country') || {}).value || '55';
+  var localDigits = (typeof window._phoneLocalDigits === 'function')
+    ? window._phoneLocalDigits(e164withPlus, country)
+    : String(e164withPlus).replace(/\D/g, '');
+  var hp = document.getElementById('login-phone');
+  var hc = document.getElementById('login-phone-country');
+  if (hp) hp.value = localDigits;
+  if (hc) hc.value = country;
+  // Pendência lida pelo hook em handlePhoneVerifyCode (e best-effort no ?wt=).
+  window._phonePwSetup = { phone: e164withPlus, password: password, displayName: displayName || '' };
+  try { sessionStorage.setItem('sp_pwSetup', JSON.stringify(window._phonePwSetup)); } catch (_e) {}
+  window._entrarStatus('📱 Enviamos um <b>código por SMS</b> e um <b>link pelo WhatsApp</b> pra confirmar seu número. Confirme abaixo pra concluir.', 'info');
+  if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
+};
+
+// Cadastro inline (após expandir): valida nome + confirmar senha, cria a conta.
+window._entrarDoRegister = function(mode, raw, password) {
+  var nameEl = document.getElementById('reg-displayname');
+  var confEl = document.getElementById('reg-password-confirm');
+  var name = nameEl ? nameEl.value.trim() : '';
+  var conf = confEl ? confEl.value : '';
+  if (!name) { window._entrarStatus('Digite um nome de exibição.', 'warning'); if (nameEl) nameEl.focus(); return; }
+  if (password !== conf) { window._entrarStatus('As senhas não conferem.', 'warning'); if (confEl) confEl.focus(); return; }
+  if (mode === 'email') {
+    window._entrarStatus('Criando sua conta…', 'info');
+    firebase.auth().createUserWithEmailAndPassword(raw.toLowerCase(), password)
+      .then(function(result) {
+        var user = result.user;
+        window._pendingVerifyName = name;
+        return user.updateProfile({ displayName: name }).catch(function(){}).then(function() {
+          if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
+            window.FirestoreDB.saveUserProfile(user.uid, { authProvider: 'password', email: user.email || raw.toLowerCase(), displayName: name, updatedAt: new Date().toISOString() }).catch(function(){});
+          }
+          if (typeof _sendRichVerificationEmail === 'function') _sendRichVerificationEmail(user, name);
+          window._entrarStatus('✅ Conta criada! Enviamos um <b>link de confirmação</b> pro seu e-mail — abra pra ativar.<br><span style="color:var(--text-muted);">Não chegou (UOL/Hotmail)? Volte e cadastre com <b>celular</b> — recebe SMS + WhatsApp.</span>', 'success');
+        });
+      })
+      .catch(function(error) {
+        var code = (error && error.code) || '';
+        if (code === 'auth/email-already-in-use') {
+          window._entrarStatus('Esse e-mail já tem conta. Apague o nome e tente entrar com a senha.', 'warning');
+          window._resetEntrarUI();
+        } else if (code === 'auth/invalid-email') {
+          window._entrarStatus('E-mail inválido.', 'warning');
+        } else {
+          window._entrarStatus((error && error.message) || 'Não foi possível criar a conta.', 'error');
+        }
+      });
+  } else {
+    var e164 = window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55');
+    window._entrarSetupPhonePassword(e164, password, name);
+  }
+};
+
+// O botão Entrar — máquina de estados única.
+window._handleEntrar = function() {
+  if (window._entrarInFlight) return;
+  var idEl = document.getElementById('login-identifier');
+  var pwEl = document.getElementById('login-password');
+  var raw = idEl ? idEl.value.trim() : '';
+  var pw = pwEl ? pwEl.value : '';
+  var mode = (typeof _detectInputModeRaw === 'function') ? _detectInputModeRaw(raw) : null;
+  if (!mode) { window._entrarStatus('Digite um e-mail (com @) ou um celular com DDD.', 'warning'); if (idEl) idEl.focus(); return; }
+  if (pw.length < 6) { window._entrarStatus('A senha precisa de pelo menos 6 caracteres.', 'warning'); if (pwEl) pwEl.focus(); return; }
+
+  // Já em modo cadastro (expandido) → cria conta.
+  if (window._entrarRegisterMode) { window._entrarDoRegister(mode, raw, pw); return; }
+
+  // Tentativa de login.
+  window._entrarInFlight = true;
+  window._entrarStatus('Entrando…', 'info');
+  var target = (mode === 'email')
+    ? raw.toLowerCase()
+    : window._entrarSyntheticEmail(window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55'));
+  if (!target) { window._entrarInFlight = false; window._entrarStatus('Número de celular inválido.', 'warning'); return; }
+
+  firebase.auth().signInWithEmailAndPassword(target, pw)
+    .then(function(result) {
+      window._entrarInFlight = false;
+      var user = result.user;
+      if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
+        var prof = { authProvider: (mode === 'phone') ? 'phone+password' : 'password', updatedAt: new Date().toISOString() };
+        if (mode === 'email' && user.email) prof.email = user.email;
+        window.FirestoreDB.saveUserProfile(user.uid, prof).catch(function(){});
+      }
+      try { sessionStorage.removeItem('sp_pwSetup'); } catch(_e){}
+      window._entrarStatus('');
+      showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {greeting: window._welcomeWord(user), name: user.displayName}) : _t('auth.welcome', {greeting: window._welcomeWord(user)}), 'success');
+      var modal = document.getElementById('modal-login');
+      if (modal) modal.classList.remove('active');
+    })
+    .catch(function(error) {
+      window._entrarInFlight = false;
+      var code = (error && error.code) || '';
+      var loginFail = (code === 'auth/wrong-password' || code === 'auth/invalid-credential' ||
+        code === 'auth/user-not-found' || code === 'auth/invalid-login-credentials');
+      if (code === 'auth/too-many-requests') { window._entrarStatus('Muitas tentativas. Aguarde um momento e tente de novo.', 'error'); return; }
+      if (!loginFail) { window._entrarStatus((error && error.message) || 'Não foi possível entrar.', 'error'); return; }
+      // Desambígua via checkAccount: existe? tem senha?
+      window._entrarStatus('Verificando…', 'info');
+      window._entrarCheckAccount(raw).then(function(info) {
+        if (!info || !info.exists) { window._entrarExpandRegister(mode, raw); return; }
+        if (info.hasPassword) {
+          window._entrarDispatchRecovery(raw).then(function(res) { window._entrarShowRecovery(res, false); });
+          return;
+        }
+        // Existe, sem senha.
+        if (mode === 'phone') {
+          var e164 = window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55');
+          window._entrarSetupPhonePassword(e164, pw, '');
+        } else {
+          window._entrarDispatchRecovery(raw).then(function(res) { window._entrarShowRecovery(res, true); });
+        }
+      });
+    });
+};
+
 // ─── Email Link (Passwordless) Login ────────────────────────────────────────
 function handleEmailLinkLogin() {
   var emailEl = document.getElementById('login-email-link');
@@ -1802,6 +2033,33 @@ function handlePhoneVerifyCode() {
   window._phoneConfirmationResult.confirm(code)
     .then(async function(result) {
       var user = result.user;
+      // v2.5.x: fluxo "definir senha após verificar o celular" (cadastro novo OU
+      // 1ª senha de usuário OTP legado). Posse provada pelo OTP → seta e-mail
+      // sintético + senha via registerPhonePassword. Caminho separado do login
+      // por OTP puro (cross-ref abaixo).
+      if (window._phonePwSetup) {
+        var _pw = window._phonePwSetup;
+        window._phonePwSetup = null;
+        try { sessionStorage.removeItem('sp_pwSetup'); } catch(_e){}
+        try {
+          await firebase.functions().httpsCallable('registerPhonePassword')({
+            phone: _pw.phone, password: _pw.password, displayName: _pw.displayName || ''
+          });
+          try { await user.getIdToken(true); } catch(_e){}
+          if (_pw.displayName) { try { await user.updateProfile({ displayName: _pw.displayName }); } catch(_e){} }
+        } catch (e) {
+          window._error('[phonePwSetup] registerPhonePassword falhou:', e);
+          showNotification('Não foi possível salvar a senha', (e && e.message) || 'Você está logado; defina a senha depois no perfil.', 'warning');
+        }
+        window._phoneConfirmationResult = null;
+        _resetPhoneRecaptcha();
+        if (typeof window._resetEntrarUI === 'function') window._resetEntrarUI();
+        showNotification(_t('auth.loginDone'), _t('auth.welcome', {greeting: window._welcomeWord(user)}), 'success');
+        var _m = document.getElementById('modal-login');
+        if (_m) _m.classList.remove('active');
+        _resetPhoneLoginUI();
+        return;
+      }
       // Save auth provider to Firestore.
       // v1.0.43-beta: cross-reference por telefone — quando user SMS faz
       // login pela primeira vez, procura outro doc users com o mesmo
@@ -4548,28 +4806,47 @@ function setupLoginModal() {
           // handlePhoneLogin (SMS Firebase + link WhatsApp em paralelo). Este
           // bloco estava oculto desde v1.9.73; voltou visível e agora é phone-only
           // (sem o input de link mágico por e-mail, que tinha o mesmo problema).
-          '<div id="login-unified-step" style="margin-bottom:10px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.35);border-radius:12px;padding:16px 14px 12px;transition:opacity 0.2s;">' +
-            '<div style="margin-bottom:10px;">' +
-              '<div style="font-size:0.95rem;font-weight:800;color:#25d366;line-height:1.3;">📱 Entrar ou cadastrar com celular</div>' +
-              '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:3px;line-height:1.45;">Sem e-mail. Você recebe um <b>código por SMS</b> e um <b>link pelo WhatsApp</b>. Ideal pra quem usa UOL ou Hotmail.</div>' +
-            '</div>' +
-            '<form novalidate onsubmit="event.preventDefault(); window._phoneSignupStart && window._phoneSignupStart();">' +
-              '<div style="display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center;">' +
-                '<select id="login-unified-country" aria-label="DDI do telefone" class="form-control" style="width:auto;min-width:0;font-size:0.82rem;padding:10px 6px;">' +
+          // --- Entrar OU cadastrar: e-mail OU celular + senha (v2.5.x) ---
+          // Um único campo aceita e-mail OU celular (peso igual). Celular faz
+          // aparecer o DDI 🇧🇷+55 à esquerda. Senha única. Botão Entrar resolve
+          // tudo (login / cadastro inline / recuperação) via window._handleEntrar.
+          '<div id="login-block-main" style="margin-bottom:4px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:16px 14px 14px;">' +
+            '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.45;">Entre com seu <b>e-mail</b> ou <b>celular</b>. É o mesmo lugar pra entrar e pra criar conta.</div>' +
+            '<form id="form-entrar" novalidate onsubmit="event.preventDefault(); window._handleEntrar && window._handleEntrar();">' +
+              '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">E-mail ou celular</div>' +
+              '<div id="login-id-row" style="display:grid;grid-template-columns:1fr;gap:6px;align-items:center;margin-bottom:12px;">' +
+                '<select id="login-identifier-country" aria-label="DDI do telefone" class="form-control" style="display:none;width:auto;min-width:0;font-size:0.82rem;padding:11px 6px;" onchange="window._onIdentifierInput && window._onIdentifierInput()">' +
                   (typeof _phoneCountries !== 'undefined' ? _phoneCountries.map(function(c) {
                     return '<option value="' + c.code + '"' + (c.code === '55' ? ' selected' : '') + '>' + c.flag + ' +' + c.code + '</option>';
                   }).join('') : '<option value="55">🇧🇷 +55</option>') +
                 '</select>' +
-                '<input type="tel" id="login-unified" class="form-control" placeholder="(11) 99999-8888" required inputmode="numeric" autocomplete="tel" oninput="window._maskPhoneInput && window._maskPhoneInput(this)" style="width:100%;min-width:0;box-sizing:border-box;font-size:0.95rem;padding:11px 12px;">' +
-                '<button type="submit" id="btn-enviar-magic" class="btn" style="background:#25d366;color:#0a1f12;font-size:0.82rem;white-space:nowrap;padding:10px 16px;font-weight:800;width:auto;justify-self:end;">Enviar código</button>' +
+                '<input type="text" id="login-identifier" class="form-control" placeholder="seu@email.com.br ou (11) 9999-8888" autocomplete="username" style="width:100%;min-width:0;box-sizing:border-box;font-size:0.95rem;padding:11px 12px;" oninput="window._onIdentifierInput && window._onIdentifierInput()">' +
               '</div>' +
-              '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;line-height:1.4;">Já tem conta com esse número? Entra também por aqui.</div>' +
+              '<div id="login-senha-label" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Senha <span style="font-style:italic;font-size:0.72rem;">(mín. 6 caracteres)</span></div>' +
+              '<div style="position:relative;margin-bottom:6px;">' +
+                '<input type="password" id="login-password" class="form-control" placeholder="sua senha" minlength="6" autocomplete="current-password" style="font-size:0.92rem;padding-right:44px;">' +
+                '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'login-password\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
+              '</div>' +
+              // Expansão de cadastro inline (aparece quando a conta não existe)
+              '<div id="register-expand" style="display:none;">' +
+                '<div id="register-expand-hint" style="font-size:0.8rem;color:#a5b4fc;margin:8px 0;line-height:1.45;">✨ Não encontramos essa conta — vamos criar a sua. Confirme abaixo:</div>' +
+                // v2.5.x: confirmar senha LOGO ABAIXO da senha (campos seguidos);
+                // nome de exibição depois.
+                '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Confirmar senha</div>' +
+                '<div style="position:relative;margin-bottom:12px;">' +
+                  '<input type="password" id="reg-password-confirm" class="form-control" placeholder="repita a senha" minlength="6" style="font-size:0.92rem;padding-right:44px;">' +
+                  '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'reg-password-confirm\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
+                '</div>' +
+                '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Nome de exibição <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(como vão te ver)</span></div>' +
+                '<input type="text" id="reg-displayname" class="form-control" placeholder="Seu nome" style="font-size:0.92rem;margin-bottom:6px;">' +
+              '</div>' +
+              '<button type="submit" id="btn-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;margin-top:4px;">Entrar</button>' +
             '</form>' +
-            // Hidden inputs — o motor handlePhoneLogin lê destes IDs.
-            '<input type="hidden" id="login-email-link">' +
-            '<input type="hidden" id="login-phone">' +
-            '<input type="hidden" id="login-phone-country" value="55">' +
+            '<div id="entrar-status" style="margin-top:10px;font-size:0.82rem;line-height:1.5;"></div>' +
           '</div>' +
+          // Hidden inputs — o motor handlePhoneLogin lê destes IDs (prova de posse).
+          '<input type="hidden" id="login-phone">' +
+          '<input type="hidden" id="login-phone-country" value="55">' +
 
           // SMS code verification step (mostrado só após handlePhoneLogin enviar SMS)
           '<div id="phone-step-code" style="display:none;margin-bottom:4px;">' +
@@ -4594,62 +4871,11 @@ function setupLoginModal() {
           '<div id="login-panel-emaillink" style="display:none;"></div>' +
           '<div id="login-panel-phone" style="display:none;"></div>' +
 
-          // --- E-mail e Senha (método principal) ---
-          '<div id="login-block-email" style="margin-bottom:4px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:16px 14px 12px;transition:opacity 0.2s;">' +
-            '<div id="email-login-mode" style="display:block;">' +
-              '<div style="font-size:0.95rem;font-weight:800;color:#a5b4fc;margin-bottom:12px;">🔑 Entrar com e-mail e senha</div>' +
-              '<form id="form-login" novalidate onsubmit="event.preventDefault(); handleEmailLogin();">' +
-                '<div style="margin-bottom:10px;">' +
-                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">E-mail <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(seu@email.com)</span></div>' +
-                  '<input type="email" id="login-email" class="form-control" placeholder="seu@email.com" required autocomplete="email" style="font-size:0.92rem;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
-                '</div>' +
-                '<div style="margin-bottom:14px;">' +
-                  '<div id="login-senha-label" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;font-weight:400;transition:color 0.2s;">Senha <span style="font-style:italic;font-size:0.72rem;">(mín. 6 caracteres)</span></div>' +
-                  '<div style="position:relative;">' +
-                    '<input type="password" id="login-password" class="form-control" placeholder="sua senha" required minlength="6" autocomplete="current-password" style="font-size:0.92rem;padding-right:44px;" oninput="window._updateEmailSenhaValidity && window._updateEmailSenhaValidity()">' +
-                    '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'login-password\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
-                  '</div>' +
-                '</div>' +
-                '<button type="submit" id="btn-email-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;transition:background 0.2s,opacity 0.2s;">Entrar</button>' +
-              '</form>' +
-              // Criar Conta + Esqueci a Senha como BOTÕES de destaque (v1.9.73)
-              '<div style="display:flex;gap:8px;margin-top:12px;">' +
-                '<button type="button" onclick="toggleEmailMode(\'register\')" class="btn btn-block" style="flex:1;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.5);color:#c7d2fe;font-size:0.85rem;font-weight:800;padding:11px;">✨ Criar Conta</button>' +
-                '<button type="button" onclick="handlePasswordReset()" class="btn btn-block" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.85rem;font-weight:800;padding:11px;">🔑 Esqueci a Senha</button>' +
-              '</div>' +
-            '</div>' +
-            '<div id="email-register-mode" style="display:none;">' +
-              '<div style="font-size:0.95rem;font-weight:800;color:#a5b4fc;margin:-4px 0 12px;">✨ Criar sua conta</div>' +
-              '<form id="form-register" novalidate onsubmit="event.preventDefault(); handleEmailRegister();">' +
-                '<div style="margin-bottom:10px;">' +
-                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Nome de exibição <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(como vão te ver no app)</span></div>' +
-                  '<input type="text" id="register-name" class="form-control" placeholder="Seu nome" required style="font-size:0.92rem;">' +
-                '</div>' +
-                '<div style="margin-bottom:10px;">' +
-                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">E-mail <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(seu@email.com)</span></div>' +
-                  '<input type="email" id="register-email" class="form-control" placeholder="seu@email.com" required style="font-size:0.92rem;">' +
-                '</div>' +
-                '<div style="margin-bottom:10px;">' +
-                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Senha <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(mín. 6 caracteres)</span></div>' +
-                  '<div style="position:relative;">' +
-                    '<input type="password" id="register-password" class="form-control" placeholder="crie uma senha" required minlength="6" style="font-size:0.92rem;padding-right:44px;">' +
-                    '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'register-password\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
-                  '</div>' +
-                '</div>' +
-                '<div style="margin-bottom:14px;">' +
-                  '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Confirmar senha <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(digite de novo)</span></div>' +
-                  '<div style="position:relative;">' +
-                    '<input type="password" id="register-password-confirm" class="form-control" placeholder="repita a senha" required minlength="6" style="font-size:0.92rem;padding-right:44px;">' +
-                    '<button type="button" tabindex="-1" aria-label="Mostrar senha" onclick="window._togglePwd(this,\'register-password-confirm\')" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:1.15rem;line-height:1;opacity:0.7;">👁️</button>' +
-                  '</div>' +
-                '</div>' +
-                '<button type="submit" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;">✨ Criar Conta</button>' +
-              '</form>' +
-              '<div style="margin-top:10px;">' +
-                '<button type="button" onclick="toggleEmailMode(\'login\')" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.85rem;font-weight:700;padding:10px;">← Já tenho conta · Entrar</button>' +
-              '</div>' +
-            '</div>' +
-          '</div>' +
+          // --- Bloco antigo "E-mail e Senha" removido (v2.5.x) ---
+          // Unificado no #login-block-main acima (campo único e-mail/celular +
+          // senha + cadastro inline). handleEmailLogin/toggleEmailMode/
+          // handleEmailRegister continuam DEFINIDOS (compat ?wt=/reset) mas não
+          // são mais acionados por nenhuma UI visível.
           '<div id="login-panel-email" style="display:none;"></div>' +
 
           // --- Divider ---
@@ -4694,19 +4920,20 @@ function setupLoginModal() {
       setTimeout(function() {
         if (typeof window._showQuickReturnBanner === 'function') window._showQuickReturnBanner();
       }, 80);
-      // v0.17.84/v1.0.22-beta: restaura último DDI escolhido pra reabrir o
-      // modal já com o país correto selecionado. Aplica em ambos os selects
-      // (visível login-unified-country + hidden login-phone-country que o
-      // handler real lê).
+      // Restaura último DDI escolhido pra reabrir o modal já com o país certo.
+      // Aplica no seletor visível (login-identifier-country) + no hidden
+      // (login-phone-country, lido por handlePhoneLogin na prova de posse).
       try {
         var saved = localStorage.getItem('scoreplace_loginPhoneCountry');
-        var selVisible = document.getElementById('login-unified-country');
+        var selVisible = document.getElementById('login-identifier-country');
         var selHidden = document.getElementById('login-phone-country');
         if (saved) {
           if (selVisible) selVisible.value = saved;
           if (selHidden) selHidden.value = saved;
         }
       } catch(_e) {}
+      // Reseta o modal pro estado inicial (caso tenha ficado em cadastro/status).
+      try { if (typeof window._resetEntrarUI === 'function') window._resetEntrarUI(); } catch(_e) {}
     });
   }
 }
