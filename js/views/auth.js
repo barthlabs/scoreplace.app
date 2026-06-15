@@ -1570,20 +1570,16 @@ window._entrarShowRecovery = function(res, noPassword) {
 };
 
 // Realça o botão "Entrar com Google" que JÁ existe na página (não recria outro):
-// brilho pulsante + scroll até ele. Um clique nele marca o hint educativo pra
-// o toast pós-login. Devolve true se achou o botão.
+// aplica o BRILHO PADRÃO do app — `.btn-shine` (mesma animação btnCtaShine do
+// botão "Entrar" verde da landing: faixa de luz que varre o botão). Scroll até
+// ele. Um clique nele marca o hint educativo pra o toast pós-login. Devolve true
+// se achou o botão.
 window._entrarHighlightGoogleBtn = function() {
   try {
     var btn = document.getElementById('login-google-btn');
     if (!btn) return false;
-    if (!document.getElementById('sp-google-glow-style')) {
-      var st = document.createElement('style');
-      st.id = 'sp-google-glow-style';
-      st.textContent = '@keyframes spGoogleGlow{0%,100%{box-shadow:0 0 0 2px rgba(59,130,246,0.55)}50%{box-shadow:0 0 20px 5px rgba(59,130,246,0.6),0 0 0 2px rgba(59,130,246,0.95)}}.sp-google-glow{animation:spGoogleGlow 1.3s ease-in-out infinite;border-color:#3b82f6 !important;}';
-      document.head.appendChild(st);
-    }
-    btn.classList.add('sp-google-glow');
-    btn.addEventListener('click', function(){ try{sessionStorage.setItem('sp_googleEduHint','1')}catch(e){}; btn.classList.remove('sp-google-glow'); }, { once: true });
+    btn.classList.add('btn-shine');
+    btn.addEventListener('click', function(){ try{sessionStorage.setItem('sp_googleEduHint','1')}catch(e){}; btn.classList.remove('btn-shine'); }, { once: true });
     try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
     return true;
   } catch (e) { return false; }
