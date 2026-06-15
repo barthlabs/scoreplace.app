@@ -2779,9 +2779,16 @@ exports.checkAccount = onCall(
     if (!ur) return { exists: false };
     const realEmail = _realEmailOf(ur);
     const phone = await _registeredPhoneFor(ur.uid, ur);
+    // v2.6.x: provedores sociais (Google/Apple/Facebook) — pra UI oferecer "Entrar
+    // com Google" quando a pessoa digita a senha do Google (que o Firebase não
+    // conhece) numa conta criada via provedor social.
+    var socialProviders = (ur.providerData || [])
+      .map(function (p) { return p && p.providerId; })
+      .filter(function (id) { return id === "google.com" || id === "apple.com" || id === "facebook.com"; });
     return {
       exists: true,
       hasPassword: _hasPasswordProvider(ur),
+      socialProviders: socialProviders,
       channels: {
         email: realEmail ? _maskEmail(realEmail) : null,
         phone: phone ? _maskPhone(phone) : null,
