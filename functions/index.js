@@ -1419,37 +1419,29 @@ exports.sendPasswordReset = onCall(
     }
 
     const db = admin.firestore();
-    const linkResult = await _genPasswordResetLink(email);
-    if (linkResult === "USER_NOT_FOUND") return { ok: true }; // silencioso (enumeração)
-    if (linkResult) {
-      try {
-        await _queuePasswordResetEmail(db, email, linkResult, name);
-        console.log("[sendPasswordReset] queued for", email);
-        return { ok: true };
-      } catch (err) {
-        console.error("[sendPasswordReset] falha ao enfileirar email:", err);
-        throw new HttpsError("internal", "não foi possível enfileirar o email: " + (err.code || err.message));
-      }
-    }
-    // v2.1.82: link indisponível (outage do Auth > retry). Em vez de jogar erro
-    // (e o usuário nunca receber o reset), enfileira pendente — drenado em ≤2 min.
+    // v2.6.x: wrapper `?pr=TOKEN` (token no Firestore) em vez do oobCode cru do
+    // Firebase — scanners anti-phishing consumiam o oobCode de uso único antes do
+    // clique ("link expirado"). Bônus: não depende mais do generatePasswordResetLink
+    // (que sofria outage transitório do Auth e exigia a fila pendingPasswordResets).
+    let ur = null;
+    try { ur = await admin.auth().getUserByEmail(email); } catch (e) { /* not found */ }
+    if (!ur) return { ok: true }; // silencioso (enumeração)
     try {
-      const dup = await db.collection("pendingPasswordResets")
-        .where("email", "==", email).where("status", "==", "pending").limit(1).get();
-      if (dup.empty) {
-        await db.collection("pendingPasswordResets").add({
-          email: email,
-          name: name || "",
-          status: "pending",
-          attempts: 0,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-    } catch (e) {
-      console.error("[sendPasswordReset] falha ao enfileirar pendente:", e);
+      const crypto = require("crypto");
+      const token = crypto.randomBytes(18).toString("base64url");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+      await db.collection("passwordResetTokens").doc(token).set({
+        uid: ur.uid, email: email, phone: ur.phoneNumber || null, expiresAt,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      const wrapperUrl = "https://scoreplace.app/?pr=" + encodeURIComponent(token);
+      await _queuePasswordResetEmail(db, email, wrapperUrl, name);
+      console.log("[sendPasswordReset] wrapper queued for", email);
+      return { ok: true };
+    } catch (err) {
+      console.error("[sendPasswordReset] falha:", err);
+      throw new HttpsError("internal", "não foi possível enviar o e-mail: " + (err.code || err.message));
     }
-    console.warn("[sendPasswordReset] generatePasswordResetLink indisponível; deferido p/ fila:", email);
-    return { ok: true, deferred: true };
   }
 );
 
@@ -2946,14 +2938,25 @@ exports.dispatchAccountRecovery = onCall(
 
     const out = { email: null, phone: null };
 
-    // Canal e-mail (só com e-mail REAL).
+    // Canal e-mail (só com e-mail REAL). v2.6.x: usa o wrapper `?pr=TOKEN` (token
+    // no Firestore) em vez do oobCode CRU do Firebase. Scanners anti-phishing
+    // (Gmail/Outlook/UOL) pré-carregam o link do e-mail e consumiam o oobCode de
+    // uso único → a pessoa clicava e dava "link expirado". O wrapper resolve do
+    // mesmo jeito que o magic link (v1.0.30): scanner faz GET na wrapper URL, não
+    // executa JS, então nunca alcança o código real.
     if (realEmail) {
       try {
-        const link = await _genPasswordResetLink(realEmail);
-        if (link && link !== "USER_NOT_FOUND") {
-          await _queuePasswordResetEmail(db, realEmail, link, (ur.displayName || ""));
-          out.email = _maskEmail(realEmail);
-        }
+        const crypto = require("crypto");
+        const token = crypto.randomBytes(18).toString("base64url");
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+        const phoneE164r = phone ? ("+" + _normalizePhoneE164(phone)) : null;
+        await db.collection("passwordResetTokens").doc(token).set({
+          uid: ur.uid, email: realEmail, phone: phoneE164r, expiresAt,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const wrapperUrl = "https://scoreplace.app/?pr=" + encodeURIComponent(token);
+        await _queuePasswordResetEmail(db, realEmail, wrapperUrl, (ur.displayName || ""));
+        out.email = _maskEmail(realEmail);
       } catch (e) { console.warn("[dispatchAccountRecovery] email leg:", e.message || e); }
     }
 
@@ -3051,16 +3054,49 @@ exports.sendPhoneOwnershipWhatsApp = onCall(
     const crypto = require("crypto");
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const codeHash = crypto.createHash("sha256").update(code).digest("hex");
-    await admin.firestore().collection("phoneOwnership").doc(uid).set({
+    const db = admin.firestore();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await db.collection("phoneOwnership").doc(uid).set({
       uid, phone: "+" + phone, codeHash, attempts: 0,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt, createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    const msg = "🎾 *scoreplace.app*\n\nSeu código pra confirmar este celular no seu perfil: *" + code + "*\n\n_Expira em 10 minutos. Se não foi você, ignore._";
+    // v2.6.x: link de 1 toque (`?pv=TOKEN`) além do código. Quem abre no celular já
+    // logado confirma direto, sem digitar. Token só resolve com a sessão principal
+    // ativa (o cliente usa pra provar posse e vincular/unir).
+    const pvToken = crypto.randomBytes(18).toString("base64url");
+    await db.collection("phoneOwnershipTokens").doc(pvToken).set({
+      uid, phone: "+" + phone, expiresAt, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    const pvUrl = "https://scoreplace.app/?pv=" + encodeURIComponent(pvToken);
+    const msg = "🎾 *scoreplace.app*\n\nConfirme este celular no seu perfil:\n\n👉 " + pvUrl + "\n\nOu digite o código no app: *" + code + "*\n\n_Expira em 10 minutos. Se não foi você, ignore._";
     try {
       const r = await _sendWhatsAppText(EVOLUTION_API_URL.value(), EVOLUTION_API_KEY.value(), EVOLUTION_INSTANCE.value(), phone, msg);
       return { ok: !!r.ok };
     } catch (e) { return { ok: false, reason: "wa-error" }; }
+  }
+);
+
+// v2.6.x: troca o token do link `?pv=` por um custom token do número (conta de
+// telefone). O cliente, JÁ LOGADO na conta principal, usa esse token pra provar
+// posse (instância secundária) e vincular/unir via mergePhoneAccount.
+exports.verifyPhoneOwnershipToken = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  async (request) => {
+    const token = String((request.data && request.data.token) || "").trim();
+    if (!token) return { ok: false, reason: "no-token" };
+    const db = admin.firestore();
+    const ref = db.collection("phoneOwnershipTokens").doc(token);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, reason: "invalid" };
+    const v = snap.data();
+    const exp = v.expiresAt && v.expiresAt.toDate ? v.expiresAt.toDate() : v.expiresAt;
+    if (exp && new Date(exp) < new Date()) { await ref.delete().catch(() => {}); return { ok: false, reason: "expired" }; }
+    let customToken;
+    try { customToken = await admin.auth().createCustomToken(v.uid, { source: "phone_ownership_token" }); }
+    catch (e) { return { ok: false, reason: "token-error" }; }
+    await ref.delete().catch(() => {});
+    return { ok: true, customToken: customToken, phone: v.phone };
   }
 );
 

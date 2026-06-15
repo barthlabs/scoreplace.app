@@ -343,7 +343,7 @@
         '</div>';
     };
 
-    showStatus('💬', 'Validando…', 'Confirmando o código do WhatsApp');
+    showStatus('💬', 'Validando…', 'Confirmando seu link de redefinição');
 
     var tries = 0;
     (function resolve() {
@@ -385,6 +385,93 @@
     if (window._error) window._error('[prToken] handler crashed:', e);
   }
 })();
+
+// ── Confirmar posse do celular pelo link do WhatsApp (?pv=TOKEN) ──────────────
+// v2.6.x: quem abre o link JÁ LOGADO na conta principal confirma o número em 1
+// toque (sem digitar código). Precisa da sessão principal — se não estiver
+// logado, guarda o token e processa após o login. Self-contained (não depende do
+// código do perfil). Fluxo: verifyPhoneOwnershipToken → custom token da conta de
+// telefone → instância secundária (prova) → mergePhoneAccount (dryRun → reivindica
+// se número novo, ou pede confirmação se for unir contas).
+window._handlePhoneOwnershipLink = function () {
+  try {
+    var token = null;
+    try {
+      var qs = new URLSearchParams(window.location.search);
+      token = qs.get('pv') || null;
+    } catch (e) {}
+    if (!token) { try { token = sessionStorage.getItem('sp_pvToken') || null; } catch (e) {} }
+    if (!token || window._pvHandling) return;
+    var fb = window.firebase;
+    if (!fb || !fb.auth || !fb.functions) return;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    function ov(html) {
+      var o = document.getElementById('pv-overlay');
+      if (!o) { o = document.createElement('div'); o.id = 'pv-overlay'; document.body.appendChild(o); }
+      o.style.cssText = 'position:fixed;inset:0;z-index:100061;background:rgba(0,0,0,0.62);display:flex;align-items:center;justify-content:center;padding:24px;';
+      o.innerHTML = '<div style="max-width:360px;width:100%;background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:22px;text-align:center;color:var(--text-bright,#fff);font-size:0.9rem;line-height:1.5;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' + html + '</div>';
+      return o;
+    }
+    function close() { var o = document.getElementById('pv-overlay'); if (o) o.remove(); }
+    if (!cu || !cu.uid) {
+      try { sessionStorage.setItem('sp_pvToken', token); } catch (e) {}
+      ov('<div style="font-size:1.8rem;">📱</div><div style="margin-top:8px;">Pra confirmar este celular, <b>entre na sua conta</b> primeiro.</div><button onclick="if(window.openModal)openModal(\'modal-login\')" style="margin-top:14px;background:#25d366;color:#0a1f12;border:none;padding:9px 18px;border-radius:10px;font-weight:800;cursor:pointer;">Entrar</button>');
+      return;
+    }
+    window._pvHandling = true;
+    try { sessionStorage.removeItem('sp_pvToken'); } catch (e) {}
+    try { history.replaceState(null, '', window.location.pathname + window.location.hash); } catch (e) {}
+    ov('<div style="font-size:1.8rem;">📱</div><div style="margin-top:8px;">Confirmando seu celular…</div>');
+    var survivor = cu.uid;
+    fb.functions().httpsCallable('verifyPhoneOwnershipToken')({ token: token }).then(function (res) {
+      var d = (res && res.data) || {};
+      if (!d.ok || !d.customToken) {
+        ov('<div style="font-size:1.8rem;">⚠️</div><div style="margin-top:8px;color:#fca5a5;">' + (d.reason === 'expired' ? 'Esse link expirou. Peça um novo no app.' : 'Link inválido. Tente pelo app.') + '</div><button onclick="document.getElementById(\'pv-overlay\').remove()" style="margin-top:14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 18px;border-radius:10px;cursor:pointer;">Fechar</button>');
+        window._pvHandling = false;
+        return;
+      }
+      var cfg = fb.app().options;
+      var sapp = fb.apps.find(function (a) { return a.name === 'profilephone'; }) || fb.initializeApp(cfg, 'profilephone');
+      try { sapp.auth().setPersistence(fb.auth.Auth.Persistence.NONE); } catch (e) {}
+      sapp.auth().signInWithCustomToken(d.customToken).then(function (cred) {
+        var phoneUser = cred.user;
+        function setStatus(html) { ov(html); }
+        function callMerge(dry) {
+          return phoneUser.getIdToken().then(function (proof) {
+            return fb.auth().currentUser.getIdToken().then(function (mainTok) {
+              return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/mergePhoneAccount', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
+                body: JSON.stringify({ data: { oldUid: phoneUser.uid, proofIdToken: proof, dryRun: !!dry } })
+              });
+            });
+          }).then(function (r) { return r.json(); }).then(function (j) { return (j && j.result) || (j && j.error ? { _error: j.error } : null); });
+        }
+        function done(merged) {
+          try { sapp.auth().signOut(); } catch (e) {}
+          setStatus('<div style="font-size:1.8rem;">✅</div><div style="margin-top:8px;">' + (merged ? 'Contas unidas e celular vinculado!' : 'Celular verificado e vinculado!') + '</div>');
+          setTimeout(function () { try { window.location.hash = '#profile'; } catch (e) {} window.location.reload(); }, 1500);
+        }
+        function fail(m) { try { sapp.auth().signOut(); } catch (e) {} window._pvHandling = false; setStatus('<div style="font-size:1.8rem;">⚠️</div><div style="margin-top:8px;color:#fca5a5;">Não foi possível: ' + (window._safeHtml ? window._safeHtml(String(m || 'erro')) : 'erro') + '</div><button onclick="document.getElementById(\'pv-overlay\').remove()" style="margin-top:14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 18px;border-radius:10px;cursor:pointer;">Fechar</button>'); }
+        function eMsg(r) { return (r && r._error && (r._error.message || r._error.status)) || 'erro'; }
+        if (phoneUser.uid === survivor) { done(false); return; }
+        callMerge(true).then(function (rep) {
+          if (!rep || rep._error) { fail(eMsg(rep)); return; }
+          if (rep.merged === false) { callMerge(false).then(function (r2) { (r2 && r2.ok) ? done(false) : fail(eMsg(r2)); }); return; }
+          var bits = [];
+          if (rep.tournaments) bits.push(rep.tournaments + ' torneio(s)');
+          if (rep.casualMatches) bits.push(rep.casualMatches + ' partida(s)');
+          if (rep.presences) bits.push(rep.presences + ' presença(s)');
+          var resumo = bits.length ? (' Vamos trazer ' + bits.join(', ') + ' pra esta conta.') : '';
+          var doIt = function () { setStatus('<div style="margin-top:8px;">Unindo as contas…</div>'); callMerge(false).then(function (r2) { (r2 && r2.ok) ? done(true) : fail(eMsg(r2)); }); };
+          var cancel = function () { try { sapp.auth().signOut(); } catch (e) {} window._pvHandling = false; close(); };
+          if (typeof showConfirmDialog === 'function') {
+            showConfirmDialog('🔀 Esse número já é de outra conta sua', 'Esse celular pertence a outra conta sua.' + resumo + ' Quer unir as duas contas?', doIt, cancel, 'Unir contas', 'Cancelar');
+          } else { doIt(); }
+        }).catch(function (e) { fail(e && (e.code || e.message)); });
+      }).catch(function (e) { window._pvHandling = false; ov('<div style="color:#fca5a5;">Erro ao confirmar. Tente pelo app.</div>'); });
+    }).catch(function () { window._pvHandling = false; ov('<div style="color:#fca5a5;">Erro. Tente de novo.</div>'); });
+  } catch (e) { if (window._error) window._error('[pvLink] crashed:', e); }
+};
 
 // ─── Config Firebase: PRODUÇÃO por padrão, STAGING só por hostname ────────────
 // scoreplace.app (e qualquer host que NÃO seja o staging, incl. localhost de
@@ -3657,6 +3744,9 @@ async function simulateLoginSuccess(user) {
     window.AppStore.currentUser.email = '';
   }
   window._log('[scoreplace-auth] currentUser set (' + (sameUser ? 'merged' : 'replaced') + '), running early router refresh');
+  // v2.6.x: se a pessoa abriu o link de 1 toque do WhatsApp (?pv=) — ou guardou o
+  // token antes de logar — confirma o celular agora que a sessão está pronta.
+  try { setTimeout(function () { if (window._handlePhoneOwnershipLink) window._handlePhoneOwnershipLink(); }, 900); } catch (e) {}
 
   // v0.17.93: atualizar topbar IMEDIATAMENTE com o user do Google.
   // Antes, topbar só era atualizado no fim da função (linha 1274+) DEPOIS
@@ -7463,23 +7553,65 @@ function setupProfileModal() {
         try { sapp.auth().signOut(); } catch(e){}
         return Promise.resolve();
       }
-      return phoneUser.getIdToken().then(function(proofToken) {
-        return firebase.auth().currentUser.getIdToken().then(function(mainTok) {
-          return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/mergePhoneAccount', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
-            body: JSON.stringify({ data: { oldUid: phoneUid, proofIdToken: proofToken } })
+      // Chama a mergePhoneAccount (dryRun=true só calcula/relata, false executa).
+      function callMerge(dryRun) {
+        return phoneUser.getIdToken().then(function(proofToken) {
+          return firebase.auth().currentUser.getIdToken().then(function(mainTok) {
+            return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/mergePhoneAccount', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
+              body: JSON.stringify({ data: { oldUid: phoneUid, proofIdToken: proofToken, dryRun: !!dryRun } })
+            });
           });
+        }).then(function(r) { return r.json(); }).then(function(j) {
+          if (j && j.result) return j.result;
+          if (j && j.error) return { _error: j.error };
+          return null;
         });
-      }).then(function(r) { return r.json(); }).then(function(j) {
+      }
+      function finishOk(merged) {
         try { sapp.auth().signOut(); } catch(e){}
-        if (j && j.result && j.result.ok) {
-          if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.82rem;">✅ Celular confirmado e vinculado! Atualizando…</div>';
-          setTimeout(function() { window.location.reload(); }, 1600);
-        } else {
-          var msg = (j && j.error && (j.error.message || j.error.status)) || 'erro';
-          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível vincular/unir: ' + window._safeHtml(String(msg)) + '</div>';
+        if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.82rem;">' +
+          (merged ? '✅ Contas unidas e celular vinculado! Atualizando…' : '✅ Celular verificado e vinculado! Atualizando…') + '</div>';
+        setTimeout(function() { window.location.reload(); }, 1600);
+      }
+      function fail(msg) {
+        try { sapp.auth().signOut(); } catch(e){}
+        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível vincular/unir: ' + window._safeHtml(String(msg || 'erro')) + '</div>';
+      }
+      function errMsg(r) { return (r && r._error && (r._error.message || r._error.status)) || 'erro'; }
+
+      // 1) dry-run: descobre se é só reivindicar o número (fantasma, sem dados) ou
+      //    UNIR duas contas (com dados). Só pede confirmação quando há merge real.
+      return callMerge(true).then(function(res) {
+        if (!res || res._error) { fail(errMsg(res)); return; }
+        if (res.merged === false) {
+          // Número novo / sem conta com dados → só marca verificado, sem perguntar.
+          if (otpEl) otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Vinculando…</div>';
+          return callMerge(false).then(function(r2) { (r2 && r2.ok) ? finishOk(false) : fail(errMsg(r2)); });
         }
-      });
+        // Conta real com dados → confirma antes de unir.
+        var bits = [];
+        if (res.tournaments) bits.push(res.tournaments + ' torneio(s)');
+        if (res.casualMatches) bits.push(res.casualMatches + ' partida(s) casual(is)');
+        if (res.presences) bits.push(res.presences + ' presença(s)');
+        if (res.friendRefsRepointed) bits.push(res.friendRefsRepointed + ' amizade(s)');
+        var resumo = bits.length ? (' Vamos trazer ' + bits.join(', ') + ' pra esta conta.') : '';
+        var doMerge = function() {
+          if (otpEl) otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Unindo as contas…</div>';
+          callMerge(false).then(function(r2) { (r2 && r2.ok) ? finishOk(true) : fail(errMsg(r2)); });
+        };
+        var onCancel = function() {
+          try { sapp.auth().signOut(); } catch(e){}
+          if (otpEl) otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Tudo bem — nada foi unido.</div>';
+        };
+        if (typeof showConfirmDialog === 'function') {
+          showConfirmDialog('🔀 Esse número já é de outra conta sua',
+            'Esse celular pertence a outra conta sua.' + resumo + ' Quer unir as duas contas?',
+            doMerge, onCancel, 'Unir contas', 'Cancelar');
+        } else {
+          doMerge();
+        }
+      }).catch(function(e) { fail(e && (e.code || e.message)); });
     };
 
     window._profileConfirmPhoneCode = function() {
