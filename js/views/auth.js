@@ -6539,17 +6539,17 @@ function setupProfileModal() {
             // Telefone: País + Número
             '<div class="form-group" style="margin-bottom: 6px;">' +
               '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
-              '<div style="display: flex; gap: 6px;">' +
+              '<div style="display: flex; gap: 6px; align-items: center;">' +
                 '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 120px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
+                '<span id="profile-phone-check" title="Celular verificado" style="display:none;color:#34d399;font-weight:800;flex-shrink:0;font-size:1.1rem;">✓</span>' +
               '</div>' +
               // v2.5.x: verificação de posse do celular. Adicionar/trocar exige
               // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
               // as duas (com confirmação). Sem isso, o número não vira válido.
               '<div style="margin-top:6px;">' +
-                '<span id="profile-phone-check" style="display:none;color:#34d399;font-weight:700;font-size:0.82rem;">✓ Celular verificado</span>' +
                 '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:#25d366;color:#0a1f12;border:none;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📱 Verificar e vincular</button>' +
                 '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS/WhatsApp. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
                 '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
