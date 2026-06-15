@@ -4286,7 +4286,33 @@ exports.mergePhoneAccount = onCall(
       db.collection("users").doc(oldUid).get(),
     ]);
 
-    if (!oldSnap.exists) throw new HttpsError("not-found", "Conta antiga não encontrada");
+    // v2.6.x: SEM MERGE. A "conta antiga" é um fantasma de Auth (telefone
+    // autenticado pelo OTP, mas sem perfil/dados no Firestore) — caso típico de
+    // verificar um celular NOVO, que não é de mais ninguém. Não há o que mesclar:
+    // só reivindica o número pro caller e marca verificado (✅). Exige prova de
+    // posse (proofIdToken da sessão do telefone == oldUid).
+    if (!oldSnap.exists) {
+      let ghProven = false;
+      const ghProof = request.data && request.data.proofIdToken;
+      if (ghProof) {
+        try { const _d = await admin.auth().verifyIdToken(String(ghProof)); if (_d && _d.uid === oldUid) ghProven = true; } catch (e) { /* inválido */ }
+      }
+      if (!ghProven) throw new HttpsError("permission-denied", "sem prova de posse do número");
+      let ghPhone = null;
+      try { const _gu = await admin.auth().getUser(oldUid); ghPhone = _gu.phoneNumber || null; } catch (e) { /* nada */ }
+      if (dryRun) return { ok: true, merged: false, claimedPhone: ghPhone };
+      if (ghPhone) {
+        // Libera o número do fantasma e seta no caller (Auth + perfil).
+        try { await admin.auth().deleteUser(oldUid); } catch (e) { console.warn("[mergePhoneAccount] del ghost:", (e && (e.code || e.message)) || e); }
+        try { await admin.auth().updateUser(callerUid, { phoneNumber: ghPhone }); }
+        catch (e) { console.error("[mergePhoneAccount] set phone on caller failed:", (e && (e.code || e.message)) || e); }
+        await db.collection("users").doc(callerUid).set(
+          { phone: ghPhone, phoneCountry: "55", updatedAt: new Date().toISOString() }, { merge: true }
+        ).catch(() => {});
+      }
+      console.log("[mergePhoneAccount] ghost claim — phone", ghPhone, "→ caller", callerUid);
+      return { ok: true, merged: false, claimedPhone: ghPhone };
+    }
     if (newSnap.exists && newSnap.data().mergedInto) throw new HttpsError("failed-precondition", "Conta atual já foi mesclada em outra");
 
     const newData = newSnap.exists ? newSnap.data() : {};
@@ -4657,7 +4683,7 @@ exports.mergePhoneAccount = onCall(
 
     console.log(`[mergePhoneAccount] ${dryRun ? "DRY-RUN " : ""}DONE ` + JSON.stringify(report));
     // Compat: mantém os campos antigos (tournaments/casualMatches) no retorno.
-    return Object.assign({ ok: true }, report, { casualMatches: report.casualMatches });
+    return Object.assign({ ok: true, merged: true }, report, { casualMatches: report.casualMatches });
   }
 );
 
