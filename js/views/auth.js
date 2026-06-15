@@ -1569,16 +1569,38 @@ window._entrarShowRecovery = function(res, noPassword) {
   window._entrarStatus(head + '<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha.</span>', 'warning');
 };
 
+// Realça o botão "Entrar com Google" que JÁ existe na página (não recria outro):
+// brilho pulsante + scroll até ele. Um clique nele marca o hint educativo pra
+// o toast pós-login. Devolve true se achou o botão.
+window._entrarHighlightGoogleBtn = function() {
+  try {
+    var btn = document.getElementById('login-google-btn');
+    if (!btn) return false;
+    if (!document.getElementById('sp-google-glow-style')) {
+      var st = document.createElement('style');
+      st.id = 'sp-google-glow-style';
+      st.textContent = '@keyframes spGoogleGlow{0%,100%{box-shadow:0 0 0 2px rgba(59,130,246,0.55)}50%{box-shadow:0 0 20px 5px rgba(59,130,246,0.6),0 0 0 2px rgba(59,130,246,0.95)}}.sp-google-glow{animation:spGoogleGlow 1.3s ease-in-out infinite;border-color:#3b82f6 !important;}';
+      document.head.appendChild(st);
+    }
+    btn.classList.add('sp-google-glow');
+    btn.addEventListener('click', function(){ try{sessionStorage.setItem('sp_googleEduHint','1')}catch(e){}; btn.classList.remove('sp-google-glow'); }, { once: true });
+    try { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+    return true;
+  } catch (e) { return false; }
+};
+
 // Conta criada via provedor social (Google/Apple): a senha do provedor NÃO vive
-// no Firebase, então login por senha nunca funciona — oferta o botão certo.
+// no Firebase, então login por senha nunca funciona. Em vez de recriar um botão,
+// aponta e dá brilho no "Entrar com Google" que já existe na própria página.
 window._entrarShowGoogleSuggestion = function(provider) {
   var isGoogle = provider !== 'apple';
   var label = isGoogle ? 'Google' : 'Apple';
-  var gsvg = '<svg width="16" height="16" viewBox="0 0 48 48" style="flex-shrink:0;"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
-  var btn = isGoogle
-    ? '<button type="button" onclick="try{sessionStorage.setItem(\'sp_googleEduHint\',\'1\')}catch(e){};window.handleGoogleLogin&&window.handleGoogleLogin()" style="width:100%;background:#fff;color:#1a1a2e;font-weight:700;font-size:0.9rem;padding:11px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.15);margin-top:10px;">' + gsvg + 'Entrar com Google</button>'
-    : '<div style="margin-top:8px;color:var(--text-muted);">Use o botão <b>Entrar com Apple</b> abaixo.</div>';
-  window._entrarStatus('👋 Essa conta entra com <b>' + label + '</b> — aqui você <b>não tem senha própria</b>, usa a do ' + label + '.' + (isGoogle ? ' Toque pra entrar:' : '') + btn, 'info');
+  if (isGoogle) {
+    var found = window._entrarHighlightGoogleBtn();
+    window._entrarStatus('👋 Essa conta entra com <b>Google</b> — aqui você <b>não tem senha própria</b>, usa a do Google. ' + (found ? 'Toque em <b>Entrar com Google</b> logo abaixo 👇' : 'Use o botão <b>Entrar com Google</b> abaixo.'), 'info');
+  } else {
+    window._entrarStatus('👋 Essa conta entra com <b>Apple</b> — aqui você <b>não tem senha própria</b>, usa a da Apple. Use o botão <b>Entrar com Apple</b> abaixo.', 'info');
+  }
 };
 
 // "Esqueci minha senha": dispara o reset SEM precisar errar a senha antes. Checa
@@ -5129,8 +5151,8 @@ function setupLoginModal() {
               '<button type="submit" id="btn-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;margin-top:4px;">Entrar</button>' +
             '</form>' +
             // Redefinir senha sem entrar: digita e-mail/celular acima e recebe o link.
-            '<div style="text-align:center;margin-top:8px;">' +
-              '<button type="button" onclick="window._entrarForgotPassword && window._entrarForgotPassword()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;text-decoration:underline;">Esqueci minha senha</button>' +
+            '<div style="margin-top:10px;">' +
+              '<button type="button" class="btn btn-primary btn-block hover-lift" onclick="window._entrarForgotPassword && window._entrarForgotPassword()" style="font-size:0.86rem;font-weight:700;padding:11px;color:#fff;">Esqueci minha senha</button>' +
             '</div>' +
             '<div id="entrar-status" style="margin-top:10px;font-size:0.82rem;line-height:1.5;"></div>' +
           '</div>' +
@@ -5177,7 +5199,7 @@ function setupLoginModal() {
 
           // --- 4. Google ---
           '<div style="margin-bottom:4px;">' +
-            '<button type="button" class="btn hover-lift btn-block" onclick="handleGoogleLogin()" style="background:#fff;color:#333;border:1px solid #ddd;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
+            '<button type="button" id="login-google-btn" class="btn hover-lift btn-block" onclick="handleGoogleLogin()" style="background:#fff;color:#333;border:1px solid #ddd;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
               '<svg width="18" height="18" viewBox="0 0 48 48" style="vertical-align:middle;margin-right:8px;"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.34 2.44 10.5l8.09-5.91z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
               _t('auth.signInGoogle') +
             '</button>' +
