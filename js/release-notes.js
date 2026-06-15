@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.5.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.5.5-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📱✉️ Confirmar celular e e-mail no perfil.</b> Adicionar ou trocar contato agora pede confirmação de posse — celular por <b>SMS + WhatsApp</b>, e-mail por <b>link</b>. Até confirmar, o contato anterior continua valendo.</li>' +
+        '<li><b>🔗 Vincular contas.</b> Confirmar um celular/e-mail que já é de outra sua conta <b>une as duas</b> — amigos, locais, torneios e histórico vão todos pra conta que você está usando.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.5.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🔐 Login novo, mais simples.</b> Um campo só: digite seu <b>e-mail OU celular</b> + senha. O mesmo botão <b>Entrar</b> serve pra entrar e pra criar conta — se a conta não existir, o cadastro abre ali mesmo.</li>' +
         '<li><b>Esqueceu a senha?</b> Se errar a senha de uma conta que existe, a gente já <b>envia o link de recuperação automaticamente</b> por e-mail e WhatsApp.</li>' +

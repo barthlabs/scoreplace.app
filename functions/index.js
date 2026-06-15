@@ -2957,6 +2957,67 @@ exports.resolveMergedLogin = onCall(
   }
 );
 
+// v2.5.x: confirmação de posse de celular no PERFIL via WhatsApp (além do SMS
+// nativo do Firebase). Manda um CÓDIGO nosso (não um link, que trocaria a
+// sessão) — a pessoa digita no mesmo campo do OTP. verify devolve um custom
+// token da conta do telefone, que vira a PROVA pro merge (proofIdToken).
+exports.sendPhoneOwnershipWhatsApp = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE] },
+  async (request) => {
+    if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "login obrigatório");
+    const phone = _normalizePhoneE164(request.data && request.data.phone);
+    if (!phone) return { ok: false, reason: "bad-phone" };
+    let uid;
+    try { uid = (await admin.auth().getUserByPhoneNumber("+" + phone)).uid; }
+    catch (e) { try { uid = (await admin.auth().createUser({ phoneNumber: "+" + phone })).uid; } catch (e2) { return { ok: false, reason: "auth-error" }; } }
+    const crypto = require("crypto");
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+    await admin.firestore().collection("phoneOwnership").doc(uid).set({
+      uid, phone: "+" + phone, codeHash, attempts: 0,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    const msg = "🎾 *scoreplace.app*\n\nSeu código pra confirmar este celular no seu perfil: *" + code + "*\n\n_Expira em 10 minutos. Se não foi você, ignore._";
+    try {
+      const r = await _sendWhatsAppText(EVOLUTION_API_URL.value(), EVOLUTION_API_KEY.value(), EVOLUTION_INSTANCE.value(), phone, msg);
+      return { ok: !!r.ok };
+    } catch (e) { return { ok: false, reason: "wa-error" }; }
+  }
+);
+
+exports.verifyPhoneOwnershipWhatsApp = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
+    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  async (request) => {
+    if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "login obrigatório");
+    const phone = _normalizePhoneE164(request.data && request.data.phone);
+    const code = String((request.data && request.data.code) || "").trim();
+    if (!phone || !/^\d{6}$/.test(code)) return { ok: false, reason: "bad-input" };
+    let uid;
+    try { uid = (await admin.auth().getUserByPhoneNumber("+" + phone)).uid; } catch (e) { return { ok: false, reason: "no-account" }; }
+    const db = admin.firestore(); const ref = db.collection("phoneOwnership").doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, reason: "no-pending" };
+    const v = snap.data();
+    const exp = v.expiresAt && v.expiresAt.toDate ? v.expiresAt.toDate() : v.expiresAt;
+    if (exp && new Date(exp) < new Date()) { await ref.delete().catch(() => {}); return { ok: false, reason: "expired" }; }
+    if ((v.attempts || 0) >= 6) return { ok: false, reason: "too-many" };
+    const crypto = require("crypto");
+    if (crypto.createHash("sha256").update(code).digest("hex") !== v.codeHash) {
+      await ref.update({ attempts: (v.attempts || 0) + 1 }).catch(() => {});
+      return { ok: false, reason: "wrong-code" };
+    }
+    await ref.delete().catch(() => {});
+    let customToken;
+    try { customToken = await admin.auth().createCustomToken(uid, { source: "phone_ownership_wa" }); }
+    catch (e) { return { ok: false, reason: "token-error" }; }
+    return { ok: true, customToken: customToken };
+  }
+);
+
 exports.processWhatsAppQueue = onDocumentCreated(
   {
     document: "whatsapp_queue/{queueId}",

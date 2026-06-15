@@ -6287,7 +6287,12 @@ function setupProfileModal() {
               '<input type="email" id="profile-edit-email" class="form-control" placeholder="seu@email.com" autocomplete="off" style="flex:1;min-width:0;box-sizing:border-box;">' +
               '<button type="button" onclick="window._profileCancelEmailEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:6px 10px;border-radius:8px;font-size:0.82rem;cursor:pointer;white-space:nowrap;line-height:1;">✕</button>' +
             '</div>' +
-            '<span style="font-size:0.68rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">O e-mail será salvo ao clicar em Salvar.</span>' +
+            // v2.5.x: e-mail exige verificação de posse (link de confirmação).
+            '<div style="margin-top:6px;">' +
+              '<button type="button" onclick="window._profileVerifyEmail && window._profileVerifyEmail()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">✉️ Verificar e vincular</button>' +
+              '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Enviamos um link de confirmação pro novo e-mail. Ele vira seu login quando você clicar.</span>' +
+              '<div id="profile-email-otp" style="display:none;margin-top:8px;font-size:0.78rem;"></div>' +
+            '</div>' +
           '</div>' +
           // ── Emails vinculados ──
           '<div style="margin:0 0 6px 0;">' +
@@ -7250,6 +7255,45 @@ function setupProfileModal() {
       if (inp) inp.value = '';
     };
 
+    // ── v2.5.x: Verificar e vincular E-MAIL no perfil ─────────────────────────
+    // E-mail novo → verifyBeforeUpdateEmail (nativo, pt-BR): só vira login depois
+    // que a pessoa clica no link enviado pro novo e-mail (fica pendente até lá; o
+    // e-mail atual continua valendo). Se o e-mail já é de outra conta, orienta a
+    // unir pelo celular (a união por e-mail entra num próximo incremento).
+    window._profileVerifyEmail = function() {
+      var cu = window.AppStore && window.AppStore.currentUser;
+      var fu = (firebase && firebase.auth) ? firebase.auth().currentUser : null;
+      if (!cu || !fu) { showNotification('Sessão', 'Entre novamente.', 'warning'); return; }
+      var inp = document.getElementById('profile-edit-email');
+      var email = inp ? String(inp.value || '').trim().toLowerCase() : '';
+      var statusEl = document.getElementById('profile-email-otp');
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showNotification('E-mail inválido', 'Digite um e-mail válido.', 'warning'); if (inp) inp.focus(); return; }
+      if (cu.email && email === String(cu.email).toLowerCase()) { showNotification('E-mail', 'Esse já é o seu e-mail.', 'info'); return; }
+      if (statusEl) { statusEl.style.display = 'block'; statusEl.innerHTML = '<span style="color:var(--text-muted);">Verificando…</span>'; }
+      fetch('https://us-central1-scoreplace-app.cloudfunctions.net/checkAccount', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { identifier: email } })
+      }).then(function(r) { return r.json(); }).then(function(j) {
+        var info = j && j.result;
+        if (info && info.exists) {
+          if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Esse e-mail já pertence a uma conta. Por enquanto, pra <b>unir contas</b> entre na conta que quer manter e use o <b>celular</b> (📱 Verificar e vincular). A união por e-mail chega em breve.</span>';
+          return;
+        }
+        return fu.verifyBeforeUpdateEmail(email).then(function() {
+          if (statusEl) statusEl.innerHTML = '<span style="color:#6ee7b7;">✅ Enviamos um link de confirmação para <b>' + window._safeHtml(email) + '</b>. Abra e confirme — ele vira seu login. Até lá, seu e-mail atual continua valendo.</span>';
+        });
+      }).catch(function(err) {
+        var code = err && err.code;
+        if (code === 'auth/requires-recent-login') {
+          if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Por segurança, saia e entre de novo antes de trocar o e-mail.</span>';
+        } else if (code === 'auth/email-already-in-use') {
+          if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Esse e-mail já pertence a outra conta. Pra unir, use o celular na conta que quer manter.</span>';
+        } else {
+          if (statusEl) statusEl.innerHTML = '<span style="color:#fca5a5;">Não foi possível: ' + window._safeHtml(String((err && (err.message || err.code)) || 'erro')) + '</span>';
+        }
+      });
+    };
+
     // ── v2.5.x: Verificar e vincular CELULAR no perfil ────────────────────────
     // Prova posse por SMS/WhatsApp numa instância SECUNDÁRIA do Firebase (não
     // troca a sessão atual). Se o número já é de outra conta, o idToken dessa
@@ -7272,12 +7316,23 @@ function setupProfileModal() {
       window._profilePhoneSurvivor = cu.uid;
       try { if (window._profilePhoneRecaptcha) window._profilePhoneRecaptcha.clear(); } catch(e){}
       window._profilePhoneRecaptcha = new firebase.auth.RecaptchaVerifier(recEl, { size: 'invisible' }, sapp);
+      window._profilePhoneE164 = e164;
       window._profilePhoneRecaptcha.render().then(function() {
         return sapp.auth().signInWithPhoneNumber(e164, window._profilePhoneRecaptcha);
       }).then(function(confirmation) {
         window._profilePhoneConfirmation = confirmation;
+        // v2.5.x: dispara TAMBÉM o código por WhatsApp, em paralelo (regra: celular
+        // sempre SMS + WhatsApp). Best-effort — não bloqueia o SMS.
+        try {
+          firebase.auth().currentUser.getIdToken().then(function(mainTok) {
+            return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/sendPhoneOwnershipWhatsApp', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
+              body: JSON.stringify({ data: { phone: e164 } })
+            });
+          }).catch(function(){});
+        } catch (e) {}
         if (otpEl) otpEl.innerHTML =
-          '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por SMS / WhatsApp:</div>' +
+          '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por <b>SMS</b> ou <b>WhatsApp</b>:</div>' +
           '<div style="display:flex;gap:8px;">' +
             '<input id="profile-phone-code" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
             '<button type="button" onclick="window._profileConfirmPhoneCode()" class="btn btn-success" style="white-space:nowrap;">Confirmar</button>' +
@@ -7288,41 +7343,68 @@ function setupProfileModal() {
       });
     };
 
+    // Conclui a partir da conta de telefone autenticada na instância secundária:
+    // mescla ela na conta atual (sobrevivente) com prova (idToken da conta-tel).
+    window._profilePhoneMergeFromSecondary = function(phoneUser, otpEl) {
+      var sapp = firebase.app('profilephone');
+      var survivor = window._profilePhoneSurvivor;
+      var phoneUid = phoneUser.uid;
+      if (phoneUid === survivor) {
+        if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.8rem;">✅ Esse celular já é desta conta.</div>';
+        try { sapp.auth().signOut(); } catch(e){}
+        return Promise.resolve();
+      }
+      return phoneUser.getIdToken().then(function(proofToken) {
+        return firebase.auth().currentUser.getIdToken().then(function(mainTok) {
+          return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/mergePhoneAccount', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
+            body: JSON.stringify({ data: { oldUid: phoneUid, proofIdToken: proofToken } })
+          });
+        });
+      }).then(function(r) { return r.json(); }).then(function(j) {
+        try { sapp.auth().signOut(); } catch(e){}
+        if (j && j.result && j.result.ok) {
+          if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.82rem;">✅ Celular confirmado e vinculado! Atualizando…</div>';
+          setTimeout(function() { window.location.reload(); }, 1600);
+        } else {
+          var msg = (j && j.error && (j.error.message || j.error.status)) || 'erro';
+          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível vincular/unir: ' + window._safeHtml(String(msg)) + '</div>';
+        }
+      });
+    };
+
     window._profileConfirmPhoneCode = function() {
       var codeEl = document.getElementById('profile-phone-code');
       var code = codeEl ? codeEl.value.trim() : '';
       var otpEl = document.getElementById('profile-phone-otp');
       if (!/^\d{6}$/.test(code)) { showNotification('Código', 'Digite os 6 dígitos.', 'warning'); return; }
-      if (!window._profilePhoneConfirmation) { showNotification('Sessão', 'Reenvie o código.', 'warning'); return; }
       if (otpEl) otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Confirmando…</div>';
       var sapp = firebase.app('profilephone');
-      var survivor = window._profilePhoneSurvivor;
-      window._profilePhoneConfirmation.confirm(code).then(function(result) {
-        var phoneUid = result.user.uid;
-        if (phoneUid === survivor) {
-          if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.8rem;">✅ Esse celular já é desta conta.</div>';
-          try { sapp.auth().signOut(); } catch(e){}
-          return;
-        }
-        return result.user.getIdToken().then(function(proofToken) {
-          return firebase.auth().currentUser.getIdToken().then(function(mainTok) {
-            return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/mergePhoneAccount', {
-              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
-              body: JSON.stringify({ data: { oldUid: phoneUid, proofIdToken: proofToken } })
-            });
+      var e164 = window._profilePhoneE164;
+      // 1) tenta o código do SMS (Firebase). 2) se falhar, tenta o código do WhatsApp.
+      var smsTry = window._profilePhoneConfirmation
+        ? window._profilePhoneConfirmation.confirm(code).then(function(result) { return result.user; })
+        : Promise.reject(new Error('no-sms-confirmation'));
+      smsTry.then(function(phoneUser) {
+        return window._profilePhoneMergeFromSecondary(phoneUser, otpEl);
+      }).catch(function() {
+        // fallback: código do WhatsApp → custom token → signInWithCustomToken
+        firebase.auth().currentUser.getIdToken().then(function(mainTok) {
+          return fetch('https://us-central1-scoreplace-app.cloudfunctions.net/verifyPhoneOwnershipWhatsApp', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + mainTok },
+            body: JSON.stringify({ data: { phone: e164, code: code } })
           });
         }).then(function(r) { return r.json(); }).then(function(j) {
-          try { sapp.auth().signOut(); } catch(e){}
-          if (j && j.result && j.result.ok) {
-            if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.82rem;">✅ Celular confirmado e vinculado! Atualizando…</div>';
-            setTimeout(function() { window.location.reload(); }, 1600);
-          } else {
-            var msg = (j && j.error && (j.error.message || j.error.status)) || 'erro';
-            if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível vincular/unir: ' + window._safeHtml(String(msg)) + '</div>';
+          var res = j && j.result;
+          if (res && res.ok && res.customToken) {
+            return sapp.auth().signInWithCustomToken(res.customToken).then(function(cred) {
+              return window._profilePhoneMergeFromSecondary(cred.user, otpEl);
+            });
           }
+          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
+        }).catch(function() {
+          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
         });
-      }).catch(function(err) {
-        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
       });
     };
 
@@ -7793,10 +7875,11 @@ function setupProfileModal() {
         }
       }
       // v1.7.9-beta: include email when user adds/changes it in profile
-      if (_emailChanged) {
-        payload.email = emailIn;
-        payload.email_lower = emailIn;
-      }
+      // v2.5.x: e-mail ALTERADO/novo não é gravado direto — precisa verificação
+      // de posse ("✉️ Verificar e vincular" → verifyBeforeUpdateEmail). Assim o
+      // e-mail só vira válido/login depois de confirmado.
+      var _emailChangedUnverified = false;
+      if (_emailChanged) { _emailChangedUnverified = true; }
       // defaultCategory removido — v1.3.98-beta (skill vive em skillBySport)
       if (preferredCeps) payload.preferredCeps = preferredCeps;
 
@@ -7972,12 +8055,13 @@ function setupProfileModal() {
             '⚠️ ' + desc,
             'error'
           );
-        } else if (_phoneChangedUnverified) {
-          showNotification(
-            'Perfil salvo — falta confirmar o celular',
-            'O novo número ainda não foi salvo. Toque em "📱 Verificar e vincular" pra confirmar por SMS/WhatsApp.',
-            'warning'
-          );
+        } else if (_phoneChangedUnverified || _emailChangedUnverified) {
+          var _pendMsg = (_phoneChangedUnverified && _emailChangedUnverified)
+            ? 'O novo celular e o novo e-mail ainda não foram salvos. Toque em "Verificar e vincular" em cada um pra confirmar.'
+            : (_phoneChangedUnverified
+              ? 'O novo número ainda não foi salvo. Toque em "📱 Verificar e vincular" pra confirmar por SMS/WhatsApp.'
+              : 'O novo e-mail ainda não foi salvo. Toque em "✉️ Verificar e vincular" pra confirmar pelo link.');
+          showNotification('Perfil salvo — falta confirmar contato', _pendMsg, 'warning');
         } else {
           showNotification(
             'Perfil atualizado',
@@ -8105,38 +8189,12 @@ function setupProfileModal() {
       // ── 9b. EMAIL MERGE — detectar conta anterior com mesmo e-mail ──────
       // v1.7.9-beta: só dispara quando o e-mail foi adicionado/alterado neste save.
       // Busca outras contas com o mesmo email_lower e oferece mesclagem via dialog.
-      if (!saveError && _emailChanged && window.FirestoreDB && window.FirestoreDB.db) {
-        setTimeout(function() {
-          window.FirestoreDB.db.collection('users')
-            .where('email_lower', '==', emailIn)
-            .limit(5)
-            .get()
-            .then(function(snap) {
-              var oldDoc = null;
-              snap.forEach(function(doc) {
-                if (doc.id !== uid && !doc.data().mergedInto) oldDoc = doc;
-              });
-              if (!oldDoc) return;
-              var oldData = oldDoc.data();
-              var oldName = oldData.displayName || '';
-              var label = oldName ? ' (nome: ' + oldName + ')' : '';
-              var confirmMsg = 'Encontramos uma conta anterior vinculada a este e-mail' + label + '.\n\nDeseja mesclar? As inscrições em torneios e o histórico de partidas daquela conta serão transferidos para a sua conta atual.';
-              if (typeof showConfirmDialog === 'function') {
-                showConfirmDialog(
-                  '📧 Conta anterior encontrada',
-                  confirmMsg,
-                  function() { window._executePhoneAccountMerge(oldDoc.id); },
-                  function() {},
-                  'Mesclar contas',
-                  'Não, ignorar'
-                );
-              } else if (confirm(confirmMsg)) {
-                window._executePhoneAccountMerge(oldDoc.id);
-              }
-            })
-            .catch(function(e) { window._warn('[EmailMerge] query error:', e); });
-        }, 1200);
-      }
+      // v2.5.x: merge-por-e-mail no save REMOVIDO. Antes, salvar o perfil com um
+      // e-mail de outra conta disparava a mesclagem direto — mas isso (a) gravava
+      // um e-mail não verificado e (b) agora é barrado pela prova de posse no
+      // mergePhoneAccount (digitar um e-mail ≠ provar que é seu). A troca/adição
+      // de e-mail passa pelo botão "✉️ Verificar e vincular" (_profileVerifyEmail),
+      // que verifica a posse de verdade antes de qualquer mudança/mesclagem.
 
       // v1.3.5-beta: usar helper centralizado que trata tanto rota #profile
       // quanto modal-overlay legacy.
