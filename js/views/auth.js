@@ -1537,15 +1537,17 @@ window._realEmailOrEmpty = function(email) {
 window._entrarCheckAccount = function(identifier) {
   try {
     return firebase.functions().httpsCallable('checkAccount')({ identifier: identifier })
-      .then(function(r) { return (r && r.data) || null; }).catch(function() { return null; });
-  } catch (e) { return Promise.resolve(null); }
+      .then(function(r) { return (r && r.data) || null; })
+      .catch(function(e) { window._lastAuthFnError = { fn: 'checkAccount', code: (e && e.code) || '', msg: (e && e.message) || String(e), at: Date.now() }; if (window._warn) window._warn('[checkAccount] falhou:', e && e.code, e && e.message); return null; });
+  } catch (e) { window._lastAuthFnError = { fn: 'checkAccount', code: 'throw', msg: String(e) }; return Promise.resolve(null); }
 };
 
 window._entrarDispatchRecovery = function(identifier) {
   try {
     return firebase.functions().httpsCallable('dispatchAccountRecovery')({ identifier: identifier })
-      .then(function(r) { return (r && r.data) || null; }).catch(function() { return null; });
-  } catch (e) { return Promise.resolve(null); }
+      .then(function(r) { return (r && r.data) || null; })
+      .catch(function(e) { window._lastAuthFnError = { fn: 'dispatchAccountRecovery', code: (e && e.code) || '', msg: (e && e.message) || String(e), at: Date.now() }; if (window._warn) window._warn('[dispatchAccountRecovery] falhou:', e && e.code, e && e.message); return null; });
+  } catch (e) { window._lastAuthFnError = { fn: 'dispatchAccountRecovery', code: 'throw', msg: String(e) }; return Promise.resolve(null); }
 };
 
 // Abre a expansão de cadastro inline.
@@ -1672,15 +1674,31 @@ window._entrarForgotPassword = function() {
     // existe. NÃO concluímos "sem conta" a partir do checkAccount, porque ele
     // pode ter FALHADO (info === null) e mostraria "crie conta" pra quem TEM conta.
     window._entrarStatus('Enviando link de redefinição…', 'info');
-    window._entrarDispatchRecovery(raw).then(function(res) {
-      if (res === null) {
+    // Fallback NATIVO do Firebase pra e-mail — vai direto pro identitytoolkit
+    // (mesmo servidor do login), sem depender da Cloud Function nem do CORS dela.
+    // Se a pessoa consegue abrir o app, esse caminho funciona. Garante que o link
+    // sai mesmo se o dispatch rico (PT + ?pr=) falhar.
+    var _nativeEmailReset = function() {
+      if (mode === 'phone' || !window.firebase || !firebase.auth) {
         window._entrarStatus('⚠️ Não deu pra confirmar agora. Verifique sua conexão e toque de novo em "Esqueci minha senha".', 'warning');
         return;
       }
+      try { firebase.auth().languageCode = 'pt-BR'; } catch (_e) {}
+      firebase.auth().sendPasswordResetEmail(raw).then(function () {
+        window._entrarStatus('🔑 Enviamos um link pra redefinir a senha por e-mail <b>' + esc(raw) + '</b>.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha. Não chegou? Veja o spam/lixeira.</span>', 'success');
+      }).catch(function (err) {
+        var code = (err && err.code) || '';
+        if (code === 'auth/user-not-found') { _noAccount(); return; }
+        if (code === 'auth/invalid-email') { window._entrarStatus('Esse e-mail não parece válido. Confira e tente de novo.', 'warning'); return; }
+        window._entrarStatus('⚠️ Não consegui enviar agora (' + (code || 'erro de conexão') + '). Tente de novo em instantes.', 'warning');
+      });
+    };
+    window._entrarDispatchRecovery(raw).then(function(res) {
       var ch = (res && res.channels) || {};
       if (ch.email || ch.phone) { _showSent(res); return; }
-      // A chamada funcionou e voltou SEM canais → realmente não existe conta.
-      _noAccount();
+      // Dispatch falhou (res null) OU não retornou canais → cai no reset nativo
+      // pra e-mail (que também distingue conta-inexistente via user-not-found).
+      _nativeEmailReset();
     });
   });
 };
