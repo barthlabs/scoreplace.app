@@ -1510,6 +1510,10 @@ window.renderHelpPage = function (container) {
     const liga = document.getElementById('liga-open-enrollment');
     if (liga) liga.checked = true;
     // elimThirdPlace is always true — no toggle needed
+    // Construtor de fases: torneio novo começa com fase única (sem fases extras)
+    window._extraPhases = [];
+    window._phase1Name = '';
+    window._phase1Rounds = 1;
 
     // Pré-selecionar sport
     const sportSelect = document.getElementById('select-sport');

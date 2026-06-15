@@ -373,6 +373,16 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
+              <!-- Fases do torneio (construtor multi-fase configurável) -->
+              <div class="form-group mb-3" id="phases-section">
+                <label class="form-label">Fases do torneio</label>
+                <div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:0.6rem;">
+                  Por padrão o torneio tem <strong>1 fase</strong> (o formato escolhido acima). Adicione fases para criar etapas com formato e origem próprios — ex.: <em>Liga classificatória (Rei/Rainha)</em> → <em>Eliminatória Ouro/Prata</em>.
+                </div>
+                <div id="phases-list"></div>
+                <button type="button" id="add-phase-btn" onclick="window._addPhase()" style="margin-top:8px;padding:10px 16px;border-radius:10px;font-size:0.84rem;cursor:pointer;border:2px dashed rgba(129,140,248,0.55);background:rgba(99,102,241,0.08);color:#818cf8;font-weight:600;width:100%;transition:all 0.15s;">+ Adicionar fase</button>
+              </div>
+
               <!-- Local e Quadras -->
               <div id="venue-photo-box" style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.venueSection')}</p>
@@ -1164,6 +1174,117 @@ function setupCreateTournamentModal() {
     if (rrConfig) rrConfig.style.display = (value === 'round_robin') ? 'block' : 'none';
     // Re-trigger format change to sync Liga round format toggle etc.
     window._onFormatoChange();
+  };
+
+  // ── Construtor de Fases (multi-fase configurável) ──
+  // Fase 1 = o formato escolhido no topo (origem: inscrição direta + sorteio).
+  // Fases 2+ vivem em window._extraPhases; cada uma define formato, rodadas,
+  // origem (inscrição OU classificados da fase anterior por colocação de grupo)
+  // e duplas fixas. Serializado em t.phases[] só quando há ao menos uma fase extra.
+  window._extraPhases = window._extraPhases || [];
+  window._phase1Name = window._phase1Name || '';
+  window._phase1Rounds = window._phase1Rounds || 1;
+  var _PHASE_FORMATS = [
+    { v: 'liga', label: 'Liga (pontos corridos)' },
+    { v: 'elim_simples', label: 'Eliminatória Simples' },
+    { v: 'elim_dupla', label: 'Dupla Eliminatória (Superior/Inferior)' },
+    { v: 'grupos_mata', label: 'Grupos + Eliminatória' }
+  ];
+  function _phaseDefaultMapping(format) {
+    if (format === 'elim_dupla') return [ { dest: 'upper', rankFrom: 1, rankTo: 2 }, { dest: 'lower', rankFrom: 3, rankTo: 4 } ];
+    return [ { dest: 'main', rankFrom: 1, rankTo: 2 } ];
+  }
+  function _phaseDests(format) {
+    if (format === 'elim_dupla') return [ { key: 'upper', label: '🥇 Chave Superior (Ouro)' }, { key: 'lower', label: '🥈 Chave Inferior (Prata)' } ];
+    return [ { key: 'main', label: 'Classificados que avançam' } ];
+  }
+  window._addPhase = function() {
+    if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
+    var n = window._extraPhases.length + 2;
+    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, sourceType: 'previous', fixedPairs: true, mapping: _phaseDefaultMapping('elim_dupla') });
+    window._renderPhases();
+  };
+  window._removePhase = function(i) { if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
+  window._setPhaseField = function(i, field, value) {
+    var ph = window._extraPhases[i]; if (!ph) return;
+    if (field === 'rounds') value = Math.max(1, parseInt(value) || 1);
+    if (field === 'reiRainha' || field === 'fixedPairs') value = !!value;
+    ph[field] = value;
+    if (field === 'format') ph.mapping = _phaseDefaultMapping(value);
+    if (field === 'format' || field === 'sourceType') window._renderPhases();
+  };
+  window._setPhaseMapping = function(i, mi, key, value) {
+    var ph = window._extraPhases[i]; if (!ph || !ph.mapping || !ph.mapping[mi]) return;
+    ph.mapping[mi][key] = Math.max(1, parseInt(value) || 1);
+  };
+  function _phOpt(v, label, sel) { return '<option value="' + v + '"' + (sel ? ' selected' : '') + '>' + label + '</option>'; }
+  var _PH_INP = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;';
+  function _phaseCardHtml(ph, i) {
+    var num = i + 2;
+    var esc = (window._safeHtml || function(s){ return s; });
+    var isLiga = ph.format === 'liga';
+    var fromPrev = ph.sourceType === 'previous';
+    var h = '<div style="border:1px solid rgba(129,140,248,0.3);border-radius:12px;padding:12px;margin-bottom:8px;background:rgba(99,102,241,0.06);">';
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+    h += '<span style="flex-shrink:0;font-size:0.66rem;font-weight:700;color:#818cf8;background:rgba(99,102,241,0.18);padding:3px 8px;border-radius:6px;">FASE ' + num + '</span>';
+    h += '<input type="text" value="' + esc(ph.name || '') + '" placeholder="Nome da fase" oninput="window._setPhaseField(' + i + ', \'name\', this.value)" style="flex:1;min-width:0;' + _PH_INP + '">';
+    h += '<button type="button" onclick="window._removePhase(' + i + ')" title="Remover fase" style="flex-shrink:0;border:none;background:rgba(239,68,68,0.15);color:#ef4444;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:0.95rem;font-weight:700;">✕</button>';
+    h += '</div>';
+    h += '<label style="display:block;font-size:0.72rem;color:var(--text-muted);margin-bottom:3px;">Formato</label>';
+    h += '<select onchange="window._setPhaseField(' + i + ', \'format\', this.value)" style="width:100%;margin-bottom:8px;' + _PH_INP + '">';
+    _PHASE_FORMATS.forEach(function(f){ h += _phOpt(f.v, f.label, ph.format === f.v); });
+    h += '</select>';
+    if (isLiga) {
+      h += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">';
+      h += '<label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;cursor:pointer;"><input type="checkbox"' + (ph.reiRainha ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'reiRainha\', this.checked)"> Parceiros rotativos (Rei/Rainha)</label>';
+      h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Rodadas <input type="number" min="1" max="30" value="' + (ph.rounds || 1) + '" oninput="window._setPhaseField(' + i + ', \'rounds\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
+      h += '</div>';
+    }
+    h += '<label style="display:block;font-size:0.72rem;color:var(--text-muted);margin-bottom:3px;">Origem dos participantes</label>';
+    h += '<select onchange="window._setPhaseField(' + i + ', \'sourceType\', this.value)" style="width:100%;margin-bottom:8px;' + _PH_INP + '">';
+    h += _phOpt('previous', 'Classificados da fase anterior', fromPrev);
+    h += _phOpt('enrollment', 'Inscrição direta + sorteio', !fromPrev);
+    h += '</select>';
+    if (fromPrev) {
+      var dests = _phaseDests(ph.format);
+      h += '<div style="background:rgba(0,0,0,0.18);border-radius:8px;padding:8px 10px;margin-bottom:8px;">';
+      h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quem entra em cada chave (por colocação <strong>em cada grupo</strong> da fase anterior):</div>';
+      (ph.mapping || []).forEach(function(mp, mi){
+        var dlabel = (dests[mi] && dests[mi].label) || ('Destino ' + (mi + 1));
+        h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">';
+        h += '<span style="flex:1;min-width:120px;font-size:0.8rem;">' + dlabel + '</span>';
+        h += '<span style="font-size:0.78rem;color:var(--text-muted);">do</span>';
+        h += '<input type="number" min="1" max="8" value="' + (mp.rankFrom || 1) + '" oninput="window._setPhaseMapping(' + i + ', ' + mi + ', \'rankFrom\', this.value)" style="width:46px;text-align:center;' + _PH_INP + '">';
+        h += '<span style="font-size:0.78rem;color:var(--text-muted);">º ao</span>';
+        h += '<input type="number" min="1" max="8" value="' + (mp.rankTo || 1) + '" oninput="window._setPhaseMapping(' + i + ', ' + mi + ', \'rankTo\', this.value)" style="width:46px;text-align:center;' + _PH_INP + '">';
+        h += '<span style="font-size:0.78rem;color:var(--text-muted);">º</span>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+    h += '<label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;"><input type="checkbox"' + (ph.fixedPairs ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'fixedPairs\', this.checked)"> Duplas fixas <span style="font-size:0.72rem;color:var(--text-muted);">(forma dupla com os classificados; desligado = individual)</span></label>';
+    h += '</div>';
+    return h;
+  }
+  window._renderPhases = function() {
+    var list = document.getElementById('phases-list');
+    if (!list) return;
+    if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
+    var esc = (window._safeHtml || function(s){ return s; });
+    var fmtSel = document.getElementById('select-formato');
+    var topFmtLabel = '';
+    if (fmtSel && fmtSel.options[fmtSel.selectedIndex]) topFmtLabel = fmtSel.options[fmtSel.selectedIndex].text;
+    var multi = window._extraPhases.length > 0;
+    var h = '<div style="border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,0.03);">';
+    h += '<div style="display:flex;align-items:center;gap:8px;">';
+    h += '<span style="flex-shrink:0;font-size:0.66rem;font-weight:700;color:#34d399;background:rgba(16,185,129,0.18);padding:3px 8px;border-radius:6px;">FASE 1</span>';
+    h += '<input type="text" id="phase1-name" value="' + esc(window._phase1Name || '') + '" placeholder="Fase 1" oninput="window._phase1Name=this.value" style="flex:1;min-width:0;' + _PH_INP + '">';
+    h += '</div>';
+    h += '<div style="font-size:0.73rem;color:var(--text-muted);margin-top:7px;">Formato: <strong style="color:var(--text-main);">' + esc(topFmtLabel) + '</strong> · origem: inscrição direta + sorteio';
+    if (multi) h += ' · <span style="color:#34d399;">rodadas</span> <input type="number" min="1" max="30" value="' + (window._phase1Rounds || 1) + '" oninput="window._phase1Rounds=Math.max(1,parseInt(this.value)||1)" style="width:50px;text-align:center;padding:3px 6px;border-radius:6px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.8rem;box-sizing:border-box;">';
+    h += '</div></div>';
+    window._extraPhases.forEach(function(ph, i){ h += _phaseCardHtml(ph, i); });
+    list.innerHTML = h;
   };
 
   // ── Enrollment Mode Toggles (non-exclusive) ──
@@ -1978,6 +2099,7 @@ function setupCreateTournamentModal() {
     window._updateRegDateVisibility();
     window._onInscricaoChange();
     window._recalcDuration();
+    if (typeof window._renderPhases === 'function') window._renderPhases();
   };
 
   window._onAdvScoringToggle = function () {
@@ -3841,6 +3963,32 @@ function setupCreateTournamentModal() {
     if (t.gruposCount) document.getElementById('grupos-count').value = t.gruposCount;
     if (t.gruposClassified) document.getElementById('grupos-classified').value = t.gruposClassified;
 
+    // Construtor de Fases — restaura fases extras (t.phases[0] = fase 1, do topo)
+    if (Array.isArray(t.phases) && t.phases.length > 1) {
+      var _p1 = t.phases[0] || {};
+      window._phase1Name = _p1.name || '';
+      window._phase1Rounds = parseInt(_p1.rounds) || 1;
+      window._extraPhases = t.phases.slice(1).map(function(ph) {
+        var src = ph.source || {};
+        var fromPrev = src.type === 'previous_phase';
+        return {
+          name: ph.name || '',
+          format: ph.formatCode || 'elim_dupla',
+          reiRainha: !!ph.reiRainha,
+          rounds: parseInt(ph.rounds) || 1,
+          sourceType: fromPrev ? 'previous' : 'enrollment',
+          fixedPairs: ph.fixedPairs !== false,
+          mapping: (fromPrev && Array.isArray(src.mapping) && src.mapping.length)
+            ? src.mapping.map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1 }; })
+            : _phaseDefaultMapping(ph.formatCode || 'elim_dupla')
+        };
+      });
+    } else {
+      window._extraPhases = [];
+      window._phase1Name = '';
+      window._phase1Rounds = 1;
+    }
+
     // Restore tiebreaker order + excluded box (v2.2.47)
     {
       const tbList = document.getElementById('tiebreaker-list');
@@ -4485,6 +4633,42 @@ function setupCreateTournamentModal() {
           }
         } else {
           tourData.drawMode = 'sorteio';
+        }
+
+        // ── Construtor de Fases ──
+        // Quando há ao menos uma fase extra, grava t.phases[] (fase 0 = formato do
+        // topo + origem por inscrição; fases 1+ vêm do construtor). Fase única =
+        // legado: t.phases fica null e o motor usa os campos top-level de sempre.
+        var _extra = Array.isArray(window._extraPhases) ? window._extraPhases : [];
+        if (_extra.length > 0) {
+          var _p1NameEl = document.getElementById('phase1-name');
+          var _phase1 = {
+            name: (_p1NameEl && _p1NameEl.value.trim()) || 'Fase 1',
+            formatCode: formatValue,
+            format: format, // string canônica (ex.: 'Liga', 'Dupla Eliminatória')
+            drawMode: tourData.drawMode || 'sorteio',
+            reiRainha: tourData.drawMode === 'rei_rainha',
+            rounds: parseInt(window._phase1Rounds) || 1,
+            source: { type: 'enrollment' },
+            fixedPairs: teamSizeVal > 1
+          };
+          var _rest = _extra.map(function(ph) {
+            var src = ph.sourceType === 'previous'
+              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: true, mapping: (ph.mapping || []).map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1 }; }) }
+              : { type: 'enrollment' };
+            return {
+              name: (ph.name || '').trim() || 'Fase',
+              formatCode: ph.format,
+              format: (formatMap[ph.format] || ph.format),
+              reiRainha: !!ph.reiRainha,
+              rounds: parseInt(ph.rounds) || 1,
+              source: src,
+              fixedPairs: !!ph.fixedPairs
+            };
+          });
+          tourData.phases = [_phase1].concat(_rest);
+        } else {
+          tourData.phases = null; // fase única (comportamento legado)
         }
 
         // Tiebreakers (ordem configurada pelo organizador)

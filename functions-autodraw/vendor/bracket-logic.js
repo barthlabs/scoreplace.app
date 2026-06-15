@@ -2156,7 +2156,7 @@ function _buildRoundRobinSchedule(players, numTurnos) {
 }
 
 // Pop next round from pre-generated schedule and append to tournament
-window._drawFromRoundRobinSchedule = function(t, category) {
+window._drawFromRoundRobinSchedule = function(t, category, _rn) {
   if (!t.ligaRRSchedule) t.ligaRRSchedule = {};
   var catKey = (category || '_default_').replace(/\s+/g, '_');
 
@@ -2173,7 +2173,12 @@ window._drawFromRoundRobinSchedule = function(t, category) {
   if (!t.ligaRRSchedule[catKey] || t.ligaRRSchedule[catKey].length === 0) return false;
 
   var nextRound = t.ligaRRSchedule[catKey].shift(); // consume next entry
-  var roundNum = (t.rounds || []).length + 1;
+  // v2.5.1: o nº da rodada deriva do MAIOR `round` já existente +1, não da
+  // contagem de colunas. Multi-categoria gera 1 coluna por categoria no MESMO
+  // sorteio — todas têm que ficar na MESMA rodada (C e D ambas Rodada 1), senão
+  // a 2ª categoria virava "Rodada 2". roundIndex (índice físico da coluna)
+  // continua = length.
+  var roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);
   var ts = Date.now();
   var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
   var catLabel = category && window._displayCategoryName
@@ -2254,15 +2259,22 @@ function _generateNextRound(t) {
 
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
 
+  // v2.5.1: nº da rodada deste sorteio calculado UMA vez, ANTES do loop de
+  // categorias = (maior round já existente) + 1. Passado pra cada gerador pra
+  // que TODAS as categorias do mesmo sorteio fiquem na MESMA rodada (C e D ambas
+  // Rodada 1). Sem isso, a 1ª categoria adicionava round=1 e a 2ª via max=1 e
+  // virava round=2.
+  var _batchRound = ((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1;
+
   // "Todos contra todos" mode: pop next round from pre-generated schedule
   if (isLiga && t.ligaDrawMode === 'round_robin') {
     var cats = (typeof window._sortCategoriesBySkillOrder === 'function')
       ? window._sortCategoriesBySkillOrder(t.combinedCategories || [], t.skillCategories)
       : (t.combinedCategories || []);
     if (cats.length === 0) {
-      window._drawFromRoundRobinSchedule(t, null);
+      window._drawFromRoundRobinSchedule(t, null, _batchRound);
     } else {
-      cats.forEach(function(cat) { window._drawFromRoundRobinSchedule(t, cat); });
+      cats.forEach(function(cat) { window._drawFromRoundRobinSchedule(t, cat, _batchRound); });
     }
     return;
   }
@@ -2275,9 +2287,9 @@ function _generateNextRound(t) {
     ? window._sortCategoriesBySkillOrder(t.combinedCategories || [], t.skillCategories)
     : (t.combinedCategories || []);
   if (categories.length === 0) {
-    genFn(t, null);
+    genFn(t, null, _batchRound);
   } else {
-    categories.forEach(function(cat) { genFn(t, cat); });
+    categories.forEach(function(cat) { genFn(t, cat, _batchRound); });
   }
 }
 // v2.3.91: expostos pra que o Cloud Function autoDraw (functions-autodraw) chame
@@ -2456,7 +2468,7 @@ function _computeAvgPointsPerRound(t, playerName, category) {
   return roundsPlayed > 0 ? Math.round(totalPoints / roundsPlayed) : 0;
 }
 
-window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category) {
+window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category, _rn) {
   var standings = _computeStandings(t, category);
   var allPlayers = standings.map(function(s) { return s.name; });
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
@@ -2476,11 +2488,16 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   }
   if (players.length < 4) {
     // Not enough for Rei/Rainha groups, fallback to standard pairing
-    _generateNextRoundForPlayers(t, category);
+    _generateNextRoundForPlayers(t, category, _rn);
     return;
   }
 
-  var roundNum = (t.rounds || []).length + 1;
+  // v2.5.1: o nº da rodada deriva do MAIOR `round` já existente +1, não da
+  // contagem de colunas. Multi-categoria gera 1 coluna por categoria no MESMO
+  // sorteio — todas têm que ficar na MESMA rodada (C e D ambas Rodada 1), senão
+  // a 2ª categoria virava "Rodada 2". roundIndex (índice físico da coluna)
+  // continua = length.
+  var roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);
   var ts = Date.now();
   var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
   var catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
@@ -2616,10 +2633,12 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   });
 };
 
-function _generateNextRoundForPlayers(t, category) {
+function _generateNextRoundForPlayers(t, category, _rn) {
   const standings = _computeStandings(t, category);
   const _isLigaFmtHere = window._isLigaFormat && window._isLigaFormat(t);
-  const roundNum = (t.rounds || []).length + 1;
+  // v2.5.1: ver comentário em _generateReiRainhaRoundForPlayers — round = maior
+  // round existente +1, pra categorias do mesmo sorteio compartilharem a rodada.
+  const roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);
   const roundIdx = (t.rounds || []).length;
   const timestamp = Date.now();
   const catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';

@@ -88,6 +88,43 @@ window._executeMerge = function(sourceName, targetName, tId) {
     }
 };
 
+// ── v2.4.83: estrela de co-organização como ALVO DE SOLTAR no card do
+// organizador (seção ORGANIZAÇÃO). Antes o único alvo era a estrela flutuante
+// no canto inferior do card do torneio — o usuário arrastava até a estrela do
+// organizador e nada acontecia. Agora o card do organizador "transforma"
+// (pulsa âmbar + estrela com brilho) enquanto se arrasta um inscrito, e aceita
+// o soltar pra abrir o convite de co-organização.
+window._setOrgDropActive = function(on) {
+  try {
+    document.querySelectorAll('.sp-org-droptarget').forEach(function(el) {
+      el.classList.toggle('sp-org-drag-active', !!on);
+      if (!on) el.classList.remove('sp-org-drop-hover');
+    });
+  } catch (e) {}
+};
+
+// Retorna a entrada de co-host PENDENTE (aguardando aceite) que casa com este
+// participante — por uid, e-mail ou displayName (a entrada guarda os três).
+window._pendingCoHostFor = function(t, name, uid, email) {
+  if (!t || !Array.isArray(t.coHosts)) return null;
+  for (var i = 0; i < t.coHosts.length; i++) {
+    var ch = t.coHosts[i];
+    if (!ch || ch.status !== 'pending') continue;
+    if (uid && ch.uid && String(ch.uid) === String(uid)) return ch;
+    if (email && ch.email && String(ch.email).toLowerCase() === String(email).toLowerCase()) return ch;
+    if (name && ch.displayName && String(ch.displayName) === String(name)) return ch;
+  }
+  return null;
+};
+
+// Tag âmbar "Aguardando aceite" com a estrela de organizador à esquerda —
+// usada no card do convidado enquanto o convite de co-organização está pendente.
+window._pendingCoHostBadgeHtml = function() {
+  return '<span class="sp-pending-cohost" title="Convite de co-organização enviado — aguardando aceite" style="display:inline-flex;align-items:center;gap:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);color:#fbbf24;font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:6px;letter-spacing:0.3px;white-space:nowrap;vertical-align:middle;margin-left:4px;">' +
+    '<svg width="11" height="11" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
+    'Aguardando aceite</span>';
+};
+
 // ── Desktop HTML5 Drag-and-Drop handlers ──
 window._mergeDragStart = function(e, name, tId) {
     window._mergeDragData = { name: name, tId: tId };
@@ -112,6 +149,7 @@ window._mergeDragStart = function(e, name, tId) {
         window._participantDragTId = tId;
         var crownBtn = document.getElementById('crown-org-btn');
         if (crownBtn) crownBtn.style.display = 'flex';
+        window._setOrgDropActive(true);
     } catch (ex2) {}
     var card = e.target.closest('.participant-card') || e.target.closest('[draggable]');
     if (card) {
@@ -125,6 +163,7 @@ window._mergeDragEnd = function(e) {
     window._participantDragData = null;
     var crownBtn = document.getElementById('crown-org-btn');
     if (crownBtn) crownBtn.style.display = 'none';
+    window._setOrgDropActive(false);
     var card = e.target.closest('.participant-card') || e.target.closest('[draggable]');
     if (card) { card.style.opacity = '1'; card.style.boxShadow = ''; }
     document.querySelectorAll('.participant-card, [draggable="true"]').forEach(function(el) {
@@ -755,16 +794,61 @@ window._buildProgressInner = function(t) {
   var _ligaBarHtml = '';
   var _lp = window._ligaTournamentProgress(t);
   if (_lp && _lp.roundsPlanned > 1) {
-    var _allStarts = [];
-    (t.rounds || []).forEach(function(r){ (r.matches || []).forEach(function(m){ if (m && m.startedAt && !m.isSitOut) _allStarts.push(+m.startedAt); }); });
+    // v2.4.78: duração REAL do torneio inteiro — do 1º placar lançado (primeiro
+    // m.startedAt de todas as rodadas) ao último (maior m.resultAt). Espelha o
+    // painel da rodada (INÍCIO REAL / DUROU / FINAL REAL), mas cobrindo a Liga
+    // toda. Inclui naturalmente os dias ociosos entre rodadas.
+    var _allStarts = [], _allEnds = [], _endsFallback = [];
+    (t.rounds || []).forEach(function(r){
+      (r.matches || []).forEach(function(m){
+        if (!m || m.isSitOut) return;
+        if (m.startedAt) _allStarts.push(+m.startedAt);
+        if (m.resultAt) _allEnds.push(+m.resultAt);
+      });
+      if (r && r.completedAt) _endsFallback.push(+r.completedAt);
+    });
     var _firstPointMs = _allStarts.length ? Math.min.apply(null, _allStarts) : (t.tournamentStarted ? (+t.tournamentStarted) : null);
+    var _lastPointMs = _allEnds.length ? Math.max.apply(null, _allEnds) : (_endsFallback.length ? Math.max.apply(null, _endsFallback) : null);
     var _deadlineMs = window._tProgParseMs(t.endDate);
-    var _dtLine = (_firstPointMs || _deadlineMs)
-      ? '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:0.62rem;color:var(--text-muted);">' +
-          '<span>' + (_firstPointMs ? 'início: ' + _date(_firstPointMs) + ' ' + _time(_firstPointMs) : '') + '</span>' +
-          '<span style="text-align:right;">' + (_deadlineMs ? '🏁 limite: ' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) : '') + '</span>' +
-        '</div>'
-      : '';
+    var _tournDone = _lp.pct >= 100;
+
+    // Linha INÍCIO REAL / DUROU / FINAL REAL (só quando há 1º e último placar).
+    var _durRow = '';
+    if (_firstPointMs && _lastPointMs && _lastPointMs >= _firstPointMs) {
+      var _tDurMs = _lastPointMs - _firstPointMs;
+      var _tColor = _tournDone ? '#10b981' : 'var(--text-bright)';
+      var _tEndLabel = _tournDone ? 'final real' : 'último placar';
+      var _tDurLabel = _tournDone ? 'durou' : 'decorrido';
+      var _tTimeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
+      var _tLblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
+      var _tCol = function(ms, label, align) {
+        return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
+          '<span style="' + _tTimeS + '">' + _time(ms) + '</span>' +
+          '<span style="font-size:0.72rem;color:var(--text-muted);font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
+          '<span style="' + _tLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+        '</div>';
+      };
+      _durRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:9px;gap:8px;">' +
+        _tCol(_firstPointMs, 'início real', 'flex-start') +
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
+          '<span style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(_tDurMs) + '</span>' +
+          '<span style="' + _tLblS + '">' + _tDurLabel + '</span>' +
+        '</div>' +
+        _tCol(_lastPointMs, _tEndLabel, 'flex-end') +
+      '</div>';
+    }
+    // Limite (prazo do torneio). v2.4.79: torneio JÁ encerrado (100%) não mostra
+    // mais o prazo — o '🏁 limite' só interessa enquanto há jogos por lançar.
+    var _showLimite = !!_deadlineMs && !_tournDone;
+    var _limiteLine = _durRow
+      ? (_showLimite ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:0.62rem;color:var(--text-muted);"><span>🏁 limite: ' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) + '</span></div>' : '')
+      : ((_firstPointMs || _showLimite)
+          ? '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:0.62rem;color:var(--text-muted);">' +
+              '<span>' + (_firstPointMs ? 'início: ' + _date(_firstPointMs) + ' ' + _time(_firstPointMs) : '') + '</span>' +
+              '<span style="text-align:right;">' + (_showLimite ? '🏁 limite: ' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) : '') + '</span>' +
+            '</div>'
+          : '');
+
     _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
         '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
@@ -772,7 +856,7 @@ window._buildProgressInner = function(t) {
       '</div>' +
       '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">' +
         '<div style="width:' + _lp.pct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
-      '</div>' + _dtLine +
+      '</div>' + _durRow + _limiteLine +
     '</div>';
   }
 

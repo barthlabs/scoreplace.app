@@ -233,9 +233,30 @@ function renderBracket(container, tournamentId, isInline) {
   // jogador convidado aceitar/recusar no topo do bracket da Liga.
   var _ligaInviteBanner = (typeof window._ligaInviteBannerHtml === 'function') ? window._ligaInviteBannerHtml(t) : '';
 
+  // ── Construtor de Fases (multi-fase) ───────────────────────────────────────
+  // Fase 2+ materializada → renderiza as chaves da fase atual (Ouro/Prata/final).
+  // Fase 1 concluída → banner pro organizador avançar (gera duplas+chaves).
+  var _phaseAdvanceBanner = '';
+  if (window._isMultiPhase && window._isMultiPhase(t)) {
+    var _curPh = t.currentPhaseIndex || 0;
+    if (_curPh > 0 && typeof window._renderPhaseBracket === 'function') {
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult) + standbyHtml;
+      _applyMyMatchesFilter();
+      return;
+    }
+    if (_curPh === 0 && isOrg && window._phasesPhaseComplete && window._phasesPhaseComplete(t)) {
+      var _nextPhaseName = window._safeHtml(((t.phases[_curPh + 1] || {}).name) || 'próxima fase');
+      var _tIdEsc = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      _phaseAdvanceBanner = '<div style="margin:0 0 1rem;padding:14px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(99,102,241,0.12));border:1px solid rgba(251,191,36,0.45);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+        '<div style="flex:1;min-width:180px;"><div style="font-weight:800;color:var(--text-bright);">Fase classificatória concluída ✓</div><div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px;">Avance para <strong>' + _nextPhaseName + '</strong> — as duplas e chaves serão geradas pelas colocações dos grupos.</div></div>' +
+        '<button class="btn btn-success hover-lift" style="white-space:nowrap;" onclick="window._advanceMultiPhase(\'' + _tIdEsc + '\')">🏆 Avançar</button>' +
+        '</div>';
+    }
+  }
+
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
-    container.innerHTML = headerHtml + _ligaInviteBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) + standbyHtml;
+    container.innerHTML = headerHtml + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) + standbyHtml;
     _applyMyMatchesFilter();
     return;
   }
@@ -243,7 +264,7 @@ function renderBracket(container, tournamentId, isInline) {
   // ── Fase de Grupos ─────────────────────────────────────────────────────────
   if (isGrupos && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml;
       _applyMyMatchesFilter();
       return;
     }
@@ -254,7 +275,7 @@ function renderBracket(container, tournamentId, isInline) {
   var isMonarch = t.format === 'Rei/Rainha da Praia';
   if (isMonarch && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + _renderMonarchStage(t, isOrg, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + _renderMonarchStage(t, isOrg, canEnterResult) + standbyHtml;
       _applyMyMatchesFilter();
       return;
     }
@@ -1274,6 +1295,79 @@ function renderDoubleElimBracket(t, canEnterResult) {
         </div>` : ''}
     </div>`;
 }
+
+// ─── Construtor de Fases: render das chaves da fase atual (Ouro/Prata + final) ─
+function _renderPhaseBracket(t, canEnterResult) {
+  var _t = window._t || function (k) { return k; };
+  if (typeof _updateProgressiveClassification === 'function') {
+    try { _updateProgressiveClassification(t); } catch (e) {}
+  }
+  var curPhase = t.currentPhaseIndex || 0;
+  var phaseCfg = (t.phases && t.phases[curPhase]) || {};
+  var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === curPhase; });
+
+  function colsFor(bracketKey) {
+    var byRound = {};
+    pm.filter(function (m) { return m.bracket === bracketKey; }).forEach(function (m) {
+      var r = m.round || 1;
+      if (!byRound[r]) byRound[r] = [];
+      byRound[r].push(m);
+    });
+    return Object.keys(byRound).map(Number).sort(function (a, b) { return a - b; })
+      .map(function (r) { return { round: r, matches: byRound[r] }; });
+  }
+
+  var globalNum = 0;
+  function roundLabel(cols, idx) {
+    var fromEnd = cols.length - idx;
+    var games = cols[idx].matches.length;
+    if (fromEnd === 1) return _t('bracket.final');
+    if (fromEnd === 2 && games === 2) return _t('bracket.semiFinal');
+    if (fromEnd === 3 && games === 4) return _t('bracket.quarterFinal');
+    if (fromEnd === 4 && games === 8) return _t('bracket.roundOf16');
+    return _t('bracket.round', { n: cols[idx].round });
+  }
+
+  function renderTier(bracketKey, title, color) {
+    var cols = colsFor(bracketKey);
+    if (!cols.length) return '';
+    var colsHtml = cols.map(function (col, idx) {
+      var label = roundLabel(cols, idx);
+      var cards = col.matches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
+      return '<div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
+        '<h5 style="color:' + color + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ' + color + ';padding-left:8px;">' + label + '</h5>' +
+        cards + '</div>';
+    }).join('');
+    return '<div style="margin-bottom:2rem;">' +
+      '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + color + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' +
+      '<div class="bracket-scroll-container" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
+      '</div>';
+  }
+
+  function renderFinalBox(bracketKey, title, color) {
+    var ms = pm.filter(function (m) { return m.bracket === bracketKey; });
+    if (!ms.length) return '';
+    var cards = ms.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
+    return '<div style="margin-top:1rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">' +
+      '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:1rem;border-left:4px solid ' + color + ';padding-left:10px;">' + title + '</h4>' +
+      '<div style="max-width:300px;">' + cards + '</div></div>';
+  }
+
+  var goldHtml = renderTier('gold', '🥇 Chave Ouro', '#fbbf24');
+  var silverHtml = renderTier('silver', '🥈 Chave Prata', '#cbd5e1');
+  var mainHtml = renderTier('main', _t('bracket.knockout') || 'Eliminatória', '#10b981');
+  var gfHtml = renderFinalBox('grandfinal', '🏆 Grande Final', '#fbbf24');
+  var thirdHtml = renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32');
+
+  var phaseTitle = window._safeHtml(phaseCfg.name || ('Fase ' + (curPhase + 1)));
+  var header = '<div style="margin-bottom:1rem;padding:10px 14px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);border-radius:12px;">' +
+    '<span style="font-size:0.7rem;font-weight:700;color:#818cf8;text-transform:uppercase;letter-spacing:1px;">Fase ' + (curPhase + 1) + '</span>' +
+    '<span style="font-weight:700;color:var(--text-bright);margin-left:8px;">' + phaseTitle + '</span>' +
+    '</div>';
+
+  return '<div>' + header + goldHtml + silverHtml + mainHtml + gfHtml + thirdHtml + '</div>';
+}
+window._renderPhaseBracket = _renderPhaseBracket;
 
 // ─── Match Card — inline score entry ─────────────────────────────────────────
 function _getCheckInStatus(tId, teamName) {
@@ -2702,8 +2796,35 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // da rodada." Mesmo padrão do split user-vs-other em Liga não-monarch
         // (linha 2041-2063 abaixo). Stash dos grupos "demais" em
         // ligaOtherMatchesHtml — acessível via let do escopo externo.
-        var _myGroups = isLigaFmt ? sortedGroups.filter(_groupHasMe) : sortedGroups;
-        var _otherGroups = isLigaFmt ? sortedGroups.filter(function(g) { return !_groupHasMe(g); }) : [];
+        // v2.5.2: split por CATEGORIA. Com várias categorias na mesma rodada
+        // (ex.: C e D no Rei/Rainha), a categoria DO USUÁRIO vem primeiro e
+        // expandida; as demais categorias num bloco colapsado. Sem isso, 21
+        // grupos de 2 categorias eram despejados todos na tela.
+        var _groupCategory = function(g) {
+          if (!g) return null;
+          if (g.category) return g.category;
+          var _ms = g.matches || [];
+          for (var _gci = 0; _gci < _ms.length; _gci++) { if (_ms[_gci] && _ms[_gci].category) return _ms[_gci].category; }
+          return null;
+        };
+        var _catKey = function(g) { var c = _groupCategory(g); return (c == null) ? '__none' : c; };
+        var _catsInRound = [];
+        sortedGroups.forEach(function(g) { var k = _catKey(g); if (_catsInRound.indexOf(k) === -1) _catsInRound.push(k); });
+        var _hasMultiCat = _catsInRound.length > 1;
+        // categoria do usuário = a do grupo onde ele está (sortedGroups já põe o
+        // grupo dele primeiro). Sem grupo do usuário, usa a 1ª categoria da rodada.
+        var _userCat = null;
+        for (var _ucg = 0; _ucg < sortedGroups.length; _ucg++) { if (_groupHasMe(sortedGroups[_ucg])) { _userCat = _catKey(sortedGroups[_ucg]); break; } }
+        var _primaryCat = (_userCat != null) ? _userCat : (_catsInRound.length ? _catsInRound[0] : null);
+        var _isPrimaryCat = function(g) { return _catKey(g) === _primaryCat; };
+        var _myGroups, _otherGroups;
+        if (isLigaFmt && _hasMultiCat) {
+          _myGroups = sortedGroups.filter(_isPrimaryCat);
+          _otherGroups = sortedGroups.filter(function(g) { return !_isPrimaryCat(g); });
+        } else {
+          _myGroups = isLigaFmt ? sortedGroups.filter(_groupHasMe) : sortedGroups;
+          _otherGroups = isLigaFmt ? sortedGroups.filter(function(g) { return !_groupHasMe(g); }) : [];
+        }
         // v1.0.64-beta: contador global de "Jogo N" pra Rei/Rainha — antes
         // resetava por grupo (`mi + 1`), gerando "Jogo 1", "Jogo 2", "Jogo 3"
         // duplicados em cada grupo. User: "lembra que cada jogo em cada
@@ -2794,15 +2915,36 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // Liga). Senão, renderiza tudo junto.
         if (isLigaFmt && _myGroups.length > 0 && _otherGroups.length > 0) {
           var _otherCount = _otherGroups.reduce(function(acc, g) { return acc + (g.matches ? g.matches.length : 0); }, 0);
+          // v2.5.2: multi-categoria → "Demais categorias", COLAPSADO por padrão,
+          // com os grupos agrupados por categoria (subcabeçalho). Caso single-cat
+          // (split por jogador) mantém "Demais jogos da rodada", aberto.
+          var _otherInner, _otherSummary, _detailsOpen;
+          if (_hasMultiCat) {
+            var _byCat = {}, _catOrder = [];
+            _otherGroups.forEach(function(g) { var k = _catKey(g); if (!_byCat[k]) { _byCat[k] = []; _catOrder.push(k); } _byCat[k].push(g); });
+            _otherInner = _catOrder.map(function(k) {
+              var _lbl = (k === '__none') ? 'Sem categoria' : ('Categoria ' + (window._displayCategoryName ? window._displayCategoryName(k) : k));
+              return '<div style="font-size:0.72rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;margin:0.75rem 0 0.6rem;">' + window._safeHtml(_lbl) + '</div>' + _byCat[k].map(_renderGroup).join('');
+            }).join('');
+            _otherSummary = '▸ Demais categorias (' + _otherCount + ' jogos)';
+            _detailsOpen = '';
+          } else {
+            _otherInner = _otherGroups.map(_renderGroup).join('');
+            _otherSummary = '▸ Demais jogos da rodada (' + _otherCount + ')';
+            _detailsOpen = ' open';
+          }
           ligaOtherMatchesHtml = '<div class="card" style="margin-bottom:1rem;">' +
-            '<details open>' +
+            '<details' + _detailsOpen + '>' +
               '<summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">' +
-                '<span>▸ Demais jogos da rodada (' + _otherCount + ')</span>' +
+                '<span>' + _otherSummary + '</span>' +
               '</summary>' +
-              '<div style="margin-top:1rem;">' + _otherGroups.map(_renderGroup).join('') + '</div>' +
+              '<div style="margin-top:1rem;">' + _otherInner + '</div>' +
             '</details>' +
           '</div>';
-          return _myGroups.map(_renderGroup).join('');
+          var _myCatHeader = (_hasMultiCat && _primaryCat != null && _primaryCat !== '__none')
+            ? '<div style="font-size:0.75rem;font-weight:800;color:#22d3ee;text-transform:uppercase;letter-spacing:1px;margin-bottom:0.6rem;">⭐ Sua categoria — ' + window._safeHtml(window._displayCategoryName ? window._displayCategoryName(_primaryCat) : _primaryCat) + '</div>'
+            : '';
+          return _myCatHeader + _myGroups.map(_renderGroup).join('');
         }
         return sortedGroups.map(_renderGroup).join('');
       })() : (() => {

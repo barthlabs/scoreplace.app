@@ -132,43 +132,88 @@
   function _buildSwissColumns(t) {
     if (!Array.isArray(t.rounds) || t.rounds.length === 0) return [];
     var isSwissQualifier = _isSwissQualifierTournament(t);
-    var swissTotal = (t.swissRounds ? parseInt(t.swissRounds) : 0) || t.rounds.length;
-    return t.rounds.map(function (r, ri) {
-      var matches = (r && r.matches) ? r.matches : [];
-      var isMonarchRound = r && r.format === 'rei_rainha';
+
+    // v2.5.1: agrupa as entradas de t.rounds pelo número da RODADA (r.round).
+    // Liga multi-categoria emite UMA entrada de t.rounds POR CATEGORIA no mesmo
+    // sorteio (C e D ambas round 1). Antes este adapter rotulava cada entrada
+    // pelo índice do array (ri+1) → a categoria D virava "Rodada 2" e o card de
+    // rodada atual (currentRound = rounds.length) só mostrava a última. Agora
+    // fundimos entradas de mesma rodada numa única coluna cujos subgrupos
+    // abrangem todas as categorias. Single-categoria não muda (1 entrada/round).
+    var buckets = [];          // [{round, entries:[r,...]}] em ordem de descoberta
+    var idxByRound = {};
+    t.rounds.forEach(function (r, ri) {
+      var rn = (r && typeof r.round === 'number') ? r.round : (ri + 1);
+      if (idxByRound[rn] === undefined) {
+        idxByRound[rn] = buckets.length;
+        buckets.push({ round: rn, entries: [] });
+      }
+      buckets[idxByRound[rn]].entries.push(r);
+    });
+    buckets.sort(function (a, b) { return a.round - b.round; });
+
+    var swissTotal = (t.swissRounds ? parseInt(t.swissRounds) : 0) || buckets.length;
+
+    return buckets.map(function (grp) {
+      var rn = grp.round;
+      var entries = grp.entries;
+      var isMonarchRound = entries.some(function (r) { return r && r.format === 'rei_rainha'; });
+
       var label;
       if (isMonarchRound) {
-        label = _tr('bracket.round', 'Rodada ' + (ri + 1), { n: ri + 1 }) +
+        label = _tr('bracket.round', 'Rodada ' + rn, { n: rn }) +
           ' • ' + _tr('bracket.monarchShort', 'Rei/Rainha');
       } else if (isSwissQualifier) {
-        label = _tr('bracket.swissRoundFull', 'RODADA SUIÇA ' + (ri + 1) + '/' + swissTotal,
-          { n: ri + 1, total: swissTotal });
+        label = _tr('bracket.swissRoundFull', 'RODADA SUIÇA ' + rn + '/' + swissTotal,
+          { n: rn, total: swissTotal });
       } else {
-        label = _tr('bracket.round', 'Rodada ' + (ri + 1), { n: ri + 1 });
+        label = _tr('bracket.round', 'Rodada ' + rn, { n: rn });
       }
-      return {
-        id: 'swiss-r' + (ri + 1),
-        phase: isMonarchRound ? 'monarch' : 'swiss',
-        label: label,
-        round: ri + 1,
-        status: (r.status === 'complete' ? 'done' : (r.status || _roundStatus(matches))),
-        historical: (r.status === 'complete' || _roundStatus(matches) === 'done'),
-        matches: matches.slice(),
-        subgroups: isMonarchRound && Array.isArray(r.monarchGroups)
-          ? r.monarchGroups.map(function (g) {
-              // v2.4.61: preserva TODOS os campos do grupo (não só name/players/
-              // matches). Antes descartava o estado de W.O./substituição
-              // (woAbsent, subStatus, subName, subIsGuest, pendingInviteId), o
-              // que fazia o convite pendente sumir do render e o grupo voltar a
-              // mostrar "Faltou alguém?". slice() nos arrays pra não mutar o raw.
-              return Object.assign({}, g, {
+
+      // Funde matches de todas as categorias desta rodada.
+      var matches = [];
+      entries.forEach(function (r) {
+        (r && r.matches ? r.matches : []).forEach(function (m) { matches.push(m); });
+      });
+
+      // Funde os monarchGroups (subgrupos) de todas as categorias. Cada grupo já
+      // carrega a categoria nos labels dos seus jogos ("... (C)" / "... (D)").
+      var subgroups;
+      if (isMonarchRound) {
+        subgroups = [];
+        entries.forEach(function (r) {
+          if (Array.isArray(r.monarchGroups)) {
+            r.monarchGroups.forEach(function (g) {
+              // v2.4.61: preserva TODOS os campos do grupo (W.O./substituição:
+              // woAbsent, subStatus, subName, subIsGuest, pendingInviteId).
+              subgroups.push(Object.assign({}, g, {
                 players: (g.players || []).slice(),
                 matches: (g.matches || []).slice()
-              });
-            })
-          : undefined,
+              }));
+            });
+          }
+        });
+      }
+
+      var allDone = entries.every(function (r) {
+        return (r.status === 'complete') || _roundStatus((r && r.matches) || []) === 'done';
+      });
+      var anyActive = entries.some(function (r) { return r.status && r.status !== 'complete'; });
+
+      return {
+        id: 'swiss-r' + rn,
+        phase: isMonarchRound ? 'monarch' : 'swiss',
+        label: label,
+        round: rn,
+        status: allDone ? 'done' : (anyActive ? 'active' : _roundStatus(matches)),
+        historical: allDone,
+        matches: matches,
+        subgroups: subgroups,
         category: null,
-        meta: { raw: r }
+        // Quando a rodada tem 1 só entrada (single-categoria), expõe o raw
+        // legado. Fundido (multi-cat) marca merged — o consumidor cai em
+        // col.subgroups/col.status (que setamos acima).
+        meta: { raw: entries.length === 1 ? entries[0] : { merged: true, entries: entries } }
       };
     });
   }
