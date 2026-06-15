@@ -203,7 +203,10 @@
       var tries = 0;
       var resolve = function() {
         var db = window.FirestoreDB && window.FirestoreDB.db;
-        var auth = window.firebase && window.firebase.auth && window.firebase.auth();
+        // Só chama auth() quando o APP estiver inicializado (fb.apps.length) —
+        // chamar antes do initializeApp lança "No Firebase App created".
+        var _appReady = window.firebase && window.firebase.apps && window.firebase.apps.length;
+        var auth = (_appReady && window.firebase.auth) ? window.firebase.auth() : null;
         if (!db || !auth) {
           if (tries++ < 80) return setTimeout(resolve, 100); // até 8s
           showStatus('⚠️', 'Não foi possível carregar', 'Verifique sua conexão e tente abrir o link de novo.', true);
@@ -286,7 +289,11 @@
     var tries = 0;
     (function resolve() {
       var fb = window.firebase;
-      if (!fb || !fb.auth || !fb.functions) {
+      // IMPORTANTE: esperar o APP inicializar (fb.apps.length), não só o SDK.
+      // firebase.initializeApp() roda DEPOIS destes IIFEs no mesmo auth.js — se
+      // chamarmos fb.functions() antes do init, lança "No Firebase App created"
+      // e a tela mostra "Erro ao carregar" (bug do reset por link, v2.6.12).
+      if (!fb || !fb.auth || !fb.functions || !(fb.apps && fb.apps.length)) {
         if (tries++ < 80) return setTimeout(resolve, 100); // até 8s
         showStatus('⚠️', 'Não foi possível carregar', 'Verifique sua conexão e tente abrir o link de novo.', true);
         return;
@@ -348,7 +355,11 @@
     var tries = 0;
     (function resolve() {
       var fb = window.firebase;
-      if (!fb || !fb.auth || !fb.functions) {
+      // IMPORTANTE: esperar o APP inicializar (fb.apps.length), não só o SDK.
+      // firebase.initializeApp() roda DEPOIS destes IIFEs no mesmo auth.js — se
+      // chamarmos fb.functions() antes do init, lança "No Firebase App created"
+      // e a tela mostra "Erro ao carregar" (bug do reset por link, v2.6.12).
+      if (!fb || !fb.auth || !fb.functions || !(fb.apps && fb.apps.length)) {
         if (tries++ < 80) return setTimeout(resolve, 100); // até 8s
         showStatus('⚠️', 'Não foi possível carregar', 'Verifique sua conexão e tente abrir o link de novo.', true);
         return;
