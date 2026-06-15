@@ -1576,9 +1576,9 @@ window._entrarShowGoogleSuggestion = function(provider) {
   var label = isGoogle ? 'Google' : 'Apple';
   var gsvg = '<svg width="16" height="16" viewBox="0 0 48 48" style="flex-shrink:0;"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
   var btn = isGoogle
-    ? '<button type="button" onclick="window.handleGoogleLogin&&window.handleGoogleLogin()" style="width:100%;background:#fff;color:#1a1a2e;font-weight:700;font-size:0.9rem;padding:11px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.15);margin-top:10px;">' + gsvg + 'Entrar com Google</button>'
+    ? '<button type="button" onclick="try{sessionStorage.setItem(\'sp_googleEduHint\',\'1\')}catch(e){};window.handleGoogleLogin&&window.handleGoogleLogin()" style="width:100%;background:#fff;color:#1a1a2e;font-weight:700;font-size:0.9rem;padding:11px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.15);margin-top:10px;">' + gsvg + 'Entrar com Google</button>'
     : '<div style="margin-top:8px;color:var(--text-muted);">Use o botão <b>Entrar com Apple</b> abaixo.</div>';
-  window._entrarStatus('👋 Essa conta entra com <b>' + label + '</b> — a senha do ' + label + ' não funciona por aqui.' + (isGoogle ? ' Toque pra entrar:' : '') + btn, 'info');
+  window._entrarStatus('👋 Essa conta entra com <b>' + label + '</b> — aqui você <b>não tem senha própria</b>, usa a do ' + label + '.' + (isGoogle ? ' Toque pra entrar:' : '') + btn, 'info');
 };
 
 // "Esqueci minha senha": dispara o reset SEM precisar errar a senha antes. Checa
@@ -1602,6 +1602,12 @@ window._entrarForgotPassword = function() {
   window._entrarStatus('Verificando…', 'info');
   window._entrarCheckAccount(raw).then(function(info) {
     if (!info || !info.exists) {
+      // Sem conta, mas é um e-mail do Google → quase sempre a pessoa "esqueceu
+      // a senha" porque entra com Google (sem senha aqui). Oferta o Google.
+      if (mode !== 'phone' && /@(gmail|googlemail)\.com$/i.test(raw)) {
+        window._entrarShowGoogleSuggestion('google');
+        return;
+      }
       var what = (mode === 'phone') ? 'esse celular' : 'esse e-mail';
       window._entrarStatus('🤔 Não encontramos nenhuma conta com ' + what + '. Pra <b>criar uma conta nova</b>, digite uma senha acima e toque em <b>Entrar</b>.', 'warning');
       return;
@@ -3807,6 +3813,18 @@ async function simulateLoginSuccess(user) {
   // v2.6.x: se a pessoa abriu o link de 1 toque do WhatsApp (?pv=) — ou guardou o
   // token antes de logar — confirma o celular agora que a sessão está pronta.
   try { setTimeout(function () { if (window._handlePhoneOwnershipLink) window._handlePhoneOwnershipLink(); }, 900); } catch (e) {}
+
+  // v2.6.x: se a pessoa veio do erro clássico "tentei entrar com e-mail+senha,
+  // mas a conta é Google" e clicou em "Entrar com Google" na sugestão, reforça
+  // que ela usa o Google (sem senha aqui) pra lembrar na próxima vez.
+  try {
+    if (sessionStorage.getItem('sp_googleEduHint')) {
+      sessionStorage.removeItem('sp_googleEduHint');
+      setTimeout(function () {
+        try { if (window.showNotification) window.showNotification('✅ Você entrou com o Google', 'Sua conta usa o Google pra entrar — você não tem senha própria aqui. Da próxima vez, é só tocar em "Entrar com Google".', 'info'); } catch (e) {}
+      }, 2400);
+    }
+  } catch (e) {}
 
   // v0.17.93: atualizar topbar IMEDIATAMENTE com o user do Google.
   // Antes, topbar só era atualizado no fim da função (linha 1274+) DEPOIS
