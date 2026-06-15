@@ -6405,6 +6405,17 @@ function setupProfileModal() {
               (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar seu telefone <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-phone\')" title="Quando ligado, ninguém vê seu telefone no app e você fica fora dos grupos automáticos de WhatsApp. Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
               '<span id="hint-omit-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app <b>e você fica fora dos grupos automáticos de WhatsApp</b> (assim seu número não aparece pra ninguém). Você continua sendo avisado por notificação no app, e-mail e WhatsApp individual.</span>' +
             '</div>' +
+            // ── Senha (v2.6.x): usuário logado define/troca a própria senha ──
+            '<div style="margin:8px 0 12px;padding:12px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:12px;">' +
+              '<div style="font-size:0.8rem;font-weight:700;color:var(--text-bright);margin-bottom:3px;">🔒 Senha</div>' +
+              '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px;">Defina ou troque sua senha de acesso.</div>' +
+              '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+                '<input type="password" id="profile-new-password" autocomplete="new-password" placeholder="Nova senha (mín. 6)" minlength="6" class="form-control" style="flex:1;min-width:130px;box-sizing:border-box;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
+                '<input type="password" id="profile-new-password2" autocomplete="new-password" placeholder="Repetir senha" minlength="6" class="form-control" style="flex:1;min-width:130px;box-sizing:border-box;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._profileSetPassword&&window._profileSetPassword();}">' +
+              '</div>' +
+              '<button type="button" onclick="window._profileSetPassword && window._profileSetPassword()" class="btn btn-primary" style="margin-top:8px;font-size:0.82rem;padding:8px 14px;">Salvar senha</button>' +
+              '<div id="profile-password-status" style="margin-top:6px;font-size:0.74rem;min-height:14px;"></div>' +
+            '</div>' +
             // Row: Sexo + Nascimento (2 colunas)
             '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">' +
               '<div class="form-group" style="margin: 0;">' +
@@ -7359,6 +7370,36 @@ function setupProfileModal() {
         } else {
           if (statusEl) statusEl.innerHTML = '<span style="color:#fca5a5;">Não foi possível: ' + window._safeHtml(String((err && (err.message || err.code)) || 'erro')) + '</span>';
         }
+      });
+    };
+
+    // ── v2.6.x: Definir/trocar a própria senha (usuário logado) ───────────────
+    // updatePassword no usuário autenticado. Funciona pra quem tem e-mail real OU
+    // e-mail sintético de celular (a senha fica atrelada ao e-mail de login do
+    // Auth, seja qual for) — daí o login por celular (phonePasswordLogin) valida.
+    window._profileSetPassword = function() {
+      var p1 = (document.getElementById('profile-new-password') || {}).value || '';
+      var p2 = (document.getElementById('profile-new-password2') || {}).value || '';
+      var st = document.getElementById('profile-password-status');
+      function show(msg, color) { if (st) { st.style.color = color; st.textContent = msg; } }
+      if (p1.length < 6) { show('A senha precisa de pelo menos 6 caracteres.', '#fca5a5'); return; }
+      if (p1 !== p2) { show('As senhas não são iguais.', '#fca5a5'); return; }
+      var u = firebase.auth().currentUser;
+      if (!u) { show('Sessão expirada. Entre de novo e tente outra vez.', '#fca5a5'); return; }
+      show('Salvando…', 'var(--text-muted)');
+      u.updatePassword(p1).then(function() {
+        show('✅ Senha atualizada.', '#6ee7b7');
+        var a = document.getElementById('profile-new-password'); if (a) a.value = '';
+        var b = document.getElementById('profile-new-password2'); if (b) b.value = '';
+        try { if (window.FirestoreDB && u.uid) window.FirestoreDB.saveUserProfile(u.uid, { hasPassword: true, updatedAt: new Date().toISOString() }).catch(function(){}); } catch (e) {}
+      }).catch(function(err) {
+        var code = err && err.code;
+        var msg = 'Não foi possível salvar a senha.';
+        if (code === 'auth/requires-recent-login') msg = 'Por segurança, saia e entre de novo, depois troque a senha.';
+        else if (code === 'auth/weak-password') msg = 'Senha muito fraca — use 6+ caracteres.';
+        else if (err && err.message) msg = err.message;
+        show(msg, '#fca5a5');
+        window._warn && window._warn('[profileSetPassword]', code || (err && err.message));
       });
     };
 
