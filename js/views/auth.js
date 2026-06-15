@@ -1581,6 +1581,35 @@ window._entrarShowGoogleSuggestion = function(provider) {
   window._entrarStatus('👋 Essa conta entra com <b>' + label + '</b> — a senha do ' + label + ' não funciona por aqui.' + (isGoogle ? ' Toque pra entrar:' : '') + btn, 'info');
 };
 
+// "Esqueci minha senha": dispara o reset SEM precisar errar a senha antes. Lê o
+// e-mail/celular do campo de cima e manda o link de redefinição (e-mail + WhatsApp).
+// Resposta mascarada/silenciosa (não revela se a conta existe).
+window._entrarForgotPassword = function() {
+  var idEl = document.getElementById('login-identifier');
+  var raw = idEl ? idEl.value.trim() : '';
+  if (!raw) {
+    window._entrarStatus('Digite seu e-mail ou celular acima e toque de novo em "Esqueci minha senha".', 'warning');
+    if (idEl) idEl.focus();
+    return;
+  }
+  var mode = (typeof _detectInputModeRaw === 'function') ? _detectInputModeRaw(raw) : null;
+  if (!mode) {
+    window._entrarStatus('Digite um e-mail (com @) ou um celular com DDD.', 'warning');
+    if (idEl) idEl.focus();
+    return;
+  }
+  window._entrarStatus('Enviando link de redefinição…', 'info');
+  window._entrarDispatchRecovery(raw).then(function(res) {
+    var ch = (res && res.channels) || {};
+    var esc = window._safeHtml || function(s){ return s; };
+    var parts = [];
+    if (ch.email) parts.push('e-mail <b>' + esc(ch.email) + '</b>');
+    if (ch.phone) parts.push('WhatsApp <b>' + esc(ch.phone) + '</b>');
+    var canais = parts.length ? (' por ' + parts.join(' e ')) : '';
+    window._entrarStatus('🔑 Se houver uma conta com esse contato, enviamos um link pra redefinir a senha' + canais + '.<br><span style="color:var(--text-muted);">Abra o link e defina a nova senha (com confirmação).</span>', 'success');
+  });
+};
+
 // Prova de posse do celular + define a senha (cadastro novo OU 1ª senha de OTP legado).
 window._entrarSetupPhonePassword = function(e164withPlus, password, displayName) {
   var country = (document.getElementById('login-identifier-country') || {}).value || '55';
@@ -5067,6 +5096,10 @@ function setupLoginModal() {
               '</div>' +
               '<button type="submit" id="btn-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;margin-top:4px;">Entrar</button>' +
             '</form>' +
+            // Redefinir senha sem entrar: digita e-mail/celular acima e recebe o link.
+            '<div style="text-align:center;margin-top:8px;">' +
+              '<button type="button" onclick="window._entrarForgotPassword && window._entrarForgotPassword()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;text-decoration:underline;">Esqueci minha senha</button>' +
+            '</div>' +
             '<div id="entrar-status" style="margin-top:10px;font-size:0.82rem;line-height:1.5;"></div>' +
           '</div>' +
           // Hidden inputs — o motor handlePhoneLogin lê destes IDs (prova de posse).
