@@ -409,14 +409,11 @@ function initRouter() {
         }
         break;
       case 'fase-final':
-        // Fase Final de temporada (playoffs de Liga). Param é o tId.
-        if (typeof window.renderFaseFinalPage === 'function' && cleanParam) {
-          window.renderFaseFinalPage(viewContainer, cleanParam);
-        } else {
-          window.location.replace('#dashboard');
-          return;
-        }
-        break;
+        // v2.6.31: playoff de Liga removido (módulo tournaments-playoff.js deletado —
+        // nenhum torneio no banco usava). A fase final agora é uma fase do construtor
+        // de fases. Deep-links antigos de #fase-final caem no dashboard.
+        window.location.replace('#dashboard');
+        return;
       default:
         // Rota desconhecida — redireciona para dashboard
         window.location.replace('#dashboard');

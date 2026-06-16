@@ -3534,10 +3534,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // Liga: user's matches at the top, then the round's standings table, then
   // the collapsible "Demais jogos da rodada" card.
   if (isLigaFmt) {
-    // Fase Final da temporada (playoffs): v2.3.97 — vai no TOPO do chaveamento
-    // (empurrando toda a fase de Liga pra baixo). Pra Liga SEM playoff, retorna
-    // '' (no-op — a ordem do bracket de Liga normal fica idêntica).
-    var _playoffHtml = (typeof window._renderPlayoffSection === 'function') ? window._renderPlayoffSection(t) : '';
+    // v2.6.31: playoff de Liga removido (módulo deletado — nenhum torneio usava).
+    // A fase final agora é uma fase do construtor de fases.
+    var _playoffHtml = '';
     // v2.3.19: quando a rodada atual já está concluída, a classificação geral
     // sobe pra cima dos jogos da rodada (rodada vira "histórico" — o que importa
     // é a tabela).

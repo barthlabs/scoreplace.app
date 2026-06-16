@@ -2075,12 +2075,11 @@ function renderTournaments(container, tournamentId = null) {
                 ${sortearBtn}
                 ${sortearAberto}
                 ${(!isFinished && hasDraw && !window._isLigaFormat(t)) ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window.finishTournament('${t.id}')">🏁 ${_t('org.finishTournament')}</button>` : ''}
-                ${/* v2.6.29: botão "Configurar Playoffs (Fase Final)" removido. A fase
-                      final da Liga agora é configurada como uma nova fase do construtor
-                      de fases (t.phases[]), que o organizador adiciona em sequência ao
-                      torneio Liga se quiser. Código legado de playoff (tournaments-playoff.js,
-                      rota #fase-final, _renderPlayoffSection) permanece para renderizar
-                      playoffs já existentes sem quebrar dados. */ ''}
+                ${/* v2.6.29/31: botão "Configurar Playoffs (Fase Final)" removido e o
+                      módulo de playoff (tournaments-playoff.js, rota #fase-final,
+                      _renderPlayoffSection) deletado de vez — confirmado que nenhum
+                      torneio no banco usava. A fase final da Liga agora é uma fase do
+                      construtor de fases (t.phases[]), adicionada em sequência à Liga. */ ''}
                 ${window.AppStore.isCreator(t) ? `<button class="btn btn-danger hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window.deleteTournamentFunction('${t.id}')">🗑️ ${_t('enroll.deleteTournament') || 'Apagar Torneio'}</button>` : ''}
               </div>
             </div>`;
