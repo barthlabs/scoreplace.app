@@ -1203,7 +1203,7 @@ function setupCreateTournamentModal() {
   window._addPhase = function() {
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
     var n = window._extraPhases.length + 2;
-    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, sourceType: 'previous', fixedPairs: true, mapping: _phaseDefaultMapping('elim_dupla') });
+    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, sourceType: 'previous', fixedPairs: true, pairingStrategy: 'top', mapping: _phaseDefaultMapping('elim_dupla') });
     window._renderPhases();
   };
   window._removePhase = function(i) { if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
@@ -1213,7 +1213,8 @@ function setupCreateTournamentModal() {
     if (field === 'reiRainha' || field === 'fixedPairs') value = !!value;
     ph[field] = value;
     if (field === 'format') ph.mapping = _phaseDefaultMapping(value);
-    if (field === 'format' || field === 'sourceType') window._renderPhases();
+    // 'fixedPairs' re-renderiza pra mostrar/esconder a escolha de pareamento.
+    if (field === 'format' || field === 'sourceType' || field === 'fixedPairs') window._renderPhases();
   };
   window._setPhaseMapping = function(i, mi, key, value) {
     var ph = window._extraPhases[i]; if (!ph || !ph.mapping || !ph.mapping[mi]) return;
@@ -1278,6 +1279,16 @@ function setupCreateTournamentModal() {
       h += '</div>';
     }
     h += '<label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;"><input type="checkbox"' + (ph.fixedPairs ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'fixedPairs\', this.checked)"> Duplas fixas <span style="font-size:0.72rem;color:var(--text-muted);">(forma dupla com os classificados; desligado = individual)</span></label>';
+    // Estratégia de pareamento: só quando os times vêm da classificação anterior
+    // E são duplas fixas. O organizador decide como juntar os classificados.
+    if (fromPrev && ph.fixedPairs) {
+      var _ps = ph.pairingStrategy || 'top';
+      h += '<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,0.18);border-radius:8px;">';
+      h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Como montar as duplas com os classificados:</div>';
+      h += '<label style="display:flex;align-items:center;gap:7px;font-size:0.8rem;cursor:pointer;margin-bottom:5px;"><input type="radio" name="ps-' + i + '"' + (_ps === 'top' ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'pairingStrategy\', \'top\')"> <span>1º + 2º · 3º + 4º <span style="font-size:0.7rem;color:var(--text-muted);">(mais fortes juntos)</span></span></label>';
+      h += '<label style="display:flex;align-items:center;gap:7px;font-size:0.8rem;cursor:pointer;"><input type="radio" name="ps-' + i + '"' + (_ps === 'balanced' ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'pairingStrategy\', \'balanced\')"> <span>1º + 4º · 2º + 3º <span style="font-size:0.7rem;color:var(--text-muted);">(equilibrado)</span></span></label>';
+      h += '</div>';
+    }
     h += '</div>';
     return h;
   }
@@ -3993,6 +4004,7 @@ function setupCreateTournamentModal() {
           rounds: parseInt(ph.rounds) || 1,
           sourceType: fromPrev ? 'previous' : 'enrollment',
           fixedPairs: ph.fixedPairs !== false,
+          pairingStrategy: ph.pairingStrategy || 'top',
           mapping: (fromPrev && Array.isArray(src.mapping) && src.mapping.length)
             ? src.mapping.map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: m.label || '' }; })
             : _phaseDefaultMapping(ph.formatCode || 'elim_dupla')
@@ -4678,7 +4690,10 @@ function setupCreateTournamentModal() {
               reiRainha: !!ph.reiRainha,
               rounds: parseInt(ph.rounds) || 1,
               source: src,
-              fixedPairs: !!ph.fixedPairs
+              fixedPairs: !!ph.fixedPairs,
+              // Pareamento (1º+2º/3º+4º = 'top'; 1º+4º/2º+3º = 'balanced') — só
+              // faz sentido quando duplas fixas vêm da classificação anterior.
+              pairingStrategy: (ph.sourceType === 'previous' && ph.fixedPairs) ? (ph.pairingStrategy || 'top') : null
             };
           });
           tourData.phases = [_phase1].concat(_rest);
