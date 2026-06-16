@@ -1191,12 +1191,14 @@ function setupCreateTournamentModal() {
     { v: 'grupos_mata', label: 'Grupos + Eliminatória' }
   ];
   function _phaseDefaultMapping(format) {
-    if (format === 'elim_dupla') return [ { dest: 'upper', rankFrom: 1, rankTo: 2 }, { dest: 'lower', rankFrom: 3, rankTo: 4 } ];
-    return [ { dest: 'main', rankFrom: 1, rankTo: 2 } ];
+    if (format === 'elim_dupla') return [ { dest: 'upper', rankFrom: 1, rankTo: 2, label: 'Ouro' }, { dest: 'lower', rankFrom: 3, rankTo: 4, label: 'Prata' } ];
+    return [ { dest: 'main', rankFrom: 1, rankTo: 2, label: '' } ];
   }
+  // Destinos de uma fase. `defaultLabel` é só a sugestão — o organizador renomeia
+  // a trilha (Ouro/Prata/A/B/…) livremente; o nome digitado vive em mapping[i].label.
   function _phaseDests(format) {
-    if (format === 'elim_dupla') return [ { key: 'upper', label: '🥇 Chave Superior (Ouro)' }, { key: 'lower', label: '🥈 Chave Inferior (Prata)' } ];
-    return [ { key: 'main', label: 'Classificados que avançam' } ];
+    if (format === 'elim_dupla') return [ { key: 'upper', icon: '🥇', defaultLabel: 'Ouro' }, { key: 'lower', icon: '🥈', defaultLabel: 'Prata' } ];
+    return [ { key: 'main', icon: '🏆', defaultLabel: 'Classificados que avançam' } ];
   }
   window._addPhase = function() {
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
@@ -1216,6 +1218,11 @@ function setupCreateTournamentModal() {
   window._setPhaseMapping = function(i, mi, key, value) {
     var ph = window._extraPhases[i]; if (!ph || !ph.mapping || !ph.mapping[mi]) return;
     ph.mapping[mi][key] = Math.max(1, parseInt(value) || 1);
+  };
+  // Nome da trilha (Ouro/Prata/…) — não re-renderiza pra não perder o foco do input.
+  window._setPhaseMappingLabel = function(i, mi, value) {
+    var ph = window._extraPhases[i]; if (!ph || !ph.mapping || !ph.mapping[mi]) return;
+    ph.mapping[mi].label = value;
   };
   function _phOpt(v, label, sel) { return '<option value="' + v + '"' + (sel ? ' selected' : '') + '>' + label + '</option>'; }
   var _PH_INP = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;';
@@ -1248,11 +1255,19 @@ function setupCreateTournamentModal() {
     if (fromPrev) {
       var dests = _phaseDests(ph.format);
       h += '<div style="background:rgba(0,0,0,0.18);border-radius:8px;padding:8px 10px;margin-bottom:8px;">';
-      h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quem entra em cada chave (por colocação <strong>em cada grupo</strong> da fase anterior):</div>';
+      var _isMultiDest = dests.length > 1;
+      h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quem entra em cada ' + (_isMultiDest ? 'trilha' : 'chave') + ' (por colocação <strong>em cada grupo</strong> da fase anterior)' + (_isMultiDest ? ' — <span style="color:#a5b4fc;">renomeie as trilhas como quiser</span>' : '') + ':</div>';
       (ph.mapping || []).forEach(function(mp, mi){
-        var dlabel = (dests[mi] && dests[mi].label) || ('Destino ' + (mi + 1));
+        var dst = dests[mi] || {};
+        var curLabel = (mp.label != null && mp.label !== '') ? mp.label : (dst.defaultLabel || ('Destino ' + (mi + 1)));
         h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">';
-        h += '<span style="flex:1;min-width:120px;font-size:0.8rem;">' + dlabel + '</span>';
+        if (_isMultiDest) {
+          // Nome da trilha editável (Ouro/Prata/A/B…) + ícone de medalha como dica.
+          if (dst.icon) h += '<span style="flex-shrink:0;font-size:1rem;">' + dst.icon + '</span>';
+          h += '<input type="text" value="' + esc(curLabel) + '" placeholder="Nome da trilha" oninput="window._setPhaseMappingLabel(' + i + ', ' + mi + ', this.value)" title="Nome da trilha (ex.: Ouro, Prata, A, B…)" style="flex:1;min-width:90px;' + _PH_INP + '">';
+        } else {
+          h += '<span style="flex:1;min-width:120px;font-size:0.8rem;">' + (dst.icon ? dst.icon + ' ' : '') + esc(curLabel) + '</span>';
+        }
         h += '<span style="font-size:0.78rem;color:var(--text-muted);">do</span>';
         h += '<input type="number" min="1" max="8" value="' + (mp.rankFrom || 1) + '" oninput="window._setPhaseMapping(' + i + ', ' + mi + ', \'rankFrom\', this.value)" style="width:46px;text-align:center;' + _PH_INP + '">';
         h += '<span style="font-size:0.78rem;color:var(--text-muted);">º ao</span>';
@@ -3979,7 +3994,7 @@ function setupCreateTournamentModal() {
           sourceType: fromPrev ? 'previous' : 'enrollment',
           fixedPairs: ph.fixedPairs !== false,
           mapping: (fromPrev && Array.isArray(src.mapping) && src.mapping.length)
-            ? src.mapping.map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1 }; })
+            ? src.mapping.map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: m.label || '' }; })
             : _phaseDefaultMapping(ph.formatCode || 'elim_dupla')
         };
       });
@@ -4654,7 +4669,7 @@ function setupCreateTournamentModal() {
           };
           var _rest = _extra.map(function(ph) {
             var src = ph.sourceType === 'previous'
-              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: true, mapping: (ph.mapping || []).map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1 }; }) }
+              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: true, mapping: (ph.mapping || []).map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: (m.label || '').trim() }; }) }
               : { type: 'enrollment' };
             return {
               name: (ph.name || '').trim() || 'Fase',

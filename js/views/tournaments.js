@@ -2528,10 +2528,10 @@ function renderTournaments(container, tournamentId = null) {
                     var nB = (typeof b === 'string' ? b : (b.displayName || b.name || '')).toLowerCase();
                     return (_enrollSort === 'alpha_desc' ? -1 : 1) * nA.localeCompare(nB, 'pt-BR', { sensitivity: 'base' });
                   }
-                  if (_enrollSort === 'chrono_desc') {
-                    return parts.indexOf(b) - parts.indexOf(a);
-                  }
-                  return 0; // chrono = original order
+                  // chrono / chrono_desc: o bloco de ordenação ACIMA já ordenou
+                  // `parts` (inclusive o reverse no chrono_desc). Aqui só preservamos
+                  // essa ordem — re-reverter anulava o toggle (bug: "não muda nada").
+                  return parts.indexOf(a) - parts.indexOf(b);
                 });
 
                 cardsStr = _sortedParts.map((p, sortedIdx) => {
