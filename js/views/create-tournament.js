@@ -3223,38 +3223,57 @@ function setupCreateTournamentModal() {
       if (!N) N = iv('tourn-max-participants', 0);
     }
 
-    // partidas de UMA chave de n unidades, no formato/modo escolhido
-    function singleBracket(n) {
-      if (n < 2) return 0;
-      if (drawMode === 'rei_rainha') {
-        var groups = Math.max(Math.ceil(n / 4), 1);
-        var gm = groups * 3; // 3 jogos por grupo de 4 (AB/CD, AC/BD, AD/BC)
-        var cls = Math.max(iv('monarch-classified', 1), 1);
-        return gm + Math.max(groups * cls - 1, 0); // grupos + elim. dos classificados
-      }
-      if (fmt === 'elim_simples') return n - 1;
-      if (fmt === 'elim_dupla') return (n - 1) * 2 + 1;
-      if (fmt === 'liga') return n * (n - 1) / 2;
-      if (fmt === 'grupos_mata') {
-        var g = Math.max(iv('grupos-count', 4), 1);
-        var cl = Math.max(iv('grupos-classified', 2), 1);
-        var pg = Math.ceil(n / g);
-        return Math.round(g * (pg * (pg - 1) / 2) + Math.max(g * cl - 1, 0));
-      }
-      return n - 1;
+    // Jogos por RODADA de UMA sub-chave (categoria). Rodadas são sequenciais —
+    // dentro de uma rodada os jogos correm em paralelo até a capacidade de quadras.
+    function elimRounds(n) {
+      var arr = [], cur = n;
+      while (cur > 1) { arr.push(Math.floor(cur / 2)); cur = Math.ceil(cur / 2); }
+      return arr; // ex.: 103 → [51,26,13,6,3,2,1] (soma = n-1)
     }
-    // total considerando categorias: campo dividido em K sub-chaves de ~n/K
+    function roundsArrayFor(n) {
+      if (n < 2) return [];
+      if (drawMode === 'rei_rainha') {
+        // Grupos de 4, 3 sub-rodadas (AB/CD, AC/BD, AD/BC); 1 jogo por grupo por
+        // sub-rodada (os 3 são sequenciais — mesmos 4 jogadores). Eliminatória,
+        // se houver, é FASE À PARTE (não entra aqui).
+        var groups = Math.max(Math.ceil(n / 4), 1);
+        return [groups, groups, groups];
+      }
+      if (fmt === 'liga') return [Math.floor(n / 2)]; // UMA rodada de pontos corridos
+      if (fmt === 'grupos_mata') {
+        var g = Math.max(iv('grupos-count', 4), 1);   // nº de grupos
+        var gs = Math.ceil(n / g);                    // tamanho do grupo
+        var rnds = Math.max(gs - 1, 1);               // rodadas round-robin no grupo
+        var perRound = Math.max(Math.floor(gs / 2) * g, 1);
+        var arr = []; for (var i = 0; i < rnds; i++) arr.push(perRound);
+        return arr;                                   // fase de grupos completa
+      }
+      return elimRounds(n);                           // elim_simples
+    }
+    function perCat(n) { return Math.max(Math.round(n / K), 1); }
+    // Tempo de um conjunto de rodadas: em cada rodada global há K×jogos (as K
+    // categorias dividem o campo mas COMPARTILHAM as quadras) → teto por quadras.
+    function roundsTime(arr) {
+      var mins = 0;
+      for (var r = 0; r < arr.length; r++) mins += Math.ceil((arr[r] * K) / Math.max(courts, 1)) * slot;
+      return mins;
+    }
     function totalMatches(n) {
       if (n < 2) return 0;
-      var per = Math.max(Math.round(n / K), 1);
-      if (per < 2) return 0;
-      return singleBracket(per) * K;
+      var pc = perCat(n);
+      // Dupla Eliminatória: ~2(n-1)+1 jogos (upper + lower + grande final).
+      if (drawMode !== 'rei_rainha' && fmt === 'elim_dupla') return ((pc - 1) * 2 + 1) * K;
+      var arr = roundsArrayFor(pc), sum = 0;
+      for (var i = 0; i < arr.length; i++) sum += arr[i];
+      return sum * K;
     }
     function timeFor(n) {
       if (slot <= 0) return -1;
-      var m = totalMatches(n);
-      if (m <= 0) return 0;
-      return Math.ceil(m / courts) * slot;
+      if (n < 2) return 0;
+      var pc = perCat(n);
+      // Dupla Elim.: lower bracket roda em paralelo ao upper → ~1.9× a simples.
+      if (drawMode !== 'rei_rainha' && fmt === 'elim_dupla') return Math.round(1.9 * roundsTime(elimRounds(pc)));
+      return roundsTime(roundsArrayFor(pc));
     }
     function fmtMin(m) {
       if (m < 0) return '—';
@@ -3280,10 +3299,10 @@ function setupCreateTournamentModal() {
                    .sort(function (a, b) { return a - b; });
 
     var fmtLabel = ({ elim_simples: 'Eliminatória', elim_dupla: 'Dupla Elim.', grupos_mata: 'Fase de Grupos', liga: 'Pontos Corridos', suico: 'Suíço' })[fmt] || fmt;
-    var modeLabel = drawMode === 'rei_rainha' ? ' · 👑 Rei/Rainha' : '';
+    var headLabel = (drawMode === 'rei_rainha') ? '👑 Rei/Rainha (grupos de 4)' : fmtLabel;
     var catLabel = K > 1 ? (' · ' + K + ' categorias') : '';
     var h = '';
-    h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;">' + fmtLabel + modeLabel + catLabel + ' · ' + courts + (courts > 1 ? ' quadras' : ' quadra') + ' · ' + slot + 'min/jogo</div>';
+    h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;">' + headLabel + catLabel + ' · ' + courts + (courts > 1 ? ' quadras' : ' quadra') + ' · ' + slot + 'min/jogo</div>';
     if (slot <= 0) h += '<div style="font-size:0.72rem;color:#f59e0b;margin-bottom:6px;">Preencha chamada/aquecimento/duração pra estimar o tempo.</div>';
     if (!isReal && N < 2) h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Sem inscritos ainda — simulação genérica. Edite um torneio com inscritos pra ver o nº real.</div>';
 
@@ -3301,13 +3320,23 @@ function setupCreateTournamentModal() {
       h += '</div>';
     });
     h += '</div>';
-    if (drawMode === 'rei_rainha') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa por rodada (um chaveamento Rei/Rainha).</div>';
+    if (drawMode === 'rei_rainha') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa de <strong>uma rodada</strong> (grupos de 4). A eliminatória, se houver, é uma fase à parte.</div>';
+    else if (fmt === 'liga') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa de <strong>uma rodada</strong> de pontos corridos.</div>';
+    else if (fmt === 'grupos_mata') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa da <strong>fase de grupos</strong> completa (sem mata-mata).</div>';
     if (ageCats > 0) h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:4px;opacity:0.8;">⚠️ Categorias por idade criam sub-chaves extras não incluídas nesta estimativa.</div>';
     ladder.innerHTML = h;
   };
 
   window._recalcDuration = function () {
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
+    // v2.6.37: a escada de estimativa (_renderPhaseEstimate) é a ÚNICA estimativa.
+    // O box de diagnóstico legado (capacidade/sugestões/"max feasible") mostrava
+    // números absurdos derivados da janela de datas — desativado de vez.
+    var _legBox = document.getElementById('duration-estimate-box');
+    if (_legBox) _legBox.style.display = 'none';
+    var _legInline = document.getElementById('duration-estimate-inline');
+    if (_legInline) _legInline.textContent = '';
+    return;
     const box = document.getElementById('duration-estimate-box');
     if (!box) return;
 
