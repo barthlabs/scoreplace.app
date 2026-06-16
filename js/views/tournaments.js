@@ -1082,6 +1082,15 @@ function renderTournaments(container, tournamentId = null) {
         const start = formatDateBr(t.startDate);
         const end = formatDateBr(t.endDate);
         const dates = start ? (end ? `${start} ${_t('tourn.dateTo')} ${end}` : `${start}`) : _t('tourn.dateTbd');
+        // v2.6.23: data em grid 2 colunas — [🗓️ | início] / ["A" | fim], com "A"
+        // sob o ícone e a data final alinhada sob a inicial.
+        const _dateToLbl = _t('tourn.dateTo');
+        const datesGridHtml = (start && end)
+          ? `<span style="display:grid;grid-template-columns:auto auto;column-gap:9px;row-gap:3px;align-items:center;">`
+              + `<span style="font-size:1.1rem;justify-self:center;line-height:1;">🗓️</span><span style="white-space:nowrap;">${start}</span>`
+              + `<span style="justify-self:center;opacity:0.8;font-weight:700;">${_dateToLbl}</span><span style="white-space:nowrap;">${end}</span>`
+            + `</span>`
+          : `<span style="display:inline-flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">🗓️</span><span>${dates}</span></span>`;
         const regLimit = formatDateBr(t.registrationLimit);
         const cats = (t.combinedCategories && t.combinedCategories.length) ? window._sortCategoriesBySkillOrder(t.combinedCategories, t.skillCategories).join(', ') : ((t.categories && t.categories.length) ? t.categories.join(', ') : _t('tourn.singleCat'));
 
@@ -1856,9 +1865,8 @@ function renderTournaments(container, tournamentId = null) {
             </div>` : ''}
 
             <!-- Below Name: Calendário + Data -->
-            <div style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.7;'}">
-               <span style="font-size: 1.1rem;">🗓️</span>
-               <span>${dates}</span>
+            <div style="display: inline-block; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.7;'}">
+               ${datesGridHtml}
             </div>
             ${(() => {
               // v0.16.90: linha "Atualizado em..." + toggle Liga "Ativado/

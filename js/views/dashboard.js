@@ -450,6 +450,14 @@ function renderDashboard(container) {
     const start = formatDateBr(t.startDate);
     const end = formatDateBr(t.endDate);
     const dates = start ? (end ? `${start} ${_t('tourn.dateTo')} ${end}` : `${start}`) : _t('tourn.dateTbd');
+    // v2.6.23: data em grid 2 colunas — [🗓️ | início] / ["A" | fim].
+    const _dateToLbl = _t('tourn.dateTo');
+    const datesGridHtml = (start && end)
+      ? `<span style="display:grid;grid-template-columns:auto auto;column-gap:9px;row-gap:3px;align-items:center;">`
+          + `<span style="font-size:1.1rem;justify-self:center;line-height:1;">🗓️</span><span style="white-space:nowrap;">${start}</span>`
+          + `<span style="justify-self:center;opacity:0.8;font-weight:700;">${_dateToLbl}</span><span style="white-space:nowrap;">${end}</span>`
+        + `</span>`
+      : `<span style="display:inline-flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">🗓️</span><span>${dates}</span></span>`;
     const regLimit = formatDateBr(t.registrationLimit);
     const cats = (t.categories && t.categories.length) ? t.categories.join(', ') : _t('tourn.singleCat');
 
@@ -697,8 +705,7 @@ function renderDashboard(container) {
 
             <!-- Below Name: Calendário + Data + badge contextual (HOJE/AMANHÃ/Em Xd) -->
             <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
-               <span style="font-size: 1.1rem;">🗓️</span>
-               <span>${dates}</span>
+               ${datesGridHtml}
                ${(() => {
                  // Badge de início — aparece em torneios ativos (nao encerrados)
                  // com startDate futura ou hoje. Reusa as i18n keys

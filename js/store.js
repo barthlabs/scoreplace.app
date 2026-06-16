@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.22-beta';
+window.SCOREPLACE_VERSION = '2.6.23-beta';
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
 // v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).
