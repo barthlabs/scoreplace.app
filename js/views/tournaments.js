@@ -291,44 +291,135 @@ function renderTournaments(container, tournamentId = null) {
         var name2 = typeof p2 === 'string' ? p2 : (p2.displayName || p2.name || '');
         if (!name1 || !name2 || name1.includes('/') || name2.includes('/')) return;
 
-        var newName = name1 + ' / ' + name2;
         var uid1 = typeof p1 === 'object' ? (p1.uid || '') : '';
         var uid2 = typeof p2 === 'object' ? (p2.uid || '') : '';
         // v1.8.88: se sourceUidOrName é um uid real (não um nome), usá-lo
         if (!uid1 && sourceUidOrName && !sourceUidOrName.includes(' ')) uid1 = sourceUidOrName;
         if (!uid2 && targetUidOrName && !targetUidOrName.includes(' ')) uid2 = targetUidOrName;
 
-        function _doFormDupla() {
-            // Entrada sempre objeto com p1Name/p2Name/p1Uid/p2Uid
-            var arr2 = Array.isArray(t.participants) ? t.participants : [];
-            var fi1 = arr2.findIndex(function(p) { return uid1 ? (typeof p === 'object' && p.uid === uid1) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name1); });
-            var fi2 = arr2.findIndex(function(p) { return uid2 ? (typeof p === 'object' && p.uid === uid2) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name2); });
-            if (fi1 === -1 || fi2 === -1 || fi1 === fi2) return;
-            // Tentar recuperar uid dos participantes se não tínhamos no momento do drag
-            var _p1 = arr2[fi1]; var _p2 = arr2[fi2];
-            var _u1 = uid1 || (typeof _p1==='object' ? (_p1.uid||'') : '');
-            var _u2 = uid2 || (typeof _p2==='object' ? (_p2.uid||'') : '');
-            var merged = { displayName: newName, name: newName, uid: _u1 || _u2 || '', p1Name: name1, p1Uid: _u1, p2Name: name2, p2Uid: _u2, ligaActive: true };
-            var maxI = Math.max(fi1, fi2), minI = Math.min(fi1, fi2);
-            arr2.splice(maxI, 1); arr2.splice(minI, 1); arr2.splice(minI, 0, merged);
-            t.participants = arr2;
-            if (!t.teamOrigins) t.teamOrigins = {};
-            t.teamOrigins[newName] = 'formada';
-            t.updatedAt = new Date().toISOString();
-            window.FirestoreDB.saveTournament(t);
-            if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
-            if (uid2 && uid2 !== uid1 && typeof window._sendUserNotification === 'function') {
-                var cu = window.AppStore.currentUser;
-                window._sendUserNotification(uid2, { type: 'enrollment_new', title: '🤝 Dupla formada!', message: (cu && cu.displayName ? cu.displayName : 'O organizador') + ' formou dupla com você em ' + window._safeHtml(t.name || '') + ': ' + window._safeHtml(newName), tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
-            }
-            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        var isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+
+        // ── Organizador: forma na hora (com confirmação) ──
+        if (isOrg) {
+            var _formNow = function() { window._formDuplaByUids(tId, name1, uid1, name2, uid2); };
+            if (typeof showConfirmDialog === 'function') showConfirmDialog('👫 Formar dupla?', '"' + name1 + '" e "' + name2 + '" vão formar a dupla.', _formNow, null, { type: 'info', confirmText: 'Formar dupla', cancelText: 'Cancelar' });
+            else _formNow();
+            return;
         }
 
-        if (typeof showConfirmDialog === 'function') {
-            showConfirmDialog('👫 Formar dupla?', '"' + name1 + '" e "' + name2 + '" vão formar a dupla.', _doFormDupla, null, { type: 'info', confirmText: 'Formar dupla', cancelText: 'Cancelar' });
-        } else {
-            _doFormDupla();
+        // ── Participante: só com manualPairing='open', arrastando o PRÓPRIO card,
+        //    sobre alguém com conta. Em vez de formar, manda convite pendente. ──
+        var cu = window.AppStore && window.AppStore.currentUser;
+        var myUid = cu && cu.uid;
+        if (t.manualPairing !== 'open') {
+            if (typeof showNotification !== 'undefined') showNotification('Apenas o organizador', 'Neste torneio, só o organizador forma as duplas.', 'info');
+            return;
         }
+        if (!myUid || uid1 !== myUid) {
+            if (typeof showNotification !== 'undefined') showNotification('Arraste o seu card', 'Você só pode formar dupla arrastando o seu próprio card sobre o de outra pessoa.', 'info');
+            return;
+        }
+        if (!uid2) {
+            if (typeof showNotification !== 'undefined') showNotification('Sem conta', name2 + ' não tem conta para aceitar o convite. Peça ao organizador para formar a dupla.', 'info');
+            return;
+        }
+        var _sendInvite = function() {
+            if (!window._teamFormation) return;
+            var res = window._teamFormation.requestPair(t, uid1, uid2, name1, name2);
+            if (!res.ok) { if (typeof showNotification !== 'undefined') showNotification('Não foi possível', window._pairErrorMsg(res.error), 'warning'); return; }
+            if (res.action === 'confirm') {
+                // recíproco: forma na ordem do 1º proponente
+                var iN = (res.inviterUid === uid1) ? name1 : name2, iU = res.inviterUid;
+                var eN = (res.inviterUid === uid1) ? name2 : name1, eU = (res.inviterUid === uid1) ? uid2 : uid1;
+                window._formDuplaByUids(tId, iN, iU, eN, eU);
+                return;
+            }
+            t.updatedAt = new Date().toISOString();
+            window.FirestoreDB.saveTournament(t);
+            if (typeof window._sendUserNotification === 'function') window._sendUserNotification(uid2, { type: 'enrollment_new', title: '🤝 Convite de dupla', message: name1 + ' quer formar dupla com você em ' + window._safeHtml(t.name || '') + '. Abra o torneio para aceitar.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
+            if (typeof showNotification !== 'undefined') showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        };
+        if (typeof showConfirmDialog === 'function') showConfirmDialog('🤝 Convidar para dupla?', 'Enviar convite para "' + name2 + '" formar dupla com você?', _sendInvite, null, { type: 'info', confirmText: 'Enviar convite', cancelText: 'Cancelar' });
+        else _sendInvite();
+    };
+
+    // Forma a dupla de fato (caminho canônico, reusado por organizador e por aceite
+    // de convite). Muta t.participants, marca teamOrigins, limpa convites pendentes
+    // dos 2, salva e notifica o parceiro.
+    window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
+        var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        if (!t) return;
+        var arr2 = Array.isArray(t.participants) ? t.participants : [];
+        var fi1 = arr2.findIndex(function(p) { return uid1 ? (typeof p === 'object' && p.uid === uid1) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name1); });
+        var fi2 = arr2.findIndex(function(p) { return uid2 ? (typeof p === 'object' && p.uid === uid2) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name2); });
+        if (fi1 === -1 || fi2 === -1 || fi1 === fi2) return;
+        var _p1 = arr2[fi1]; var _p2 = arr2[fi2];
+        var _u1 = uid1 || (typeof _p1==='object' ? (_p1.uid||'') : '');
+        var _u2 = uid2 || (typeof _p2==='object' ? (_p2.uid||'') : '');
+        var newName = name1 + ' / ' + name2;
+        var merged = { displayName: newName, name: newName, uid: _u1 || _u2 || '', p1Name: name1, p1Uid: _u1, p2Name: name2, p2Uid: _u2, ligaActive: true };
+        var maxI = Math.max(fi1, fi2), minI = Math.min(fi1, fi2);
+        arr2.splice(maxI, 1); arr2.splice(minI, 1); arr2.splice(minI, 0, merged);
+        t.participants = arr2;
+        if (!t.teamOrigins) t.teamOrigins = {};
+        t.teamOrigins[newName] = 'formada';
+        if (window._teamFormation && _u1 && _u2) window._teamFormation.dropRequestsInvolving(t, [_u1, _u2]);
+        t.updatedAt = new Date().toISOString();
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
+        if (_u2 && _u2 !== _u1 && typeof window._sendUserNotification === 'function') {
+            var cu = window.AppStore.currentUser;
+            window._sendUserNotification(_u2, { type: 'enrollment_new', title: '🤝 Dupla formada!', message: (cu && cu.displayName ? cu.displayName : 'O organizador') + ' formou dupla com você em ' + window._safeHtml(t.name || '') + ': ' + window._safeHtml(newName), tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
+        }
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    };
+
+    // Mensagens PT pros códigos de erro da máquina de pendência.
+    window._pairErrorMsg = function(code) {
+        var m = {
+            'participante-sem-permissao': 'Neste torneio, só o organizador forma as duplas.',
+            'voce-ja-em-dupla': 'Você já está em uma dupla.',
+            'alvo-ja-em-dupla': 'Essa pessoa já está em uma dupla.',
+            'iniciante-ja-em-dupla': 'Quem te convidou já entrou em outra dupla.',
+            'ja-tem-convite-pendente': 'Você já tem um convite pendente. Cancele-o antes de enviar outro.',
+            'convite-ja-enviado': 'Convite já enviado para essa pessoa.',
+            'nao-e-o-convidado': 'Só quem recebeu o convite pode aceitar.',
+            'convite-nao-encontrado': 'Convite não encontrado (talvez já tenha sido respondido).',
+            'sem-permissao': 'Você não pode cancelar este convite.',
+            'mesma-pessoa': 'Selecione duas pessoas diferentes.',
+            'nao-duplas': 'Este torneio não é de duplas.',
+            'inscrito-nao-encontrado': 'Inscrito não encontrado.'
+        };
+        return m[code] || code;
+    };
+
+    // Aceitar um convite de dupla pendente (alvo) → forma via caminho canônico.
+    window._acceptPairRequest = function(tId, reqId) {
+        var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        if (!t || !window._teamFormation) return;
+        var myUid = (window.AppStore.currentUser || {}).uid;
+        var res = window._teamFormation.acceptPair(t, reqId, myUid);
+        if (!res.ok) {
+            if (typeof showNotification !== 'undefined') showNotification('Não foi possível', window._pairErrorMsg(res.error), 'warning');
+            // estado pode ter mudado (ex.: convite sumiu) — re-render
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+            return;
+        }
+        window._formDuplaByUids(tId, res.inviterName, res.inviterUid, res.inviteeName, res.inviteeUid);
+    };
+
+    // Cancelar/recusar um convite pendente (iniciante ou alvo).
+    window._cancelPairRequest = function(tId, reqId) {
+        var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        if (!t || !window._teamFormation) return;
+        var myUid = (window.AppStore.currentUser || {}).uid;
+        var res = window._teamFormation.cancelPair(t, reqId, myUid);
+        if (!res.ok) { if (typeof showNotification !== 'undefined') showNotification('Não foi possível', window._pairErrorMsg(res.error), 'warning'); return; }
+        t.updatedAt = new Date().toISOString();
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('Convite cancelado', '', 'info');
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
     };
 
     // Desfazer dupla: separa "Nome1 / Nome2" de volta em dois inscritos solo
@@ -2833,6 +2924,34 @@ function renderTournaments(container, tournamentId = null) {
             function _safeAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 
             if (_isDoublesTournament && !drawDone) {
+              // Convites de dupla pendentes (manualPairing='open') — visível a todos.
+              var _cuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
+              var _reqs = Array.isArray(t.pairRequests) ? t.pairRequests : [];
+              var _pendingHtml = '';
+              if (_reqs.length) {
+                _pendingHtml = '<div style="margin-bottom:1.2rem;">'
+                  + '<div style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">⏳ Convites de dupla (' + _reqs.length + ')</div>'
+                  + '<div style="display:flex;flex-direction:column;gap:6px;">'
+                  + _reqs.map(function(r){
+                      var amInvitee = _cuUid && r.inviteeUid === _cuUid;
+                      var amInviter = _cuUid && r.inviterUid === _cuUid;
+                      var label = amInvitee ? (window._safeHtml(r.inviterName || 'Alguém') + ' quer formar dupla com você')
+                                : amInviter ? ('Convite enviado para ' + window._safeHtml(r.inviteeName || ''))
+                                : (window._safeHtml(r.inviterName || '') + ' → ' + window._safeHtml(r.inviteeName || '') + ' (aguardando)');
+                      var btns = '';
+                      var tIdA = _safeAttr(String(t.id)), rIdA = _safeAttr(r.id);
+                      if (amInvitee) {
+                        btns = '<button onclick="event.stopPropagation();window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;color:#34d399;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;">✅ Aceitar</button>'
+                            + '<button onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;color:#f87171;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;margin-left:6px;">❌ Recusar</button>';
+                      } else if (amInviter || isOrg) {
+                        btns = '<button onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;color:#f87171;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;">Cancelar</button>';
+                      }
+                      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 12px;">'
+                           + '<span style="font-size:0.85rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;">⏳ ' + label + '</span>'
+                           + '<span style="flex-shrink:0;white-space:nowrap;">' + btns + '</span></div>';
+                    }).join('')
+                  + '</div></div>';
+              }
               // Modo duplas pré-sorteio: duas seções com drag-drop
               participantsHtml = `
                 <div class="mt-5 mb-4">
@@ -2850,6 +2969,8 @@ function renderTournaments(container, tournamentId = null) {
                       ${_soloParticipants.map(function(p) { return _duplaCard(p, true, String(t.id)); }).join('')}
                     </div>
                   </div>` : '<div style="margin-bottom:1rem;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:0.82rem;color:#34d399;text-align:center;">✅ Todos com dupla formada</div>'}
+
+                  ${_pendingHtml}
 
                   ${_pairedParticipants.length > 0 ? `
                   <div>

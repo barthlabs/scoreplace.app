@@ -120,7 +120,9 @@ service cloud.firestore {
           // Inscrição — overlap com isEnrollmentOnlyDiff
           'participants', 'memberEmails', 'teamOrigins',
           // v1.8.99: memberUids sempre recomputado em saveTournament
-          'memberUids'
+          'memberUids',
+          // Convites de dupla pendentes (participante envia/aceita/cancela)
+          'pairRequests'
         ]);
     }
 
