@@ -118,6 +118,17 @@ function setupCreateTournamentModal() {
                 <small id="vis-desc" class="text-muted" style="display:block;margin-top:6px;">${_t('create.publicDesc')}</small>
               </div>
 
+              <!-- ═══════════ BOX FASE 1 ═══════════
+                   Agrupa: Formato · Modo de Sorteio · campos condicionais ·
+                   Formato das Partidas (GSM) · Categorias · Classificação.
+                   A Fase 1 é o formato escolhido aqui; fases extras vêm em
+                   "+ Adicionar fase" logo abaixo do box. -->
+              <div id="fase1-box" style="border:1px solid rgba(129,140,248,0.35); border-radius:14px; padding:1rem; margin-bottom:1rem; background:rgba(99,102,241,0.05);">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                  <span style="flex-shrink:0;font-size:0.7rem;font-weight:800;color:#a5b4fc;background:rgba(99,102,241,0.2);padding:4px 10px;border-radius:7px;letter-spacing:0.5px;">FASE 1</span>
+                  <input type="text" id="phase1-name" placeholder="Nome da fase (opcional)" oninput="window._phase1Name=this.value" style="flex:1;min-width:0;padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;">
+                </div>
+
               <!-- Formato -->
               <div class="form-group mb-3">
                 <label class="form-label">${_t('tournament.format')}</label>
@@ -316,6 +327,119 @@ function setupCreateTournamentModal() {
               </div>
               <!-- ranking-fields removido em v0.2.6: unificado com liga-fields -->
 
+              <!-- Game Set Match Config — Presets (Formato das Partidas) -->
+              <div id="gsm-section" style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #c084fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 ${_t('create.matchFormat')}</p>
+                <div id="gsm-presets" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:10px;"></div>
+                <!-- Advantage toggle (auto-hidden for beach tennis/padel) -->
+                <div id="gsm-advantage-section" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(168,85,247,0.04);border-radius:10px;border:1px solid rgba(168,85,247,0.1);">
+                  <div class="toggle-row" style="padding:0;">
+                    <div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">${_t('create.gsmAdvantageLabel')}</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">${_t('create.gsmAdvantageDesc')}</div></div>
+                    <label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-advantage-toggle" onchange="window._gsmAdvantageChanged()"><span class="toggle-slider"></span></label>
+                  </div>
+                </div>
+                <!-- Summary -->
+                <div id="gsm-summary" style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;display:none;"></div>
+                <!-- Hidden fields to store config -->
+                <input type="hidden" id="gsm-type" value="simple">
+                <input type="hidden" id="gsm-setsToWin" value="1">
+                <input type="hidden" id="gsm-gamesPerSet" value="6">
+                <input type="hidden" id="gsm-tiebreakEnabled" value="true">
+                <input type="hidden" id="gsm-tiebreakPoints" value="7">
+                <input type="hidden" id="gsm-tiebreakMargin" value="2">
+                <input type="hidden" id="gsm-superTiebreak" value="false">
+                <input type="hidden" id="gsm-superTiebreakPoints" value="10">
+                <input type="hidden" id="gsm-countingType" value="numeric">
+                <input type="hidden" id="gsm-advantageRule" value="false">
+                <input type="hidden" id="gsm-fixedSet" value="false">
+                <input type="hidden" id="gsm-fixedSetGames" value="6">
+              </div>
+
+              <!-- Categorias do Torneio -->
+              <div style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #a855f7; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.catSection')}</p>
+                <div style="margin-bottom:0.75rem;">
+                  <label class="form-label" style="margin-bottom:6px;">${_t('create.genderCatLabel')}</label>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;" id="gender-cat-buttons">
+                    <button type="button" id="btn-cat-fem" onclick="window._toggleGenderCat('fem')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">♀</span>${_t('create.catFem')}</button>
+                    <button type="button" id="btn-cat-masc" onclick="window._toggleGenderCat('masc')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">♂</span>${_t('create.catMasc')}</button>
+                    <button type="button" id="btn-cat-misto-ale" onclick="window._toggleGenderCat('misto_aleatorio')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">⚥</span>${_t('create.catMistoAle')}</button>
+                    <button type="button" id="btn-cat-misto-obr" onclick="window._toggleGenderCat('misto_obrigatorio')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">⚤</span>${_t('create.catMistoObr')}</button>
+                  </div>
+                  <input type="hidden" id="tourn-gender-categories" value="">
+                  <small class="text-muted" style="display:block;margin-top:6px;">${_t('create.genderCatHint')}</small>
+                </div>
+                <div>
+                  <label class="form-label" style="margin-bottom:6px;">${_t('create.skillCatLabel')}</label>
+                  <!-- v1.2.2-beta: pills A, B, C, D, FUN. Indigo, multi-select. -->
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;" id="skill-cat-buttons">
+                    <button type="button" data-skill="A" data-active="0" onclick="window._toggleSkillCat('A')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">A</button>
+                    <button type="button" data-skill="B" data-active="0" onclick="window._toggleSkillCat('B')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">B</button>
+                    <button type="button" data-skill="C" data-active="0" onclick="window._toggleSkillCat('C')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">C</button>
+                    <button type="button" data-skill="D" data-active="0" onclick="window._toggleSkillCat('D')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">D</button>
+                    <button type="button" data-skill="FUN" data-active="0" onclick="window._toggleSkillCat('FUN')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">FUN</button>
+                  </div>
+                  <input type="hidden" id="tourn-skill-categories" value="">
+                  <small class="text-muted" style="display:block;margin-top:6px;">A é o nível mais alto (avançado), D o mais iniciante. FUN = categoria iniciante.</small>
+                </div>
+
+                <!-- v1.2.0-beta: Categorias por Idade -->
+                <div style="margin-top:0.75rem;">
+                  <label class="form-label" style="margin-bottom:6px;">Categorias por Idade</label>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;" id="age-cat-buttons">
+                    <button type="button" data-age="40+" onclick="window._toggleAgeCat('40+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">40+</button>
+                    <button type="button" data-age="50+" onclick="window._toggleAgeCat('50+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">50+</button>
+                    <button type="button" data-age="60+" onclick="window._toggleAgeCat('60+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">60+</button>
+                    <button type="button" data-age="70+" onclick="window._toggleAgeCat('70+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">70+</button>
+                  </div>
+                  <input type="hidden" id="tourn-age-categories" value="">
+                  <small class="text-muted" style="display:block;margin-top:6px;">Sub-bracket por faixa etária. Inscritos podem competir na categoria de habilidade, na de idade, ou em ambas. Sub-bracket também é separado por gênero.</small>
+                </div>
+
+                <!-- v2.1.80-beta: Categorias personalizadas (livres) — funcionam como a
+                     habilidade: cruzam com gênero e viram sub-bracket. O inscrito escolhe
+                     na inscrição; o organizador atribui/reatribui no gerenciador. -->
+                <div style="margin-top:0.75rem;">
+                  <label class="form-label" style="margin-bottom:6px;">Categorias personalizadas</label>
+                  <div id="custom-cat-chips" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;"></div>
+                  <button type="button" id="btn-add-custom-cat" onclick="window._addCustomCat()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px dashed rgba(20,184,166,0.5); background:rgba(20,184,166,0.08); color:#5eead4; font-weight:600;"><span style="line-height:1;">＋</span> Adicionar categoria</button>
+                  <input type="hidden" id="tourn-custom-categories" value="">
+                  <small class="text-muted" style="display:block;margin-top:6px;">Categoria livre (ex.: Estreante, Profissional). Cruza com gênero como a habilidade e gera sub-bracket próprio. O inscrito escolhe na inscrição; você pode reatribuir no gerenciador de categorias.</small>
+                </div>
+
+                <div id="category-preview" style="display:none; margin-top:0.75rem; padding:8px 12px; background:rgba(168,85,247,0.08); border:1px solid rgba(168,85,247,0.2); border-radius:8px;">
+                  <div style="font-size:0.7rem; color:#a855f7; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.catPreview')}</div>
+                  <div id="category-preview-list" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
+                </div>
+              </div>
+
+              <!-- Classificação -->
+              <div id="elim-settings" style="display:none; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.classificationSection')}</p>
+                <input type="hidden" id="elim-third-place" value="true">
+                <div class="form-group">
+                  <div id="ranking-type-buttons" style="display:flex;gap:8px;">
+                    <button type="button" class="ranking-type-btn ranking-type-active" data-value="individual" onclick="window._selectRankingType('individual')" style="flex:1;padding:10px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid #f87171;background:rgba(248,113,113,0.12);color:#fca5a5;font-weight:600;text-align:center;">${_t('create.rankingPersonalized')}</button>
+                    <button type="button" class="ranking-type-btn" data-value="blocks" onclick="window._selectRankingType('blocks')" style="flex:1;padding:10px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;text-align:center;">${_t('create.rankingBlocks')}</button>
+                  </div>
+                  <small class="text-muted" style="display:block;margin-top:6px;">${_t('create.rankingTypeHint')}</small>
+                  <select class="form-control" id="elim-ranking-type" style="display:none;">
+                    <option value="individual">${_t('create.rankingPersonalized')}</option>
+                    <option value="blocks">${_t('create.rankingBlocks')}</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- ═══════════ FIM BOX FASE 1 ═══════════ -->
+              </div>
+
+              <!-- + Adicionar fase (fases 2+ — cada uma com as mesmas configs da Fase 1) -->
+              <div class="form-group mb-3" id="phases-section">
+                <div id="phases-list"></div>
+                <button type="button" id="add-phase-btn" onclick="window._addPhase()" style="margin-top:4px;padding:10px 16px;border-radius:10px;font-size:0.84rem;cursor:pointer;border:2px dashed rgba(129,140,248,0.55);background:rgba(99,102,241,0.08);color:#818cf8;font-weight:600;width:100%;transition:all 0.15s;">+ Adicionar fase</button>
+                <small class="text-muted" style="display:block;margin-top:8px;">Adicione fases para criar etapas com formato e origem próprios (ex.: <em>Liga classificatória</em> → <em>Eliminatória Ouro/Prata</em>). Cada fase tem as mesmas configurações da Fase 1.</small>
+              </div>
+
               <!-- Datas e Horários (posicionado após agendamento de sorteios) -->
               <div class="dates-row" style="display:flex; gap:10px; margin-bottom:0.75rem; align-items:stretch; flex-wrap:wrap;">
                 <div id="reg-date-container" style="flex:1; min-width:0; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
@@ -369,15 +493,7 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- Fases do torneio (construtor multi-fase configurável) -->
-              <div class="form-group mb-3" id="phases-section">
-                <label class="form-label">Fases do torneio</label>
-                <div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:0.6rem;">
-                  Por padrão o torneio tem <strong>1 fase</strong> (o formato escolhido acima). Adicione fases para criar etapas com formato e origem próprios — ex.: <em>Liga classificatória (Rei/Rainha)</em> → <em>Eliminatória Ouro/Prata</em>.
-                </div>
-                <div id="phases-list"></div>
-                <button type="button" id="add-phase-btn" onclick="window._addPhase()" style="margin-top:8px;padding:10px 16px;border-radius:10px;font-size:0.84rem;cursor:pointer;border:2px dashed rgba(129,140,248,0.55);background:rgba(99,102,241,0.08);color:#818cf8;font-weight:600;width:100%;transition:all 0.15s;">+ Adicionar fase</button>
-              </div>
+              <!-- (Fases do torneio movido para logo após o box FASE 1) -->
 
               <!-- Local e Quadras -->
               <div id="venue-photo-box" style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
@@ -474,33 +590,7 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- Game Set Match Config — Presets -->
-              <div id="gsm-section" style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #c084fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 ${_t('create.matchFormat')}</p>
-                <div id="gsm-presets" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:10px;"></div>
-                <!-- Advantage toggle (auto-hidden for beach tennis/padel) -->
-                <div id="gsm-advantage-section" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(168,85,247,0.04);border-radius:10px;border:1px solid rgba(168,85,247,0.1);">
-                  <div class="toggle-row" style="padding:0;">
-                    <div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">${_t('create.gsmAdvantageLabel')}</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">${_t('create.gsmAdvantageDesc')}</div></div>
-                    <label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-advantage-toggle" onchange="window._gsmAdvantageChanged()"><span class="toggle-slider"></span></label>
-                  </div>
-                </div>
-                <!-- Summary -->
-                <div id="gsm-summary" style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;display:none;"></div>
-                <!-- Hidden fields to store config -->
-                <input type="hidden" id="gsm-type" value="simple">
-                <input type="hidden" id="gsm-setsToWin" value="1">
-                <input type="hidden" id="gsm-gamesPerSet" value="6">
-                <input type="hidden" id="gsm-tiebreakEnabled" value="true">
-                <input type="hidden" id="gsm-tiebreakPoints" value="7">
-                <input type="hidden" id="gsm-tiebreakMargin" value="2">
-                <input type="hidden" id="gsm-superTiebreak" value="false">
-                <input type="hidden" id="gsm-superTiebreakPoints" value="10">
-                <input type="hidden" id="gsm-countingType" value="numeric">
-                <input type="hidden" id="gsm-advantageRule" value="false">
-                <input type="hidden" id="gsm-fixedSet" value="false">
-                <input type="hidden" id="gsm-fixedSetGames" value="6">
-              </div>
+              <!-- (Formato das Partidas / GSM movido para o box FASE 1) -->
 
               <!-- Sistema de Pontos Avançado (apenas Liga / Suíço) -->
               <div id="adv-scoring-section" style="display:none; background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
@@ -620,63 +710,7 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- Categorias do Torneio (movido pra antes do Modo de Inscrição em v1.2.4-beta) -->
-              <div style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #a855f7; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.catSection')}</p>
-                <div style="margin-bottom:0.75rem;">
-                  <label class="form-label" style="margin-bottom:6px;">${_t('create.genderCatLabel')}</label>
-                  <div style="display:flex; gap:8px; flex-wrap:wrap;" id="gender-cat-buttons">
-                    <button type="button" id="btn-cat-fem" onclick="window._toggleGenderCat('fem')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">♀</span>${_t('create.catFem')}</button>
-                    <button type="button" id="btn-cat-masc" onclick="window._toggleGenderCat('masc')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">♂</span>${_t('create.catMasc')}</button>
-                    <button type="button" id="btn-cat-misto-ale" onclick="window._toggleGenderCat('misto_aleatorio')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">⚥</span>${_t('create.catMistoAle')}</button>
-                    <button type="button" id="btn-cat-misto-obr" onclick="window._toggleGenderCat('misto_obrigatorio')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">⚤</span>${_t('create.catMistoObr')}</button>
-                  </div>
-                  <input type="hidden" id="tourn-gender-categories" value="">
-                  <small class="text-muted" style="display:block;margin-top:6px;">${_t('create.genderCatHint')}</small>
-                </div>
-                <div>
-                  <label class="form-label" style="margin-bottom:6px;">${_t('create.skillCatLabel')}</label>
-                  <!-- v1.2.2-beta: pills A, B, C, D, FUN. Indigo, multi-select. -->
-                  <div style="display:flex; gap:8px; flex-wrap:wrap;" id="skill-cat-buttons">
-                    <button type="button" data-skill="A" data-active="0" onclick="window._toggleSkillCat('A')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">A</button>
-                    <button type="button" data-skill="B" data-active="0" onclick="window._toggleSkillCat('B')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">B</button>
-                    <button type="button" data-skill="C" data-active="0" onclick="window._toggleSkillCat('C')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">C</button>
-                    <button type="button" data-skill="D" data-active="0" onclick="window._toggleSkillCat('D')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">D</button>
-                    <button type="button" data-skill="FUN" data-active="0" onclick="window._toggleSkillCat('FUN')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">FUN</button>
-                  </div>
-                  <input type="hidden" id="tourn-skill-categories" value="">
-                  <small class="text-muted" style="display:block;margin-top:6px;">A é o nível mais alto (avançado), D o mais iniciante. FUN = categoria iniciante.</small>
-                </div>
-
-                <!-- v1.2.0-beta: Categorias por Idade -->
-                <div style="margin-top:0.75rem;">
-                  <label class="form-label" style="margin-bottom:6px;">Categorias por Idade</label>
-                  <div style="display:flex; gap:8px; flex-wrap:wrap;" id="age-cat-buttons">
-                    <button type="button" data-age="40+" onclick="window._toggleAgeCat('40+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">40+</button>
-                    <button type="button" data-age="50+" onclick="window._toggleAgeCat('50+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">50+</button>
-                    <button type="button" data-age="60+" onclick="window._toggleAgeCat('60+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">60+</button>
-                    <button type="button" data-age="70+" onclick="window._toggleAgeCat('70+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">70+</button>
-                  </div>
-                  <input type="hidden" id="tourn-age-categories" value="">
-                  <small class="text-muted" style="display:block;margin-top:6px;">Sub-bracket por faixa etária. Inscritos podem competir na categoria de habilidade, na de idade, ou em ambas. Sub-bracket também é separado por gênero.</small>
-                </div>
-
-                <!-- v2.1.80-beta: Categorias personalizadas (livres) — funcionam como a
-                     habilidade: cruzam com gênero e viram sub-bracket. O inscrito escolhe
-                     na inscrição; o organizador atribui/reatribui no gerenciador. -->
-                <div style="margin-top:0.75rem;">
-                  <label class="form-label" style="margin-bottom:6px;">Categorias personalizadas</label>
-                  <div id="custom-cat-chips" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;"></div>
-                  <button type="button" id="btn-add-custom-cat" onclick="window._addCustomCat()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px dashed rgba(20,184,166,0.5); background:rgba(20,184,166,0.08); color:#5eead4; font-weight:600;"><span style="line-height:1;">＋</span> Adicionar categoria</button>
-                  <input type="hidden" id="tourn-custom-categories" value="">
-                  <small class="text-muted" style="display:block;margin-top:6px;">Categoria livre (ex.: Estreante, Profissional). Cruza com gênero como a habilidade e gera sub-bracket próprio. O inscrito escolhe na inscrição; você pode reatribuir no gerenciador de categorias.</small>
-                </div>
-
-                <div id="category-preview" style="display:none; margin-top:0.75rem; padding:8px 12px; background:rgba(168,85,247,0.08); border:1px solid rgba(168,85,247,0.2); border-radius:8px;">
-                  <div style="font-size:0.7rem; color:#a855f7; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.catPreview')}</div>
-                  <div id="category-preview-list" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
-                </div>
-              </div>
+              <!-- (Categorias movido para o box FASE 1) -->
 
               <!-- Modo de Inscrição (toggles não-excludentes) -->
               <div class="form-group mb-3">
@@ -760,22 +794,7 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="select-result-entry" value="organizer">
               </div>
 
-              <!-- Classificação -->
-              <div id="elim-settings" style="display:none; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.classificationSection')}</p>
-                <input type="hidden" id="elim-third-place" value="true">
-                <div class="form-group">
-                  <div id="ranking-type-buttons" style="display:flex;gap:8px;">
-                    <button type="button" class="ranking-type-btn ranking-type-active" data-value="individual" onclick="window._selectRankingType('individual')" style="flex:1;padding:10px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid #f87171;background:rgba(248,113,113,0.12);color:#fca5a5;font-weight:600;text-align:center;">${_t('create.rankingPersonalized')}</button>
-                    <button type="button" class="ranking-type-btn" data-value="blocks" onclick="window._selectRankingType('blocks')" style="flex:1;padding:10px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;text-align:center;">${_t('create.rankingBlocks')}</button>
-                  </div>
-                  <small class="text-muted" style="display:block;margin-top:6px;">${_t('create.rankingTypeHint')}</small>
-                  <select class="form-control" id="elim-ranking-type" style="display:none;">
-                    <option value="individual">${_t('create.rankingPersonalized')}</option>
-                    <option value="blocks">${_t('create.rankingBlocks')}</option>
-                  </select>
-                </div>
-              </div>
+              <!-- (Classificação movido para o box FASE 1) -->
 
               <!-- Critérios de Desempate -->
               <div id="tiebreaker-section" style="background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
@@ -1289,22 +1308,12 @@ function setupCreateTournamentModal() {
     return h;
   }
   window._renderPhases = function() {
+    // A Fase 1 agora é o box "FASE 1" do formulário (com #phase1-name no header).
+    // Aqui renderizamos apenas as fases extras (2+) que o organizador adicionar.
     var list = document.getElementById('phases-list');
     if (!list) return;
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
-    var esc = (window._safeHtml || function(s){ return s; });
-    var fmtSel = document.getElementById('select-formato');
-    var topFmtLabel = '';
-    if (fmtSel && fmtSel.options[fmtSel.selectedIndex]) topFmtLabel = fmtSel.options[fmtSel.selectedIndex].text;
-    var multi = window._extraPhases.length > 0;
-    var h = '<div style="border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:12px;margin-bottom:8px;background:rgba(255,255,255,0.03);">';
-    h += '<div style="display:flex;align-items:center;gap:8px;">';
-    h += '<span style="flex-shrink:0;font-size:0.66rem;font-weight:700;color:#34d399;background:rgba(16,185,129,0.18);padding:3px 8px;border-radius:6px;">FASE 1</span>';
-    h += '<input type="text" id="phase1-name" value="' + esc(window._phase1Name || '') + '" placeholder="Fase 1" oninput="window._phase1Name=this.value" style="flex:1;min-width:0;' + _PH_INP + '">';
-    h += '</div>';
-    h += '<div style="font-size:0.73rem;color:var(--text-muted);margin-top:7px;">Formato: <strong style="color:var(--text-main);">' + esc(topFmtLabel) + '</strong> · origem: inscrição direta + sorteio';
-    if (multi) h += ' · <span style="color:#34d399;">rodadas</span> <input type="number" min="1" max="30" value="' + (window._phase1Rounds || 1) + '" oninput="window._phase1Rounds=Math.max(1,parseInt(this.value)||1)" style="width:50px;text-align:center;padding:3px 6px;border-radius:6px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.8rem;box-sizing:border-box;">';
-    h += '</div></div>';
+    var h = '';
     window._extraPhases.forEach(function(ph, i){ h += _phaseCardHtml(ph, i); });
     list.innerHTML = h;
   };
