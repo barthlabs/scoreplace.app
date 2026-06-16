@@ -1,4 +1,14 @@
-window.SCOREPLACE_VERSION = '2.6.33-beta';
+window.SCOREPLACE_VERSION = '2.6.34-beta';
+
+// Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
+// (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
+// mostrado ao usuário. 'Liga'/'Ranking' → 'Pontos Corridos';
+// 'Fase de Grupos + Eliminatórias' → 'Fase de Grupos'.
+window._formatDisplayName = function (fmt) {
+  if (fmt === 'Liga' || fmt === 'Ranking') return 'Pontos Corridos';
+  if (fmt === 'Fase de Grupos + Eliminatórias') return 'Fase de Grupos';
+  return fmt;
+};
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
 // v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).

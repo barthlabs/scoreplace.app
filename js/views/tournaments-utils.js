@@ -1169,7 +1169,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     opts = opts || {};
     var esc = window._safeHtml || function (s) { return s == null ? '' : String(s); };
     var isLiga = window._isLigaFormat(t);
-    var fmt = t.format || '—';
+    var fmt = (window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '—';
 
     // ── helpers de formatação ──
     function fmtDrawMode() {

@@ -882,7 +882,7 @@ function renderDashboard(container) {
                ${(typeof window._buildTournamentConfigBox === 'function')
                  ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: false })
                  : `<div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);"' : ''}>
-                  <div><strong>${_t('dashboard.labelFormat')}:</strong> ${t.format}</div>
+                  <div><strong>${_t('dashboard.labelFormat')}:</strong> ${window._formatDisplayName ? window._formatDisplayName(t.format) : t.format}</div>
                   <div><strong>${_t('dashboard.labelAccess')}:</strong> ${publicText}</div>
                </div>`}
             </div>
@@ -1327,10 +1327,10 @@ function renderDashboard(container) {
         // Format label
         var formatLabel = '';
         if (isMonarchMatch) formatLabel = 'Rei/Rainha';
-        else if (t.format) formatLabel = t.format;
+        else if (t.format) formatLabel = window._formatDisplayName ? window._formatDisplayName(t.format) : t.format;
         // Liga com rodadas Rei/Rainha
         if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && isMonarchMatch) {
-          formatLabel = 'Liga · Rei/Rainha';
+          formatLabel = 'Pontos Corridos · Rei/Rainha';
         }
 
         // Phase label — Rei/Rainha tem m.label rico ("R1 Grupo A • Jogo 1"),
@@ -1645,8 +1645,8 @@ function renderDashboard(container) {
         if (m.label) _phaseLabel = String(m.label);
         else if (m.roundLabel) _phaseLabel = String(m.roundLabel);
         else if (m.round != null) _phaseLabel = 'Rodada ' + m.round;
-        var _formatLabel = m.isMonarch ? 'Rei/Rainha' : (t.format || '');
-        if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && m.isMonarch) _formatLabel = 'Liga · Rei/Rainha';
+        var _formatLabel = m.isMonarch ? 'Rei/Rainha' : ((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '');
+        if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && m.isMonarch) _formatLabel = 'Pontos Corridos · Rei/Rainha';
         var _subLine = [_formatLabel, _phaseLabel].filter(Boolean).join(' · ');
 
         var matchInfo = {
@@ -2574,7 +2574,7 @@ function renderDashboard(container) {
   // Build filter pills for formats
   let formatPills = formatsArr.map(f => {
     const active = curFormat === f;
-    return `<button onclick="window._applyDashFormat('${f.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}')" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;border:1px solid ${active ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.1)'};background:${active ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)'};color:${active ? '#fbbf24' : 'var(--text-muted)'};font-size:0.75rem;font-weight:${active ? '700' : '500'};cursor:pointer;white-space:nowrap;transition:all 0.2s;">🏅${f}</button>`;
+    return `<button onclick="window._applyDashFormat('${f.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}')" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;border:1px solid ${active ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.1)'};background:${active ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)'};color:${active ? '#fbbf24' : 'var(--text-muted)'};font-size:0.75rem;font-weight:${active ? '700' : '500'};cursor:pointer;white-space:nowrap;transition:all 0.2s;">🏅${window._formatDisplayName ? window._formatDisplayName(f) : f}</button>`;
   }).join('');
 
   const hasSecondaryFilters = sportsArr.length > 0 || locationsArr.length > 0 || formatsArr.length > 0;
@@ -2627,7 +2627,7 @@ function renderDashboard(container) {
             '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (isFav ? '<span style="color:#f43f5e">♥</span> ' : '') + window._safeHtml(t.name) + '</div>' +
             '<div class="compact-details" style="font-size:0.7rem;color:var(--text-muted);display:flex;gap:8px;margin-top:2px;flex-wrap:wrap;">' +
               '<span>' + (t.sport || '—') + '</span>' +
-              '<span>' + (t.format || '—') + '</span>' +
+              '<span>' + ((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '—') + '</span>' +
               (dateStr ? '<span>' + dateStr + '</span>' : '') +
             '</div>' +
           '</div>' +

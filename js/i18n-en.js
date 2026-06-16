@@ -128,12 +128,12 @@ window._translations['en'] = {
   // Formats
   'format.single': 'Single Elimination',
   'format.double': 'Double Elimination',
-  'format.groups': 'Groups + Knockout',
+  'format.groups': 'Group Stage',
   'format.swiss': 'Swiss',
-  'format.league': 'League',
+  'format.league': 'Round Robin',
   'format.monarch': 'King/Queen of the Beach',
   'format.monarchShort': 'King/Queen',
-  'format.groupsShort': 'Groups + Knockout',
+  'format.groupsShort': 'Group Stage',
   'format.monarchDesc': 'Groups of 4 players with 3 matches and rotating partners. Individual scoring.',
 
   // Bracket/Stage
@@ -383,7 +383,7 @@ window._translations['en'] = {
   'create.drawModeMonarchDesc': 'Groups of 4 with rotating partners. Individual scoring. Top players advance to knockout.',
   'create.descElimSimples': 'Eliminated on first loss.',
   'create.descElimDupla': 'Eliminated on second loss (losers bracket).',
-  'create.descGrupos': 'Group stage followed by knockout (World Cup style).',
+  'create.descGrupos': 'Group standings stage (round-robin). For knockout, add an Elimination phase.',
   'create.descSuico': 'Points-based with score-matched pairings.',
   'create.descLiga': 'Continuous season with points standings.',
   'create.gameType': 'Game Type',

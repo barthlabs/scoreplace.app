@@ -196,7 +196,7 @@ function renderBracket(container, tournamentId, isInline) {
         <h2 style="margin:0;">${isLiga || isSuico ? _t('bracket.title.standings') + ' — ' : isGrupos ? _t('bracket.title.groups') + ' — ' : t.format === 'Rei/Rainha da Praia' ? '👑 ' + _t('bracket.title.monarch') + ' — ' : _t('bracket.title.bracket') + ' — '}${window._safeHtml(t.name)}</h2>
         <div class="d-flex gap-2 mt-1">
           ${hasContent ? `<span class="badge badge-success" style="background:rgba(16,185,129,0.2);color:#34d399;">${_t('bracket.drawDone')}</span>` : `<span class="badge badge-warning">${_t('bracket.waitingDraw')}</span>`}
-          <span class="badge badge-info">${t.format || 'Eliminatórias'}</span>
+          <span class="badge badge-info">${(window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || 'Eliminatórias'}</span>
           ${isGrupos && t.currentStage === 'groups' ? `<span class="badge badge-warning">${_t('stage.groups')}</span>` : ''}
           ${isGrupos && t.currentStage === 'elimination' ? `<span class="badge badge-success" style="background:rgba(16,185,129,0.2);color:#34d399;">${_t('stage.elimination')}</span>` : ''}
         </div>

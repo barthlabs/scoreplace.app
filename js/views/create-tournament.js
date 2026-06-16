@@ -1205,10 +1205,10 @@ function setupCreateTournamentModal() {
   window._phase1Name = window._phase1Name || '';
   window._phase1Rounds = window._phase1Rounds || 1;
   var _PHASE_FORMATS = [
-    { v: 'liga', label: 'Liga (pontos corridos)' },
+    { v: 'liga', label: 'Pontos Corridos' },
     { v: 'elim_simples', label: 'Eliminatória Simples' },
     { v: 'elim_dupla', label: 'Dupla Eliminatória (Superior/Inferior)' },
-    { v: 'grupos_mata', label: 'Grupos + Eliminatória' }
+    { v: 'grupos_mata', label: 'Fase de Grupos' }
   ];
   function _phaseDefaultMapping(format) {
     if (format === 'elim_dupla') return [ { dest: 'upper', rankFrom: 1, rankTo: 2, label: 'Ouro' }, { dest: 'lower', rankFrom: 3, rankTo: 4, label: 'Prata' } ];
@@ -1794,8 +1794,8 @@ function setupCreateTournamentModal() {
 
     // Format label
     var formatMap = {
-      liga: 'Liga', suico: 'Suíço', elim_simples: 'Eliminatórias',
-      elim_dupla: 'Dupla Elim.', grupos_mata: 'Grupos + Elim.'
+      liga: 'Pontos Corridos', suico: 'Suíço', elim_simples: 'Eliminatórias',
+      elim_dupla: 'Dupla Elim.', grupos_mata: 'Fase de Grupos'
     };
     var formatLabel = formatMap[formatValue] || '';
 
@@ -3279,7 +3279,7 @@ function setupCreateTournamentModal() {
                    .filter(function (c) { if (seen[c]) return false; seen[c] = 1; return true; })
                    .sort(function (a, b) { return a - b; });
 
-    var fmtLabel = ({ elim_simples: 'Eliminatória', elim_dupla: 'Dupla Elim.', grupos_mata: 'Grupos + Elim.', liga: 'Liga', suico: 'Suíço' })[fmt] || fmt;
+    var fmtLabel = ({ elim_simples: 'Eliminatória', elim_dupla: 'Dupla Elim.', grupos_mata: 'Fase de Grupos', liga: 'Pontos Corridos', suico: 'Suíço' })[fmt] || fmt;
     var modeLabel = drawMode === 'rei_rainha' ? ' · 👑 Rei/Rainha' : '';
     var catLabel = K > 1 ? (' · ' + K + ' categorias') : '';
     var h = '';
