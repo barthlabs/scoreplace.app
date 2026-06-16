@@ -1079,7 +1079,7 @@ window._toggleLigaActive = function(tId, isActive) {
   // por _suppressSoftRefresh quando preciso).
   var _syncTogglesInDom = function() {
     var newLabel = isActive ? 'Ativado' : 'Desativado';
-    var newColor = isActive ? '#34d399' : '#f87171';
+    var newPillBg = isActive ? '#10b981' : '#ef4444'; // verde / vermelho sólido
     var newTitle = isActive
       ? 'Clique para ficar de fora do próximo sorteio'
       : 'Clique para voltar ao próximo sorteio';
@@ -1087,7 +1087,8 @@ window._toggleLigaActive = function(tId, isActive) {
     var wrappers = document.querySelectorAll('[data-liga-toggle-tid="' + String(tId).replace(/"/g, '\\"') + '"]');
     wrappers.forEach(function(w) {
       var lbl = w.querySelector('.liga-toggle-state-label');
-      if (lbl) { lbl.textContent = newLabel; lbl.style.color = newColor; }
+      if (lbl) { lbl.textContent = newLabel; lbl.style.color = '#fff'; } // texto sempre branco
+      if (w.classList && w.classList.contains('liga-toggle-pill')) w.style.background = newPillBg;
       w.setAttribute('title', newTitle);
       var inp = w.querySelector('input[type="checkbox"]');
       if (inp) inp.checked = !!isActive;
@@ -1146,7 +1147,10 @@ window._buildLigaActiveToggleHtml = function(t) {
   var isActive = found.ligaActive !== false; // default true
   var safeTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var stateLabel = isActive ? 'Ativado' : 'Desativado';
-  var stateColor = isActive ? '#34d399' : '#f87171';
+  // v2.6.21: pílula SÓLIDA — verde (Ativado) / vermelha (Desativado) com texto
+  // SEMPRE branco, nos dois temas. Antes era texto colorido sobre tarja escura
+  // (contraste ruim no tema claro). A própria pílula carrega a cor do estado.
+  var pillBg = isActive ? '#10b981' : '#ef4444';
   var titleAttr = isActive
     ? 'Clique para ficar de fora do próximo sorteio'
     : 'Clique para voltar ao próximo sorteio';
@@ -1155,9 +1159,9 @@ window._buildLigaActiveToggleHtml = function(t) {
   // liga-toggle-state-label no text span permite update in-place pelo
   // _toggleLigaActive sem re-render do view (sem scroll jump).
   var STOP = 'onclick="event.stopPropagation();"';
-  return '<span data-liga-toggle-tid="' + safeTid + '" style="display:inline-flex;align-items:center;gap:8px;flex-shrink:0;" ' + STOP + ' ' +
+  return '<span data-liga-toggle-tid="' + safeTid + '" class="liga-toggle-pill" style="display:inline-flex;align-items:center;gap:7px;flex-shrink:0;background:' + pillBg + ';border-radius:999px;padding:4px 9px 4px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.18);" ' + STOP + ' ' +
     'title="' + window._safeHtml(titleAttr) + '">' +
-    '<span class="liga-toggle-state-label" style="font-size:0.95rem;font-weight:700;color:' + stateColor + ';white-space:nowrap;" ' + STOP + '>' + stateLabel + '</span>' +
+    '<span class="liga-toggle-state-label" style="font-size:0.88rem;font-weight:700;color:#fff;white-space:nowrap;" ' + STOP + '>' + stateLabel + '</span>' +
     '<label class="toggle-switch toggle-sm" style="flex-shrink:0;" ' + STOP + '>' +
       '<input type="checkbox" ' + (isActive ? 'checked' : '') + ' ' + STOP +
         ' onchange="window._toggleLigaActive(\'' + safeTid + '\', this.checked)">' +

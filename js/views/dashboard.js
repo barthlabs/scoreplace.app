@@ -717,18 +717,16 @@ function renderDashboard(container) {
                                               new Date(_today.getFullYear(), _today.getMonth(), _today.getDate())) / 86400000);
                    if (_dayDiff < 0) return ''; // já começou, não mostra badge
                    if (_dayDiff > 14) return ''; // mais de 2 semanas — badge fica irrelevante
-                   var _label, _bg, _color;
-                   if (_dayDiff === 0) {
-                     _label = _t('tournament.startsToday');
-                     _bg = 'rgba(16,185,129,0.22)'; _color = '#10b981';
-                   } else if (_dayDiff === 1) {
-                     _label = _t('tournament.startsTomorrow');
-                     _bg = 'rgba(251,191,36,0.22)'; _color = '#fbbf24';
-                   } else {
-                     _label = _t('tournament.startsIn').replace('{days}', _dayDiff);
-                     _bg = 'rgba(99,102,241,0.2)'; _color = '#a5b4fc';
-                   }
-                   return '<span style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:10px;background:' + _bg + ';color:' + _color + ';border:1px solid ' + _color + '40;white-space:nowrap;">' + _label + '</span>';
+                   var _label, _solid;
+                   if (_dayDiff === 0) { _label = _t('tournament.startsToday'); _solid = '#10b981'; }
+                   else if (_dayDiff === 1) { _label = _t('tournament.startsTomorrow'); _solid = '#f59e0b'; }
+                   else { _label = _t('tournament.startsIn').replace('{days}', _dayDiff); _solid = '#6366f1'; }
+                   // v2.6.21: em tarja escura (_pReadBg) → pílula SÓLIDA + texto branco
+                   // (contraste). No fundo claro → tint suave + texto na cor.
+                   var _bg = _pReadBg ? _solid : (_solid + '2e');
+                   var _color = _pReadBg ? '#fff' : _solid;
+                   var _bd = _pReadBg ? _solid : (_solid + '55');
+                   return '<span style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:10px;background:' + _bg + ';color:' + _color + ';border:1px solid ' + _bd + ';white-space:nowrap;">' + _label + '</span>';
                  } catch(e) { return ''; }
                })()}
             </div>
@@ -782,17 +780,17 @@ function renderDashboard(container) {
                 // v0.16.92: stopPropagation no wrapper da row pra cobrir
                 // cliques fora do toggle (área vazia à esquerda). Caso
                 // contrário a row inteira é "área quente" do card click.
-                var _toggleInner = _ligaToggleDash && _pReadBg
-                  ? '<span style="background:' + _pReadBg + ';border-radius:10px;padding:5px 9px;display:inline-flex;align-items:center;">' + _ligaToggleDash + '</span>'
-                  : _ligaToggleDash;
+                // v2.6.21: toggle é pílula sólida verde/vermelha — sem tarja escura.
+                var _toggleInner = _ligaToggleDash;
                 var _toggleRowDash = _ligaToggleDash
                   ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _toggleInner + '</div>'
                   : '';
+                var _ctColor = _pReadBg ? '#fff' : _ligaEv.color; // tarja escura → texto claro
                 return _toggleRowDash +
                   '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +
-                  '<span style="font-size:0.85rem;font-weight:700;color:' + _ligaEv.color + ';">' + _ligaEv.label + '</span>' +
-                  '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ligaEv.color + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
+                  '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ';">' + _ligaEv.label + '</span>' +
+                  '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
                 '</div>';
               }
 
@@ -815,10 +813,11 @@ function renderDashboard(container) {
               var _next = _events[0];
               var _countdownText = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _next.color === '#f59e0b' ? '245,158,11' : _next.color === '#10b981' ? '16,185,129' : '139,92,246';
+              var _ctColor2 = _pReadBg ? '#fff' : _next.color; // tarja escura → texto claro
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb2 + ',0.1)')) + ';border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
-                '<span style="font-size:0.85rem;font-weight:700;color:' + _next.color + ';">' + _next.label + '</span>' +
-                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _next.color + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
+                '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ';">' + _next.label + '</span>' +
+                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
               '</div>';
             })()}
 

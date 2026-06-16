@@ -1873,9 +1873,9 @@ function renderTournaments(container, tournamentId = null) {
                      <span>Atualizado em ${(() => { try { var d = new Date(t.updatedAt); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}); } catch(e) { return t.updatedAt; } })()}</span>
                    </div>`
                 : '<div></div>';
-              var _toggleWrapped = ligaActiveToggleHtml
-                ? (_pReadBg ? '<span style="background:'+_pReadBg+';border-radius:10px;padding:5px 9px;display:inline-flex;align-items:center;">'+ligaActiveToggleHtml+'</span>' : ligaActiveToggleHtml)
-                : '';
+              // v2.6.21: o toggle agora é pílula sólida verde/vermelha (cor própria)
+              // — não envolver em tarja escura (_pReadBg).
+              var _toggleWrapped = ligaActiveToggleHtml || '';
               return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();">${_updatedHtml}${_toggleWrapped}</div>`;
             })()}
             ${(typeof window._buildTimeEstimation === 'function') ? window._buildTimeEstimation(t) : ''}
@@ -1950,10 +1950,13 @@ function renderTournaments(container, tournamentId = null) {
                 var _rgb = _colorMap[_ligaEvent.color] || '139,92,246';
                 // v0.16.90: toggle Liga removido daqui — agora vive na linha
                 // "Atualizado em..." acima (compartilhada entre lista e detalhe).
+                // v2.6.21: em tarja escura (_pReadBg) o texto é CLARO (contraste);
+                // sem tarja, usa a cor semântica sobre o tint claro.
+                var _ctColor = _pReadBg ? '#fff' : _ligaEvent.color;
                 return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEvent.icon + '</span>' +
-                  '<span style="font-size:0.85rem;font-weight:700;color:' + _ligaEvent.color + ';">' + _ligaEvent.label + '</span>' +
-                  '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ligaEvent.color + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
+                  '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ';">' + _ligaEvent.label + '</span>' +
+                  '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
                 '</div>';
               }
 
@@ -1977,10 +1980,12 @@ function renderTournaments(container, tournamentId = null) {
               var _next = _events[0];
               var _countdownText2 = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _colorMap2[_next.color] || '139,92,246';
+              // v2.6.21: tarja escura → texto claro; sem tarja → cor semântica.
+              var _ctColor2 = _pReadBg ? '#fff' : _next.color;
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb2 + ',0.1)')) + ';border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
-                '<span style="font-size:0.85rem;font-weight:700;color:' + _next.color + ';">' + _next.label + '</span>' +
-                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _next.color + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText2 + '</span>' +
+                '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ';">' + _next.label + '</span>' +
+                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText2 + '</span>' +
               '</div>';
             })()}
 
