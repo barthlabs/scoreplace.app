@@ -564,12 +564,25 @@ button[style*="linear-gradient"]:not(.btn):active {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--stat-box-bg, rgba(0,0,0,0.28));
   padding: 0.6rem 1rem;
   border-radius: 12px;
   min-width: 100px;
   width: fit-content;
-  color: var(--text-main);
+}
+/* v2.6.26: stat-box e config-box INVERTEM em relação ao tema pra se destacar do
+   fundo do card. Temas escuros (padrão) → box CLARO + texto ESCURO; tema claro →
+   box ESCURO + texto CLARO. Quando estão sobre FOTO de local, o inline _pReadBg
+   (+ color !important) vence essas regras e mantém tarja escura + texto claro. */
+.stat-box, .tourn-config-box {
+  background: rgba(226,232,240,0.92);
+  color: #1e293b;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+[data-theme="light"] .stat-box,
+[data-theme="light"] .tourn-config-box {
+  background: rgba(30,41,59,0.95);
+  color: #f1f5f9;
+  border: 1px solid rgba(255,255,255,0.12);
 }
 
 /* --- Botões Compactos (ações em cards de participantes) --- */
