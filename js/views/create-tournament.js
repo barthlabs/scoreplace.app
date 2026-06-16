@@ -129,6 +129,52 @@ function setupCreateTournamentModal() {
                   <input type="text" id="phase1-name" placeholder="Nome da fase (opcional)" oninput="window._phase1Name=this.value" style="flex:1;min-width:0;padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;">
                 </div>
 
+              <!-- Estimativa de tempo da fase (topo do box) -->
+              <div id="time-estimates-container" style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 1rem;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom: 0.5rem;">
+                  <span style="font-size: 0.72rem; color: #f59e0b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">⏱ Estimativa de tempo da fase</span>
+                  <span id="duration-estimate-inline" style="font-size: 0.8rem; font-weight: 700; color: var(--text-bright); white-space: nowrap;">—</span>
+                </div>
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-items:end;">
+                  <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.callTimeDesc')}">
+                    <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.callTimeLabel')}</span>
+                    <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:2px 6px;">
+                      <input type="number" id="tourn-call-time" min="0" max="60" value="5" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
+                      <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
+                    </div>
+                  </label>
+                  <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.warmupDesc')}">
+                    <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.warmupLabel')}</span>
+                    <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:2px 6px;">
+                      <input type="number" id="tourn-warmup-time" min="0" max="60" value="5" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
+                      <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
+                    </div>
+                  </label>
+                  <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.gameDurDesc')}">
+                    <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.gameDurLabel')}</span>
+                    <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:2px 6px;">
+                      <input type="number" id="tourn-game-duration" min="5" max="300" value="30" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
+                      <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
+                    </div>
+                  </label>
+                </div>
+
+                <!-- Escada de estimativa: 2 pot. de 2 abaixo + real + 2 acima -->
+                <div id="phase-estimate-ladder" style="margin-top:8px;"></div>
+
+                <!-- Extra diagnostics (shown only when relevant) -->
+                <div id="duration-estimate-box" style="display:none; margin-top: 0.5rem;">
+                  <div id="duration-estimate-text" style="display:none;">—</div>
+                  <div id="duration-estimate-detail" style="display:none;"></div>
+                  <div id="duration-warning" style="display:none; padding:6px 10px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); border-radius:6px; font-size:0.78rem; color:#f87171;">
+                  </div>
+                  <div id="capacity-warning" style="display:none; margin-top:6px; padding:6px 10px; border-radius:6px; font-size:0.78rem;">
+                  </div>
+                  <div id="suggestions-panel" style="display:none; margin-top:6px; flex-direction:column; gap:6px;">
+                  </div>
+                </div>
+              </div>
+
               <!-- Formato -->
               <div class="form-group mb-3">
                 <label class="form-label">${_t('tournament.format')}</label>
@@ -547,48 +593,7 @@ function setupCreateTournamentModal() {
                 <div id="weather-content"></div>
               </div>
 
-              <!-- Estimativas de Tempo (compact) -->
-              <div id="time-estimates-container" style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 1rem;">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom: 0.5rem;">
-                  <span style="font-size: 0.72rem; color: #f59e0b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">⏱ ${_t('create.timeEstSection')}</span>
-                  <span id="duration-estimate-inline" style="font-size: 0.8rem; font-weight: 700; color: var(--text-bright); white-space: nowrap;">—</span>
-                </div>
-                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-items:end;">
-                  <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.callTimeDesc')}">
-                    <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.callTimeLabel')}</span>
-                    <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:2px 6px;">
-                      <input type="number" id="tourn-call-time" min="0" max="60" value="5" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
-                      <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
-                    </div>
-                  </label>
-                  <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.warmupDesc')}">
-                    <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.warmupLabel')}</span>
-                    <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:2px 6px;">
-                      <input type="number" id="tourn-warmup-time" min="0" max="60" value="5" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
-                      <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
-                    </div>
-                  </label>
-                  <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.gameDurDesc')}">
-                    <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.gameDurLabel')}</span>
-                    <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:2px 6px;">
-                      <input type="number" id="tourn-game-duration" min="5" max="300" value="30" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
-                      <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
-                    </div>
-                  </label>
-                </div>
-
-                <!-- Extra diagnostics (shown only when relevant) -->
-                <div id="duration-estimate-box" style="display:none; margin-top: 0.5rem;">
-                  <div id="duration-estimate-text" style="display:none;">—</div>
-                  <div id="duration-estimate-detail" style="display:none;"></div>
-                  <div id="duration-warning" style="display:none; padding:6px 10px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); border-radius:6px; font-size:0.78rem; color:#f87171;">
-                  </div>
-                  <div id="capacity-warning" style="display:none; margin-top:6px; padding:6px 10px; border-radius:6px; font-size:0.78rem;">
-                  </div>
-                  <div id="suggestions-panel" style="display:none; margin-top:6px; flex-direction:column; gap:6px;">
-                  </div>
-                </div>
-              </div>
+              <!-- (Estimativa de tempo movida para o topo do box FASE 1) -->
 
               <!-- (Formato das Partidas / GSM movido para o box FASE 1) -->
 
@@ -2440,6 +2445,8 @@ function setupCreateTournamentModal() {
     // v2.1.80: chips de categorias personalizadas re-renderizam junto do preview
     // (cobre abertura do form, edição e mudança de game type — todos chamam aqui).
     if (typeof window._renderCustomCatChips === 'function') window._renderCustomCatChips();
+    // Categorias dividem o campo em sub-chaves → atualiza a estimativa de tempo da fase.
+    if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
     var genderVals = ((document.getElementById('tourn-gender-categories') || {}).value || '').split(',').filter(Boolean);
     var skillText = ((document.getElementById('tourn-skill-categories') || {}).value || '').trim();
     var skillCats = skillText ? skillText.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
@@ -3177,7 +3184,130 @@ function setupCreateTournamentModal() {
   };
 
   // --- Duration estimation calculator ---
+  // ── Estimativa de tempo da FASE (escada de potências de 2 em torno do nº real) ──
+  // Considera: formato, modo de sorteio (sorteio/rei-rainha), categorias (dividem o
+  // campo em sub-chaves) e os tempos médios que o organizador informa (chamada +
+  // aquecimento + duração). O formato da partida (GSM) entra via a duração média.
+  window._renderPhaseEstimate = function () {
+    var ladder = document.getElementById('phase-estimate-ladder');
+    if (!ladder) return;
+    var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
+    var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
+
+    var call = iv('tourn-call-time', 0);
+    var warm = iv('tourn-warmup-time', 0);
+    var dur  = iv('tourn-game-duration', 0);
+    var courts = Math.max(iv('tourn-court-count', 1), 1);
+    var slot = call + warm + dur; // minutos por slot de partida
+    var fmt = gv('select-formato') || 'elim_simples';
+    var drawMode = gv('draw-mode') || 'sorteio';
+
+    // nº de categorias (sub-chaves independentes) — o campo se divide entre elas
+    var K = 1, ageCats = 0;
+    try {
+      var catData = (window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {}) || {};
+      if (catData.combinedCategories && catData.combinedCategories.length) K = catData.combinedCategories.length;
+      ageCats = (catData.ageCategories || []).length;
+    } catch (e) { K = 1; }
+
+    // nº real de unidades inscritas (editando) OU planejado (criando)
+    var N = 0, isReal = false;
+    var editId = gv('edit-tournament-id');
+    if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+      var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
+      if (t && Array.isArray(t.participants) && t.participants.length > 0) { N = t.participants.length; isReal = true; }
+    }
+    if (!isReal) {
+      var elm = gv('enrollment-limit-mode') || 'cap';
+      if (elm === 'draw') N = iv('tourn-target-slots', 0);
+      if (!N) N = iv('tourn-max-participants', 0);
+    }
+
+    // partidas de UMA chave de n unidades, no formato/modo escolhido
+    function singleBracket(n) {
+      if (n < 2) return 0;
+      if (drawMode === 'rei_rainha') {
+        var groups = Math.max(Math.ceil(n / 4), 1);
+        var gm = groups * 3; // 3 jogos por grupo de 4 (AB/CD, AC/BD, AD/BC)
+        var cls = Math.max(iv('monarch-classified', 1), 1);
+        return gm + Math.max(groups * cls - 1, 0); // grupos + elim. dos classificados
+      }
+      if (fmt === 'elim_simples') return n - 1;
+      if (fmt === 'elim_dupla') return (n - 1) * 2 + 1;
+      if (fmt === 'liga') return n * (n - 1) / 2;
+      if (fmt === 'grupos_mata') {
+        var g = Math.max(iv('grupos-count', 4), 1);
+        var cl = Math.max(iv('grupos-classified', 2), 1);
+        var pg = Math.ceil(n / g);
+        return Math.round(g * (pg * (pg - 1) / 2) + Math.max(g * cl - 1, 0));
+      }
+      return n - 1;
+    }
+    // total considerando categorias: campo dividido em K sub-chaves de ~n/K
+    function totalMatches(n) {
+      if (n < 2) return 0;
+      var per = Math.max(Math.round(n / K), 1);
+      if (per < 2) return 0;
+      return singleBracket(per) * K;
+    }
+    function timeFor(n) {
+      if (slot <= 0) return -1;
+      var m = totalMatches(n);
+      if (m <= 0) return 0;
+      return Math.ceil(m / courts) * slot;
+    }
+    function fmtMin(m) {
+      if (m < 0) return '—';
+      var h = Math.floor(m / 60), mm = Math.round(m % 60);
+      if (h > 0 && mm > 0) return h + 'h' + (mm < 10 ? '0' : '') + mm;
+      if (h > 0) return h + 'h';
+      return mm + 'min';
+    }
+    function isPow2(v) { return v > 0 && (v & (v - 1)) === 0; }
+    function below(v) { var p = 1; while (p * 2 <= v) p *= 2; return p; }
+
+    // escada: 2 pot. de 2 abaixo + real/planejado + 2 acima
+    var counts;
+    if (N >= 2) {
+      if (isPow2(N)) counts = [N / 4, N / 2, N, N * 2, N * 4];
+      else { var prev = below(N); counts = [prev / 2, prev, N, prev * 2, prev * 4]; }
+    } else {
+      counts = [8, 16, 32, 64, 128]; // sem inscritos: simulação genérica
+    }
+    var seen = {};
+    counts = counts.filter(function (c) { return c >= 2; })
+                   .filter(function (c) { if (seen[c]) return false; seen[c] = 1; return true; })
+                   .sort(function (a, b) { return a - b; });
+
+    var fmtLabel = ({ elim_simples: 'Eliminatória', elim_dupla: 'Dupla Elim.', grupos_mata: 'Grupos + Elim.', liga: 'Liga', suico: 'Suíço' })[fmt] || fmt;
+    var modeLabel = drawMode === 'rei_rainha' ? ' · 👑 Rei/Rainha' : '';
+    var catLabel = K > 1 ? (' · ' + K + ' categorias') : '';
+    var h = '';
+    h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;">' + fmtLabel + modeLabel + catLabel + ' · ' + courts + (courts > 1 ? ' quadras' : ' quadra') + ' · ' + slot + 'min/jogo</div>';
+    if (slot <= 0) h += '<div style="font-size:0.72rem;color:#f59e0b;margin-bottom:6px;">Preencha chamada/aquecimento/duração pra estimar o tempo.</div>';
+    if (!isReal && N < 2) h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Sem inscritos ainda — simulação genérica. Edite um torneio com inscritos pra ver o nº real.</div>';
+
+    h += '<div style="display:flex;flex-direction:column;gap:4px;">';
+    counts.forEach(function (c) {
+      var real = isReal && c === N;
+      var m = totalMatches(c);
+      var bg = real ? 'rgba(59,130,246,0.18)' : 'rgba(255,255,255,0.03)';
+      var bd = real ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.06)';
+      var lc = real ? '#60a5fa' : 'var(--text-muted)';
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + bg + ';border:' + bd + ';border-radius:8px;flex-wrap:wrap;">';
+      h += '<span style="font-size:0.78rem;font-weight:' + (real ? '700' : '600') + ';color:' + lc + ';min-width:104px;">' + c + ' inscritos' + (real ? ' <span style="font-size:0.62rem;">(real)</span>' : '') + '</span>';
+      h += '<span style="font-size:0.74rem;color:var(--text-muted);opacity:0.65;">' + m + ' jogos</span>';
+      h += '<span style="font-size:0.85rem;font-weight:700;color:' + (real ? '#e2e8f0' : 'rgba(255,255,255,0.7)') + ';margin-left:auto;">' + fmtMin(timeFor(c)) + '</span>';
+      h += '</div>';
+    });
+    h += '</div>';
+    if (drawMode === 'rei_rainha') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa por rodada (um chaveamento Rei/Rainha).</div>';
+    if (ageCats > 0) h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:4px;opacity:0.8;">⚠️ Categorias por idade criam sub-chaves extras não incluídas nesta estimativa.</div>';
+    ladder.innerHTML = h;
+  };
+
   window._recalcDuration = function () {
+    if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
     const box = document.getElementById('duration-estimate-box');
     if (!box) return;
 
