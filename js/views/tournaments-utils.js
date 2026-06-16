@@ -1292,7 +1292,9 @@ window._buildTournamentConfigBox = function (t, opts) {
         var openEnroll = (t.ligaOpenEnrollment !== undefined) ? t.ligaOpenEnrollment
             : (t.rankingOpenEnrollment !== undefined ? t.rankingOpenEnrollment : true);
         add('Inscrição durante a temporada', openEnroll !== false ? 'Permitida' : 'Fechada após início');
-        add('Fase final (playoffs)', t.playoffEnabled === true ? 'Sim' : 'Não');
+        // v2.6.29: fase final virou fase do construtor de fases — só exibimos quando
+        // a Liga legada já tinha o flag ligado, pra não poluir ligas novas.
+        if (t.playoffEnabled === true) add('Fase final (playoffs)', 'Sim');
         add('Agendamento do 1º sorteio', fmtSchedule());
         add('Periodicidade do sorteio', fmtPeriodicity());
     } else if (fmt === 'Grupos + Eliminatórias' || fmt === 'Grupos') {
