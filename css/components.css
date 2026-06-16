@@ -584,6 +584,14 @@ button[style*="linear-gradient"]:not(.btn):active {
   color: #f1f5f9;
   border: 1px solid rgba(255,255,255,0.12);
 }
+/* v2.6.32: dentro da config-box EXPANDIDA, os rótulos (strong) seguiam
+   var(--text-bright) do TEMA — mas o FUNDO do box é invertido (claro no tema
+   escuro, escuro no tema claro, tarja escura sobre foto). Isso dava texto claro
+   em fundo claro e texto escuro em fundo escuro. Aqui o rótulo herda a COR do
+   próprio box (sempre legível: escuro em fundo claro, claro em fundo escuro),
+   só com leve mute pra manter a hierarquia em relação ao valor. Vence o
+   `.info-box strong` genérico por vir depois com mesma especificidade. */
+.tourn-config-box strong { color: inherit; opacity: 0.72; }
 
 /* --- Botões Compactos (ações em cards de participantes) --- */
 .btn-micro {
