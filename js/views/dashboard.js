@@ -689,14 +689,14 @@ function renderDashboard(container) {
 
             ${t.venueName ? `
             <!-- Local -->
-            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: -0.8rem; ${_pReadBg ? 'background:'+_pReadBg+';border-radius:10px;padding:6px 10px;max-width:100%;' : 'opacity: 0.6;'}">
+            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: -0.8rem; ${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:6px 10px;max-width:100%;' : 'opacity: 0.6;'}">
                <span style="font-size: 1rem;">📍</span>
                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window._safeHtml(t.venueName)}</span>
             </div>
             ` : ''}
 
             <!-- Below Name: Calendário + Data + badge contextual (HOJE/AMANHÃ/Em Xd) -->
-            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
+            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
                <span style="font-size: 1.1rem;">🗓️</span>
                <span>${dates}</span>
                ${(() => {
@@ -839,7 +839,7 @@ function renderDashboard(container) {
                <!-- Stats Column -->
                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
                    <div style="display: flex; flex-direction: row; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
-                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);' : ''}">
+                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👤</span>
                              <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
@@ -847,7 +847,7 @@ function renderDashboard(container) {
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statEnrolled')}</span>
                        </div>
                        ${teamCount > 0 ? `
-                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);' : ''}">
+                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👥</span>
                              <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${teamCount}</span>
@@ -871,7 +871,7 @@ function renderDashboard(container) {
                <!-- Configuração Completa do Torneio (dinâmica, por formato) -->
                ${(typeof window._buildTournamentConfigBox === 'function')
                  ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: false })
-                 : `<div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';border:1px solid rgba(255,255,255,0.12);"' : ''}>
+                 : `<div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);"' : ''}>
                   <div><strong>${_t('dashboard.labelFormat')}:</strong> ${t.format}</div>
                   <div><strong>${_t('dashboard.labelAccess')}:</strong> ${publicText}</div>
                </div>`}

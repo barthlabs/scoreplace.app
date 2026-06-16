@@ -1320,7 +1320,8 @@ window._buildTournamentConfigBox = function (t, opts) {
     add('Categorias', fmtCategories());
     add('Critérios de desempate', fmtTiebreakers());
 
-    var bgStyle = opts.bg ? ('background:' + opts.bg + ';border:1px solid rgba(255,255,255,0.12);') : '';
+    // v2.6.22: em tarja escura (opts.bg) o texto é CLARO pra dar contraste no tema claro.
+    var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);') : '';
     var openAttr = opts.open ? ' open' : '';
     var summary = esc(fmt) + ' · ' + fmtGameType().replace(' — 2 categorias', ' (2 cat.)');
 
