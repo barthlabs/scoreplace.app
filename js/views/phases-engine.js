@@ -302,6 +302,53 @@
     return { matches: allMatches, tiers: tiers, converge: converge, byDest: byDest };
   }
 
+  // Standings por grupo a partir de matches p1/p2 (Fase de Grupos). Funciona
+  // tanto pra individuais quanto pra DUPLAS (m.p1/m.p2 = "A / B") — o nome carrega
+  // a dupla, e o keep implícito (buildEntrantsByDest) reforma o teamObj. Devolve
+  // array JÁ ORDENADO (pontos → saldo → vitórias → saldo sets → saldo games).
+  // Simplificação consciente: usa ordem default, não os tiebreakers configuráveis
+  // do organizador (que vivem em locals de bracket-logic). Suficiente pra decidir
+  // quem classifica na transição entre fases.
+  function _groupTeamStandings(group) {
+    if (!group) return [];
+    var matches = (group.matches || []).slice();
+    (group.rounds || []).forEach(function (r) { if (Array.isArray(r.matches)) matches = matches.concat(r.matches); });
+    var participants = group.players || group.participants || [];
+    var smap = {};
+    function ensure(nm) { if (nm && !smap[nm]) smap[nm] = { name: nm, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0 }; }
+    participants.forEach(function (p) { ensure(typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); });
+    matches.forEach(function (m) {
+      if (!m || !m.winner || m.isBye || m.isSitOut) return;
+      ensure(m.p1); ensure(m.p2);
+      if (!smap[m.p1] || !smap[m.p2]) return;
+      var s1 = parseInt(m.scoreP1) || 0, s2 = parseInt(m.scoreP2) || 0;
+      smap[m.p1].played++; smap[m.p2].played++;
+      smap[m.p1].pointsDiff += (s1 - s2); smap[m.p2].pointsDiff += (s2 - s1);
+      if (m.draw || m.winner === 'draw') {
+        smap[m.p1].draws++; smap[m.p1].points += 1; smap[m.p2].draws++; smap[m.p2].points += 1;
+      } else {
+        var loser = (m.winner === m.p1) ? m.p2 : m.p1;
+        if (smap[m.winner]) { smap[m.winner].wins++; smap[m.winner].points += 3; }
+        if (smap[loser]) smap[loser].losses++;
+      }
+      if (Array.isArray(m.sets)) m.sets.forEach(function (st) {
+        var g1 = parseInt(st.gamesP1) || 0, g2 = parseInt(st.gamesP2) || 0;
+        smap[m.p1].gamesWon += g1; smap[m.p1].gamesLost += g2;
+        smap[m.p2].gamesWon += g2; smap[m.p2].gamesLost += g1;
+        if (g1 > g2) { smap[m.p1].setsWon++; smap[m.p2].setsLost++; }
+        else if (g2 > g1) { smap[m.p2].setsWon++; smap[m.p1].setsLost++; }
+      });
+    });
+    return Object.keys(smap).map(function (k) { return smap[k]; }).sort(function (a, b) {
+      if (b.points !== a.points) return b.points - a.points;
+      var d = b.pointsDiff - a.pointsDiff; if (d) return d;
+      d = b.wins - a.wins; if (d) return d;
+      d = ((b.setsWon - b.setsLost) - (a.setsWon - a.setsLost)); if (d) return d;
+      d = ((b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost)); if (d) return d;
+      return 0;
+    });
+  }
+
   // ── Integração com o torneio ──────────────────────────────────────────────
 
   // Grupos da fase anterior: última rodada Rei/Rainha com monarchGroups; senão
@@ -375,7 +422,14 @@
       if (window.showAlertDialog) window.showAlertDialog('Fase incompleta', 'Conclua todos os jogos da fase atual antes de avançar.', null, { type: 'warning' });
       return;
     }
-    var cs = window._computeMonarchStandings || function (g) { return g.standings || []; };
+    // Escolhe a função de standings conforme a forma dos grupos da fase anterior:
+    //  • Rei/Rainha (monarchGroups) → standings INDIVIDUAL (_computeMonarchStandings).
+    //  • Fase de Grupos (t.groups, individuais OU duplas) → _groupTeamStandings
+    //    (lê m.p1/m.p2; pro caso de duplas o nome "A / B" segue junto via keep).
+    var _isMonarchPrev = (t.rounds || []).some(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
+    var cs = _isMonarchPrev
+      ? (window._computeMonarchStandings || function (g) { return g.standings || []; })
+      : _groupTeamStandings;
     var res = materializeNextPhase(t, cs, 'ph-' + tId + '-' + ((t.currentPhaseIndex || 0) + 1));
     if (!res.ok) {
       if (window.showAlertDialog) window.showAlertDialog('Não foi possível avançar', 'Motivo: ' + res.error, null, { type: 'warning' });
@@ -396,7 +450,8 @@
     linkTierToFinal: linkTierToFinal,
     prevPhaseGroups: prevPhaseGroups,
     phaseComplete: phaseComplete,
-    materializeNextPhase: materializeNextPhase
+    materializeNextPhase: materializeNextPhase,
+    groupTeamStandings: _groupTeamStandings
   };
 
   // Exposição: browser (window) + node (module.exports) para teste headless.

@@ -280,5 +280,32 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(kept.main[0].fixedPair === true, 'keep por nome: marcada como dupla');
 })();
 
+// 16) groupTeamStandings ranqueia DUPLAS (m.p1/m.p2 = "A / B") e keep reforma.
+(function () {
+  var grp = {
+    players: ['A / B', 'C / D', 'E / F'],
+    matches: [
+      { p1: 'A / B', p2: 'C / D', winner: 'A / B', scoreP1: 6, scoreP2: 3 },
+      { p1: 'A / B', p2: 'E / F', winner: 'A / B', scoreP1: 6, scoreP2: 2 },
+      { p1: 'C / D', p2: 'E / F', winner: 'C / D', scoreP1: 6, scoreP2: 4 }
+    ]
+  };
+  eq(eng.groupTeamStandings(grp).map(function (s) { return s.name; }), ['A / B', 'C / D', 'E / F'], 'groupTeamStandings ordena duplas por desempenho');
+  var cfg = { source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: 2 }] }, fixedPairs: false };
+  var built = eng.buildPhaseBrackets([grp], cfg, eng.groupTeamStandings, 'gts');
+  eq(built.byDest.main.map(function (t) { return t.displayName; }), ['A / B', 'C / D'], 'keep: top-2 duplas avançam juntas');
+  ok(built.byDest.main[0].p1Name === 'A' && built.byDest.main[0].p2Name === 'B', 'dupla dividida nos 2 membros');
+})();
+
+// 17) groupTeamStandings também serve singles (nome sem barra = individual).
+(function () {
+  var grp = { players: ['Joao', 'Maria', 'Ana'], matches: [
+    { p1: 'Joao', p2: 'Maria', winner: 'Joao', scoreP1: 6, scoreP2: 1 },
+    { p1: 'Joao', p2: 'Ana', winner: 'Joao', scoreP1: 6, scoreP2: 0 },
+    { p1: 'Maria', p2: 'Ana', winner: 'Maria', scoreP1: 6, scoreP2: 2 }
+  ] };
+  eq(eng.groupTeamStandings(grp).map(function (s) { return s.name; }), ['Joao', 'Maria', 'Ana'], 'singles também ranqueia certo');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

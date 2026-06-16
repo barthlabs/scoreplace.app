@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.40-beta';
+window.SCOREPLACE_VERSION = '2.6.41-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
