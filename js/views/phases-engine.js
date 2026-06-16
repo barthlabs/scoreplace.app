@@ -39,39 +39,129 @@
     return obj;
   }
 
+  // Uma colocação já É um time (dupla fixa que veio formada da fase anterior)?
+  // Detecta 3 formas: participants[], campos p{N}Name/fixedPair, ou nome "X / Y"
+  // (convenção canônica de dupla no app — Fase de Grupos de duplas).
+  function _isTeamEntry(s) {
+    return !!(s && ((Array.isArray(s.participants) && s.participants.length > 1) || s.p2Name || s.fixedPair || (typeof s.name === 'string' && /\s\/\s/.test(s.name))));
+  }
+  // Normaliza uma colocação-que-é-time num teamObj canônico, preservando membros
+  // (uids/emails/fotos quando existem). Usado no carry-forward ('keep') — a dupla
+  // SEGUE junta. Quando só há o nome "X / Y", divide pelos nomes (sem uid).
+  function _asTeam(s) {
+    if (Array.isArray(s.participants) && s.participants.length > 1) return mkTeam(s.participants);
+    if (s.p2Name || s.fixedPair) {
+      var members = [];
+      for (var k = 1; k <= 4; k++) {
+        var nm = s['p' + k + 'Name']; if (!nm) break;
+        var mem = { name: nm };
+        if (s['p' + k + 'Uid']) mem.uid = s['p' + k + 'Uid'];
+        if (s['p' + k + 'Email']) mem.email = s['p' + k + 'Email'];
+        if (s['p' + k + 'Photo']) mem.photoURL = s['p' + k + 'Photo'];
+        members.push(mem);
+      }
+      if (members.length > 1) return mkTeam(members);
+    }
+    if (typeof s.name === 'string' && /\s\/\s/.test(s.name)) {
+      var byName = s.name.split('/').map(function (n) { return { name: n.trim() }; }).filter(function (m) { return m.name; });
+      if (byName.length > 1) return mkTeam(byName);
+    }
+    return mkTeam([s]);
+  }
+  // Fisher-Yates (Math.random). Injetável via opts.shuffle para teste determinístico.
+  function _defaultShuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+  }
+  // Ranking AGREGADO (escopo 'overall'): mescla as standings de todos os grupos e
+  // reordena por critério global (vitórias → saldo de sets → games → pontos). Sort
+  // estável — empate total preserva a ordem de concatenação dos grupos.
+  function _globalStandings(prevGroups, computeStandings) {
+    var all = [];
+    (prevGroups || []).forEach(function (g) { (computeStandings(g) || []).forEach(function (s) { all.push(s); }); });
+    all.sort(function (a, b) {
+      var d;
+      d = (b.wins || 0) - (a.wins || 0); if (d) return d;
+      d = (((b.setsWon || 0) - (b.setsLost || 0)) - ((a.setsWon || 0) - (a.setsLost || 0))); if (d) return d;
+      d = (((b.gamesWon || 0) - (b.gamesLost || 0)) - ((a.gamesWon || 0) - (a.gamesLost || 0))); if (d) return d;
+      d = (((b.pointsFor || 0) - (b.pointsAgainst || 0)) - ((a.pointsFor || 0) - (a.pointsAgainst || 0))); if (d) return d;
+      return 0;
+    });
+    return all;
+  }
+
   // A partir dos grupos da fase anterior + mapping, devolve { dest: [teamObjs] }.
   // mapping: [{ dest:'upper'|'lower'|'main', rankFrom, rankTo }]
-  // fixedPairs=true → os jogadores das colocações de UM grupo viram dupla (2 a 2).
-  // pairingStrategy: 'top' (1º+2º, 3º+4º…) ou 'balanced' (1º+último, 2º+penúltimo…).
-  function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy) {
+  // fixedPairs=true → os jogadores das colocações viram dupla (2 a 2).
+  // pairingStrategy: 'top' (1º+2º, 3º+4º…), 'balanced' (1º+último, 2º+penúltimo…)
+  //                  ou 'draw_among' (sorteio entre os classificados).
+  // opts (NOVO, opcional): {
+  //   scope: 'per_group' (default — colocação dentro de CADA grupo)
+  //        | 'overall'   (top-N no ranking agregado, ignorando grupo),
+  //   rankingBasis: 'individual' (default) | 'team' (colocações já são duplas → keep),
+  //   shuffle: fn (injetável p/ draw_among determinístico no teste)
+  // }
+  // Carry-forward ('keep') implícito: se as colocações já SÃO times (dupla veio
+  // formada da fase anterior), elas seguem juntas — fixedPairs/pairingStrategy são
+  // ignorados, ninguém é re-pareado.
+  function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, opts) {
+    opts = opts || {};
+    var scope = opts.scope || 'per_group';
+    var basis = opts.rankingBasis || 'individual';
+    var shuffle = opts.shuffle || _defaultShuffle;
     var byDest = {};
     mapping.forEach(function (mp) { if (!byDest[mp.dest]) byDest[mp.dest] = []; });
-    (prevGroups || []).forEach(function (g) {
-      var standings = computeStandings(g) || [];
-      mapping.forEach(function (mp) {
-        var picked = [];
-        for (var r = mp.rankFrom; r <= mp.rankTo; r++) {
-          var s = standings[r - 1];
-          if (s) picked.push(s);
-        }
-        if (!picked.length) return;
-        if (fixedPairs) {
-          if (pairingStrategy === 'balanced') {
-            // Equilibrado: 1º+último, 2º+penúltimo… (junta forte com fraco)
-            var lo = 0, hi = picked.length - 1;
-            while (lo < hi) { byDest[mp.dest].push(mkTeam([picked[lo], picked[hi]])); lo++; hi--; }
-            if (lo === hi) byDest[mp.dest].push(mkTeam([picked[lo]])); // sobra ímpar = solo
-          } else {
-            // 'top' (default): adjacentes — 1º+2º, 3º+4º…
-            for (var i = 0; i < picked.length; i += 2) {
-              byDest[mp.dest].push(mkTeam(picked.slice(i, i + 2)));
-            }
-          }
-        } else {
-          picked.forEach(function (s) { byDest[mp.dest].push(mkTeam([s])); });
-        }
+
+    // Combina uma lista de classificados (já recortada por faixa de colocação) em
+    // times dentro de byDest[dest], respeitando keep/fixedPairs/estratégia.
+    function pairInto(destArr, picked) {
+      if (!picked || !picked.length) return;
+      // keep: rankingBasis='team' OU as colocações já vêm como dupla → passa direto.
+      if (basis === 'team' || _isTeamEntry(picked[0])) {
+        picked.forEach(function (s) { destArr.push(_asTeam(s)); });
+        return;
+      }
+      if (!fixedPairs) {
+        picked.forEach(function (s) { destArr.push(mkTeam([s])); });
+        return;
+      }
+      var list = picked.slice();
+      if (pairingStrategy === 'draw_among') {
+        // Sorteio entre os classificados, depois pareia adjacentes do embaralhado.
+        list = shuffle(list);
+        for (var i = 0; i < list.length; i += 2) destArr.push(mkTeam(list.slice(i, i + 2)));
+      } else if (pairingStrategy === 'balanced') {
+        // Equilibrado: 1º+último, 2º+penúltimo… (junta forte com fraco)
+        var lo = 0, hi = list.length - 1;
+        while (lo < hi) { destArr.push(mkTeam([list[lo], list[hi]])); lo++; hi--; }
+        if (lo === hi) destArr.push(mkTeam([list[lo]])); // sobra ímpar = solo
+      } else {
+        // 'top' (default): adjacentes — 1º+2º, 3º+4º…
+        for (var j = 0; j < list.length; j += 2) destArr.push(mkTeam(list.slice(j, j + 2)));
+      }
+    }
+
+    function pickRange(standings, mp) {
+      var picked = [];
+      for (var r = mp.rankFrom; r <= mp.rankTo; r++) { var s = standings[r - 1]; if (s) picked.push(s); }
+      return picked;
+    }
+
+    if (scope === 'overall') {
+      // Pool agregado: classifica todo mundo junto e recorta faixas globais.
+      var global = _globalStandings(prevGroups, computeStandings);
+      mapping.forEach(function (mp) { pairInto(byDest[mp.dest], pickRange(global, mp)); });
+    } else {
+      // Por grupo (default): colocação dentro de cada grupo; pareia dentro do grupo.
+      (prevGroups || []).forEach(function (g) {
+        var standings = computeStandings(g) || [];
+        mapping.forEach(function (mp) { pairInto(byDest[mp.dest], pickRange(standings, mp)); });
       });
-    });
+    }
     return byDest;
   }
 
@@ -165,8 +255,10 @@
     var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 2 }];
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs !== false) : true;
     var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
+    var scope = src.scope || 'per_group';            // 'per_group' | 'overall'
+    var rankingBasis = src.rankingBasis || 'individual'; // 'individual' | 'team' (keep)
 
-    var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy);
+    var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
 
     var allMatches = [];
     var tiers = {};

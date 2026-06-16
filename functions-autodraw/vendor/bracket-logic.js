@@ -841,6 +841,23 @@ function _advanceWinner(t, completedMatch) {
     }
   }
 
+  // Construtor de Fases: roteamento genérico do PERDEDOR (ex.: vice da chave Ouro
+  // e vice da Prata → disputa de 3º/4º). Aditivo e guardado por campo — só dispara
+  // quando o match define loserNextMatchId (gerado pelo phases-engine). Torneios
+  // sem esse campo (todos os atuais) ficam intocados.
+  if (completedMatch.loserNextMatchId) {
+    const lnMatch = _findMatch(t, completedMatch.loserNextMatchId);
+    if (lnMatch) {
+      if (completedMatch.loserNextSlot === 'p1') lnMatch.p1 = loser;
+      else if (completedMatch.loserNextSlot === 'p2') lnMatch.p2 = loser;
+      else {
+        if (!lnMatch.p1 || lnMatch.p1 === 'TBD') lnMatch.p1 = loser;
+        else if (!lnMatch.p2 || lnMatch.p2 === 'TBD') lnMatch.p2 = loser;
+      }
+      _autoResolveBye(t, lnMatch);
+    }
+  }
+
   // Repechage: when R1 match completes, check if ALL R1 done → assign losers
   if (completedMatch.isRepechageR1 && t.repechageConfig) {
     _assignRepechageLosers(t);
@@ -2429,6 +2446,18 @@ function _bestShuffle(players, opponentHistory, groupSize, attempts) {
   return best;
 }
 
+// Embaralho Fisher-Yates simples (cópia). Usado quando os grupos Rei/Rainha são
+// formados por SORTEIO (groupsBy='sorteio') — diferente do _bestShuffle, que tenta
+// minimizar reencontros e, com histórico vazio, devolveria a ordem inalterada.
+function _plainShuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
 // Helper: compute average points per round for a player (for sit-out compensation)
 function _computeAvgPointsPerRound(t, playerName, category) {
   var totalPoints = 0;
@@ -2514,12 +2543,23 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     _recordSitOut(t, sitOutPlayers, category);
   }
 
-  // Liga: shuffle active players so each round draws new groups of 4,
-  // preferring pairings of players who haven't faced each other yet.
-  // Pure Rei/Rainha (non-Liga): keep standings order (balanced by skill).
+  // Formação dos grupos de 4 (groupsBy):
+  //   'ranking' (default) = mantém a ordem de classificação/seeding — comportamento legado.
+  //   'sorteio'           = embaralha → grupos aleatórios.
+  // Liga continuada: a partir da 2ª rodada SEMPRE usa _bestShuffle (evita reencontros),
+  // independente do groupsBy — a justiça da rotação vence. groupsBy só decide a 1ª
+  // formação (quando ainda não há histórico de adversários).
+  var _rrGroupsBy = (t.reiRainhaGroupsBy || 'ranking');
   if (isLiga) {
     var rrOpHist = (t.opponentHistory && t.opponentHistory[(category || '_default_').replace(/\s+/g, '_')]) || {};
-    playingPlayers = _bestShuffle(playingPlayers, rrOpHist, 4, 200);
+    var _hasHist = rrOpHist && Object.keys(rrOpHist).length > 0;
+    if (!_hasHist && _rrGroupsBy === 'sorteio') {
+      playingPlayers = _plainShuffle(playingPlayers); // 1ª rodada por sorteio
+    } else {
+      playingPlayers = _bestShuffle(playingPlayers, rrOpHist, 4, 200);
+    }
+  } else if (_rrGroupsBy === 'sorteio') {
+    playingPlayers = _plainShuffle(playingPlayers);
   }
 
   // Divide playing players into groups of 4

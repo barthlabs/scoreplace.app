@@ -232,6 +232,15 @@ function setupCreateTournamentModal() {
                   </div>
                   <input type="hidden" id="monarch-classified" value="1">
                 </div>
+                <div style="margin-bottom:0.75rem;">
+                  <label class="form-label" style="font-size:0.75rem;margin-bottom:6px;">Formação dos grupos de 4</label>
+                  <div style="display:flex;gap:8px;" id="monarch-groupsby-buttons">
+                    <button type="button" class="monarch-gb-btn monarch-gb-active" data-value="sorteio" onclick="window._selectMonarchGroupsBy(this)" style="flex:1;padding:8px 12px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid #fbbf24;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:600;text-align:center;">🎲 Sorteio</button>
+                    <button type="button" class="monarch-gb-btn" data-value="ranking" onclick="window._selectMonarchGroupsBy(this)" style="flex:1;padding:8px 12px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;text-align:center;">📊 Por ranking</button>
+                  </div>
+                  <input type="hidden" id="monarch-groupsby" value="sorteio">
+                  <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Sorteio = grupos aleatórios. Por ranking = agrupa pela classificação (a partir da 2ª rodada na Liga; folgas seguem a justiça de rotação).</div>
+                </div>
                 <div style="font-size:0.75rem;color:#4ade80;font-weight:600;margin-top:4px;">✓ ${_t('monarch.advanceHelp')}</div>
               </div>
 
@@ -742,6 +751,16 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
+              <!-- Quem forma as duplas (apenas duplas) -->
+              <div class="form-group mb-3" id="manual-pairing-container">
+                <label class="form-label">Formação das duplas</label>
+                <input type="hidden" id="manual-pairing" value="organizer_only">
+                <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
+                  <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🤝</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Participantes podem formar suas duplas</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">Ligado: cada um arrasta seu card sobre o de outro e a dupla fica pendente até o outro aceitar. Desligado: só o organizador monta as duplas. (Só vale em duplas.)</div></div></div>
+                  <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="manual-pairing-toggle" aria-label="Participantes formam duplas" onchange="window._syncManualPairing()"><span class="toggle-slider"></span></label>
+                </div>
+              </div>
+
               <!-- Auto-close (apenas eliminatórias) -->
               <div class="form-group mb-3" id="auto-close-container" style="display:none;">
                 <div class="toggle-row">
@@ -1223,7 +1242,7 @@ function setupCreateTournamentModal() {
   window._addPhase = function() {
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
     var n = window._extraPhases.length + 2;
-    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, sourceType: 'previous', fixedPairs: true, pairingStrategy: 'top', mapping: _phaseDefaultMapping('elim_dupla') });
+    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, sourceType: 'previous', scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', mapping: _phaseDefaultMapping('elim_dupla') });
     window._renderPhases();
   };
   window._removePhase = function(i) { if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
@@ -1234,7 +1253,7 @@ function setupCreateTournamentModal() {
     ph[field] = value;
     if (field === 'format') ph.mapping = _phaseDefaultMapping(value);
     // 'fixedPairs' re-renderiza pra mostrar/esconder a escolha de pareamento.
-    if (field === 'format' || field === 'sourceType' || field === 'fixedPairs') window._renderPhases();
+    if (field === 'format' || field === 'sourceType' || field === 'fixedPairs' || field === 'scope') window._renderPhases();
   };
   window._setPhaseMapping = function(i, mi, key, value) {
     var ph = window._extraPhases[i]; if (!ph || !ph.mapping || !ph.mapping[mi]) return;
@@ -1274,10 +1293,19 @@ function setupCreateTournamentModal() {
     h += _phOpt('enrollment', 'Inscrição direta + sorteio', !fromPrev);
     h += '</select>';
     if (fromPrev) {
+      // Escopo da classificação: por grupo (top-K de cada grupo) ou agregado (top-N geral).
+      var _scope = ph.scope || 'per_group';
+      var _isOverall = _scope === 'overall';
+      h += '<label style="display:block;font-size:0.72rem;color:var(--text-muted);margin-bottom:3px;">Como contar a colocação</label>';
+      h += '<select onchange="window._setPhaseField(' + i + ', \'scope\', this.value)" style="width:100%;margin-bottom:8px;' + _PH_INP + '">';
+      h += _phOpt('per_group', 'Por grupo (colocação dentro de cada grupo)', !_isOverall);
+      h += _phOpt('overall', 'Geral (ranking agregado de todos os grupos)', _isOverall);
+      h += '</select>';
       var dests = _phaseDests(ph.format);
       h += '<div style="background:rgba(0,0,0,0.18);border-radius:8px;padding:8px 10px;margin-bottom:8px;">';
       var _isMultiDest = dests.length > 1;
-      h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quem entra em cada ' + (_isMultiDest ? 'trilha' : 'chave') + ' (por colocação <strong>em cada grupo</strong> da fase anterior)' + (_isMultiDest ? ' — <span style="color:#a5b4fc;">renomeie as trilhas como quiser</span>' : '') + ':</div>';
+      var _rankCtx = _isOverall ? 'no <strong>ranking geral</strong>' : '<strong>em cada grupo</strong>';
+      h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quem entra em cada ' + (_isMultiDest ? 'trilha' : 'chave') + ' (por colocação ' + _rankCtx + ' da fase anterior)' + (_isMultiDest ? ' — <span style="color:#a5b4fc;">renomeie as trilhas como quiser</span>' : '') + ':</div>';
       (ph.mapping || []).forEach(function(mp, mi){
         var dst = dests[mi] || {};
         var curLabel = (mp.label != null && mp.label !== '') ? mp.label : (dst.defaultLabel || ('Destino ' + (mi + 1)));
@@ -1306,7 +1334,8 @@ function setupCreateTournamentModal() {
       h += '<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,0.18);border-radius:8px;">';
       h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Como montar as duplas com os classificados:</div>';
       h += '<label style="display:flex;align-items:center;gap:7px;font-size:0.8rem;cursor:pointer;margin-bottom:5px;"><input type="radio" name="ps-' + i + '"' + (_ps === 'top' ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'pairingStrategy\', \'top\')"> <span>1º + 2º · 3º + 4º <span style="font-size:0.7rem;color:var(--text-muted);">(mais fortes juntos)</span></span></label>';
-      h += '<label style="display:flex;align-items:center;gap:7px;font-size:0.8rem;cursor:pointer;"><input type="radio" name="ps-' + i + '"' + (_ps === 'balanced' ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'pairingStrategy\', \'balanced\')"> <span>1º + 4º · 2º + 3º <span style="font-size:0.7rem;color:var(--text-muted);">(equilibrado)</span></span></label>';
+      h += '<label style="display:flex;align-items:center;gap:7px;font-size:0.8rem;cursor:pointer;margin-bottom:5px;"><input type="radio" name="ps-' + i + '"' + (_ps === 'balanced' ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'pairingStrategy\', \'balanced\')"> <span>1º + 4º · 2º + 3º <span style="font-size:0.7rem;color:var(--text-muted);">(equilibrado)</span></span></label>';
+      h += '<label style="display:flex;align-items:center;gap:7px;font-size:0.8rem;cursor:pointer;"><input type="radio" name="ps-' + i + '"' + (_ps === 'draw_among' ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'pairingStrategy\', \'draw_among\')"> <span>Sorteio entre os classificados <span style="font-size:0.7rem;color:var(--text-muted);">(duplas aleatórias)</span></span></label>';
       h += '</div>';
     }
     h += '</div>';
@@ -1348,6 +1377,13 @@ function setupCreateTournamentModal() {
     // modo misto — Individual (sorteadas) + Times Montados (formadas) juntos.
     var mpc = document.getElementById('mixed-pairing-container');
     if (mpc) mpc.style.display = (value === 'misto') ? 'block' : 'none';
+  };
+
+  // Quem forma as duplas: 'organizer_only' (default) | 'open' (participantes também).
+  window._syncManualPairing = function() {
+    var tgl = document.getElementById('manual-pairing-toggle');
+    var hidden = document.getElementById('manual-pairing');
+    if (hidden) hidden.value = (tgl && tgl.checked) ? 'open' : 'organizer_only';
   };
 
   // v2.2.46: separar duplas formadas x sorteadas em chaveamentos próprios.
@@ -1619,6 +1655,29 @@ function setupCreateTournamentModal() {
       }
     });
     var hidden = document.getElementById('monarch-classified');
+    if (hidden) hidden.value = value;
+  };
+
+  // Formação dos grupos Rei/Rainha: 'sorteio' (aleatório) | 'ranking' (classificação).
+  window._selectMonarchGroupsBy = function(btn) {
+    var value = btn.getAttribute('data-value');
+    var btns = document.querySelectorAll('#monarch-groupsby-buttons .monarch-gb-btn');
+    btns.forEach(function(b) {
+      if (b.getAttribute('data-value') === value) {
+        b.classList.add('monarch-gb-active');
+        b.style.border = '2px solid #fbbf24';
+        b.style.background = 'rgba(251,191,36,0.15)';
+        b.style.color = '#fbbf24';
+        b.style.fontWeight = '600';
+      } else {
+        b.classList.remove('monarch-gb-active');
+        b.style.border = '2px solid rgba(255,255,255,0.18)';
+        b.style.background = 'rgba(255,255,255,0.06)';
+        b.style.color = 'var(--text-main)';
+        b.style.fontWeight = '500';
+      }
+    });
+    var hidden = document.getElementById('monarch-groupsby');
     if (hidden) hidden.value = value;
   };
 
@@ -3852,6 +3911,9 @@ function setupCreateTournamentModal() {
       if (_mcEl) _mcEl.value = String(t.monarchClassified || 1);
       var _mcBtn = document.querySelector('#monarch-classified-buttons .monarch-cls-btn[data-value="' + (t.monarchClassified || 1) + '"]');
       if (_mcBtn) window._selectMonarchClassified(_mcBtn);
+      var _gbVal = (t.reiRainhaGroupsBy === 'ranking') ? 'ranking' : 'sorteio';
+      var _gbBtn = document.querySelector('#monarch-groupsby-buttons .monarch-gb-btn[data-value="' + _gbVal + '"]');
+      if (_gbBtn && window._selectMonarchGroupsBy) window._selectMonarchGroupsBy(_gbBtn);
     }
     // Sync draw mode buttons
     var dmBtns = document.querySelectorAll('#draw-mode-buttons .draw-mode-btn');
@@ -3916,6 +3978,12 @@ function setupCreateTournamentModal() {
     if (_mpTgl) {
       _mpTgl.checked = !!t.mixedPairingSeparated;
       if (typeof window._syncMixedPairing === 'function') window._syncMixedPairing();
+    }
+    // restaura toggle "participantes formam duplas"
+    var _mpairTgl = document.getElementById('manual-pairing-toggle');
+    if (_mpairTgl) {
+      _mpairTgl.checked = (t.manualPairing === 'open');
+      if (typeof window._syncManualPairing === 'function') window._syncManualPairing();
     }
     if (t.teamSize) document.getElementById('tourn-team-size').value = t.teamSize;
 
@@ -4166,6 +4234,7 @@ function setupCreateTournamentModal() {
           reiRainha: !!ph.reiRainha,
           rounds: parseInt(ph.rounds) || 1,
           sourceType: fromPrev ? 'previous' : 'enrollment',
+          scope: src.scope || 'per_group',
           fixedPairs: ph.fixedPairs !== false,
           pairingStrategy: ph.pairingStrategy || 'top',
           mapping: (fromPrev && Array.isArray(src.mapping) && src.mapping.length)
@@ -4650,6 +4719,8 @@ function setupCreateTournamentModal() {
           enrollmentMode: enrollmentVal,
           // v2.2.46: separar duplas formadas x sorteadas (só vale no modo misto)
           mixedPairingSeparated: enrollmentVal === 'misto' && (document.getElementById('mixed-pairing-separated') || {}).value === 'true',
+          // Quem forma as duplas: 'organizer_only' (default) | 'open' (participantes também)
+          manualPairing: (document.getElementById('manual-pairing') || {}).value === 'open' ? 'open' : 'organizer_only',
           teamSize: teamSizeVal,
           gameTypes: (document.getElementById('tourn-game-types') || {}).value || 'duplas',
           thirdPlace: true,
@@ -4811,6 +4882,8 @@ function setupCreateTournamentModal() {
 
         if (drawModeValue === 'rei_rainha' || drawModeValue === 'round_robin') {
           tourData.drawMode = 'rei_rainha'; // both use Rei/Rainha match format
+          var _gbEl = document.getElementById('monarch-groupsby');
+          tourData.reiRainhaGroupsBy = (_gbEl && _gbEl.value === 'ranking') ? 'ranking' : 'sorteio';
           // Liga: pontos corridos, sem fase eliminatória — não salvar classificados
           if (formatValue === 'liga') {
             tourData.ligaRoundFormat = 'rei_rainha';
@@ -4843,7 +4916,7 @@ function setupCreateTournamentModal() {
           };
           var _rest = _extra.map(function(ph) {
             var src = ph.sourceType === 'previous'
-              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: true, mapping: (ph.mapping || []).map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: (m.label || '').trim() }; }) }
+              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: (ph.scope || 'per_group') !== 'overall', scope: (ph.scope || 'per_group'), mapping: (ph.mapping || []).map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: (m.label || '').trim() }; }) }
               : { type: 'enrollment' };
             return {
               name: (ph.name || '').trim() || 'Fase',

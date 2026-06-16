@@ -210,5 +210,75 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(!inBracket.A3 && !inBracket.A4 && !inBracket.B3 && !inBracket.B4, '3º/4º de cada grupo NÃO entram');
 })();
 
+// 11) Escopo 'overall': ranking AGREGADO entre grupos (top-N global, ignora grupo).
+//     Grupos A (wins 3,2) e B (wins 4,1) → global por vitórias: B1(4),A1(3),A2(2),B2(1).
+(function () {
+  var gA = { standings: [{ name: 'A1', wins: 3 }, { name: 'A2', wins: 2 }] };
+  var gB = { standings: [{ name: 'B1', wins: 4 }, { name: 'B2', wins: 1 }] };
+  var cs = function (g) { return g.standings; };
+  var mp = [{ dest: 'main', rankFrom: 1, rankTo: 4 }];
+  // per_group (default): pareia dentro do grupo → A1/A2 · B1/B2
+  var perGroup = eng.buildEntrantsByDest([gA, gB], mp, true, cs, 'top')
+    .main.map(function (t) { return t.displayName; });
+  eq(perGroup, ['A1 / A2', 'B1 / B2'], 'per_group pareia dentro do grupo');
+  // overall: ranking global B1>A1>A2>B2 → top 1+2 / 3+4 = B1/A1 · A2/B2
+  var overall = eng.buildEntrantsByDest([gA, gB], mp, true, cs, 'top', { scope: 'overall' })
+    .main.map(function (t) { return t.displayName; });
+  eq(overall, ['B1 / A1', 'A2 / B2'], 'overall pareia pelo ranking agregado (top global)');
+})();
+
+// 12) draw_among: sorteio entre os classificados (shuffle injetado = reverso, determinístico).
+(function () {
+  var cs = function () { return [{ name: 'P1' }, { name: 'P2' }, { name: 'P3' }, { name: 'P4' }]; };
+  var mp = [{ dest: 'main', rankFrom: 1, rankTo: 4 }];
+  var rev = function (a) { return a.slice().reverse(); };
+  var drawn = eng.buildEntrantsByDest([{}], mp, true, cs, 'draw_among', { shuffle: rev })
+    .main.map(function (t) { return t.displayName; });
+  eq(drawn, ['P4 / P3', 'P2 / P1'], 'draw_among pareia o embaralhado (shuffle reverso)');
+})();
+
+// 13) keep via rankingBasis='team': colocações já são duplas → seguem juntas, uids preservados.
+(function () {
+  var teamGroup = {
+    standings: [
+      { name: 'A1 / A2', p1Name: 'A1', p1Uid: 'uA1', p2Name: 'A2', p2Uid: 'uA2', fixedPair: true },
+      { name: 'B1 / B2', p1Name: 'B1', p1Uid: 'uB1', p2Name: 'B2', p2Uid: 'uB2', fixedPair: true }
+    ]
+  };
+  var cs = function (g) { return g.standings; };
+  var mp = [{ dest: 'main', rankFrom: 1, rankTo: 2 }];
+  var kept = eng.buildEntrantsByDest([teamGroup], mp, true, cs, 'top', { rankingBasis: 'team' });
+  eq(kept.main.map(function (t) { return t.displayName; }), ['A1 / A2', 'B1 / B2'], 'keep: duplas seguem juntas (não re-pareia)');
+  ok(kept.main[0].p1Uid === 'uA1' && kept.main[0].p2Uid === 'uA2', 'keep: uids dos 2 membros preservados');
+  ok(kept.main[0].fixedPair === true, 'keep: dupla mantém fixedPair');
+})();
+
+// 14) keep IMPLÍCITO: mesmo sem rankingBasis, se a colocação já é dupla, não re-pareia.
+(function () {
+  var teamGroup = { standings: [
+    { name: 'X1 / X2', p1Name: 'X1', p1Uid: 'uX1', p2Name: 'X2', p2Uid: 'uX2', fixedPair: true }
+  ] };
+  var cs = function (g) { return g.standings; };
+  var mp = [{ dest: 'main', rankFrom: 1, rankTo: 1 }];
+  var kept = eng.buildEntrantsByDest([teamGroup], mp, true, cs, 'top'); // sem opts
+  eq(kept.main.map(function (t) { return t.displayName; }), ['X1 / X2'], 'keep implícito: dupla pré-formada passa direto');
+  ok(kept.main[0].p2Uid === 'uX2', 'keep implícito: membros preservados');
+})();
+
+// 15) keep por NOME "X / Y" (Fase de Grupos de duplas): standing só tem name →
+//     divide nos 2 membros, dupla segue junta, não vira "individual de 1 nome".
+(function () {
+  var grpDuplas = { standings: [
+    { name: 'Ana / Bia', wins: 2 },
+    { name: 'Cida / Duda', wins: 1 }
+  ] };
+  var cs = function (g) { return g.standings; };
+  var mp = [{ dest: 'main', rankFrom: 1, rankTo: 2 }];
+  var kept = eng.buildEntrantsByDest([grpDuplas], mp, false, cs, 'top'); // fixedPairs irrelevante
+  eq(kept.main.map(function (t) { return t.displayName; }), ['Ana / Bia', 'Cida / Duda'], 'keep por nome: duplas seguem juntas');
+  eq([kept.main[0].p1Name, kept.main[0].p2Name], ['Ana', 'Bia'], 'keep por nome: 2 membros separados');
+  ok(kept.main[0].fixedPair === true, 'keep por nome: marcada como dupla');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);
