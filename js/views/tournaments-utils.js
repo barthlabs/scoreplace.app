@@ -1327,11 +1327,17 @@ window._buildTournamentConfigBox = function (t, opts) {
     var openAttr = opts.open ? ' open' : '';
     var summary = esc(fmt) + ' · ' + fmtGameType().replace(' — 2 categorias', ' (2 cat.)');
 
+    // v2.6.29: hardening contra overflow lateral. Como esta caixa é um flex item
+    // (fica numa linha própria dentro do "Bottom Section" flex-row do card), sem
+    // min-width:0 + max-width:100% + box-sizing:border-box + overflow:hidden ela
+    // pode, em certos casos de layout/conteúdo, ultrapassar a borda do card e a
+    // label "configuração ▾" do fim é cortada. O <span> do meio elipsa o texto
+    // longo; o do fim nunca encolhe (flex-shrink:0 + nowrap) — fica sempre legível.
     return '<details class="info-box tourn-config-box"' + openAttr +
-        ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;' + bgStyle + '">' +
-        '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;align-items:center;gap:6px;">' +
-        '<span>⚙️</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + summary + '</span>' +
-        '<span style="opacity:0.6;font-weight:500;font-size:0.68rem;">configuração ▾</span>' +
+        ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;' + bgStyle + '">' +
+        '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;">' +
+        '<span style="flex-shrink:0;">⚙️</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + summary + '</span>' +
+        '<span style="opacity:0.6;font-weight:500;font-size:0.68rem;flex-shrink:0;white-space:nowrap;">configuração ▾</span>' +
         '</summary>' +
         '<div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">' + rows.join('') + '</div>' +
         '</details>';
