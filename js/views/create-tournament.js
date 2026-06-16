@@ -3233,11 +3233,11 @@ function setupCreateTournamentModal() {
     function roundsArrayFor(n) {
       if (n < 2) return [];
       if (drawMode === 'rei_rainha') {
-        // Grupos de 4, 3 sub-rodadas (AB/CD, AC/BD, AD/BC); 1 jogo por grupo por
-        // sub-rodada (os 3 são sequenciais — mesmos 4 jogadores). Eliminatória,
-        // se houver, é FASE À PARTE (não entra aqui).
+        // Rei/Rainha coroa um campeão: grupos de 4 (3 sub-rodadas, 1 jogo/grupo
+        // cada) → classificados avançam → ELIMINATÓRIA até a final. Conta TUDO.
         var groups = Math.max(Math.ceil(n / 4), 1);
-        return [groups, groups, groups];
+        var cls = Math.max(iv('monarch-classified', 1), 1); // classificados por grupo
+        return [groups, groups, groups].concat(elimRounds(groups * cls));
       }
       if (fmt === 'liga') return [Math.floor(n / 2)]; // UMA rodada de pontos corridos
       if (fmt === 'grupos_mata') {
@@ -3320,7 +3320,7 @@ function setupCreateTournamentModal() {
       h += '</div>';
     });
     h += '</div>';
-    if (drawMode === 'rei_rainha') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa de <strong>uma rodada</strong> (grupos de 4). A eliminatória, se houver, é uma fase à parte.</div>';
+    if (drawMode === 'rei_rainha') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Grupos de 4 + eliminatória dos classificados <strong>até a final</strong>.</div>';
     else if (fmt === 'liga') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa de <strong>uma rodada</strong> de pontos corridos.</div>';
     else if (fmt === 'grupos_mata') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa da <strong>fase de grupos</strong> completa (sem mata-mata).</div>';
     if (ageCats > 0) h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:4px;opacity:0.8;">⚠️ Categorias por idade criam sub-chaves extras não incluídas nesta estimativa.</div>';
