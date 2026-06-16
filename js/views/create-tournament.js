@@ -6079,6 +6079,9 @@ window.renderCreateTournamentPage = function (container) {
     if (typeof window._initPlacesAutocomplete === 'function') window._initPlacesAutocomplete();
     if (typeof window._autoShowVenueMap === 'function') window._autoShowVenueMap();
     if (typeof window._hydrateVenuePrefChips === 'function') window._hydrateVenuePrefChips();
+    // Estimativa de tempo da fase: render inicial no open (create e edit). O wiring
+    // de mudança (formato/sorteio/categoria/tempos) cobre depois; aqui é o 1º paint.
+    if (typeof window._renderPhaseEstimate === 'function') { try { window._renderPhaseEstimate(); } catch (e) {} }
   }, 50);
   // v2.1.50: o perfil (preferredLocations) pode chegar async depois do render —
   // re-hidrata os chips de locais preferidos quando ele tiver carregado.
