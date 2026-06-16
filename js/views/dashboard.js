@@ -450,14 +450,17 @@ function renderDashboard(container) {
     const start = formatDateBr(t.startDate);
     const end = formatDateBr(t.endDate);
     const dates = start ? (end ? `${start} ${_t('tourn.dateTo')} ${end}` : `${start}`) : _t('tourn.dateTbd');
-    // v2.6.23: data em grid 2 colunas — [🗓️ | início] / ["A" | fim].
+    // v2.6.24: data em grid — [🗓️ | data | hora] / ["A" | data | hora] com
+    // tabular-nums → data e hora perfeitamente alinhadas entre as linhas.
     const _dateToLbl = _t('tourn.dateTo');
+    const _splitDT = (s) => { var p = String(s || '').trim().split(' '); return { d: p[0] || '', t: p.slice(1).join(' ') }; };
+    const _sDT = _splitDT(start), _eDT = _splitDT(end);
     const datesGridHtml = (start && end)
-      ? `<span style="display:grid;grid-template-columns:auto auto;column-gap:9px;row-gap:3px;align-items:center;">`
-          + `<span style="font-size:1.1rem;justify-self:center;line-height:1;">🗓️</span><span style="white-space:nowrap;">${start}</span>`
-          + `<span style="justify-self:center;opacity:0.8;font-weight:700;">${_dateToLbl}</span><span style="white-space:nowrap;">${end}</span>`
+      ? `<span style="display:grid;grid-template-columns:auto auto auto;column-gap:9px;row-gap:3px;align-items:center;font-variant-numeric:tabular-nums;">`
+          + `<span style="font-size:1.1rem;justify-self:center;line-height:1;">🗓️</span><span style="white-space:nowrap;">${_sDT.d}</span><span style="white-space:nowrap;">${_sDT.t}</span>`
+          + `<span style="justify-self:center;opacity:0.8;font-weight:700;">${_dateToLbl}</span><span style="white-space:nowrap;">${_eDT.d}</span><span style="white-space:nowrap;">${_eDT.t}</span>`
         + `</span>`
-      : `<span style="display:inline-flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">🗓️</span><span>${dates}</span></span>`;
+      : `<span style="display:inline-flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">🗓️</span><span style="font-variant-numeric:tabular-nums;">${dates}</span></span>`;
     const regLimit = formatDateBr(t.registrationLimit);
     const cats = (t.categories && t.categories.length) ? t.categories.join(', ') : _t('tourn.singleCat');
 
