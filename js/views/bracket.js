@@ -2240,10 +2240,18 @@ function renderGroupStage(t, isOrg, canEnterResult) {
   // v1.0.97-beta: faltava ')' fechando a chamada — onclick virava JS inválido
   // 'window._advanceToElimination(\'id_123\'' sem o paren final, browser ignorava
   // o clique. User: 'o botao avancar para fase eliminatoria nao faz nada'.
+  // v2.6.25: Copa do Mundo — se o torneio é multi-fase (Grupos → fase de
+  // eliminatória configurada), o avanço usa o MOTOR DE FASES (monta a chave
+  // puxando os classificados de cada grupo, com o formato/pareamento/trilhas que
+  // o organizador definiu), em vez da eliminatória embutida. Single-phase
+  // (grupos_mata legado) segue usando _advanceToElimination, sem mudança.
+  const _gMulti = (typeof window._isMultiPhase === 'function') && window._isMultiPhase(t) && (t.currentPhaseIndex || 0) === 0;
+  const _gAdvFn = _gMulti ? 'window._advanceMultiPhase' : 'window._advanceToElimination';
+  const _gAdvLbl = _gMulti ? '⏭️ Avançar para a próxima fase' : _t('bracket.advanceToElim');
   const advanceBtn = (isOrg && allGroupsDone) ? `
     <div style="text-align:center;margin:2rem 0;">
-      <button class="btn btn-warning btn-lg hover-lift" onclick="window._advanceToElimination('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
-        ${_t('bracket.advanceToElim')}
+      <button class="btn btn-warning btn-lg hover-lift" onclick="${_gAdvFn}('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
+        ${_gAdvLbl}
       </button>
     </div>` : '';
 

@@ -229,14 +229,19 @@
     if (!isMultiPhase(t)) return false;
     var cur = t.currentPhaseIndex || 0;
     if (cur === 0) {
-      // Fase classificatória (Rei/Rainha): nº de rodadas jogadas >= configurado e
-      // todos os jogos dos grupos da última rodada decididos.
-      var cfg = t.phases[0] || {};
-      var need = parseInt(cfg.rounds) || 1;
-      var monRounds = (t.rounds || []).filter(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
-      if (monRounds.length < need) return false;
+      // Fase classificatória completa quando todos os jogos dos grupos estão
+      // decididos. Cobre DOIS estilos:
+      //  • Rei/Rainha: grupos vêm de t.rounds[].monarchGroups (exige nº de rodadas).
+      //  • Grupos (Copa do Mundo): grupos vêm de t.groups (round-robin, sem rodadas).
       var groups = prevPhaseGroups(t);
       if (!groups.length) return false;
+      var isMonarch = (t.rounds || []).some(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
+      if (isMonarch) {
+        var cfg = t.phases[0] || {};
+        var need = parseInt(cfg.rounds) || 1;
+        var monRounds = (t.rounds || []).filter(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
+        if (monRounds.length < need) return false;
+      }
       return groups.every(function (g) {
         var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
         return ms.length > 0 && ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });

@@ -187,5 +187,28 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   eq(balN, ['P1 / P4', 'P2 / P3'], "pareamento 'balanced' = 1º+4º · 2º+3º");
 })();
 
+// Copa do Mundo: Grupos (t.groups) → Eliminatória puxando top-2 de cada grupo
+(function () {
+  function grp(names) { return { players: names.map(function (n) { return { name: n }; }), matches: [{ winner: names[0] }] }; }
+  var t = {
+    id: 'wc',
+    groups: [grp(['A1', 'A2', 'A3', 'A4']), grp(['B1', 'B2', 'B3', 'B4'])],
+    phases: [
+      { name: 'Grupos', formatCode: 'grupos_mata', source: { type: 'enrollment' } },
+      { name: 'Eliminatória', formatCode: 'elim_simples', source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: 2 }] }, fixedPairs: false }
+    ],
+    currentPhaseIndex: 0, matches: []
+  };
+  var cs = function (g) { return (g.players || []).slice().sort(function (a, b) { return a.name.localeCompare(b.name); }); };
+  ok(eng.phaseComplete(t) === true, 'fase de grupos (t.groups) reconhecida como completa');
+  var r = eng.materializeNextPhase(t, cs, 'wc-elim');
+  ok(r.ok === true, 'materializa eliminatória a partir dos grupos');
+  var mains = (t.matches || []).filter(function (m) { return m.bracket === 'main'; });
+  var inBracket = {};
+  mains.forEach(function (m) { [m.p1, m.p2].forEach(function (p) { if (p && p !== 'TBD') inBracket[p] = true; }); });
+  ok(inBracket.A1 && inBracket.A2 && inBracket.B1 && inBracket.B2, 'chave contém os top-2 de cada grupo (A1,A2,B1,B2)');
+  ok(!inBracket.A3 && !inBracket.A4 && !inBracket.B3 && !inBracket.B4, '3º/4º de cada grupo NÃO entram');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);
