@@ -1,5 +1,6 @@
-// Temas disponíveis: dark, light, sunset, ocean
-var _validThemes = ['dark', 'light', 'sunset', 'ocean'];
+// v2.6.27: SÓ 2 temas — escuro e claro. (sunset/ocean removidos; preferências
+// salvas com eles caem no padrão pela validação abaixo.)
+var _validThemes = ['dark', 'light'];
 
 function applyTheme(themeValue) {
   var activeTheme = themeValue;

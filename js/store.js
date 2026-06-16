@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.26-beta';
+window.SCOREPLACE_VERSION = '2.6.27-beta';
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
 // v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).
@@ -2587,10 +2587,10 @@ window._recoverWipedAdminEmails = function() {
   });
 };
 
-// ─── Temas: dark → light → sunset → ocean ──────────────────────────────────
-window._themeOrder = ['dark', 'light', 'sunset', 'ocean'];
-window._themeIcons = { dark: '🌙', light: '☀️', sunset: '🌅', ocean: '🌊' };
-window._themeNames = { dark: 'Noturno', light: 'Claro', sunset: 'Pôr do Sol', ocean: 'Oceano' };
+// ─── Temas: SÓ 2 — escuro ↔ claro (v2.6.27, simplificado) ───────────────────
+window._themeOrder = ['dark', 'light'];
+window._themeIcons = { dark: '🌙', light: '☀️' };
+window._themeNames = { dark: 'Noturno', light: 'Claro' };
 
 // ─── Tamanho da interface (v2.1.91) ─────────────────────────────────────────
 // --ui-scale multiplica o font-size da raiz (html), que é a base de quase todo
