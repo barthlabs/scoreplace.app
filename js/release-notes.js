@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.6.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.6.20-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⚙️ O motor já respeita suas escolhas de fase.</b> Ao avançar pra próxima fase, as duplas agora se formam pela estratégia escolhida (1º+2º/3º+4º ou 1º+4º/2º+3º), e as chaves aparecem com o <b>nome que você deu às trilhas</b> (Ouro/Prata ou o que você quiser).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.6.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(15 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🤝 Como montar as duplas você escolhe.</b> Quando uma fase forma duplas fixas com os classificados da fase anterior, o organizador decide o pareamento: <b>1º+2º · 3º+4º</b> (mais fortes juntos) ou <b>1º+4º · 2º+3º</b> (equilibrado).</li>' +
       '</ul>' +

@@ -42,7 +42,8 @@
   // A partir dos grupos da fase anterior + mapping, devolve { dest: [teamObjs] }.
   // mapping: [{ dest:'upper'|'lower'|'main', rankFrom, rankTo }]
   // fixedPairs=true → os jogadores das colocações de UM grupo viram dupla (2 a 2).
-  function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings) {
+  // pairingStrategy: 'top' (1º+2º, 3º+4º…) ou 'balanced' (1º+último, 2º+penúltimo…).
+  function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy) {
     var byDest = {};
     mapping.forEach(function (mp) { if (!byDest[mp.dest]) byDest[mp.dest] = []; });
     (prevGroups || []).forEach(function (g) {
@@ -55,8 +56,16 @@
         }
         if (!picked.length) return;
         if (fixedPairs) {
-          for (var i = 0; i < picked.length; i += 2) {
-            byDest[mp.dest].push(mkTeam(picked.slice(i, i + 2)));
+          if (pairingStrategy === 'balanced') {
+            // Equilibrado: 1º+último, 2º+penúltimo… (junta forte com fraco)
+            var lo = 0, hi = picked.length - 1;
+            while (lo < hi) { byDest[mp.dest].push(mkTeam([picked[lo], picked[hi]])); lo++; hi--; }
+            if (lo === hi) byDest[mp.dest].push(mkTeam([picked[lo]])); // sobra ímpar = solo
+          } else {
+            // 'top' (default): adjacentes — 1º+2º, 3º+4º…
+            for (var i = 0; i < picked.length; i += 2) {
+              byDest[mp.dest].push(mkTeam(picked.slice(i, i + 2)));
+            }
           }
         } else {
           picked.forEach(function (s) { byDest[mp.dest].push(mkTeam([s])); });
@@ -155,8 +164,9 @@
     var src = (phaseCfg && phaseCfg.source) || {};
     var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 2 }];
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs !== false) : true;
+    var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
 
-    var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings);
+    var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy);
 
     var allMatches = [];
     var tiers = {};
@@ -167,7 +177,13 @@
     destOrder.forEach(function (dest) {
       var bracketKey = DEST_BRACKET[dest] || dest;
       var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey);
-      res.matches.forEach(function (m) { m.tierLabel = DEST_LABEL[dest] || dest; });
+      // Nome da trilha: usa o que o organizador digitou (mapping[].label), com o
+      // ícone de medalha como prefixo; senão cai no default (🥇 Ouro / 🥈 Prata).
+      var _mp = mapping.filter(function (m) { return m.dest === dest; })[0];
+      var _custom = (_mp && _mp.label) ? String(_mp.label).trim() : '';
+      var _icon = (dest === 'upper') ? '🥇 ' : (dest === 'lower') ? '🥈 ' : '';
+      var _label = _custom ? (_icon + _custom) : (DEST_LABEL[dest] || dest);
+      res.matches.forEach(function (m) { m.tierLabel = _label; });
       allMatches = allMatches.concat(res.matches);
       tiers[dest] = res;
     });

@@ -177,5 +177,15 @@ tourn3.currentPhaseIndex = 0; // simula chamada repetida antes do índice subir
 var mres3 = eng.materializeNextPhase(tourn3, stand, 'x');
 ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMaterialized barra double-call antes do índice atualizar');
 
+// Estratégia de pareamento: 'top' (adjacentes 1º+2º,3º+4º) vs 'balanced' (extremos 1º+4º,2º+3º)
+(function () {
+  var cs4 = function () { return [{ name: 'P1' }, { name: 'P2' }, { name: 'P3' }, { name: 'P4' }]; };
+  var mp4 = [{ dest: 'main', rankFrom: 1, rankTo: 4 }];
+  var topN = (eng.buildEntrantsByDest([{}], mp4, true, cs4, 'top').main || []).map(function (t) { return t.displayName; });
+  var balN = (eng.buildEntrantsByDest([{}], mp4, true, cs4, 'balanced').main || []).map(function (t) { return t.displayName; });
+  eq(topN, ['P1 / P2', 'P3 / P4'], "pareamento 'top' = 1º+2º · 3º+4º");
+  eq(balN, ['P1 / P4', 'P2 / P3'], "pareamento 'balanced' = 1º+4º · 2º+3º");
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

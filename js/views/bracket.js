@@ -1353,9 +1353,16 @@ function _renderPhaseBracket(t, canEnterResult) {
       '<div style="max-width:300px;">' + cards + '</div></div>';
   }
 
-  var goldHtml = renderTier('gold', '🥇 Chave Ouro', '#fbbf24');
-  var silverHtml = renderTier('silver', '🥈 Chave Prata', '#cbd5e1');
-  var mainHtml = renderTier('main', _t('bracket.knockout') || 'Eliminatória', '#10b981');
+  // Título da trilha = nome que o organizador deu (m.tierLabel, vindo do motor);
+  // cai no default só se não houver.
+  function tierTitle(bracketKey, fallback) {
+    var ms = pm.filter(function (m) { return m.bracket === bracketKey; });
+    var lbl = (ms[0] && ms[0].tierLabel) ? String(ms[0].tierLabel).trim() : '';
+    return lbl ? window._safeHtml(lbl) : fallback;
+  }
+  var goldHtml = renderTier('gold', tierTitle('gold', '🥇 Chave Ouro'), '#fbbf24');
+  var silverHtml = renderTier('silver', tierTitle('silver', '🥈 Chave Prata'), '#cbd5e1');
+  var mainHtml = renderTier('main', tierTitle('main', _t('bracket.knockout') || 'Eliminatória'), '#10b981');
   var gfHtml = renderFinalBox('grandfinal', '🏆 Grande Final', '#fbbf24');
   var thirdHtml = renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32');
 
