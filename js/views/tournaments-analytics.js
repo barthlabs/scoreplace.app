@@ -455,7 +455,7 @@ function _buildOrganizerAnalyticsForModal(playerName) {
     var formatCounts = {};
     var sportCounts = {};
     organizados.forEach(function(tr) {
-        var f = tr.format || t('common.other');
+        var f = (window._formatDisplayName ? window._formatDisplayName(tr.format) : tr.format) || t('common.other');
         formatCounts[f] = (formatCounts[f] || 0) + 1;
         var s = tr.sport ? String(tr.sport).replace(/^[^\w\u00C0-\u024F]+/u, '').trim() : t('common.other');
         sportCounts[s] = (sportCounts[s] || 0) + 1;
@@ -580,7 +580,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         if (!isParticipant) return;
 
         stats.tournamentsPlayed++;
-        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: t.format || '' });
+        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '' });
 
         // Track sports and formats
         if (t.sport) stats.sports[t.sport] = (stats.sports[t.sport] || 0) + 1;

@@ -1280,7 +1280,7 @@ function _tournamentCalendarPayload(t) {
   }
   var title = '🏆 ' + (t.name || 'Torneio');
   var sport = t.sport ? window._safeHtml(t.sport) : '';
-  var format = t.format || '';
+  var format = (window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '';
   var venue = t.venue || t.venueName || '';
   var addr = t.venueAddress || '';
   var loc = venue && addr ? (venue + ' — ' + addr) : (venue || addr || '');

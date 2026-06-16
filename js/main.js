@@ -844,7 +844,7 @@ function setupHelpModal() {
             '• <b>Coração ♥</b> — Favoritar torneio<br>' +
             '• <b>Filtro por esporte</b> — Beach Tennis, Tênis, Padel...<br>' +
             '• <b>Filtro por local</b> — Torneios perto de você<br>' +
-            '• <b>Filtro por formato</b> — Eliminatórias, Dupla, Grupos+Elim, Liga<br>' +
+            '• <b>Filtro por formato</b> — Eliminatórias, Dupla, Fase de Grupos, Pontos Corridos<br>' +
             '• <b>Carregar mais</b> — Próximos torneios (paginação)' +
           '</p>' +
         '</div>' +
@@ -891,7 +891,7 @@ function setupHelpModal() {
           '<div style="font-weight:700;font-size:0.85rem;color:#f59e0b;margin-bottom:8px;">➕ Criar/Editar Torneio (32)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Esporte</b> — Padrões de pontuação por modalidade<br>' +
-            '• <b>Formato</b> — Eliminatória, Dupla, Grupos+Elim, Liga<br>' +
+            '• <b>Formato</b> — Eliminatória, Dupla, Fase de Grupos, Pontos Corridos<br>' +
             '• <b>Modo de sorteio</b> — Sorteio ou Rei/Rainha<br>' +
             '• <b>Modo de inscrição</b> — Individual, Times, Misto<br>' +
             '• <b>Tipo de jogo</b> — Simples (1v1) ou Duplas (2v2)<br>' +
@@ -1603,7 +1603,7 @@ window.renderHelpPage = function (container) {
         '<span style="font-size:1.2rem;">' + sportIcon + '</span>' +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-weight:600;font-size:0.85rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(tpl.name) + '</div>' +
-          '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml(tpl.format || '') + '</div>' +
+          '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml((window._formatDisplayName ? window._formatDisplayName(tpl.format) : tpl.format) || '') + '</div>' +
         '</div>' +
         '<button class="btn btn-micro btn-danger-ghost" onclick="event.stopPropagation();window._qcDeleteTemplate(\'' + window._safeHtml(tpl._id || String(i)) + '\')" title="Apagar">✕</button>' +
       '</div>';
@@ -2169,7 +2169,7 @@ window._log("scoreplace.app v" + (window.SCOREPLACE_VERSION || '?') + " Iniciali
           '<span style="font-size:1.1rem;">🏅</span>' +
           '<div style="flex:1;overflow:hidden;">' +
           '<div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sh(t.name) + '</div>' +
-          '<div style="font-size:0.7rem;color:var(--text-muted);">' + _sh(t.format || '') + ' — ' + _sh(t.sport || '') + '</div>' +
+          '<div style="font-size:0.7rem;color:var(--text-muted);">' + _sh((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '') + ' — ' + _sh(t.sport || '') + '</div>' +
           '</div>' +
           '<span style="font-size:0.65rem;color:var(--text-muted);">' + status + '</span>' +
           '</div>';

@@ -43,7 +43,7 @@ window._buildAnalyticsSection = function _buildAnalyticsSection(organizados) {
   // By format
   var formatCounts = {};
   organizados.forEach(function(tour) {
-    var f = tour.format || t('common.other');
+    var f = (window._formatDisplayName ? window._formatDisplayName(tour.format) : tour.format) || t('common.other');
     formatCounts[f] = (formatCounts[f] || 0) + 1;
   });
 

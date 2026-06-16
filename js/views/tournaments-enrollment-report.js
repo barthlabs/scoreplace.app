@@ -193,7 +193,7 @@
       var ng = Math.max(1, Math.round(n / 4));
       var groupGames = ng * 6, qualifiers = ng * 2, gem = Math.max(0, qualifiers - 1);
       var gtot = groupGames + gem;
-      return { format: 'Grupos + Eliminatória', matches: gtot, color: '#3b82f6',
+      return { format: 'Fase de Grupos', matches: gtot, color: '#3b82f6',
         durationMin: Math.ceil(gtot / courts) * gameDur,
         desc: '~' + ng + ' grupo' + (ng !== 1 ? 's' : '') + ' de 4 (' + groupGames + ' jogos) + elim (' + gem + ' partidas).' };
     }
