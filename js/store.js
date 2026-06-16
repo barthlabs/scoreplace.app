@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.15-beta';
+window.SCOREPLACE_VERSION = '2.6.16-beta';
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
 // v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).
@@ -358,7 +358,9 @@ window._devWhatsAppBtnHtml = function (opts) {
     var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
       return Promise.all(regs.map(function(r) { return r.unregister(); }));
     }) : Promise.resolve();
-    Promise.all([p1, p2]).then(function() { window.location.reload(); });
+    // Marca o guard ANTES do reload pra o handler de controllerchange (index.html)
+    // não disparar um segundo reload durante o churn de unregister/re-register.
+    Promise.all([p1, p2]).then(function() { window._swReloading = true; window.location.reload(); });
   };
 
   // Busca store.js sem cache e compara a versão. Throttle de 60s salvo force.
