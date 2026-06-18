@@ -936,6 +936,15 @@ window.addParticipantFunction = function (tId) {
                         t.status = 'closed';
                         if (typeof showNotification !== 'undefined') showNotification(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');
                     }
+                    // v2.6.99: Rei/Rainha com rodada em andamento → novo inscrito entra
+                    // na LISTA DE ESPERA; ao juntar 4, forma um grupo automaticamente.
+                    try {
+                        if (typeof window._onParticipantAddedToMonarchRound === 'function') {
+                            var _wlRes = window._onParticipantAddedToMonarchRound(t, participantObj.name, (participantObj.categories && participantObj.categories[0]) || participantObj.category || null);
+                            if (_wlRes.added && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
+                            if (_wlRes.formed > 0 && typeof showNotification !== 'undefined') showNotification('Novo grupo formado', _wlRes.formed + ' grupo(s) criado(s) a partir da lista de espera.', 'success');
+                        }
+                    } catch (_wlErr) { if (window._warn) window._warn('[monarch waitlist add]', _wlErr); }
                     const container = document.getElementById('view-container');
                     if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
                 }).catch(function(err) {
@@ -947,6 +956,12 @@ window.addParticipantFunction = function (tId) {
                 let arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
                 arr.push(participantObj);
                 t.participants = arr;
+                try {
+                    if (typeof window._onParticipantAddedToMonarchRound === 'function') {
+                        var _wlRes2 = window._onParticipantAddedToMonarchRound(t, participantObj.name, (participantObj.categories && participantObj.categories[0]) || participantObj.category || null);
+                        if (_wlRes2.formed > 0 && typeof showNotification !== 'undefined') showNotification('Novo grupo formado', _wlRes2.formed + ' grupo(s) criado(s) a partir da lista de espera.', 'success');
+                    }
+                } catch (_wlErr2) { if (window._warn) window._warn('[monarch waitlist add]', _wlErr2); }
                 window.FirestoreDB.saveTournament(t);
                 const container = document.getElementById('view-container');
                 if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);

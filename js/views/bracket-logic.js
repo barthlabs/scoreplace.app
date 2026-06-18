@@ -2590,6 +2590,101 @@ function _computeAvgPointsPerRound(t, playerName, category) {
   return roundsPlayed > 0 ? Math.round(totalPoints / roundsPlayed) : 0;
 }
 
+// ─── Lista de espera Rei/Rainha (v2.6.99) ──────────────────────────────────────
+// A SOBRA da divisão por 4 numa rodada Rei/Rainha não é mais "folga com média":
+// vira LISTA DE ESPERA. Ela carrega entre rodadas (com prioridade pra entrar nos
+// grupos na próxima) e, quando junta 4 (sobra + novos inscritos via +participante),
+// forma AUTOMATICAMENTE um novo grupo na rodada corrente. Decisão do dono (18-jun):
+// auto-formar ao juntar 4; quem fica esperando segue pra próxima rodada (sem média).
+function _monarchWaitKey(category) { return (category || '_default_').replace(/\s+/g, '_'); }
+window._getMonarchWaitlist = function (t, category) {
+  var k = _monarchWaitKey(category);
+  return (t && t.monarchWaitlist && Array.isArray(t.monarchWaitlist[k])) ? t.monarchWaitlist[k].slice() : [];
+};
+function _setMonarchWaitlist(t, category, names) {
+  if (!t.monarchWaitlist) t.monarchWaitlist = {};
+  t.monarchWaitlist[_monarchWaitKey(category)] = (names || []).slice();
+}
+// Forma grupos de 4 a partir da lista de espera e anexa à COLUNA da rodada corrente.
+// Retorna quantos grupos formou. Chamado após o sorteio e após +participante.
+window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
+  var wl = window._getMonarchWaitlist(t, category);
+  if (wl.length < 4) return 0;
+  var rounds = t.rounds || [];
+  var colIdx = -1;
+  for (var ci = rounds.length - 1; ci >= 0; ci--) {
+    var r = rounds[ci];
+    if (!r || r.round !== roundNum || !Array.isArray(r.monarchGroups)) continue;
+    var sample = (r.matches || [])[0];
+    var rcat = sample ? (sample.category || null) : null;
+    if ((category || null) !== (rcat || null)) continue;
+    colIdx = ci; break;
+  }
+  if (colIdx === -1) return 0;
+  var col = rounds[colIdx];
+  var ts = Date.now();
+  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
+  var catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
+  var formed = 0;
+  while (wl.length >= 4) {
+    var grp = wl.splice(0, 4);
+    var gi = (col.monarchGroups || []).length;
+    var A = grp[0], B = grp[1], C = grp[2], D = grp[3];
+    var groupName = 'R' + roundNum + ' ' + (typeof _t === 'function' ? _t('label.group') : 'Grupo') + ' ' + String.fromCharCode(65 + gi);
+    var pairings = [{ t1: [A, B], t2: [C, D] }, { t1: [A, C], t2: [B, D] }, { t1: [A, D], t2: [B, C] }];
+    var matches = pairings.map(function (pair, mi) {
+      var m = {
+        id: 'match-rr-r' + roundNum + '-wl' + gi + '-' + mi + catSuffix + '-' + ts + '-' + formed,
+        round: roundNum, roundIndex: colIdx,
+        p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
+        team1: pair.t1, team2: pair.t2,
+        winner: null, scoreP1: null, scoreP2: null,
+        isMonarch: true, monarchGroup: gi,
+        label: groupName + ' • Jogo ' + (mi + 1) + catLabel
+      };
+      if (category) m.category = category;
+      return m;
+    });
+    col.monarchGroups.push({ name: groupName, players: grp, matches: matches });
+    col.matches = (col.matches || []).concat(matches);
+    formed++;
+  }
+  _setMonarchWaitlist(t, category, wl);
+  if (formed > 0 && typeof _recordOpponentHistory === 'function') {
+    try { _recordOpponentHistory(t, col.monarchGroups.slice(-formed), category); } catch (e) {}
+  }
+  return formed;
+};
+// Chamado quando um +participante entra num torneio Rei/Rainha com rodada em
+// andamento (fase 0): joga o novo na lista de espera da rodada corrente e tenta
+// formar grupo. Retorna {added, formed}. Caller salva se added.
+window._onParticipantAddedToMonarchRound = function (t, playerName, category) {
+  var res = { added: false, formed: 0 };
+  if (!t || !playerName) return res;
+  if ((t.currentPhaseIndex || 0) !== 0) return res; // já avançou de fase
+  var isLiga = window._isLigaFormat && window._isLigaFormat(t);
+  if (!isLiga || t.ligaRoundFormat !== 'rei_rainha') return res;
+  var rounds = t.rounds || [];
+  var target = null;
+  for (var i = rounds.length - 1; i >= 0; i--) {
+    var r = rounds[i];
+    if (!r || !Array.isArray(r.monarchGroups) || !r.monarchGroups.length) continue;
+    var sample = (r.matches || [])[0];
+    var rcat = sample ? (sample.category || null) : null;
+    if ((category || null) !== (rcat || null)) continue;
+    target = r; break;
+  }
+  if (!target) return res;
+  var inGroup = (target.monarchGroups || []).some(function (g) { return (g.players || []).indexOf(playerName) !== -1; });
+  var wl = window._getMonarchWaitlist(t, category);
+  if (inGroup || wl.indexOf(playerName) !== -1) return res;
+  wl.push(playerName);
+  _setMonarchWaitlist(t, category, wl);
+  res.added = true;
+  res.formed = window._tryFormMonarchWaitlistGroups(t, category, target.round);
+  return res;
+};
+
 window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category, _rn) {
   var standings = _computeStandings(t, category);
   var allPlayers = standings.map(function(s) { return s.name; });
@@ -2624,16 +2719,23 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
   var catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
 
-  // Liga: determine sit-outs fairly instead of BYE/extra matches
+  // v2.6.99: a SOBRA da divisão por 4 NÃO é mais folga-com-média — vira LISTA DE
+  // ESPERA. Quem já estava na espera entra nos grupos primeiro (prioridade), e a
+  // nova sobra é a lista de espera desta rodada (carrega pra próxima, sem média).
   var remainder = players.length % 4;
   var playingPlayers = players;
-  var sitOutPlayers = [];
+  var sitOutPlayers = []; // só INATIVOS viram folga agora (a sobra vira espera)
 
-  if (remainder > 0 && isLiga) {
-    var result = _chooseSitOutPlayers(t, players, remainder, category);
-    playingPlayers = result.playing;
-    sitOutPlayers = result.sitOut;
-    _recordSitOut(t, sitOutPlayers, category);
+  if (isLiga) {
+    if (remainder > 0) {
+      var _prevWl = window._getMonarchWaitlist(t, category).filter(function (n) { return players.indexOf(n) !== -1; });
+      var _rest = players.filter(function (n) { return _prevWl.indexOf(n) === -1; });
+      var _ordered = _prevWl.concat(_rest);
+      playingPlayers = _ordered.slice(0, _ordered.length - remainder);
+      _setMonarchWaitlist(t, category, _ordered.slice(_ordered.length - remainder));
+    } else {
+      _setMonarchWaitlist(t, category, []); // sem sobra → ninguém esperando
+    }
   }
 
   // Formação dos grupos de 4 (groupsBy):
@@ -2764,6 +2866,11 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     phase: 'monarch', round: roundNum, status: 'active',
     format: 'rei_rainha', matches: allMatches, monarchGroups: groups
   });
+
+  // v2.6.99: se a lista de espera já tiver 4+ (ex.: sobra acumulada), forma grupo
+  // na hora. Normalmente a sobra desta rodada é < 4, então isso é no-op aqui — o
+  // gatilho real é o +participante (que empurra pra ≥4).
+  if (isLiga) window._tryFormMonarchWaitlistGroups(t, category, roundNum);
 };
 
 function _generateNextRoundForPlayers(t, category, _rn) {

@@ -2795,6 +2795,30 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         '</details>';
       })()}
       ${_isReiRainhaRound ? (() => {
+        // v2.6.99: Lista de espera Rei/Rainha — sobra do sorteio + novos inscritos.
+        // Quando junta 4, forma um novo grupo automaticamente. Substitui o antigo
+        // "Sem grupo (recebem média)" — quem espera NÃO recebe média, segue na fila.
+        var _wl = t.monarchWaitlist || {};
+        var _wlNames = [];
+        Object.keys(_wl).forEach(function(k){ (_wl[k] || []).forEach(function(n){ if (n && _wlNames.indexOf(n) === -1) _wlNames.push(n); }); });
+        if (!_wlNames.length) return '';
+        var _pills = _wlNames.map(function(n){
+          var _isMe = _nameMatchesCurUser(n);
+          var _bg = _isMe ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.06)';
+          var _bd = _isMe ? 'rgba(34,211,238,0.55)' : 'rgba(56,189,248,0.3)';
+          var _co = _isMe ? '#22d3ee' : '#7dd3fc';
+          var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
+          return '<span style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
+        }).join('');
+        var _need = (4 - (_wlNames.length % 4)) % 4;
+        var _hint = _need === 0 ? 'completou 4 — formando grupo…' : ('faltam ' + _need + ' para formar o próximo grupo');
+        return '<div style="margin-bottom:1rem;background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:10px 14px;">' +
+          '<div style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:700;color:#38bdf8;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
+          '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— ao juntar 4, forma um novo grupo automaticamente · ' + _hint + '</span></div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _pills + '</div>' +
+        '</div>';
+      })() : ''}
+      ${_isReiRainhaRound ? (() => {
         var _useSetsMonarch = !!(t.scoring && t.scoring.type === 'gsm');
         // v0.16.52: ordena os grupos pra que o grupo do usuário (se houver) venha
         // primeiro. Comparação tolerante: nome exato, dupla "X/Y" desmembrada, e
