@@ -370,37 +370,65 @@ window._deduplicateParticipants = function(t) {
         }
     });
 
-    // Pass 2: deduplicate by uid/email AND by name-in-team
-    t.participants.forEach(function(p) {
+    // v2.6.102: dedup por IDENTIDADE em UNIÃO (uid OU e-mail OU telefone). Antes só
+    // por uid (e-mail só quando sem uid) → 2 contas da MESMA pessoa com uids diferentes
+    // mas mesmo e-mail/telefone escapavam (caso real Confra: "Camila" com 2 uids e o
+    // MESMO e-mail). Escopo é só a lista de inscritos DESTE torneio — não mexe nas
+    // contas globais; só remove a inscrição redundante. NÃO funde por NOME (2 pessoas
+    // homônimas com contatos diferentes continuam separadas — isso é tarefa da regra
+    // de nome único + decisão do organizador).
+    var _normPhone = function (v) { return v ? String(v).replace(/[\s()+\-]/g, '') : ''; };
+    var _nameIsPhone = function (s) { return /^\+?\d[\d\s()\-]{8,}$/.test(String(s || '').trim()); };
+    var _identitiesOf = function (p) {
+        var out = [];
+        if (p.uid) out.push('uid:' + String(p.uid));
+        if (p.email) out.push('email:' + String(p.email).trim().toLowerCase());
+        if (p.phone) out.push('phone:' + _normPhone(p.phone));
+        var nm = (p.displayName || p.name || '').trim();
+        if (nm && _nameIsPhone(nm)) out.push('phone:' + _normPhone(nm)); // nome que É telefone conta como identidade
+        return out;
+    };
+    var _mergeInto = function (canon, p) {
+        if (!canon.uid && p.uid) canon.uid = p.uid;
+        if (!canon.email && p.email) canon.email = p.email;
+        if (!canon.phone && p.phone) canon.phone = p.phone;
+        if (!canon.photoURL && p.photoURL) canon.photoURL = p.photoURL;
+        // nome real (não-telefone) ganha do nome-telefone
+        if (_nameIsPhone(canon.displayName || canon.name) && (p.displayName || p.name) && !_nameIsPhone(p.displayName || p.name)) {
+            canon.displayName = p.displayName || p.name; canon.name = p.name || p.displayName;
+        }
+        if (p.ligaActive === true) canon.ligaActive = true; // ativo ganha de inativo (mesma pessoa)
+        if (p.addedAt && (!canon.addedAt || p.addedAt < canon.addedAt)) canon.addedAt = p.addedAt; // inscrição mais antiga
+        if (!canon.categories && p.categories) canon.categories = p.categories;
+        if (!canon.category && p.category) canon.category = p.category;
+    };
+
+    var idToCanon = {};
+    t.participants.forEach(function (p) {
         if (!p) return;
         if (typeof p === 'string') {
-            // Check if this individual name is already part of a team entry
-            if (p.indexOf(' / ') === -1 && teamMembers[p.trim().toLowerCase()]) {
-                removedCount++;
-                return; // skip — already represented inside a team
-            }
+            if (p.indexOf(' / ') === -1 && teamMembers[p.trim().toLowerCase()]) { removedCount++; return; }
             deduped.push(p);
             return;
         }
         if (typeof p !== 'object') return;
         var pName = (p.displayName || p.name || '').trim();
+        // já está dentro de um time (string "A / B")?
+        if (pName && pName.indexOf(' / ') === -1 && teamMembers[pName.toLowerCase()]) { removedCount++; return; }
+        // entrada de TIME (objeto "A / B"): não passa pela dedup de identidade individual
+        if (pName.indexOf(' / ') !== -1) { deduped.push(p); return; }
 
-        // Check if this individual is already inside a team string
-        if (pName && pName.indexOf(' / ') === -1 && teamMembers[pName.toLowerCase()]) {
+        var myIds = _identitiesOf(p);
+        var canon = null;
+        for (var ii = 0; ii < myIds.length; ii++) { if (idToCanon[myIds[ii]]) { canon = idToCanon[myIds[ii]]; break; } }
+        if (canon) {
             removedCount++;
-            return; // skip — already represented inside a team
-        }
-
-        // Deduplicate by uid/email
-        var key = p.uid ? ('uid:' + p.uid) : (p.email ? ('email:' + p.email) : null);
-        if (key && seen[key]) {
-            removedCount++;
-            var prevIdx = deduped.indexOf(seen[key]);
-            if (prevIdx !== -1) deduped[prevIdx] = p;
-            seen[key] = p;
+            _mergeInto(canon, p);
+            _identitiesOf(canon).forEach(function (id) { idToCanon[id] = canon; }); // re-registra ids do canônico (ganhou novos)
+            myIds.forEach(function (id) { idToCanon[id] = canon; });
         } else {
-            if (key) seen[key] = p;
             deduped.push(p);
+            myIds.forEach(function (id) { idToCanon[id] = p; });
         }
     });
 
