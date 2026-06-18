@@ -1573,7 +1573,7 @@ function setupCreateTournamentModal() {
   window._addPhase = function() {
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
     var n = window._extraPhases.length + 2;
-    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
+    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: 2, scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
     window._renderPhases();
   };
   window._removePhase = function(i) { if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
@@ -1586,12 +1586,14 @@ function setupCreateTournamentModal() {
       ph.mapping = _phaseDefaultMapping(value);
       if (value !== 'liga') ph.reiRainha = false; // Rei/Rainha só em Pontos Corridos
     }
-    // qualifyMode: 'all' (todos) | 'per_group' (top-K/grupo) | 'overall' (top-N geral).
-    if (field === 'qualifyMode') {
-      if (value === 'all') { ph.scope = 'per_group'; ph.mapping = [{ dest: (ph.format === 'elim_dupla' ? 'upper' : 'main'), rankFrom: 1, rankTo: 99, label: '' }]; }
-      else { ph.scope = (value === 'overall') ? 'overall' : 'per_group'; ph.mapping = _phaseDefaultMapping(ph.format); }
+    // v2.6.83: dois eixos — qualifyQuantity ('all'|'top') × scope ('per_group'|'overall').
+    // Mantém qualifyMode normalizado pro save/motor/estimativa (legado): all|per_group|overall.
+    if (field === 'qualifyQuantity' || field === 'scope') {
+      var _q = ph.qualifyQuantity || 'top';
+      var _s = ph.scope || 'per_group';
+      ph.qualifyMode = (_q === 'all') ? 'all' : (_s === 'overall' ? 'overall' : 'per_group');
     }
-    if (['format', 'reiRainha', 'sourceType', 'fixedPairs', 'qualifyMode', 'grandFinal'].indexOf(field) !== -1) window._renderPhases();
+    if (['format', 'reiRainha', 'sourceType', 'fixedPairs', 'qualifyMode', 'qualifyQuantity', 'scope', 'grandFinal'].indexOf(field) !== -1) window._renderPhases();
   };
   // v2.6.77: estratégia de avanço (Performance/Equilíbrio/Sorteio) é INDEPENDENTE
   // do toggle "Duplas fixas". A estratégia sempre define COMO os classificados vão
@@ -1602,15 +1604,11 @@ function setupCreateTournamentModal() {
     ph.pairingStrategy = strategy;
     window._renderPhases();
   };
-  // v2.6.75: trilha única — "Os X melhores avançam". Atualiza mapping[0] (rankFrom=1,
-  // rankTo=X) sem re-render (preserva o foco do input). Multi-trilha (Ouro/Prata) usa
-  // _setPhaseMapping com faixas; aqui é o caso simples de um destino só.
+  // v2.6.83: "Os X melhores" — quantos avançam (eixo quantidade). Grava em qualifyTopN
+  // SEM re-render (preserva o foco do input). Vale tanto pra per_group quanto pra geral.
   window._setPhaseTopN = function(i, value) {
     var ph = window._extraPhases[i]; if (!ph) return;
-    var x = Math.max(1, parseInt(value) || 1);
-    if (!Array.isArray(ph.mapping) || !ph.mapping.length) ph.mapping = _phaseDefaultMapping(ph.format);
-    ph.mapping[0].rankFrom = 1;
-    ph.mapping[0].rankTo = x;
+    ph.qualifyTopN = Math.max(1, parseInt(value) || 1);
   };
   // v2.6.79: nº de linhas (chaves paralelas) numa Eliminatória — 1, 2 ou 4. 3 é
   // BLOQUEADO (a 3ª linha exigiria a 4ª por justiça das semis). Preserva nomes/faixas
@@ -1675,13 +1673,14 @@ function setupCreateTournamentModal() {
   // Resumo de 1 linha das escolhas da transição (mostrado quando colapsada).
   function _phaseTxSummary(ph, teamSize) {
     var qm = ph.qualifyMode || 'per_group', parts = [];
-    if (qm === 'all') { parts.push('Todos avançam'); }
-    else if ((ph.mapping || []).length > 1) {
-      parts.push((ph.mapping || []).map(function(m, mi){ var lbl = (m.label && m.label.trim()) || ('Linha ' + (mi + 1)); return lbl + ' ' + (m.rankFrom || 1) + '-' + (m.rankTo || 1); }).join(' · '));
-      parts.push(ph.grandFinal !== false ? 'grande final' : 'linhas independentes');
-    } else {
-      var x = (ph.mapping && ph.mapping[0]) ? (ph.mapping[0].rankTo || 2) : 2;
-      parts.push('Top ' + x + (qm === 'overall' ? ' geral' : '/grupo'));
+    // v2.6.83: resumo dos dois eixos + linhas (Eliminatórias).
+    var _qty = ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top');
+    var _basis = ph.scope || (ph.qualifyMode === 'overall' ? 'overall' : 'per_group');
+    var _basisLbl = (_basis === 'overall') ? 'geral' : 'por grupo';
+    parts.push((_qty === 'all') ? ('Todos · ' + _basisLbl) : ('Top ' + (ph.qualifyTopN || 2) + ' · ' + _basisLbl));
+    if (ph.format === 'elim_simples' || ph.format === 'elim_dupla') {
+      var _nL = (ph.mapping || []).length || 1;
+      if (_nL > 1) parts.push(_nL + ' linhas · ' + (ph.grandFinal !== false ? 'grande final' : 'independentes'));
     }
     if (teamSize >= 2) {
       var sl = { draw_among: 'Sorteio', top: 'Performance', balanced: 'Equilíbrio' }[ph.pairingStrategy || 'top'] || 'Performance';
@@ -1711,59 +1710,50 @@ function setupCreateTournamentModal() {
     if (_txCol) h += '<span style="font-size:0.72rem;color:var(--text-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">— ' + esc(_phaseTxSummary(ph, teamSize)) + '</span>';
     h += '</div>';
     if (!_txCol) {
-    h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Quem classifica</div>';
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:' + (qm === 'all' ? '0' : '10px') + ';">';
-    h += _phBtn(i, 'qualifyMode', 'all', 'Todos', qm === 'all');
-    h += _phBtn(i, 'qualifyMode', 'per_group', 'Melhores de cada grupo', qm === 'per_group');
-    h += _phBtn(i, 'qualifyMode', 'overall', 'Melhores no geral', qm === 'overall');
-    h += '</div>';
-    // v2.6.82: a config de LINHAS (Eliminatórias) aparece SEMPRE — mesmo com "Todos",
-    // pois define como os classificados são distribuídos nas chaves paralelas. Já o
-    // "Os X melhores" (não-elim) só faz sentido quando não é "Todos".
+    // v2.6.83: "Quem classifica" = DOIS eixos independentes.
+    //  • Quantos: Todos | Os X melhores.   • Classificação: Por grupo | Geral.
+    var _qty = ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top');
+    var _basis = ph.scope || (ph.qualifyMode === 'overall' ? 'overall' : 'per_group');
+    var _topN = ph.qualifyTopN || (ph.mapping && ph.mapping[0] && ph.mapping[0].rankTo) || 2;
     var _isElim = (ph.format === 'elim_simples' || ph.format === 'elim_dupla');
-    if (_isElim || qm !== 'all') {
-      var _rankCtx = (qm === 'overall') ? 'no <strong>ranking geral</strong>' : '<strong>de cada grupo</strong>';
+    h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Quem classifica</div>';
+    h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">';
+    h += '<span style="font-size:0.68rem;color:var(--text-muted);min-width:82px;">Quantos:</span>';
+    h += _phBtn(i, 'qualifyQuantity', 'all', 'Todos', _qty === 'all');
+    h += _phBtn(i, 'qualifyQuantity', 'top', 'Os X melhores', _qty === 'top');
+    if (_qty === 'top') h += '<input type="number" min="1" max="64" value="' + _topN + '" oninput="window._setPhaseTopN(' + i + ', this.value)" style="width:52px;text-align:center;' + _PH_INP + '">';
+    h += '</div>';
+    h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">';
+    h += '<span style="font-size:0.68rem;color:var(--text-muted);min-width:82px;">Classificação:</span>';
+    h += _phBtn(i, 'scope', 'per_group', 'Por grupo', _basis === 'per_group');
+    h += _phBtn(i, 'scope', 'overall', 'Geral', _basis === 'overall');
+    h += '</div>';
+    // Linhas (só Eliminatórias) — apenas o NOME de cada chave. Quem ocupa cada linha é
+    // decidido pelo critério "Como avançam" (Sorteio / Performance / Equilíbrio) abaixo.
+    if (_isElim) {
+      var _lon = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;';
+      var _loff = 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);';
+      var _nLines = (ph.mapping && ph.mapping.length) || 1;
       h += '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 10px;margin-bottom:' + (teamSize >= 2 ? '10px' : '0') + ';">';
-      if (_isElim) {
-        // v2.6.79: Linhas (chaves paralelas) — 1, 2 ou 4 (3 bloqueado). Cada linha é
-        // uma chave eliminatória nomeada pelo organizador; os campeões convergem.
-        var _nLines = (ph.mapping && ph.mapping.length) || 1;
-        h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">Linhas (chaves paralelas) — cada uma é uma chave; os campeões convergem na grande final:</div>';
-        h += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">';
-        h += '<span style="font-size:0.72rem;color:var(--text-muted);">Nº de linhas:</span>';
-        [1, 2, 4].forEach(function(n){
-          var act = _nLines === n;
-          h += '<button type="button" onclick="window._setPhaseLineCount(' + i + ',' + n + ')" style="padding:5px 13px;border-radius:9px;font-size:0.8rem;font-weight:700;cursor:pointer;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + n + '</button>';
-        });
-        h += '<span style="font-size:0.66rem;color:var(--text-muted);">(3 não — a 3ª exigiria a 4ª)</span>';
+      h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">Linhas (chaves paralelas) — cada uma é uma chave; os campeões convergem na grande final:</div>';
+      h += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">';
+      h += '<span style="font-size:0.72rem;color:var(--text-muted);">Nº de linhas:</span>';
+      [1, 2, 4].forEach(function(n){
+        h += '<button type="button" onclick="window._setPhaseLineCount(' + i + ',' + n + ')" style="padding:5px 13px;border-radius:9px;font-size:0.8rem;font-weight:700;cursor:pointer;' + (_nLines === n ? _lon : _loff) + '">' + n + '</button>';
+      });
+      h += '</div>';
+      h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:5px;">Nomeie cada linha (quem entra em cada chave vem do critério Sorteio / Performance / Equilíbrio abaixo):</div>';
+      (ph.mapping || []).forEach(function(mp, mi){
+        h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">';
+        h += '<span style="flex-shrink:0;font-size:0.9rem;">🔹</span>';
+        h += '<input type="text" value="' + esc(mp.label || '') + '" placeholder="Nome da linha ' + (mi + 1) + '" oninput="window._setPhaseMappingLabel(' + i + ', ' + mi + ', this.value)" style="flex:1;min-width:120px;' + _PH_INP + '">';
         h += '</div>';
-        h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:5px;">Nomeie cada linha e defina a faixa de colocação ' + _rankCtx + ' que vem pra ela:</div>';
-        (ph.mapping || []).forEach(function(mp, mi){
-          h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">';
-          h += '<span style="flex-shrink:0;font-size:0.9rem;">🔹</span>';
-          h += '<input type="text" value="' + esc(mp.label || '') + '" placeholder="Nome da linha ' + (mi + 1) + '" oninput="window._setPhaseMappingLabel(' + i + ', ' + mi + ', this.value)" style="flex:1;min-width:90px;' + _PH_INP + '">';
-          h += '<span style="font-size:0.78rem;color:var(--text-muted);">do</span>';
-          h += '<input type="number" min="1" max="32" value="' + (mp.rankFrom || 1) + '" oninput="window._setPhaseMapping(' + i + ', ' + mi + ', \'rankFrom\', this.value)" style="width:46px;text-align:center;' + _PH_INP + '">';
-          h += '<span style="font-size:0.78rem;color:var(--text-muted);">º ao</span>';
-          h += '<input type="number" min="1" max="32" value="' + (mp.rankTo || 1) + '" oninput="window._setPhaseMapping(' + i + ', ' + mi + ', \'rankTo\', this.value)" style="width:46px;text-align:center;' + _PH_INP + '">';
-          h += '<span style="font-size:0.78rem;color:var(--text-muted);">º</span>';
-          h += '</div>';
-        });
-        if (_nLines >= 2) {
-          // v2.6.80: grande final (campeão único) × linhas independentes (categorias).
-          var _gf = ph.grandFinal !== false;
-          h += '<div style="display:flex;align-items:center;gap:9px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">';
-          h += '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox"' + (_gf ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ',\'grandFinal\',this.checked)"><span class="toggle-slider"></span></label>';
-          h += '<div><span style="font-size:0.8rem;font-weight:600;color:var(--text-bright);">Grande final unindo as linhas</span><div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;">' + (_gf ? 'os campeões das linhas convergem num campeão único' : 'cada linha é independente — categoria própria, classificação separada') + '</div></div>';
-          h += '</div>';
-        }
-      } else {
-        // não-eliminatória (Pontos Corridos / Fase de Grupos) → "Os X melhores avançam".
-        var _m0 = (ph.mapping && ph.mapping[0]) ? ph.mapping[0] : { rankTo: 2 };
-        h += '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">';
-        h += '<span style="font-size:0.82rem;">🏆 Os</span>';
-        h += '<input type="number" min="1" max="32" value="' + (_m0.rankTo || 2) + '" oninput="window._setPhaseTopN(' + i + ', this.value)" style="width:54px;text-align:center;' + _PH_INP + '">';
-        h += '<span style="font-size:0.82rem;color:var(--text-muted);">melhores ' + _rankCtx + ' avançam</span>';
+      });
+      if (_nLines >= 2) {
+        var _gf = ph.grandFinal !== false;
+        h += '<div style="display:flex;align-items:center;gap:9px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">';
+        h += '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox"' + (_gf ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ',\'grandFinal\',this.checked)"><span class="toggle-slider"></span></label>';
+        h += '<div><span style="font-size:0.8rem;font-weight:600;color:var(--text-bright);">Grande final unindo as linhas</span><div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;">' + (_gf ? 'os campeões das linhas convergem num campeão único' : 'cada linha é independente — categoria própria, classificação separada') + '</div></div>';
         h += '</div>';
       }
       h += '</div>';
@@ -4018,13 +4008,13 @@ function setupCreateTournamentModal() {
     }
     for (var k = 0; k <= i; k++) {
       var ph = window._extraPhases[k]; if (!ph) break;
-      var qm = ph.qualifyMode || 'per_group';
-      if (qm !== 'all') {
-        var perDest = (ph.mapping || []).reduce(function (s, m) {
-          return s + Math.max((parseInt(m.rankTo, 10) || 1) - (parseInt(m.rankFrom, 10) || 1) + 1, 0);
-        }, 0) || 2;
-        if (qm === 'overall') { N = (N > 0) ? Math.min(perDest, N) : perDest; }
-        else { var g = groupsOf(prevFmt, prevRei, prevGrupos, N); var d = g * perDest; N = (N > 0) ? Math.min(d, N) : d; }
+      // v2.6.83: quantidade vem de qualifyQuantity ('all'|'top') + qualifyTopN; base de scope.
+      var _qty = ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top');
+      var _basis = ph.scope || (ph.qualifyMode === 'overall' ? 'overall' : 'per_group');
+      if (_qty !== 'all') {
+        var topN = Math.max(parseInt(ph.qualifyTopN, 10) || 2, 1);
+        if (_basis === 'overall') { N = (N > 0) ? Math.min(topN, N) : topN; }
+        else { var g = groupsOf(prevFmt, prevRei, prevGrupos, N); var d = g * topN; N = (N > 0) ? Math.min(d, N) : d; }
       }
       prevFmt = ph.format; prevRei = !!ph.reiRainha; prevGrupos = ph.gruposCount || 4;
     }
@@ -4916,6 +4906,8 @@ function setupCreateTournamentModal() {
           gruposClassified: parseInt(ph.gruposClassified) || 2,
           sourceType: fromPrev ? 'previous' : 'enrollment',
           qualifyMode: src.qualifyMode || (src.scope === 'overall' ? 'overall' : 'per_group'),
+          qualifyQuantity: src.qualifyQuantity || (src.qualifyMode === 'all' ? 'all' : 'top'),
+          qualifyTopN: parseInt(src.qualifyTopN) || 2,
           scope: src.scope || 'per_group',
           fixedPairs: ph.fixedPairs !== false,
           pairingStrategy: ph.pairingStrategy || 'top',
@@ -5628,7 +5620,7 @@ function setupCreateTournamentModal() {
           };
           var _rest = _extra.map(function(ph, _ei) {
             var src = ph.sourceType === 'previous'
-              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: (ph.scope || 'per_group') !== 'overall', scope: (ph.scope || 'per_group'), qualifyMode: ph.qualifyMode || 'per_group', mapping: (ph.mapping || []).map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: (m.label || '').trim() }; }) }
+              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: (ph.scope || 'per_group') !== 'overall', scope: (ph.scope || 'per_group'), qualifyMode: ph.qualifyMode || 'per_group', qualifyQuantity: ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top'), qualifyTopN: parseInt(ph.qualifyTopN) || 2, mapping: (ph.mapping || []).map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: (m.label || '').trim() }; }) }
               : { type: 'enrollment' };
             return {
               name: (ph.name || '').trim() || 'Fase',
