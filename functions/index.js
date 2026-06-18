@@ -5100,6 +5100,97 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
   }
 );
 
+// ─── propagateProfileNameChange ───────────────────────────────────────────────
+// v2.6.109: quando o displayName do perfil muda, propaga o nome NOVO pra TODOS os
+// torneios onde a pessoa aparece — na hora, sem depender de alguém abrir o torneio.
+// Atualiza participants[] (por uid) + as strings p1/p2/winner e os arrays team1/team2
+// nas matches/rounds/groups/rodadas (singles E duplas "A / B"). Escopo: torneios em
+// que o uid está em memberUids (query indexada). Identidade = uid (autoridade).
+exports.propagateProfileNameChange = onDocumentWritten(
+  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 300 },
+  async (event) => {
+    const after = event.data.after, before = event.data.before;
+    if (!after.exists) return;
+    const a = after.data(), b = before.exists ? (before.data() || {}) : {};
+    if (a.mergedInto) return;
+    const newName = String(a.displayName || "").trim();
+    const prevName = String(b.displayName || "").trim();
+    if (!newName || newName === prevName) return; // nome não mudou
+    const db = admin.firestore();
+    const uid = event.params.uid;
+    console.log(`[propagateProfileNameChange] uid=${uid} "${prevName}" -> "${newName}"`);
+
+    function renameStr(s, oldNm) {
+      if (s === oldNm) return newName;
+      if (typeof s === "string" && s.indexOf(" / ") !== -1) {
+        const parts = s.split(" / ").map(x => x.trim());
+        if (parts.indexOf(oldNm) !== -1) return parts.map(x => x === oldNm ? newName : x).join(" / ");
+      }
+      return s;
+    }
+    function renameInMatches(matches, oldNm) {
+      if (!Array.isArray(matches) || !oldNm) return { arr: matches, hit: false };
+      let hit = false;
+      const arr = matches.map(m => {
+        if (!m || typeof m !== "object") return m;
+        const nm = Object.assign({}, m);
+        const p1 = renameStr(nm.p1, oldNm); if (p1 !== nm.p1) { nm.p1 = p1; hit = true; }
+        const p2 = renameStr(nm.p2, oldNm); if (p2 !== nm.p2) { nm.p2 = p2; hit = true; }
+        const w = renameStr(nm.winner, oldNm); if (w !== nm.winner) { nm.winner = w; hit = true; }
+        if (Array.isArray(nm.team1)) nm.team1 = nm.team1.map(x => x === oldNm ? (hit = true, newName) : x);
+        if (Array.isArray(nm.team2)) nm.team2 = nm.team2.map(x => x === oldNm ? (hit = true, newName) : x);
+        return nm;
+      });
+      return { arr, hit };
+    }
+
+    let snap;
+    try {
+      snap = await db.collection("tournaments").where("memberUids", "array-contains", uid).get();
+    } catch (e) { console.error("[propagateProfileNameChange] query falhou:", e); return; }
+
+    let fixed = 0;
+    for (const tourDoc of snap.docs) {
+      const t = tourDoc.data();
+      let changed = false;
+      const update = {};
+      let cachedName = null; // nome cacheado deste inscrito NESTE torneio (por uid)
+      if (Array.isArray(t.participants)) {
+        const participants = t.participants.map(p => {
+          if (!p || typeof p !== "object" || (p.uid || "") !== uid) return p;
+          cachedName = String(p.displayName || p.name || "").trim();
+          changed = true;
+          return Object.assign({}, p, { displayName: newName, name: newName });
+        });
+        if (changed) update.participants = participants;
+      }
+      const oldNm = cachedName;
+      if (oldNm && oldNm !== newName) {
+        for (const fld of ["matches", "rounds", "groups", "rodadas"]) {
+          if (!Array.isArray(t[fld])) continue;
+          if (fld === "matches") {
+            const r = renameInMatches(t.matches, oldNm);
+            if (r.hit) { update.matches = r.arr; changed = true; }
+          } else {
+            let hit = false;
+            const arr = t[fld].map(col => {
+              const r = renameInMatches(col && col.matches, oldNm);
+              if (r.hit) hit = true;
+              return Object.assign({}, col, { matches: r.arr });
+            });
+            if (hit) { update[fld] = arr; changed = true; }
+          }
+        }
+      }
+      if (changed && Object.keys(update).length) {
+        try { await tourDoc.ref.update(update); fixed++; }
+        catch (e) { console.error(`[propagateProfileNameChange] update falhou t=${tourDoc.id}:`, e); }
+      }
+    }
+    console.log(`[propagateProfileNameChange] uid=${uid} torneios atualizados: ${fixed}`);
+  }
+);
+
 // ─── scheduledAutoMergeCleanup (diário 04:45 BRT) ─────────────────────────
 // Varre toda a coleção users em busca de phones E emails duplicados e mescla
 // automaticamente os pares encontrados. Garante que duplicatas que existiam
