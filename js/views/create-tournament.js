@@ -1908,7 +1908,15 @@ function setupCreateTournamentModal() {
   window._syncManualPairing = function() {
     var tgl = document.getElementById('manual-pairing-toggle');
     var hidden = document.getElementById('manual-pairing');
-    if (hidden) hidden.value = (tgl && tgl.checked) ? 'open' : 'organizer_only';
+    var on = !!(tgl && tgl.checked);
+    if (hidden) hidden.value = on ? 'open' : 'organizer_only';
+    // v2.6.90: se os participantes formam suas duplas, eles se inscrevem JÁ com parceiro
+    // = "Times Montados". Liga o modo Times automaticamente (mantém Individual como está;
+    // os dois ligados = misto — indivíduos podem se juntar formando duplas).
+    if (on) {
+      var team = document.getElementById('enroll-toggle-team');
+      if (team && !team.checked) { team.checked = true; if (typeof window._syncEnrollToggles === 'function') window._syncEnrollToggles(); }
+    }
   };
 
   // v2.2.46: separar duplas formadas x sorteadas em chaveamentos próprios.
