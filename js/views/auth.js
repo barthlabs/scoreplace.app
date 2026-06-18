@@ -8200,6 +8200,28 @@ function setupProfileModal() {
         }
       }
 
+      // ── 2.5 GATE DE NOME ÚNICO (v2.6.104) ───────────────────────────────────
+      // Se o nome MUDOU e já existe de OUTRA pessoa (uid diferente), bloqueia — a
+      // regra que combinamos: não pode dois usuários distintos com o mesmo nome.
+      // Só checa quando o nome muda (saves que não mexem no nome passam, mesmo com
+      // duplicata legada). Nome-que-é-telefone é exceção. Fail-open (erro não trava).
+      if (finalName && finalName.trim().toLowerCase() !== (_oldDisplayName || '').trim().toLowerCase()
+          && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(finalName))
+          && window.FirestoreDB && typeof window.FirestoreDB.isDisplayNameTaken === 'function') {
+        var _conflictUid = null;
+        try { _conflictUid = await window.FirestoreDB.isDisplayNameTaken(finalName, cu.uid); } catch (e) {}
+        if (_conflictUid) {
+          if (typeof showAlertDialog === 'function') {
+            showAlertDialog('Esse nome já está em uso', 'Já existe outra pessoa cadastrada como "' + finalName + '". Escolha um nome diferente — pode incluir o sobrenome ou uma inicial (ex.: "' + finalName + ' M.").', null, { type: 'warning' });
+          } else if (typeof showNotification !== 'undefined') {
+            showNotification('Nome em uso', 'Já existe "' + finalName + '". Escolha outro.', 'warning');
+          }
+          var _sbtn = document.getElementById('profile-save-btn');
+          if (_sbtn && typeof window._unspinButton === 'function') window._unspinButton(_sbtn);
+          return;
+        }
+      }
+
       // ── 2a. PRIVACIDADE × NOME (v2.4.4) ────────────────────────────────
       // Se o usuário ativou "ocultar e-mail/telefone" mas o nome de exibição
       // É justamente o contato (não tem nome real), bloqueia o save e exige
