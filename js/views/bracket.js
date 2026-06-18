@@ -1475,23 +1475,33 @@ async function _preloadPlayerPhotos(tournament) {
 
   // v1.8.58: buscar foto por UID (fonte mais confiável — imune a nomes trocados).
   // Cacheia sob o displayName real do Firestore E sob cada membro do time.
+  // v2.6.105: AO MESMO TEMPO, refresca o NOME do inscrito a partir do perfil atual
+  // (por uid). O torneio congela o nome no momento da inscrição; quando a pessoa
+  // renomeia o perfil depois, o torneio fica com nome velho → 2 pessoas distintas
+  // apareciam com o MESMO nome velho (falsa duplicata) e colapsavam no ranking.
+  // Aqui usamos o mesmo doc.get() que já buscamos pra foto — zero leitura extra.
+  var _nameRefresh = [];
   participants.forEach(function(p) {
     if (typeof p !== 'object') return;
     var uid  = p.uid || '';
-    var teamName = p.displayName || p.name || '';
     if (!uid) return;
     promises.push(
       window.FirestoreDB.db.collection('users').doc(uid).get()
         .then(function(doc) {
           if (!doc.exists) return;
-          var data = doc.data();
-          if (!data.photoURL || data.photoURL.indexOf('dicebear.com') !== -1) return;
-          var photo = data.photoURL;
-          // Princípio: cada pessoa é um indivíduo com sua própria foto/avatar.
-          // Cacheia APENAS sob o displayName real do Firestore dessa pessoa.
-          // Nunca usa o UID de um membro para preencher o avatar de outro.
-          var realName = (data.displayName || '').trim().toLowerCase();
-          if (realName) window._playerPhotoCache[realName] = photo;
+          var data = doc.data() || {};
+          // foto (cada pessoa sob o SEU displayName real; nunca o uid de um preenche o outro)
+          if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1) {
+            var realName = (data.displayName || '').trim().toLowerCase();
+            if (realName) window._playerPhotoCache[realName] = data.photoURL;
+          }
+          // refresh do nome — só INDIVÍDUOS (não times "A / B"); ignora nome-genérico/telefone
+          var freshName = (data.displayName || '').trim();
+          var cached = (p.displayName || p.name || '').trim();
+          if (freshName && freshName !== cached && cached.indexOf(' / ') === -1
+              && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(freshName))) {
+            _nameRefresh.push({ p: p, name: freshName, email: data.email || '' });
+          }
         })
         .catch(function() {})
     );
@@ -1520,6 +1530,24 @@ async function _preloadPlayerPhotos(tournament) {
   });
 
   await Promise.all(promises);
+
+  // v2.6.105: aplica nomes atualizados + salva + re-render leve se algo mudou.
+  // Idempotente: na próxima passada os nomes já batem → nada muda → sem loop.
+  if (_nameRefresh.length) {
+    var _changed = 0;
+    _nameRefresh.forEach(function(r) {
+      var cur = (r.p.displayName || r.p.name || '').trim();
+      if (cur !== r.name) {
+        r.p.displayName = r.name; r.p.name = r.name;
+        if (r.email && !r.p.email) r.p.email = r.email;
+        _changed++;
+      }
+    });
+    if (_changed && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+      try { await window.FirestoreDB.saveTournament(tournament); } catch (e) {}
+      try { if (typeof window._softRefreshView === 'function') window._softRefreshView(); } catch (e) {}
+    }
+  }
 }
 
 // ─── Player avatars helper for bracket cards ────────────────────────────────
