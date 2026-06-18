@@ -1591,6 +1591,16 @@ function setupCreateTournamentModal() {
     ph.fixedPairs = true; ph.pairingStrategy = strategy;
     window._renderPhases();
   };
+  // v2.6.75: trilha única — "Os X melhores avançam". Atualiza mapping[0] (rankFrom=1,
+  // rankTo=X) sem re-render (preserva o foco do input). Multi-trilha (Ouro/Prata) usa
+  // _setPhaseMapping com faixas; aqui é o caso simples de um destino só.
+  window._setPhaseTopN = function(i, value) {
+    var ph = window._extraPhases[i]; if (!ph) return;
+    var x = Math.max(1, parseInt(value) || 1);
+    if (!Array.isArray(ph.mapping) || !ph.mapping.length) ph.mapping = _phaseDefaultMapping(ph.format);
+    ph.mapping[0].rankFrom = 1;
+    ph.mapping[0].rankTo = x;
+  };
   // v2.6.62: _togglePhaseResultEntry agora é canônico (definido no topo, idx 0 = Fase 1).
   // Botão de toggle do construtor (estilo dos botões da Fase 1).
   function _phBtn(i, field, val, label, active) {
@@ -1621,36 +1631,32 @@ function setupCreateTournamentModal() {
     var qm = ph.qualifyMode || 'per_group';
     var h = '';
 
-    // ─── BLOCO DE TRANSIÇÃO (como esta fase recebe os inscritos da anterior) ───
+    // ─── BLOCO DE TRANSIÇÃO (como esta fase recebe os classificados da anterior) ───
+    // v2.6.75: fase extra SEMPRE vem dos classificados da fase anterior — inscrição
+    // direta não cabe numa transição. Origem fixa (sem botões de seleção).
+    ph.sourceType = 'previous';
     h += '<div style="border:1px dashed rgba(245,158,11,0.45);border-radius:12px;padding:10px 12px;margin-bottom:6px;background:rgba(245,158,11,0.05);">';
-    h += '<div style="font-size:0.7rem;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">⇣ Como a Fase ' + num + ' recebe os inscritos</div>';
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:' + (fromPrev ? '10px' : '0') + ';">';
-    h += _phBtn(i, 'sourceType', 'previous', 'Classificados da fase anterior', fromPrev);
-    h += _phBtn(i, 'sourceType', 'enrollment', 'Inscrição direta + sorteio', !fromPrev);
+    h += '<div style="font-size:0.7rem;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">⇣ Como a Fase ' + num + ' recebe os classificados</div>';
+    h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Quem classifica</div>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:' + (qm === 'all' ? '0' : '10px') + ';">';
+    h += _phBtn(i, 'qualifyMode', 'all', 'Todos', qm === 'all');
+    h += _phBtn(i, 'qualifyMode', 'per_group', 'Melhores de cada grupo', qm === 'per_group');
+    h += _phBtn(i, 'qualifyMode', 'overall', 'Melhores no geral', qm === 'overall');
     h += '</div>';
-    if (fromPrev) {
-      h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Quem classifica</div>';
-      h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:' + (qm === 'all' ? '0' : '10px') + ';">';
-      h += _phBtn(i, 'qualifyMode', 'all', 'Todos', qm === 'all');
-      h += _phBtn(i, 'qualifyMode', 'per_group', 'Melhores de cada grupo', qm === 'per_group');
-      h += _phBtn(i, 'qualifyMode', 'overall', 'Melhores no geral', qm === 'overall');
-      h += '</div>';
-      if (qm !== 'all') {
-        var dests = _phaseDests(ph.format);
-        var _isMultiDest = dests.length > 1;
-        var _rankCtx = (qm === 'overall') ? 'no <strong>ranking geral</strong>' : '<strong>em cada grupo</strong>';
-        h += '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 10px;margin-bottom:' + (teamSize >= 2 ? '10px' : '0') + ';">';
-        h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">Faixa de colocação ' + _rankCtx + (_isMultiDest ? ' por trilha — <span style="color:#a5b4fc;">renomeie como quiser</span>' : '') + ':</div>';
+    if (qm !== 'all') {
+      var dests = _phaseDests(ph.format);
+      var _isMultiDest = dests.length > 1;
+      var _rankCtx = (qm === 'overall') ? 'no <strong>ranking geral</strong>' : '<strong>de cada grupo</strong>';
+      h += '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 10px;margin-bottom:' + (teamSize >= 2 ? '10px' : '0') + ';">';
+      if (_isMultiDest) {
+        // múltiplas trilhas (ex.: Ouro/Prata) → faixa de colocação por trilha.
+        h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">Faixa de colocação ' + _rankCtx + ' por trilha — <span style="color:#a5b4fc;">renomeie como quiser</span>:</div>';
         (ph.mapping || []).forEach(function(mp, mi){
           var dst = dests[mi] || {};
           var curLabel = (mp.label != null && mp.label !== '') ? mp.label : (dst.defaultLabel || ('Destino ' + (mi + 1)));
           h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">';
-          if (_isMultiDest) {
-            if (dst.icon) h += '<span style="flex-shrink:0;font-size:1rem;">' + dst.icon + '</span>';
-            h += '<input type="text" value="' + esc(curLabel) + '" placeholder="Nome da trilha" oninput="window._setPhaseMappingLabel(' + i + ', ' + mi + ', this.value)" title="Nome da trilha (ex.: Ouro, Prata, A, B…)" style="flex:1;min-width:90px;' + _PH_INP + '">';
-          } else {
-            h += '<span style="flex:1;min-width:120px;font-size:0.8rem;">' + (dst.icon ? dst.icon + ' ' : '') + esc(curLabel) + '</span>';
-          }
+          if (dst.icon) h += '<span style="flex-shrink:0;font-size:1rem;">' + dst.icon + '</span>';
+          h += '<input type="text" value="' + esc(curLabel) + '" placeholder="Nome da trilha" oninput="window._setPhaseMappingLabel(' + i + ', ' + mi + ', this.value)" title="Nome da trilha (ex.: Ouro, Prata, A, B…)" style="flex:1;min-width:90px;' + _PH_INP + '">';
           h += '<span style="font-size:0.78rem;color:var(--text-muted);">do</span>';
           h += '<input type="number" min="1" max="32" value="' + (mp.rankFrom || 1) + '" oninput="window._setPhaseMapping(' + i + ', ' + mi + ', \'rankFrom\', this.value)" style="width:46px;text-align:center;' + _PH_INP + '">';
           h += '<span style="font-size:0.78rem;color:var(--text-muted);">º ao</span>';
@@ -1658,21 +1664,31 @@ function setupCreateTournamentModal() {
           h += '<span style="font-size:0.78rem;color:var(--text-muted);">º</span>';
           h += '</div>';
         });
+      } else {
+        // trilha única → campo simples "Os X melhores … avançam".
+        var _m0 = (ph.mapping && ph.mapping[0]) ? ph.mapping[0] : { rankTo: 2 };
+        h += '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">';
+        h += '<span style="font-size:0.82rem;">🏆 Os</span>';
+        h += '<input type="number" min="1" max="32" value="' + (_m0.rankTo || 2) + '" oninput="window._setPhaseTopN(' + i + ', this.value)" style="width:54px;text-align:center;' + _PH_INP + '">';
+        h += '<span style="font-size:0.82rem;color:var(--text-muted);">melhores ' + _rankCtx + ' avançam</span>';
         h += '</div>';
       }
-      // Como formam as duplas (só faz sentido em duplas).
-      if (teamSize >= 2) {
-        var _ps = ph.pairingStrategy || 'top';
-        var _indiv = !ph.fixedPairs;
-        h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Como formam as duplas</div>';
-        h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-        h += '<button type="button" onclick="window._setPhaseField(' + i + ',\'fixedPairs\',false)" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (_indiv ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">Individual</button>';
-        [['top', '1º+2º · 3º+4º'], ['balanced', '1º+4º · 2º+3º'], ['draw_among', '🎲 Sorteio']].forEach(function(p){
-          var act = !_indiv && _ps === p[0];
-          h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
-        });
-        h += '</div>';
-      }
+      h += '</div>';
+    }
+    // Como formam as duplas na próxima fase (só em duplas). v2.6.75: Individual
+    // (parceria não fixa) OU duplas FIXAS formadas por Sorteio / Performance
+    // (1º+2º, 3º+4º) / Equilíbrio (1º+último, 2º+penúltimo). Persistido em pairingStrategy.
+    if (teamSize >= 2) {
+      var _ps = ph.pairingStrategy || 'top';
+      var _indiv = !ph.fixedPairs;
+      h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Como formam as duplas</div>';
+      h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+      h += '<button type="button" onclick="window._setPhaseField(' + i + ',\'fixedPairs\',false)" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (_indiv ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">Individual</button>';
+      [['draw_among', '🎲 Sorteio'], ['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.']].forEach(function(p){
+        var act = !_indiv && _ps === p[0];
+        h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
+      });
+      h += '</div>';
     }
     h += '</div>'; // fim transição
 
