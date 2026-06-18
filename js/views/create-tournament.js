@@ -669,6 +669,8 @@ function setupCreateTournamentModal() {
                   <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🤝</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Participantes podem formar suas duplas</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">Ligado: cada um arrasta seu card sobre o de outro e a dupla fica pendente até o outro aceitar. Desligado: só o organizador monta as duplas. (Só vale em duplas.)</div></div></div>
                   <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="manual-pairing-toggle" aria-label="Participantes formam duplas" onchange="window._syncManualPairing()"><span class="toggle-slider"></span></label>
                 </div>
+                <!-- v2.6.91: aviso quando formação manual liga Times mas Individual segue marcado (misto) -->
+                <div id="manual-pairing-notice" style="display:none;margin-top:8px;"></div>
               </div>
 
               <!-- (Inscrições durante a fase movida pra logo abaixo do Agendamento de Sorteios — v2.6.51) -->
@@ -1902,6 +1904,7 @@ function setupCreateTournamentModal() {
     // modo misto — Individual (sorteadas) + Times Montados (formadas) juntos.
     var mpc = document.getElementById('mixed-pairing-container');
     if (mpc) mpc.style.display = (value === 'misto') ? 'block' : 'none';
+    if (typeof window._updateManualPairingNotice === 'function') window._updateManualPairingNotice();
   };
 
   // Quem forma as duplas: 'organizer_only' (default) | 'open' (participantes também).
@@ -1917,6 +1920,19 @@ function setupCreateTournamentModal() {
       var team = document.getElementById('enroll-toggle-team');
       if (team && !team.checked) { team.checked = true; if (typeof window._syncEnrollToggles === 'function') window._syncEnrollToggles(); }
     }
+    window._updateManualPairingNotice();
+  };
+  // v2.6.91: formação manual pressupõe Times Montados (ligado automaticamente), mas NÃO
+  // exclui Individual — o organizador decide. Quando os dois ficam ligados (misto), avisa
+  // que Individual também está marcado pra ele manter (misto) ou desmarcar (só duplas montadas).
+  window._updateManualPairingNotice = function() {
+    var box = document.getElementById('manual-pairing-notice'); if (!box) return;
+    var mp = document.getElementById('manual-pairing-toggle');
+    var indiv = document.getElementById('enroll-toggle-individual');
+    var show = !!(mp && mp.checked && indiv && indiv.checked);
+    if (!show) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = '';
+    box.innerHTML = '<div style="padding:8px 10px;border-radius:9px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.08);font-size:0.74rem;color:#fbbf24;line-height:1.4;">⚠️ <strong>Inscrição individual</strong> também está selecionada — junto com Times Montados, isso é <strong>misto</strong> (indivíduos se inscrevem sozinhos e podem se juntar formando duplas). Mantenha assim, ou desmarque <strong>Individual</strong> no Modo de Inscrição pra aceitar <strong>só duplas montadas</strong>.</div>';
   };
 
   // v2.2.46: separar duplas formadas x sorteadas em chaveamentos próprios.
