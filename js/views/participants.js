@@ -741,6 +741,41 @@ window._setCheckInFilter = function (tId, filter) {
   _reRenderParticipants();
 };
 
+// v2.6.101: sort + busca + filtro ativos/inativos na tela de Inscritos.
+// Busca e filtro ativo/inativo são DOM (sem re-render → não perde foco da busca);
+// o sort re-renderiza (reordena os cards de fato).
+window._partSort = window._partSort || 'az';
+window._partActiveFilter = window._partActiveFilter || 'all';
+window._partSearch = window._partSearch || '';
+window._setPartSort = function (tId, s) { window._partSort = s; if (typeof _reRenderParticipants === 'function') _reRenderParticipants(); };
+window._setPartActiveFilter = function (f) {
+  window._partActiveFilter = f;
+  ['all', 'active', 'inactive'].forEach(function (k) {
+    var b = document.querySelector('[data-pactf="' + k + '"]');
+    if (b) { var on = (k === f); b.style.background = on ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)'; b.style.color = on ? '#a5b4fc' : 'var(--text-muted)'; b.style.borderColor = on ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)'; }
+  });
+  window._partApplyFilter();
+};
+window._partApplyFilter = function () {
+  var inp = document.getElementById('part-search');
+  if (inp) window._partSearch = inp.value;
+  var q = (window._partSearch || '').trim().toLowerCase();
+  var af = window._partActiveFilter || 'all';
+  var cards = document.querySelectorAll('[data-part-card]');
+  var shown = 0;
+  cards.forEach(function (c) {
+    var nm = c.getAttribute('data-part-name') || '';
+    var inactive = c.getAttribute('data-part-inactive') === '1';
+    var okSearch = !q || nm.indexOf(q) !== -1;
+    var okActive = af === 'all' || (af === 'active' && !inactive) || (af === 'inactive' && inactive);
+    var ok = okSearch && okActive;
+    c.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+  });
+  var empty = document.getElementById('part-search-empty');
+  if (empty) empty.style.display = (shown === 0 && cards.length > 0) ? '' : 'none';
+};
+
 window._toggleVip = function (tId, participantName) {
   const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
   if (!t) return;
@@ -1720,7 +1755,10 @@ function renderParticipants(container, tournamentId) {
     // O painel "Lista de Espera" em bracket.js continua em ordem de chegada
     // (timestamp de check-in ascendente). Aqui na lista regular, alfabético
     // facilita encontrar pelo nome ao marcar Presente.
-    _dedupedIndividuals.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+    _dedupedIndividuals.sort((a, b) => {
+      const _c = a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
+      return (window._partSort === 'za') ? -_c : _c;
+    });
 
     // v1.0.83-beta: diagnóstico observável — se Bot 05 ainda sumir, podemos
     // inspecionar window._debugLastParticipantsRender no console pra ver
@@ -1969,8 +2007,9 @@ function renderParticipants(container, tournamentId) {
         }
       }
 
+      const _ciInactive = (_nameToParticipant[ind.name] && _nameToParticipant[ind.name].ligaActive === false) ? '1' : '0';
       return `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${cardBg};border:1px solid ${cardBorder};${isVipPlayer ? 'border-left:3px solid #fbbf24;' : ''}${isWOOrphan ? 'opacity:0.75;' : ''}transition:all 0.2s;">
+        <div data-part-card="1" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${cardBg};border:1px solid ${cardBorder};${isVipPlayer ? 'border-left:3px solid #fbbf24;' : ''}${isWOOrphan ? 'opacity:0.75;' : ''}transition:all 0.2s;">
             <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.4)' : isAbsent ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
             <div style="flex:1;overflow:hidden;">
                 ${standbyHeader}
@@ -2251,6 +2290,24 @@ function renderParticipants(container, tournamentId) {
     ${startBanner}
     ${startedBadge}
     ${readyBannerHtml}
+    ${(parts.length > 6 && (canRollCall || postDrawPresence || canCheckIn)) ? (() => {
+      var _ps = window._partSort || 'az';
+      var _af = window._partActiveFilter || 'all';
+      var _sb = function (on) { return 'padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;border:1px solid ' + (on ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)') + ';background:' + (on ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)') + ';color:' + (on ? '#a5b4fc' : 'var(--text-muted)') + ';'; };
+      return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 12px;">' +
+        '<input id="part-search" type="text" placeholder="🔍 Procurar inscrito…" value="' + (window._partSearch || '').replace(/"/g, '&quot;') + '" oninput="window._partApplyFilter()" style="flex:1;min-width:150px;padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;" />' +
+        '<div style="display:flex;gap:4px;">' +
+          '<button onclick="window._setPartSort(\'' + t.id + '\',\'az\')" style="' + _sb(_ps === 'az') + '">A→Z</button>' +
+          '<button onclick="window._setPartSort(\'' + t.id + '\',\'za\')" style="' + _sb(_ps === 'za') + '">Z→A</button>' +
+        '</div>' +
+        '<div style="display:flex;gap:4px;">' +
+          '<button data-pactf="all" onclick="window._setPartActiveFilter(\'all\')" style="' + _sb(_af === 'all') + '">Todos</button>' +
+          '<button data-pactf="active" onclick="window._setPartActiveFilter(\'active\')" style="' + _sb(_af === 'active') + '">Ativos</button>' +
+          '<button data-pactf="inactive" onclick="window._setPartActiveFilter(\'inactive\')" style="' + _sb(_af === 'inactive') + '">Inativos</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="part-search-empty" style="display:none;text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;">Nenhum inscrito encontrado.</div>';
+    })() : ''}
     ${parts.length > 0 ? `
       <div style="${gridStyle}">
         ${cardsStr}
@@ -2262,6 +2319,8 @@ function renderParticipants(container, tournamentId) {
     `}
     ${standbyPanelHtml}
   `;
+  // v2.6.101: reaplica busca + filtro ativo/inativo após o (re)render.
+  setTimeout(function () { try { if (window._partApplyFilter) window._partApplyFilter(); } catch (e) {} }, 0);
 }
 
 // ── Skill category assignment from participant cards ──────────────────────────
