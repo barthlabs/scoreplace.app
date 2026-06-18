@@ -391,5 +391,25 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   eq(pg[1].standings.map(function (s) { return s.name; }), ['sA', 'sB'], 'indep: campeão da linha primeiro (Prata)');
 })();
 
+// 21) Tiebreakers configuráveis na classificação entre fases (Motor Chunk 5).
+//     A e B empatam em pontos; A venceu o confronto direto MAS B tem saldo melhor.
+//     → default (confronto_direto 1º) coloca A na frente; ['saldo_pontos'] inverte.
+(function () {
+  var n = function (s) { return s.name; };
+  var group = { players: ['A', 'B', 'C', 'D'], matches: [
+    { p1: 'A', p2: 'B', winner: 'A', scoreP1: 6, scoreP2: 5 },
+    { p1: 'A', p2: 'C', winner: 'A', scoreP1: 6, scoreP2: 5 },
+    { p1: 'A', p2: 'D', winner: 'D', scoreP1: 5, scoreP2: 6 },
+    { p1: 'B', p2: 'C', winner: 'B', scoreP1: 6, scoreP2: 0 },
+    { p1: 'B', p2: 'D', winner: 'B', scoreP1: 6, scoreP2: 0 },
+    { p1: 'C', p2: 'D', winner: 'C', scoreP1: 6, scoreP2: 0 }
+  ] };
+  // A,B = 6 pts cada. A: saldo +1, venceu B. B: saldo +11. C,D = 3 pts; C venceu D.
+  eq(eng.groupTeamStandings(group).map(n), ['A', 'B', 'C', 'D'], 'tiebreak: confronto_direto (default) → A acima de B');
+  eq(eng.groupTeamStandings(group, { tiebreakers: ['saldo_pontos'] }).map(n), ['B', 'A', 'C', 'D'], 'tiebreak: saldo_pontos → B acima de A (h2h ignorado)');
+  // vitorias como único critério: empate 2×2 entre A/B → estável (mantém A,B); C/D 1×1.
+  eq(eng.groupTeamStandings(group, { tiebreakers: ['vitorias'] }).map(n).slice(0, 2).sort(), ['A', 'B'], 'tiebreak: vitorias mantém A,B no topo');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

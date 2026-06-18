@@ -323,17 +323,22 @@
   // Standings por grupo a partir de matches p1/p2 (Fase de Grupos). Funciona
   // tanto pra individuais quanto pra DUPLAS (m.p1/m.p2 = "A / B") — o nome carrega
   // a dupla, e o keep implícito (buildEntrantsByDest) reforma o teamObj. Devolve
-  // array JÁ ORDENADO (pontos → saldo → vitórias → saldo sets → saldo games).
-  // Simplificação consciente: usa ordem default, não os tiebreakers configuráveis
-  // do organizador (que vivem em locals de bracket-logic). Suficiente pra decidir
-  // quem classifica na transição entre fases.
-  function _groupTeamStandings(group) {
+  // array JÁ ORDENADO.
+  // v2.6.95 (Chunk 5): honra os tiebreakers configurados pelo organizador
+  // (opts.tiebreakers) — mesmo conjunto de critérios e ordem default que o
+  // _computeStandings de bracket-logic. confronto_direto usa o h2h DESTE grupo
+  // (round-robin); buchholz/sonneborn são group-local; antiguidade/juventude via
+  // opts.birthByName (injetado). 'sorteio' é estável no motor (determinismo de
+  // teste — o sorteio real só decide na renderização do app, não na classificação).
+  // Sem opts → ordem default GSM-aware (compatível com chamadas de 1 argumento).
+  function _groupTeamStandings(group, opts) {
+    opts = opts || {};
     if (!group) return [];
     var matches = (group.matches || []).slice();
     (group.rounds || []).forEach(function (r) { if (Array.isArray(r.matches)) matches = matches.concat(r.matches); });
     var participants = group.players || group.participants || [];
-    var smap = {};
-    function ensure(nm) { if (nm && !smap[nm]) smap[nm] = { name: nm, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0 }; }
+    var smap = {}, h2h = {}, usesSets = false;
+    function ensure(nm) { if (nm && !smap[nm]) smap[nm] = { name: nm, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, buchholz: 0, sonnebornBerger: 0 }; }
     participants.forEach(function (p) { ensure(typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); });
     matches.forEach(function (m) {
       if (!m || !m.winner || m.isBye || m.isSitOut) return;
@@ -344,27 +349,67 @@
       smap[m.p1].pointsDiff += (s1 - s2); smap[m.p2].pointsDiff += (s2 - s1);
       if (m.draw || m.winner === 'draw') {
         smap[m.p1].draws++; smap[m.p1].points += 1; smap[m.p2].draws++; smap[m.p2].points += 1;
+        h2h[m.p1 + '|||' + m.p2 + '|||d'] = (h2h[m.p1 + '|||' + m.p2 + '|||d'] || 0) + 1;
+        h2h[m.p2 + '|||' + m.p1 + '|||d'] = (h2h[m.p2 + '|||' + m.p1 + '|||d'] || 0) + 1;
       } else {
         var loser = (m.winner === m.p1) ? m.p2 : m.p1;
         if (smap[m.winner]) { smap[m.winner].wins++; smap[m.winner].points += 3; }
         if (smap[loser]) smap[loser].losses++;
+        h2h[m.winner + '|||' + loser] = (h2h[m.winner + '|||' + loser] || 0) + 1;
       }
-      if (Array.isArray(m.sets)) m.sets.forEach(function (st) {
-        var g1 = parseInt(st.gamesP1) || 0, g2 = parseInt(st.gamesP2) || 0;
-        smap[m.p1].gamesWon += g1; smap[m.p1].gamesLost += g2;
-        smap[m.p2].gamesWon += g2; smap[m.p2].gamesLost += g1;
-        if (g1 > g2) { smap[m.p1].setsWon++; smap[m.p2].setsLost++; }
-        else if (g2 > g1) { smap[m.p2].setsWon++; smap[m.p1].setsLost++; }
+      if (Array.isArray(m.sets) && m.sets.length) {
+        usesSets = true;
+        var sw1 = 0, sw2 = 0, gw1 = 0, gw2 = 0, tb1 = 0, tb2 = 0;
+        m.sets.forEach(function (st) {
+          var g1 = parseInt(st.gamesP1) || 0, g2 = parseInt(st.gamesP2) || 0;
+          gw1 += g1; gw2 += g2;
+          if (g1 > g2) sw1++; else if (g2 > g1) sw2++;
+          if (st.tiebreak) { var tp1 = parseInt(st.tiebreak.pointsP1) || 0, tp2 = parseInt(st.tiebreak.pointsP2) || 0; if (tp1 > tp2) tb1++; else if (tp2 > tp1) tb2++; }
+        });
+        smap[m.p1].setsWon += sw1; smap[m.p1].setsLost += sw2; smap[m.p1].gamesWon += gw1; smap[m.p1].gamesLost += gw2; smap[m.p1].tiebreaksWon += tb1;
+        smap[m.p2].setsWon += sw2; smap[m.p2].setsLost += sw1; smap[m.p2].gamesWon += gw2; smap[m.p2].gamesLost += gw1; smap[m.p2].tiebreaksWon += tb2;
+      }
+    });
+    // Buchholz (soma dos pontos dos adversários) + Sonneborn-Berger (ponderado por resultado), group-local.
+    Object.keys(smap).forEach(function (nm) {
+      var s = smap[nm];
+      matches.forEach(function (m) {
+        if (!m.winner || m.isBye || m.isSitOut) return;
+        var opp = (m.p1 === nm) ? m.p2 : (m.p2 === nm ? m.p1 : null);
+        if (!opp || !smap[opp]) return;
+        s.buchholz += smap[opp].points;
+        if (m.draw || m.winner === 'draw') s.sonnebornBerger += smap[opp].points * 0.5;
+        else if (m.winner === nm) s.sonnebornBerger += smap[opp].points;
       });
     });
-    return Object.keys(smap).map(function (k) { return smap[k]; }).sort(function (a, b) {
+    var birthByName = opts.birthByName || {};
+    var defaultTb = usesSets
+      ? ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio']
+      : ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
+    var tb = (Array.isArray(opts.tiebreakers) && opts.tiebreakers.length) ? opts.tiebreakers : defaultTb;
+    function cmp(a, b) {
       if (b.points !== a.points) return b.points - a.points;
-      var d = b.pointsDiff - a.pointsDiff; if (d) return d;
-      d = b.wins - a.wins; if (d) return d;
-      d = ((b.setsWon - b.setsLost) - (a.setsWon - a.setsLost)); if (d) return d;
-      d = ((b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost)); if (d) return d;
+      for (var i = 0; i < tb.length; i++) {
+        var d = 0;
+        switch (tb[i]) {
+          case 'confronto_direto': { var ab = h2h[a.name + '|||' + b.name] || 0, ba = h2h[b.name + '|||' + a.name] || 0; d = ba - ab; if (d) return d < 0 ? -1 : 1; break; }
+          case 'saldo_pontos': d = b.pointsDiff - a.pointsDiff; if (d) return d; break;
+          case 'vitorias': d = b.wins - a.wins; if (d) return d; break;
+          case 'buchholz': d = (b.buchholz || 0) - (a.buchholz || 0); if (d) return d; break;
+          case 'sonneborn_berger': d = (b.sonnebornBerger || 0) - (a.sonnebornBerger || 0); if (d) return d; break;
+          case 'saldo_sets': d = ((b.setsWon || 0) - (b.setsLost || 0)) - ((a.setsWon || 0) - (a.setsLost || 0)); if (d) return d; break;
+          case 'saldo_games': d = ((b.gamesWon || 0) - (b.gamesLost || 0)) - ((a.gamesWon || 0) - (a.gamesLost || 0)); if (d) return d; break;
+          case 'sets_vencidos': d = (b.setsWon || 0) - (a.setsWon || 0); if (d) return d; break;
+          case 'games_vencidos': d = (b.gamesWon || 0) - (a.gamesWon || 0); if (d) return d; break;
+          case 'tiebreaks_vencidos': d = (b.tiebreaksWon || 0) - (a.tiebreaksWon || 0); if (d) return d; break;
+          case 'antiguidade': { var ab2 = birthByName[a.name], bb2 = birthByName[b.name]; if (ab2 != null && bb2 != null && ab2 !== bb2) return ab2 - bb2; break; }
+          case 'juventude': { var ay = birthByName[a.name], by = birthByName[b.name]; if (ay != null && by != null && ay !== by) return by - ay; break; }
+          case 'sorteio': return 0;
+        }
+      }
       return 0;
-    });
+    }
+    return Object.keys(smap).map(function (k) { return smap[k]; }).sort(cmp);
   }
 
   // ── Integração com o torneio ──────────────────────────────────────────────
@@ -521,9 +566,13 @@
     //  • Fase de Grupos (t.groups, individuais OU duplas) → _groupTeamStandings
     //    (lê m.p1/m.p2; pro caso de duplas o nome "A / B" segue junto via keep).
     var _isMonarchPrev = (t.rounds || []).some(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
+    // v2.6.95 (Chunk 5): passa os tiebreakers configurados + datas de nascimento
+    // (antiguidade/juventude) pro _groupTeamStandings, pra classificação na transição
+    // respeitar a ordem que o organizador definiu.
+    var _tbOpts = { tiebreakers: t.tiebreakers, birthByName: (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {} };
     var cs = _isMonarchPrev
       ? (window._computeMonarchStandings || function (g) { return g.standings || []; })
-      : _groupTeamStandings;
+      : function (g) { return _groupTeamStandings(g, _tbOpts); };
     var res = materializeNextPhase(t, cs, 'ph-' + tId + '-' + ((t.currentPhaseIndex || 0) + 1));
     if (!res.ok) {
       if (window.showAlertDialog) window.showAlertDialog('Não foi possível avançar', 'Motivo: ' + res.error, null, { type: 'warning' });
