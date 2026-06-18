@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.102-beta';
+window.SCOREPLACE_VERSION = '2.6.103-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -353,12 +353,35 @@ window._devWhatsAppBtnHtml = function (opts) {
     return true;
   };
 
+  // v2.6.103: pílula visível "Nova versão — toque pra atualizar". Aparece sempre
+  // que detectamos versão nova (mesmo quando o reload automático é adiado por ação
+  // em andamento) — assim o usuário NUNCA precisa de DevTools/aba anônima: 1 toque
+  // e atualiza na hora. O reload automático (quando seguro) continua valendo.
+  window._showUpdatePill = function() {
+    try {
+      if (document.getElementById('sp-update-pill')) return;
+      if (!document.body) return;
+      var pill = document.createElement('button');
+      pill.id = 'sp-update-pill';
+      pill.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:100000;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;font-size:0.85rem;padding:11px 18px;border-radius:999px;box-shadow:0 6px 22px rgba(0,0,0,0.4);cursor:pointer;border:none;display:flex;align-items:center;gap:8px;animation:spUpPill 0.3s ease;';
+      pill.innerHTML = '🔄 Nova versão — toque para atualizar';
+      pill.onclick = function() { pill.innerHTML = '⏳ Atualizando…'; window._applyUpdate(true); };
+      if (!document.getElementById('sp-update-pill-style')) {
+        var st = document.createElement('style'); st.id = 'sp-update-pill-style';
+        st.textContent = '@keyframes spUpPill{from{opacity:0;transform:translateX(-50%) translateY(12px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}';
+        document.head.appendChild(st);
+      }
+      document.body.appendChild(pill);
+    } catch (e) {}
+  };
+
   // Aplica a atualização: nuke caches + unregister SW + reload. Se não for
   // seguro e force!=true, marca pendente e tenta de novo quando ficar seguro.
   window._applyUpdate = function(force) {
     if (!force && !window._isSafeToReload()) {
       window._pendingUpdateReload = true;
       window._log('[AutoUpdate] Nova versão pronta — aguardando momento seguro pra recarregar.');
+      window._showUpdatePill(); // dá agência ao usuário: 1 toque atualiza já
       return;
     }
     window._pendingUpdateReload = false;
@@ -389,6 +412,7 @@ window._devWhatsAppBtnHtml = function (opts) {
       var m = txt.match(/SCOREPLACE_VERSION\s*=\s*'([^']+)'/);
       if (m && m[1] && m[1] !== window.SCOREPLACE_VERSION) {
         window._log('[AutoUpdate] New version:', m[1], '(running:', window.SCOREPLACE_VERSION + ').');
+        window._showUpdatePill(); // mostra a pílula mesmo se o reload auto for adiado
         window._applyUpdate(!!opts.force);
       }
     }).catch(function() {});
