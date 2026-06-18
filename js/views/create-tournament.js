@@ -3977,14 +3977,56 @@ function setupCreateTournamentModal() {
   // Estimativa de cada fase extra (mesma lógica; N planejado/genérico).
   window._phaseEstimateHtml = function (i, ph) {
     var T = window._t || function (k) { return k; };
-    var inner = window._estimateInnerForPhase(ph);
+    var inner = window._estimateInnerForPhase(ph, i);
     var h = '<div style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px; padding: 0.6rem 0.75rem; margin-top: 12px;">';
     h += '<div style="font-size: 0.72rem; color: #f59e0b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 0.5rem;">⏱ Estimativa de tempo da fase</div>';
     h += '<div id="ph-estimate-ladder-' + i + '">' + inner + '</div></div>';
     return h;
   };
+  // v2.6.81: nº de ENTRANTES de uma fase extra DERIVADO da fase anterior + "quem
+  // classifica". Encadeia da Fase 1 (inscritos reais OU planejado: max/target-slots)
+  // por cada fase: 'Todos' → mantém o nº de ativos; 'Melhores no geral' → soma das
+  // faixas (top X, fixo); 'Melhores de cada grupo' → grupos da fase anterior × faixa.
+  // Só ajusta o que muda (formato/rei-rainha/grupos), como pedido.
+  window._derivePhaseEntrants = function (i) {
+    var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
+    var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
+    var N = 0, isReal = false;
+    var editId = gv('edit-tournament-id');
+    if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+      var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
+      if (t && Array.isArray(t.participants) && t.participants.length > 0) { N = t.participants.length; isReal = true; }
+    }
+    if (!isReal) {
+      var elm = gv('enrollment-limit-mode') || 'cap';
+      if (elm === 'draw') N = iv('tourn-target-slots', 0);
+      if (!N) N = iv('tourn-max-participants', 0);
+    }
+    // Parâmetros da fase ANTERIOR (começam na Fase 1).
+    var prevFmt = gv('select-formato') || 'elim_simples';
+    var prevRei = (gv('draw-mode') || 'sorteio') === 'rei_rainha';
+    var prevGrupos = iv('grupos-count', 4);
+    function groupsOf(fmt, rei, grupos, n) {
+      if (rei) return Math.max(Math.ceil((n || 0) / 4), 1);
+      if (fmt === 'grupos_mata') return Math.max(grupos || 4, 1);
+      return 1;
+    }
+    for (var k = 0; k <= i; k++) {
+      var ph = window._extraPhases[k]; if (!ph) break;
+      var qm = ph.qualifyMode || 'per_group';
+      if (qm !== 'all') {
+        var perDest = (ph.mapping || []).reduce(function (s, m) {
+          return s + Math.max((parseInt(m.rankTo, 10) || 1) - (parseInt(m.rankFrom, 10) || 1) + 1, 0);
+        }, 0) || 2;
+        if (qm === 'overall') { N = (N > 0) ? Math.min(perDest, N) : perDest; }
+        else { var g = groupsOf(prevFmt, prevRei, prevGrupos, N); var d = g * perDest; N = (N > 0) ? Math.min(d, N) : d; }
+      }
+      prevFmt = ph.format; prevRei = !!ph.reiRainha; prevGrupos = ph.gruposCount || 4;
+    }
+    return { N: N, isReal: isReal && N >= 2 };
+  };
   // Calcula o HTML interno da estimativa de uma fase (lê tempos/quadras/categorias do torneio).
-  window._estimateInnerForPhase = function (ph) {
+  window._estimateInnerForPhase = function (ph, i) {
     var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
     var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
     var K = 1, ageCats = 0;
@@ -3993,10 +4035,11 @@ function setupCreateTournamentModal() {
       if (cd.combinedCategories && cd.combinedCategories.length) K = cd.combinedCategories.length;
       ageCats = (cd.ageCategories || []).length;
     } catch (e) { K = 1; }
+    var ent = (typeof i === 'number' && typeof window._derivePhaseEntrants === 'function') ? window._derivePhaseEntrants(i) : { N: 0, isReal: false };
     return window._buildPhaseEstimate({
       call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
       courts: iv('tourn-court-count', 1), fmt: ph.format || 'elim_simples', drawMode: ph.reiRainha ? 'rei_rainha' : 'sorteio',
-      K: K, ageCats: ageCats, N: 0, isReal: false,
+      K: K, ageCats: ageCats, N: ent.N, isReal: ent.isReal,
       monarchClassified: ph.monarchClassified || 1, gruposCount: ph.gruposCount || 4
     });
   };
@@ -4005,7 +4048,7 @@ function setupCreateTournamentModal() {
     if (!Array.isArray(window._extraPhases)) return;
     window._extraPhases.forEach(function (ph, i) {
       var el = document.getElementById('ph-estimate-ladder-' + i);
-      if (el) el.innerHTML = window._estimateInnerForPhase(ph);
+      if (el) el.innerHTML = window._estimateInnerForPhase(ph, i);
     });
   };
 
