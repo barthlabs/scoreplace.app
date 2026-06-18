@@ -22,6 +22,11 @@ try {
 initializeApp();
 const db = getFirestore();
 
+// Kill-switch de notificações no staging (ver functions/index.js). No projeto de
+// staging, push (FCM) NÃO é enviado — pra simular torneios com inscritos reais
+// sem disparar nada. Em prod IS_STAGING é false → comportamento idêntico.
+const IS_STAGING = String(process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || '').indexOf('staging') !== -1;
+
 // v2.4.12: temporada encerrada? Espelha o cliente (tournaments.js season auto-
 // closure + bracket-logic poller endDate check). Sem isto, o autoDraw gerava
 // rodadas — e disparava notificações — PRA SEMPRE após o fim da temporada, se
@@ -100,15 +105,19 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
     const firstDraw = new Date(firstDrawStr);
     if (isNaN(firstDraw.getTime())) continue;
 
-    const intervalMs = (t.drawIntervalDays || 7) * 86400000;
+    // v2.6.55: intervalo < 1 = SEM repetição → exatamente 1 rodada (1 sorteio único),
+    // mesmo com a temporada/término ainda aberta. Espelha _calcNextDrawDate do cliente.
+    const _interval = parseInt(t.drawIntervalDays, 10);
+    const _noRepeat = !_interval || _interval < 1;
+    const intervalMs = (_noRepeat ? 7 : _interval) * 86400000;
 
     // If first draw is in the future, skip
     if (firstDraw > now) continue;
 
     // Calculate how many intervals have passed
     const elapsed = now.getTime() - firstDraw.getTime();
-    const intervalsCompleted = Math.floor(elapsed / intervalMs);
-    const expectedRounds = intervalsCompleted + 1;
+    const intervalsCompleted = _noRepeat ? 0 : Math.floor(elapsed / intervalMs);
+    const expectedRounds = _noRepeat ? 1 : (intervalsCompleted + 1);
 
     const currentRounds = Array.isArray(t.rounds) ? t.rounds.length : 0;
     const currentRodadas = Array.isArray(t.rodadas) ? t.rodadas.length : 0;
@@ -299,6 +308,7 @@ exports.autoDraw = onSchedule('every 1 hours', async (event) => {
 exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{notifId}', async (event) => {
   const snap = event.data;
   if (!snap) return;
+  if (IS_STAGING) { console.log('[staging] push (FCM) suprimido'); return; }
 
   const userId = event.params.userId;
   const notifData = snap.data();

@@ -939,6 +939,7 @@ window.FirestoreDB = {
 
   async queueEmail(to, subject, html) {
     if (!this.db || !to) return;
+    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] e-mail suprimido (queueEmail)'); } catch(_e){} return; }
     try {
       var toArr = Array.isArray(to) ? to : [to];
       await this.db.collection('mail').add({
@@ -957,6 +958,7 @@ window.FirestoreDB = {
   // E-mails transacionais (verificação) NÃO passam por aqui — vão direto pro mail/.
   async queueNotifEmail(emails, level, message, opts) {
     if (!this.db || !emails || !emails.length) return;
+    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] notif e-mail suprimido (queueNotifEmail)'); } catch(_e){} return; }
     var WINDOWS = { fundamental: 5, important: 15, all: 30 }; // minutos
     var mins = (WINDOWS[level] != null) ? WINDOWS[level] : 30;
     var now = Date.now();
@@ -983,6 +985,7 @@ window.FirestoreDB = {
 
   async queueWhatsApp(phones, message) {
     if (!this.db || !phones || !phones.length) return;
+    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] WhatsApp suprimido (queueWhatsApp)'); } catch(_e){} return; }
     try {
       await this.db.collection('whatsapp_queue').add({
         phones: phones,

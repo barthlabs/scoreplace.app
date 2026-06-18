@@ -1015,8 +1015,14 @@ window._calcNextDrawDate = function(t) {
     var firstDrawStr = t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00');
     var firstDraw = new Date(firstDrawStr);
     if (isNaN(firstDraw.getTime())) return null;
-    var intervalMs = (t.drawIntervalDays || 7) * 86400000;
     var now = new Date();
+    // v2.6.55: intervalo < 1 = SEM repetição (1 rodada). O único sorteio é o primeiro;
+    // depois dele não há próximo (mesmo com temporada/término ainda em aberto).
+    var _interval = parseInt(t.drawIntervalDays, 10);
+    if (!_interval || _interval < 1) {
+        return (firstDraw > now) ? firstDraw : null;
+    }
+    var intervalMs = _interval * 86400000;
     var next;
     // If first draw is in the future, that's the next one
     if (firstDraw > now) {
@@ -1322,8 +1328,10 @@ window._buildTournamentConfigBox = function (t, opts) {
     add('Categorias', fmtCategories());
     add('Critérios de desempate', fmtTiebreakers());
 
-    // v2.6.22: em tarja escura (opts.bg) o texto é CLARO pra dar contraste no tema claro.
-    var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);') : '';
+    // v2.6.43: read box (opts.bg) theme-aware — texto/borda acompanham o tema
+    // (escuro→box claro/texto escuro; claro→box escuro/texto claro).
+    var _rbC = (opts.bg && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
+    var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';') : '';
     var openAttr = opts.open ? ' open' : '';
     var summary = esc(fmt) + ' · ' + fmtGameType().replace(' — 2 categorias', ' (2 cat.)');
 

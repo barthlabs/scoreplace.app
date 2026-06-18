@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.42-beta';
+window.SCOREPLACE_VERSION = '2.6.74-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2048,6 +2048,39 @@ window._tournamentLogoRadius = function(t) {
     if (isNaN(r)) r = 14;
     return Math.max(0, Math.min(50, r)) + '%';
 };
+// v2.6.43: "read box" (tarja de leitura sobre a foto do local) é THEME-AWARE.
+// Convenção dos dois lados (ver memória feedback_dark_tarja_light_text):
+//   - tema ESCURO (Noturno/Oceano)  → box CLARO + texto ESCURO  (igual .stat-box)
+//   - tema CLARO  (Claro/Sunset)    → box ESCURO + texto CLARO  (lógica invertida)
+// Mantém legibilidade sobre a foto em qualquer tema sem forçar box escuro no escuro.
+window._photoReadBox = function () {
+    var th = (document.documentElement.getAttribute('data-theme') || 'dark');
+    var light = (th === 'light' || th === 'sunset');
+    // v2.6.45: alpha SUAVE pra bater com a aparência efetiva dos boxes sem-foto
+    // (.stat-box 0.92/0.95 dentro de seção com opacity:0.75 ≈ 0.69/0.71 composto).
+    // Boxes com foto NÃO herdam aquele opacity → usar alpha ~0.70 direto, senão fica
+    // "brilho agressivo" vs o card sem foto. Cor alinhada à CSS .stat-box
+    // (claro 226,232,240 / escuro 30,41,59).
+    return light
+        ? { bg: 'rgba(30,41,59,0.72)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' }
+        : { bg: 'rgba(226,232,240,0.70)', fg: '#1e293b', border: 'rgba(0,0,0,0.06)' };
+};
+// v2.6.60: CONFIG POR FASE — resolve woScope / resultEntry da FASE de um match
+// (multifase), com FALLBACK pro top-level (= fase 0 / default). Single-phase ou
+// match sem phaseIndex → sempre o top-level (comportamento idêntico ao de sempre).
+// Match multifase é tagueado com m.phaseIndex; t.phases[i] guarda o override.
+window._effectiveWoScope = function(t, match) {
+    var def = (t && t.woScope) || 'individual';
+    if (!t || !Array.isArray(t.phases) || t.phases.length <= 1 || !match) return def;
+    var ph = t.phases[match.phaseIndex || 0];
+    return (ph && ph.woScope) ? ph.woScope : def;
+};
+window._effectiveResultEntry = function(t, match) {
+    var def = (t && t.resultEntry) || 'organizer';
+    if (!t || !Array.isArray(t.phases) || t.phases.length <= 1 || !match) return def;
+    var ph = t.phases[match.phaseIndex || 0];
+    return (ph && ph.resultEntry != null) ? ph.resultEntry : def;
+};
 window._qrCodeUrl = function(data, size, darkMode) {
     var s = size || 280;
     var bg = darkMode !== false ? '1a1e2e' : 'ffffff';
@@ -2691,13 +2724,33 @@ window._applyThemeIcon = function(theme) {
 })();
 
 // ─── Favoritos (localStorage) ────────────────────────────────────────────────
+// Favoritos — v2.6.50: re-chaveado por UID (identidade estável). Antes a chave era
+// só `scoreplace_favorites_<email>`; como o email NÃO é estável (zerado p/ contas
+// sintéticas em auth.js, ausente em re-render pré-auth, mudável), a chave trocava e
+// o favorito "sumia". Agora: leitura em UNIÃO de [uid-key, email-key, legado] —
+// acha o favorito independente de qual identidade está presente; escrita nas chaves
+// de identidade (uid + email) — migra sozinho e remoção fica consistente.
+window._favReadKeys = function() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var keys = [];
+  if (cu && cu.uid) keys.push('scoreplace_favorites_uid_' + cu.uid);
+  if (cu && cu.email) keys.push('scoreplace_favorites_' + cu.email);
+  if (keys.length === 0) keys.push('scoreplace_favorites'); // deslogado / pré-auth
+  return keys;
+};
+window._favWriteKeys = function() {
+  // mesmas chaves da leitura (de identidade quando logado) — escreve a lista
+  // unificada em todas, então a remoção "pega" em qualquer caminho.
+  return window._favReadKeys();
+};
+
 window._getFavorites = function() {
   try {
-    var key = 'scoreplace_favorites';
-    var cu = window.AppStore && window.AppStore.currentUser;
-    if (cu && cu.email) key += '_' + cu.email;
-    var raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
+    var set = {};
+    window._favReadKeys().forEach(function(k) {
+      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function(id){ set[String(id)] = 1; }); } catch (e) {}
+    });
+    return Object.keys(set);
   } catch (e) { return []; }
 };
 
@@ -2708,20 +2761,19 @@ window._isFavorite = function(tId) {
 
 window._toggleFavorite = function(tId, event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
-  var key = 'scoreplace_favorites';
-  var cu = window.AppStore && window.AppStore.currentUser;
-  if (cu && cu.email) key += '_' + cu.email;
   var favs = window._getFavorites();
   var id = String(tId);
   var idx = favs.indexOf(id);
-  if (idx === -1) { favs.push(id); } else { favs.splice(idx, 1); }
-  try { localStorage.setItem(key, JSON.stringify(favs)); } catch (e) {}
+  var nowFav = (idx === -1);
+  if (nowFav) { favs.push(id); } else { favs.splice(idx, 1); }
+  var payload = JSON.stringify(favs);
+  window._favWriteKeys().forEach(function(k) { try { localStorage.setItem(k, payload); } catch (e) {} });
   // Update heart icons on the page
   var stars = document.querySelectorAll('[data-fav-id="' + id + '"]');
   stars.forEach(function(el) {
-    el.textContent = (idx === -1) ? '♥' : '♡';
-    el.title = (idx === -1) ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
-    el.style.color = (idx === -1) ? '#f43f5e' : 'rgba(255,255,255,0.4)';
+    el.textContent = nowFav ? '♥' : '♡';
+    el.title = nowFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
+    el.style.color = nowFav ? '#f43f5e' : 'rgba(255,255,255,0.4)';
   });
 };
 

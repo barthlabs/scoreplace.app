@@ -110,6 +110,14 @@ window._computeTournamentPlanWindow = function(t) {
   if (!t.startDate || String(t.startDate).indexOf('T') === -1) return null;  // exige hora
   var startsAt = new Date(t.startDate).getTime();
   if (isNaN(startsAt)) return null;
+  // v2.6.44: torneio de LONGA DURAÇÃO (mais de 1 dia) NÃO ganha "ida planejada" na
+  // largada. Em multi-dia cada rodada é combinada à parte (ex.: Rei/Rainha gera grupos
+  // no WhatsApp pra cada grupo marcar dia/hora), e o lançamento costuma ser pelos
+  // próprios competidores — um plano único de presença no início engana o inscrito.
+  if (t.endDate) {
+    var _endTs = new Date(t.endDate).getTime();
+    if (!isNaN(_endTs) && (_endTs - startsAt) > 24 * 3600000) return null;
+  }
   var venueName = t.venue || t.venueName || '';
   var placeId = window.PresenceDB.venueKey(t.venuePlaceId || '', venueName);
   if (!placeId) return null;                                                 // exige local

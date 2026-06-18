@@ -16,6 +16,137 @@ window._sportScoringDefaults = {
 };
 
 function setupCreateTournamentModal() {
+  // ═══ RENDER CANÔNICA DE CONFIG DE FASE (v2.6.61) — definida ANTES do template ═══
+  // Uma única montagem usada por TODAS as fases (Fase 1 = idx 0; extras = idx 1+).
+  // Ajustar aqui vale pra todas. Estado-alvo: idx 0 grava no hidden da Fase 1 (save/load
+  // do topo intocados); idx>=1 grava em _extraPhases[idx-1]. — Bloco 1: W.O. (ausência) —
+  window._phaseWoVal = function(idx) {
+    if (idx === 0) { var h = document.getElementById('wo-scope'); return (h && h.value) || 'individual'; }
+    var ph = window._extraPhases && window._extraPhases[idx - 1]; return (ph && ph.woScope) || 'individual';
+  };
+  window._setPhaseWo = function(idx, val) {
+    if (idx === 0) { var h = document.getElementById('wo-scope'); if (h) h.value = val; var box = document.getElementById('phase-wo-buttons-0'); if (box) box.outerHTML = window._woButtonsHtml(0); }
+    else { var ph = window._extraPhases && window._extraPhases[idx - 1]; if (ph) { ph.woScope = val; window._renderPhases(); } }
+  };
+  // v2.6.71: W.O. volta a ser UM toggle único (igual à Fase 1 original): ligado = só o
+  // ausente sai (Individual); desligado = time inteiro sai. Render canônica p/ todas as fases.
+  window._woButtonsHtml = function(idx) {
+    var T = window._t || function(k){ return k; };
+    var indiv = window._phaseWoVal(idx) !== 'time';
+    var icon = indiv ? '👤' : '👥';
+    var title = indiv ? 'Individual' : (T('create.woTeam') || 'Time Inteiro');
+    var desc = indiv ? T('create.woIndividualOnDesc') : T('create.woIndividualOffDesc');
+    return '<div id="phase-wo-buttons-' + idx + '">'
+      + '<div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.08);">'
+      + '<div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">' + icon + '</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + title + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + desc + '</div></div></div>'
+      + '<label class="toggle-switch" style="--toggle-on-bg:#f87171;--toggle-on-glow:rgba(248,113,113,0.3);--toggle-on-border:#f87171;"><input type="checkbox"' + (indiv ? ' checked' : '') + ' onchange="window._setPhaseWo(' + idx + ', this.checked ? \'individual\' : \'time\')"><span class="toggle-slider"></span></label>'
+      + '</div></div>';
+  };
+  // — Bloco 2: Lançamento de Resultados (multi-seleção: organizador/jogadores/árbitro) —
+  window._phaseReVal = function(idx) {
+    if (idx === 0) {
+      var h = document.getElementById('select-result-entry');
+      var raw = (h && h.value) || 'organizer';
+      var arr; try { arr = JSON.parse(raw); } catch (e) { arr = raw; }
+      if (!Array.isArray(arr)) arr = [arr];
+      return arr.length ? arr : ['organizer'];
+    }
+    var ph = window._extraPhases && window._extraPhases[idx - 1];
+    var r = ph && ph.resultEntry;
+    var a = Array.isArray(r) ? r.slice() : [r || 'organizer'];
+    return a.length ? a : ['organizer'];
+  };
+  window._togglePhaseResultEntry = function(idx, role) {
+    var arr = window._phaseReVal(idx);
+    var p = arr.indexOf(role);
+    if (p !== -1) arr.splice(p, 1); else arr.push(role);
+    if (!arr.length) arr = ['organizer']; // nunca tudo-off
+    if (idx === 0) {
+      var h = document.getElementById('select-result-entry');
+      if (h) h.value = arr.length === 1 ? arr[0] : JSON.stringify(arr);
+      var box = document.getElementById('phase-re-buttons-0');
+      if (box) box.outerHTML = window._resultEntryButtonsHtml(0);
+    } else {
+      var ph = window._extraPhases && window._extraPhases[idx - 1];
+      if (ph) { ph.resultEntry = arr; window._renderPhases(); }
+    }
+  };
+  window._resultEntryButtonsHtml = function(idx) {
+    var T = window._t || function(k){ return k; };
+    var val = window._phaseReVal(idx);
+    function rowt(role, icon, labelKey, descKey) {
+      var on = val.indexOf(role) !== -1;
+      return '<div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">'
+        + '<div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">' + icon + '</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + T(labelKey) + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(descKey) + '</div></div></div>'
+        + '<label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="window._togglePhaseResultEntry(' + idx + ',\'' + role + '\')"><span class="toggle-slider"></span></label>'
+        + '</div>';
+    }
+    var h = '<div id="phase-re-buttons-' + idx + '" style="display:flex;flex-direction:column;gap:8px;">';
+    h += rowt('organizer', '📋', 'create.resultOrg', 'create.resultOrgDesc');
+    h += rowt('players', '🏓', 'create.resultPlayersLabel', 'create.resultPlayersDesc');
+    h += rowt('referee', '🧑‍⚖️', 'create.resultRefereeLabel', 'create.resultRefereeDesc');
+    h += '</div>';
+    return h;
+  };
+  // — Bloco 3: Pontuação Avançada (GSM). idx 0 = IDs sem sufixo (Fase 1, save/load/motor
+  //   intactos); idx>=1 = IDs sufixados -N, gravados em _extraPhases[idx-1].advancedScoring. —
+  window._advScoringHtml = function(idx, initialDisplay, advData) {
+    var T = window._t || function(k){ return k; };
+    var s = idx === 0 ? '' : ('-' + idx);
+    var disp = initialDisplay || 'none';
+    var cats = (advData && advData.categories) || null;
+    var enabledOn = !!(advData && advData.enabled);
+    var applyLiveOn = !advData || advData.applyLiveScoring !== false;
+    function row(key, label, desc, val, checked) {
+      if (cats && cats[key]) { checked = !!cats[key].enabled; val = (cats[key].value != null ? cats[key].value : val); }
+      return '<div class="adv-row" data-adv-key="' + key + '" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">'
+        + '<label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled"' + (checked ? ' checked' : '') + '><span class="toggle-slider"></span></label>'
+        + '<div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:600;">' + T(label) + '</div><div style="font-size:0.68rem; color:var(--text-muted);">' + T(desc) + '</div></div>'
+        + '<input type="number" class="adv-value form-control" value="' + val + '" style="width:70px; flex-shrink:0; text-align:center; padding:4px 6px; font-size:0.85rem;">'
+        + '</div>';
+    }
+    var h = '<div id="adv-scoring-section' + s + '" style="display:' + disp + '; background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">';
+    h += '<div class="toggle-row" style="padding:0; margin-bottom:10px;">';
+    h += '<div class="toggle-row-label"><span style="font-size:0.85rem;font-weight:700;color:#fbbf24;">💯 ' + T('create.advScoringTitle') + '</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">' + T('create.advScoringDesc') + '</div></div>';
+    h += '<label class="toggle-switch toggle-sm"><input type="checkbox" id="adv-scoring-enabled' + s + '"' + (enabledOn ? ' checked' : '') + ' onchange="window._onAdvScoringToggle(' + idx + ')"><span class="toggle-slider"></span></label>';
+    h += '</div>';
+    h += '<div id="adv-scoring-body' + s + '" style="display:' + (enabledOn ? 'block' : 'none') + '; margin-top:12px;">';
+    h += '<p style="font-size:0.7rem; color:#10b981; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">' + T('create.advScoringGroupA') + '</p>';
+    h += '<div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">';
+    h += row('participation', 'create.advParticipation', 'create.advParticipationDesc', '150', true);
+    h += row('match_won', 'create.advMatchWon', 'create.advMatchWonDesc', '150', true);
+    h += row('game_won', 'create.advGameWon', 'create.advGameWonDesc', '50', true);
+    h += row('game_lost', 'create.advGameLost', 'create.advGameLostDesc', '-20', true);
+    h += row('tiebreak_point', 'create.advTiebreakPoint', 'create.advTiebreakPointDesc', '2', true);
+    h += '</div>';
+    h += '<p style="font-size:0.7rem; color:#f87171; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">' + T('create.advScoringGroupB') + '</p>';
+    h += '<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; padding:6px 10px; background:rgba(248,113,113,0.06); border-radius:6px; border-left:2px solid #f87171;">ⓘ ' + T('create.advScoringGroupBWarn') + '</div>';
+    h += '<div style="display:flex; align-items:center; gap:10px; padding:9px 11px; background:rgba(248,113,113,0.08); border:1px solid rgba(248,113,113,0.25); border-radius:8px; margin-bottom:8px;">';
+    h += '<label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="adv-apply-live' + s + '"' + (applyLiveOn ? ' checked' : '') + ' onchange="window._onAdvApplyLiveToggle(' + idx + ')"><span class="toggle-slider"></span></label>';
+    h += '<div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:700; color:#f87171;">' + T('create.advApplyLive') + '</div><div style="font-size:0.68rem; color:var(--text-muted);">' + T('create.advApplyLiveDesc') + '</div></div>';
+    h += '</div>';
+    h += '<div style="display:flex; flex-direction:column; gap:6px;">';
+    h += row('killing_point', 'create.advKillingPoint', 'create.advKillingPointDesc', '10', false);
+    h += row('point_scored', 'create.advPointScored', 'create.advPointScoredDesc', '1', false);
+    h += '</div>';
+    h += '<div style="font-size:0.7rem; color:var(--text-muted); margin-top:10px; font-style:italic;">' + T('create.advScoringFloorNote') + '</div>';
+    h += '</div></div>';
+    return h;
+  };
+  // Lê a Pontuação Avançada de uma fase a partir do DOM (idx 0 = Fase 1; idx>=1 = extra).
+  window._readAdvScoring = function(idx) {
+    var s = idx === 0 ? '' : ('-' + idx);
+    var enEl = document.getElementById('adv-scoring-enabled' + s);
+    if (!enEl) return null;
+    var catsObj = {};
+    Array.prototype.forEach.call(document.querySelectorAll('#adv-scoring-body' + s + ' .adv-row'), function(row){
+      var key = row.dataset.advKey; if (!key) return;
+      var en = row.querySelector('.adv-enabled'); var val = row.querySelector('.adv-value');
+      catsObj[key] = { enabled: !!(en && en.checked), value: val ? (parseInt(val.value, 10) || 0) : 0 };
+    });
+    var apply = document.getElementById('adv-apply-live' + s);
+    return { enabled: !!enEl.checked, categories: catsObj, applyLiveScoring: apply ? !!apply.checked : true };
+  };
   if (!document.getElementById('modal-create-tournament')) {
     const modalHtml = `
       <div class="modal-overlay" id="modal-create-tournament">
@@ -129,7 +260,128 @@ function setupCreateTournamentModal() {
                   <input type="text" id="phase1-name" placeholder="Nome da fase (opcional)" oninput="window._phase1Name=this.value" style="flex:1;min-width:0;padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;">
                 </div>
 
-              <!-- Estimativa de tempo da fase (topo do box) -->
+              <!-- (Estimativa de tempo da fase movida pra DEPOIS do Formato + Datas — v2.6.46) -->
+
+              <!-- Formato -->
+              <div class="form-group mb-3">
+                <label class="form-label">${_t('tournament.format')}</label>
+                <!-- Hidden select for backward compatibility -->
+                <!-- PR 4 of the Liga-unification (v0.14.52): Suíço is no
+                     longer offered as a standalone format. New tournaments
+                     pick Liga + temporada=off for finite-round / dynamic
+                     behavior. Suíço also remains as a resolution option in
+                     the power-of-2 Nash panel (separate code path). -->
+                <select class="form-control" id="select-formato" onchange="window._onFormatoChange()" style="display:none;">
+                  <option value="elim_simples">Eliminatórias Simples</option>
+                  <option value="elim_dupla">Dupla Eliminatória</option>
+                  <option value="grupos_mata">Fase de Grupos + Eliminatórias</option>
+                  <option value="liga">Liga</option>
+                </select>
+                <div id="formato-buttons" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+                  <button type="button" class="formato-btn" data-fmt="pontos" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);font-weight:700;text-align:center;line-height:1.1;">
+                    <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><rect x="2" y="2" width="36" height="32" rx="3" opacity=".3" fill="currentColor" stroke="none"/><rect x="2" y="2" width="36" height="32" rx="3" fill="none" opacity=".6"/><line x1="2" y1="10" x2="38" y2="10" opacity=".4"/><line x1="2" y1="18" x2="38" y2="18" opacity=".25"/><line x1="2" y1="26" x2="38" y2="26" opacity=".25"/><line x1="14" y1="2" x2="14" y2="34" opacity=".25"/><line x1="26" y1="2" x2="26" y2="34" opacity=".25"/><text x="5" y="8" font-size="5" font-weight="700" fill="currentColor" stroke="none" opacity=".5">#</text><text x="17" y="8" font-size="5" font-weight="700" fill="currentColor" stroke="none" opacity=".5">V</text><text x="29" y="8" font-size="5" font-weight="700" fill="currentColor" stroke="none" opacity=".5">P</text><circle cx="7" cy="15" r="1.5" fill="currentColor" stroke="none" opacity=".5"/><circle cx="7" cy="23" r="1.5" fill="currentColor" stroke="none" opacity=".35"/><circle cx="7" cy="31" r="1.5" fill="currentColor" stroke="none" opacity=".25"/></svg>
+                    ${_t('format.league')}</button>
+                  <button type="button" class="formato-btn" data-fmt="grupos" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);font-weight:700;text-align:center;line-height:1.1;">
+                    <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1" y="2" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="2" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="7" x2="13" y2="7" opacity=".5"/><line x1="4" y1="12" x2="13" y2="12" opacity=".5"/><rect x="1" y="20" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="20" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="25" x2="13" y2="25" opacity=".5"/><line x1="4" y1="30" x2="13" y2="30" opacity=".5"/><line x1="20" y1="9" x2="20" y2="27"/><line x1="20" y1="9" x2="28" y2="9" opacity=".6"/><line x1="20" y1="27" x2="28" y2="27" opacity=".6"/><line x1="28" y1="9" x2="28" y2="27"/><line x1="28" y1="18" x2="36" y2="18"/><circle cx="38" cy="18" r="1.8" fill="currentColor" stroke="none" opacity=".6"/></svg>
+                    ${_t('format.groupsShort')}</button>
+                  <button type="button" class="formato-btn formato-btn-active" data-fmt="elim" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid #3b82f6;background:rgba(59,130,246,0.12);color:#60a5fa;font-weight:700;text-align:center;line-height:1.1;">
+                    <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="4" x2="12" y2="4" opacity=".5"/><line x1="2" y1="14" x2="12" y2="14" opacity=".5"/><line x1="12" y1="4" x2="12" y2="14"/><line x1="12" y1="9" x2="22" y2="9"/><line x1="2" y1="22" x2="12" y2="22" opacity=".5"/><line x1="2" y1="32" x2="12" y2="32" opacity=".5"/><line x1="12" y1="22" x2="12" y2="32"/><line x1="12" y1="27" x2="22" y2="27"/><line x1="22" y1="9" x2="22" y2="27"/><line x1="22" y1="18" x2="32" y2="18"/><circle cx="36" cy="18" r="3" fill="currentColor" stroke="none" opacity=".6"/></svg>
+                    ${_t('format.elimination')}</button>
+                </div>
+                <style>#formato-buttons{grid-template-columns:repeat(3,1fr)!important}@media(max-width:600px){#formato-buttons{grid-template-columns:repeat(3,1fr)!important}}#formato-buttons .formato-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.3)}</style>
+                <!-- Dupla eliminatória: sub-toggle visível só quando Eliminatórias está ativo (v2.6.66) -->
+                <div id="dupla-elim-row" style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 12px;border-radius:10px;border:1px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.06);">
+                  <label class="toggle-switch" style="flex-shrink:0;">
+                    <input type="checkbox" id="toggle-dupla-elim" aria-label="Dupla eliminatória" onchange="window._toggleDuplaElim(this.checked)">
+                    <span class="toggle-slider"></span>
+                  </label>
+                  <div><span style="font-weight:600;font-size:0.85rem;color:var(--text-bright);">${_t('format.double')}</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${_t('create.descElimDupla')}</div></div>
+                </div>
+                <small class="text-muted" style="display:block;margin-top:4px;" id="formato-desc">${_t('format.elimination')} — ${_t('create.descElimSimples')}</small>
+              </div>
+
+              <!-- Datas da fase (logo abaixo do Formato) — v2.6.46 -->
+              <div style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.75rem; margin-bottom:1rem;">
+                <div style="font-size:0.72rem; color:#a5b4fc; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem;">📅 ${_t('create.phaseDatesTitle')}</div>
+                <div class="dates-row" style="display:flex; gap:10px; align-items:stretch; flex-wrap:wrap;">
+                  <div id="reg-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
+                    <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnrollDeadline')}</div>
+                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
+                      <input type="date" class="form-control" id="tourn-reg-date" aria-label="Data limite das inscrições da fase" style="padding:4px 6px; font-size:0.82rem; flex:1 1 120px; min-width:120px;" oninput="window._recalcDuration()">
+                      <input type="time" class="form-control" id="tourn-reg-time" aria-label="Hora limite das inscrições da fase" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration()">
+                    </div>
+                  </div>
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
+                    <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseStart')}</div>
+                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
+                      <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:4px 6px; font-size:0.82rem; flex:1 1 120px; min-width:120px;" required oninput="window._recalcDuration(); window._checkWeather(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                    </div>
+                  </div>
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
+                    <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnd')}</div>
+                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
+                      <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:4px 6px; font-size:0.82rem; flex:1 1 120px; min-width:120px;" required oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término da fase" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Agendamento de Sorteios (Liga/Pontos Corridos) — logo abaixo das Datas (v2.6.48); visibilidade via _onFormatoChange -->
+              <div id="liga-draw-schedule" style="display:none; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.35rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.drawSchedule')}</p>
+                <p style="margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-bright); font-weight: 600;">Primeiro Sorteio</p>
+                <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:0.5rem;">
+                  <div class="form-group" style="margin:0;flex:0 0 auto;">
+                    <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.dateLabel')}</label>
+                    <input type="date" class="form-control" id="liga-first-draw-date" style="width:175px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                  </div>
+                  <div class="form-group" style="margin:0;flex:0 0 auto;">
+                    <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.timeLabel')}</label>
+                    <input type="time" class="form-control" id="liga-first-draw-time" value="19:00" style="width:100px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                  </div>
+                  <div class="form-group" style="margin:0;flex:0 0 auto;">
+                    <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.repeatEvery')}</label>
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <input type="number" class="form-control" id="liga-draw-interval" min="1" max="90" value="7" style="width:55px;padding:6px 8px;font-size:0.85rem;text-align:center;" oninput="window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">${_t('create.daysUnit')}</span>
+                    </div>
+                  </div>
+                  <!-- v2.6.47: rodadas EDITÁVEL — calcula a partir das datas OU, se preenchido direto, ajusta a data de término da fase -->
+                  <div class="form-group" id="liga-rounds-group" style="margin:0;margin-left:18px;flex:0 0 auto;display:none;">
+                    <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;color:#34d399;">Rodadas</label>
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <input type="number" class="form-control" id="liga-rounds-input" min="1" max="60" style="width:62px;min-height:40px;padding:6px 8px;font-size:0.85rem;text-align:center;font-weight:700;color:#34d399;background:rgba(16,185,129,0.10);border-color:rgba(16,185,129,0.45);box-sizing:border-box;" oninput="window._applyLigaRoundsToEnd && window._applyLigaRoundsToEnd()" title="Digite o nº de rodadas — a data de término da fase se ajusta sozinha">
+                      <span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">rodadas</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <div class="toggle-row">
+                    <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">${_t('create.manualDraw')}</span><div class="toggle-desc">${_t('create.manualDrawDesc')}</div></div></div>
+                    <label class="toggle-switch"><input type="checkbox" id="liga-manual-draw"><span class="toggle-slider"></span></label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Inscrições durante a fase — logo abaixo do Agendamento de Sorteios (v2.6.51) -->
+              <div style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
+                <input type="hidden" id="late-enrollment" value="closed">
+                <div style="display:flex;flex-direction:column;gap:8px;" id="late-enrollment-buttons">
+                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
+                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🚫</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollClosed')}</span><div class="toggle-desc" id="late-closed-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollClosedOnDesc')}</div></div></div>
+                    <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-closed" aria-label="Inscrições fora do prazo fechadas" checked onchange="window._syncLateEnrollment('closed')"><span class="toggle-slider"></span></label>
+                  </div>
+                  <div class="toggle-row" style="display:none;padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
+                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">➕</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollExpand')}</span><div class="toggle-desc" id="late-expand-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollExpandDisabledDesc')}</div></div></div>
+                    <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-expand" aria-label="Inscrições fora do prazo expandem lista" onchange="window._syncLateEnrollment('expand')"><span class="toggle-slider"></span></label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Estimativa de tempo da fase (após Formato + Datas) -->
               <div id="time-estimates-container" style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 1rem;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom: 0.5rem;">
                   <span style="font-size: 0.72rem; color: #f59e0b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">⏱ Estimativa de tempo da fase</span>
@@ -175,39 +427,6 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- Formato -->
-              <div class="form-group mb-3">
-                <label class="form-label">${_t('tournament.format')}</label>
-                <!-- Hidden select for backward compatibility -->
-                <!-- PR 4 of the Liga-unification (v0.14.52): Suíço is no
-                     longer offered as a standalone format. New tournaments
-                     pick Liga + temporada=off for finite-round / dynamic
-                     behavior. Suíço also remains as a resolution option in
-                     the power-of-2 Nash panel (separate code path). -->
-                <select class="form-control" id="select-formato" onchange="window._onFormatoChange()" style="display:none;">
-                  <option value="elim_simples">Eliminatórias Simples</option>
-                  <option value="elim_dupla">Dupla Eliminatória</option>
-                  <option value="grupos_mata">Fase de Grupos + Eliminatórias</option>
-                  <option value="liga">Liga</option>
-                </select>
-                <div id="formato-buttons" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
-                  <button type="button" class="formato-btn formato-btn-active" data-value="elim_simples" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid #3b82f6;background:rgba(59,130,246,0.12);color:#60a5fa;font-weight:700;text-align:center;line-height:1.1;">
-                    <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="4" x2="12" y2="4" opacity=".5"/><line x1="2" y1="14" x2="12" y2="14" opacity=".5"/><line x1="12" y1="4" x2="12" y2="14"/><line x1="12" y1="9" x2="22" y2="9"/><line x1="2" y1="22" x2="12" y2="22" opacity=".5"/><line x1="2" y1="32" x2="12" y2="32" opacity=".5"/><line x1="12" y1="22" x2="12" y2="32"/><line x1="12" y1="27" x2="22" y2="27"/><line x1="22" y1="9" x2="22" y2="27"/><line x1="22" y1="18" x2="32" y2="18"/><circle cx="36" cy="18" r="3" fill="currentColor" stroke="none" opacity=".6"/></svg>
-                    ${_t('format.single')}</button>
-                  <button type="button" class="formato-btn" data-value="elim_dupla" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);font-weight:700;text-align:center;line-height:1.1;">
-                    <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="3" x2="10" y2="3" opacity=".5"/><line x1="2" y1="10" x2="10" y2="10" opacity=".5"/><line x1="10" y1="3" x2="10" y2="10"/><line x1="10" y1="6.5" x2="18" y2="6.5"/><line x1="18" y1="6.5" x2="18" y2="13"/><line x1="18" y1="13" x2="26" y2="13"/><line x1="2" y1="20" x2="10" y2="20" opacity=".4" stroke-dasharray="2 2"/><line x1="2" y1="27" x2="10" y2="27" opacity=".4" stroke-dasharray="2 2"/><line x1="10" y1="20" x2="10" y2="27" opacity=".6" stroke-dasharray="2 2"/><line x1="10" y1="23.5" x2="18" y2="23.5" opacity=".6" stroke-dasharray="2 2"/><line x1="18" y1="19" x2="18" y2="23.5" opacity=".6" stroke-dasharray="2 2"/><line x1="18" y1="19" x2="26" y2="19" opacity=".6" stroke-dasharray="2 2"/><line x1="26" y1="13" x2="26" y2="19"/><line x1="26" y1="16" x2="34" y2="16"/><circle cx="37" cy="16" r="2.5" fill="currentColor" stroke="none" opacity=".6"/></svg>
-                    ${_t('format.double')}</button>
-                  <button type="button" class="formato-btn" data-value="grupos_mata" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);font-weight:700;text-align:center;line-height:1.1;">
-                    <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1" y="2" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="2" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="7" x2="13" y2="7" opacity=".5"/><line x1="4" y1="12" x2="13" y2="12" opacity=".5"/><rect x="1" y="20" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="20" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="25" x2="13" y2="25" opacity=".5"/><line x1="4" y1="30" x2="13" y2="30" opacity=".5"/><line x1="20" y1="9" x2="20" y2="27"/><line x1="20" y1="9" x2="28" y2="9" opacity=".6"/><line x1="20" y1="27" x2="28" y2="27" opacity=".6"/><line x1="28" y1="9" x2="28" y2="27"/><line x1="28" y1="18" x2="36" y2="18"/><circle cx="38" cy="18" r="1.8" fill="currentColor" stroke="none" opacity=".6"/></svg>
-                    ${_t('format.groupsShort')}</button>
-                  <button type="button" class="formato-btn" data-value="liga" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);font-weight:700;text-align:center;line-height:1.1;">
-                    <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><rect x="2" y="2" width="36" height="32" rx="3" opacity=".3" fill="currentColor" stroke="none"/><rect x="2" y="2" width="36" height="32" rx="3" fill="none" opacity=".6"/><line x1="2" y1="10" x2="38" y2="10" opacity=".4"/><line x1="2" y1="18" x2="38" y2="18" opacity=".25"/><line x1="2" y1="26" x2="38" y2="26" opacity=".25"/><line x1="14" y1="2" x2="14" y2="34" opacity=".25"/><line x1="26" y1="2" x2="26" y2="34" opacity=".25"/><text x="5" y="8" font-size="5" font-weight="700" fill="currentColor" stroke="none" opacity=".5">#</text><text x="17" y="8" font-size="5" font-weight="700" fill="currentColor" stroke="none" opacity=".5">V</text><text x="29" y="8" font-size="5" font-weight="700" fill="currentColor" stroke="none" opacity=".5">P</text><circle cx="7" cy="15" r="1.5" fill="currentColor" stroke="none" opacity=".5"/><circle cx="7" cy="23" r="1.5" fill="currentColor" stroke="none" opacity=".35"/><circle cx="7" cy="31" r="1.5" fill="currentColor" stroke="none" opacity=".25"/></svg>
-                    ${_t('format.league')}</button>
-                </div>
-                <style>#formato-buttons{grid-template-columns:repeat(4,1fr)!important}@media(max-width:600px){#formato-buttons{grid-template-columns:repeat(2,1fr)!important}}#formato-buttons .formato-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.3)}</style>
-                <small class="text-muted" style="display:block;margin-top:4px;" id="formato-desc">${_t('format.single')} — ${_t('create.descElimSimples')}</small>
-              </div>
-
               <!-- Modo de Sorteio -->
               <div class="form-group mb-3" id="draw-mode-container">
                 <label class="form-label">${_t('create.drawMode')}</label>
@@ -223,25 +442,13 @@ function setupCreateTournamentModal() {
               <!-- Rei/Rainha da Praia (logo abaixo do formato, visível só quando rei_rainha selecionado) -->
               <div id="rei-rainha-fields" style="display:none; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">👑 ${_t('format.monarch')}</p>
-                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.75rem;">${_t('format.monarchDesc')}</div>
-                <div style="margin-bottom:0.75rem;">
-                  <label class="form-label" style="font-size:0.75rem;margin-bottom:6px;">${_t('label.classifiedPerGroup')}</label>
-                  <div style="display:flex;gap:8px;" id="monarch-classified-buttons">
-                    <button type="button" class="monarch-cls-btn monarch-cls-active" data-value="1" onclick="window._selectMonarchClassified(this)" style="flex:1;padding:8px 12px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid #fbbf24;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:600;text-align:center;">${_t('monarch.classified1')}</button>
-                    <button type="button" class="monarch-cls-btn" data-value="2" onclick="window._selectMonarchClassified(this)" style="flex:1;padding:8px 12px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;text-align:center;">2 (Rei + Vice)</button>
-                  </div>
-                  <input type="hidden" id="monarch-classified" value="1">
-                </div>
-                <div style="margin-bottom:0.75rem;">
-                  <label class="form-label" style="font-size:0.75rem;margin-bottom:6px;">Formação dos grupos de 4</label>
-                  <div style="display:flex;gap:8px;" id="monarch-groupsby-buttons">
-                    <button type="button" class="monarch-gb-btn monarch-gb-active" data-value="sorteio" onclick="window._selectMonarchGroupsBy(this)" style="flex:1;padding:8px 12px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid #fbbf24;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:600;text-align:center;">🎲 Sorteio</button>
-                    <button type="button" class="monarch-gb-btn" data-value="ranking" onclick="window._selectMonarchGroupsBy(this)" style="flex:1;padding:8px 12px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;text-align:center;">📊 Por ranking</button>
-                  </div>
-                  <input type="hidden" id="monarch-groupsby" value="sorteio">
-                  <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Sorteio = grupos aleatórios. Por ranking = agrupa pela classificação (a partir da 2ª rodada na Liga; folgas seguem a justiça de rotação).</div>
-                </div>
-                <div style="font-size:0.75rem;color:#4ade80;font-weight:600;margin-top:4px;">✓ ${_t('monarch.advanceHelp')}</div>
+                <div style="font-size:0.78rem;color:var(--text-muted);">${_t('format.monarchDesc')}</div>
+                <!-- v2.6.44: controles "Classificados por grupo" + "Formação dos grupos de 4"
+                     e a linha de avanço REMOVIDOS daqui — são lógica de SUCESSÃO/transição
+                     entre fases e serão redesenhados na configuração da transição. Inputs
+                     ocultos mantidos só com defaults pra não quebrar save/estimativa/edição. -->
+                <input type="hidden" id="monarch-classified" value="1">
+                <input type="hidden" id="monarch-groupsby" value="sorteio">
               </div>
 
               <!-- Campos específicos: Todos contra todos -->
@@ -287,12 +494,8 @@ function setupCreateTournamentModal() {
               <!-- Campos específicos: Liga (unificado com antigo Ranking) -->
               <div id="liga-fields" style="display:none; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.ligaConfig')}</p>
-                <div class="form-group" style="margin-bottom:0.5rem;">
-                  <div class="toggle-row">
-                    <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">${_t('create.ligaSeasonToggle')}</span><div class="toggle-desc">${_t('create.ligaSeasonDesc')}</div></div></div>
-                    <label class="toggle-switch"><input type="checkbox" id="liga-season-toggle" checked><span class="toggle-slider"></span></label>
-                  </div>
-                </div>
+                <!-- v2.6.56: "Temporada contínua" removida — início/fim da fase já definem a temporada
+                     (t.temporada=true por padrão no save; sem elemento). -->
                 <div class="form-group" style="margin-bottom:0.5rem;">
                   <div class="toggle-row">
                     <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">${_t('create.ligaBalancedToggle')}</span><div class="toggle-desc">${_t('create.ligaBalancedDesc')}</div></div></div>
@@ -319,7 +522,7 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="liga-season-duration" value="indefinida">
                 <div id="liga-custom-duration-container" style="display:none;"><input type="hidden" id="liga-custom-months" value="6"></div>
                 <input type="hidden" id="liga-round-format" value="standard">
-                <div class="form-group mb-3">
+                <div class="form-group mb-3" id="liga-nps-container">
                   <label class="form-label" style="font-size:0.75rem;">${_t('create.ligaNewScore')}</label>
                   <input type="hidden" id="liga-new-player-score" value="zero">
                   <div id="liga-nps-buttons" style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -342,43 +545,13 @@ function setupCreateTournamentModal() {
                   <label class="form-label">${_t('create.ligaInactRounds')}</label>
                   <input type="number" class="form-control" id="liga-inactivity-x" min="1" value="3">
                 </div>
-                <div class="form-group mt-2">
-                  <div class="toggle-row">
-                    <div class="toggle-row-label"><span style="font-weight:bold; color:var(--text-color);">${_t('create.ligaOpenEnrollLabel')}</span></div>
-                    <label class="toggle-switch"><input type="checkbox" id="liga-open-enrollment" checked><span class="toggle-slider"></span></label>
-                  </div>
-                </div>
+                <!-- v2.6.56: "Inscrições abertas durante toda a temporada" removida — redundante com
+                     "Inscrições durante a fase" (Fechadas/Aberta). ligaOpenEnrollment é DERIVADO do
+                     lateEnrollment no save. -->
+
                 ${/* v2.6.29: toggle "Fase final (playoffs)" removido — a fase final agora
                       é uma fase do construtor de fases adicionada em sequência à Liga. */ ''}
-                <div id="liga-draw-schedule" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(16,185,129,0.15);">
-                  <p style="margin: 0 0 0.35rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.drawSchedule')}</p>
-                  <p style="margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-bright); font-weight: 600;">Primeiro Sorteio</p>
-                  <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:0.5rem;">
-                    <div class="form-group" style="margin:0;flex:0 0 auto;">
-                      <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.dateLabel')}</label>
-                      <input type="date" class="form-control" id="liga-first-draw-date" style="width:175px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                    </div>
-                    <div class="form-group" style="margin:0;flex:0 0 auto;">
-                      <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.timeLabel')}</label>
-                      <input type="time" class="form-control" id="liga-first-draw-time" value="19:00" style="width:100px;padding:6px 8px;font-size:0.85rem;" onchange="window._syncLigaDrawDateToStart(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                    </div>
-                    <div class="form-group" style="margin:0;flex:0 0 auto;">
-                      <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.repeatEvery')}</label>
-                      <div style="display:flex;align-items:center;gap:4px;">
-                        <input type="number" class="form-control" id="liga-draw-interval" min="1" max="90" value="7" style="width:55px;padding:6px 8px;font-size:0.85rem;text-align:center;" oninput="window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                        <span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">${_t('create.daysUnit')}</span>
-                      </div>
-                    </div>
-                    <!-- v2.1.21: tag de rodadas previstas (1º sorteio + intervalo + fim do torneio) -->
-                    <div id="liga-rounds-tag" style="flex:0 0 auto;align-self:flex-end;font-size:0.85rem;font-weight:700;color:#34d399;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:0 12px;white-space:nowrap;align-items:center;justify-content:center;display:none;"></div>
-                  </div>
-                  <div class="form-group" style="margin:0;">
-                    <div class="toggle-row">
-                      <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">${_t('create.manualDraw')}</span><div class="toggle-desc">${_t('create.manualDrawDesc')}</div></div></div>
-                      <label class="toggle-switch"><input type="checkbox" id="liga-manual-draw"><span class="toggle-slider"></span></label>
-                    </div>
-                  </div>
-                </div>
+                <!-- Agendamento de Sorteios movido pra logo abaixo das "Datas da fase" (v2.6.48) -->
               </div>
               <!-- ranking-fields removido em v0.2.6: unificado com liga-fields -->
 
@@ -485,6 +658,36 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
+              <!-- Formação das duplas (movido pra dentro da config de fase — v2.6.49) -->
+              <div class="form-group mb-3" id="manual-pairing-container">
+                <label class="form-label">Formação das duplas</label>
+                <input type="hidden" id="manual-pairing" value="organizer_only">
+                <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
+                  <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🤝</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Participantes podem formar suas duplas</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">Ligado: cada um arrasta seu card sobre o de outro e a dupla fica pendente até o outro aceitar. Desligado: só o organizador monta as duplas. (Só vale em duplas.)</div></div></div>
+                  <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="manual-pairing-toggle" aria-label="Participantes formam duplas" onchange="window._syncManualPairing()"><span class="toggle-slider"></span></label>
+                </div>
+              </div>
+
+              <!-- (Inscrições durante a fase movida pra logo abaixo do Agendamento de Sorteios — v2.6.51) -->
+
+              <!-- v2.6.63: Pontuação Avançada agora usa a render CANÔNICA (mesma da Fase 1 e fases extras). -->
+              ${window._advScoringHtml(0)}
+
+              <!-- W.O. Scope -->
+              <div style="background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;" id="wo-scope-container">
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚠️ ${_t('create.woSection')}</p>
+                <input type="hidden" id="wo-scope" value="individual">
+                <!-- v2.6.61: W.O. agora usa a render CANÔNICA (mesma da Fase 1 e fases extras). -->
+                ${window._woButtonsHtml(0)}
+              </div>
+
+              <!-- Lançamento de Resultados (toggles não-excludentes) -->
+              <div style="background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #60a5fa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">📋 ${_t('create.resultSection')}</p>
+                ${window._resultEntryButtonsHtml(0)}
+                <input type="hidden" id="select-result-entry" value="organizer">
+              </div>
+
               <!-- ═══════════ FIM BOX FASE 1 ═══════════ -->
               </div>
 
@@ -495,30 +698,8 @@ function setupCreateTournamentModal() {
                 <small class="text-muted" style="display:block;margin-top:8px;">Adicione fases para criar etapas com formato e origem próprios (ex.: <em>Liga classificatória</em> → <em>Eliminatória Ouro/Prata</em>). Cada fase tem as mesmas configurações da Fase 1.</small>
               </div>
 
-              <!-- Datas e Horários (posicionado após agendamento de sorteios) -->
-              <div class="dates-row" style="display:flex; gap:10px; margin-bottom:0.75rem; align-items:stretch; flex-wrap:wrap;">
-                <div id="reg-date-container" style="flex:1; min-width:0; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
-                  <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.enrollDeadline')}</div>
-                  <div style="display:flex; gap:6px; align-items:center;">
-                    <input type="date" class="form-control" id="tourn-reg-date" aria-label="Data limite das inscrições" style="padding:4px 6px; font-size:0.82rem; flex:1; min-width:0;" oninput="window._recalcDuration()">
-                    <input type="time" class="form-control" id="tourn-reg-time" aria-label="Hora limite das inscrições" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration()">
-                  </div>
-                </div>
-                <div style="flex:1; min-width:0; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
-                  <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.tournamentStart')}</div>
-                  <div style="display:flex; gap:6px; align-items:center;">
-                    <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início do torneio" style="padding:4px 6px; font-size:0.82rem; flex:1; min-width:0;" required oninput="window._recalcDuration(); window._checkWeather()">
-                    <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início do torneio" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration()">
-                  </div>
-                </div>
-                <div style="flex:1; min-width:0; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
-                  <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.tournamentEnd')}</div>
-                  <div style="display:flex; gap:6px; align-items:center;">
-                    <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término do torneio" style="padding:4px 6px; font-size:0.82rem; flex:1; min-width:0;" required oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                    <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término do torneio" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                  </div>
-                </div>
-              </div>
+              <!-- Datas e Horários movidos pro box da Fase (sob o Formato, antes da Estimativa) — v2.6.46 -->
+
 
               <!-- Campos periocidade de sorteio: Suíço -->
               <div id="suico-draw-schedule-fields" style="display:none; background: rgba(99,102,241,0.05); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
@@ -607,60 +788,28 @@ function setupCreateTournamentModal() {
               <!-- (Formato das Partidas / GSM movido para o box FASE 1) -->
 
               <!-- Sistema de Pontos Avançado (apenas Liga / Suíço) -->
-              <div id="adv-scoring-section" style="display:none; background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <div class="toggle-row" style="padding:0; margin-bottom:10px;">
-                  <div class="toggle-row-label"><span style="font-size:0.85rem;font-weight:700;color:#fbbf24;">💯 ${_t('create.advScoringTitle')}</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">${_t('create.advScoringDesc')}</div></div>
-                  <label class="toggle-switch toggle-sm"><input type="checkbox" id="adv-scoring-enabled" onchange="window._onAdvScoringToggle()"><span class="toggle-slider"></span></label>
+
+              <!-- Inscrição e Limite -->
+              <div class="d-flex gap-2 mb-3">
+                <div class="form-group full-width" id="cap-max-container">
+                  <label class="form-label">${_t('create.maxParticipants')}</label>
+                  <input type="number" class="form-control" id="tourn-max-participants" min="2" placeholder="${_t('create.noLimit')}" oninput="window._updateAutoCloseVisibility(); window._recalcDuration()">
                 </div>
-                <div id="adv-scoring-body" style="display:none; margin-top:12px;">
-                  <p style="font-size:0.7rem; color:#10b981; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">${_t('create.advScoringGroupA')}</p>
-                  <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">
-                    <div class="adv-row" data-adv-key="participation" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
-                      <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled" checked><span class="toggle-slider"></span></label>
-                      <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:600;">${_t('create.advParticipation')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advParticipationDesc')}</div></div>
-                      <input type="number" class="adv-value form-control" value="150" style="width:70px; flex-shrink:0; text-align:center; padding:4px 6px; font-size:0.85rem;">
+                <div class="form-group full-width">
+                  <label class="form-label">${_t('create.gameType')}</label>
+                  <input type="hidden" id="tourn-team-size" value="2">
+                  <input type="hidden" id="tourn-game-types" value="duplas">
+                  <div id="game-type-buttons" style="display:flex;flex-direction:column;gap:8px;">
+                    <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                      <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏸</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.gameSimples')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.simplesSideDesc')}</div></div></div>
+                      <label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox" id="game-toggle-simples" aria-label="Modo simples" onchange="window._syncGameTypeToggles()"><span class="toggle-slider"></span></label>
                     </div>
-                    <div class="adv-row" data-adv-key="match_won" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
-                      <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled" checked><span class="toggle-slider"></span></label>
-                      <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:600;">${_t('create.advMatchWon')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advMatchWonDesc')}</div></div>
-                      <input type="number" class="adv-value form-control" value="150" style="width:70px; flex-shrink:0; text-align:center; padding:4px 6px; font-size:0.85rem;">
-                    </div>
-                    <div class="adv-row" data-adv-key="game_won" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
-                      <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled" checked><span class="toggle-slider"></span></label>
-                      <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:600;">${_t('create.advGameWon')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advGameWonDesc')}</div></div>
-                      <input type="number" class="adv-value form-control" value="50" style="width:70px; flex-shrink:0; text-align:center; padding:4px 6px; font-size:0.85rem;">
-                    </div>
-                    <div class="adv-row" data-adv-key="game_lost" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
-                      <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled" checked><span class="toggle-slider"></span></label>
-                      <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:600;">${_t('create.advGameLost')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advGameLostDesc')}</div></div>
-                      <input type="number" class="adv-value form-control" value="-20" style="width:70px; flex-shrink:0; text-align:center; padding:4px 6px; font-size:0.85rem;">
-                    </div>
-                    <div class="adv-row" data-adv-key="tiebreak_point" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
-                      <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled" checked><span class="toggle-slider"></span></label>
-                      <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:600;">${_t('create.advTiebreakPoint')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advTiebreakPointDesc')}</div></div>
-                      <input type="number" class="adv-value form-control" value="2" style="width:70px; flex-shrink:0; text-align:center; padding:4px 6px; font-size:0.85rem;">
+                    <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                      <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏖️</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.gameDuplas')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.duplasSideDesc')}</div></div></div>
+                      <label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox" id="game-toggle-duplas" aria-label="Modo duplas" checked onchange="window._syncGameTypeToggles()"><span class="toggle-slider"></span></label>
                     </div>
                   </div>
-                  <p style="font-size:0.7rem; color:#f87171; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">${_t('create.advScoringGroupB')}</p>
-                  <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; padding:6px 10px; background:rgba(248,113,113,0.06); border-radius:6px; border-left:2px solid #f87171;">ⓘ ${_t('create.advScoringGroupBWarn')}</div>
-                  <!-- v2.3.12: toggle mestre — desligado, nivela quem usa placar ao vivo -->
-                  <div style="display:flex; align-items:center; gap:10px; padding:9px 11px; background:rgba(248,113,113,0.08); border:1px solid rgba(248,113,113,0.25); border-radius:8px; margin-bottom:8px;">
-                    <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="adv-apply-live" checked onchange="window._onAdvApplyLiveToggle()"><span class="toggle-slider"></span></label>
-                    <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:700; color:#f87171;">${_t('create.advApplyLive')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advApplyLiveDesc')}</div></div>
-                  </div>
-                  <div style="display:flex; flex-direction:column; gap:6px;">
-                    <div class="adv-row" data-adv-key="killing_point" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
-                      <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled"><span class="toggle-slider"></span></label>
-                      <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:600;">${_t('create.advKillingPoint')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advKillingPointDesc')}</div></div>
-                      <input type="number" class="adv-value form-control" value="10" style="width:70px; flex-shrink:0; text-align:center; padding:4px 6px; font-size:0.85rem;">
-                    </div>
-                    <div class="adv-row" data-adv-key="point_scored" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">
-                      <label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled"><span class="toggle-slider"></span></label>
-                      <div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:600;">${_t('create.advPointScored')}</div><div style="font-size:0.68rem; color:var(--text-muted);">${_t('create.advPointScoredDesc')}</div></div>
-                      <input type="number" class="adv-value form-control" value="1" style="width:70px; flex-shrink:0; text-align:center; padding:4px 6px; font-size:0.85rem;">
-                    </div>
-                  </div>
-                  <div style="font-size:0.7rem; color:var(--text-muted); margin-top:10px; font-style:italic;">${_t('create.advScoringFloorNote')}</div>
+                  <small class="text-muted" style="display:block;margin-top:6px;" id="game-type-desc">${_t('create.gameTypeHint')}</small>
                 </div>
               </div>
 
@@ -700,30 +849,6 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- Inscrição e Limite -->
-              <div class="d-flex gap-2 mb-3">
-                <div class="form-group full-width" id="cap-max-container">
-                  <label class="form-label">${_t('create.maxParticipants')}</label>
-                  <input type="number" class="form-control" id="tourn-max-participants" min="2" placeholder="${_t('create.noLimit')}" oninput="window._updateAutoCloseVisibility(); window._recalcDuration()">
-                </div>
-                <div class="form-group full-width">
-                  <label class="form-label">${_t('create.gameType')}</label>
-                  <input type="hidden" id="tourn-team-size" value="2">
-                  <input type="hidden" id="tourn-game-types" value="duplas">
-                  <div id="game-type-buttons" style="display:flex;flex-direction:column;gap:8px;">
-                    <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
-                      <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏸</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.gameSimples')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.simplesSideDesc')}</div></div></div>
-                      <label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox" id="game-toggle-simples" aria-label="Modo simples" onchange="window._syncGameTypeToggles()"><span class="toggle-slider"></span></label>
-                    </div>
-                    <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
-                      <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏖️</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.gameDuplas')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.duplasSideDesc')}</div></div></div>
-                      <label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox" id="game-toggle-duplas" aria-label="Modo duplas" checked onchange="window._syncGameTypeToggles()"><span class="toggle-slider"></span></label>
-                    </div>
-                  </div>
-                  <small class="text-muted" style="display:block;margin-top:6px;" id="game-type-desc">${_t('create.gameTypeHint')}</small>
-                </div>
-              </div>
-
               <!-- (Categorias movido para o box FASE 1) -->
 
               <!-- Modo de Inscrição (toggles não-excludentes) -->
@@ -751,15 +876,7 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- Quem forma as duplas (apenas duplas) -->
-              <div class="form-group mb-3" id="manual-pairing-container">
-                <label class="form-label">Formação das duplas</label>
-                <input type="hidden" id="manual-pairing" value="organizer_only">
-                <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
-                  <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🤝</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Participantes podem formar suas duplas</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">Ligado: cada um arrasta seu card sobre o de outro e a dupla fica pendente até o outro aceitar. Desligado: só o organizador monta as duplas. (Só vale em duplas.)</div></div></div>
-                  <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="manual-pairing-toggle" aria-label="Participantes formam duplas" onchange="window._syncManualPairing()"><span class="toggle-slider"></span></label>
-                </div>
-              </div>
+              <!-- (Formação das duplas movida pra dentro do box FASE 1 — v2.6.49) -->
 
               <!-- Auto-close (apenas eliminatórias) -->
               <div class="form-group mb-3" id="auto-close-container" style="display:none;">
@@ -769,54 +886,9 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- W.O. Scope -->
-              <div style="background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;" id="wo-scope-container">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚠️ ${_t('create.woSection')}</p>
-                <input type="hidden" id="wo-scope" value="individual">
-                <div style="display:flex;flex-direction:column;gap:8px;" id="wo-scope-buttons">
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.08);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="wo-icon">👤</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;" id="wo-label">${_t('create.enrollIndividual')}</span><div class="toggle-desc" id="wo-indiv-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.woIndividualOnDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#f87171;--toggle-on-glow:rgba(248,113,113,0.3);--toggle-on-border:#f87171;"><input type="checkbox" id="wo-toggle-individual" aria-label="W.O. individual" checked onchange="window._syncWoScope()"><span class="toggle-slider"></span></label>
-                  </div>
-                </div>
-              </div>
 
-              <!-- Inscrições após encerramento -->
-              <div style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
-                <input type="hidden" id="late-enrollment" value="closed">
-                <div style="display:flex;flex-direction:column;gap:8px;" id="late-enrollment-buttons">
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🚫</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollClosed')}</span><div class="toggle-desc" id="late-closed-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollClosedOnDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-closed" aria-label="Inscrições fora do prazo fechadas" checked onchange="window._syncLateEnrollment('closed')"><span class="toggle-slider"></span></label>
-                  </div>
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">➕</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollExpand')}</span><div class="toggle-desc" id="late-expand-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollExpandDisabledDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-expand" aria-label="Inscrições fora do prazo expandem lista" onchange="window._syncLateEnrollment('expand')"><span class="toggle-slider"></span></label>
-                  </div>
-                </div>
-              </div>
+              <!-- (Inscrições durante a fase movida pra dentro do box FASE 1 — v2.6.49) -->
 
-              <!-- Lançamento de Resultados (toggles não-excludentes) -->
-              <div style="background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #60a5fa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">📋 ${_t('create.resultSection')}</p>
-                <div id="result-entry-buttons" style="display:flex;flex-direction:column;gap:8px;">
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">📋</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.resultOrg')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.resultOrgDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox" id="re-toggle-organizer" aria-label="Resultados via organizador" checked onchange="window._syncResultEntryToggles()"><span class="toggle-slider"></span></label>
-                  </div>
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏓</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.resultPlayersLabel')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.resultPlayersDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox" id="re-toggle-players" aria-label="Resultados via jogadores" onchange="window._syncResultEntryToggles()"><span class="toggle-slider"></span></label>
-                  </div>
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🧑‍⚖️</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.resultRefereeLabel')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.resultRefereeDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox" id="re-toggle-referee" aria-label="Resultados via árbitro" onchange="window._syncResultEntryToggles()"><span class="toggle-slider"></span></label>
-                  </div>
-                </div>
-                <div id="result-entry-desc" style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">${_t('create.resultOnlyOrgDesc')}</div>
-                <input type="hidden" id="select-result-entry" value="organizer">
-              </div>
 
               <!-- (Classificação movido para o box FASE 1) -->
 
@@ -1152,11 +1224,14 @@ function setupCreateTournamentModal() {
     'time': _t('create.enrollModeTimeDesc'),
     'misto': _t('create.enrollModeMistoDesc')
   };
+  // v2.6.66: o picker exibe 3 categorias (Pontos Corridos / Fase de Grupos /
+  // Eliminatórias). A categoria é mapeada pro valor INTERNO de t.format (intocado):
+  // pontos→'liga', grupos→'grupos_mata', elim→'elim_simples'|'elim_dupla' (toggle Dupla).
   window._selectFormato = function(btn) {
-    var value = btn.getAttribute('data-value');
+    var cat = btn.getAttribute('data-fmt');
     var btns = document.querySelectorAll('#formato-buttons .formato-btn');
     btns.forEach(function(b) {
-      if (b.getAttribute('data-value') === value) {
+      if (b.getAttribute('data-fmt') === cat) {
         b.classList.add('formato-btn-active');
         b.style.border = '2px solid #3b82f6';
         b.style.background = 'rgba(59,130,246,0.12)';
@@ -1172,10 +1247,28 @@ function setupCreateTournamentModal() {
         b.style.boxShadow = 'none';
       }
     });
-    // Sync hidden select
+    var duplaEl = document.getElementById('toggle-dupla-elim');
+    var value = (cat === 'pontos') ? 'liga'
+              : (cat === 'grupos') ? 'grupos_mata'
+              : (duplaEl && duplaEl.checked) ? 'elim_dupla' : 'elim_simples';
+    // Sync hidden select (fonte única de verdade para todo o resto do form)
     var sel = document.getElementById('select-formato');
     if (sel) { sel.value = value; }
     // Update description
+    var descEl = document.getElementById('formato-desc');
+    if (descEl) descEl.textContent = _formatoDescs[value] || '';
+    window._onFormatoChange();
+  };
+
+  // Toggle Dupla Eliminatória — alterna elim_simples ↔ elim_dupla mantendo
+  // a categoria Eliminatórias ativa. Só age quando Eliminatórias está selecionado.
+  window._toggleDuplaElim = function(checked) {
+    var sel = document.getElementById('select-formato');
+    if (!sel) return;
+    var activeBtn = document.querySelector('#formato-buttons .formato-btn.formato-btn-active');
+    if (activeBtn && activeBtn.getAttribute('data-fmt') !== 'elim') return;
+    var value = checked ? 'elim_dupla' : 'elim_simples';
+    sel.value = value;
     var descEl = document.getElementById('formato-desc');
     if (descEl) descEl.textContent = _formatoDescs[value] || '';
     window._onFormatoChange();
@@ -1229,6 +1322,236 @@ function setupCreateTournamentModal() {
     { v: 'elim_dupla', label: 'Dupla Eliminatória (Superior/Inferior)' },
     { v: 'grupos_mata', label: 'Fase de Grupos' }
   ];
+  // v2.6.64: ícones SVG idênticos aos da Fase 1 — render canônica de Formato pras fases extras.
+  var _PHASE_FORMAT_SVG = {
+    elim_simples: '<svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="4" x2="12" y2="4" opacity=".5"/><line x1="2" y1="14" x2="12" y2="14" opacity=".5"/><line x1="12" y1="4" x2="12" y2="14"/><line x1="12" y1="9" x2="22" y2="9"/><line x1="2" y1="22" x2="12" y2="22" opacity=".5"/><line x1="2" y1="32" x2="12" y2="32" opacity=".5"/><line x1="12" y1="22" x2="12" y2="32"/><line x1="12" y1="27" x2="22" y2="27"/><line x1="22" y1="9" x2="22" y2="27"/><line x1="22" y1="18" x2="32" y2="18"/><circle cx="36" cy="18" r="3" fill="currentColor" stroke="none" opacity=".6"/></svg>',
+    elim_dupla: '<svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="3" x2="10" y2="3" opacity=".5"/><line x1="2" y1="10" x2="10" y2="10" opacity=".5"/><line x1="10" y1="3" x2="10" y2="10"/><line x1="10" y1="6.5" x2="18" y2="6.5"/><line x1="18" y1="6.5" x2="18" y2="13"/><line x1="18" y1="13" x2="26" y2="13"/><line x1="2" y1="20" x2="10" y2="20" opacity=".4" stroke-dasharray="2 2"/><line x1="2" y1="27" x2="10" y2="27" opacity=".4" stroke-dasharray="2 2"/><line x1="10" y1="20" x2="10" y2="27" opacity=".6" stroke-dasharray="2 2"/><line x1="10" y1="23.5" x2="18" y2="23.5" opacity=".6" stroke-dasharray="2 2"/><line x1="18" y1="19" x2="18" y2="23.5" opacity=".6" stroke-dasharray="2 2"/><line x1="18" y1="19" x2="26" y2="19" opacity=".6" stroke-dasharray="2 2"/><line x1="26" y1="13" x2="26" y2="19"/><line x1="26" y1="16" x2="34" y2="16"/><circle cx="37" cy="16" r="2.5" fill="currentColor" stroke="none" opacity=".6"/></svg>',
+    grupos_mata: '<svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1" y="2" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="2" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="7" x2="13" y2="7" opacity=".5"/><line x1="4" y1="12" x2="13" y2="12" opacity=".5"/><rect x="1" y="20" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="20" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="25" x2="13" y2="25" opacity=".5"/><line x1="4" y1="30" x2="13" y2="30" opacity=".5"/><line x1="20" y1="9" x2="20" y2="27"/><line x1="20" y1="9" x2="28" y2="9" opacity=".6"/><line x1="20" y1="27" x2="28" y2="27" opacity=".6"/><line x1="28" y1="9" x2="28" y2="27"/><line x1="28" y1="18" x2="36" y2="18"/><circle cx="38" cy="18" r="1.8" fill="currentColor" stroke="none" opacity=".6"/></svg>',
+    liga: '<svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><rect x="2" y="2" width="36" height="32" rx="3" opacity=".3" fill="currentColor" stroke="none"/><rect x="2" y="2" width="36" height="32" rx="3" fill="none" opacity=".6"/><line x1="2" y1="10" x2="38" y2="10" opacity=".4"/><line x1="2" y1="18" x2="38" y2="18" opacity=".25"/><line x1="2" y1="26" x2="38" y2="26" opacity=".25"/><line x1="14" y1="2" x2="14" y2="34" opacity=".25"/><line x1="26" y1="2" x2="26" y2="34" opacity=".25"/><circle cx="7" cy="15" r="1.5" fill="currentColor" stroke="none" opacity=".5"/><circle cx="7" cy="23" r="1.5" fill="currentColor" stroke="none" opacity=".35"/><circle cx="7" cy="31" r="1.5" fill="currentColor" stroke="none" opacity=".25"/></svg>'
+  };
+  var _PHASE_FORMAT_LABELKEY = { elim_simples: 'format.single', elim_dupla: 'format.double', grupos_mata: 'format.groupsShort', liga: 'format.league' };
+  // Grade de Formato canônica (mesmo visual da Fase 1) — usada nos cards de fase extra.
+  // v2.6.68: 3 categorias (Pontos Corridos / Fase de Grupos / Eliminatórias), igual à
+  // Fase 1. Dupla Eliminatória vira sub-toggle dentro de Eliminatórias. O valor gravado
+  // em ph.format continua sendo o interno legado ('liga'|'grupos_mata'|'elim_simples'|'elim_dupla').
+  window._phaseFormatGridHtml = function(i, current) {
+    var T = window._t || function(k){ return k; };
+    if (!document.getElementById('sp-phase-fmt-grid-css-v2')) {
+      var _st = document.createElement('style');
+      _st.id = 'sp-phase-fmt-grid-css-v2';
+      _st.textContent = '.sp-phase-fmt-grid{grid-template-columns:repeat(3,1fr)!important}@media(max-width:600px){.sp-phase-fmt-grid{grid-template-columns:repeat(3,1fr)!important}}';
+      document.head.appendChild(_st);
+    }
+    var on = 'border:2px solid #3b82f6;background:rgba(59,130,246,0.12);color:#60a5fa;';
+    var off = 'border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);';
+    var isElim = (current === 'elim_simples' || current === 'elim_dupla');
+    var cats = [
+      { val: 'liga',        svg: _PHASE_FORMAT_SVG.liga,        labelKey: 'format.league',      act: current === 'liga' },
+      { val: 'grupos_mata', svg: _PHASE_FORMAT_SVG.grupos_mata, labelKey: 'format.groupsShort', act: current === 'grupos_mata' },
+      { val: (current === 'elim_dupla' ? 'elim_dupla' : 'elim_simples'), svg: _PHASE_FORMAT_SVG.elim_simples, labelKey: 'format.elimination', act: isElim }
+    ];
+    var h = '<label style="display:block;font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Formato</label>';
+    h += '<div class="sp-phase-fmt-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">';
+    cats.forEach(function(c){
+      h += '<button type="button" onclick="window._setPhaseField(' + i + ',\'format\',\'' + c.val + '\')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;font-weight:700;text-align:center;line-height:1.1;' + (c.act ? on : off) + '">' + c.svg + T(c.labelKey) + '</button>';
+    });
+    h += '</div>';
+    // Sub-toggle Dupla Eliminatória — só na categoria Eliminatórias.
+    if (isElim) {
+      var dupChecked = current === 'elim_dupla';
+      h += '<div style="display:flex;align-items:center;gap:10px;margin:-2px 0 10px;padding:8px 12px;border-radius:10px;border:1px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.06);">';
+      h += '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox"' + (dupChecked ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ',\'format\',this.checked?\'elim_dupla\':\'elim_simples\')"><span class="toggle-slider"></span></label>';
+      h += '<div><span style="font-weight:600;font-size:0.85rem;color:var(--text-bright);">' + T('format.double') + '</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">' + T('create.descElimDupla') + '</div></div>';
+      h += '</div>';
+    }
+    return h;
+  };
+  // Modo de Sorteio canônico (Sorteio / Rei-Rainha) — só Pontos Corridos tem Rei/Rainha.
+  window._phaseDrawModeHtml = function(i, isRei) {
+    var T = window._t || function(k){ return k; };
+    var on = 'border:2px solid #34d399;background:rgba(16,185,129,0.15);color:#34d399;';
+    var off = 'border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);';
+    var bs = 'padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;font-weight:600;';
+    var h = '<label style="display:block;font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + T('create.drawMode') + '</label>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    h += '<button type="button" onclick="window._setPhaseField(' + i + ',\'reiRainha\',false)" style="' + bs + (!isRei ? on : off) + '">🎲 ' + T('create.drawModeSorteio') + '</button>';
+    h += '<button type="button" onclick="window._setPhaseField(' + i + ',\'reiRainha\',true)" style="' + bs + (isRei ? on : off) + '">👑 ' + T('format.monarchShort') + '</button>';
+    h += '</div>';
+    return h;
+  };
+  // Grava data/hora da fase sem re-render (preserva foco do input). — v2.6.65
+  window._setPhaseDate = function(i, field, value) {
+    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
+    ph[field] = value;
+  };
+  // Datas da fase canônicas (mesmo visual da Fase 1: labels no topo, campos na linha mais baixa).
+  window._phaseDatesHtml = function(i, ph) {
+    var T = window._t || function(k){ return k; };
+    var col = 'flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;';
+    var lbl = 'font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;';
+    var rowS = 'display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;';
+    var dInp = 'padding:4px 6px; font-size:0.82rem; flex:1 1 120px; min-width:120px;';
+    var tInp = 'padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;';
+    function cell(label, dKey, tKey) {
+      // oninput de Início/Término também recalcula as Rodadas do Agendamento (forward).
+      var extra = (dKey === 'startDate' || dKey === 'endDate' || dKey === 'startTime' || dKey === 'endTime') ? '; window._recalcPhaseRounds && window._recalcPhaseRounds(' + i + ')' : '';
+      return '<div style="' + col + '"><div style="' + lbl + '">' + T(label) + '</div><div style="' + rowS + '">'
+        + '<input type="date" class="form-control" id="ph-' + dKey + '-' + i + '" value="' + (ph[dKey] || '') + '" oninput="window._setPhaseDate(' + i + ',\'' + dKey + '\',this.value)' + extra + '" style="' + dInp + '">'
+        + '<input type="time" class="form-control" id="ph-' + tKey + '-' + i + '" value="' + (ph[tKey] || '') + '" oninput="window._setPhaseDate(' + i + ',\'' + tKey + '\',this.value)' + extra + '" style="' + tInp + '">'
+        + '</div></div>';
+    }
+    var h = '<div style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.75rem; margin-top:10px;">';
+    h += '<div style="font-size:0.72rem; color:#a5b4fc; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem;">📅 ' + T('create.phaseDatesTitle') + '</div>';
+    h += '<div class="dates-row" style="display:flex; gap:10px; align-items:stretch; flex-wrap:wrap;">';
+    // Prazo de inscrição só aparece quando inscrições FECHADAS (igual à Fase 1).
+    if ((ph.lateEnrollment || 'closed') === 'closed') h += cell('create.phaseEnrollDeadline', 'regDate', 'regTime');
+    h += cell('create.phaseStart', 'startDate', 'startTime');
+    h += cell('create.phaseEnd', 'endDate', 'endTime');
+    h += '</div></div>';
+    return h;
+  };
+  // Inscrições durante a fase (Fechadas / Aberta-expande) — mutuamente exclusivo. — v2.6.66
+  window._setPhaseLateEnroll = function(i, mode) {
+    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
+    ph.lateEnrollment = mode;
+    window._renderPhases();
+  };
+  window._phaseLateEnrollHtml = function(i, mode) {
+    var T = window._t || function(k){ return k; };
+    // 3 estados (= Fase 1): 'closed' (Fechadas) | 'expand' (aberta + novos confrontos) | 'standby' (aberta, sem novos confrontos).
+    mode = mode || 'closed';
+    var closed = (mode === 'closed');
+    var expand = (mode === 'expand');
+    var rowS = 'padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
+    var swS = '--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;';
+    var h = '<div style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-top: 12px;">';
+    h += '<p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>';
+    h += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    // Fechadas (master): ligado = fechada; desligado = aberta (cai em standby).
+    h += '<div class="toggle-row" style="' + rowS + '"><div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🚫</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + T('create.lateEnrollClosed') + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(closed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc') + '</div></div></div>';
+    h += '<label class="toggle-switch" style="' + swS + '"><input type="checkbox"' + (closed ? ' checked' : '') + ' onchange="window._setPhaseLateEnroll(' + i + ', this.checked ? \'closed\' : \'standby\')"><span class="toggle-slider"></span></label></div>';
+    // Novos Confrontos: SÓ aparece quando NÃO fechada (não há suplentes com inscrição fechada).
+    if (!closed) {
+      h += '<div class="toggle-row" style="' + rowS + '"><div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">➕</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + T('create.lateEnrollExpand') + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(expand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc') + '</div></div></div>';
+      h += '<label class="toggle-switch" style="' + swS + '"><input type="checkbox"' + (expand ? ' checked' : '') + ' onchange="window._setPhaseLateEnroll(' + i + ', this.checked ? \'expand\' : \'standby\')"><span class="toggle-slider"></span></label></div>';
+    }
+    h += '</div></div>';
+    return h;
+  };
+  // ─── Agendamento de Sorteios por fase (só Pontos Corridos) — v2.6.67 ───
+  window._setPhaseDraw = function(i, field, value) {
+    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
+    ph[field] = value;
+  };
+  // FORWARD: datas/intervalo → nº de rodadas (não briga com digitação no campo).
+  window._recalcPhaseRounds = function(i) {
+    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
+    var input = document.getElementById('ph-rounds-' + i);
+    var firstDateVal = ph.drawFirstDate || ph.startDate || '';
+    var timeVal = ph.drawFirstTime || ph.startTime || '19:00';
+    var interval = parseInt(ph.drawIntervalDays, 10);
+    var first = firstDateVal ? new Date(firstDateVal + 'T' + timeVal + ':00') : null;
+    if (!first || isNaN(first.getTime())) return;
+    if (!interval || interval < 1) { ph.rounds = 1; if (input && document.activeElement !== input) input.value = 1; return; }
+    var endDateVal = ph.endDate || '';
+    var endTimeVal = ph.endTime || '23:59';
+    var end = endDateVal ? new Date(endDateVal + 'T' + endTimeVal + ':00') : null;
+    if (!end || isNaN(end.getTime()) || end < first) return;
+    var rounds = Math.floor((end - first) / (interval * 86400000)) + 1;
+    if (rounds < 1) rounds = 1;
+    ph.rounds = rounds;
+    if (input && document.activeElement !== input) input.value = rounds;
+  };
+  // REVERSE: nº de rodadas → data de término da fase (fim = 1ºsorteio + (N−1)×intervalo).
+  window._applyPhaseRounds = function(i) {
+    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
+    var input = document.getElementById('ph-rounds-' + i);
+    var rounds = input ? parseInt(input.value, 10) : 0;
+    ph.rounds = (rounds && rounds >= 1) ? rounds : 1;
+    var firstDateVal = ph.drawFirstDate || ph.startDate || '';
+    var interval = parseInt(ph.drawIntervalDays, 10);
+    if (!rounds || rounds < 1 || !firstDateVal || !interval || interval < 1) return;
+    var timeVal = ph.drawFirstTime || ph.startTime || '19:00';
+    var first = new Date(firstDateVal + 'T' + timeVal + ':00');
+    if (isNaN(first.getTime())) return;
+    var endDate = new Date(first.getTime() + (rounds - 1) * interval * 86400000);
+    var y = endDate.getFullYear(), m = String(endDate.getMonth() + 1).padStart(2, '0'), d = String(endDate.getDate()).padStart(2, '0');
+    ph.endDate = y + '-' + m + '-' + d; ph.endTime = timeVal;
+    var endEl = document.getElementById('ph-endDate-' + i); if (endEl) endEl.value = ph.endDate;
+    var endTEl = document.getElementById('ph-endTime-' + i); if (endTEl) endTEl.value = timeVal;
+  };
+  window._phaseDrawScheduleHtml = function(i, ph) {
+    var T = window._t || function(k){ return k; };
+    var grp = 'margin:0;flex:0 0 auto;';
+    var lblS = 'font-size:0.7rem;margin-bottom:2px;display:block;color:var(--text-muted);';
+    var h = '<div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 0.6rem 0.75rem; margin-top: 12px;">';
+    h += '<p style="margin: 0 0 0.35rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">' + T('create.drawSchedule') + '</p>';
+    h += '<p style="margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-bright); font-weight: 600;">Primeiro Sorteio</p>';
+    h += '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:0.5rem;">';
+    h += '<div style="' + grp + '"><label style="' + lblS + '">' + T('create.dateLabel') + '</label><input type="date" class="form-control" value="' + (ph.drawFirstDate || '') + '" oninput="window._setPhaseDraw(' + i + ',\'drawFirstDate\',this.value); window._recalcPhaseRounds(' + i + ')" style="width:160px;max-width:100%;padding:6px 8px;font-size:0.85rem;"></div>';
+    h += '<div style="' + grp + '"><label style="' + lblS + '">' + T('create.timeLabel') + '</label><input type="time" class="form-control" value="' + (ph.drawFirstTime || '19:00') + '" oninput="window._setPhaseDraw(' + i + ',\'drawFirstTime\',this.value); window._recalcPhaseRounds(' + i + ')" style="width:100px;padding:6px 8px;font-size:0.85rem;"></div>';
+    h += '<div style="' + grp + '"><label style="' + lblS + '">' + T('create.repeatEvery') + '</label><div style="display:flex;align-items:center;gap:4px;"><input type="number" class="form-control" min="1" max="90" value="' + (ph.drawIntervalDays != null && ph.drawIntervalDays !== '' ? ph.drawIntervalDays : 7) + '" oninput="window._setPhaseDraw(' + i + ',\'drawIntervalDays\',this.value); window._recalcPhaseRounds(' + i + ')" style="width:55px;padding:6px 8px;font-size:0.85rem;text-align:center;"><span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">' + T('create.daysUnit') + '</span></div></div>';
+    h += '<div style="margin:0;margin-left:18px;flex:0 0 auto;"><label style="font-size:0.7rem;margin-bottom:2px;display:block;color:#34d399;">Rodadas</label><div style="display:flex;align-items:center;gap:4px;"><input type="number" id="ph-rounds-' + i + '" min="1" max="60" value="' + (ph.rounds || 1) + '" class="form-control" oninput="window._applyPhaseRounds(' + i + ')" title="Digite o nº de rodadas — a data de término da fase se ajusta sozinha" style="width:62px;min-height:40px;padding:6px 8px;font-size:0.85rem;text-align:center;font-weight:700;color:#34d399;background:rgba(16,185,129,0.10);border-color:rgba(16,185,129,0.45);box-sizing:border-box;"><span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">rodadas</span></div></div>';
+    h += '</div>';
+    h += '<div class="toggle-row"><div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">' + T('create.manualDraw') + '</span><div class="toggle-desc">' + T('create.manualDrawDesc') + '</div></div></div><label class="toggle-switch"><input type="checkbox"' + (ph.drawManual ? ' checked' : '') + ' onchange="window._setPhaseDraw(' + i + ',\'drawManual\',this.checked)"><span class="toggle-slider"></span></label></div>';
+    h += '</div>';
+    return h;
+  };
+  // ─── Sistema de Pontuação (GSM) por fase — modelo OVERRIDE — v2.6.69 ───
+  // ph.scoring null = herda o padrão do torneio; senão = override da fase.
+  // (Personalizado fica no padrão do torneio — o modal global é hardwired à Fase 1.)
+  window._currentSportName = function() {
+    var sportEl = document.getElementById('select-sport');
+    if (!sportEl || !sportEl.options[sportEl.selectedIndex]) return '';
+    return sportEl.options[sportEl.selectedIndex].text.replace(/^[^\wÀ-ɏ]+/u, '').trim();
+  };
+  window._phaseGsmSelectPreset = function(i, key) {
+    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
+    if (key === 'inherit') { ph.scoring = null; ph._gsmPreset = 'inherit'; window._renderPhases(); return; }
+    var p = (window._gsmPresets || {})[key]; if (!p) return;
+    var adv = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : !!p.advantageRule;
+    ph._gsmPreset = key;
+    ph.scoring = {
+      type: 'sets', setsToWin: p.setsToWin, gamesPerSet: p.gamesPerSet,
+      tiebreakEnabled: p.tiebreakEnabled, tiebreakPoints: p.tiebreakPoints, tiebreakMargin: p.tiebreakMargin,
+      superTiebreak: p.superTiebreak, superTiebreakPoints: p.superTiebreakPoints, countingType: p.countingType,
+      advantageRule: adv, fixedSet: false, fixedSetGames: 6
+    };
+    window._renderPhases();
+  };
+  window._phaseGsmAdvantage = function(i, checked) {
+    var ph = window._extraPhases && window._extraPhases[i]; if (!ph || !ph.scoring) return;
+    ph.scoring.advantageRule = !!checked;
+    window._renderPhases();
+  };
+  window._phaseGsmHtml = function(i, ph) {
+    var T = window._t || function(k){ return k; };
+    var sc = ph.scoring || null;
+    // preset selecionado (por setsToWin) ou 'inherit'.
+    var selKey = 'inherit';
+    if (sc) { selKey = (sc.setsToWin >= 3) ? 'best5' : (sc.setsToWin === 2 ? 'best3' : 'set1'); }
+    var opts = [['inherit', '🏛️', 'Padrão do torneio'], ['set1', '⚡', '1 Set'], ['best3', '🏆', 'Melhor de 3'], ['best5', '🎯', 'Melhor de 5']];
+    var h = '<div style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-top: 12px;">';
+    h += '<p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #c084fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 ' + T('create.matchFormat') + '</p>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;">';
+    opts.forEach(function(o){
+      var act = selKey === o[0];
+      var desc = (o[0] === 'inherit') ? 'herda do torneio' : (window._gsmBuildDescFromValues ? (function(){ var p = window._gsmPresets[o[0]]; return window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints); })() : '');
+      h += '<button type="button" onclick="window._phaseGsmSelectPreset(' + i + ',\'' + o[0] + '\')" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid ' + (act ? 'rgba(168,85,247,0.7)' : 'rgba(255,255,255,0.1)') + ';background:' + (act ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.03)') + ';">';
+      h += '<span style="font-size:1.2rem;">' + o[1] + '</span><span style="font-size:0.76rem;font-weight:700;color:' + (act ? '#c084fc' : 'var(--text-bright)') + ';">' + o[2] + '</span>';
+      h += '<span style="font-size:0.62rem;color:var(--text-muted);text-align:center;line-height:1.25;">' + desc + '</span></button>';
+    });
+    h += '</div>';
+    // Vantagem (só quando há override e o esporte não trava no-Ad).
+    if (sc) {
+      var sport = window._currentSportName();
+      var locked = !!(window._gsmNoAdLocked && window._gsmNoAdLocked[sport]);
+      if (!locked) {
+        h += '<div style="margin-top:10px;padding:10px 12px;background:rgba(168,85,247,0.04);border-radius:10px;border:1px solid rgba(168,85,247,0.1);"><div class="toggle-row" style="padding:0;"><div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">' + T('create.gsmAdvantageLabel') + '</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">' + T('create.gsmAdvantageDesc') + '</div></div><label class="toggle-switch toggle-sm"><input type="checkbox"' + (sc.advantageRule ? ' checked' : '') + ' onchange="window._phaseGsmAdvantage(' + i + ', this.checked)"><span class="toggle-slider"></span></label></div></div>';
+      }
+    }
+    return h;
+  };
   function _phaseDefaultMapping(format) {
     if (format === 'elim_dupla') return [ { dest: 'upper', rankFrom: 1, rankTo: 2, label: 'Ouro' }, { dest: 'lower', rankFrom: 3, rankTo: 4, label: 'Prata' } ];
     return [ { dest: 'main', rankFrom: 1, rankTo: 2, label: '' } ];
@@ -1242,7 +1565,7 @@ function setupCreateTournamentModal() {
   window._addPhase = function() {
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
     var n = window._extraPhases.length + 2;
-    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', mapping: _phaseDefaultMapping('elim_dupla') });
+    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
     window._renderPhases();
   };
   window._removePhase = function(i) { if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
@@ -1268,6 +1591,7 @@ function setupCreateTournamentModal() {
     ph.fixedPairs = true; ph.pairingStrategy = strategy;
     window._renderPhases();
   };
+  // v2.6.62: _togglePhaseResultEntry agora é canônico (definido no topo, idx 0 = Fase 1).
   // Botão de toggle do construtor (estilo dos botões da Fase 1).
   function _phBtn(i, field, val, label, active) {
     var on = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;';
@@ -1283,6 +1607,8 @@ function setupCreateTournamentModal() {
     var ph = window._extraPhases[i]; if (!ph || !ph.mapping || !ph.mapping[mi]) return;
     ph.mapping[mi].label = value;
   };
+  // (render canônica de W.O. movida pro TOPO de setupCreateTournamentModal — v2.6.61,
+  //  pra estar definida antes do template da Fase 1 que a usa.)
   function _phOpt(v, label, sel) { return '<option value="' + v + '"' + (sel ? ' selected' : '') + '>' + label + '</option>'; }
   var _PH_INP = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;';
   function _phaseCardHtml(ph, i) {
@@ -1357,13 +1683,12 @@ function setupCreateTournamentModal() {
     h += '<input type="text" value="' + esc(ph.name || '') + '" placeholder="Nome da fase (opcional)" oninput="window._setPhaseField(' + i + ', \'name\', this.value)" style="flex:1;min-width:0;' + _PH_INP + '">';
     h += '<button type="button" onclick="window._removePhase(' + i + ')" title="Remover fase" style="flex-shrink:0;border:none;background:rgba(239,68,68,0.15);color:#ef4444;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:0.95rem;font-weight:700;">✕</button>';
     h += '</div>';
-    h += '<label style="display:block;font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Formato</label>';
-    h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px;">';
-    _PHASE_FORMATS.forEach(function(f){ h += _phBtn(i, 'format', f.v, f.label, ph.format === f.v); });
-    h += '</div>';
+    // Formato — render CANÔNICA (mesma grade com ícones SVG + rótulos da Fase 1) — v2.6.64.
+    h += window._phaseFormatGridHtml(i, ph.format);
     if (isLiga) {
+      // Modo de Sorteio canônico (Sorteio / Rei-Rainha) + Rodadas.
+      h += '<div style="margin-bottom:8px;">' + window._phaseDrawModeHtml(i, !!ph.reiRainha) + '</div>';
       h += '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:' + (ph.reiRainha ? '8px' : '0') + ';">';
-      h += '<label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;cursor:pointer;"><input type="checkbox"' + (ph.reiRainha ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'reiRainha\', this.checked)"> 👑 Parceiros rotativos (Rei/Rainha)</label>';
       h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Rodadas <input type="number" min="1" max="30" value="' + (ph.rounds || 1) + '" oninput="window._setPhaseField(' + i + ', \'rounds\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
       h += '</div>';
       if (ph.reiRainha) {
@@ -1379,6 +1704,27 @@ function setupCreateTournamentModal() {
       h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Classificados/grupo <input type="number" min="1" max="8" value="' + (ph.gruposClassified || 2) + '" oninput="window._setPhaseField(' + i + ', \'gruposClassified\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
       h += '</div>';
     }
+    // ─── Datas da fase POR FASE (v2.6.65) ───
+    h += window._phaseDatesHtml(i, ph);
+    // ─── Agendamento de Sorteios POR FASE (v2.6.67) — só Pontos Corridos ───
+    if (isLiga) h += window._phaseDrawScheduleHtml(i, ph);
+    // ─── Inscrições durante a fase POR FASE (v2.6.66) ───
+    h += window._phaseLateEnrollHtml(i, ph.lateEnrollment || 'closed');
+    // ─── Estimativa de tempo POR FASE (v2.6.68) ───
+    h += window._phaseEstimateHtml(i, ph);
+    // ─── Sistema de Pontuação (GSM) POR FASE (v2.6.69) ───
+    h += window._phaseGsmHtml(i, ph);
+    // ─── Pontuação Avançada POR FASE (v2.6.63) — só em Pontos Corridos (liga) ───
+    if (isLiga) {
+      h += '<div style="margin-top:12px;">' + window._advScoringHtml(i + 1, 'block', ph.advancedScoring) + '</div>';
+    }
+    // ─── W.O. + Lançamento de Resultados POR FASE (v2.6.59) ───
+    h += '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;">';
+    h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">⚠️ W.O. (ausência)</div>';
+    h += '<div style="margin-bottom:10px;">' + window._woButtonsHtml(i + 1) + '</div>';
+    h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">📋 Lançamento dos resultados</div>';
+    h += window._resultEntryButtonsHtml(i + 1);
+    h += '</div>';
     h += '</div>'; // fim box da fase
     return h;
   }
@@ -1391,6 +1737,10 @@ function setupCreateTournamentModal() {
     var h = '';
     window._extraPhases.forEach(function(ph, i){ h += _phaseCardHtml(ph, i); });
     list.innerHTML = h;
+    // v2.6.63: aplica o estado inicial (disable/dim do Grupo B) da Pontuação Avançada por fase.
+    window._extraPhases.forEach(function(ph, i){
+      if (ph.format === 'liga' && typeof window._onAdvApplyLiveToggle === 'function') window._onAdvApplyLiveToggle(i + 1);
+    });
   };
 
   // ── Enrollment Mode Toggles (non-exclusive) ──
@@ -1599,7 +1949,9 @@ function setupCreateTournamentModal() {
       var expandEffective = !closed.checked && expand.checked;
       rows[1].style.border = expandEffective ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.08)';
       rows[1].style.background = expandEffective ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
-      rows[1].style.opacity = closed.checked ? '0.55' : '1';
+      // v2.6.52: "Novos Confrontos" some quando Fechadas (não há suplentes); aparece só quando aberta.
+      rows[1].style.display = closed.checked ? 'none' : '';
+      rows[1].style.opacity = '1';
     }
     var closedDesc = document.getElementById('late-closed-desc');
     if (closedDesc) closedDesc.textContent = _t(closed.checked ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc');
@@ -1610,6 +1962,14 @@ function setupCreateTournamentModal() {
       else key = expand.checked ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc';
       expandDesc.textContent = _t(key);
     }
+    // v2.6.52: Fechadas ON → mostra prazo de encerramento das inscrições (DATAS DA FASE);
+    // Aberta → esconde o prazo (inscrição segue durante a fase, sem corte fixo).
+    var regBox = document.getElementById('reg-date-container');
+    if (regBox) regBox.style.display = closed.checked ? 'flex' : 'none'; // 'flex' preserva o card em coluna
+    // v2.6.56: "Pontuação de Novos Inscritos" só faz sentido com inscrição ABERTA durante a
+    // fase (há novos inscritos pra pontuar). Fechadas → esconde.
+    var npsBox = document.getElementById('liga-nps-container');
+    if (npsBox) npsBox.style.display = closed.checked ? 'none' : '';
   };
 
   // Sorteio de Vagas: alterna entre o modelo "corrida" (cap, atual) e "vagas
@@ -2172,8 +2532,16 @@ function setupCreateTournamentModal() {
     const drawMode = document.getElementById('draw-mode').value;
     const isMonarch = drawMode === 'rei_rainha';
 
+    // v2.6.66: sub-toggle "Dupla eliminatória" só aparece na categoria Eliminatórias.
+    var _duplaRow = document.getElementById('dupla-elim-row');
+    if (_duplaRow) _duplaRow.style.display = isElim ? 'flex' : 'none';
+
     document.getElementById('suico-fields').style.display = isSuico ? 'block' : 'none';
     document.getElementById('liga-fields').style.display = isLiga ? 'block' : 'none';
+    // v2.6.48: Agendamento de Sorteios foi extraído do #liga-fields pra logo abaixo
+    // das "Datas da fase" — visibilidade controlada aqui (só Liga/Pontos Corridos).
+    var _dsEl = document.getElementById('liga-draw-schedule');
+    if (_dsEl) _dsEl.style.display = isLiga ? 'block' : 'none';
     if (isLiga && typeof window._updateLigaRoundsTag === 'function') setTimeout(window._updateLigaRoundsTag, 0);
     document.getElementById('suico-draw-schedule-fields').style.display = isSuico ? 'block' : 'none';
     document.getElementById('elim-settings').style.display = (isElim || isGrupos) ? 'block' : 'none';
@@ -2233,26 +2601,35 @@ function setupCreateTournamentModal() {
 
     window._updateAutoCloseVisibility();
     window._updateRegDateVisibility();
+    // v2.6.52: aplica a visibilidade de "Novos Confrontos" + prazo conforme Fechadas
+    // (no init e em toda troca de formato, não só no clique do toggle).
+    if (typeof window._syncLateEnrollment === 'function') window._syncLateEnrollment();
     window._onInscricaoChange();
     window._recalcDuration();
     if (typeof window._renderPhases === 'function') window._renderPhases();
   };
 
-  window._onAdvScoringToggle = function () {
-    var on = document.getElementById('adv-scoring-enabled').checked;
-    var body = document.getElementById('adv-scoring-body');
+  // v2.6.63: idx-aware (idx 0 = Fase 1 sem sufixo; idx>=1 = fase extra com sufixo -N).
+  window._onAdvScoringToggle = function (idx) {
+    idx = idx || 0;
+    var s = idx === 0 ? '' : ('-' + idx);
+    var enEl = document.getElementById('adv-scoring-enabled' + s);
+    var on = enEl ? enEl.checked : false;
+    var body = document.getElementById('adv-scoring-body' + s);
     if (body) body.style.display = on ? 'block' : 'none';
-    if (typeof window._onAdvApplyLiveToggle === 'function') window._onAdvApplyLiveToggle();
+    if (typeof window._onAdvApplyLiveToggle === 'function') window._onAdvApplyLiveToggle(idx);
   };
 
   // v2.3.13: o toggle mestre "Aplicar pontos de placar ao vivo" controla os 2
   // toggles individuais do Grupo B (killing point, ponto marcado). Desligado,
   // desmarca e desabilita os dois (e o cálculo já os zera).
-  window._onAdvApplyLiveToggle = function () {
-    var master = document.getElementById('adv-apply-live');
+  window._onAdvApplyLiveToggle = function (idx) {
+    idx = idx || 0;
+    var s = idx === 0 ? '' : ('-' + idx);
+    var master = document.getElementById('adv-apply-live' + s);
     var on = master ? master.checked : true;
     ['killing_point', 'point_scored'].forEach(function (key) {
-      var row = document.querySelector('#adv-scoring-body .adv-row[data-adv-key="' + key + '"]');
+      var row = document.querySelector('#adv-scoring-body' + s + ' .adv-row[data-adv-key="' + key + '"]');
       if (!row) return;
       var en = row.querySelector('.adv-enabled');
       var val = row.querySelector('.adv-value');
@@ -2335,34 +2712,75 @@ function setupCreateTournamentModal() {
   // v2.1.21: tag de rodadas previstas no agendamento da Liga — calcula quantos
   // sorteios cabem do 1º sorteio até o fim do torneio, no intervalo definido.
   // rodadas = floor((fim - 1ºsorteio) / intervalo_dias) + 1.
+  // v2.6.47: FORWARD — datas/intervalo → nº de rodadas (preenche o campo editável).
+  // Não sobrescreve enquanto o organizador está DIGITANDO no campo de rodadas.
   window._updateLigaRoundsTag = function() {
-    var tag = document.getElementById('liga-rounds-tag');
-    if (!tag) return;
+    var grp = document.getElementById('liga-rounds-group');
+    var input = document.getElementById('liga-rounds-input');
+    if (!grp || !input) return;
     var dEl = document.getElementById('liga-first-draw-date');
     var tEl = document.getElementById('liga-first-draw-time');
     var iEl = document.getElementById('liga-draw-interval');
     var endDEl = document.getElementById('tourn-end-date');
     var endTEl = document.getElementById('tourn-end-time');
-    // v2.3.16: cálculo PRECISO por HORA EXATA — igual ao _ligaTournamentProgress
-    // (barra roxa). Antes usava meia-noite (1º sorteio) + fim do dia (fim do
-    // torneio), o que inflava a estimativa (ex.: dava 5 quando o correto é 4
-    // porque o 5º sorteio cairia DEPOIS da hora de término).
-    var timeVal = (tEl && tEl.value) || '19:00';
+    // v2.3.16: cálculo PRECISO por HORA EXATA (igual à barra roxa do progresso).
+    // v2.6.51: `first` = 1º sorteio (liga-first-draw-date) com FALLBACK pro Início
+    // da Fase (tourn-start-date) — assim mexer no Início da fase também recalcula.
+    var sdEl = document.getElementById('tourn-start-date');
+    var stEl = document.getElementById('tourn-start-time');
+    var firstDateVal = (dEl && dEl.value) || (sdEl && sdEl.value) || '';
+    var timeVal = (tEl && tEl.value) || (stEl && stEl.value) || '19:00';
     var endTimeVal = (endTEl && endTEl.value) || '23:59';
-    var first = (dEl && dEl.value) ? new Date(dEl.value + 'T' + timeVal + ':00') : null;
+    var first = firstDateVal ? new Date(firstDateVal + 'T' + timeVal + ':00') : null;
     var interval = iEl ? parseInt(iEl.value, 10) : 0;
     var end = (endDEl && endDEl.value) ? new Date(endDEl.value + 'T' + endTimeVal + ':00') : null;
-    if (!first || !end || !interval || interval < 1 ||
-        isNaN(first.getTime()) || isNaN(end.getTime()) || end < first) {
-      tag.style.display = 'none';
+    // O campo de rodadas aparece assim que há um 1º sorteio/início válido.
+    if (!first || isNaN(first.getTime())) {
+      grp.style.display = 'none';
       return;
     }
+    grp.style.display = '';
+    // v2.6.53: SEM "Repetir a cada" (intervalo vazio/0) = sem repetição = 1 rodada.
+    // Antes o campo SUMIA; agora mostra 1 (apagar repetições não esconde as rodadas).
+    if (!interval || interval < 1) {
+      if (document.activeElement !== input) input.value = 1;
+      return;
+    }
+    if (!end || isNaN(end.getTime()) || end < first) return; // sem término válido — deixa digitar
     var intervalMs = interval * 24 * 60 * 60 * 1000;
     var rounds = Math.floor((end - first) / intervalMs) + 1;
-    if (rounds < 1) { tag.style.display = 'none'; return; }
-    tag.textContent = '≈ ' + rounds + ' rodada' + (rounds > 1 ? 's' : '');
-    tag.title = 'Do 1º sorteio até o fim do torneio, a cada ' + interval + ' dia(s) — pela hora exata';
-    tag.style.display = 'inline-flex';
+    if (rounds < 1) rounds = 1;
+    if (document.activeElement !== input) input.value = rounds; // não brigar com a digitação
+  };
+
+  // v2.6.47: REVERSE — organizador digita o nº de rodadas e a data/hora de
+  // término da FASE se ajusta: fim = 1º sorteio + (rodadas − 1) × intervalo,
+  // na hora do 1º sorteio (garante que cabem EXATAMENTE N sorteios).
+  window._applyLigaRoundsToEnd = function() {
+    var input = document.getElementById('liga-rounds-input');
+    var dEl = document.getElementById('liga-first-draw-date');
+    var tEl = document.getElementById('liga-first-draw-time');
+    var iEl = document.getElementById('liga-draw-interval');
+    var endDEl = document.getElementById('tourn-end-date');
+    var endTEl = document.getElementById('tourn-end-time');
+    if (!input || !iEl || !endDEl) return;
+    var rounds = parseInt(input.value, 10);
+    var interval = parseInt(iEl.value, 10);
+    // v2.6.51: usa 1º sorteio com fallback pro Início da Fase (tourn-start-date).
+    var sdEl = document.getElementById('tourn-start-date');
+    var stEl = document.getElementById('tourn-start-time');
+    var firstDateVal = (dEl && dEl.value) || (sdEl && sdEl.value) || '';
+    if (!rounds || rounds < 1 || !firstDateVal || !interval || interval < 1) return;
+    var timeVal = (tEl && tEl.value) || (stEl && stEl.value) || '19:00';
+    var first = new Date(firstDateVal + 'T' + timeVal + ':00');
+    if (isNaN(first.getTime())) return;
+    var endDate = new Date(first.getTime() + (rounds - 1) * interval * 24 * 60 * 60 * 1000);
+    var y = endDate.getFullYear();
+    var m = String(endDate.getMonth() + 1).padStart(2, '0');
+    var d = String(endDate.getDate()).padStart(2, '0');
+    endDEl.value = y + '-' + m + '-' + d;     // término = data do último sorteio
+    if (endTEl) endTEl.value = timeVal;        // na hora do 1º sorteio → cabe N exato
+    if (typeof window._recalcDuration === 'function') window._recalcDuration();
   };
 
   // ─── Category management ──────────────────────────────────────────────────
@@ -2720,13 +3138,15 @@ function setupCreateTournamentModal() {
   };
 
   window._updateRegDateVisibility = function () {
-    const fmt = document.getElementById('select-formato').value;
     const regBox = document.getElementById('reg-date-container');
     if (!regBox) return;
-    const isLiga = fmt === 'liga';
-    const openEnroll = document.getElementById('liga-open-enrollment');
-    // Liga com inscrições abertas esconde prazo de inscrição
-    regBox.style.display = (isLiga && openEnroll && openEnroll.checked) ? 'none' : '';
+    // v2.6.52: o prazo de encerramento das inscrições é regido por "Inscrições durante
+    // a fase": só aparece quando FECHADAS está ligado. Aberta = inscrição segue durante
+    // a fase, sem data de corte (e o toggle "Novos Confrontos" aparece). Vale p/ todos
+    // os formatos — antes era escondido só pra Liga com inscrições abertas.
+    var lateVal = (document.getElementById('late-enrollment') || {}).value || 'closed';
+    // 'flex' (não '') preserva o layout coluna do card — '' apagaria o display:flex inline.
+    regBox.style.display = (lateVal === 'closed') ? 'flex' : 'none';
   };
 
   window._onVenueAccessToggle = function () {
@@ -3288,40 +3708,22 @@ function setupCreateTournamentModal() {
   // Considera: formato, modo de sorteio (sorteio/rei-rainha), categorias (dividem o
   // campo em sub-chaves) e os tempos médios que o organizador informa (chamada +
   // aquecimento + duração). O formato da partida (GSM) entra via a duração média.
-  window._renderPhaseEstimate = function () {
-    var ladder = document.getElementById('phase-estimate-ladder');
-    if (!ladder) return;
-    var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
-    var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
-
-    var call = iv('tourn-call-time', 0);
-    var warm = iv('tourn-warmup-time', 0);
-    var dur  = iv('tourn-game-duration', 0);
-    var courts = Math.max(iv('tourn-court-count', 1), 1);
+  // v2.6.68: núcleo da estimativa extraído — parametrizado por formato/modo/monarch/
+  // grupos/N, pra ser reusado pela Fase 1 E por cada fase extra (mesma lógica).
+  // slot/courts/categorias (K) são do TORNEIO (compartilhados); o resto vem da fase.
+  window._buildPhaseEstimate = function (o) {
+    o = o || {};
+    var call = o.call || 0, warm = o.warm || 0, dur = o.dur || 0;
+    var courts = Math.max(o.courts || 1, 1);
     var slot = call + warm + dur; // minutos por slot de partida
-    var fmt = gv('select-formato') || 'elim_simples';
-    var drawMode = gv('draw-mode') || 'sorteio';
-
-    // nº de categorias (sub-chaves independentes) — o campo se divide entre elas
-    var K = 1, ageCats = 0;
-    try {
-      var catData = (window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {}) || {};
-      if (catData.combinedCategories && catData.combinedCategories.length) K = catData.combinedCategories.length;
-      ageCats = (catData.ageCategories || []).length;
-    } catch (e) { K = 1; }
-
-    // nº real de unidades inscritas (editando) OU planejado (criando)
-    var N = 0, isReal = false;
-    var editId = gv('edit-tournament-id');
-    if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
-      var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
-      if (t && Array.isArray(t.participants) && t.participants.length > 0) { N = t.participants.length; isReal = true; }
-    }
-    if (!isReal) {
-      var elm = gv('enrollment-limit-mode') || 'cap';
-      if (elm === 'draw') N = iv('tourn-target-slots', 0);
-      if (!N) N = iv('tourn-max-participants', 0);
-    }
+    var fmt = o.fmt || 'elim_simples';
+    var drawMode = o.drawMode || 'sorteio';
+    var K = Math.max(o.K || 1, 1);
+    var ageCats = o.ageCats || 0;
+    var N = o.N || 0;
+    var isReal = !!o.isReal;
+    var monarchCls = Math.max(o.monarchClassified || 1, 1);
+    var gruposN = Math.max(o.gruposCount || 4, 1);
 
     // Jogos por RODADA de UMA sub-chave (categoria). Rodadas são sequenciais —
     // dentro de uma rodada os jogos correm em paralelo até a capacidade de quadras.
@@ -3336,12 +3738,12 @@ function setupCreateTournamentModal() {
         // Rei/Rainha coroa um campeão: grupos de 4 (3 sub-rodadas, 1 jogo/grupo
         // cada) → classificados avançam → ELIMINATÓRIA até a final. Conta TUDO.
         var groups = Math.max(Math.ceil(n / 4), 1);
-        var cls = Math.max(iv('monarch-classified', 1), 1); // classificados por grupo
+        var cls = monarchCls; // classificados por grupo
         return [groups, groups, groups].concat(elimRounds(groups * cls));
       }
       if (fmt === 'liga') return [Math.floor(n / 2)]; // UMA rodada de pontos corridos
       if (fmt === 'grupos_mata') {
-        var g = Math.max(iv('grupos-count', 4), 1);   // nº de grupos
+        var g = gruposN;   // nº de grupos
         var gs = Math.ceil(n / g);                    // tamanho do grupo
         var rnds = Math.max(gs - 1, 1);               // rodadas round-robin no grupo
         var perRound = Math.max(Math.floor(gs / 2) * g, 1);
@@ -3424,11 +3826,78 @@ function setupCreateTournamentModal() {
     else if (fmt === 'liga') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa de <strong>uma rodada</strong> de pontos corridos.</div>';
     else if (fmt === 'grupos_mata') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa da <strong>fase de grupos</strong> completa (sem mata-mata).</div>';
     if (ageCats > 0) h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:4px;opacity:0.8;">⚠️ Categorias por idade criam sub-chaves extras não incluídas nesta estimativa.</div>';
-    ladder.innerHTML = h;
+    return h;
+  };
+
+  // Fase 1: colhe os inputs (torneio + Fase 1) e injeta no #phase-estimate-ladder.
+  window._renderPhaseEstimate = function () {
+    var ladder = document.getElementById('phase-estimate-ladder');
+    if (!ladder) return;
+    var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
+    var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
+    var K = 1, ageCats = 0;
+    try {
+      var catData = (window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {}) || {};
+      if (catData.combinedCategories && catData.combinedCategories.length) K = catData.combinedCategories.length;
+      ageCats = (catData.ageCategories || []).length;
+    } catch (e) { K = 1; }
+    var N = 0, isReal = false;
+    var editId = gv('edit-tournament-id');
+    if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+      var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
+      if (t && Array.isArray(t.participants) && t.participants.length > 0) { N = t.participants.length; isReal = true; }
+    }
+    if (!isReal) {
+      var elm = gv('enrollment-limit-mode') || 'cap';
+      if (elm === 'draw') N = iv('tourn-target-slots', 0);
+      if (!N) N = iv('tourn-max-participants', 0);
+    }
+    ladder.innerHTML = window._buildPhaseEstimate({
+      call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
+      courts: iv('tourn-court-count', 1), fmt: gv('select-formato') || 'elim_simples', drawMode: gv('draw-mode') || 'sorteio',
+      K: K, ageCats: ageCats, N: N, isReal: isReal,
+      monarchClassified: iv('monarch-classified', 1), gruposCount: iv('grupos-count', 4)
+    });
+  };
+
+  // Estimativa de cada fase extra (mesma lógica; N planejado/genérico).
+  window._phaseEstimateHtml = function (i, ph) {
+    var T = window._t || function (k) { return k; };
+    var inner = window._estimateInnerForPhase(ph);
+    var h = '<div style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px; padding: 0.6rem 0.75rem; margin-top: 12px;">';
+    h += '<div style="font-size: 0.72rem; color: #f59e0b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 0.5rem;">⏱ Estimativa de tempo da fase</div>';
+    h += '<div id="ph-estimate-ladder-' + i + '">' + inner + '</div></div>';
+    return h;
+  };
+  // Calcula o HTML interno da estimativa de uma fase (lê tempos/quadras/categorias do torneio).
+  window._estimateInnerForPhase = function (ph) {
+    var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
+    var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
+    var K = 1, ageCats = 0;
+    try {
+      var cd = (window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {}) || {};
+      if (cd.combinedCategories && cd.combinedCategories.length) K = cd.combinedCategories.length;
+      ageCats = (cd.ageCategories || []).length;
+    } catch (e) { K = 1; }
+    return window._buildPhaseEstimate({
+      call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
+      courts: iv('tourn-court-count', 1), fmt: ph.format || 'elim_simples', drawMode: ph.reiRainha ? 'rei_rainha' : 'sorteio',
+      K: K, ageCats: ageCats, N: 0, isReal: false,
+      monarchClassified: ph.monarchClassified || 1, gruposCount: ph.gruposCount || 4
+    });
+  };
+  // Atualiza as escadas de estimativa de todas as fases extras (sem re-render do card).
+  window._refreshAllPhaseEstimates = function () {
+    if (!Array.isArray(window._extraPhases)) return;
+    window._extraPhases.forEach(function (ph, i) {
+      var el = document.getElementById('ph-estimate-ladder-' + i);
+      if (el) el.innerHTML = window._estimateInnerForPhase(ph);
+    });
   };
 
   window._recalcDuration = function () {
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
+    if (window._refreshAllPhaseEstimates) { try { window._refreshAllPhaseEstimates(); } catch (e) {} }
     // v2.6.37: a escada de estimativa (_renderPhaseEstimate) é a ÚNICA estimativa.
     // O box de diagnóstico legado (capacidade/sugestões/"max feasible") mostrava
     // números absurdos derivados da janela de datas — desativado de vez.
@@ -3969,10 +4438,14 @@ function setupCreateTournamentModal() {
     });
     var dmDescEl = document.getElementById('draw-mode-desc');
     if (dmDescEl && typeof _drawModeDescs !== 'undefined') dmDescEl.textContent = _drawModeDescs[drawModeVal] || '';
-    // Sync formato buttons with loaded value
+    // Sync formato buttons with loaded value (v2.6.66: categoria, não valor cru).
     var fmtBtns = document.querySelectorAll('#formato-buttons .formato-btn');
+    var _loadCat = (fmtValue === 'liga' || fmtValue === 'suico') ? 'pontos'
+                 : (fmtValue === 'grupos_mata') ? 'grupos' : 'elim';
+    var _duplaTgl = document.getElementById('toggle-dupla-elim');
+    if (_duplaTgl) _duplaTgl.checked = (fmtValue === 'elim_dupla');
     fmtBtns.forEach(function(b) {
-      if (b.getAttribute('data-value') === fmtValue) {
+      if (b.getAttribute('data-fmt') === _loadCat) {
         b.classList.add('formato-btn-active');
         b.style.border = '2px solid #3b82f6';
         b.style.background = 'rgba(59,130,246,0.15)';
@@ -3988,6 +4461,8 @@ function setupCreateTournamentModal() {
     });
     var fmtDescEl = document.getElementById('formato-desc');
     if (fmtDescEl && typeof _formatoDescs !== 'undefined') fmtDescEl.textContent = _formatoDescs[fmtValue] || '';
+    // Sincroniza visibilidade das seções (inclui dupla-elim-row) com o formato carregado.
+    if (typeof window._onFormatoChange === 'function') window._onFormatoChange();
 
     // Split stored datetime values (YYYY-MM-DD or YYYY-MM-DDTHH:MM) into date + time fields
     const _splitDT = (v) => {
@@ -4085,11 +4560,10 @@ function setupCreateTournamentModal() {
     if (typeof window._syncCallPolicy === 'function') window._syncCallPolicy();
     if (typeof window._syncEnrollLimitMode === 'function') window._syncEnrollLimitMode();
     window._setVisibility(t.isPublic !== false ? 'public' : 'private');
-    // W.O. Scope (single toggle: ON=individual, OFF=team)
+    // W.O. Scope — v2.6.61: render canônica (botões). Normaliza legado 'team' → 'time'.
     var _woScope = t.woScope || 'individual';
-    document.getElementById('wo-scope').value = _woScope;
-    document.getElementById('wo-toggle-individual').checked = _woScope === 'individual';
-    window._syncWoScope();
+    if (_woScope === 'team') _woScope = 'time';
+    if (typeof window._setPhaseWo === 'function') window._setPhaseWo(0, _woScope);
     // Late Enrollment (Fechadas + Novos Confrontos)
     var _lateEnroll = t.lateEnrollment || 'closed';
     document.getElementById('late-enrollment').value = _lateEnroll;
@@ -4097,16 +4571,14 @@ function setupCreateTournamentModal() {
     // Novos Confrontos: ON when mode is 'expand'. For new tournaments with Fechadas OFF, default ON.
     document.getElementById('late-toggle-expand').checked = _lateEnroll === 'expand';
     window._syncLateEnrollment();
-    // Restore result entry toggles (backward compat: string or array)
+    // Lançamento de Resultados — v2.6.62: render canônica. Grava no hidden + re-renderiza botões.
     var _reVal = t.resultEntry || 'organizer';
     var _reArr = Array.isArray(_reVal) ? _reVal : [_reVal];
-    var _reOrg = document.getElementById('re-toggle-organizer');
-    var _rePlr = document.getElementById('re-toggle-players');
-    var _reRef = document.getElementById('re-toggle-referee');
-    if (_reOrg) _reOrg.checked = _reArr.indexOf('organizer') !== -1;
-    if (_rePlr) _rePlr.checked = _reArr.indexOf('players') !== -1;
-    if (_reRef) _reRef.checked = _reArr.indexOf('referee') !== -1;
-    window._syncResultEntryToggles();
+    if (!_reArr.length) _reArr = ['organizer'];
+    var _reHidden = document.getElementById('select-result-entry');
+    if (_reHidden) _reHidden.value = _reArr.length === 1 ? _reArr[0] : JSON.stringify(_reArr);
+    var _reBox = document.getElementById('phase-re-buttons-0');
+    if (_reBox && typeof window._resultEntryButtonsHtml === 'function') _reBox.outerHTML = window._resultEntryButtonsHtml(0);
 
     // Venue / Courts / Time
     document.getElementById('tourn-venue').value = t.venue || '';
@@ -4203,7 +4675,6 @@ function setupCreateTournamentModal() {
     var _inact = t.ligaInactivity || t.rankingInactivity;
     var _inactX = t.ligaInactivityX || t.rankingInactivityX;
     var _season = t.ligaSeasonMonths || t.rankingSeasonMonths;
-    var _openEnroll = (t.ligaOpenEnrollment !== undefined) ? t.ligaOpenEnrollment : (t.rankingOpenEnrollment !== undefined ? t.rankingOpenEnrollment : true);
 
     // NPS: activate correct button
     if (_nps) {
@@ -4216,7 +4687,8 @@ function setupCreateTournamentModal() {
       if (_inactBtn) window._selectLigaInact(_inactBtn);
     }
     if (_inactX) document.getElementById('liga-inactivity-x').value = _inactX;
-    document.getElementById('liga-open-enrollment').checked = _openEnroll !== false;
+    // v2.6.56: toggle "Inscrições abertas durante a temporada" removido — ligaOpenEnrollment
+    // agora vem de "Inscrições durante a fase" (derivado no save).
     // v2.6.29: liga-playoff-toggle removido (fase final → construtor de fases).
 
     // v0.14.52: Temporada + Equilibrado toggles
@@ -4237,7 +4709,8 @@ function setupCreateTournamentModal() {
     // Agendamento (shared field drawFirstDate, drawFirstTime, drawIntervalDays, drawManual)
     if (t.format === 'Liga' && t.drawFirstDate) document.getElementById('liga-first-draw-date').value = t.drawFirstDate;
     if (t.format === 'Liga' && t.drawFirstTime) document.getElementById('liga-first-draw-time').value = t.drawFirstTime;
-    if (t.format === 'Liga' && t.drawIntervalDays) document.getElementById('liga-draw-interval').value = t.drawIntervalDays;
+    // v2.6.55: restaura o intervalo; 0/null = sem repetição → campo VAZIO (não 7).
+    if (t.format === 'Liga') { var _ivLoad = document.getElementById('liga-draw-interval'); if (_ivLoad) _ivLoad.value = (t.drawIntervalDays && t.drawIntervalDays >= 1) ? t.drawIntervalDays : ''; }
     if (t.format === 'Liga' && typeof window._updateLigaRoundsTag === 'function') setTimeout(window._updateLigaRoundsTag, 0); // v2.1.21: tag de rodadas no load
     if (t.format === 'Liga') document.getElementById('liga-manual-draw').checked = !!t.drawManual;
     // Liga round format (derive from drawMode, keep hidden field in sync)
@@ -4264,7 +4737,7 @@ function setupCreateTournamentModal() {
     // Construtor de Fases — restaura fases extras (t.phases[0] = fase 1, do topo)
     if (Array.isArray(t.phases) && t.phases.length > 1) {
       var _p1 = t.phases[0] || {};
-      window._phase1Name = _p1.name || '';
+      window._phase1Name = _p1.name || t.phase1Name || '';
       window._phase1Rounds = parseInt(_p1.rounds) || 1;
       window._extraPhases = t.phases.slice(1).map(function(ph) {
         var src = ph.source || {};
@@ -4284,6 +4757,24 @@ function setupCreateTournamentModal() {
           scope: src.scope || 'per_group',
           fixedPairs: ph.fixedPairs !== false,
           pairingStrategy: ph.pairingStrategy || 'top',
+          // v2.6.59: config por fase — W.O. + lançamento (normaliza resultEntry pra array na UI).
+          woScope: (ph.woScope === 'team' ? 'time' : (ph.woScope || 'individual')),
+          resultEntry: (function(){ var r = ph.resultEntry; if (Array.isArray(r)) return r.length ? r : ['organizer']; if (typeof r === 'string') { try { var p = JSON.parse(r); if (Array.isArray(p)) return p.length ? p : ['organizer']; } catch(e){} return [r]; } return ['organizer']; })(),
+          // v2.6.63: Pontuação Avançada por fase (objeto {enabled, categories, applyLiveScoring} ou null).
+          advancedScoring: ph.advancedScoring || null,
+          // v2.6.65: Datas da fase.
+          regDate: ph.regDate || '', regTime: ph.regTime || '',
+          startDate: ph.startDate || '', startTime: ph.startTime || '',
+          endDate: ph.endDate || '', endTime: ph.endTime || '',
+          // v2.6.66: Inscrições durante a fase.
+          lateEnrollment: ph.lateEnrollment || 'closed',
+          // v2.6.67: Agendamento de Sorteios.
+          drawFirstDate: ph.drawFirstDate || '',
+          drawFirstTime: ph.drawFirstTime || '19:00',
+          drawIntervalDays: (ph.drawIntervalDays != null && ph.drawIntervalDays !== '' ? ph.drawIntervalDays : 7),
+          drawManual: !!ph.drawManual,
+          // v2.6.69: Sistema de Pontuação por fase (null = herda do torneio).
+          scoring: (ph.scoring && ph.scoring.type) ? ph.scoring : null,
           mapping: (fromPrev && Array.isArray(src.mapping) && src.mapping.length)
             ? src.mapping.map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: m.label || '' }; })
             : _phaseDefaultMapping(ph.formatCode || 'elim_dupla')
@@ -4291,9 +4782,13 @@ function setupCreateTournamentModal() {
       });
     } else {
       window._extraPhases = [];
-      window._phase1Name = '';
+      window._phase1Name = t.phase1Name || ''; // v2.6.49: nome da Fase 1 mesmo em fase única
       window._phase1Rounds = 1;
     }
+    // v2.6.49: popular o input do nome da Fase 1 (antes só a variável era setada,
+    // o campo ficava vazio no edit → re-save apagava o nome).
+    var _p1NameInput = document.getElementById('phase1-name');
+    if (_p1NameInput) _p1NameInput.value = window._phase1Name || '';
 
     // Restore tiebreaker order + excluded box (v2.2.47)
     {
@@ -4842,14 +5337,21 @@ function setupCreateTournamentModal() {
           tourData.ligaNewPlayerScore = document.getElementById('liga-new-player-score').value;
           tourData.ligaInactivity = document.getElementById('liga-inactivity').value;
           tourData.ligaInactivityX = parseInt(document.getElementById('liga-inactivity-x').value) || 3;
-          tourData.ligaOpenEnrollment = document.getElementById('liga-open-enrollment').checked;
+          // v2.6.56: derivado de "Inscrições durante a fase" (Fechadas → inscrição fechada;
+          // Aberta → aberta). O toggle dedicado foi removido por ser redundante.
+          var _lateForLiga = (document.getElementById('late-enrollment') || {}).value || 'closed';
+          tourData.ligaOpenEnrollment = (_lateForLiga !== 'closed');
           // v2.6.29: Fase Final de temporada não é mais marcada na criação. Agora é
           // uma fase do construtor de fases adicionada em sequência à Liga. Não
           // escrevemos playoffEnabled aqui — preserva o valor existente em ligas legadas.
           // Agendamento
           tourData.drawFirstDate = document.getElementById('liga-first-draw-date').value || '';
           tourData.drawFirstTime = document.getElementById('liga-first-draw-time').value || '19:00';
-          tourData.drawIntervalDays = parseInt(document.getElementById('liga-draw-interval').value) || 7;
+          // v2.6.55: intervalo VAZIO persiste como 0 = "sem repetição" (1 rodada).
+          // Antes o `|| 7` forçava 7 ao salvar → "os 7 dias voltavam" mesmo tendo
+          // apagado. 0 é tratado como sem-repetição no display e no motor de sorteio.
+          var _ligaIv = parseInt(document.getElementById('liga-draw-interval').value, 10);
+          tourData.drawIntervalDays = (_ligaIv >= 1) ? _ligaIv : 0;
           tourData.drawManual = document.getElementById('liga-manual-draw').checked;
           // v0.16.56: Liga com sorteio automático REQUER drawFirstDate.
           // Se o usuário deixou em branco, defaulta pra amanhã 19:00 (sensível
@@ -4961,7 +5463,7 @@ function setupCreateTournamentModal() {
             source: { type: 'enrollment' },
             fixedPairs: teamSizeVal > 1
           };
-          var _rest = _extra.map(function(ph) {
+          var _rest = _extra.map(function(ph, _ei) {
             var src = ph.sourceType === 'previous'
               ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: (ph.scope || 'per_group') !== 'overall', scope: (ph.scope || 'per_group'), qualifyMode: ph.qualifyMode || 'per_group', mapping: (ph.mapping || []).map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: (m.label || '').trim() }; }) }
               : { type: 'enrollment' };
@@ -4980,13 +5482,37 @@ function setupCreateTournamentModal() {
               fixedPairs: !!ph.fixedPairs,
               // Pareamento (1º+2º/3º+4º = 'top'; 1º+4º/2º+3º = 'balanced') — só
               // faz sentido quando duplas fixas vêm da classificação anterior.
-              pairingStrategy: (ph.sourceType === 'previous' && ph.fixedPairs) ? (ph.pairingStrategy || 'top') : null
+              pairingStrategy: (ph.sourceType === 'previous' && ph.fixedPairs) ? (ph.pairingStrategy || 'top') : null,
+              // v2.6.59: config POR FASE — W.O. e lançamento de resultados. O motor lê
+              // t.phases[i].X com fallback pro top-level (t.X = fase 0/default).
+              woScope: ph.woScope || 'individual',
+              resultEntry: (function(){ var a = Array.isArray(ph.resultEntry) ? ph.resultEntry.slice() : [ph.resultEntry || 'organizer']; if (!a.length) a = ['organizer']; return a.length === 1 ? a[0] : a; })(),
+              // v2.6.63: Pontuação Avançada por fase (só Pontos Corridos). Lê do DOM da fase.
+              advancedScoring: (ph.format === 'liga' && typeof window._readAdvScoring === 'function') ? window._readAdvScoring(_ei + 1) : null,
+              // v2.6.65: Datas da fase por fase (strings vazias quando não preenchidas).
+              regDate: ph.regDate || '', regTime: ph.regTime || '',
+              startDate: ph.startDate || '', startTime: ph.startTime || '',
+              endDate: ph.endDate || '', endTime: ph.endTime || '',
+              // v2.6.66: Inscrições durante a fase ('closed' | 'expand').
+              lateEnrollment: ph.lateEnrollment || 'closed',
+              // v2.6.67: Agendamento de Sorteios (só Pontos Corridos). Em outros formatos vai null.
+              drawFirstDate: (ph.format === 'liga' ? (ph.drawFirstDate || '') : ''),
+              drawFirstTime: (ph.format === 'liga' ? (ph.drawFirstTime || '19:00') : ''),
+              drawIntervalDays: (ph.format === 'liga' ? (parseInt(ph.drawIntervalDays, 10) >= 1 ? parseInt(ph.drawIntervalDays, 10) : 0) : null),
+              drawManual: (ph.format === 'liga' ? !!ph.drawManual : false),
+              // v2.6.69: Sistema de Pontuação por fase (null = herda o padrão do torneio).
+              scoring: (ph.scoring && ph.scoring.type) ? ph.scoring : null
             };
           });
           tourData.phases = [_phase1].concat(_rest);
         } else {
           tourData.phases = null; // fase única (comportamento legado)
         }
+        // v2.6.49: nome custom da Fase 1 persiste SEMPRE (inclusive fase única, onde
+        // phases fica null). Antes só era gravado dentro de phases[0] quando havia
+        // fase extra — por isso o nome "não gravava" em torneio de fase única.
+        var _p1NameAll = document.getElementById('phase1-name');
+        tourData.phase1Name = (_p1NameAll && _p1NameAll.value.trim()) || '';
 
         // Tiebreakers (ordem configurada pelo organizador)
         const tbList = document.getElementById('tiebreaker-list');
@@ -6059,11 +6585,9 @@ window._prefillFromTemplate = function(tpl) {
     window._gsmApplyConfig(tpl.scoring);
   }
 
-  // W.O. Scope (single toggle: ON=individual, OFF=team)
-  if (tpl.woScope) {
-    document.getElementById('wo-scope').value = tpl.woScope;
-    document.getElementById('wo-toggle-individual').checked = tpl.woScope === 'individual';
-    if (typeof window._syncWoScope === 'function') window._syncWoScope();
+  // W.O. Scope — v2.6.61: render canônica (botões); normaliza legado 'team' → 'time'.
+  if (tpl.woScope && typeof window._setPhaseWo === 'function') {
+    window._setPhaseWo(0, tpl.woScope === 'team' ? 'time' : tpl.woScope);
   }
 
   // Late Enrollment (Fechadas + Novos Confrontos)
@@ -6090,8 +6614,15 @@ window._prefillFromTemplate = function(tpl) {
   }
   // Tipo de jogo, lotação, lançamento de resultado, W.O. já tratado, encerrar ao lotar
   _setV('tourn-game-types', tpl.gameTypes);
-  _setV('select-result-entry', tpl.resultEntry);
-  if (typeof window._syncResultEntryUI === 'function') { try { window._syncResultEntryUI(); } catch (e) {} }
+  // Lançamento de Resultados — v2.6.62: hidden + render canônica.
+  if (tpl.resultEntry != null) {
+    var _tplRe = Array.isArray(tpl.resultEntry) ? tpl.resultEntry : [tpl.resultEntry];
+    if (!_tplRe.length) _tplRe = ['organizer'];
+    var _tplReH = document.getElementById('select-result-entry');
+    if (_tplReH) _tplReH.value = _tplRe.length === 1 ? _tplRe[0] : JSON.stringify(_tplRe);
+    var _tplReBox = document.getElementById('phase-re-buttons-0');
+    if (_tplReBox && typeof window._resultEntryButtonsHtml === 'function') _tplReBox.outerHTML = window._resultEntryButtonsHtml(0);
+  }
   if (tpl.autoCloseOnFull !== undefined) _setC('tourn-auto-close', tpl.autoCloseOnFull);
   // Sorteio de Vagas: modelo de inscrição + vagas + chamada da fila
   if (tpl.enrollmentLimitMode) {

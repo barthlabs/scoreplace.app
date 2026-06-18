@@ -1903,7 +1903,11 @@ function renderTournaments(container, tournamentId = null) {
         // cronômetro, inscritos, formato/acesso). _pReadBg = fundo escuro legível
         // aplicado por bloco só quando há foto do local.
         var _photoPanel = '';
-        var _pReadBg = venuePhotoBg ? 'rgba(15,23,42,0.62)' : '';
+        // v2.6.43: read box theme-aware (escuro→box claro/texto escuro; claro→box escuro/texto claro)
+        var _rb = (venuePhotoBg && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
+        var _pReadBg = _rb ? _rb.bg : '';
+        var _pReadFg = _rb ? _rb.fg : '#f1f5f9';
+        var _pReadBd = _rb ? _rb.border : 'rgba(255,255,255,0.12)';
 
         return `
         <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}" style="position:relative;${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transition: transform 0.2s; ${!tournamentId ? 'cursor: pointer;' : ''}" ${!tournamentId ? `onclick="window.location.hash='#tournaments/${t.id}'" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'"` : ''}>
@@ -1959,7 +1963,7 @@ function renderTournaments(container, tournamentId = null) {
             </div>` : ''}
 
             <!-- Below Name: Calendário + Data -->
-            <div style="display: inline-block; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.7;'}">
+            <div style="display: inline-block; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.7;'}">
                ${datesGridHtml}
             </div>
             ${(() => {
@@ -1970,7 +1974,7 @@ function renderTournaments(container, tournamentId = null) {
               var _hasUpdated = !!(tournamentId && t.updatedAt);
               if (!_hasUpdated && !ligaActiveToggleHtml) return '';
               var _updatedHtml = _hasUpdated
-                ? `<div style="display:inline-flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:400;${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:6px 10px;' : 'opacity:0.5;'}">
+                ? `<div style="display:inline-flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:400;${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border-radius:10px;padding:6px 10px;' : 'opacity:0.5;'}">
                      <span>🔄</span>
                      <span>Atualizado em ${(() => { try { var d = new Date(t.updatedAt); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}); } catch(e) { return t.updatedAt; } })()}</span>
                    </div>`
@@ -1982,7 +1986,7 @@ function renderTournaments(container, tournamentId = null) {
             })()}
             ${(typeof window._buildTimeEstimation === 'function') ? window._buildTimeEstimation(t) : ''}
             ${t.venue ? `
-            <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 6px; ${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
+            <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 6px; ${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
                <span style="font-size: 1rem; flex-shrink:0;">📍</span>
                <span style="display:flex; flex-direction:column; gap:1px;">
                  <span>${window._safeHtml(t.venue)}${t.courtCount > 1 ? ' — ' + t.courtCount + ' quadras' : t.courtCount === 1 ? ' — 1 quadra' : ''}</span>
@@ -2054,7 +2058,7 @@ function renderTournaments(container, tournamentId = null) {
                 // "Atualizado em..." acima (compartilhada entre lista e detalhe).
                 // v2.6.21: em tarja escura (_pReadBg) o texto é CLARO (contraste);
                 // sem tarja, usa a cor semântica sobre o tint claro.
-                var _ctColor = _pReadBg ? '#fff' : _ligaEvent.color;
+                var _ctColor = _pReadBg ? _pReadFg : _ligaEvent.color;
                 return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEvent.icon + '</span>' +
                   '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ';">' + _ligaEvent.label + '</span>' +
@@ -2083,7 +2087,7 @@ function renderTournaments(container, tournamentId = null) {
               var _countdownText2 = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _colorMap2[_next.color] || '139,92,246';
               // v2.6.21: tarja escura → texto claro; sem tarja → cor semântica.
-              var _ctColor2 = _pReadBg ? '#fff' : _next.color;
+              var _ctColor2 = _pReadBg ? _pReadFg : _next.color;
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb2 + ',0.1)')) + ';border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ';">' + _next.label + '</span>' +
@@ -2100,13 +2104,13 @@ function renderTournaments(container, tournamentId = null) {
                <!-- Stats Column -->
                 <div style="display: inline-flex; flex-direction: column; gap: 8px; width: 100%;">
                     <div id="stat-boxes-row" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
-                        <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);"' : ''}>
+                        <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👤</span>
                            <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Inscritos</span>
                         </div>
                         ${teamCount > 0 ? `
-                        <div class="stat-box" data-stat="equipes" ${_pReadBg ? 'style="background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);"' : ''}>
+                        <div class="stat-box" data-stat="equipes" ${_pReadBg ? 'style="background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👥</span>
                            <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${teamCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Equipes</span>
@@ -2135,7 +2139,7 @@ function renderTournaments(container, tournamentId = null) {
                     const _ed = new Date(_sd); _ed.setMonth(_ed.getMonth() + parseInt(_sm));
                     const _daysLeft = Math.ceil((_ed - new Date()) / 86400000);
                     if (!(_daysLeft > 0 && _daysLeft <= 7)) return '';
-                    return `<div class="info-box" style="font-size:0.72rem;padding:5px 10px;border-radius:8px;margin-top:6px;color:#f59e0b;font-weight:700;${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);' : ''}">⚠️ Temporada encerra em ${_daysLeft}d (${_ed.toLocaleDateString('pt-BR')})</div>`;
+                    return `<div class="info-box" style="font-size:0.72rem;padding:5px 10px;border-radius:8px;margin-top:6px;color:#f59e0b;font-weight:700;${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';' : ''}">⚠️ Temporada encerra em ${_daysLeft}d (${_ed.toLocaleDateString('pt-BR')})</div>`;
                   })() : ''}
             </div>
 

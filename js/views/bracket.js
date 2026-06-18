@@ -13,9 +13,13 @@ window._isByeMatch = function(m) {
   return p2 === 'BYE' || p2 === 'BYE (Avança Direto)';
 };
 
-// Helper: check if a result entry role is active (backward compat: string or array)
-window._resultEntryIncludes = function(t, role) {
-  var re = t && t.resultEntry || 'organizer';
+// Helper: check if a result entry role is active (backward compat: string or array).
+// v2.6.60: `match` opcional → resolve por FASE (t.phases[m.phaseIndex]) com fallback
+// pro top-level. Sem match → top-level (comportamento de sempre).
+window._resultEntryIncludes = function(t, role, match) {
+  var re = (match && typeof window._effectiveResultEntry === 'function')
+    ? window._effectiveResultEntry(t, match)
+    : (t && t.resultEntry || 'organizer');
   if (Array.isArray(re)) return re.indexOf(role) !== -1;
   return re === role;
 };
@@ -1939,8 +1943,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _isOrgLocal = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
   const _canScoreLive = !isDecided && !hasPending && !isByeMatch && !hasTBD && (
     _isOrgLocal ||
-    (_isMyMatch && window._resultEntryIncludes(t, 'players')) ||
-    (_cu && _cu.uid && window._resultEntryIncludes(t, 'referee'))
+    (_isMyMatch && window._resultEntryIncludes(t, 'players', m)) ||
+    (_cu && _cu.uid && window._resultEntryIncludes(t, 'referee', m))
   );
   const liveBtn = _canScoreLive
     ? `<button onclick="window._openLiveScoring('${_esc(tId)}','${_esc(m.id)}')"

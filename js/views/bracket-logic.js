@@ -2372,8 +2372,15 @@ function _chooseSitOutPlayers(t, players, numToSitOut, category) {
 }
 
 // Helper: record sit-out in tournament history
-function _recordSitOut(t, sitOutPlayers, category) {
+// v2.6.70: `reason` opcional. sitOutHistory é EXCLUSIVAMENTE o contador de fairness
+// do sorteio (quem fica de fora POR SORTEIO/remainder). Folgas por INATIVIDADE ('inactive')
+// ou W.O. ('wo') NÃO entram nessa contagem — um jogador pode ficar de fora N vezes por
+// inatividade sem que isso reduza sua chance de ser sorteado pra folga quando voltar a
+// ativo (ele conta como qualquer outro). Regra: antes de alguém ficar de fora 2x POR
+// SORTEIO, todos os ativos ficam 1x (round-robin em _chooseSitOutPlayers).
+function _recordSitOut(t, sitOutPlayers, category, reason) {
   if (!sitOutPlayers || sitOutPlayers.length === 0) return;
+  if (reason === 'inactive' || reason === 'wo') return;
   if (!t.sitOutHistory) t.sitOutHistory = {};
   // v0.16.58: Firestore não aceita field names que começam E terminam com
   // `__` (reserva pra internos como `__name__`). Antes usávamos `__all__`
@@ -2457,6 +2464,35 @@ function _plainShuffle(arr) {
   }
   return a;
 }
+
+// v2.6.69: Sorteio EQUILIBRADO por clusters (Pontos Corridos "Sorteio equilibrado").
+// Particiona os jogadores em buckets de ~clusterSize por nível (ordem de ranking via
+// rankIndex), e roda o anti-repeat (_bestShuffle) DENTRO de cada bucket — então os
+// jogos só acontecem entre jogadores de nível próximo ("16 melhores entre si, os 16
+// seguintes entre si…"), preservando a diversidade de parceiros/adversários intra-cluster.
+// Sem cluster válido (config ausente, ou cluster ≥ total), cai no _bestShuffle global
+// — comportamento legado intocado. clusterSize é arredondado pra baixo a múltiplo de
+// groupSize pra que as fronteiras de cluster batam com as fronteiras de grupo.
+function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize, attempts, rankIndex) {
+  groupSize = groupSize || 4;
+  var n = players.length;
+  var eff = Math.floor((parseInt(clusterSize, 10) || 0) / groupSize) * groupSize;
+  if (!eff || eff < groupSize || eff >= n) {
+    return _bestShuffle(players, opponentHistory, groupSize, attempts);
+  }
+  var ordered = players.slice().sort(function(a, b) {
+    var ra = (rankIndex && rankIndex[a] != null) ? rankIndex[a] : 1e9;
+    var rb = (rankIndex && rankIndex[b] != null) ? rankIndex[b] : 1e9;
+    return ra - rb;
+  });
+  var out = [];
+  for (var i = 0; i < ordered.length; i += eff) {
+    out = out.concat(_bestShuffle(ordered.slice(i, i + eff), opponentHistory, groupSize, attempts));
+  }
+  return out;
+}
+// Exposto pra paridade com a Cloud Function autoDraw e testes (igual _generateNextRoundForPlayers).
+window._clusteredBestShuffle = _clusteredBestShuffle;
 
 // Helper: compute average points per round for a player (for sit-out compensation)
 function _computeAvgPointsPerRound(t, playerName, category) {
@@ -2602,8 +2638,8 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   var sitOutMatches = [];
   if (isLiga) {
     var allSitOuts = sitOutPlayers.concat(inactiveSitOuts);
-    // Record sit-outs (both remainder and inactive)
-    _recordSitOut(t, inactiveSitOuts, category);
+    // v2.6.70: inativos NÃO contam na fairness do sorteio (reason 'inactive').
+    _recordSitOut(t, inactiveSitOuts, category, 'inactive');
     allSitOuts.forEach(function(name, si) {
       var isInactive = inactiveSitOuts.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
@@ -2690,7 +2726,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
   if (_isLigaFmtHere) {
     activeNamesSwiss = _getActiveLigaPlayers(t);
     inactiveSitOutsSwiss = _getInactiveLigaPlayers(t);
-    _recordSitOut(t, inactiveSitOutsSwiss, category);
+    _recordSitOut(t, inactiveSitOutsSwiss, category, 'inactive');
   }
 
   var allPlayersSwiss = standings.map(s => s.name);
@@ -2720,8 +2756,16 @@ function _generateNextRoundForPlayers(t, category, _rn) {
       _recordSitOut(t, sitOutPlayers, category);
     }
 
-    // Re-shuffle playing players with anti-repeat for partner assignment
-    playingPlayers = _bestShuffle(playingPlayers, ligaOpHist, 4, 200);
+    // Re-shuffle playing players with anti-repeat for partner assignment.
+    // v2.6.69: "Sorteio equilibrado" (t.equilibrado) + tamanho de cluster (t.clusterSize)
+    // restringem o pareamento a buckets de nível próximo. Ranking vem das standings
+    // (rankIndex 0 = mais forte). Sem clusterSize → _bestShuffle global (legado).
+    var _ligaRankIndex = {};
+    standings.forEach(function(s, _ri) { _ligaRankIndex[s.name] = _ri; });
+    var _ligaBalanced = (t.equilibrado !== false) && t.clusterSize;
+    playingPlayers = _ligaBalanced
+      ? _clusteredBestShuffle(playingPlayers, ligaOpHist, 4, t.clusterSize, 200, _ligaRankIndex)
+      : _bestShuffle(playingPlayers, ligaOpHist, 4, 200);
 
     // Form doubles: take consecutive pairs of 4 → team1 = [0,1] vs team2 = [2,3]
     var newMatches = [];
@@ -2750,7 +2794,8 @@ function _generateNextRoundForPlayers(t, category, _rn) {
 
     // Sit-out matches: remainder + inactive players receive average points
     var allSitOuts = sitOutPlayers.concat(inactiveSitOutsSwiss);
-    _recordSitOut(t, inactiveSitOutsSwiss, category);
+    // v2.6.70: inativos NÃO contam na fairness do sorteio (reason 'inactive').
+    _recordSitOut(t, inactiveSitOutsSwiss, category, 'inactive');
     allSitOuts.forEach(function(name, idx) {
       var isInactive = inactiveSitOutsSwiss.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);

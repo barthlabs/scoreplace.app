@@ -126,6 +126,7 @@ window._translations['en'] = {
   'status.finished': 'Finished',
 
   // Formats
+  'format.elimination': 'Elimination',
   'format.single': 'Single Elimination',
   'format.double': 'Double Elimination',
   'format.groups': 'Group Stage',
@@ -1714,6 +1715,10 @@ window._translations['en'] = {
   'create.enrollDeadline': 'Registration Deadline',
   'create.tournamentStart': 'Tournament Start',
   'create.tournamentEnd': 'Tournament End',
+  'create.phaseDatesTitle': 'Phase dates',
+  'create.phaseEnrollDeadline': 'Registration deadline',
+  'create.phaseStart': 'Phase start',
+  'create.phaseEnd': 'Phase end',
   'create.swissDrawSchedule': 'Draw Schedule (Swiss)',
   'create.swissManualDrawDesc': 'When enabled, the organizer decides when to generate each round.',
   'create.venueSection': 'Venue & Courts',
@@ -1750,7 +1755,7 @@ window._translations['en'] = {
   'create.woIndividualOffDesc': 'The whole team is eliminated on W.O. The opponent advances automatically.',
   'create.woTeam': 'Full Team',
   'create.woTeamDesc': 'W.O. eliminates the entire team. Opponent advances automatically.',
-  'create.lateEnrollSection': 'Registrations After Start',
+  'create.lateEnrollSection': 'Registrations During the Phase',
   'create.lateEnrollClosed': 'Closed',
   'create.lateEnrollClosedDesc': 'On: no one can register after the deadline. Off: new registrations go to the waitlist.',
   'create.lateEnrollClosedOnDesc': 'No one can register after the deadline — not even during the tournament.',

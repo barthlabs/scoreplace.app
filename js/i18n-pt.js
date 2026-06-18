@@ -126,6 +126,7 @@ window._translations['pt'] = {
   'status.finished': 'Encerrado',
 
   // Formats
+  'format.elimination': 'Eliminatórias',
   'format.single': 'Eliminatórias Simples',
   'format.double': 'Dupla Eliminatória',
   'format.groups': 'Fase de Grupos',
@@ -1726,6 +1727,10 @@ window._translations['pt'] = {
   'create.enrollDeadline': 'Encerramento Inscrições',
   'create.tournamentStart': 'Início do Torneio',
   'create.tournamentEnd': 'Fim do Torneio',
+  'create.phaseDatesTitle': 'Datas da fase',
+  'create.phaseEnrollDeadline': 'Encerramento das inscrições',
+  'create.phaseStart': 'Início da fase',
+  'create.phaseEnd': 'Término da fase',
   'create.swissDrawSchedule': 'Agendamento de Sorteios (Suíço)',
   'create.swissManualDrawDesc': 'Quando ativado, o organizador decide quando gerar cada rodada.',
   'create.venueSection': 'Local e Quadras',
@@ -1762,7 +1767,7 @@ window._translations['pt'] = {
   'create.woIndividualOffDesc': 'Time inteiro eliminado em caso de W.O. Adversário avança automaticamente.',
   'create.woTeam': 'Time Inteiro',
   'create.woTeamDesc': 'W.O. elimina o time completo. Adversário avança automaticamente.',
-  'create.lateEnrollSection': 'Inscrições Após o Início',
+  'create.lateEnrollSection': 'Inscrições Durante a Fase',
   'create.lateEnrollClosed': 'Fechadas',
   'create.lateEnrollClosedDesc': 'Ligado: ninguém mais pode se inscrever. Desligado: novos inscritos vão para a lista de espera.',
   'create.lateEnrollClosedOnDesc': 'Ninguém mais pode se inscrever após o prazo — nem durante o torneio.',

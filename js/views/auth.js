@@ -7904,6 +7904,7 @@ function setupProfileModal() {
         verified: false
       }).then(function() {
         // Criar email via coleção mail (Trigger Email extension)
+        if (window.SCOREPLACE_ENV === 'staging') { return null; } // staging: kill-switch — sem e-mail
         return db.collection('mail').add({
           to: [email],
           message: {

@@ -32,6 +32,32 @@ const fetch = require("node-fetch");
 
 admin.initializeApp();
 
+// CORS unificado pros callables/onRequest do frontend. Inclui produção, o ambiente
+// de STAGING (scoreplace-staging.web.app + .firebaseapp.com) e localhost de dev.
+// Centralizado pra evitar drift entre as ~23 functions e dar paridade prod↔staging.
+const APP_ORIGINS = [
+  "https://scoreplace.app",
+  "https://scoreplace-staging.web.app",
+  "https://scoreplace-staging.firebaseapp.com",
+  "http://localhost:9876",
+];
+
+// ── KILL-SWITCH DE NOTIFICAÇÕES NO STAGING ───────────────────────────────────
+// O staging compartilha os MESMOS backends de prod (Evolution/WhatsApp, FCM, SMTP
+// Brevo via extensão). Pra simular torneios com os inscritos REAIS sem disparar
+// nada pra eles, TODA entrega externa (WhatsApp, e-mail, push) vira no-op quando
+// rodando no projeto de staging. Em prod IS_STAGING é false → comportamento
+// idêntico ao de sempre. As notificações in-app (docs em users/{uid}/notifications)
+// continuam sendo criadas — visíveis na UI do staging, mas sem entrega externa.
+const IS_STAGING = String(process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "").indexOf("staging") !== -1;
+
+// Enfileira e-mail na coleção mail/ (consumida pela extensão firestore-send-email).
+// No staging NÃO escreve nada → a extensão não tem o que entregar → zero e-mail.
+async function _enqueueMail(dbRef, doc) {
+  if (IS_STAGING) { console.log("[staging] e-mail suprimido (mail/ não escrito)"); return null; }
+  return dbRef.collection("mail").add(doc);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MODULE-LEVEL HELPERS — account deduplication (phone + email)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -588,7 +614,7 @@ exports.flushNotifEmailDigest = onSchedule(
         const subject = items.length === 1
           ? ("scoreplace.app — " + (items[0].tournamentName || "Notificação"))
           : ("scoreplace.app — " + items.length + " novidades");
-        await db.collection("mail").add({
+        await _enqueueMail(db, {
           to: [email],
           replyTo: "scoreplace.app@gmail.com",
           message: { subject, html: _buildDigestHtml(items), text: _buildDigestText(items) },
@@ -932,7 +958,7 @@ exports.sendMagicLink = onCall(
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
   },
   async (request) => {
     const email = (request.data && request.data.email || "").trim().toLowerCase();
@@ -1057,7 +1083,7 @@ exports.sendMagicLink = onCall(
     // v1.3.82-beta: subject menos "phishing-like" + text/plain alternativo
     // pra melhorar deliverability (emails HTML-only têm score de spam maior).
     try {
-      await admin.firestore().collection("mail").add({
+      await _enqueueMail(admin.firestore(), {
         to: [email],
         replyTo: "scoreplace.app@gmail.com",
         message: {
@@ -1176,7 +1202,7 @@ function _buildVerificationEmailContent(link, name) {
 // firestore-send-email). Lança se o add falhar.
 async function _queueVerificationEmail(db, email, link, name) {
   const { html, text } = _buildVerificationEmailContent(link, name);
-  await db.collection("mail").add({
+  await _enqueueMail(db, {
     to: [email],
     replyTo: "scoreplace.app@gmail.com",
     message: {
@@ -1193,7 +1219,7 @@ exports.sendVerificationEmail = onCall(
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 60,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
   },
   async (request) => {
     const email = (request.data && request.data.email || "").trim().toLowerCase();
@@ -1389,7 +1415,7 @@ function _buildPasswordResetEmail(link, name) {
 // Enfileira o e-mail de redefinição de senha na coleção mail/ (SMTP). Lança se falhar.
 async function _queuePasswordResetEmail(db, email, link, name) {
   const built = _buildPasswordResetEmail(link, name);
-  await db.collection("mail").add({
+  await _enqueueMail(db, {
     to: [email],
     replyTo: "scoreplace.app@gmail.com",
     message: {
@@ -1409,7 +1435,7 @@ exports.sendPasswordReset = onCall(
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 60,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
   },
   async (request) => {
     const email = (request.data && request.data.email || "").trim().toLowerCase();
@@ -1507,7 +1533,7 @@ exports.drainPendingPasswordResets = onSchedule(
 // gênero ainda (não sobrescreve quem já declarou) e o valor é masculino/feminino.
 // Deploy:  firebase deploy --only functions:setParticipantsGender
 exports.setParticipantsGender = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
@@ -1556,7 +1582,7 @@ exports.setParticipantsGender = onCall(
 // caller é organizador/co-host. Admin SDK ignora as rules (escrita em perfil alheio).
 // Deploy:  firebase deploy --only functions:setParticipantsProfile
 exports.setParticipantsProfile = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
@@ -1623,7 +1649,7 @@ exports.setParticipantsProfile = onCall(
 // _sendUserNotification + _dispatchChannels do cliente (plataforma + fila de
 // e-mail digest + fila de WhatsApp).
 exports.sendOrgCommunication = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
@@ -1865,7 +1891,7 @@ exports.sendOrgCommunication = onCall(
 //   • whatsapp: lê o doc da fila (whatsappQueueId) → deliveries[] por telefone.
 //   • email: só "enviado" (entrega/abertura por e-mail não é rastreada nesta v1).
 exports.getCommunicationStats = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
@@ -2004,7 +2030,7 @@ exports.getCommunicationStats = onCall(
 
 // ─── Lista de comunicados de um torneio (painel de controle) ────────────────
 exports.listCommunications = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: ["https://scoreplace.app", "http://localhost:9876"] },
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
@@ -2270,6 +2296,7 @@ function _hasPasswordProvider(userRecord) {
 
 // Send single WhatsApp text via Evolution. Retorna { ok, messageId?, error? }.
 async function _sendWhatsAppText(apiUrl, apiKey, instance, phone, text) {
+  if (IS_STAGING) { console.log("[staging] WhatsApp suprimido →", String(phone)); return { ok: true, messageId: null, suppressed: true }; }
   const url = apiUrl.replace(/\/+$/, "") + "/message/sendText/" + encodeURIComponent(instance);
   // v2.4.37: Evolution/Baileys quer o número SÓ EM DÍGITOS (country code + DDD +
   // número), sem "+". A ficha guarda em E.164 ("+5511..."), então normaliza aqui.
@@ -2339,7 +2366,7 @@ exports.sendPhoneVerifyWhatsApp = onCall(
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
     secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
   },
   async (request) => {
@@ -2406,7 +2433,7 @@ exports.verifyPhoneGate = onCall(
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
   },
   async (request) => {
     const uid = request.auth && request.auth.uid;
@@ -2455,7 +2482,7 @@ exports.verifyPhoneGateToken = onCall(
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
   },
   async (request) => {
     const token = String((request.data && request.data.token) || "").trim();
@@ -2526,7 +2553,7 @@ exports.sendPasswordResetPhone = onCall(
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
     secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
   },
   async (request) => {
@@ -2638,7 +2665,7 @@ exports.verifyPasswordResetPhone = onCall(
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
   },
   async (request) => {
     const data = request.data || {};
@@ -2699,7 +2726,7 @@ exports.verifyPasswordResetPhoneToken = onCall(
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
   },
   async (request) => {
     const token = String((request.data && request.data.token) || "").trim();
@@ -2810,7 +2837,7 @@ async function _throttleHit(db, coll, key, maxPerMin) {
 // UX (distinguir "logar" de "cadastrar"); por isso rate-limit + resposta mascarada.
 exports.checkAccount = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+    cors: APP_ORIGINS },
   async (request) => {
     const identifier = String((request.data && request.data.identifier) || "").trim();
     if (!identifier) throw new HttpsError("invalid-argument", "identifier vazio");
@@ -2845,7 +2872,7 @@ exports.checkAccount = onCall(
 // OU custom token do WhatsApp). Cobre cadastro novo E 1ª senha de OTP legado.
 exports.registerPhonePassword = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+    cors: APP_ORIGINS },
   async (request) => {
     const auth = request.auth;
     if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "sessão de telefone ausente");
@@ -2902,7 +2929,7 @@ exports.registerPhonePassword = onCall(
 // e-mail nunca volta pro cliente; o cliente só recebe o token. uid-first.
 exports.phonePasswordLogin = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
     secrets: [SIGNIN_API_KEY] },
   async (request) => {
     const data = request.data || {};
@@ -2965,7 +2992,7 @@ exports.phonePasswordLogin = onCall(
 // canais que a conta tem, com cooldown de 10 min/conta. SMS não é server-side.
 exports.dispatchAccountRecovery = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 45,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
     secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE] },
   async (request) => {
     const identifier = String((request.data && request.data.identifier) || "").trim();
@@ -3058,7 +3085,7 @@ exports.dispatchAccountRecovery = onCall(
 // só funciona pra quem JÁ provou ser dono da conta antiga (está autenticado nela).
 exports.resolveMergedLogin = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+    cors: APP_ORIGINS },
   async (request) => {
     const uid = request.auth && request.auth.uid;
     if (!uid) throw new HttpsError("unauthenticated", "login obrigatório");
@@ -3092,7 +3119,7 @@ exports.resolveMergedLogin = onCall(
 // token da conta do telefone, que vira a PROVA pro merge (proofIdToken).
 exports.sendPhoneOwnershipWhatsApp = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
     secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE] },
   async (request) => {
     if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "login obrigatório");
@@ -3131,7 +3158,7 @@ exports.sendPhoneOwnershipWhatsApp = onCall(
 // posse (instância secundária) e vincular/unir via mergePhoneAccount.
 exports.verifyPhoneOwnershipToken = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+    cors: APP_ORIGINS },
   async (request) => {
     const token = String((request.data && request.data.token) || "").trim();
     if (!token) return { ok: false, reason: "no-token" };
@@ -3152,7 +3179,7 @@ exports.verifyPhoneOwnershipToken = onCall(
 
 exports.verifyPhoneOwnershipWhatsApp = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
-    cors: ["https://scoreplace.app", "http://localhost:9876"] },
+    cors: APP_ORIGINS },
   async (request) => {
     if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "login obrigatório");
     const phone = _normalizePhoneE164(request.data && request.data.phone);
@@ -3192,6 +3219,7 @@ exports.processWhatsAppQueue = onDocumentCreated(
   async (event) => {
     const snap = event.data;
     if (!snap) return;
+    if (IS_STAGING) { try { await snap.ref.update({ status: "suppressed_staging", processedAt: new Date().toISOString() }); } catch (_e) {} return; }
     const data = snap.data();
     if (!data || !data.message || !Array.isArray(data.phones) || data.phones.length === 0) {
       console.warn("[processWhatsAppQueue] doc inválido — skip:", event.params.queueId);
@@ -3339,7 +3367,7 @@ async function _notifyDevRecovery(db, title, body) {
     });
   } catch (e) { /* ignore */ }
   try {
-    await db.collection("mail").add({
+    await _enqueueMail(db, {
       to: ["scoreplace.app@gmail.com"],
       replyTo: "scoreplace.app@gmail.com",
       message: { subject: "scoreplace — " + title, text: body, html: "<p>" + body.replace(/\n/g, "<br>") + "</p>" },
@@ -3461,6 +3489,7 @@ exports.notifyLeagueRoundWhatsApp = onCall(
     secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
   },
   async (request) => {
+    if (IS_STAGING) { console.log("[staging] notifyLeagueRoundWhatsApp suprimido (sem criação de grupo)"); return { ok: true, suppressed: true, groups: [] }; }
     const { tournamentId, roundIndex, nextDrawDateStr } = request.data || {};
     if (!tournamentId) return { ok: false, reason: "missing-tournament-id" };
 
@@ -3998,7 +4027,7 @@ exports.backfillAllUserTrophies = onCall(
     region: "us-central1",
     memory: "512MiB",
     timeoutSeconds: 540,
-    cors: ["https://scoreplace.app", "http://localhost:9876"],
+    cors: APP_ORIGINS,
   },
   async (request) => {
     // ── Auth guard: only owner ───────────────────────────────────────────────

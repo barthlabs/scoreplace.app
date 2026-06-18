@@ -656,7 +656,11 @@ function renderDashboard(container) {
     // nos blocos de info pequena/cor fraca (datas, cronômetro, inscritos,
     // formato/acesso). _pReadBg = fundo escuro legível por bloco quando há foto.
     const _photoPanelD = '';
-    const _pReadBg = venuePhotoBg ? 'rgba(15,23,42,0.62)' : '';
+    // v2.6.43: read box theme-aware (escuro→box claro/texto escuro; claro→box escuro/texto claro)
+    const _rb = (venuePhotoBg && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
+    const _pReadBg = _rb ? _rb.bg : '';
+    const _pReadFg = _rb ? _rb.fg : '#f1f5f9';
+    const _pReadBd = _rb ? _rb.border : 'rgba(255,255,255,0.12)';
     return `
         <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'">
           ${isOrg ? `
@@ -700,14 +704,14 @@ function renderDashboard(container) {
 
             ${t.venueName ? `
             <!-- Local -->
-            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: -0.8rem; ${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:6px 10px;max-width:100%;' : 'opacity: 0.6;'}">
+            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: -0.8rem; ${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border-radius:10px;padding:6px 10px;max-width:100%;' : 'opacity: 0.6;'}">
                <span style="font-size: 1rem;">📍</span>
                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window._safeHtml(t.venueName)}</span>
             </div>
             ` : ''}
 
             <!-- Below Name: Calendário + Data + badge contextual (HOJE/AMANHÃ/Em Xd) -->
-            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
+            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
                ${datesGridHtml}
                ${(() => {
                  // Badge de início — aparece em torneios ativos (nao encerrados)
@@ -795,7 +799,7 @@ function renderDashboard(container) {
                 var _toggleRowDash = _ligaToggleDash
                   ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _toggleInner + '</div>'
                   : '';
-                var _ctColor = _pReadBg ? '#fff' : _ligaEv.color; // tarja escura → texto claro
+                var _ctColor = _pReadBg ? _pReadFg : _ligaEv.color; // tarja theme-aware
                 return _toggleRowDash +
                   '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +
@@ -823,7 +827,7 @@ function renderDashboard(container) {
               var _next = _events[0];
               var _countdownText = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _next.color === '#f59e0b' ? '245,158,11' : _next.color === '#10b981' ? '16,185,129' : '139,92,246';
-              var _ctColor2 = _pReadBg ? '#fff' : _next.color; // tarja escura → texto claro
+              var _ctColor2 = _pReadBg ? _pReadFg : _next.color; // tarja theme-aware
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb2 + ',0.1)')) + ';border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ';">' + _next.label + '</span>' +
@@ -849,7 +853,7 @@ function renderDashboard(container) {
                <!-- Stats Column -->
                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
                    <div style="display: flex; flex-direction: row; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
-                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);' : ''}">
+                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👤</span>
                              <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
@@ -857,7 +861,7 @@ function renderDashboard(container) {
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statEnrolled')}</span>
                        </div>
                        ${teamCount > 0 ? `
-                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);' : ''}">
+                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👥</span>
                              <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${teamCount}</span>
@@ -881,7 +885,7 @@ function renderDashboard(container) {
                <!-- Configuração Completa do Torneio (dinâmica, por formato) -->
                ${(typeof window._buildTournamentConfigBox === 'function')
                  ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: false })
-                 : `<div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';color:#f1f5f9 !important;border:1px solid rgba(255,255,255,0.12);"' : ''}>
+                 : `<div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
                   <div><strong>${_t('dashboard.labelFormat')}:</strong> ${window._formatDisplayName ? window._formatDisplayName(t.format) : t.format}</div>
                   <div><strong>${_t('dashboard.labelAccess')}:</strong> ${publicText}</div>
                </div>`}

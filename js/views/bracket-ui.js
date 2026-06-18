@@ -443,8 +443,9 @@ function _resultNeedsApproval(t, m, user) {
   if (!t || !m || !user) return false;
   // Quando em disputa, só o organizador pode lançar — participantes bloqueados
   if (m.pendingResult && m.pendingResult.disputed) return false;
-  // Só aplica quando a configuração do torneio permite participantes lançar resultado
-  var _re = t.resultEntry || 'organizer';
+  // Só aplica quando a configuração permite participantes lançar resultado.
+  // v2.6.60: resolve por FASE do match (fallback top-level).
+  var _re = (typeof window._effectiveResultEntry === 'function') ? window._effectiveResultEntry(t, m) : (t.resultEntry || 'organizer');
   var _playersCanSubmit = _re === 'players' || _re === 'all' ||
     (Array.isArray(_re) && _re.indexOf('players') !== -1);
   if (!_playersCanSubmit) return false;
@@ -1047,7 +1048,8 @@ window._autoSubstituteWO = function(tId, overrideReplacementName) {
 
   var oldEntry = woMatch[woSlot];
   var isTeam = oldEntry.includes(' / ');
-  var woScope = t.woScope || 'individual';
+  // v2.6.60: W.O. scope da FASE do match (fallback top-level).
+  var woScope = (typeof window._effectiveWoScope === 'function') ? window._effectiveWoScope(t, woMatch) : (t.woScope || 'individual');
 
   if (isTeam && woScope === 'individual') {
     // W.O. is individual — replace only the absent member, partner stays
