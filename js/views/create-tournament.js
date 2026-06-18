@@ -1553,10 +1553,15 @@ function setupCreateTournamentModal() {
     }
     return h;
   };
+  // v2.6.79: default = 1 linha (chave única). Eliminatórias permite configurar 1/2/4
+  // linhas via _setPhaseLineCount. Sem rótulos Ouro/Prata hardcoded — o organizador
+  // nomeia cada linha (ou fica genérico "Chave N" no motor).
   function _phaseDefaultMapping(format) {
-    if (format === 'elim_dupla') return [ { dest: 'upper', rankFrom: 1, rankTo: 2, label: 'Ouro' }, { dest: 'lower', rankFrom: 3, rankTo: 4, label: 'Prata' } ];
     return [ { dest: 'main', rankFrom: 1, rankTo: 2, label: '' } ];
   }
+  // dest keys das linhas: 1 linha → ['main']; 2/4 → ['upper','lower','line3','line4'].
+  // Mantém compat com o motor (converge upper+lower); line3/line4 entram na fase 4-linhas.
+  function _lineDests(n) { return (n <= 1) ? ['main'] : ['upper', 'lower', 'line3', 'line4'].slice(0, n); }
   // Destinos de uma fase. `defaultLabel` é só a sugestão — o organizador renomeia
   // a trilha (Ouro/Prata/A/B/…) livremente; o nome digitado vive em mapping[i].label.
   function _phaseDests(format) {
@@ -1604,6 +1609,20 @@ function setupCreateTournamentModal() {
     if (!Array.isArray(ph.mapping) || !ph.mapping.length) ph.mapping = _phaseDefaultMapping(ph.format);
     ph.mapping[0].rankFrom = 1;
     ph.mapping[0].rankTo = x;
+  };
+  // v2.6.79: nº de linhas (chaves paralelas) numa Eliminatória — 1, 2 ou 4. 3 é
+  // BLOQUEADO (a 3ª linha exigiria a 4ª por justiça das semis). Preserva nomes/faixas
+  // existentes ao redimensionar; novas linhas ganham faixa default 2 em 2 (1-2, 3-4…).
+  window._setPhaseLineCount = function(i, n) {
+    var ph = window._extraPhases[i]; if (!ph) return;
+    n = (n === 4) ? 4 : (n === 2 ? 2 : 1); // bloqueia 3
+    var prev = Array.isArray(ph.mapping) ? ph.mapping : [];
+    var dests = _lineDests(n);
+    ph.mapping = dests.map(function(d, k){
+      var o = prev[k] || {};
+      return { dest: d, rankFrom: o.rankFrom || (2 * k + 1), rankTo: o.rankTo || (2 * k + 2), label: o.label || '' };
+    });
+    window._renderPhases();
   };
   // v2.6.62: _togglePhaseResultEntry agora é canônico (definido no topo, idx 0 = Fase 1).
   // Botão de toggle do construtor (estilo dos botões da Fase 1).
@@ -1655,14 +1674,11 @@ function setupCreateTournamentModal() {
   function _phaseTxSummary(ph, teamSize) {
     var qm = ph.qualifyMode || 'per_group', parts = [];
     if (qm === 'all') { parts.push('Todos avançam'); }
-    else {
-      var dests = _phaseDests(ph.format);
-      if (dests.length > 1) {
-        parts.push((ph.mapping || []).map(function(m, mi){ var d = dests[mi] || {}; var lbl = (m.label && m.label.trim()) || d.defaultLabel || ('T' + (mi + 1)); return lbl + ' ' + (m.rankFrom || 1) + '-' + (m.rankTo || 1); }).join(' · '));
-      } else {
-        var x = (ph.mapping && ph.mapping[0]) ? (ph.mapping[0].rankTo || 2) : 2;
-        parts.push('Top ' + x + (qm === 'overall' ? ' geral' : '/grupo'));
-      }
+    else if ((ph.mapping || []).length > 1) {
+      parts.push((ph.mapping || []).map(function(m, mi){ var lbl = (m.label && m.label.trim()) || ('Linha ' + (mi + 1)); return lbl + ' ' + (m.rankFrom || 1) + '-' + (m.rankTo || 1); }).join(' · '));
+    } else {
+      var x = (ph.mapping && ph.mapping[0]) ? (ph.mapping[0].rankTo || 2) : 2;
+      parts.push('Top ' + x + (qm === 'overall' ? ' geral' : '/grupo'));
     }
     if (teamSize >= 2) {
       var sl = { draw_among: 'Sorteio', top: 'Performance', balanced: 'Equilíbrio' }[ph.pairingStrategy || 'top'] || 'Performance';
@@ -1699,19 +1715,27 @@ function setupCreateTournamentModal() {
     h += _phBtn(i, 'qualifyMode', 'overall', 'Melhores no geral', qm === 'overall');
     h += '</div>';
     if (qm !== 'all') {
-      var dests = _phaseDests(ph.format);
-      var _isMultiDest = dests.length > 1;
+      var _isElim = (ph.format === 'elim_simples' || ph.format === 'elim_dupla');
       var _rankCtx = (qm === 'overall') ? 'no <strong>ranking geral</strong>' : '<strong>de cada grupo</strong>';
       h += '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 10px;margin-bottom:' + (teamSize >= 2 ? '10px' : '0') + ';">';
-      if (_isMultiDest) {
-        // múltiplas trilhas (ex.: Ouro/Prata) → faixa de colocação por trilha.
-        h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">Faixa de colocação ' + _rankCtx + ' por trilha — <span style="color:#a5b4fc;">renomeie como quiser</span>:</div>';
+      if (_isElim) {
+        // v2.6.79: Linhas (chaves paralelas) — 1, 2 ou 4 (3 bloqueado). Cada linha é
+        // uma chave eliminatória nomeada pelo organizador; os campeões convergem.
+        var _nLines = (ph.mapping && ph.mapping.length) || 1;
+        h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">Linhas (chaves paralelas) — cada uma é uma chave; os campeões convergem na grande final:</div>';
+        h += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">';
+        h += '<span style="font-size:0.72rem;color:var(--text-muted);">Nº de linhas:</span>';
+        [1, 2, 4].forEach(function(n){
+          var act = _nLines === n;
+          h += '<button type="button" onclick="window._setPhaseLineCount(' + i + ',' + n + ')" style="padding:5px 13px;border-radius:9px;font-size:0.8rem;font-weight:700;cursor:pointer;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + n + '</button>';
+        });
+        h += '<span style="font-size:0.66rem;color:var(--text-muted);">(3 não — a 3ª exigiria a 4ª)</span>';
+        h += '</div>';
+        h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:5px;">Nomeie cada linha e defina a faixa de colocação ' + _rankCtx + ' que vem pra ela:</div>';
         (ph.mapping || []).forEach(function(mp, mi){
-          var dst = dests[mi] || {};
-          var curLabel = (mp.label != null && mp.label !== '') ? mp.label : (dst.defaultLabel || ('Destino ' + (mi + 1)));
           h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">';
-          if (dst.icon) h += '<span style="flex-shrink:0;font-size:1rem;">' + dst.icon + '</span>';
-          h += '<input type="text" value="' + esc(curLabel) + '" placeholder="Nome da trilha" oninput="window._setPhaseMappingLabel(' + i + ', ' + mi + ', this.value)" title="Nome da trilha (ex.: Ouro, Prata, A, B…)" style="flex:1;min-width:90px;' + _PH_INP + '">';
+          h += '<span style="flex-shrink:0;font-size:0.9rem;">🔹</span>';
+          h += '<input type="text" value="' + esc(mp.label || '') + '" placeholder="Nome da linha ' + (mi + 1) + '" oninput="window._setPhaseMappingLabel(' + i + ', ' + mi + ', this.value)" style="flex:1;min-width:90px;' + _PH_INP + '">';
           h += '<span style="font-size:0.78rem;color:var(--text-muted);">do</span>';
           h += '<input type="number" min="1" max="32" value="' + (mp.rankFrom || 1) + '" oninput="window._setPhaseMapping(' + i + ', ' + mi + ', \'rankFrom\', this.value)" style="width:46px;text-align:center;' + _PH_INP + '">';
           h += '<span style="font-size:0.78rem;color:var(--text-muted);">º ao</span>';
@@ -1720,7 +1744,7 @@ function setupCreateTournamentModal() {
           h += '</div>';
         });
       } else {
-        // trilha única → campo simples "Os X melhores … avançam".
+        // não-eliminatória (Pontos Corridos / Fase de Grupos) → "Os X melhores avançam".
         var _m0 = (ph.mapping && ph.mapping[0]) ? ph.mapping[0] : { rankTo: 2 };
         h += '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">';
         h += '<span style="font-size:0.82rem;">🏆 Os</span>';

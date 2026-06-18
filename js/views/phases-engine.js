@@ -229,8 +229,10 @@
     return { matches: matches, finalMatchId: finalMatchId, soleWinner: null, totalRounds: totalRounds };
   }
 
-  var DEST_BRACKET = { upper: 'gold', lower: 'silver', main: 'main' };
-  var DEST_LABEL = { upper: '🥇 Ouro', lower: '🥈 Prata', main: 'Eliminatória' };
+  var DEST_BRACKET = { upper: 'gold', lower: 'silver', main: 'main', line3: 'line3', line4: 'line4' };
+  // v2.6.79: sem rótulos Ouro/Prata hardcoded — o nome de cada linha/chave vem do
+  // que o organizador digitou (mapping[].label); fallback genérico "Chave N".
+  var DEST_LABEL = { main: 'Eliminatória' };
 
   // Liga o match final de uma chave (tier) à grande final (vencedor) e à disputa
   // de 3º/4º (perdedor). Se a chave tem 1 time só (soleWinner), preenche direto.
@@ -269,12 +271,11 @@
     destOrder.forEach(function (dest) {
       var bracketKey = DEST_BRACKET[dest] || dest;
       var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey);
-      // Nome da trilha: usa o que o organizador digitou (mapping[].label), com o
-      // ícone de medalha como prefixo; senão cai no default (🥇 Ouro / 🥈 Prata).
+      // v2.6.79: nome da linha/chave = o que o organizador digitou (mapping[].label);
+      // sem ícone de medalha hardcoded. Fallback genérico "Chave N" (ordem da linha).
       var _mp = mapping.filter(function (m) { return m.dest === dest; })[0];
       var _custom = (_mp && _mp.label) ? String(_mp.label).trim() : '';
-      var _icon = (dest === 'upper') ? '🥇 ' : (dest === 'lower') ? '🥈 ' : '';
-      var _label = _custom ? (_icon + _custom) : (DEST_LABEL[dest] || dest);
+      var _label = _custom || (DEST_LABEL[dest] || ('Chave ' + (destOrder.indexOf(dest) + 1)));
       res.matches.forEach(function (m) { m.tierLabel = _label; });
       allMatches = allMatches.concat(res.matches);
       tiers[dest] = res;
