@@ -2,6 +2,67 @@
 (function() {
 var _t = window._t || function(k) { return k; };
 
+// v2.6.98 — limpa TODOS os artefatos de sorteio + estado do construtor de fases +
+// flags de encerramento, MANTENDO inscritos (t.participants/memberUids) e config
+// (t.phases, t.scoring, categorias, tiebreakers…). Base do re-sorteio e do reset.
+window._clearTournamentDraw = function (t) {
+  if (!t) return;
+  t.matches = [];
+  t.rounds = [];
+  t.groups = [];
+  t.standings = null;
+  t.thirdPlaceMatch = null;
+  t.rodadas = null;
+  // estado do construtor de fases
+  t.currentPhaseIndex = 0;
+  t.currentStage = null;
+  t._phaseMaterialized = 0;
+  // flags de encerramento / relógio
+  if (t.status === 'finished') t.status = 'closed';
+  t.finishedAt = null;
+  t.finishNotifiedAt = null;
+  t.durationMs = null;
+  t.tournamentStarted = null;
+  // derivados do sorteio
+  t.sitOutHistory = null;
+  t.ligaGhosts = null;
+  t.nextDrawAt = null;
+};
+
+// v2.6.98 — "Resetar para inscrições (manter inscritos)": apaga sorteio/rodadas/
+// fases e volta o torneio para inscrições ABERTAS, preservando todos os inscritos.
+// Pensado para o ciclo de testes (rodar um cenário, zerar, montar outro com a mesma
+// galera). Ação destrutiva → dupla confirmação.
+window._resetTournamentToEnrollment = function (tId) {
+  var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
+  if (!t) return;
+  var n = (t.participants || []).length;
+  var _refresh = function () {
+    var c = document.getElementById('view-container');
+    if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
+  };
+  if (typeof showAlertDialog !== 'function') return;
+  showAlertDialog('🔄 Resetar para inscrições?',
+    'Isto apaga TODO o sorteio, rodadas e fases e volta o torneio para "inscrições abertas". Os <strong>' + n + '</strong> inscritos são MANTIDOS. Não dá pra desfazer.',
+    function () {
+      window._clearTournamentDraw(t);
+      t.status = 'open';
+      t.updatedAt = new Date().toISOString();
+      var done = function () {
+        if (typeof showNotification === 'function') showNotification('Torneio resetado', 'Voltou para inscrições abertas — ' + n + ' inscritos mantidos.', 'success');
+        _refresh();
+      };
+      if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t).then(done).catch(function (err) { window._error && window._error('[resetToEnrollment] save error:', err); done(); });
+      } else {
+        try { window.AppStore.sync(); } catch (e) {}
+        done();
+      }
+    },
+    { type: 'danger', confirmText: 'Sim, resetar', cancelText: 'Cancelar' }
+  );
+};
+
 // v1.9.85: forma duplas/times preservando a IDENTIDADE (uid/email/foto) de
 // cada membro. ANTES, o sorteio convertia os participantes em STRINGS de nome
 // ("A / B") via name.join(' / ') — destruindo todos os uids. Consequências
@@ -527,10 +588,9 @@ window.generateDrawFunction = function (tId) {
                 _t('draw.alreadyDoneMsg'),
                 function() {
                     // User confirmed — allow redraw by clearing existing data
-                    t.matches = [];
-                    t.rounds = [];
-                    t.groups = [];
-                    t.standings = null;
+                    // v2.6.98: limpa TAMBÉM estado de fase/encerramento (re-sortear um
+                    // torneio multi-fase precisa voltar à Fase 0, senão fica resíduo).
+                    window._clearTournamentDraw(t);
                     window.generateDrawFunction(tId);
                 },
                 { type: 'danger', confirmText: _t('draw.alreadyDoneConfirm'), cancelText: _t('btn.cancel') }
@@ -541,10 +601,7 @@ window.generateDrawFunction = function (tId) {
         showAlertDialog(_t('draw.redrawTitle'),
             _t('draw.redrawMsg'),
             function() {
-                t.matches = [];
-                t.rounds = [];
-                t.groups = [];
-                t.standings = null;
+                window._clearTournamentDraw(t);
                 window.generateDrawFunction(tId);
             },
             { type: 'warning', confirmText: _t('draw.redrawConfirm'), cancelText: _t('draw.redrawCancel') }
