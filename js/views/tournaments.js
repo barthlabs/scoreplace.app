@@ -1589,8 +1589,10 @@ function renderTournaments(container, tournamentId = null) {
         // v2.3.1: brilho de Análise e Editar usa o MESMO efeito dos botões
         // especiais da hero box (.btn-shine — sweep de luz periódico), não o
         // pulse box-shadow (sp-glow-*). Sempre ligado, igual à hero box.
-        // v2.1.45: Análise omitida depois do sorteio.
-        const enrollmentReportBtn = (isOrg && !sorteioRealizado) ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">📊 Análise</button>` : '';
+        // v2.6.106: Análise CONTINUA visível pro organizador depois do sorteio/início
+        // (analisa o perfil dos inscritos — útil a qualquer momento). Antes (v2.1.45)
+        // sumia após o sorteio; o organizador pediu de volta.
+        const enrollmentReportBtn = isOrg ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">📊 Análise</button>` : '';
 
         const isSuicoFormat = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
         const isLigaFormat = window._isLigaFormat(t);
