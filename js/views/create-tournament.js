@@ -1591,6 +1591,29 @@ function setupCreateTournamentModal() {
   // dest keys das linhas: 1 linha → ['main']; 2/4 → ['upper','lower','line3','line4'].
   // Mantém compat com o motor (converge upper+lower); line3/line4 entram na fase 4-linhas.
   function _lineDests(n) { return (n <= 1) ? ['main'] : ['upper', 'lower', 'line3', 'line4'].slice(0, n); }
+  // v2.6.92 (Motor Chunk 1): deriva o mapping QUE O MOTOR LÊ a partir do modelo novo
+  // de "quem classifica" — quantos (Todos | Os X melhores via qualifyTopN) × base (scope)
+  // distribuídos pelas N linhas por faixa de colocação. O motor (buildEntrantsByDest)
+  // consome rankFrom/rankTo por dest; aqui traduzimos qualifyTopN → faixas. Os nomes das
+  // linhas (label) são preservados. 'Todos' com 1 linha = rankTo amplo (todos); 'Todos'
+  // multi-linha mantém as faixas existentes (split por N é trabalho de runtime — Chunk 2).
+  window._deriveMotorMapping = function (ph) {
+    var lines = (Array.isArray(ph.mapping) && ph.mapping.length) ? ph.mapping : [{ dest: 'main', label: '' }];
+    var nLines = lines.length;
+    var quantity = ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top');
+    if (quantity === 'all') {
+      if (nLines === 1) return [{ dest: lines[0].dest, rankFrom: 1, rankTo: 999, label: (lines[0].label || '').trim() }];
+      return lines.map(function (ln) { return { dest: ln.dest, rankFrom: parseInt(ln.rankFrom, 10) || 1, rankTo: parseInt(ln.rankTo, 10) || 2, label: (ln.label || '').trim() }; });
+    }
+    var topN = Math.max(parseInt(ph.qualifyTopN, 10) || 2, 1);
+    var per = Math.floor(topN / nLines), rem = topN - per * nLines, start = 1;
+    return lines.map(function (ln, k) {
+      var cnt = Math.max(per + (k < rem ? 1 : 0), 1);
+      var m = { dest: ln.dest, rankFrom: start, rankTo: start + cnt - 1, label: (ln.label || '').trim() };
+      start += cnt;
+      return m;
+    });
+  };
   // Destinos de uma fase. `defaultLabel` é só a sugestão — o organizador renomeia
   // a trilha (Ouro/Prata/A/B/…) livremente; o nome digitado vive em mapping[i].label.
   function _phaseDests(format) {
@@ -5739,7 +5762,7 @@ function setupCreateTournamentModal() {
           };
           var _rest = _extra.map(function(ph, _ei) {
             var src = ph.sourceType === 'previous'
-              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: (ph.scope || 'per_group') !== 'overall', scope: (ph.scope || 'per_group'), qualifyMode: ph.qualifyMode || 'per_group', qualifyQuantity: ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top'), qualifyTopN: parseInt(ph.qualifyTopN) || 2, mapping: (ph.mapping || []).map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: (m.label || '').trim() }; }) }
+              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: (ph.scope || 'per_group') !== 'overall', scope: (ph.scope || 'per_group'), qualifyMode: ph.qualifyMode || 'per_group', qualifyQuantity: ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top'), qualifyTopN: parseInt(ph.qualifyTopN) || 2, mapping: window._deriveMotorMapping(ph) }
               : { type: 'enrollment' };
             return {
               name: (ph.name || '').trim() || 'Fase',
