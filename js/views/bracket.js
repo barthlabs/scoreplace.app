@@ -244,7 +244,18 @@ function renderBracket(container, tournamentId, isInline) {
   if (window._isMultiPhase && window._isMultiPhase(t)) {
     var _curPh = t.currentPhaseIndex || 0;
     if (_curPh > 0 && typeof window._renderPhaseBracket === 'function') {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult) + standbyHtml;
+      // Fase de chave concluída E existe próxima fase → banner pra avançar (encadeia
+      // 1→2→…→N; o motor puxa as colocações da CHAVE atual, não dos grupos da Fase 0).
+      var _nextBanner = '';
+      if (isOrg && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
+        var _nnNm = window._safeHtml(((t.phases[_curPh + 1] || {}).name) || 'próxima fase');
+        var _tIdEsc2 = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        _nextBanner = '<div style="margin:0 0 1rem;padding:14px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(99,102,241,0.12));border:1px solid rgba(251,191,36,0.45);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+          '<div style="flex:1;min-width:180px;"><div style="font-weight:800;color:var(--text-bright);">Fase concluída ✓</div><div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px;">Avance para <strong>' + _nnNm + '</strong> — as chaves serão geradas pelas colocações desta fase.</div></div>' +
+          '<button class="btn btn-success hover-lift" style="white-space:nowrap;" onclick="window._advanceMultiPhase(\'' + _tIdEsc2 + '\')">🏆 Avançar</button>' +
+          '</div>';
+      }
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + _nextBanner + window._renderPhaseBracket(t, canEnterResult) + standbyHtml;
       _applyMyMatchesFilter();
       return;
     }

@@ -410,6 +410,77 @@
     return pm.every(function (m) { return m.winner || m.isBye; });
   }
 
+  // ── Fase 1+ → próxima fase: derivar colocações de uma CHAVE já jogada ─────────
+  // (v2.6.94, Motor Chunk 4 — encadeamento além de 0→1.)
+
+  // Reconstrói teamObjs por displayName a partir das R1 (que carregam team1Obj/
+  // team2Obj). Permite o keep de duplas seguir com uids/fotos pra próxima fase.
+  function _nameToTeamMap(phaseMatches) {
+    var map = {};
+    phaseMatches.forEach(function (m) {
+      if (m.team1Obj && m.team1Obj.displayName) map[m.team1Obj.displayName] = m.team1Obj;
+      if (m.team2Obj && m.team2Obj.displayName) map[m.team2Obj.displayName] = m.team2Obj;
+    });
+    return map;
+  }
+  // Rodada de CHAVE (round<99) em que `name` perdeu — eliminado mais tarde = melhor.
+  // Nunca perdeu (campeão do tier / ainda vivo) → sentinela alta (9999), pra ordenar
+  // ANTES de quem perdeu. Ignora BYE.
+  function _tierExitRound(name, tierMatches) {
+    var maxLost = 0, lostSomewhere = false;
+    tierMatches.forEach(function (m) {
+      if (m.isBye || (m.round || 1) >= 99) return;
+      if ((m.p1 === name || m.p2 === name) && m.winner && m.winner !== name) { maxLost = Math.max(maxLost, m.round || 1); lostSomewhere = true; }
+    });
+    return lostSomewhere ? maxLost : 9999;
+  }
+  // Nomes que jogaram numa lista de matches de chave (ignora BYE/TBD e convergência).
+  function _tierTeamNames(tierMatches) {
+    var seen = {}, out = [];
+    tierMatches.forEach(function (m) {
+      if ((m.round || 1) >= 99) return;
+      [m.p1, m.p2].forEach(function (nm) { if (nm && nm !== 'BYE' && nm !== 'TBD' && !seen[nm]) { seen[nm] = 1; out.push(nm); } });
+    });
+    return out;
+  }
+  // Standings de uma fase de CHAVE já jogada → pseudo-grupos pra semear a próxima.
+  //  • Com convergência (grande final): UM grupo "geral" na ordem do pódio
+  //    (campeão, vice, 3º, 4º) + cauda por profundidade de eliminação nas linhas.
+  //  • Sem convergência (linhas independentes): UM grupo por linha (tier), cada
+  //    um ordenado por profundidade dentro da linha (campeão da linha primeiro).
+  function bracketPhaseGroups(t, phaseIdx) {
+    var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx; });
+    if (!pm.length) return [];
+    var nameTeam = _nameToTeamMap(pm);
+    function entry(nm) { return nameTeam[nm] || { name: nm, displayName: nm }; }
+    var gf = pm.filter(function (m) { return m.bracket === 'grandfinal'; })[0];
+    var third = pm.filter(function (m) { return m.bracket === 'thirdplace'; })[0];
+    var TIERS = ['gold', 'silver', 'main', 'line3', 'line4'];
+    var tierMatches = pm.filter(function (m) { return TIERS.indexOf(m.bracket) !== -1; });
+
+    if (gf) {
+      var order = [], used = {};
+      function push(nm) { if (nm && nm !== 'BYE' && nm !== 'TBD' && !used[nm]) { used[nm] = 1; order.push(entry(nm)); } }
+      if (gf.winner) { push(gf.winner); push((gf.p1 === gf.winner) ? gf.p2 : gf.p1); }
+      if (third && third.winner) { push(third.winner); push((third.p1 === third.winner) ? third.p2 : third.p1); }
+      var rest = _tierTeamNames(tierMatches).filter(function (nm) { return !used[nm]; });
+      rest.sort(function (a, b) { return _tierExitRound(b, tierMatches) - _tierExitRound(a, tierMatches); });
+      rest.forEach(push);
+      var pname = (t.phases[phaseIdx] && t.phases[phaseIdx].name) || ('Fase ' + (phaseIdx + 1));
+      return [{ name: pname, standings: order }];
+    }
+
+    // Linhas independentes: um grupo por bracketKey, ordenado por exitRound desc.
+    var byBracket = {};
+    tierMatches.forEach(function (m) { (byBracket[m.bracket] = byBracket[m.bracket] || []).push(m); });
+    return Object.keys(byBracket).map(function (bk) {
+      var ms = byBracket[bk];
+      var names = _tierTeamNames(ms);
+      names.sort(function (a, b) { return _tierExitRound(b, ms) - _tierExitRound(a, ms); });
+      return { name: (ms[0] && ms[0].tierLabel) || bk, standings: names.map(entry) };
+    });
+  }
+
   // Materializa a próxima fase: gera as chaves a partir das colocações da fase
   // anterior e anexa em t.matches (tagueadas com phaseIndex). PURA (sem DOM/AppStore).
   function materializeNextPhase(t, computeStandings, idPrefix) {
@@ -418,10 +489,15 @@
     var nextIdx = cur + 1;
     if (nextIdx >= t.phases.length) return { ok: false, error: 'no-next-phase' };
     if ((t._phaseMaterialized || 0) >= nextIdx) return { ok: false, error: 'already-materialized' };
-    var groups = prevPhaseGroups(t);
+    // Origem das colocações: Fase 0 = grupos (Rei/Rainha ou round-robin); Fase 1+ =
+    // resultado da CHAVE anterior (Chunk 4 — encadeamento além de 0→1). No 2º caso
+    // as standings já vêm ranqueadas, então cs é identidade.
+    var groups, cs;
+    if (cur === 0) { groups = prevPhaseGroups(t); cs = computeStandings; }
+    else { groups = bracketPhaseGroups(t, cur); cs = function (g) { return g.standings || []; }; }
     if (!groups.length) return { ok: false, error: 'no-groups' };
     var cfg = t.phases[nextIdx];
-    var built = buildPhaseBrackets(groups, cfg, computeStandings, idPrefix || ('ph' + nextIdx));
+    var built = buildPhaseBrackets(groups, cfg, cs, idPrefix || ('ph' + nextIdx));
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
     built.matches.forEach(function (m) { m.phaseIndex = nextIdx; if (m.category === undefined) m.category = null; });
     t.matches = (t.matches || []).concat(built.matches);
@@ -467,6 +543,7 @@
     buildPhaseBrackets: buildPhaseBrackets,
     linkTierToFinal: linkTierToFinal,
     prevPhaseGroups: prevPhaseGroups,
+    bracketPhaseGroups: bracketPhaseGroups,
     phaseComplete: phaseComplete,
     materializeNextPhase: materializeNextPhase,
     groupTeamStandings: _groupTeamStandings

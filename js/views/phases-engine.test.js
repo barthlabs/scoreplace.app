@@ -342,5 +342,54 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   eq(tierNext(rb, 'line4'), bs2 + '/p2', 'equil: campeão L4 → semi2 (2×4)');
 })();
 
+// 19) Encadeamento Fase 1 → Fase 2 (Motor Chunk 4): a próxima fase puxa do resultado
+//     da CHAVE anterior (pódio), não dos grupos da Fase 0.
+(function () {
+  var phaseMatches = [
+    { id: 'g0', phaseIndex: 1, bracket: 'gold',       round: 1,  p1: 'gA', p2: 'gB', winner: 'gA' },
+    { id: 's0', phaseIndex: 1, bracket: 'silver',     round: 1,  p1: 'sA', p2: 'sB', winner: 'sA' },
+    { id: 'gf', phaseIndex: 1, bracket: 'grandfinal', round: 99, p1: 'gA', p2: 'sA', winner: 'gA' },
+    { id: 'tp', phaseIndex: 1, bracket: 'thirdplace', round: 99, p1: 'gB', p2: 'sB', winner: 'gB' }
+  ];
+  var t = {
+    phases: [
+      { name: 'Grupos' },
+      { name: 'Fase Ouro/Prata' },
+      { name: 'Final', fixedPairs: false, grandFinal: false, source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 2 }] } }
+    ],
+    currentPhaseIndex: 1, _phaseMaterialized: 1,
+    groups: [{ name: 'Grupo A', standings: [{ name: 'FANTASMA1' }, { name: 'FANTASMA2' }] }],
+    matches: phaseMatches.slice()
+  };
+  var pg = eng.bracketPhaseGroups(t, 1);
+  eq(pg.length, 1, 'chunk4: convergência → 1 grupo geral');
+  eq(pg[0].standings.map(function (s) { return s.name; }), ['gA', 'sA', 'gB', 'sB'], 'chunk4: pódio campeão/vice/3º/4º');
+
+  var res = eng.materializeNextPhase(t, function (g) { return g.standings || []; }, 'ph-test');
+  ok(res.ok, 'chunk4: materializeNextPhase ok');
+  eq(t.currentPhaseIndex, 2, 'chunk4: avançou pra fase 2');
+  var f2 = t.matches.filter(function (m) { return m.phaseIndex === 2; });
+  eq(f2.length, 1, 'chunk4: fase 2 tem 1 jogo (final entre os 2 melhores)');
+  var slots = [f2[0].p1, f2[0].p2].sort();
+  eq(slots, ['gA', 'sA'], 'chunk4: finalistas vêm do pódio da fase 1');
+  ok(slots.indexOf('FANTASMA1') === -1 && slots.indexOf('FANTASMA2') === -1, 'chunk4: grupos da Fase 0 NÃO reaproveitados');
+})();
+
+// 20) Linhas INDEPENDENTES (sem grande final) → um grupo por linha na próxima fase.
+(function () {
+  var t = {
+    phases: [{ name: 'Grupos' }, { name: 'Linhas' }, { name: 'x' }],
+    currentPhaseIndex: 1, _phaseMaterialized: 1,
+    matches: [
+      { id: 'a', phaseIndex: 1, bracket: 'gold',   round: 1, p1: 'gA', p2: 'gB', winner: 'gA', tierLabel: 'Ouro' },
+      { id: 'b', phaseIndex: 1, bracket: 'silver', round: 1, p1: 'sA', p2: 'sB', winner: 'sA', tierLabel: 'Prata' }
+    ]
+  };
+  var pg = eng.bracketPhaseGroups(t, 1);
+  eq(pg.length, 2, 'indep: 2 grupos (um por linha)');
+  eq(pg[0].standings.map(function (s) { return s.name; }), ['gA', 'gB'], 'indep: campeão da linha primeiro (Ouro)');
+  eq(pg[1].standings.map(function (s) { return s.name; }), ['sA', 'sB'], 'indep: campeão da linha primeiro (Prata)');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);
