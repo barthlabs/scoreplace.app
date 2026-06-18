@@ -153,6 +153,7 @@ function renderBracket(container, tournamentId, isInline) {
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift" onclick="window._exportTournamentCSV('${_tIdSafe}')">📊 CSV</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._tvMode('${_tIdSafe}')">📺 Modo TV</button>` : '<span></span>'}
       ${isOrg && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
+      ${(isOrg && hasContent && window.AppStore.isCreator && window.AppStore.isCreator(t)) ? `<button class="btn btn-sm hover-lift no-print" style="grid-column:span 2;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#fbbf24;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="Apaga sorteio, rodadas e fases; mantém os inscritos">🔄 Resetar (manter inscritos)</button>` : ''}
     </div>
     <style>
       @media (min-width: 768px) {
@@ -210,7 +211,11 @@ function renderBracket(container, tournamentId, isInline) {
 
   // ── Banner "Iniciar Torneio" e Progress Bar (skip quando inline — já existem no card acima) ──
   const hasDrawContent = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);
-  const startTournamentBanner = (!isInline && isOrg && hasDrawContent && !t.tournamentStarted) ? `
+  // v2.6.100: Pontos Corridos (Liga/Suíço) com sorteio AUTOMÁTICO (drawManual !== true)
+  // não tem passo "Iniciar Torneio" — sorteia e já começa. O banner (rede de
+  // segurança) fica só no sorteio MANUAL, por enquanto.
+  const _ligaAutoDraw = (isLiga || isSuico) && t.drawManual !== true;
+  const startTournamentBanner = (!isInline && isOrg && hasDrawContent && !t.tournamentStarted && !_ligaAutoDraw) ? `
     <div style="margin:1rem 0 1.5rem;padding:20px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.1));border:2px solid rgba(16,185,129,0.4);border-radius:16px;text-align:center;">
         <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:12px;">Sorteio realizado. Inicie o torneio para habilitar a chamada de presença.</p>
         <button class="btn btn-success btn-cta hover-lift" onclick="window._startTournament('${_tIdSafe}')">
