@@ -1585,10 +1585,13 @@ function setupCreateTournamentModal() {
     }
     if (['format', 'reiRainha', 'sourceType', 'fixedPairs', 'qualifyMode'].indexOf(field) !== -1) window._renderPhases();
   };
-  // Como formam as duplas (transição): liga fixedPairs + estratégia num clique só.
+  // v2.6.77: estratégia de avanço (Performance/Equilíbrio/Sorteio) é INDEPENDENTE
+  // do toggle "Duplas fixas". A estratégia sempre define COMO os classificados vão
+  // pra próxima fase (em pares fixos OU como indivíduos semeados); o toggle só decide
+  // se os pares ficam travados na fase ou se entram individualmente.
   window._setPhasePairing = function(i, strategy) {
     var ph = window._extraPhases[i]; if (!ph) return;
-    ph.fixedPairs = true; ph.pairingStrategy = strategy;
+    ph.pairingStrategy = strategy;
     window._renderPhases();
   };
   // v2.6.75: trilha única — "Os X melhores avançam". Atualiza mapping[0] (rankFrom=1,
@@ -1675,17 +1678,22 @@ function setupCreateTournamentModal() {
       }
       h += '</div>';
     }
-    // Como formam as duplas na próxima fase (só em duplas). v2.6.75: Individual
-    // (parceria não fixa) OU duplas FIXAS formadas por Sorteio / Performance
-    // (1º+2º, 3º+4º) / Equilíbrio (1º+último, 2º+penúltimo). Persistido em pairingStrategy.
+    // Como avançam os classificados (só em duplas). v2.6.77: toggle "Duplas fixas"
+    // (pares travados na fase × indivíduos) + estratégia SEMPRE ativa (Sorteio /
+    // Performance / Equilíbrio) que define a ordem/pareamento com que avançam.
+    // Pra fase Rei/Rainha a estratégia expande pra grupos de 4 (motor pendente).
     if (teamSize >= 2) {
       var _ps = ph.pairingStrategy || 'top';
-      var _indiv = !ph.fixedPairs;
-      h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Como formam as duplas</div>';
+      var _fixed = ph.fixedPairs !== false; // default: duplas fixas ON
+      h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Como avançam os classificados</div>';
+      h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
+      h += '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox"' + (_fixed ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ',\'fixedPairs\',this.checked)"><span class="toggle-slider"></span></label>';
+      h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">Duplas fixas</span>';
+      h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_fixed ? 'pares travados para toda a fase' : 'classificados entram individualmente') + '</span>';
+      h += '</div>';
       h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-      h += '<button type="button" onclick="window._setPhaseField(' + i + ',\'fixedPairs\',false)" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (_indiv ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">Individual</button>';
       [['draw_among', '🎲 Sorteio'], ['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.']].forEach(function(p){
-        var act = !_indiv && _ps === p[0];
+        var act = _ps === p[0];
         h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
       });
       h += '</div>';
@@ -5496,9 +5504,10 @@ function setupCreateTournamentModal() {
               rounds: parseInt(ph.rounds) || 1,
               source: src,
               fixedPairs: !!ph.fixedPairs,
-              // Pareamento (1º+2º/3º+4º = 'top'; 1º+4º/2º+3º = 'balanced') — só
-              // faz sentido quando duplas fixas vêm da classificação anterior.
-              pairingStrategy: (ph.sourceType === 'previous' && ph.fixedPairs) ? (ph.pairingStrategy || 'top') : null,
+              // v2.6.77: estratégia de avanço é INDEPENDENTE do toggle duplas-fixas —
+              // ela ordena/pareia os classificados mesmo quando entram individualmente
+              // (o motor expande pra grupos de 4 numa fase Rei/Rainha). Sempre persiste.
+              pairingStrategy: ph.pairingStrategy || 'top',
               // v2.6.59: config POR FASE — W.O. e lançamento de resultados. O motor lê
               // t.phases[i].X com fallback pro top-level (t.X = fase 0/default).
               woScope: ph.woScope || 'individual',
