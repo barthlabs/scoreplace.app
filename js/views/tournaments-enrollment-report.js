@@ -1156,22 +1156,8 @@
 
   function _renderInscritosList(rows, t) {
     if (!rows || rows.length === 0) return '';
-    var _ctrlStyle = 'width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text-bright);';
-    var sel = function (id, label, optsHtml) {
-      return '<div style="flex:1 1 108px;min-width:108px;">' +
-        '<label style="display:block;font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">' + label + '</label>' +
-        '<select id="' + id + '" onchange="window._erRenderInscritos()" style="' + _ctrlStyle + 'padding:7px 8px;font-size:0.76rem;">' + optsHtml + '</select>' +
-      '</div>';
-    };
-    var sortOpts = '<option value="order-asc">Inscrição ↑</option><option value="order-desc">Inscrição ↓</option>' +
-      '<option value="name-asc">Nome A→Z</option><option value="name-desc">Nome Z→A</option>';
-    var genderOpts = '<option value="all">Todos</option><option value="Masc">♂ Masculino</option>' +
-      '<option value="Fem">♀ Feminino</option><option value="Misto">⚥ Misto</option><option value="none">? Sem gênero</option>';
-    var skillList = (t.skillCategories && t.skillCategories.length > 0) ? t.skillCategories.slice() : ['A', 'B', 'C', 'D', 'FUN'];
-    var skillOpts = '<option value="all">Todas</option>' +
-      skillList.map(function (s) { return '<option value="' + _esc(s) + '">' + _esc(s) + '</option>'; }).join('') +
-      '<option value="none">Sem habilidade</option>';
-
+    // v2.6.108: barra canônica compartilhada (window._inscritosFilterBar em store.js).
+    // Esta é a referência; a tela de Inscritos (#participants) usa a MESMA função.
     var _isOrgList = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
     var _tIdEsc = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var _sportEsc = String(t.sport || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -1186,8 +1172,9 @@
     return '<div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.18);border-radius:12px;padding:14px 16px;margin-bottom:14px;">' +
       '<p style="margin:0 0 10px;font-size:0.74rem;color:#818cf8;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Inscritos <span id="er-inscritos-count" style="color:var(--text-muted);font-weight:600;"></span></p>' +
       (_isOrgList ? '<p style="margin:-4px 0 10px;font-size:0.68rem;color:var(--text-muted);">Edite gênero e categoria de quantos quiser e clique em <b>Salvar alterações</b> no fim.</p>' : '') +
-      '<input id="er-search" type="text" oninput="window._erRenderInscritos()" placeholder="🔎 Buscar por nome…" autocomplete="off" style="' + _ctrlStyle + 'padding:9px 12px;font-size:0.82rem;margin-bottom:8px;">' +
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">' + sel('er-sort', 'Ordenar', sortOpts) + sel('er-gender', 'Gênero', genderOpts) + sel('er-skill', 'Habilidade', skillOpts) + '</div>' +
+      (typeof window._inscritosFilterBar === 'function'
+        ? window._inscritosFilterBar({ searchId: 'er-search', sortId: 'er-sort', genderId: 'er-gender', skillId: 'er-skill', onChange: 'window._erRenderInscritos()', skillCategories: (t.skillCategories || []) })
+        : '') +
       '<div id="er-inscritos-list" style="display:flex;flex-direction:column;gap:6px;"></div>' +
       saveBar +
     '</div>';

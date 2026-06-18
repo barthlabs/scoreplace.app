@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.107-beta';
+window.SCOREPLACE_VERSION = '2.6.108-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2115,6 +2115,45 @@ window._effectiveScoring = function(t, match) {
     if (!t || pi < 1 || !Array.isArray(t.phases) || pi >= t.phases.length) return def;
     var ph = t.phases[pi];
     return (ph && ph.scoring != null && ph.scoring.type) ? ph.scoring : def;
+};
+// v2.6.108: barra CANÔNICA de busca + ordenação + filtros (gênero/habilidade) pra
+// listas de inscritos. UI idêntica à Análise de Inscritos — uma fonte só, reusável.
+// opts: { searchId, sortId, genderId, skillId, onChange, skillCategories[], sort, gender, skill, search }
+// Mapeamento canônico: sort = order-asc|order-desc|name-asc|name-desc;
+// gênero = all|Masc|Fem|Misto|none; habilidade = all|<cat>|none.
+window._inscritosFilterBar = function (opts) {
+    opts = opts || {};
+    var on = opts.onChange || '';
+    var esc = window._safeHtml || function (s) { return s == null ? '' : String(s); };
+    var ctrl = 'width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text-bright);';
+    function selOne(id, label, optsHtml) {
+        if (!id) return '';
+        return '<div style="flex:1 1 108px;min-width:108px;">' +
+            '<label style="display:block;font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">' + label + '</label>' +
+            '<select id="' + id + '" onchange="' + on + '" style="' + ctrl + 'padding:7px 8px;font-size:0.76rem;">' + optsHtml + '</select>' +
+        '</div>';
+    }
+    function opt(cur, v, lbl) { return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + lbl + '</option>'; }
+    var cs = opts.sort || 'order-asc';
+    var sortOpts = opt(cs, 'order-asc', 'Inscrição ↑') + opt(cs, 'order-desc', 'Inscrição ↓') + opt(cs, 'name-asc', 'Nome A→Z') + opt(cs, 'name-desc', 'Nome Z→A');
+    var cg = opts.gender || 'all';
+    var genderOpts = opt(cg, 'all', 'Todos') + opt(cg, 'Masc', '♂ Masculino') + opt(cg, 'Fem', '♀ Feminino') + opt(cg, 'Misto', '⚥ Misto') + opt(cg, 'none', '? Sem gênero');
+    var skills = (opts.skillCategories && opts.skillCategories.length) ? opts.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
+    var ck = opts.skill || 'all';
+    var skillOpts = opt(ck, 'all', 'Todas') + skills.map(function (s) { return opt(ck, esc(s), esc(s)); }).join('') + opt(ck, 'none', 'Sem habilidade');
+    var html = '';
+    if (opts.searchId) html += '<input id="' + opts.searchId + '" type="text" oninput="' + on + '" placeholder="🔎 Buscar por nome…" autocomplete="off" value="' + esc(opts.search || '') + '" style="' + ctrl + 'padding:9px 12px;font-size:0.82rem;margin-bottom:8px;">';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">' + selOne(opts.sortId, 'Ordenar', sortOpts) + selOne(opts.genderId, 'Gênero', genderOpts) + selOne(opts.skillId, 'Habilidade', skillOpts) + '</div>';
+    return html;
+};
+// v2.6.108: normaliza o gênero do perfil/inscrito pro código canônico do filtro.
+window._canonGender = function (g) {
+    var s = String(g || '').trim().toLowerCase();
+    if (!s) return 'none';
+    if (s.indexOf('fem') === 0 || s === 'f' || s === '♀') return 'Fem';
+    if (s.indexOf('masc') === 0 || s === 'm' || s === '♂') return 'Masc';
+    if (s.indexOf('mist') === 0 || s.indexOf('mix') === 0) return 'Misto';
+    return 'none';
 };
 window._qrCodeUrl = function(data, size, darkMode) {
     var s = size || 280;
