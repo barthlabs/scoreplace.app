@@ -469,15 +469,17 @@ function setupCreateTournamentModal() {
                 <div class="d-flex gap-2">
                   <div class="form-group full-width">
                     <label class="form-label">${_t('create.gruposCount')}</label>
-                    <input type="number" class="form-control" id="grupos-count" min="2" max="16" value="4" placeholder="Ex: 4">
+                    <input type="number" class="form-control" id="grupos-count" min="2" max="16" value="4" placeholder="Ex: 4" oninput="window._renderGruposSuggestions && window._renderGruposSuggestions()">
                     <small class="text-muted" style="display:block;margin-top:4px;">${_t('create.gruposDistDesc')}</small>
                   </div>
                   <div class="form-group full-width">
                     <label class="form-label">${_t('create.gruposClassified')}</label>
-                    <input type="number" class="form-control" id="grupos-classified" min="1" max="4" value="2" placeholder="Ex: 2">
+                    <input type="number" class="form-control" id="grupos-classified" min="1" max="4" value="2" placeholder="Ex: 2" oninput="window._renderGruposSuggestions && window._renderGruposSuggestions()">
                     <small class="text-muted" style="display:block;margin-top:4px;">${_t('create.gruposClassifiedDesc')}</small>
                   </div>
                 </div>
+                <!-- v2.6.89: sugestões dinâmicas de divisão de grupos a partir do nº de inscritos -->
+                <div id="grupos-suggestions" style="margin-top:10px;"></div>
               </div>
 
               <!-- Campos específicos: Suíço -->
@@ -2678,6 +2680,7 @@ function setupCreateTournamentModal() {
     document.getElementById('suico-draw-schedule-fields').style.display = isSuico ? 'block' : 'none';
     document.getElementById('elim-settings').style.display = (isElim || isGrupos) ? 'block' : 'none';
     document.getElementById('grupos-fields').style.display = isGrupos ? 'block' : 'none';
+    if (isGrupos && typeof window._renderGruposSuggestions === 'function') { try { window._renderGruposSuggestions(); } catch (e) {} }
     // Rei/Rainha classified config: hide for Liga (pontos corridos, sem fase eliminatória)
     document.getElementById('rei-rainha-fields').style.display = (isMonarch && !isLiga) ? 'block' : 'none';
 
@@ -4081,7 +4084,65 @@ function setupCreateTournamentModal() {
     });
   };
 
+  // v2.6.89: sugestões dinâmicas de divisão da Fase de Grupos a partir do nº de
+  // inscritos (real ao editar, ou planejado: máx/vagas). Lista opções de nº de grupos
+  // × tamanho do grupo (mantendo 3–6 por grupo) com estimativa de tempo + quantos
+  // avançam; clicar aplica o nº de grupos. Grupos de 4 ganham dica de Rei/Rainha.
+  window._renderGruposSuggestions = function () {
+    var box = document.getElementById('grupos-suggestions'); if (!box) return;
+    var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
+    var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
+    var N = 0;
+    var ed = gv('edit-tournament-id');
+    if (ed && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+      var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(ed); });
+      if (t && Array.isArray(t.participants) && t.participants.length > 1) N = t.participants.length;
+    }
+    if (!N) { var elm = gv('enrollment-limit-mode') || 'cap'; if (elm === 'draw') N = iv('tourn-target-slots', 0); if (!N) N = iv('tourn-max-participants', 0); }
+    var teamSize = iv('tourn-team-size', 1);
+    var units = (teamSize >= 2) ? Math.floor(N / 2) : N; // duplas → nº de times
+    if (!units || units < 4) {
+      box.innerHTML = '<div style="font-size:0.72rem;color:var(--text-muted);">Defina o <strong>Máx. Participantes</strong> pra ver opções de divisão (nº de grupos × tamanho × tempo).</div>';
+      return;
+    }
+    var slot = iv('tourn-call-time', 5) + iv('tourn-warmup-time', 5) + iv('tourn-game-duration', 30);
+    var courts = Math.max(iv('tourn-court-count', 1), 1);
+    var classif = Math.max(iv('grupos-classified', 2), 1);
+    var curG = iv('grupos-count', 4);
+    function fmtMin(m) { var h = Math.floor(m / 60), mm = Math.round(m % 60); if (h > 0 && mm > 0) return h + 'h' + (mm < 10 ? '0' : '') + mm; if (h > 0) return h + 'h'; return mm + 'min'; }
+    var cands = [];
+    for (var g = 2; g <= Math.floor(units / 2); g++) {
+      var p = Math.round(units / g);
+      if (p < 3 || p > 6) continue;
+      var rounds = Math.max(p - 1, 1);
+      var perRound = Math.max(Math.floor(p / 2) * g, 1);
+      cands.push({ g: g, p: p, mins: rounds * Math.ceil(perRound / courts) * slot });
+    }
+    if (!cands.length) { box.innerHTML = '<div style="font-size:0.72rem;color:var(--text-muted);">' + units + ' ' + (teamSize >= 2 ? 'duplas' : 'jogadores') + ' — ajuste o nº de grupos manualmente.</div>'; return; }
+    cands.sort(function (a, b) { return b.p - a.p; });
+    cands = cands.slice(0, 4);
+    var unitLbl = (teamSize >= 2) ? 'duplas' : 'jogadores';
+    var h = '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">' + units + ' ' + unitLbl + ' — opções de divisão (clique pra aplicar):</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    cands.forEach(function (c) {
+      var act = c.g === curG;
+      var rr = (c.p === 4) ? ' · 👑 pode ser Rei/Rainha' : '';
+      h += '<button type="button" onclick="window._applyGruposSuggestion(' + c.g + ')" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;text-align:left;flex-wrap:wrap;' + (act ? 'border:2px solid #f59e0b;background:rgba(245,158,11,0.15);color:#fbbf24;' : 'border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:var(--text-main);') + '">';
+      h += '<span style="font-weight:700;font-size:0.82rem;min-width:128px;">' + c.g + ' grupos · ~' + c.p + '/grupo</span>';
+      h += '<span style="font-size:0.72rem;color:var(--text-muted);">~' + fmtMin(c.mins) + rr + '</span>';
+      h += '<span style="font-size:0.72rem;margin-left:auto;color:' + (act ? '#fbbf24' : 'var(--text-muted)') + ';">→ ' + (c.g * classif) + ' avançam</span>';
+      h += '</button>';
+    });
+    h += '</div>';
+    box.innerHTML = h;
+  };
+  window._applyGruposSuggestion = function (g) {
+    var el = document.getElementById('grupos-count'); if (el) el.value = g;
+    if (window._renderGruposSuggestions) window._renderGruposSuggestions();
+    if (window._recalcDuration) window._recalcDuration();
+  };
   window._recalcDuration = function () {
+    if (window._renderGruposSuggestions) { try { window._renderGruposSuggestions(); } catch (e) {} }
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
     if (window._refreshAllPhaseEstimates) { try { window._refreshAllPhaseEstimates(); } catch (e) {} }
     // v2.6.37: a escada de estimativa (_renderPhaseEstimate) é a ÚNICA estimativa.
