@@ -5191,6 +5191,91 @@ exports.propagateProfileNameChange = onDocumentWritten(
   }
 );
 
+// ─── reconcileParticipantNames (a cada 2h) ────────────────────────────────────
+// v2.6.109: garante que o nome de CADA inscrito em CADA torneio bate com o perfil
+// ATUAL (por uid) — independente de quando a pessoa mudou o nome ou de alguém abrir
+// o torneio. A CF propagateProfileNameChange dá o "ao vivo" nas mudanças novas; esta
+// varredura limpa o atraso existente (nomes que mudaram antes da CF) e é rede de
+// segurança permanente. Identidade = uid. Só toca no NOME (nunca apaga outros dados).
+exports.reconcileParticipantNames = onSchedule(
+  { schedule: "every 2 hours", region: "us-central1", memory: "512MiB", timeoutSeconds: 540 },
+  async () => {
+    const db = admin.firestore();
+    function renameStr(s, oldNm, newNm) {
+      if (s === oldNm) return newNm;
+      if (typeof s === "string" && s.indexOf(" / ") !== -1) {
+        const parts = s.split(" / ").map(x => x.trim());
+        if (parts.indexOf(oldNm) !== -1) return parts.map(x => x === oldNm ? newNm : x).join(" / ");
+      }
+      return s;
+    }
+    function renameInMatches(matches, oldNm, newNm) {
+      if (!Array.isArray(matches)) return { arr: matches, hit: false };
+      let hit = false;
+      const arr = matches.map(m => {
+        if (!m || typeof m !== "object") return m;
+        const nm = Object.assign({}, m);
+        const p1 = renameStr(nm.p1, oldNm, newNm); if (p1 !== nm.p1) { nm.p1 = p1; hit = true; }
+        const p2 = renameStr(nm.p2, oldNm, newNm); if (p2 !== nm.p2) { nm.p2 = p2; hit = true; }
+        const w = renameStr(nm.winner, oldNm, newNm); if (w !== nm.winner) { nm.winner = w; hit = true; }
+        if (Array.isArray(nm.team1)) nm.team1 = nm.team1.map(x => x === oldNm ? (hit = true, newNm) : x);
+        if (Array.isArray(nm.team2)) nm.team2 = nm.team2.map(x => x === oldNm ? (hit = true, newNm) : x);
+        return nm;
+      });
+      return { arr, hit };
+    }
+
+    const tours = await db.collection("tournaments").get();
+    let totalFixed = 0, namesFixed = 0;
+    for (const tourDoc of tours.docs) {
+      const t = tourDoc.data();
+      if (t.status === "finished") continue; // encerrados: não mexe
+      if (!Array.isArray(t.participants) || !t.participants.length) continue;
+      const uids = [...new Set(t.participants.filter(p => p && typeof p === "object" && p.uid).map(p => p.uid))];
+      if (!uids.length) continue;
+      // perfis atuais (batch via getAll)
+      const nameByUid = {};
+      for (let i = 0; i < uids.length; i += 100) {
+        const refs = uids.slice(i, i + 100).map(u => db.collection("users").doc(u));
+        const docs = await db.getAll(...refs);
+        docs.forEach(d => { if (d.exists) { const dn = String((d.data() || {}).displayName || "").trim(); if (dn) nameByUid[d.id] = dn; } });
+      }
+      let changed = false;
+      const renames = [];
+      const participants = t.participants.map(p => {
+        if (!p || typeof p !== "object" || !p.uid) return p;
+        const cur = nameByUid[p.uid];
+        const cached = String(p.displayName || p.name || "").trim();
+        if (cur && cur !== cached) {
+          changed = true; namesFixed++;
+          if (cached) renames.push({ o: cached, n: cur });
+          return Object.assign({}, p, { displayName: cur, name: cur });
+        }
+        return p;
+      });
+      if (!changed) continue;
+      const update = { participants };
+      for (const { o, n } of renames) {
+        for (const fld of ["matches", "rounds", "groups", "rodadas"]) {
+          const base = update[fld] || t[fld];
+          if (!Array.isArray(base)) continue;
+          if (fld === "matches") {
+            const r = renameInMatches(base, o, n);
+            if (r.hit) update.matches = r.arr;
+          } else {
+            let hit = false;
+            const arr = base.map(col => { const r = renameInMatches(col && col.matches, o, n); if (r.hit) hit = true; return Object.assign({}, col, { matches: r.arr }); });
+            if (hit) update[fld] = arr;
+          }
+        }
+      }
+      try { await tourDoc.ref.update(update); totalFixed++; }
+      catch (e) { console.error(`[reconcileParticipantNames] update falhou t=${tourDoc.id}:`, e); }
+    }
+    console.log(`[reconcileParticipantNames] torneios reconciliados: ${totalFixed} | nomes corrigidos: ${namesFixed}`);
+  }
+);
+
 // ─── scheduledAutoMergeCleanup (diário 04:45 BRT) ─────────────────────────
 // Varre toda a coleção users em busca de phones E emails duplicados e mescla
 // automaticamente os pares encontrados. Garante que duplicatas que existiam
