@@ -256,6 +256,7 @@ function setupCreateTournamentModal() {
                    "+ Adicionar fase" logo abaixo do box. -->
               <div id="fase1-box" style="border:1px solid rgba(129,140,248,0.35); border-radius:14px; padding:1rem; margin-bottom:1rem; background:rgba(99,102,241,0.05);">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                  <button type="button" id="fase1-collapse-btn" onclick="window._toggleFase1Collapse()" title="Colapsar/expandir fase" style="flex-shrink:0;border:none;background:rgba(99,102,241,0.2);color:#a5b4fc;width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:700;line-height:1;">▾</button>
                   <span style="flex-shrink:0;font-size:0.7rem;font-weight:800;color:#a5b4fc;background:rgba(99,102,241,0.2);padding:4px 10px;border-radius:7px;letter-spacing:0.5px;">FASE 1</span>
                   <input type="text" id="phase1-name" placeholder="Nome da fase (opcional)" oninput="window._phase1Name=this.value" style="flex:1;min-width:0;padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;">
                 </div>
@@ -1624,6 +1625,51 @@ function setupCreateTournamentModal() {
   //  pra estar definida antes do template da Fase 1 que a usa.)
   function _phOpt(v, label, sel) { return '<option value="' + v + '"' + (sel ? ' selected' : '') + '>' + label + '</option>'; }
   var _PH_INP = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;';
+  // v2.6.78: colapsar/expandir fase e transição. _collapsed/_txCollapsed são UI-only
+  // (o save monta objeto novo com chaves explícitas → não vão pro Firestore).
+  window._togglePhaseCollapse = function(i, which) {
+    var ph = window._extraPhases[i]; if (!ph) return;
+    if (which === 'tx') ph._txCollapsed = !ph._txCollapsed; else ph._collapsed = !ph._collapsed;
+    window._renderPhases();
+  };
+  // Fase 1 é HTML estático: colapsa escondendo tudo no #fase1-box menos o cabeçalho.
+  // Via CSS (atributo data-collapsed) pra NÃO mexer no display inline dos filhos —
+  // várias seções (suico/grupos/liga-fields…) têm display:none próprio que precisa
+  // ser preservado ao reexpandir. Setar style.display='' os revelaria por engano.
+  window._toggleFase1Collapse = function() {
+    var box = document.getElementById('fase1-box'); if (!box) return;
+    if (!document.getElementById('sp-fase1-collapse-css')) {
+      var st = document.createElement('style'); st.id = 'sp-fase1-collapse-css';
+      st.textContent = '#fase1-box[data-collapsed="1"] > *:not(:first-child){display:none !important;}';
+      document.head.appendChild(st);
+    }
+    var collapsed = box.getAttribute('data-collapsed') !== '1';
+    box.setAttribute('data-collapsed', collapsed ? '1' : '0');
+    var btn = document.getElementById('fase1-collapse-btn'); if (btn) btn.textContent = collapsed ? '▸' : '▾';
+  };
+  // Botão de colapso canônico (▸/▾).
+  function _phCollapseBtn(onclick, collapsed, color) {
+    return '<button type="button" onclick="' + onclick + '" title="Colapsar/expandir" style="flex-shrink:0;border:none;background:' + color + ';color:inherit;width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:700;line-height:1;">' + (collapsed ? '▸' : '▾') + '</button>';
+  }
+  // Resumo de 1 linha das escolhas da transição (mostrado quando colapsada).
+  function _phaseTxSummary(ph, teamSize) {
+    var qm = ph.qualifyMode || 'per_group', parts = [];
+    if (qm === 'all') { parts.push('Todos avançam'); }
+    else {
+      var dests = _phaseDests(ph.format);
+      if (dests.length > 1) {
+        parts.push((ph.mapping || []).map(function(m, mi){ var d = dests[mi] || {}; var lbl = (m.label && m.label.trim()) || d.defaultLabel || ('T' + (mi + 1)); return lbl + ' ' + (m.rankFrom || 1) + '-' + (m.rankTo || 1); }).join(' · '));
+      } else {
+        var x = (ph.mapping && ph.mapping[0]) ? (ph.mapping[0].rankTo || 2) : 2;
+        parts.push('Top ' + x + (qm === 'overall' ? ' geral' : '/grupo'));
+      }
+    }
+    if (teamSize >= 2) {
+      var sl = { draw_among: 'Sorteio', top: 'Performance', balanced: 'Equilíbrio' }[ph.pairingStrategy || 'top'] || 'Performance';
+      parts.push((ph.fixedPairs !== false ? 'duplas fixas' : 'individual') + ' · ' + sl);
+    }
+    return parts.join('  ·  ');
+  }
   function _phaseCardHtml(ph, i) {
     var num = i + 2;
     var esc = (window._safeHtml || function(s){ return s; });
@@ -1638,8 +1684,14 @@ function setupCreateTournamentModal() {
     // v2.6.75: fase extra SEMPRE vem dos classificados da fase anterior — inscrição
     // direta não cabe numa transição. Origem fixa (sem botões de seleção).
     ph.sourceType = 'previous';
+    var _txCol = !!ph._txCollapsed;
     h += '<div style="border:1px dashed rgba(245,158,11,0.45);border-radius:12px;padding:10px 12px;margin-bottom:6px;background:rgba(245,158,11,0.05);">';
-    h += '<div style="font-size:0.7rem;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">⇣ Como a Fase ' + num + ' recebe os classificados</div>';
+    h += '<div style="display:flex;align-items:center;gap:8px;color:#f59e0b;' + (_txCol ? '' : 'margin-bottom:8px;') + '">';
+    h += _phCollapseBtn('window._togglePhaseCollapse(' + i + ',\'tx\')', _txCol, 'rgba(245,158,11,0.18)');
+    h += '<span style="flex-shrink:0;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">⇣ Como a Fase ' + num + ' recebe os classificados</span>';
+    if (_txCol) h += '<span style="font-size:0.72rem;color:var(--text-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">— ' + esc(_phaseTxSummary(ph, teamSize)) + '</span>';
+    h += '</div>';
+    if (!_txCol) {
     h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Quem classifica</div>';
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:' + (qm === 'all' ? '0' : '10px') + ';">';
     h += _phBtn(i, 'qualifyMode', 'all', 'Todos', qm === 'all');
@@ -1698,15 +1750,19 @@ function setupCreateTournamentModal() {
       });
       h += '</div>';
     }
+    } // fim if(!_txCol)
     h += '</div>'; // fim transição
 
     // ─── BOX DA FASE (mesma config da Fase 1: Formato + Modo de Sorteio) ───
+    var _boxCol = !!ph._collapsed;
     h += '<div style="border:1px solid rgba(129,140,248,0.35);border-radius:14px;padding:12px;margin-bottom:14px;background:rgba(99,102,241,0.06);">';
-    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+    h += '<div style="display:flex;align-items:center;gap:8px;color:#a5b4fc;' + (_boxCol ? '' : 'margin-bottom:10px;') + '">';
+    h += _phCollapseBtn('window._togglePhaseCollapse(' + i + ',\'box\')', _boxCol, 'rgba(99,102,241,0.2)');
     h += '<span style="flex-shrink:0;font-size:0.7rem;font-weight:800;color:#a5b4fc;background:rgba(99,102,241,0.2);padding:4px 10px;border-radius:7px;letter-spacing:0.5px;">FASE ' + num + '</span>';
     h += '<input type="text" value="' + esc(ph.name || '') + '" placeholder="Nome da fase (opcional)" oninput="window._setPhaseField(' + i + ', \'name\', this.value)" style="flex:1;min-width:0;' + _PH_INP + '">';
     h += '<button type="button" onclick="window._removePhase(' + i + ')" title="Remover fase" style="flex-shrink:0;border:none;background:rgba(239,68,68,0.15);color:#ef4444;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:0.95rem;font-weight:700;">✕</button>';
     h += '</div>';
+    if (!_boxCol) {
     // Formato — render CANÔNICA (mesma grade com ícones SVG + rótulos da Fase 1) — v2.6.64.
     h += window._phaseFormatGridHtml(i, ph.format);
     if (isLiga) {
@@ -1749,6 +1805,7 @@ function setupCreateTournamentModal() {
     h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">📋 Lançamento dos resultados</div>';
     h += window._resultEntryButtonsHtml(i + 1);
     h += '</div>';
+    } // fim if(!_boxCol)
     h += '</div>'; // fim box da fase
     return h;
   }
