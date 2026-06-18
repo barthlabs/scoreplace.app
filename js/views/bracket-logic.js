@@ -2685,6 +2685,51 @@ window._onParticipantAddedToMonarchRound = function (t, playerName, category) {
   return res;
 };
 
+// v2.7.1: auto-cura — em Rei/Rainha NINGUÉM fica "Sem grupo (recebe média)". Quem
+// sobrou do agrupamento por 4 É a lista de espera (entrou primeiro). Converte
+// qualquer folga 'remainder' (de sorteios feitos antes da lista de espera existir,
+// ou copiados de outro ambiente) em lista de espera no TOPO, remove a partida de
+// folga e tenta formar grupo ao juntar 4. Idempotente: sem 'remainder' → no-op.
+// Guarda: NÃO mexe no modo "Todos contra todos" (round_robin), onde a folga é
+// rodízio agendado legítimo (o jogador joga em outras rodadas), não fila.
+window._healMonarchRemainderToWaitlist = function (t) {
+  if (!t || !Array.isArray(t.rounds)) return false;
+  if (!(window._isLigaFormat && window._isLigaFormat(t)) || t.ligaRoundFormat !== 'rei_rainha') return false;
+  if (t.ligaDrawMode === 'round_robin') return false; // rodízio agendado, não fila
+  if ((t.currentPhaseIndex || 0) !== 0) return false; // só na fase de grupos
+  var changed = false;
+  var touchedCats = {};
+  var _isRem = function (m) { return m && m.isSitOut && m.sitOutReason !== 'inactive' && m.sitOutReason !== 'wo'; };
+  t.rounds.forEach(function (col) {
+    if (!col || col.format !== 'rei_rainha' || !Array.isArray(col.matches)) return;
+    var rem = col.matches.filter(_isRem);
+    if (!rem.length) return;
+    var byCat = {};
+    rem.forEach(function (m) {
+      var ck = _monarchWaitKey(m.category || null);
+      (byCat[ck] = byCat[ck] || { cat: (m.category || null), names: [] }).names.push(m.p1);
+    });
+    Object.keys(byCat).forEach(function (ck) {
+      var cat = byCat[ck].cat;
+      var names = byCat[ck].names.filter(Boolean);
+      var wl = window._getMonarchWaitlist(t, cat);
+      // remainder entrou primeiro → vai pra frente da fila (dedup)
+      var merged = names.concat(wl.filter(function (n) { return names.indexOf(n) === -1; }));
+      _setMonarchWaitlist(t, cat, merged);
+      touchedCats[ck] = { cat: cat, round: col.round };
+    });
+    col.matches = col.matches.filter(function (m) { return !_isRem(m); });
+    changed = true;
+  });
+  if (changed) {
+    Object.keys(touchedCats).forEach(function (ck) {
+      var tc = touchedCats[ck];
+      try { window._tryFormMonarchWaitlistGroups(t, tc.cat, tc.round); } catch (e) {}
+    });
+  }
+  return changed;
+};
+
 window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category, _rn) {
   var standings = _computeStandings(t, category);
   var allPlayers = standings.map(function(s) { return s.name; });

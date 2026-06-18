@@ -2784,6 +2784,26 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           _markEngaged(m.p1); _markEngaged(m.p2);
         });
         _remainder = _remainder.filter(function(m) { return !_engagedInRound[String(m.p1)]; });
+        // v2.7.1: em Rei/Rainha NINGUÉM fica "Sem grupo (recebe média)" — a sobra
+        // do agrupamento por 4 É a lista de espera. Auto-cura draws antigos: migra
+        // qualquer 'remainder' pra fila (no topo) e forma grupo ao juntar 4. O
+        // render NÃO mostra "Sem grupo" pra Rei/Rainha — esses vão pra seção
+        // "🕒 Lista de espera" logo abaixo.
+        if (_isReiRainhaRound && _remainder.length) {
+          if (!window._monarchHealInFlight && typeof window._healMonarchRemainderToWaitlist === 'function') {
+            window._monarchHealInFlight = true;
+            setTimeout(function() {
+              try {
+                if (window._healMonarchRemainderToWaitlist(t)) {
+                  if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+                  if (window._softRefreshView) window._softRefreshView();
+                }
+              } catch (e) { if (window._warn) window._warn('[monarch heal]', e); }
+              finally { window._monarchHealInFlight = false; }
+            }, 0);
+          }
+          _remainder = [];
+        }
         // v0.16.97: cada pill mostra os pontos atribuídos. Inativos sempre
         // 0 pts (regra explícita do usuário: "deve fazer zero pontos na
         // rodada que estiver desativado"). Remainder recebe sua média até
