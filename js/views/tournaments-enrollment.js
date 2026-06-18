@@ -520,6 +520,12 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // --- Background: Firestore transaction for consistency ---
     if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {
         window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(result) {
+            if (result.capacityFull) {
+                // v2.6.87: lotou antes de concluir (limite com corrida) — NÃO inscrito.
+                if (typeof showNotification !== 'undefined') showNotification('Vagas esgotadas', 'As vagas acabaram antes de você concluir — você não foi inscrito.', 'error');
+                var _vcCap = document.getElementById('view-container'); if (_vcCap && typeof renderTournaments === 'function') renderTournaments(_vcCap, tId);
+                return;
+            }
             if (result.alreadyEnrolled) {
                 // Already enrolled on server — local state is fine, just sync participants
                 t.participants = result.participants;
@@ -683,6 +689,11 @@ window.submitTeamEnroll = function (tId) {
     // --- Background: Firestore transaction for consistency ---
     if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {
         window.FirestoreDB.enrollParticipant(tId, participantObj, { teamOrigins: _teamOrigins }).then(function(result) {
+            if (result.capacityFull) {
+                if (typeof showNotification !== 'undefined') showNotification('Vagas esgotadas', 'As vagas acabaram antes de você concluir — você não foi inscrito.', 'error');
+                var _vcCap2 = document.getElementById('view-container'); if (_vcCap2 && typeof renderTournaments === 'function') renderTournaments(_vcCap2, tId);
+                return;
+            }
             if (result.alreadyEnrolled) {
                 t.participants = result.participants;
                 return;
@@ -899,6 +910,11 @@ window.addParticipantFunction = function (tId) {
             // Use transactional enroll to prevent race conditions
             if (window.FirestoreDB && typeof window.FirestoreDB.enrollParticipant === 'function') {
                 window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(result) {
+                    if (result.capacityFull) {
+                        if (typeof showNotification !== 'undefined') showNotification('Vagas esgotadas', 'As vagas acabaram — ' + pName.trim() + ' não foi inscrito.', 'error');
+                        var _vcCap3 = document.getElementById('view-container'); if (_vcCap3 && typeof renderTournaments === 'function') renderTournaments(_vcCap3, tId);
+                        return;
+                    }
                     if (result.alreadyEnrolled) {
                         if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledSingle', { name: pName.trim() }), 'warning');
                         return;

@@ -814,8 +814,10 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- Modelo de inscrição: corrida (cap) vs sorteio de vagas (draw) -->
-              <div class="form-group mb-3">
+              <!-- Modelo de inscrição: corrida (cap) vs sorteio de vagas (draw).
+                   v2.6.87: só aparece quando há Máx. Participantes (= nº de vagas).
+                   Sem limite → não há corrida nem sorteio (visibilidade em _updateAutoCloseVisibility). -->
+              <div class="form-group mb-3" id="enroll-model-section">
                 <label class="form-label">Modelo de inscrição</label>
                 <input type="hidden" id="enrollment-limit-mode" value="cap">
                 <div style="display:flex;flex-direction:column;gap:8px;" id="enroll-limit-mode-buttons">
@@ -3795,6 +3797,17 @@ function setupCreateTournamentModal() {
   window._updateAutoCloseVisibility = function () {
     const fmt = document.getElementById('select-formato');
     const maxEl = document.getElementById('tourn-max-participants');
+    // v2.6.87: "Modelo de inscrição" (corrida/sorteio) só faz sentido com Máx.
+    // Participantes definido — sem limite não há vagas pra disputar nem sortear.
+    var _enrollSec = document.getElementById('enroll-model-section');
+    if (_enrollSec && maxEl) {
+      var _maxV = parseInt(maxEl.value, 10);
+      var _hasMax = !isNaN(_maxV) && _maxV >= 2;
+      _enrollSec.style.display = _hasMax ? '' : 'none';
+      // Máx. Participantes É o nº de vagas a sortear (modo draw) — mantém em sincronia.
+      var _slots = document.getElementById('tourn-target-slots');
+      if (_slots && _hasMax) _slots.value = _maxV;
+    }
     const container = document.getElementById('auto-close-container');
     if (!fmt || !maxEl || !container) return;
     // Modo Vagas-por-sorteio é incompatível com encerrar-ao-lotar (não há corrida).

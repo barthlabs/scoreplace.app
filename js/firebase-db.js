@@ -294,6 +294,17 @@ window.FirestoreDB = {
       });
       if (already) return { alreadyEnrolled: true, participants: participants };
 
+      // v2.6.87: Limite com corrida — capacidade ATÔMICA. No modo 'cap' (não-sorteio)
+      // com maxParticipants definido, REJEITA se já lotou ANTES de inserir. Como roda
+      // dentro da transação, dois cliques simultâneos pra última vaga não passam ambos:
+      // o segundo é re-executado pelo Firestore, re-lê participants já cheio e rejeita.
+      // Quem clicou depois de lotar NUNCA é considerado inscrito.
+      var _capMax = parseInt(data.maxParticipants, 10);
+      var _isDrawMode = data.enrollmentLimitMode === 'draw';
+      if (!_isDrawMode && !isNaN(_capMax) && _capMax > 0 && participants.length >= _capMax) {
+        return { alreadyEnrolled: false, capacityFull: true, participants: participants };
+      }
+
       participants.push(self._cleanUndefined(participantObj));
 
       var _enrollData = Object.assign({}, data, { participants: participants });
@@ -314,8 +325,10 @@ window.FirestoreDB = {
       // é verdadeiro. Inconsistência: desligar "Fechar quando lotar" não tinha efeito
       // no caminho real de inscrição. Agora os dois lados usam a mesma regra.
       // Modo Vagas-por-sorteio (enrollmentLimitMode='draw') nunca fecha sozinho.
+      // v2.6.87: "Limite com corrida" sempre encerra ao lotar (a corrida é o modelo).
+      // Modo Vagas-por-sorteio (draw) nunca fecha sozinho — encerra por prazo/organizador.
       var _maxP = parseInt(data.maxParticipants, 10);
-      if (data.autoCloseOnFull && data.enrollmentLimitMode !== 'draw' && !isNaN(_maxP) && _maxP > 0 && participants.length >= _maxP) {
+      if (!_isDrawMode && !isNaN(_maxP) && _maxP > 0 && participants.length >= _maxP) {
         updateData.status = 'closed';
       }
 
