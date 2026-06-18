@@ -1509,6 +1509,7 @@ function setupCreateTournamentModal() {
   window._phaseGsmSelectPreset = function(i, key) {
     var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
     if (key === 'inherit') { ph.scoring = null; ph._gsmPreset = 'inherit'; window._renderPhases(); return; }
+    if (key === 'custom') { if (typeof window._openGSMConfig === 'function') window._openGSMConfig(i); return; }
     var p = (window._gsmPresets || {})[key]; if (!p) return;
     var adv = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : !!p.advantageRule;
     ph._gsmPreset = key;
@@ -1531,15 +1532,21 @@ function setupCreateTournamentModal() {
     // v2.6.82: sem "herda do torneio" — picker canônico (igual à Fase 1). Sem override
     // (ph.scoring null) destaca o preset padrão DO TORNEIO; clicar define o override da fase.
     var selKey;
-    if (sc) { selKey = (sc.setsToWin >= 3) ? 'best5' : (sc.setsToWin === 2 ? 'best3' : 'set1'); }
+    if (ph._gsmPreset === 'custom') { selKey = 'custom'; }
+    else if (sc) { selKey = (sc.setsToWin >= 3) ? 'best5' : (sc.setsToWin === 2 ? 'best3' : 'set1'); }
     else { var _ts = parseInt((document.getElementById('gsm-setsToWin') || {}).value, 10) || 1; selKey = (_ts >= 3) ? 'best5' : (_ts === 2 ? 'best3' : 'set1'); }
-    var opts = [['set1', '⚡', '1 Set'], ['best3', '🏆', 'Melhor de 3'], ['best5', '🎯', 'Melhor de 5']];
+    var opts = [['set1', '⚡', '1 Set'], ['best3', '🏆', 'Melhor de 3'], ['best5', '🎯', 'Melhor de 5'], ['custom', '⚙️', 'Personalizado']];
     var h = '<div style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-top: 12px;">';
     h += '<p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #c084fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 ' + T('create.matchFormat') + '</p>';
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;">';
     opts.forEach(function(o){
       var act = selKey === o[0];
-      var desc = (window._gsmBuildDescFromValues ? (function(){ var p = window._gsmPresets[o[0]]; return window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints); })() : '');
+      var desc;
+      if (o[0] === 'custom') {
+        desc = (selKey === 'custom' && sc && window._gsmBuildDescFromValues) ? window._gsmBuildDescFromValues(sc.setsToWin, sc.gamesPerSet, sc.tiebreakEnabled, sc.tiebreakPoints, sc.superTiebreak, sc.superTiebreakPoints) : 'sets/games/TB à sua escolha';
+      } else {
+        desc = (window._gsmBuildDescFromValues ? (function(){ var p = window._gsmPresets[o[0]]; return window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints); })() : '');
+      }
       h += '<button type="button" onclick="window._phaseGsmSelectPreset(' + i + ',\'' + o[0] + '\')" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid ' + (act ? 'rgba(168,85,247,0.7)' : 'rgba(255,255,255,0.1)') + ';background:' + (act ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.03)') + ';">';
       h += '<span style="font-size:1.2rem;">' + o[1] + '</span><span style="font-size:0.76rem;font-weight:700;color:' + (act ? '#c084fc' : 'var(--text-bright)') + ';">' + o[2] + '</span>';
       h += '<span style="font-size:0.62rem;color:var(--text-muted);text-align:center;line-height:1.25;">' + desc + '</span></button>';
@@ -6350,19 +6357,27 @@ window._gsmInitPresets = function() {
 };
 
 // Legacy-compatible _openGSMConfig — now opens "Personalizado" overlay
-window._openGSMConfig = function() {
-  // Read current values from hidden fields
-  var setsToWin = document.getElementById('gsm-setsToWin').value;
-  var gamesPerSet = document.getElementById('gsm-gamesPerSet').value;
-  var tbEnabled = document.getElementById('gsm-tiebreakEnabled').value === 'true';
-  var tbPoints = document.getElementById('gsm-tiebreakPoints').value;
-  var tbMargin = document.getElementById('gsm-tiebreakMargin').value;
-  var stb = document.getElementById('gsm-superTiebreak').value === 'true';
-  var stbPoints = document.getElementById('gsm-superTiebreakPoints').value;
-  var counting = document.getElementById('gsm-countingType').value;
-  var advantage = document.getElementById('gsm-advantageRule').value === 'true';
-  var fixedSet = document.getElementById('gsm-fixedSet').value === 'true';
-  var fixedSetGames = document.getElementById('gsm-fixedSetGames').value || '6';
+window._openGSMConfig = function(targetPhase) {
+  // v2.6.85: targetPhase (índice) → "Personalizado" da FASE. Lê de ph.scoring (ou cai
+  // no padrão do torneio se a fase ainda não tem override); ao Aplicar grava em ph.scoring.
+  window._gsmConfigTargetPhase = (typeof targetPhase === 'number') ? targetPhase : null;
+  var _ps = null;
+  if (window._gsmConfigTargetPhase != null) {
+    var _pph = window._extraPhases && window._extraPhases[window._gsmConfigTargetPhase];
+    _ps = (_pph && _pph.scoring) || null;
+  }
+  // Read current values — da fase (se houver) OU dos campos globais (Fase 1/torneio).
+  var setsToWin = _ps ? String(_ps.setsToWin) : document.getElementById('gsm-setsToWin').value;
+  var gamesPerSet = _ps ? String(_ps.gamesPerSet) : document.getElementById('gsm-gamesPerSet').value;
+  var tbEnabled = _ps ? !!_ps.tiebreakEnabled : document.getElementById('gsm-tiebreakEnabled').value === 'true';
+  var tbPoints = _ps ? String(_ps.tiebreakPoints) : document.getElementById('gsm-tiebreakPoints').value;
+  var tbMargin = _ps ? String(_ps.tiebreakMargin) : document.getElementById('gsm-tiebreakMargin').value;
+  var stb = _ps ? !!_ps.superTiebreak : document.getElementById('gsm-superTiebreak').value === 'true';
+  var stbPoints = _ps ? String(_ps.superTiebreakPoints) : document.getElementById('gsm-superTiebreakPoints').value;
+  var counting = _ps ? (_ps.countingType || 'tennis') : document.getElementById('gsm-countingType').value;
+  var advantage = _ps ? !!_ps.advantageRule : document.getElementById('gsm-advantageRule').value === 'true';
+  var fixedSet = _ps ? !!_ps.fixedSet : document.getElementById('gsm-fixedSet').value === 'true';
+  var fixedSetGames = _ps ? String(_ps.fixedSetGames || 6) : (document.getElementById('gsm-fixedSetGames').value || '6');
 
   var existing = document.getElementById('gsm-config-overlay');
   if (existing) existing.remove();
@@ -6375,7 +6390,7 @@ window._openGSMConfig = function() {
     '<div style="background:linear-gradient(135deg,#6d28d9 0%,#a855f7 100%);padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
       '<h3 style="margin:0;color:#f5f3ff;font-size:1.1rem;font-weight:800;">⚙️ Personalizado</h3>' +
       '<div style="display:flex;gap:8px;">' +
-        '<button type="button" onclick="document.getElementById(\'gsm-config-overlay\').remove();" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#f5f3ff;border:1px solid rgba(255,255,255,0.25);">Cancelar</button>' +
+        '<button type="button" onclick="window._gsmConfigTargetPhase=null;document.getElementById(\'gsm-config-overlay\').remove();" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#f5f3ff;border:1px solid rgba(255,255,255,0.25);">Cancelar</button>' +
         '<button type="button" onclick="window._gsmSaveConfig();" class="btn btn-sm" style="background:#fff;color:#6d28d9;font-weight:700;border:none;">Aplicar</button>' +
       '</div>' +
     '</div>' +
@@ -6559,6 +6574,37 @@ window._gsmUpdateSummary = function() {
 };
 
 window._gsmSaveConfig = function() {
+  // v2.6.85: Personalizado de uma FASE → grava em ph.scoring e sai (não toca nos
+  // campos globais nem nas prefs do torneio).
+  if (window._gsmConfigTargetPhase != null) {
+    var _ti = window._gsmConfigTargetPhase;
+    var _tph = window._extraPhases && window._extraPhases[_ti];
+    if (_tph) {
+      var _g = function(id, d){ var e = document.getElementById(id); return e ? e.value : d; };
+      var _c = function(id){ var e = document.getElementById(id); return e ? e.checked : false; };
+      var _fs = _c('gsm-cfg-fixedSet');
+      var _gms = parseInt(_g('gsm-cfg-gamesPerSet', '6'), 10) || 6;
+      _tph.scoring = {
+        type: 'sets',
+        setsToWin: parseInt(_g('gsm-cfg-setsToWin', '1'), 10) || 1,
+        gamesPerSet: _gms,
+        tiebreakEnabled: _c('gsm-cfg-tiebreak'),
+        tiebreakPoints: parseInt(_g('gsm-cfg-tbPoints', '7'), 10) || 7,
+        tiebreakMargin: parseInt(_g('gsm-cfg-tbMargin', '2'), 10) || 2,
+        superTiebreak: _c('gsm-cfg-superTb'),
+        superTiebreakPoints: parseInt(_g('gsm-cfg-stbPoints', '10'), 10) || 10,
+        countingType: 'tennis',
+        advantageRule: _c('gsm-cfg-advantage'),
+        fixedSet: _fs,
+        fixedSetGames: _fs ? _gms : 6
+      };
+      _tph._gsmPreset = 'custom';
+    }
+    window._gsmConfigTargetPhase = null;
+    var _ov = document.getElementById('gsm-config-overlay'); if (_ov) _ov.remove();
+    if (typeof window._renderPhases === 'function') window._renderPhases();
+    return;
+  }
   // Mark that user explicitly chose custom — preserved until a preset is clicked
   window._gsmForcedCustom = true;
   // Always save as type 'sets'
