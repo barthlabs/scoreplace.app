@@ -1528,16 +1528,18 @@ function setupCreateTournamentModal() {
   window._phaseGsmHtml = function(i, ph) {
     var T = window._t || function(k){ return k; };
     var sc = ph.scoring || null;
-    // preset selecionado (por setsToWin) ou 'inherit'.
-    var selKey = 'inherit';
+    // v2.6.82: sem "herda do torneio" — picker canônico (igual à Fase 1). Sem override
+    // (ph.scoring null) destaca o preset padrão DO TORNEIO; clicar define o override da fase.
+    var selKey;
     if (sc) { selKey = (sc.setsToWin >= 3) ? 'best5' : (sc.setsToWin === 2 ? 'best3' : 'set1'); }
-    var opts = [['inherit', '🏛️', 'Padrão do torneio'], ['set1', '⚡', '1 Set'], ['best3', '🏆', 'Melhor de 3'], ['best5', '🎯', 'Melhor de 5']];
+    else { var _ts = parseInt((document.getElementById('gsm-setsToWin') || {}).value, 10) || 1; selKey = (_ts >= 3) ? 'best5' : (_ts === 2 ? 'best3' : 'set1'); }
+    var opts = [['set1', '⚡', '1 Set'], ['best3', '🏆', 'Melhor de 3'], ['best5', '🎯', 'Melhor de 5']];
     var h = '<div style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-top: 12px;">';
     h += '<p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #c084fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 ' + T('create.matchFormat') + '</p>';
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;">';
     opts.forEach(function(o){
       var act = selKey === o[0];
-      var desc = (o[0] === 'inherit') ? 'herda do torneio' : (window._gsmBuildDescFromValues ? (function(){ var p = window._gsmPresets[o[0]]; return window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints); })() : '');
+      var desc = (window._gsmBuildDescFromValues ? (function(){ var p = window._gsmPresets[o[0]]; return window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints); })() : '');
       h += '<button type="button" onclick="window._phaseGsmSelectPreset(' + i + ',\'' + o[0] + '\')" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid ' + (act ? 'rgba(168,85,247,0.7)' : 'rgba(255,255,255,0.1)') + ';background:' + (act ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.03)') + ';">';
       h += '<span style="font-size:1.2rem;">' + o[1] + '</span><span style="font-size:0.76rem;font-weight:700;color:' + (act ? '#c084fc' : 'var(--text-bright)') + ';">' + o[2] + '</span>';
       h += '<span style="font-size:0.62rem;color:var(--text-muted);text-align:center;line-height:1.25;">' + desc + '</span></button>';
@@ -1715,8 +1717,11 @@ function setupCreateTournamentModal() {
     h += _phBtn(i, 'qualifyMode', 'per_group', 'Melhores de cada grupo', qm === 'per_group');
     h += _phBtn(i, 'qualifyMode', 'overall', 'Melhores no geral', qm === 'overall');
     h += '</div>';
-    if (qm !== 'all') {
-      var _isElim = (ph.format === 'elim_simples' || ph.format === 'elim_dupla');
+    // v2.6.82: a config de LINHAS (Eliminatórias) aparece SEMPRE — mesmo com "Todos",
+    // pois define como os classificados são distribuídos nas chaves paralelas. Já o
+    // "Os X melhores" (não-elim) só faz sentido quando não é "Todos".
+    var _isElim = (ph.format === 'elim_simples' || ph.format === 'elim_dupla');
+    if (_isElim || qm !== 'all') {
       var _rankCtx = (qm === 'overall') ? 'no <strong>ranking geral</strong>' : '<strong>de cada grupo</strong>';
       h += '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 10px;margin-bottom:' + (teamSize >= 2 ? '10px' : '0') + ';">';
       if (_isElim) {
