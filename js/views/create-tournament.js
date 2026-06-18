@@ -921,6 +921,20 @@ function setupCreateTournamentModal() {
     `;
     document.body.appendChild(createInteractiveElement(modalHtml));
 
+    // v2.6.86: ordem do form — primeiro o que é de TODO o torneio (inscrição, desempate),
+    // depois o que é particular das FASES. Move o box da Fase 1 + o construtor de fases
+    // pra DEPOIS do critério de desempate (que é a última seção geral). Reorder único no
+    // setup (a seção sobrevive ao move do .modal entre modal e #novo-torneio).
+    (function () {
+      var tb = document.getElementById('tiebreaker-section');
+      var f1 = document.getElementById('fase1-box');
+      var ps = document.getElementById('phases-section');
+      if (tb && f1 && ps && tb.parentNode) {
+        tb.parentNode.insertBefore(f1, tb.nextSibling);
+        f1.parentNode.insertBefore(ps, f1.nextSibling);
+      }
+    })();
+
     // Render the centralized back header with action buttons (Voltar + Carregar + Salvar Template + Descartar + Salvar)
     if (typeof window._renderCreateTournamentHeader === 'function') {
       window._renderCreateTournamentHeader();
