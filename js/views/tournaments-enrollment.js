@@ -533,6 +533,10 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
             }
             // Sync authoritative server state
             t.participants = result.participants;
+            // v2.6.88: Vagas com sorteio — atingiu o máx. → avisa todos os inscritos da lista de espera.
+            if (result.reachedCapacityDraw && typeof window._notifyTournamentParticipants === 'function') {
+                window._notifyTournamentParticipants(t, { type: 'tournament_update', message: 'As vagas de "' + (t.name || 'Torneio') + '" foram preenchidas. Novas inscrições entram na lista de espera — um sorteio definirá quem joga.', level: 'important' });
+            }
             if (result.autoCloseTriggered) {
                 t.status = 'closed';
                 if (typeof showNotification !== 'undefined') showNotification(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');
@@ -699,6 +703,10 @@ window.submitTeamEnroll = function (tId) {
                 return;
             }
             t.participants = result.participants;
+            // v2.6.88: Vagas com sorteio — atingiu o máx. → avisa todos os inscritos da lista de espera.
+            if (result.reachedCapacityDraw && typeof window._notifyTournamentParticipants === 'function') {
+                window._notifyTournamentParticipants(t, { type: 'tournament_update', message: 'As vagas de "' + (t.name || 'Torneio') + '" foram preenchidas. Novas inscrições entram na lista de espera — um sorteio definirá quem joga.', level: 'important' });
+            }
             if (result.autoCloseTriggered) {
                 t.status = 'closed';
                 if (typeof showNotification !== 'undefined') showNotification(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');

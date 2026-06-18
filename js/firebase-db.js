@@ -331,9 +331,17 @@ window.FirestoreDB = {
       if (!_isDrawMode && !isNaN(_maxP) && _maxP > 0 && participants.length >= _maxP) {
         updateData.status = 'closed';
       }
+      // v2.6.88: Vagas com sorteio — ao ATINGIR o máx., sinaliza (UMA vez) que as
+      // próximas inscrições entram em lista de espera. waitlistNoticeSent garante 1
+      // disparo só (mesmo com cliques simultâneos, a transação é serializada).
+      var _reachedDraw = false;
+      if (_isDrawMode && !isNaN(_maxP) && _maxP > 0 && participants.length >= _maxP && !data.waitlistNoticeSent) {
+        updateData.waitlistNoticeSent = true;
+        _reachedDraw = true;
+      }
 
       transaction.update(docRef, updateData);
-      return { alreadyEnrolled: false, participants: participants, autoCloseTriggered: !!updateData.status };
+      return { alreadyEnrolled: false, participants: participants, autoCloseTriggered: !!updateData.status, reachedCapacityDraw: _reachedDraw };
     });
   },
 
