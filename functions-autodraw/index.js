@@ -63,7 +63,12 @@ function _ligaSeasonEnded(t, now) {
 }
 
 // ─── Auto-Draw: runs every hour, checks for pending draws ───────────────────
-exports.autoDraw = onSchedule('every 1 hours', async (event) => {
+// v2.6.74: cadência apertada de 1h → 5min pra o sorteio sair PERTO do horário
+// agendado (antes podia atrasar ~1h, "dentro da hora" e não "na hora"). O dedup
+// por timestamp (lastAutoDrawAt >= mostRecentScheduled, abaixo) garante UMA rodada
+// por slot mesmo checando 12×/h — só muda QUÃO CEDO o slot é detectado, nunca o
+// número de rodadas. Custo: 1 leitura da coleção tournaments por tick (ok em beta).
+exports.autoDraw = onSchedule('every 5 minutes', async (event) => {
   const now = new Date();
   const snap = await db.collection('tournaments').get();
 
