@@ -1500,10 +1500,11 @@ window._highlightWinner = function (matchId) {
               // v1.0.72-beta: trigger TB em qualquer torneio com tiebreakEnabled
               // (não exige type==='sets'). Permite TB inputs em torneios simples
               // que tenham tiebreak configurado.
-              if (_tour.scoring && _tour.scoring.tiebreakEnabled !== false &&
-                  (_tour.scoring.type === 'sets' || _tour.scoring.gamesPerSet)) {
+              var _tsc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(_tour, _matches[mi]) : _tour.scoring;
+              if (_tsc && _tsc.tiebreakEnabled !== false &&
+                  (_tsc.type === 'sets' || _tsc.gamesPerSet)) {
                 // Tiebreak triggers at (gamesPerSet - 1) — e.g. 5-5 in a 6-game set
-                _trigger = (parseInt(_tour.scoring.gamesPerSet) || 6) - 1;
+                _trigger = (parseInt(_tsc.gamesPerSet) || 6) - 1;
               }
               break;
             }
@@ -1541,11 +1542,12 @@ window._highlightWinner = function (matchId) {
 
 window._saveSetResult = function(tId, matchId) {
   const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
-  if (!t || !t.scoring) return;
+  if (!t) return;
   const m = _findMatch(t, matchId);
   if (!m) return;
-
-  const sc = t.scoring;
+  // v2.6.96: placar efetivo do match (a fase pode ter GSM próprio).
+  const sc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  if (!sc) return;
   const isFixedSet = sc.fixedSet === true;
   let sets = [];
   let p1Sets = 0, p2Sets = 0;
@@ -1819,11 +1821,13 @@ window._saveResultInline = function (tId, matchId) {
   const allowDraw = isGroupMatch || isRoundMatch;
 
   // GSM scoring compatibility: store inline scores as sets data when tournament uses GSM
-  const useSets = t.scoring && t.scoring.type === 'sets';
-  const isFixedSet = useSets && t.scoring.fixedSet;
-  const tbEnabled = useSets && t.scoring.tiebreakEnabled !== false;
+  // v2.6.96: placar efetivo do match (a fase pode ter GSM próprio).
+  const _isc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  const useSets = _isc && _isc.type === 'sets';
+  const isFixedSet = useSets && _isc.fixedSet;
+  const tbEnabled = useSets && _isc.tiebreakEnabled !== false;
   // Tiebreak triggers at (gamesPerSet - 1) — e.g. 5-5 in a 6-game set (final 6-5)
-  const tbTrigger = tbEnabled ? ((parseInt(t.scoring.gamesPerSet) || 6) - 1) : null;
+  const tbTrigger = tbEnabled ? ((parseInt(_isc.gamesPerSet) || 6) - 1) : null;
 
   // Tiebreak mode: a trigger+1 / trigger score (e.g. 7-6) implies the set was
   // decided on a tie-break. The winner of the set is already known from s1/s2;
@@ -2878,8 +2882,9 @@ window._editResultInline = function(tId, matchId) {
 
   // If this is a GSM set match with tiebreak enabled, also render hidden TB inputs
   // pre-filled with any existing tiebreak points from the saved set.
-  var _useSets = t.scoring && t.scoring.type === 'sets';
-  var _tbEnabled = _useSets && t.scoring.tiebreakEnabled !== false;
+  var _esc2 = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  var _useSets = _esc2 && _esc2.type === 'sets';
+  var _tbEnabled = _useSets && _esc2.tiebreakEnabled !== false;
   var _existingTb = (m.sets && m.sets[0] && m.sets[0].tiebreak) || null;
   var _tbInputStyle = 'width:40px;text-align:center;font-size:0.75rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.4);color:var(--text-bright);border-radius:5px;padding:3px 4px;';
 
@@ -3899,13 +3904,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (m && !m.startedAt && !m.winner) m.startedAt = Date.now();
   }
 
-  var sc = isCasual ? (opts.scoring || {}) : (t.scoring || {});
+  var sc = isCasual ? (opts.scoring || {}) : (((typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring) || {});
   var useSets = sc.type === 'sets';
   // v2.1.35: se o torneio não tem GSM configurado mas o ESPORTE tem padrão
   // (Beach Tennis, Tênis, Padel, Pickleball, Vôlei de Praia, Futevôlei…), usa o
   // padrão do esporte — o placar ao vivo passa a contar games/sets/tiebreak em
   // vez de pontos soltos. Persiste em t.scoring pra o card do bracket bater.
-  if (!isCasual && !useSets && window._sportScoringDefaults) {
+  if (!isCasual && !useSets && !(m && m.phaseIndex) && window._sportScoringDefaults) {
     var _sportKey = String(t.sport || '').replace(/^[^\wÀ-ɏ]+/u, '').trim();
     var _sportDef = window._sportScoringDefaults[_sportKey];
     if (_sportDef && _sportDef.type === 'sets') {

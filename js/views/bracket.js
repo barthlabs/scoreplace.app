@@ -1596,8 +1596,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   }
 
   const t = window.AppStore ? window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString()) : null;
-  const useSets = t && t.scoring && t.scoring.type === 'sets';
-  const useFixedSet = useSets && t.scoring.fixedSet;
+  // v2.6.96: placar efetivo do match (fase pode ter GSM próprio — "Personalizado").
+  const _msc = (t && typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : (t && t.scoring);
+  const useSets = t && _msc && _msc.type === 'sets';
+  const useFixedSet = useSets && _msc.fixedSet;
 
   const isDecided = !!m.winner;
   const isByeMatch = m.isBye || m.p2 === 'BYE';
@@ -1682,8 +1684,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // E gamesPerSet definido (não exige type==='sets'). Antes só funcionava em
   // GSM. Agora qualquer torneio que NÃO permita empate pela regra mostra
   // inputs de TB ao registrar 6-5/5-6 (default trigger = gamesPerSet - 1).
-  const _tbEnabled = !!(t.scoring && t.scoring.tiebreakEnabled !== false &&
-      (t.scoring.gamesPerSet || useSets));
+  const _tbEnabled = !!(_msc && _msc.tiebreakEnabled !== false &&
+      (_msc.gamesPerSet || useSets));
   const _tbInputStyle = 'width:40px;text-align:center;font-size:0.75rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:3px 4px;';
   const p1TbInput = showInputs && _tbEnabled
     ? `<input type="number" id="tb1-${m.id}" min="0" placeholder="tb" title="Tie-break"

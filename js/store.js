@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.95-beta';
+window.SCOREPLACE_VERSION = '2.6.96-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2080,6 +2080,17 @@ window._effectiveResultEntry = function(t, match) {
     if (!t || !Array.isArray(t.phases) || t.phases.length <= 1 || !match) return def;
     var ph = t.phases[match.phaseIndex || 0];
     return (ph && ph.resultEntry != null) ? ph.resultEntry : def;
+};
+// v2.6.96 — placar (GSM) EFETIVO de um match no construtor de fases. Só diverge
+// do placar do torneio (t.scoring) quando o match é de uma fase ≥1 que tem placar
+// "Personalizado" (ph.scoring com type). Fase 0 e torneios de fase única usam
+// SEMPRE t.scoring — garantia de compat com tudo que já existe.
+window._effectiveScoring = function(t, match) {
+    var def = (t && t.scoring) || null;
+    var pi = (match && match.phaseIndex) || 0;
+    if (!t || pi < 1 || !Array.isArray(t.phases) || pi >= t.phases.length) return def;
+    var ph = t.phases[pi];
+    return (ph && ph.scoring != null && ph.scoring.type) ? ph.scoring : def;
 };
 window._qrCodeUrl = function(data, size, darkMode) {
     var s = size || 280;
