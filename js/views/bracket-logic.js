@@ -2263,28 +2263,9 @@ window._drawFromRoundRobinSchedule = function(t, category, _rn) {
   var monarchGroups = [];
 
   nextRound.groups.forEach(function(grp, gi) {
-    var A = grp[0], B = grp[1], C = grp[2], D = grp[3];
-    var groupName = 'R' + roundNum + ' Grupo ' + String.fromCharCode(65 + gi) + turnoLabel;
-    var pairings = [
-      { t1: [A, B], t2: [C, D] },
-      { t1: [A, C], t2: [B, D] },
-      { t1: [A, D], t2: [B, C] }
-    ];
-    var matches = pairings.map(function(pair, mi) {
-      var mObj = {
-        id: 'match-rr-r' + roundNum + '-g' + gi + '-' + mi + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
-        team1: pair.t1, team2: pair.t2,
-        winner: null, scoreP1: null, scoreP2: null,
-        isMonarch: true, monarchGroup: gi,
-        label: groupName + ' • Jogo ' + (mi + 1) + catLabel
-      };
-      if (category) mObj.category = category;
-      return mObj;
-    });
-    allMatches = allMatches.concat(matches);
-    monarchGroups.push({ name: groupName, players: grp, matches: matches });
+    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: grp, category: category, ts: ts, nameSuffix: turnoLabel });
+    allMatches = allMatches.concat(g.matches);
+    monarchGroups.push(g);
   });
 
   // Sit-outs for players not in any group this round
@@ -2596,6 +2577,46 @@ function _computeAvgPointsPerRound(t, playerName, category) {
 // grupos na próxima) e, quando junta 4 (sobra + novos inscritos via +participante),
 // forma AUTOMATICAMENTE um novo grupo na rodada corrente. Decisão do dono (18-jun):
 // auto-formar ao juntar 4; quem fica esperando segue pra próxima rodada (sem média).
+// ─── Canônico: construção de um grupo Rei/Rainha ─────────────────────────────
+// v2.7.2: ÚNICA fonte da estrutura de um grupo Rei/Rainha (4 jogadores → 3 jogos
+// com parceiros rotativos AB/CD, AC/BD, AD/BC). Usado pelos TRÊS caminhos que
+// criam grupo — sorteio standard (_generateReiRainhaRoundForPlayers), agendado
+// round-robin (_drawFromRoundRobinSchedule) e formação por lista de espera
+// (_tryFormMonarchWaitlistGroups). Mudou aqui, muda em todos: fim do drift que
+// deixava uma rotina com folga 'remainder' e outra com lista de espera.
+// opts: { roundNum, roundIndex, gi, players:[A,B,C,D], category, ts, idTag, idExtra, nameSuffix }
+function _buildMonarchGroup(opts) {
+  var roundNum = opts.roundNum;
+  var P = opts.players, category = opts.category || null, gi = opts.gi;
+  var ts = (opts.ts != null) ? opts.ts : Date.now();
+  var idTag = opts.idTag || 'g';
+  var idExtra = (opts.idExtra != null) ? opts.idExtra : '';
+  var nameSuffix = opts.nameSuffix || '';
+  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
+  var catLabel = category && window._displayCategoryName
+    ? ' (' + window._displayCategoryName(category) + ')'
+    : (category ? ' (' + category + ')' : '');
+  var groupName = 'R' + roundNum + ' ' + (typeof _t === 'function' ? _t('label.group') : 'Grupo')
+    + ' ' + String.fromCharCode(65 + gi) + nameSuffix;
+  var A = P[0], B = P[1], C = P[2], D = P[3];
+  var pairings = [{ t1: [A, B], t2: [C, D] }, { t1: [A, C], t2: [B, D] }, { t1: [A, D], t2: [B, C] }];
+  var matches = pairings.map(function (pair, mi) {
+    var m = {
+      id: 'match-rr-r' + roundNum + '-' + idTag + gi + '-' + mi + catSuffix + '-' + ts + idExtra,
+      round: roundNum, roundIndex: opts.roundIndex,
+      p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
+      team1: pair.t1, team2: pair.t2,
+      winner: null, scoreP1: null, scoreP2: null,
+      isMonarch: true, monarchGroup: gi,
+      label: groupName + ' • Jogo ' + (mi + 1) + catLabel
+    };
+    if (category) m.category = category;
+    return m;
+  });
+  return { name: groupName, players: P.slice(), matches: matches };
+}
+window._buildMonarchGroup = _buildMonarchGroup;
+
 function _monarchWaitKey(category) { return (category || '_default_').replace(/\s+/g, '_'); }
 window._getMonarchWaitlist = function (t, category) {
   var k = _monarchWaitKey(category);
@@ -2629,24 +2650,9 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   while (wl.length >= 4) {
     var grp = wl.splice(0, 4);
     var gi = (col.monarchGroups || []).length;
-    var A = grp[0], B = grp[1], C = grp[2], D = grp[3];
-    var groupName = 'R' + roundNum + ' ' + (typeof _t === 'function' ? _t('label.group') : 'Grupo') + ' ' + String.fromCharCode(65 + gi);
-    var pairings = [{ t1: [A, B], t2: [C, D] }, { t1: [A, C], t2: [B, D] }, { t1: [A, D], t2: [B, C] }];
-    var matches = pairings.map(function (pair, mi) {
-      var m = {
-        id: 'match-rr-r' + roundNum + '-wl' + gi + '-' + mi + catSuffix + '-' + ts + '-' + formed,
-        round: roundNum, roundIndex: colIdx,
-        p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
-        team1: pair.t1, team2: pair.t2,
-        winner: null, scoreP1: null, scoreP2: null,
-        isMonarch: true, monarchGroup: gi,
-        label: groupName + ' • Jogo ' + (mi + 1) + catLabel
-      };
-      if (category) m.category = category;
-      return m;
-    });
-    col.monarchGroups.push({ name: groupName, players: grp, matches: matches });
-    col.matches = (col.matches || []).concat(matches);
+    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed });
+    col.monarchGroups.push(g);
+    col.matches = (col.matches || []).concat(g.matches);
     formed++;
   }
   _setMonarchWaitlist(t, category, wl);
@@ -2808,31 +2814,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
 
   for (var gi = 0; gi < numGroups; gi++) {
     var gPlayers = playingPlayers.slice(gi * 4, gi * 4 + 4);
-    var A = gPlayers[0], B = gPlayers[1], C = gPlayers[2], D = gPlayers[3];
-    var groupName = 'R' + roundNum + ' ' + (typeof _t === 'function' ? _t('label.group') : 'Grupo') + ' ' + String.fromCharCode(65 + gi);
-
-    // 3 matches with rotating partners: AB vs CD, AC vs BD, AD vs BC
-    var pairings = [
-      { t1: [A, B], t2: [C, D] },
-      { t1: [A, C], t2: [B, D] },
-      { t1: [A, D], t2: [B, C] }
-    ];
-
-    var matches = pairings.map(function(pair, mi) {
-      var mObj = {
-        id: 'match-rr-r' + roundNum + '-g' + gi + '-' + mi + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
-        team1: pair.t1, team2: pair.t2,
-        winner: null, scoreP1: null, scoreP2: null,
-        isMonarch: true, monarchGroup: gi,
-        label: groupName + ' • Jogo ' + (mi + 1) + catLabel
-      };
-      if (category) mObj.category = category;
-      return mObj;
-    });
-
-    groups.push({ name: groupName, players: gPlayers, matches: matches });
+    groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts }));
   }
 
   // Record opponent pairings for anti-repeat logic in future rounds
