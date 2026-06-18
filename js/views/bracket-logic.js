@@ -1698,8 +1698,65 @@ function _updateProgressiveClassification(t) {
 }
 
 // ─── Auto-finish elimination tournament ──────────────────────────────────────
+// v2.6.97 — encerramento do CONSTRUTOR DE FASES. O torneio multi-fase encerra
+// quando a ÚLTIMA fase termina (todas as partidas dela decididas, incluindo a
+// grande final). Em fases anteriores NÃO encerra — o avanço é manual (botão).
+// Campeão = vencedor da grande final da última fase; em chave única, o vencedor
+// da final; em linhas independentes (sem grande final), fica sem nome único.
+function _maybeFinishMultiPhase(t) {
+  if (!t || t.status === 'finished') return false;
+  if (!(window._isMultiPhase && window._isMultiPhase(t))) return false;
+  var cur = t.currentPhaseIndex || 0;
+  var last = t.phases.length - 1;
+  if (cur < 1 || cur < last) return false; // ainda em fase classificatória ou há fases por vir
+  var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; });
+  if (!pm.length) return false;
+  var pending = pm.filter(function (m) { return !m.isBye && m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD' && !m.winner; });
+  if (pending.length) return false;
+  var tbd = pm.filter(function (m) { return !m.isBye && (!m.p1 || m.p1 === 'TBD' || !m.p2 || m.p2 === 'TBD'); });
+  if (tbd.length) return false;
+
+  // Campeão: grande final > final de chave única > (linhas independentes: sem nome).
+  var champion = null;
+  var gf = pm.filter(function (m) { return m.bracket === 'grandfinal'; })[0];
+  if (gf && gf.winner) champion = gf.winner;
+  if (!champion) {
+    var tierMs = pm.filter(function (m) { return (m.round || 1) < 99 && !m.isBye; });
+    var brackets = {};
+    tierMs.forEach(function (m) { (brackets[m.bracket] = brackets[m.bracket] || []).push(m); });
+    var bk = Object.keys(brackets);
+    if (bk.length === 1) {
+      var ms = brackets[bk[0]];
+      var lr = Math.max.apply(null, ms.map(function (m) { return m.round || 1; }));
+      var fin = ms.filter(function (m) { return (m.round || 1) === lr; });
+      if (fin.length === 1 && fin[0].winner) champion = fin[0].winner;
+    }
+  }
+
+  t.status = 'finished';
+  if (!t.finishedAt) t.finishedAt = new Date().toISOString();
+  var _startMs = (typeof t.tournamentStarted === 'number' && t.tournamentStarted > 0) ? t.tournamentStarted : null;
+  if (_startMs && (t.durationMs == null)) t.durationMs = Math.max(0, Date.now() - _startMs);
+  if (typeof showNotification === 'function') {
+    showNotification(_t('bui.tournamentFinished'), champion ? _t('bui.tournamentFinishedChamp', { name: champion }) : _t('bui.tournamentFinishedMsg'), 'success');
+  }
+  if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
+    t.finishNotifiedAt = new Date().toISOString();
+    var _finMsg = _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio');
+    if (champion) _finMsg += ' ' + champion + ' ' + _t('notif.isChampion');
+    window._notifyTournamentParticipants(t, { type: 'tournament_finished', message: _finMsg, level: 'important' });
+  }
+  setTimeout(function () {
+    try { if (typeof window._trophyOnTournamentFinished === 'function') window._trophyOnTournamentFinished(t, champion); } catch (_te) {}
+  }, 500);
+  return true;
+}
+window._maybeFinishMultiPhase = _maybeFinishMultiPhase;
+
 function _maybeFinishElimination(t) {
   if (t.status === 'finished') return;
+  // v2.6.97: construtor de fases tem encerramento próprio (última fase concluída).
+  if (window._isMultiPhase && window._isMultiPhase(t)) { _maybeFinishMultiPhase(t); return; }
   // v2.4.20: inscrição TARDIA ('standby'/'expand') mantém a Eliminatória ABERTA —
   // completar os jogos atuais NÃO encerra o torneio. Novos confrontos da lista de
   // espera (a cada 4), repescagem e a próxima rodada ainda podem entrar. Só encerra
