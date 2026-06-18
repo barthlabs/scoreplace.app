@@ -9,7 +9,20 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.6.32-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(16 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.6.108-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🧩 Construtor de fases.</b> Monte o torneio em quantas fases quiser — ex.: Pontos Corridos / Rei-Rainha classificando para uma eliminatória em chaves (Ouro/Prata) que convergem numa grande final. Cada fase com seu formato, placar, pareamento e regra de quem classifica.</li>' +
+        '<li><b>🕒 Lista de espera no Rei/Rainha.</b> Quem sobra da divisão por 4 — e novos inscritos — entram numa lista de espera; ao juntar 4, forma um grupo novo automaticamente, sem você precisar fazer nada.</li>' +
+        '<li><b>🪪 Identidade mais robusta.</b> Nome de exibição único (não dá pra duas pessoas diferentes terem o mesmo nome); ao trocar o nome no perfil, ele atualiza em <b>todos</b> os torneios na hora; e inscrições repetidas da mesma conta são unificadas.</li>' +
+        '<li><b>🔎 Busca, ordenação e filtros nos inscritos.</b> Na lista de inscritos e na Análise: buscar por nome + ordenar (Inscrição / A→Z) + filtrar por gênero e habilidade — a mesma barra nos dois lugares.</li>' +
+        '<li><b>🔄 Atualização automática.</b> Quando sai versão nova, aparece um botão verde "Atualizar" — um toque e pronto, sem recarregar na mão.</li>' +
+        '<li><b>♻️ Resetar mantendo inscritos.</b> Botão para apagar sorteio, rodadas e fases e voltar às inscrições — mantendo todos os inscritos.</li>' +
+        '<li><b>📊 Análise sempre à mão.</b> O botão Análise continua visível pro organizador também depois do sorteio e durante o torneio.</li>' +
+        '<li><b>▶️ Pontos Corridos com sorteio automático já começa no sorteio</b> — sem passo extra de "Iniciar Torneio".</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.6.32-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(16 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>👓 Configuração expandida do torneio agora é legível nos dois temas.</b> Quando você abria a caixa "⚙️ configuração", os rótulos (Formato, Tipo de jogo, etc.) ficavam claros em fundo claro / escuros em fundo escuro — difíceis de ler. Agora o texto sempre contrasta: escuro em fundo claro, claro em fundo escuro.</li>' +
       '</ul>' +
