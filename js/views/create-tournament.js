@@ -1720,7 +1720,7 @@ function setupCreateTournamentModal() {
     h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">';
     h += '<span style="font-size:0.68rem;color:var(--text-muted);min-width:82px;">Quantos:</span>';
     h += _phBtn(i, 'qualifyQuantity', 'all', 'Todos', _qty === 'all');
-    h += _phBtn(i, 'qualifyQuantity', 'top', 'Os X melhores', _qty === 'top');
+    h += _phBtn(i, 'qualifyQuantity', 'top', 'Os melhores', _qty === 'top');
     if (_qty === 'top') h += '<input type="number" min="1" max="64" value="' + _topN + '" oninput="window._setPhaseTopN(' + i + ', this.value)" style="width:52px;text-align:center;' + _PH_INP + '">';
     h += '</div>';
     h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">';
