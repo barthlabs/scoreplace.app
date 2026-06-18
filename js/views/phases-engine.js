@@ -282,22 +282,39 @@
     });
 
     var converge = null;
-    // v2.6.80: sem grande final → cada linha é INDEPENDENTE (categoria própria, com
-    // classificação separada — campeão por linha). Só converge (campeão único) quando
-    // grandFinal !== false. Sem GF, nem a disputa de 3º/4º ENTRE linhas é criada.
+    // v2.6.80: sem grande final → cada linha INDEPENDENTE (campeão por linha, sem convergência).
+    // v2.6.93 (Motor Chunk 2): convergência de N linhas. 2 linhas → grande final direta
+    // (campeão A × campeão B) + 3º; 4 linhas → 2 SEMIS + final + 3º, com as semis pareadas
+    // pela estratégia (linhas em ordem de seed): performance/'top' = (L1×L4),(L2×L3);
+    // equilíbrio/'balanced' = (L1×L3),(L2×L4). Sem grande final → nada disso (independentes).
     var withGF = phaseCfg ? (phaseCfg.grandFinal !== false) : true;
-    if (withGF && tiers.upper && tiers.lower) {
-      var withThird = phaseCfg ? (phaseCfg.thirdPlace !== false) : true;
-      var gf = { id: idPrefix + '-grandfinal', bracket: 'grandfinal', round: 99, p1: 'TBD', p2: 'TBD', winner: null, tierLabel: '🏆 Grande Final' };
-      var third = null, convMatches = [gf];
-      if (withThird) {
-        third = { id: idPrefix + '-thirdplace', bracket: 'thirdplace', round: 99, p1: 'TBD', p2: 'TBD', winner: null, tierLabel: '🥉 Disputa de 3º/4º' };
-        convMatches.push(third);
-      }
+    var withThird = phaseCfg ? (phaseCfg.thirdPlace !== false) : true;
+    var tierKeys = destOrder.filter(function (d) { return tiers[d]; });
+    function _mkConv(idSuffix, bracket, label) { return { id: idPrefix + idSuffix, bracket: bracket, round: 99, p1: 'TBD', p2: 'TBD', winner: null, tierLabel: label }; }
+    if (withGF && tierKeys.length === 2) {
+      var gf = _mkConv('-grandfinal', 'grandfinal', '🏆 Grande Final');
+      var third = withThird ? _mkConv('-thirdplace', 'thirdplace', '🥉 Disputa de 3º/4º') : null;
+      var convMatches = [gf]; if (third) convMatches.push(third);
       allMatches = allMatches.concat(convMatches);
-      linkTierToFinal(tiers.upper, gf, 'p1', third, 'p1', allMatches);
-      linkTierToFinal(tiers.lower, gf, 'p2', third, 'p2', allMatches);
+      linkTierToFinal(tiers[tierKeys[0]], gf, 'p1', third, 'p1', allMatches);
+      linkTierToFinal(tiers[tierKeys[1]], gf, 'p2', third, 'p2', allMatches);
       converge = { gf: gf, third: third, matches: convMatches };
+    } else if (withGF && tierKeys.length === 4) {
+      var pair = (pairingStrategy === 'balanced') ? [[0, 2], [1, 3]] : [[0, 3], [1, 2]];
+      var semi1 = _mkConv('-semi1', 'semifinal', '🎾 Semifinal 1');
+      var semi2 = _mkConv('-semi2', 'semifinal', '🎾 Semifinal 2');
+      var gf4 = _mkConv('-grandfinal', 'grandfinal', '🏆 Grande Final');
+      var third4 = withThird ? _mkConv('-thirdplace', 'thirdplace', '🥉 Disputa de 3º/4º') : null;
+      semi1.nextMatchId = gf4.id; semi1.nextSlot = 'p1';
+      semi2.nextMatchId = gf4.id; semi2.nextSlot = 'p2';
+      if (third4) { semi1.loserNextMatchId = third4.id; semi1.loserNextSlot = 'p1'; semi2.loserNextMatchId = third4.id; semi2.loserNextSlot = 'p2'; }
+      var conv4 = [semi1, semi2, gf4]; if (third4) conv4.push(third4);
+      allMatches = allMatches.concat(conv4);
+      linkTierToFinal(tiers[tierKeys[pair[0][0]]], semi1, 'p1', null, null, allMatches);
+      linkTierToFinal(tiers[tierKeys[pair[0][1]]], semi1, 'p2', null, null, allMatches);
+      linkTierToFinal(tiers[tierKeys[pair[1][0]]], semi2, 'p1', null, null, allMatches);
+      linkTierToFinal(tiers[tierKeys[pair[1][1]]], semi2, 'p2', null, null, allMatches);
+      converge = { gf: gf4, third: third4, semis: [semi1, semi2], matches: conv4 };
     }
 
     return { matches: allMatches, tiers: tiers, converge: converge, byDest: byDest };

@@ -307,5 +307,40 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   eq(eng.groupTeamStandings(grp).map(function (s) { return s.name; }), ['Joao', 'Maria', 'Ana'], 'singles também ranqueia certo');
 })();
 
+// 18) Convergência de 4 LINHAS (Motor Chunk 2): 2 semis + final + 3º; semis pareadas por estratégia.
+(function () {
+  function mk4(strategy) {
+    var cfg = {
+      name: '4 linhas', fixedPairs: false, grandFinal: true, thirdPlace: true, pairingStrategy: strategy,
+      source: { type: 'previous_phase', mapping: [
+        { dest: 'upper', rankFrom: 1, rankTo: 1 }, { dest: 'lower', rankFrom: 2, rankTo: 2 },
+        { dest: 'line3', rankFrom: 3, rankTo: 3 }, { dest: 'line4', rankFrom: 4, rankTo: 4 }
+      ] }
+    };
+    return eng.buildPhaseBrackets(prevGroups, cfg, computeStandings, 'ph4');
+  }
+  function findM(res, id) { return res.matches.filter(function (m) { return m.id === id; })[0]; }
+  function tierNext(res, dest) { var fm = findM(res, res.tiers[dest].finalMatchId); return fm ? (fm.nextMatchId + '/' + fm.nextSlot) : null; }
+
+  var r = mk4('top'); // performance
+  ok(r.converge && r.converge.semis && r.converge.semis.length === 2, '4 linhas: 2 semis criadas');
+  ok(r.converge.gf && r.converge.third, '4 linhas: grande final + 3º criados');
+  var s1 = r.converge.semis[0].id, s2 = r.converge.semis[1].id, gf = r.converge.gf.id;
+  eq(findM(r, s1).nextMatchId + '/' + findM(r, s1).nextSlot, gf + '/p1', 'semi1 → final p1');
+  eq(findM(r, s2).nextMatchId + '/' + findM(r, s2).nextSlot, gf + '/p2', 'semi2 → final p2');
+  ok(findM(r, s1).loserNextMatchId === r.converge.third.id, 'semi1 perdedor → 3º');
+  eq(tierNext(r, 'upper'), s1 + '/p1', 'perf: campeão L1 → semi1');
+  eq(tierNext(r, 'line4'), s1 + '/p2', 'perf: campeão L4 → semi1 (1×4)');
+  eq(tierNext(r, 'lower'), s2 + '/p1', 'perf: campeão L2 → semi2');
+  eq(tierNext(r, 'line3'), s2 + '/p2', 'perf: campeão L3 → semi2 (2×3)');
+
+  var rb = mk4('balanced'); // equilíbrio
+  var bs1 = rb.converge.semis[0].id, bs2 = rb.converge.semis[1].id;
+  eq(tierNext(rb, 'upper'), bs1 + '/p1', 'equil: campeão L1 → semi1');
+  eq(tierNext(rb, 'line3'), bs1 + '/p2', 'equil: campeão L3 → semi1 (1×3)');
+  eq(tierNext(rb, 'lower'), bs2 + '/p1', 'equil: campeão L2 → semi2');
+  eq(tierNext(rb, 'line4'), bs2 + '/p2', 'equil: campeão L4 → semi2 (2×4)');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);
