@@ -282,14 +282,14 @@
     });
 
     var converge = null;
-    if (tiers.upper && tiers.lower) {
-      var withGF = phaseCfg ? (phaseCfg.grandFinal !== false) : true;
+    // v2.6.80: sem grande final → cada linha é INDEPENDENTE (categoria própria, com
+    // classificação separada — campeão por linha). Só converge (campeão único) quando
+    // grandFinal !== false. Sem GF, nem a disputa de 3º/4º ENTRE linhas é criada.
+    var withGF = phaseCfg ? (phaseCfg.grandFinal !== false) : true;
+    if (withGF && tiers.upper && tiers.lower) {
       var withThird = phaseCfg ? (phaseCfg.thirdPlace !== false) : true;
-      var gf = null, third = null, convMatches = [];
-      if (withGF) {
-        gf = { id: idPrefix + '-grandfinal', bracket: 'grandfinal', round: 99, p1: 'TBD', p2: 'TBD', winner: null, tierLabel: '🏆 Grande Final' };
-        convMatches.push(gf);
-      }
+      var gf = { id: idPrefix + '-grandfinal', bracket: 'grandfinal', round: 99, p1: 'TBD', p2: 'TBD', winner: null, tierLabel: '🏆 Grande Final' };
+      var third = null, convMatches = [gf];
       if (withThird) {
         third = { id: idPrefix + '-thirdplace', bracket: 'thirdplace', round: 99, p1: 'TBD', p2: 'TBD', winner: null, tierLabel: '🥉 Disputa de 3º/4º' };
         convMatches.push(third);

@@ -1578,7 +1578,7 @@ function setupCreateTournamentModal() {
   window._setPhaseField = function(i, field, value) {
     var ph = window._extraPhases[i]; if (!ph) return;
     if (['rounds', 'gruposCount', 'gruposClassified', 'monarchClassified'].indexOf(field) !== -1) value = Math.max(1, parseInt(value) || 1);
-    if (field === 'reiRainha' || field === 'fixedPairs') value = !!value;
+    if (field === 'reiRainha' || field === 'fixedPairs' || field === 'grandFinal') value = !!value;
     ph[field] = value;
     if (field === 'format') {
       ph.mapping = _phaseDefaultMapping(value);
@@ -1589,7 +1589,7 @@ function setupCreateTournamentModal() {
       if (value === 'all') { ph.scope = 'per_group'; ph.mapping = [{ dest: (ph.format === 'elim_dupla' ? 'upper' : 'main'), rankFrom: 1, rankTo: 99, label: '' }]; }
       else { ph.scope = (value === 'overall') ? 'overall' : 'per_group'; ph.mapping = _phaseDefaultMapping(ph.format); }
     }
-    if (['format', 'reiRainha', 'sourceType', 'fixedPairs', 'qualifyMode'].indexOf(field) !== -1) window._renderPhases();
+    if (['format', 'reiRainha', 'sourceType', 'fixedPairs', 'qualifyMode', 'grandFinal'].indexOf(field) !== -1) window._renderPhases();
   };
   // v2.6.77: estratégia de avanço (Performance/Equilíbrio/Sorteio) é INDEPENDENTE
   // do toggle "Duplas fixas". A estratégia sempre define COMO os classificados vão
@@ -1676,6 +1676,7 @@ function setupCreateTournamentModal() {
     if (qm === 'all') { parts.push('Todos avançam'); }
     else if ((ph.mapping || []).length > 1) {
       parts.push((ph.mapping || []).map(function(m, mi){ var lbl = (m.label && m.label.trim()) || ('Linha ' + (mi + 1)); return lbl + ' ' + (m.rankFrom || 1) + '-' + (m.rankTo || 1); }).join(' · '));
+      parts.push(ph.grandFinal !== false ? 'grande final' : 'linhas independentes');
     } else {
       var x = (ph.mapping && ph.mapping[0]) ? (ph.mapping[0].rankTo || 2) : 2;
       parts.push('Top ' + x + (qm === 'overall' ? ' geral' : '/grupo'));
@@ -1743,6 +1744,14 @@ function setupCreateTournamentModal() {
           h += '<span style="font-size:0.78rem;color:var(--text-muted);">º</span>';
           h += '</div>';
         });
+        if (_nLines >= 2) {
+          // v2.6.80: grande final (campeão único) × linhas independentes (categorias).
+          var _gf = ph.grandFinal !== false;
+          h += '<div style="display:flex;align-items:center;gap:9px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">';
+          h += '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox"' + (_gf ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ',\'grandFinal\',this.checked)"><span class="toggle-slider"></span></label>';
+          h += '<div><span style="font-size:0.8rem;font-weight:600;color:var(--text-bright);">Grande final unindo as linhas</span><div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;">' + (_gf ? 'os campeões das linhas convergem num campeão único' : 'cada linha é independente — categoria própria, classificação separada') + '</div></div>';
+          h += '</div>';
+        }
       } else {
         // não-eliminatória (Pontos Corridos / Fase de Grupos) → "Os X melhores avançam".
         var _m0 = (ph.mapping && ph.mapping[0]) ? ph.mapping[0] : { rankTo: 2 };
@@ -4862,6 +4871,7 @@ function setupCreateTournamentModal() {
           scope: src.scope || 'per_group',
           fixedPairs: ph.fixedPairs !== false,
           pairingStrategy: ph.pairingStrategy || 'top',
+          grandFinal: ph.grandFinal !== false,
           // v2.6.59: config por fase — W.O. + lançamento (normaliza resultEntry pra array na UI).
           woScope: (ph.woScope === 'team' ? 'time' : (ph.woScope || 'individual')),
           resultEntry: (function(){ var r = ph.resultEntry; if (Array.isArray(r)) return r.length ? r : ['organizer']; if (typeof r === 'string') { try { var p = JSON.parse(r); if (Array.isArray(p)) return p.length ? p : ['organizer']; } catch(e){} return [r]; } return ['organizer']; })(),
@@ -5589,6 +5599,9 @@ function setupCreateTournamentModal() {
               // ela ordena/pareia os classificados mesmo quando entram individualmente
               // (o motor expande pra grupos de 4 numa fase Rei/Rainha). Sempre persiste.
               pairingStrategy: ph.pairingStrategy || 'top',
+              // v2.6.80: grande final unindo as linhas (campeão único) × linhas
+              // independentes (cada linha = categoria com classificação própria).
+              grandFinal: ph.grandFinal !== false,
               // v2.6.59: config POR FASE — W.O. e lançamento de resultados. O motor lê
               // t.phases[i].X com fallback pro top-level (t.X = fase 0/default).
               woScope: ph.woScope || 'individual',
