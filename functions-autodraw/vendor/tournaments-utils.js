@@ -1041,6 +1041,49 @@ window._calcNextDrawDate = function(t) {
     return next;
 };
 
+// v2.6.74: timestamp (ms epoch) do próximo sorteio que o sistema AINDA DEVE
+// realizar — o "slot devido". DIFERENTE de _calcNextDrawDate (que é só calendário,
+// pro display de "próximo sorteio em X"): este considera se o slot atual já foi
+// sorteado (via lastAutoDrawAt) — então fica <= now ENQUANTO um sorteio está
+// PENDENTE e só avança pro próximo slot DEPOIS que o sorteio acontece. É o campo
+// `nextDrawAt` que o autoDraw do servidor consulta com where('nextDrawAt','<=',now)
+// pra disparar perto da hora exata sem varrer a coleção inteira (custo). Espelha
+// EXATAMENTE a lógica de due-check do servidor (firstDraw + intervalos + dedup por
+// lastAutoDrawAt). Parse em BRT (-03:00) pra o ms bater entre cliente e servidor.
+// Retorna null quando não há sorteio devido/futuro (manual, sem data, encerrado,
+// sorteio único já feito, ou temporada terminada).
+window._nextOwedDrawMs = function(t, nowMs) {
+    if (!t) return null;
+    var isLiga = t.format === 'Liga' || t.format === 'Ranking';
+    if (!isLiga || t.drawManual === true || !t.drawFirstDate || t.status === 'finished') return null;
+    var fd = String(t.drawFirstDate), ft = t.drawFirstTime || '19:00';
+    if (fd.indexOf('T') !== -1) { var pr = fd.split('T'); fd = pr[0]; if (pr[1]) ft = pr[1].slice(0, 5); }
+    var firstDraw = new Date(fd + 'T' + ft + ':00-03:00').getTime();
+    if (isNaN(firstDraw)) return null;
+    var now = (typeof nowMs === 'number') ? nowMs : Date.now();
+    var interval = parseInt(t.drawIntervalDays, 10);
+    var noRepeat = !interval || interval < 1;
+    var lastFired = t.lastAutoDrawAt ? new Date(t.lastAutoDrawAt).getTime() : null;
+    if (lastFired != null && isNaN(lastFired)) lastFired = null;
+    var owed;
+    if (now < firstDraw) {
+        owed = firstDraw; // primeiro sorteio ainda no futuro
+    } else if (noRepeat) {
+        if (lastFired != null && lastFired >= firstDraw) return null; // sorteio único já feito
+        owed = firstDraw;
+    } else {
+        var intervalMs = interval * 86400000;
+        var intervalsCompleted = Math.floor((now - firstDraw) / intervalMs);
+        var mostRecentScheduled = firstDraw + intervalsCompleted * intervalMs;
+        owed = (lastFired != null && lastFired >= mostRecentScheduled)
+            ? mostRecentScheduled + intervalMs // slot atual já sorteado → próximo (futuro)
+            : mostRecentScheduled;             // slot atual pendente (<= now → devido)
+    }
+    var seasonEnd = (typeof window._ligaSeasonEndMs === 'function') ? window._ligaSeasonEndMs(t) : null;
+    if (seasonEnd != null && owed > seasonEnd) return null;
+    return owed;
+};
+
 // Navigate to tournament detail and scroll to highlight the enrolled participant
 window._scrollToParticipant = function(tId, participantName) {
     // Guard: participantName pode ser null para inscritos sem nome (phone-only)

@@ -198,6 +198,23 @@ window.FirestoreDB = {
       var _prevUids = Array.isArray(tourData.memberUids) ? tourData.memberUids : [];
       cleanData.memberUids = Array.from(new Set(_prevUids.concat(_newUids)));
     }
+    // v2.6.74: nextDrawAt — ms epoch do próximo sorteio devido (ver _nextOwedDrawMs).
+    // É o índice que o autoDraw do servidor consulta com where('nextDrawAt','<=',now)
+    // pra disparar perto da hora exata sem varrer a coleção toda. Recalculado em TODO
+    // save (cria/edita/sorteio do cliente/manual), derivado do MESMO helper do servidor.
+    // Quando não há sorteio devido (manual, sem data, encerrado, etc.) remove o campo
+    // pra não deixar valor stale travando a query. Best-effort: se o helper não estiver
+    // carregado, o reconciliador do servidor seta como fallback.
+    try {
+      if (typeof window._nextOwedDrawMs === 'function') {
+        var _owed = window._nextOwedDrawMs(cleanData);
+        if (typeof _owed === 'number') {
+          cleanData.nextDrawAt = _owed;
+        } else if (typeof firebase !== 'undefined' && firebase.firestore) {
+          cleanData.nextDrawAt = firebase.firestore.FieldValue.delete();
+        }
+      }
+    } catch (_ndErr) { /* nextDrawAt é otimização; nunca derruba o save */ }
     await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
   },
 

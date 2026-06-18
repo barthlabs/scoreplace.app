@@ -1,7 +1,7 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 
 // v2.3.91: lógica de sorteio REAL do cliente (Rei/Rainha, duplas, equilíbrio,
@@ -63,14 +63,18 @@ function _ligaSeasonEnded(t, now) {
 }
 
 // ─── Auto-Draw: runs every hour, checks for pending draws ───────────────────
-// v2.6.74: cadência apertada de 1h → 5min pra o sorteio sair PERTO do horário
-// agendado (antes podia atrasar ~1h, "dentro da hora" e não "na hora"). O dedup
-// por timestamp (lastAutoDrawAt >= mostRecentScheduled, abaixo) garante UMA rodada
-// por slot mesmo checando 12×/h — só muda QUÃO CEDO o slot é detectado, nunca o
-// número de rodadas. Custo: 1 leitura da coleção tournaments por tick (ok em beta).
-exports.autoDraw = onSchedule('every 5 minutes', async (event) => {
+// v2.6.74: sorteio NA HORA + custo baixo. Cadência de 1 minuto, mas em vez de
+// varrer a coleção inteira a cada tick, consulta só os torneios com `nextDrawAt`
+// (ms do slot devido — ver _nextOwedDrawMs) <= agora. Quando nada está vencendo,
+// a query devolve ~0 docs → leituras quase nulas. O dedup por lastAutoDrawAt
+// (abaixo) e os checks em memória continuam como autoridade/rede de segurança.
+// `nextDrawAt` é mantido por: saveTournament (cliente, todo save), este autoDraw
+// (após sortear) e autoDrawReconcile (varredura 30min — backfill de docs legados
+// sem o campo + cura de drift). Sem o reconciliador, docs sem nextDrawAt seriam
+// excluídos da range query (Firestore ignora docs com campo ausente).
+exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
   const now = new Date();
-  const snap = await db.collection('tournaments').get();
+  const snap = await db.collection('tournaments').where('nextDrawAt', '<=', now.getTime()).get();
 
   for (const doc of snap.docs) {
     const t = doc.data();
@@ -164,6 +168,18 @@ exports.autoDraw = onSchedule('every 5 minutes', async (event) => {
           continue;
         }
 
+        // v2.6.74: avança `nextDrawAt` pro próximo slot devido. O motor já setou
+        // t.lastAutoDrawAt = mostRecentScheduled → o helper devolve o PRÓXIMO slot
+        // (futuro), então a query não re-dispara este. null = sem mais sorteio
+        // (sorteio único feito / temporada encerrada) → remove o campo.
+        let _nextDrawMs = null;
+        try {
+          if (drawWindow && typeof drawWindow._nextOwedDrawMs === 'function') {
+            _nextDrawMs = drawWindow._nextOwedDrawMs(t, now.getTime());
+          }
+        } catch (e) { /* best-effort */ }
+        const _nextDrawField = (typeof _nextDrawMs === 'number') ? _nextDrawMs : FieldValue.delete();
+
         // ── REDE DE SEGURANÇA (v2.3.96): sorteio em revisão ────────────────────
         // Se t.stagedDraw, o sorteio NÃO vai a público nem notifica. Grava SÓ em
         // `pendingDraw` — o doc público (rounds/status/standings) fica INTOCADO,
@@ -185,6 +201,7 @@ exports.autoDraw = onSchedule('every 5 minutes', async (event) => {
           await db.collection('tournaments').doc(tId).update({
             pendingDraw: pendingDraw,
             lastAutoDrawAt: t.lastAutoDrawAt,
+            nextDrawAt: _nextDrawField,
             updatedAt: t.updatedAt,
           });
           console.log(`Auto-draw STAGED (review): round ${res.roundNumber} held in pendingDraw for ${tId} — no public, no notify`);
@@ -197,6 +214,7 @@ exports.autoDraw = onSchedule('every 5 minutes', async (event) => {
           rounds: t.rounds,
           status: t.status,
           lastAutoDrawAt: t.lastAutoDrawAt,
+          nextDrawAt: _nextDrawField,
           updatedAt: t.updatedAt,
         };
         if (t.standings) payload.standings = t.standings;
@@ -307,6 +325,42 @@ exports.autoDraw = onSchedule('every 5 minutes', async (event) => {
       }
     }
   }
+});
+
+// ─── Reconciliador de nextDrawAt (v2.6.74) ──────────────────────────────────
+// O autoDraw (acima) consulta por `nextDrawAt` pra ser barato + na hora. Mas:
+//  (a) torneios LEGADOS (criados antes deste campo) não têm nextDrawAt → a range
+//      query os EXCLUI (Firestore ignora docs com o campo ausente) → nunca seriam
+//      sorteados. (b) drift: se algum caminho mutar o agendamento sem recalcular.
+// Este reconciliador varre a coleção a cada 30min e grava o nextDrawAt correto
+// (via o MESMO _nextOwedDrawMs) onde está ausente/desatualizado — backfill + cura.
+// NÃO sorteia (isso é só do autoDraw) → zero risco de disparo duplo. Custo: 48
+// varreduras/dia (barato), escrevendo só quando o valor muda.
+exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
+  const now = Date.now();
+  let scanned = 0, fixed = 0;
+  if (!drawWindow || typeof drawWindow._nextOwedDrawMs !== 'function') {
+    console.error('[autoDrawReconcile] _nextOwedDrawMs indisponível — abortando');
+    return;
+  }
+  const snap = await db.collection('tournaments').get();
+  for (const doc of snap.docs) {
+    scanned++;
+    const t = doc.data();
+    let want = null;
+    try {
+      const owed = drawWindow._nextOwedDrawMs(t, now);
+      if (typeof owed === 'number') want = owed;
+    } catch (e) { /* doc malformado: trata como sem sorteio devido */ }
+    const have = (typeof t.nextDrawAt === 'number') ? t.nextDrawAt : null;
+    if (want !== have) {
+      try {
+        await doc.ref.update({ nextDrawAt: want != null ? want : FieldValue.delete() });
+        fixed++;
+      } catch (e) { console.error(`[autoDrawReconcile] falha ao atualizar ${doc.id}:`, e && e.message); }
+    }
+  }
+  console.log(`[autoDrawReconcile] ${scanned} torneios varridos, ${fixed} nextDrawAt atualizados`);
 });
 
 // ─── Push Notifications via FCM ─────────────────────────────────────────────
