@@ -650,6 +650,24 @@
     var cs = _isMonarchPrev
       ? (window._computeMonarchStandings || function (g) { return g.standings || []; })
       : function (g) { return _groupTeamStandings(g, _tbOpts); };
+    // v2.7.24: se alguma LINHA da próxima fase NÃO for potência de 2 e o organizador
+    // ainda não escolheu como resolver → PERGUNTA (painel) em vez de aplicar BYE
+    // direto. Tamanhos das linhas são determinísticos (não dependem do sorteio).
+    var _cur = t.currentPhaseIndex || 0;
+    var _nextCfg = t.phases[_cur + 1] || {};
+    if (!_nextCfg.bracketResolution) {
+      var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
+      var _src = _nextCfg.source || {};
+      var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+      var _byDest = buildEntrantsByDest(_curG, _mp, _nextCfg.fixedPairs !== false, (_cur === 0 ? cs : function (g) { return g.standings || []; }), _nextCfg.pairingStrategy || 'top', { scope: _src.scope || 'per_group', rankingBasis: _src.rankingBasis || 'individual' });
+      var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
+      var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
+      if (_anyNonPow2 && typeof window._showPhaseResolutionPanel === 'function') {
+        t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
+        window._showPhaseResolutionPanel(tId);
+        return;
+      }
+    }
     var res = materializeNextPhase(t, cs, 'ph-' + tId + '-' + ((t.currentPhaseIndex || 0) + 1));
     if (!res.ok) {
       if (window.showAlertDialog) window.showAlertDialog('Não foi possível avançar', 'Motivo: ' + res.error, null, { type: 'warning' });

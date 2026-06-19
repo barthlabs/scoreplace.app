@@ -1378,6 +1378,65 @@ window._cancelPowerOf2Panel = function (tId) {
     }
 };
 
+// ── v2.7.24: Resolução de potência de 2 nas CHAVES DE FASE (construtor) ───────
+// Painel DEDICADO de fase (NÃO mexe no showUnifiedResolutionPanel da inscrição).
+// Disparado por advanceMultiPhase quando uma linha não fecha em potência de 2.
+// Pergunta como resolver — UMA escolha pra todas as linhas — e grava em
+// phase.bracketResolution (o motor genTierBracket aplica). Opções viáveis numa
+// chave de entrantes FIXOS: Play-in, BYE, Exclusão.
+window._showPhaseResolutionPanel = function (tId) {
+    var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
+    if (!t || !t._phaseResInfo) return;
+    var info = t._phaseResInfo;
+    var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+    var tIdSafe = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    function pow2lo(s) { var lo = 1; while (lo * 2 <= s) lo *= 2; return lo; }
+    function descFor(optKey) {
+        return info.lines.map(function (l) {
+            var s = l.size; if (s <= 1 || (s & (s - 1)) === 0) return null;
+            var lo = pow2lo(s), hi = lo * 2, excess = s - lo, missing = hi - s, d;
+            if (optKey === 'bye') d = 'chave de ' + hi + ' (' + missing + ' folga' + (missing > 1 ? 's' : '') + ')';
+            else if (optKey === 'playin') d = excess + ' classificatória' + (excess > 1 ? 's' : '') + ' → chave de ' + lo;
+            else d = 'corta ' + excess + ' → chave de ' + lo;
+            return '<b>' + esc(l.label) + '</b> (' + s + '): ' + d;
+        }).filter(Boolean).join(' · ');
+    }
+    var opts = [
+        { key: 'playin', icon: '🔁', title: 'Play-in (classificatória)', sub: 'Todos jogam — os últimos disputam a vaga.', rec: true },
+        { key: 'bye', icon: '🥇', title: 'BYE (folga p/ cabeças)', sub: 'Os melhores folgam a 1ª rodada até a potência acima.', rec: false },
+        { key: 'exclusion', icon: '🚫', title: 'Exclusão', sub: 'Corta os piores classificados até a potência abaixo.', rec: false }
+    ];
+    var cards = opts.map(function (o) {
+        return '<button onclick="window._applyPhaseResolution(\'' + tIdSafe + '\',\'' + o.key + '\')" style="text-align:left;background:' + (o.rec ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)') + ';border:2px solid ' + (o.rec ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.12)') + ';border-radius:14px;padding:12px 14px;cursor:pointer;color:#e2e8f0;transition:all 0.2s;" onmouseover="this.style.filter=\'brightness(1.12)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.filter=\'\';this.style.transform=\'\'">' +
+            '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:0.92rem;">' + o.icon + ' ' + o.title + (o.rec ? ' <span style="font-size:0.6rem;background:rgba(16,185,129,0.25);color:#6ee7b7;padding:1px 7px;border-radius:6px;">recomendado</span>' : '') + '</div>' +
+            '<div style="font-size:0.74rem;color:var(--text-muted);margin:3px 0 5px;">' + o.sub + '</div>' +
+            '<div style="font-size:0.72rem;color:#93c5fd;">' + descFor(o.key) + '</div>' +
+        '</button>';
+    }).join('');
+    var old = document.getElementById('phase-res-panel'); if (old) old.remove();
+    var ov = document.createElement('div');
+    ov.id = 'phase-res-panel';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:18px;';
+    var linesSummary = info.lines.map(function (l) { return esc(l.label) + ': ' + l.size; }).join(' · ');
+    ov.innerHTML = '<div style="background:var(--bg-card,#1a1a2e);border:2px solid rgba(245,158,11,0.4);border-radius:18px;max-width:460px;width:100%;padding:18px 18px 16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+        '<div style="font-size:1.05rem;font-weight:800;color:#fbbf24;margin-bottom:4px;">⚖️ Resolver as chaves da ' + esc(info.nextName) + '</div>' +
+        '<div style="font-size:0.8rem;color:var(--text-main);line-height:1.4;margin-bottom:10px;">Alguma linha não fechou em potência de 2 (' + esc(linesSummary) + '). Escolha como resolver — vale pra <b>todas as linhas</b>:</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;">' + cards + '</div>' +
+        '<button onclick="document.getElementById(\'phase-res-panel\').remove()" style="margin-top:12px;width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);border-radius:10px;padding:8px;font-weight:600;cursor:pointer;">Cancelar</button>' +
+    '</div>';
+    document.body.appendChild(ov);
+};
+window._applyPhaseResolution = function (tId, option) {
+    var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
+    if (!t) return;
+    var info = t._phaseResInfo;
+    var idx = info ? info.nextIdx : ((t.currentPhaseIndex || 0) + 1);
+    if (t.phases && t.phases[idx]) t.phases[idx].bracketResolution = option;
+    delete t._phaseResInfo;
+    var p = document.getElementById('phase-res-panel'); if (p) p.remove();
+    if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+};
+
 // (Check-in functions moved to participants.js)
 
 // ═══════════════════════════════════════════════════════════
