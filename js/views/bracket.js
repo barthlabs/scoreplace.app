@@ -1989,15 +1989,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // do jogo (confirmada pelo GPS via _toggleCheckIn → _isUserAtTournamentVenue).
   // Os sorteados juntos veem o status uns dos outros pelos pontos de presença
   // (ciDot) que já existem. Não há "chamada do organizador" aqui — é peer.
-  let _arrivedBtn = '';
+  let _arrivedBtn = '';   // BOTÃO "Cheguei" (vai na linha dos botões)
+  let _presenceTag = '';  // TAG "PRESENTE" (vai EMPILHADA abaixo do PARCIAL)
   if (typeof window._participantsSelfPresence === 'function' && window._participantsSelfPresence(t) &&
       _isMyMatch && !isDecided && !isByeMatch && !hasTBD && _cuName) {
     const _meHere = !!(t && t.checkedIn && t.checkedIn[_cuName]);
-    // v2.7.57: presente vira uma TAG simples (não texto solto); antes de chegar, um
-    // BOTÃO padrão "Cheguei" (cyan, distinto do verde Confirmar).
-    _arrivedBtn = _meHere
-      ? `<span style="font-size:0.6rem;font-weight:800;color:#10b981;background:rgba(16,185,129,0.16);border:1px solid rgba(16,185,129,0.4);padding:2px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;flex-shrink:0;">✓ Presente</span>`
-      : `<button class="btn btn-cyan btn-micro" onclick="event.stopPropagation(); window._toggleCheckIn('${_esc(tId)}','${_esc(_cuName)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)'}">📍 ${_t('bracket.arrived') || 'Cheguei'}</button>`;
+    // v2.7.59: PRESENTE é TAG (mesmo tamanho/forma do PARCIAL) e fica empilhada
+    // abaixo dele. Antes de chegar, BOTÃO padrão "Cheguei" (cyan) na linha dos botões.
+    if (_meHere) {
+      _presenceTag = `<span style="font-size:0.6rem;font-weight:800;color:#10b981;background:rgba(16,185,129,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;white-space:nowrap;align-self:flex-start;">✓ Presente</span>`;
+    } else {
+      _arrivedBtn = `<button class="btn btn-cyan btn-micro" onclick="event.stopPropagation(); window._toggleCheckIn('${_esc(tId)}','${_esc(_cuName)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)'}">📍 ${_t('bracket.arrived') || 'Cheguei'}</button>`;
+    }
   }
 
   // User's own matches: indigo border + glow (distinct from amber partial)
@@ -2092,14 +2095,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         </div>
         <div id="header-btns-${m.id}" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;">
           ${readyBadge}
+          ${_presenceTag}
           <span style="font-size:0.56rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.02em;line-height:1.3;text-align:right;max-width:104px;">⏳ Aguardando aprovação</span>
         </div>
       </div>`;
   } else {
     _headerHtml = `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
         <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-        <div id="header-btns-${m.id}" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${readyBadge}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
+        <div id="header-btns-${m.id}" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${(readyBadge || _presenceTag) ? `<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;">${readyBadge}${_presenceTag}</div>` : ''}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
       </div>`;
   }
 
