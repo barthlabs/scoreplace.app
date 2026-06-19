@@ -771,6 +771,11 @@ window._partApplyFilter = function () {
   var parent = cards[0].parentNode;
   if (parent) {
     cards.slice().sort(function (a, b) {
+      // v2.7.29: VIPs SEMPRE fixados no topo (pedido do usuário — "no máximo fixar
+      // no topo os vips"). VIP é a chave primária; o sort escolhido é secundário.
+      var va = a.getAttribute('data-part-vip') === '1' ? 1 : 0;
+      var vb = b.getAttribute('data-part-vip') === '1' ? 1 : 0;
+      if (va !== vb) return vb - va;
       if (sort === 'name-asc' || sort === 'name-desc') {
         var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
         return sort === 'name-desc' ? -r : r;
@@ -2046,7 +2051,7 @@ function renderParticipants(container, tournamentId) {
       const _riNum = (typeof _ciOrder === 'number' && _ciOrder !== 9999) ? (_ciOrder + 1) : '';
       const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
-        <div class="participant-card" data-part-card="1" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
+        <div class="participant-card" data-part-card="1" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${_riNum !== '' ? `<div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(_riNum).length > 2 ? '2.4rem' : '3rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${_riNum}</div>` : ''}
             <div style="position:relative;z-index:1;display:flex;align-items:center;gap:10px;">
                 <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
@@ -2179,10 +2184,10 @@ function renderParticipants(container, tournamentId) {
         dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
         if (!drawDone) {
           const vipBtn = `<button class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)'}; color: ${isVip ? '#fbbf24' : '#a3842a'}; border: 1px ${isVip ? 'solid' : 'dashed'} ${isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)'}; letter-spacing: 0.5px;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
-          const delBtn = `<button class="btn btn-micro" title="${_t('btn.remove')}" style="background: rgba(239,68,68,0.1); color: #ef4444; border: 1px dashed #ef4444;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', ${idx});">🗑️</button>`;
+          const delBtn = `<button class="btn btn-micro" title="${_t('btn.remove')}" style="background: rgba(239,68,68,0.1); color: #ef4444; border: 1px dashed #ef4444;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">🗑️</button>`;
           let splitBtn = '';
           if (pName.includes('/')) {
-            splitBtn = `<button class="btn btn-micro" title="${_t('participants.splitTeam')}" style="background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', ${idx});">✂️</button>`;
+            splitBtn = `<button class="btn btn-micro" title="${_t('participants.splitTeam')}" style="background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
           }
           actionsDiv = `<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:6px;">${vipBtn}${splitBtn}${undoMergeBtn}${delBtn}</div>`;
         } else if (undoMergeBtn) {
@@ -2234,7 +2239,7 @@ function renderParticipants(container, tournamentId) {
       const _fOrder = (_partEnrollIdx && _partEnrollIdx[_fKey] != null) ? _partEnrollIdx[_fKey] : idx;
       const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
       return `
-        <div class="participant-card" data-part-card="1" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+        <div class="participant-card" data-part-card="1" data-part-vip="${isVip ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
             <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(bgNum).length > 2 ? '2.8rem' : '3.5rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${bgNum}</div>
             <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:0;">
                 <div style="display:flex;align-items:center;gap:12px;">

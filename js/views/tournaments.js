@@ -1028,7 +1028,10 @@ function renderTournaments(container, tournamentId = null) {
 
                         const container = document.getElementById('view-container');
                         if (container) {
-                            renderTournaments(container, tId);
+                            // v2.7.29: mantém o usuário na lista de Inscritos quando a remoção
+                            // veio de #participants (antes ia sempre pro detalhe do torneio).
+                            if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
+                            else renderTournaments(container, tId);
                         }
                     }
                 },
@@ -1070,7 +1073,8 @@ function renderTournaments(container, tournamentId = null) {
 
                             const container = document.getElementById('view-container');
                             if (container) {
-                                renderTournaments(container, tId);
+                                if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
+                                else renderTournaments(container, tId);
                             }
                         }
                     }
