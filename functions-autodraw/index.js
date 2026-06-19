@@ -191,6 +191,9 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
             standings: t.standings || null,
             sitOutHistory: t.sitOutHistory || null,
             opponentHistory: t.opponentHistory || null,
+            // v2.7.9: lista de espera do Rei/Rainha (sobra da divisão por 4). Sem
+            // isso, o publish não tinha o que carregar e a espera sumia.
+            monarchWaitlist: t.monarchWaitlist || null,
             status: 'active',
             roundIndex: res.roundIndex,
             roundNumber: res.roundNumber,
@@ -220,6 +223,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         if (t.standings) payload.standings = t.standings;
         if (t.sitOutHistory) payload.sitOutHistory = t.sitOutHistory;       // fairness das folgas
         if (t.opponentHistory) payload.opponentHistory = t.opponentHistory; // anti-repeat de duplas
+        if (t.monarchWaitlist) payload.monarchWaitlist = t.monarchWaitlist; // v2.7.9: espera Rei/Rainha
         if (t.drawVisibility) payload.drawVisibility = t.drawVisibility;
         await db.collection('tournaments').doc(tId).update(payload);
 
