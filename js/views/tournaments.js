@@ -1,6 +1,85 @@
 // Dynamically update stat-boxes after participant/waitlist changes
 var _t = window._t || function(k) { return k; };
 
+// v2.7.32: handlers de ação do inscrito (remover/split) definidos no NÍVEL DO MÓDULO
+// — antes só eram criados dentro de renderTournaments, então abrir a página de
+// Inscritos DIRETO (reload / rota direta, sem passar pelo detalhe) deixava
+// window.removeParticipantFunction undefined → clicar na lixeira não fazia NADA (nem
+// abria a confirmação). Definir aqui garante que existam assim que tournaments.js
+// carrega. setupDone=true faz os blocos inline (em renderTournaments) virarem no-op.
+window.removeParticipantFunction = function (tId, participantName) {
+    showConfirmDialog(
+        _t('tourn.removeParticipantTitle'),
+        _t('tourn.removeParticipantMsg'),
+        () => {
+            const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+            if (t && t.participants) {
+                let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+                var idx = arr.findIndex(function(p, i) {
+                    var name = window._pName(p);
+                    if (name) return name === participantName;
+                    return ('Participante ' + (i + 1)) === participantName;
+                });
+                if (idx === -1) return;
+                var _removedP = arr[idx];
+                arr.splice(idx, 1);
+                t.participants = arr;
+                if (_removedP && typeof _removedP === 'object' && _removedP.uid && typeof window._sendUserNotification === 'function') {
+                    var _cuRem = window.AppStore && window.AppStore.currentUser;
+                    var _remover = (_cuRem && (_cuRem.displayName || _cuRem.email)) || 'o organizador';
+                    var _whenStr = new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    window._sendUserNotification(_removedP.uid, {
+                        type: 'participant_removed',
+                        message: 'Você foi removido do torneio "' + (t.name || 'Torneio') + '" por ' + _remover + ' em ' + _whenStr + '.',
+                        tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental'
+                    });
+                }
+                if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+                else if (typeof window.AppStore.sync === 'function') window.AppStore.sync();
+                const container = document.getElementById('view-container');
+                if (container) {
+                    if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
+                    else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
+                }
+            }
+        },
+        null,
+        { type: 'danger', confirmText: _t('btn.remove'), cancelText: _t('btn.cancel') }
+    );
+};
+window.splitParticipantFunction = function (tId, participantName) {
+    showConfirmDialog(
+        _t('tourn.splitTeamTitle'),
+        _t('tourn.splitTeamMsg'),
+        () => {
+            const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+            if (t && t.participants) {
+                let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+                var idx = arr.findIndex(function(p) { return window._pName(p) === participantName; });
+                if (idx === -1) return;
+                const pStr = window._pName(arr[idx]);
+                if (pStr.includes('/')) {
+                    const parts = pStr.split('/').map(s => s.trim());
+                    arr.splice(idx, 1);
+                    arr.splice(idx, 0, ...parts);
+                    t.participants = arr;
+                    if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+                    else if (typeof window.AppStore.sync === 'function') window.AppStore.sync();
+                    const container = document.getElementById('view-container');
+                    if (container) {
+                        if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
+                        else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
+                    }
+                }
+            }
+        },
+        null,
+        { type: 'warning', confirmText: _t('btn.undo'), cancelText: _t('btn.keepTeam') }
+    );
+};
+window.removeParticipantSetupDone = true;
+window.splitParticipantSetupDone = true;
+
 // Self-healing: when enrollments are open (status not 'closed' AND no draw yet),
 // the waitlist/standby lists should always be empty. Anyone sitting there from a
 // previous closed state gets promoted back to the main roster. Dedupe by
@@ -984,107 +1063,6 @@ function renderTournaments(container, tournamentId = null) {
         window.editModalSetupDone = true;
     }
 
-    if (!window.removeParticipantSetupDone) {
-        window.removeParticipantFunction = function (tId, participantName) {
-            showConfirmDialog(
-                _t('tourn.removeParticipantTitle'),
-                _t('tourn.removeParticipantMsg'),
-                () => {
-                    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
-                    if (t && t.participants) {
-                        let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-                        var idx = arr.findIndex(function(p, i) {
-                            var name = window._pName(p);
-                            if (name) return name === participantName;
-                            // Participante sem nome: match pelo fallback "Participante N"
-                            return ('Participante ' + (i + 1)) === participantName;
-                        });
-                        if (idx === -1) return;
-                        // Capture participant before removing to send notification
-                        var _removedP = arr[idx];
-                        arr.splice(idx, 1);
-                        t.participants = arr;
-
-                        // Notify removed participant — v2.3.84: inclui QUEM removeu
-                        // e QUANDO (pedido do usuário).
-                        if (_removedP && typeof _removedP === 'object' && _removedP.uid && typeof window._sendUserNotification === 'function') {
-                            var _cuRem = window.AppStore && window.AppStore.currentUser;
-                            var _remover = (_cuRem && (_cuRem.displayName || _cuRem.email)) || 'o organizador';
-                            var _whenStr = new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                            window._sendUserNotification(_removedP.uid, {
-                                type: 'participant_removed',
-                                message: 'Você foi removido do torneio "' + (t.name || 'Torneio') + '" por ' + _remover + ' em ' + _whenStr + '.',
-                                tournamentId: String(t.id),
-                                tournamentName: t.name || '',
-                                level: 'fundamental'
-                            });
-                        }
-
-                        if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) {
-                            window.FirestoreDB.saveTournament(t);
-                        } else if (typeof window.AppStore.sync === 'function') {
-                            window.AppStore.sync();
-                        }
-
-                        const container = document.getElementById('view-container');
-                        if (container) {
-                            // v2.7.29: mantém o usuário na lista de Inscritos quando a remoção
-                            // veio de #participants (antes ia sempre pro detalhe do torneio).
-                            if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
-                            else renderTournaments(container, tId);
-                        }
-                    }
-                },
-                null,
-                { type: 'danger', confirmText: _t('btn.remove'), cancelText: _t('btn.cancel') }
-            );
-        };
-        window.removeParticipantSetupDone = true;
-    }
-
-    if (!window.splitParticipantSetupDone) {
-        window.splitParticipantFunction = function (tId, participantName) {
-            showConfirmDialog(
-                _t('tourn.splitTeamTitle'),
-                _t('tourn.splitTeamMsg'),
-                () => {
-                    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
-                    if (t && t.participants) {
-                        let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-                        var idx = arr.findIndex(function(p) {
-                            var name = window._pName(p);
-                            return name === participantName;
-                        });
-                        if (idx === -1) return;
-                        const p = arr[idx];
-                        const pStr = window._pName(p);
-
-                        if (pStr.includes('/')) {
-                            const parts = pStr.split('/').map(s => s.trim());
-                            arr.splice(idx, 1);
-                            arr.splice(idx, 0, ...parts);
-                            t.participants = arr;
-
-                            if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) {
-                                window.FirestoreDB.saveTournament(t);
-                            } else if (typeof window.AppStore.sync === 'function') {
-                                window.AppStore.sync();
-                            }
-
-                            const container = document.getElementById('view-container');
-                            if (container) {
-                                if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
-                                else renderTournaments(container, tId);
-                            }
-                        }
-                    }
-                },
-                null,
-                { type: 'warning', confirmText: _t('btn.undo'), cancelText: _t('btn.keepTeam') }
-            );
-        };
-        window.splitParticipantSetupDone = true;
-    }
 
     // ─── Invite fallback card — shown when tournament can't be loaded yet ─────
     window._renderInviteFallbackCard = function(container, tId) {
