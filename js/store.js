@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.42-beta';
+window.SCOREPLACE_VERSION = '2.7.43-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2644,7 +2644,10 @@ var _attrEscMeta = function(s) { return String(s == null ? '' : s).replace(/&/g,
 // Visível pra TODOS os inscritos do torneio (não só o organizador) — as categorias
 // (gênero · nível · idade) são informação pública da chave. O parâmetro isOrg é
 // mantido por compat de assinatura, mas não gateia mais a visibilidade.
-window._profileMetaSlots = function(p, pName, isTeam, t, isOrg) {
+window._profileMetaSlots = function(p, pName, isTeam, t, isOrg, opts) {
+  // v2.7.43: opts.inline → margin-top:0 (pra alinhar os badges com algo ao lado, ex.:
+  // botão VIP na mesma linha). Sem opts → margem padrão (badges empilhados sob o nome).
+  var _inline = !!(opts && opts.inline);
   var members = isTeam ? String(pName).split('/').map(function(n) { return n.trim(); }).filter(Boolean) : [pName];
   return members.map(function(mn, mi) {
     var lc = String(mn).toLowerCase();
@@ -2652,7 +2655,8 @@ window._profileMetaSlots = function(p, pName, isTeam, t, isOrg) {
     var fbCat = (!isTeam && p && typeof p === 'object') ? (p.category || '') : '';
     var prefixName = isTeam ? String(mn).split(' ')[0] : '';
     var initial = window._profileMetaBadgesHtml(fbGender, window._profileMetaExtractSkill(fbCat, t), '', prefixName, t);
-    return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + (mi === 0 ? '5px' : '3px') + ';">' + initial + '</div>';
+    var _mt = _inline ? '0' : (mi === 0 ? '5px' : '3px');
+    return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + _mt + ';">' + initial + '</div>';
   }).join('');
 };
 

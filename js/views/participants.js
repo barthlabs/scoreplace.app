@@ -1473,9 +1473,9 @@ function renderParticipants(container, tournamentId) {
   // (window._profileMetaSlots / _loadParticipantProfilesByName /
   // _patchProfileMetaSlots) pra a mesma lógica valer aqui e na seção "Inscritos
   // Confirmados" do detalhe do torneio (tournaments.js), sem divergir.
-  function _metaSlotsFor(p, pName, isTeam) {
+  function _metaSlotsFor(p, pName, isTeam, opts) {
     return (typeof window._profileMetaSlots === 'function')
-      ? window._profileMetaSlots(p, pName, isTeam, t, isOrg) : '';
+      ? window._profileMetaSlots(p, pName, isTeam, t, isOrg, opts) : '';
   }
   // v2.4.70: hidrata os badges de meta (gênero/nível/idade) pra TODOS os inscritos,
   // não só o organizador — as categorias são informação pública da chave.
@@ -2000,8 +2000,15 @@ function renderParticipants(container, tournamentId) {
         const _woNameSafe = (ind.woMeta.partner || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const _woMatchNum = ind.woMeta.matchNum || '?';
         _matchStrip = `<div style="font-size:0.68rem;color:#f87171;margin-top:6px;font-weight:600;">❌ W.O. — Estava no Jogo ${_woMatchNum}${_woNameSafe ? ` com <span style="color:#94a3b8;font-weight:500;">${_woNameSafe}</span>` : ''}</div>`;
-      } else if (teamsCell) {
-        _matchStrip = `<div style="margin-top:7px;display:flex;align-items:center;gap:10px;"><div style="flex:1;min-width:0;">${teamsCell}</div>${vsCell || ''}</div>`;
+      } else if (teamLine || opponentLine) {
+        // v2.7.43: "vs" na linha do 1º time, "Jogo N" alinhado à direita na linha do 2º.
+        var _jR = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;flex-shrink:0;">${matchLabel}</span>` : '';
+        var _row = function (line, right) {
+          return `<div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:3px;line-height:1.3;">${line || ''}</div><div style="flex-shrink:0;">${right || ''}</div></div>`;
+        };
+        _matchStrip = (teamLine && opponentLine)
+          ? `<div style="margin-top:7px;display:flex;flex-direction:column;gap:2px;">${_row(teamLine, vsCell || '')}${_row(opponentLine, _jR)}</div>`
+          : `<div style="margin-top:7px;">${_row(teamLine || opponentLine, _jR)}</div>`;
       }
       // v2.1.96: todos os W.O. devem ter Reverter disponível — sem restrição
       // por status do jogo. User: "aqui todos os WO deveriam estar com o
@@ -2025,7 +2032,7 @@ function renderParticipants(container, tournamentId) {
           // aparece no badge de meta (gênero · nível · idade) abaixo do nome —
           // não duplica como pill read-only pra não-org.
           const _ciOpts = _ciSkillCats.map(sk => `<option value="${sk}" ${_ciCurrentSkill === sk ? 'selected' : ''}>${sk}</option>`).join('');
-          _ciSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${tId}','${_ciNameSafe}',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:3px;"><option value="" ${!_ciCurrentSkill ? 'selected' : ''}>— nível</option>${_ciOpts}</select>`;
+          _ciSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${tId}','${_ciNameSafe}',this.value)" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:0;"><option value="" ${!_ciCurrentSkill ? 'selected' : ''}>— nível</option>${_ciOpts}</select>`;
         }
       }
 
@@ -2054,15 +2061,14 @@ function renderParticipants(container, tournamentId) {
         <div class="participant-card" data-part-card="1" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${_riNum !== '' ? `<div style="position:absolute;right:8px;top:8px;font-size:${String(_riNum).length > 2 ? '1.9rem' : '2.4rem'};font-weight:900;color:rgba(255,255,255,0.07);line-height:1;pointer-events:none;user-select:none;">${_riNum}</div>` : ''}
             <div style="position:relative;z-index:1;">
-                <!-- HEADER: avatar + nome + estrela | Jogo N -->
-                <div style="display:flex;align-items:flex-start;gap:8px;">
+                <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->
+                <div style="display:flex;align-items:center;gap:8px;">
                     <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
                     <div style="flex:1;min-width:0;">${standbyHeader}${_nameRow}</div>
-                    ${_jogoTop ? `<div style="flex-shrink:0;">${_jogoTop}</div>` : ''}
                 </div>
-                <!-- LINHA COMBINADA (v2.7.42): VIP + categorias (esquerda) | Ausente/Presente + toggle + W.O. (direita) -->
+                <!-- LINHA COMBINADA (v2.7.42/43): VIP + categorias (esquerda, alinhadas no topo) | Ausente/Presente + toggle + W.O. (direita) -->
                 <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">${_vipBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}${_ciSkillHtml}</div>
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">${_vipBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false, {inline:true})}${_ciSkillHtml}</div>
                     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;">
                         ${_presenceWord}
                         ${isAbsent ? _riWoBadge : _toggleSwitch}
