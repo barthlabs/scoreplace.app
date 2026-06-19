@@ -721,66 +721,10 @@ window._ligaTournamentProgress = function(t) {
            totalPlanned: totalPlanned, pct: pct, currentRoundNum: t.rounds.length };
 };
 
-// ─── v2.7.12: PLANO DE JOGOS DO TORNEIO INTEIRO (todas as fases) ──────────────
-// Construtor de fases: o total de jogos previstos é a SOMA de todas as fases —
-// fase já materializada conta os jogos reais; fase futura é estimada por formato.
-// Fase única (legado) NÃO usa isto (continua no _ligaTournamentProgress). Canônico.
+// ─── v2.7.13: PLANO DE JOGOS DO TORNEIO INTEIRO (todas as fases) ──────────────
+// Construtor de fases: total previsto = SOMA de todas as fases. Fase materializada
+// conta jogos REAIS; próxima fase é contada RODANDO O MOTOR (não fórmula). Canônico.
 window._isMultiPhase = function (t) { return !!(t && Array.isArray(t.phases) && t.phases.length > 1); };
-
-// Código interno do formato (cfg.format guarda o rótulo de exibição). reiRainha
-// vem do flag da fase.
-window._phaseFormatCode = function (cfg) {
-  cfg = cfg || {};
-  if (cfg.reiRainha || cfg.drawMode === 'rei_rainha') return { code: 'liga', reiRainha: true };
-  var f = String(cfg.format || '').toLowerCase();
-  if (f.indexOf('dupla') !== -1) return { code: 'elim_dupla', reiRainha: false };
-  if (f.indexOf('grupos') !== -1) return { code: 'grupos_mata', reiRainha: false };
-  if (f.indexOf('su') === 0 || f.indexOf('suí') !== -1 || f.indexOf('sui') !== -1) return { code: 'suico', reiRainha: false };
-  if (f.indexOf('pontos') !== -1 || f.indexOf('liga') !== -1 || f.indexOf('ranking') !== -1) return { code: 'liga', reiRainha: false };
-  return { code: 'elim_simples', reiRainha: false };
-};
-
-// Jogos de UMA fase de CHAVE (bracket) com `teams` entrantes.
-window._bracketGames = function (teams, code) {
-  teams = parseInt(teams) || 0;
-  if (teams < 2) return 0;
-  if (code === 'elim_dupla') return (teams - 1) * 2 + 1;  // upper + lower + grande final
-  return teams - 1;                                       // elim_simples / suíço aprox.
-};
-
-// Jogos da fase CLASSIFICATÓRIA (fase 0) — SÓ os jogos do estágio, sem a
-// eliminação dos classificados (que no construtor é a próxima fase). rounds
-// respeitado (1 rodada = 1 rodada — nada de intervalo presumido).
-window._classifierGames = function (N, cfg) {
-  N = parseInt(N) || 0;
-  if (N < 2) return 0;
-  var fc = window._phaseFormatCode(cfg);
-  var rounds = Math.max(parseInt(cfg && cfg.rounds) || 1, 1);
-  if (fc.reiRainha) return Math.max(Math.floor(N / 4), 1) * 3 * rounds; // 3 jogos/grupo de 4
-  if (fc.code === 'liga') return Math.floor(N / 2) * rounds;
-  if (fc.code === 'grupos_mata') {
-    var g = Math.max(parseInt(cfg && cfg.gruposCount) || 4, 1);
-    var gs = Math.ceil(N / g);
-    return Math.max(gs - 1, 1) * Math.max(Math.floor(gs / 2) * g, 1);  // round-robin nos grupos
-  }
-  return window._bracketGames(N, fc.code);  // chave como fase 0 (raro)
-};
-
-// Quantos avançam da fase classificatória → entrantes da próxima fase.
-// materializedGroups: nº real de grupos da fase 0 (quando já sorteada) → mais preciso.
-window._phaseQualifiers = function (N, cfg, nextCfg, materializedGroups) {
-  var fc = window._phaseFormatCode(cfg);
-  var groups;
-  if (typeof materializedGroups === 'number' && materializedGroups > 0) groups = materializedGroups;
-  else if (fc.reiRainha) groups = Math.max(Math.floor((parseInt(N) || 0) / 4), 1);
-  else groups = Math.max(parseInt(cfg && cfg.gruposCount) || 4, 1);
-  var perGroup = fc.reiRainha
-    ? Math.max(parseInt(cfg && cfg.monarchClassified) || 1, 1)
-    : Math.max(parseInt(cfg && cfg.gruposClassified) || 2, 1);
-  var qualifiers = groups * perGroup;
-  if (nextCfg && nextCfg.fixedPairs) qualifiers = Math.max(Math.floor(qualifiers / 2), 1); // duplas fixas → pares
-  return Math.max(qualifiers, 0);
-};
 
 // Jogos reais já materializados de uma fase (i=0 → t.rounds; i>0 → t.matches[phaseIndex]).
 function _materializedPhaseGames(t, phaseIdx) {
@@ -798,7 +742,40 @@ function _materializedPhaseGames(t, phaseIdx) {
   return (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && real(m); }).length;
 }
 
+// Conta os jogos PREVISTOS de uma fase de chave RODANDO O MOTOR REAL
+// (window._phasesEngine.buildPhaseBrackets) sobre os grupos da fase anterior.
+// Conta jogáveis = não-BYE (inclui rodadas futuras TBD + convergência se houver).
+// Como usa os grupos ATUAIS da fase anterior, grupos tardios (lista de espera)
+// que aparecem na fase 0 refletem AUTOMATICAMENTE no total da fase seguinte.
+function _simulatePhaseGames(t, phaseIdx) {
+  var eng = window._phasesEngine;
+  if (!eng || typeof eng.buildPhaseBrackets !== 'function') return null;
+  var cur = t.currentPhaseIndex || 0;
+  if (phaseIdx !== cur + 1) return null; // só a PRÓXIMA fase é simulável sem resultados
+  var prevGroups = null;
+  if (cur === 0 && typeof eng.prevPhaseGroups === 'function') prevGroups = eng.prevPhaseGroups(t);
+  else if (typeof eng.bracketPhaseGroups === 'function') prevGroups = eng.bracketPhaseGroups(t, cur);
+  if (!prevGroups || !prevGroups.length) return null;
+  // computeStandings só precisa devolver os participantes do grupo (a CONTAGEM da
+  // chave depende de quantos entram por linha, não de QUEM). Ordem não importa.
+  var cs = function (g) {
+    var ps = (g && (g.players || g.participants || g.standings)) || [];
+    return ps.map(function (p) {
+      var nm = (typeof p === 'string') ? p : (p && (p.displayName || p.name)) || '';
+      return { name: nm, displayName: nm };
+    });
+  };
+  try {
+    var built = eng.buildPhaseBrackets(prevGroups, t.phases[phaseIdx], cs, 'plan-' + phaseIdx);
+    return (built.matches || []).filter(function (m) {
+      return m && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE';
+    }).length;
+  } catch (e) { if (window._warn) window._warn('[plan] sim falhou', e); return null; }
+}
+
 // PLANO canônico: total de jogos previstos somando TODAS as fases.
+// Fase materializada = jogos reais (fase 0 inclui grupos tardios da lista de espera).
+// Próxima fase = simulada pelo MOTOR real (single-elim por linha + convergência).
 window._tournamentGamesPlan = function (t) {
   var prog = window._getTournamentProgress(t);
   var done = prog.completed != null ? prog.completed : (prog.completedAll || 0);
@@ -810,33 +787,21 @@ window._tournamentGamesPlan = function (t) {
   }
   var phases = t.phases;
   var curIdx = t.currentPhaseIndex || 0;
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var N0 = parts.length;
-  // grupos reais da fase 0 (Rei/Rainha) por rodada → classificados precisos
-  var rounds0 = Math.max(parseInt((phases[0] || {}).rounds) || 1, 1);
-  var monGroupsTotal = 0;
-  (t.rounds || []).forEach(function (r) { if (r && Array.isArray(r.monarchGroups)) monGroupsTotal += r.monarchGroups.length; });
-  var groupsPerRound = monGroupsTotal > 0 ? Math.round(monGroupsTotal / rounds0) : 0;
-
-  var totalP = 0, entrants = N0;
-  phases.forEach(function (cfg, i) {
-    var games;
-    if (i === 0) {
-      var realP0 = _materializedPhaseGames(t, 0);
-      games = realP0 > 0 ? realP0 : window._classifierGames(N0, cfg);
-      entrants = window._phaseQualifiers(N0, cfg, phases[1], groupsPerRound);
+  var totalP = 0, simComplete = true;
+  for (var i = 0; i < phases.length; i++) {
+    if (i <= curIdx) {
+      totalP += _materializedPhaseGames(t, i);            // fase já sorteada → jogos reais
+    } else if (i === curIdx + 1) {
+      var sim = _simulatePhaseGames(t, i);                // próxima fase → motor real
+      if (sim == null) simComplete = false; else totalP += sim;
     } else {
-      var realPi = _materializedPhaseGames(t, i);
-      var fc = window._phaseFormatCode(cfg);
-      games = realPi > 0 ? realPi : window._bracketGames(entrants, fc.code);
-      entrants = Math.max(Math.floor(entrants / 2), 1); // próxima fase de chave (aprox.)
+      simComplete = false;                                // fases 3+ só entram ao materializar a anterior
     }
-    totalP += games;
-  });
+  }
   if (totalP < done) totalP = done;
   return { multiPhase: true, totalPlanned: totalP, totalDone: done,
            pct: totalP > 0 ? Math.round(done / totalP * 100) : 0,
-           phasesCount: phases.length, currentPhaseIndex: curIdx };
+           phasesCount: phases.length, currentPhaseIndex: curIdx, partial: !simComplete };
 };
 
 // HTML interno (recomputado a cada tick).
