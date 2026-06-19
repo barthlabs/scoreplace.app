@@ -779,11 +779,10 @@ window._partApplyFilter = function () {
       var va = a.getAttribute('data-part-vip') === '1' ? 1 : 0;
       var vb = b.getAttribute('data-part-vip') === '1' ? 1 : 0;
       if (va !== vb) return vb - va;
-      // v2.7.50: LISTA DE ESPERA sempre no rodapé (depois de todos os inscritos),
-      // independente do sort. Dentro do grupo da espera, o sort escolhido vale.
-      var sa = a.getAttribute('data-part-standby') === '1' ? 1 : 0;
-      var sb = b.getAttribute('data-part-standby') === '1' ? 1 : 0;
-      if (sa !== sb) return sa - sb;
+      // v2.7.53: LISTA DE ESPERA NÃO é mais fixada no rodapé — ela entra na ordem
+      // normal (alfabética/cronológica) junto com os demais inscritos, só em âmbar.
+      // Assim, quando a pessoa chega, é achada pela ordem alfabética. (Continua
+      // também no painel "Lista de Espera".)
       if (sort === 'name-asc' || sort === 'name-desc') {
         var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
         return sort === 'name-desc' ? -r : r;
