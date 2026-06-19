@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.33-beta';
+window.SCOREPLACE_VERSION = '2.7.34-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2174,6 +2174,9 @@ window._fbInner = function (key) {
     }
     var IND = { bg: 'rgba(99,102,241,0.30)', bd: 'rgba(99,102,241,0.85)', fg: '#c7d2fe' };
     var RED = { bg: 'rgba(248,113,113,0.18)', bd: 'rgba(248,113,113,0.6)', fg: '#f87171' };
+    var GREEN = { bg: 'rgba(52,211,153,0.20)', bd: 'rgba(52,211,153,0.7)', fg: '#6ee7b7' };
+    var BLUE = { bg: 'rgba(96,165,250,0.22)', bd: 'rgba(96,165,250,0.7)', fg: '#93c5fd' };
+    var PINK = { bg: 'rgba(244,114,182,0.22)', bd: 'rgba(244,114,182,0.7)', fg: '#f9a8d4' };
     // SORT (Opção 1): A-Z e 🕒, cada um uma pílula; ativo indigo + seta da direção.
     var curDim = sort.indexOf('name') === 0 ? 'name' : 'order';
     var curDir = sort.indexOf('-desc') >= 0 ? 'desc' : 'asc';
@@ -2187,26 +2190,26 @@ window._fbInner = function (key) {
         'Ordem alfabética ' + (nameDir === 'desc' ? '(Z→A)' : '(A→Z)') + ' — clique p/ inverter', 'min-width:auto;');
     var clockPill = pill(orderActive, IND, '🕒' + ar(orderDir), "window._fbSortPill('" + key + "','order')",
         'Ordem de inscrição ' + (orderDir === 'desc' ? '(mais recentes 1º)' : '(mais antigos 1º)') + ' — clique p/ inverter', 'min-width:auto;');
-    // GÊNERO cíclico colorido: ⚥ ambos(verde) → ♂ masc(azul) → ♀ fem(rosa) → 🚫 sem gênero(vermelho)
+    // GÊNERO cíclico: ⚥ ambos(verde) → ♂ masc(azul) → ♀ fem(rosa) → 🚫 sem gênero(vermelho)
     var gOrder = ['all', 'Masc', 'Fem', 'none'];
     var gMap = {
-        all:  { sym: '⚥',  t: 'Ambos os gêneros', c: { bg: 'rgba(52,211,153,0.20)', bd: 'rgba(52,211,153,0.7)', fg: '#6ee7b7' } },
-        Masc: { sym: '♂',  t: 'Masculino',         c: { bg: 'rgba(96,165,250,0.22)', bd: 'rgba(96,165,250,0.7)', fg: '#93c5fd' } },
-        Fem:  { sym: '♀',  t: 'Feminino',          c: { bg: 'rgba(244,114,182,0.22)', bd: 'rgba(244,114,182,0.7)', fg: '#f9a8d4' } },
-        none: { sym: '🚫', t: 'Sem gênero',        c: RED }
+        all:  { sym: '⚥',  t: 'Ambos os gêneros', c: GREEN },
+        Masc: { sym: '♂',  t: 'Masculino',        c: BLUE },
+        Fem:  { sym: '♀',  t: 'Feminino',         c: PINK },
+        none: { sym: '🚫', t: 'Sem gênero',       c: RED }
     };
     var gCur = gMap[gender] ? gender : 'all';
     var gNext = gOrder[(gOrder.indexOf(gCur) + 1) % gOrder.length];
     var genderBtn = pill(true, gMap[gCur].c, gMap[gCur].sym, "window._fbAction('" + key + "','gender','" + gNext + "')",
-        'Gênero: ' + gMap[gCur].t + ' — clique p/ alternar', 'font-size:1.02rem;min-width:34px;');
-    // HABILIDADE cíclica: todas(–, NEUTRA = mostra todas) → categorias(indigo) → sem habilidade(🚫 vermelho)
+        'Gênero: ' + gMap[gCur].t + ' — clique p/ alternar', 'font-size:' + (gCur === 'none' ? '0.95rem' : '1.02rem') + ';min-width:34px;');
+    // HABILIDADE cíclica: – todas(verde = mostra todas) → categorias(indigo) → 🚫 sem habilidade(vermelho)
     var skills = (opts.skillCategories && opts.skillCategories.length) ? opts.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
     var sOrder = ['all'].concat(skills).concat(['none']);
     var sCur = (sOrder.indexOf(skill) >= 0) ? skill : 'all';
     var sNext = sOrder[(sOrder.indexOf(sCur) + 1) % sOrder.length];
     var skillBtn;
     var sClick = "window._fbAction('" + key + "','skill','" + sNext + "')";
-    if (sCur === 'all') skillBtn = pill(false, IND, '–', sClick, 'Habilidade: Todas — clique p/ alternar', 'min-width:32px;');
+    if (sCur === 'all') skillBtn = pill(true, GREEN, '–', sClick, 'Habilidade: Todas — clique p/ alternar', 'min-width:32px;');
     else if (sCur === 'none') skillBtn = pill(true, RED, '🚫', sClick, 'Habilidade: Sem habilidade — clique p/ alternar', 'min-width:32px;font-size:0.95rem;');
     else skillBtn = pill(true, IND, esc(sCur), sClick, 'Habilidade: ' + sCur + ' — clique p/ alternar', 'min-width:32px;');
     // inputs ocultos lidos pelos consumidores
