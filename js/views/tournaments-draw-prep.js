@@ -1465,14 +1465,21 @@ window._showPhaseResolutionPanel = function (tId) {
     var estimateHtml = '<div id="phase-res-estimate" style="position:sticky;top:0;z-index:3;background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.5);border-radius:12px;padding:9px 12px;font-size:0.82rem;color:var(--text-bright);box-shadow:0 6px 14px rgba(0,0,0,0.3);">' +
         '⏱️ <b>Estimativa</b>: <b id="phase-res-est-val" style="color:#6ee7b7;">~' + _selD.fmt + '</b> ' +
         '<span id="phase-res-est-sub" style="opacity:0.78;font-size:0.74rem;">(' + _selD.games + ' jogos · ' + _courts + ' quadra' + (_courts > 1 ? 's' : '') + ' · ' + _dur + ' min/jogo)</span></div>';
+    // v2.7.67: as AÇÕES (Avançar/Cancelar) também acompanham a solução selecionada —
+    // ficam LOGO ABAIXO do card escolhido (sticky no rodapé), empurrando as demais
+    // soluções pra baixo e ficando sempre na tela.
+    var actionsHtml = '<div id="phase-res-actions" style="position:sticky;bottom:0;z-index:3;background:var(--bg-card,#1a1a2e);padding-top:8px;box-shadow:0 -8px 12px rgba(0,0,0,0.25);">' +
+        '<button onclick="window._applyPhaseResolution(\'' + tIdSafe + '\', window._phaseResSel)" class="btn btn-success" style="width:100%;">🏆 Avançar com esta solução</button>' +
+        '<button onclick="document.getElementById(\'phase-res-panel\').remove()" style="margin-top:8px;width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);border-radius:10px;padding:8px;font-weight:600;cursor:pointer;">Cancelar</button>' +
+    '</div>';
     ov.innerHTML = '<div style="background:var(--bg-card,#1a1a2e);border:2px solid rgba(245,158,11,0.4);border-radius:18px;max-width:460px;width:100%;max-height:88vh;overflow-y:auto;padding:18px 18px 16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
         '<div style="font-size:1.05rem;font-weight:800;color:#fbbf24;margin-bottom:4px;">⚖️ Resolver as chaves da ' + esc(info.nextName) + '</div>' +
         '<div style="font-size:0.8rem;color:var(--text-main);line-height:1.4;margin-bottom:10px;">Alguma linha não fechou em potência de 2 (' + esc(linesSummary) + '). Escolha como resolver — vale pra <b>todas as linhas</b>:</div>' +
-        '<div style="display:flex;flex-direction:column;gap:8px;">' + estimateHtml + cards + '</div>' +
-        '<button onclick="window._applyPhaseResolution(\'' + tIdSafe + '\', window._phaseResSel)" class="btn btn-success" style="margin-top:12px;width:100%;">🏆 Avançar com esta solução</button>' +
-        '<button onclick="document.getElementById(\'phase-res-panel\').remove()" style="margin-top:8px;width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);border-radius:10px;padding:8px;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;">' + estimateHtml + cards + actionsHtml + '</div>' +
     '</div>';
     document.body.appendChild(ov);
+    // posiciona estimativa (acima) e ações (abaixo) do card selecionado
+    if (typeof window._phaseResSelect === 'function') window._phaseResSelect(window._phaseResSel);
 };
 // v2.7.65: seleção dinâmica no painel de resolução — destaca o card e atualiza a
 // estimativa de tempo acima dos botões, sem aplicar (o "Avançar" aplica).
@@ -1488,10 +1495,13 @@ window._phaseResSelect = function (key) {
     if (!d) return;
     var v = document.getElementById('phase-res-est-val'); if (v) v.textContent = '~' + d.fmt;
     var s = document.getElementById('phase-res-est-sub'); if (s) s.textContent = '(' + d.games + ' jogos · ' + (window._phaseResCourts || '?') + ' quadra' + ((window._phaseResCourts || 1) > 1 ? 's' : '') + ')';
-    // move o box verde pra logo ACIMA da solução clicada (continua sticky)
+    // move o box verde pra ACIMA da solução clicada e as ações pra ABAIXO dela
+    // (ambos sticky → sempre na tela; empurra as demais soluções pra baixo).
     var box = document.getElementById('phase-res-estimate');
     var card = document.getElementById('phase-res-opt-' + key);
     if (box && card && card.parentNode) card.parentNode.insertBefore(box, card);
+    var actions = document.getElementById('phase-res-actions');
+    if (actions && card && card.parentNode) card.parentNode.insertBefore(actions, card.nextSibling);
 };
 window._applyPhaseResolution = function (tId, option) {
     var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
