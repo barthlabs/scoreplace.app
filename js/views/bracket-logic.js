@@ -2385,9 +2385,11 @@ window._generateNextRound = _generateNextRound;
 // Helper: get active players for Liga (filters out ligaActive === false)
 function _getActiveLigaPlayers(t) {
   var allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  // v2.7.38: organizador desligou a auto-desativação → TODOS contam como ativos.
+  var _selfDeactOff = (t && t.allowSelfDeactivation === false);
   var activeNames = {};
   allP.forEach(function(p) {
-    if (typeof p === 'object' && p.ligaActive === false) return; // explicitly inactive
+    if (!_selfDeactOff && typeof p === 'object' && p.ligaActive === false) return; // explicitly inactive
     var name = typeof p === 'string' ? p : (p.displayName || p.name || '');
     if (name) activeNames[name] = true;
   });
@@ -2396,6 +2398,8 @@ function _getActiveLigaPlayers(t) {
 
 // Helper: get inactive players for this round (ligaActive === false)
 function _getInactiveLigaPlayers(t) {
+  // v2.7.38: auto-desativação desligada → ninguém inativo.
+  if (t && t.allowSelfDeactivation === false) return [];
   var allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   var names = [];
   allP.forEach(function(p) {

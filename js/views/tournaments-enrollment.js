@@ -1180,6 +1180,9 @@ window._buildLigaActiveToggleHtml = function(t) {
     ? window._isLigaFormat(t)
     : (t.format === 'Liga' || t.format === 'Ranking');
   if (!isLiga) return '';
+  // v2.7.38: organizador desligou a auto-desativação → o controle some de TODOS os
+  // inscritos (e todos ficam ativos, ver _getActiveLigaPlayers).
+  if (t.allowSelfDeactivation === false) return '';
   if (t.status === 'finished') return '';
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu || !cu.uid && !cu.email) return '';

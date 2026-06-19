@@ -548,6 +548,12 @@ function setupCreateTournamentModal() {
                   <label class="form-label">${_t('create.ligaInactRounds')}</label>
                   <input type="number" class="form-control" id="liga-inactivity-x" min="1" value="3">
                 </div>
+                <!-- v2.7.38: permitir que inscritos se auto-desativem (ficar de fora de um sorteio).
+                     Ligado por padrão. Desligado → o controle some de todos os inscritos e todos ficam ativos. -->
+                <div class="toggle-row" style="margin-bottom:0.75rem;">
+                  <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">Permitir auto-desativação</span><div class="toggle-desc">Inscritos podem ficar de fora de um sorteio. Desligado: ninguém se desativa e todos ficam sempre ativos.</div></div></div>
+                  <label class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation" checked><span class="toggle-slider"></span></label>
+                </div>
                 <!-- v2.6.56: "Inscrições abertas durante toda a temporada" removida — redundante com
                      "Inscrições durante a fase" (Fechadas/Aberta). ligaOpenEnrollment é DERIVADO do
                      lateEnrollment no save. -->
@@ -5009,6 +5015,9 @@ function setupCreateTournamentModal() {
     if (_seasonLoad) _seasonLoad.checked = (t.temporada !== false);
     var _balLoad = document.getElementById('liga-balanced-toggle');
     if (_balLoad) _balLoad.checked = (t.equilibrado !== false);
+    // v2.7.38: permitir auto-desativação (default true).
+    var _adLoad = document.getElementById('liga-allow-self-deactivation');
+    if (_adLoad) _adLoad.checked = (t.allowSelfDeactivation !== false);
     if (t.clusterSize) {
       var _clusterLoad = document.getElementById('liga-cluster-size');
       if (_clusterLoad) _clusterLoad.value = t.clusterSize;
@@ -5653,6 +5662,9 @@ function setupCreateTournamentModal() {
           tourData.ligaNewPlayerScore = document.getElementById('liga-new-player-score').value;
           tourData.ligaInactivity = document.getElementById('liga-inactivity').value;
           tourData.ligaInactivityX = parseInt(document.getElementById('liga-inactivity-x').value) || 3;
+          // v2.7.38: permitir auto-desativação (default true). Off → controle some + todos ativos.
+          var _adEl = document.getElementById('liga-allow-self-deactivation');
+          tourData.allowSelfDeactivation = _adEl ? !!_adEl.checked : true;
           // v2.6.56: derivado de "Inscrições durante a fase" (Fechadas → inscrição fechada;
           // Aberta → aberta). O toggle dedicado foi removido por ser redundante.
           var _lateForLiga = (document.getElementById('late-enrollment') || {}).value || 'closed';
