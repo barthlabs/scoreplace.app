@@ -771,8 +771,11 @@ window._partApplyFilter = function () {
   var parent = cards[0].parentNode;
   if (parent) {
     cards.slice().sort(function (a, b) {
-      // v2.7.29: VIPs SEMPRE fixados no topo (pedido do usuário — "no máximo fixar
-      // no topo os vips"). VIP é a chave primária; o sort escolhido é secundário.
+      // v2.7.37: ORGANIZADORES sempre no topo (acima até dos VIPs), independente do
+      // sort/filtro. Depois VIPs. Depois o sort escolhido (v2.7.29).
+      var ga = a.getAttribute('data-part-org') === '1' ? 1 : 0;
+      var gb = b.getAttribute('data-part-org') === '1' ? 1 : 0;
+      if (ga !== gb) return gb - ga;
       var va = a.getAttribute('data-part-vip') === '1' ? 1 : 0;
       var vb = b.getAttribute('data-part-vip') === '1' ? 1 : 0;
       if (va !== vb) return vb - va;
@@ -1817,6 +1820,9 @@ function renderParticipants(container, tournamentId) {
       if (currentFilter === 'pending' && !isPending) return '';
 
       const safeName = ind.name.replace(/'/g, "\\'");
+      // v2.7.37: estrela do organizador (sempre) + pin no topo (data-part-org).
+      const _isOrgPC = (typeof window._isOrgParticipant === 'function') && window._isOrgParticipant(t, _nameToParticipant[ind.name]);
+      const _orgStarC = _isOrgPC ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.9rem;line-height:1;">⭐</span>' : '';
 
       // Build sub-info with presence dots (3 states: green=presente, red=ausente, gray=aguardando)
       const dotHtml = (name) => {
@@ -1978,7 +1984,7 @@ function renderParticipants(container, tournamentId) {
         : '';
       // v2.2.0: strikethrough só quando isAbsent (player em t.absent) —
       // não quando isWO (match-level). Parceiro presente não deve ter riscado.
-      const nameCell = `<div style="display:flex;align-items:baseline;gap:6px;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${vipTag}${isStandby ? presenceDot : ''}${jogoInline}</div>`;
+      const nameCell = `<div style="display:flex;align-items:baseline;gap:6px;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${_orgStarC}${vipTag}${isStandby ? presenceDot : ''}${jogoInline}</div>`;
       // Inline layout: name+Jogo anchored to top-left, teams stack to the right, "vs" at top-right.
       // Mobile (< 768px) falls back to name on top, matchup block below.
       // v2.7.28: card único em grade → célula estreita; sempre empilha (nome em
@@ -2051,7 +2057,7 @@ function renderParticipants(container, tournamentId) {
       const _riNum = (typeof _ciOrder === 'number' && _ciOrder !== 9999) ? (_ciOrder + 1) : '';
       const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
-        <div class="participant-card" data-part-card="1" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
+        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${_riNum !== '' ? `<div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(_riNum).length > 2 ? '2.4rem' : '3rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${_riNum}</div>` : ''}
             <div style="position:relative;z-index:1;display:flex;align-items:center;gap:10px;">
                 <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
@@ -2077,6 +2083,9 @@ function renderParticipants(container, tournamentId) {
     cardsStr = parts.map((p, idx) => {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
       const isTeam = pName.includes('/');
+      // v2.7.37: estrela do organizador (sempre visível) + pin no topo (data-part-org).
+      const _isOrgP = (typeof window._isOrgParticipant === 'function') && window._isOrgParticipant(t, p);
+      const _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.95rem;line-height:1;">⭐</span>' : '';
 
       // v2.1.86/v2.2.40: estado da CHAMADA (por entry) + filtro presente/ausente/aguardando.
       // Vale na chamada pré-sorteio (interativa) e pós-sorteio antes de iniciar (leitura).
@@ -2117,7 +2126,7 @@ function renderParticipants(container, tournamentId) {
           const _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
           const _editAttr = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_nmSafe}')" title="Clique para editar" style="font-weight:700;font-size:0.95rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;"` : `style="font-weight:700;font-size:0.95rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_nmSafe}'${_mUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_nmSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_nmH}"`;
           return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="${_mPhoto}" ${_mErr} data-player-name="${_nmH}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span ${_editAttr}>${_nmH}</span></div>`;
-        }).join('');
+        }).join('') + (_orgStar ? `<div style="margin-top:2px;">${_orgStar}</div>` : '');
       } else {
         const _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const _pSeedN = encodeURIComponent(pName);
@@ -2130,7 +2139,7 @@ function renderParticipants(container, tournamentId) {
         const _pUid  = (_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '';
         const _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
         const _editAttrN = isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${t.id}','${_pSafe}')" title="Clique para editar" style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:text;"` : `style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pSafe}'${_pUidJs});else if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_pSafe}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Ver perfil de ${_pNameH}"`;
-        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhotoN}" ${_pErrN} data-player-name="${_pNameH}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span ${_editAttrN}>${_pNameH}</span></div>`;
+        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhotoN}" ${_pErrN} data-player-name="${_pNameH}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span ${_editAttrN}>${_pNameH}</span>${_orgStar}</div>`;
       }
 
       const vips = t.vips || {};
@@ -2239,7 +2248,7 @@ function renderParticipants(container, tournamentId) {
       const _fOrder = (_partEnrollIdx && _partEnrollIdx[_fKey] != null) ? _partEnrollIdx[_fKey] : idx;
       const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
       return `
-        <div class="participant-card" data-part-card="1" data-part-vip="${isVip ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
             <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(bgNum).length > 2 ? '2.8rem' : '3.5rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${bgNum}</div>
             <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:0;">
                 <div style="display:flex;align-items:center;gap:12px;">

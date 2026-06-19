@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.36-beta';
+window.SCOREPLACE_VERSION = '2.7.37-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -4196,6 +4196,29 @@ window._loadTemplates = async function() {
     } catch(e2) { window._templateCache = []; }
     return window._templateCache;
   }
+};
+
+// v2.7.37: é ESTE participante um organizador (criador ou co-host ATIVO)? Aceita o
+// objeto participante (checa uid/email + p1/p2 de duplas). Usado pra ESTRELA + fixar
+// no topo da lista de Inscritos (organizadores no topo, como os VIPs).
+window._isOrgParticipant = function (t, p) {
+  if (!t || !p || typeof p !== 'object') return false;
+  var uids = [p.uid || '', p.p1Uid || '', p.p2Uid || ''].filter(Boolean);
+  var emails = [p.email, p.p1Email, p.p2Email].map(function (e) { return String(e || '').toLowerCase(); }).filter(Boolean);
+  if (t.creatorUid && uids.indexOf(t.creatorUid) >= 0) return true;
+  var cE = String(t.creatorEmail || '').toLowerCase();
+  var oE = String(t.organizerEmail || '').toLowerCase();
+  if (cE && emails.indexOf(cE) >= 0) return true;
+  if (oE && emails.indexOf(oE) >= 0) return true;
+  if (Array.isArray(t.coHosts)) {
+    for (var i = 0; i < t.coHosts.length; i++) {
+      var ch = t.coHosts[i];
+      if (!ch || ch.status !== 'active') continue;
+      if (ch.uid && uids.indexOf(ch.uid) >= 0) return true;
+      if (ch.email && emails.indexOf(String(ch.email).toLowerCase()) >= 0) return true;
+    }
+  }
+  return false;
 };
 
 window._saveTemplate = async function(template) {
