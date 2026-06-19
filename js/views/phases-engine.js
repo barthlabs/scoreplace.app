@@ -229,8 +229,12 @@
     var isPow2 = (n & (n - 1)) === 0;
     var lo = 1; while (lo * 2 <= n) lo *= 2; // maior potência de 2 <= n
 
-    // EXCLUSÃO — corta os piores até a potência abaixo (chave limpa, sem BYE).
-    if (!isPow2 && resolution === 'exclusion') {
+    // EXCLUSÃO / LISTA DE ESPERA — corta os piores até a potência abaixo (chave
+    // limpa, sem BYE). 'exclusion' descarta; 'standby' GUARDA os cortados (vão pra
+    // lista de espera — disponíveis pra substituir num W.O.).
+    var waitlistTeams = [];
+    if (!isPow2 && (resolution === 'exclusion' || resolution === 'standby')) {
+      if (resolution === 'standby') waitlistTeams = teams.slice(lo);
       teams = teams.slice(0, lo); n = lo; isPow2 = true;
     }
 
@@ -300,7 +304,7 @@
     }
 
     var finalMatchId = roundsMap[totalRounds][0].id;
-    return { matches: matches, finalMatchId: finalMatchId, soleWinner: null, totalRounds: totalRounds };
+    return { matches: matches, finalMatchId: finalMatchId, soleWinner: null, totalRounds: totalRounds, waitlist: waitlistTeams };
   }
 
   var DEST_BRACKET = { upper: 'gold', lower: 'silver', main: 'main', line3: 'line3', line4: 'line4' };
@@ -338,6 +342,7 @@
 
     var allMatches = [];
     var tiers = {};
+    var phaseWaitlist = []; // v2.7.25: cortados que vão pra lista de espera (resolution 'standby')
     // ordem estável: upper(Ouro) antes de lower(Prata)
     var destOrder = ['upper', 'lower', 'main'].filter(function (d) { return byDest[d]; });
     Object.keys(byDest).forEach(function (d) { if (destOrder.indexOf(d) === -1) destOrder.push(d); });
@@ -355,6 +360,7 @@
       var _label = _custom || (DEST_LABEL[dest] || ('Chave ' + (destOrder.indexOf(dest) + 1)));
       res.matches.forEach(function (m) { m.tierLabel = _label; });
       allMatches = allMatches.concat(res.matches);
+      if (res.waitlist && res.waitlist.length) phaseWaitlist = phaseWaitlist.concat(res.waitlist);
       tiers[dest] = res;
     });
 
@@ -394,7 +400,7 @@
       converge = { gf: gf4, third: third4, semis: [semi1, semi2], matches: conv4 };
     }
 
-    return { matches: allMatches, tiers: tiers, converge: converge, byDest: byDest };
+    return { matches: allMatches, tiers: tiers, converge: converge, byDest: byDest, waitlist: phaseWaitlist };
   }
 
   // Standings por grupo a partir de matches p1/p2 (Fase de Grupos). Funciona
@@ -623,6 +629,15 @@
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
     built.matches.forEach(function (m) { m.phaseIndex = nextIdx; if (m.category === undefined) m.category = null; });
     t.matches = (t.matches || []).concat(built.matches);
+    // v2.7.25: resolução 'standby' → os cortados vão pra lista de espera (reusa a
+    // infra existente: aparecem no painel de Lista de Espera + servem pra W.O.).
+    if (built.waitlist && built.waitlist.length) {
+      var _sb = Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : [];
+      var _have = {};
+      _sb.forEach(function (p) { var nm = (typeof p === 'string') ? p : (p && (p.displayName || p.name)); if (nm) _have[nm] = 1; });
+      built.waitlist.forEach(function (tm) { var nm = tm && (tm.displayName || tm.name); if (nm && !_have[nm]) { _sb.push(nm); _have[nm] = 1; } });
+      t.standbyParticipants = _sb;
+    }
     t.currentPhaseIndex = nextIdx;
     t.currentStage = 'phase' + nextIdx;
     t._phaseMaterialized = nextIdx;

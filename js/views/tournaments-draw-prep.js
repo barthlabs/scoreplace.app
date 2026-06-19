@@ -1397,12 +1397,14 @@ window._showPhaseResolutionPanel = function (tId) {
             var lo = pow2lo(s), hi = lo * 2, excess = s - lo, missing = hi - s, d;
             if (optKey === 'bye') d = 'chave de ' + hi + ' (' + missing + ' folga' + (missing > 1 ? 's' : '') + ')';
             else if (optKey === 'playin') d = excess + ' classificatória' + (excess > 1 ? 's' : '') + ' → chave de ' + lo;
+            else if (optKey === 'standby') d = excess + ' pra lista de espera → chave de ' + lo;
             else d = 'corta ' + excess + ' → chave de ' + lo;
             return '<b>' + esc(l.label) + '</b> (' + s + '): ' + d;
         }).filter(Boolean).join(' · ');
     }
     var opts = [
         { key: 'playin', icon: '🔁', title: 'Play-in (classificatória)', sub: 'Todos jogam — os últimos disputam a vaga.', rec: true },
+        { key: 'standby', icon: '⏱️', title: 'Lista de espera', sub: 'Os últimos ficam de espera (entram na chave abaixo) — disponíveis pra substituir num W.O.', rec: false },
         { key: 'bye', icon: '🥇', title: 'BYE (folga p/ cabeças)', sub: 'Os melhores folgam a 1ª rodada até a potência acima.', rec: false },
         { key: 'exclusion', icon: '🚫', title: 'Exclusão', sub: 'Corta os piores classificados até a potência abaixo.', rec: false }
     ];
