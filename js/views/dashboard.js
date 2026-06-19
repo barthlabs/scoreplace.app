@@ -1906,11 +1906,11 @@ function renderDashboard(container) {
       }
       var finalHeaderBtns = headerBtns !== null ? headerBtns : defaultHeaderBtns;
 
-      // v2.4.76: "Ir para Torneio" virou botão de verdade (padrão .btn do app —
-      // .btn-indigo .btn-sm com o volume almofadado), na MESMA linha do "JOGO N"
-      // (header), não mais como tag no rodapé. Fica FORA do #header-btns (que é
-      // reescrito in-place no fluxo de aprovação) pra nunca ser apagado.
-      var goToBtn = '<button onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" class="btn btn-indigo btn-sm" style="flex-shrink:0;">Ir para Torneio →</button>';
+      // v2.7.51: "Ir para Torneio" volta ao tamanho dos botões Ao Vivo/Confirmar
+      // (mesma fonte/padding/raio, flat) só com a cor índigo — antes era .btn .btn-sm
+      // (maior, com volume) e quebrava pra outra linha. Fica na MESMA linha dos outros
+      // 2, FORA do #header-btns (que é reescrito in-place no fluxo de aprovação).
+      var goToBtn = '<button onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;" onmouseover="this.style.background=\'rgba(99,102,241,0.3)\'" onmouseout="this.style.background=\'rgba(99,102,241,0.15)\'">Ir para Torneio →</button>';
 
       return '<div style="min-width:300px;max-width:360px;display:flex;flex-direction:column;gap:0.6rem;">' +
         (opts.hideFaseHeader ? '' :
