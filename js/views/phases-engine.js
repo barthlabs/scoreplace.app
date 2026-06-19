@@ -151,15 +151,60 @@
       return picked;
     }
 
+    // v2.7.15: distribuição DIRIGIDA PELA ESTRATÉGIA. Forma os times (duplas ou
+    // indivíduos) de um POOL de classificados e distribui nas N linhas EM ORDEM.
+    // O destino da dupla vem da ESTRATÉGIA + ordem, não mais da faixa de rank:
+    //   • 'top' (Performance): duplas adjacentes 1+2, 3+4… (fortes primeiro) →
+    //     tiered: as duplas mais fortes na linha 0 (Ouro), as fracas na linha 1.
+    //   • 'balanced' (Equilíbrio): duplas 1+último, 2+penúltimo (forte+fraco) →
+    //     distribuídas em ordem (1+4→linha0, 2+3→linha1).
+    //   • 'draw_among' (Sorteio): embaralha, pareia adjacente, distribui em ordem.
+    // keep (duplas já formadas) passa direto, distribuído tiered.
+    function _distributePool(pool, destKeys) {
+      var nLines = destKeys.length;
+      if (!pool || !pool.length || !nLines) return;
+      if (basis === 'team' || _isTeamEntry(pool[0])) {
+        pool.forEach(function (s, k) {
+          var ln = Math.min(Math.floor(k * nLines / pool.length), nLines - 1);
+          byDest[destKeys[ln]].push(_asTeam(s));
+        });
+        return;
+      }
+      var teams = [];
+      if (!fixedPairs) {
+        teams = pool.map(function (s) { return mkTeam([s]); });
+      } else if (pairingStrategy === 'draw_among') {
+        var l = shuffle(pool.slice());
+        for (var i = 0; i < l.length; i += 2) teams.push(mkTeam(l.slice(i, i + 2)));
+      } else if (pairingStrategy === 'balanced') {
+        var lo = 0, hi = pool.length - 1;
+        while (lo < hi) { teams.push(mkTeam([pool[lo], pool[hi]])); lo++; hi--; }
+        if (lo === hi) teams.push(mkTeam([pool[lo]]));
+      } else { // 'top'/'performance' (e 'seed' por ora cai aqui)
+        for (var j = 0; j < pool.length; j += 2) teams.push(mkTeam(pool.slice(j, j + 2)));
+      }
+      var per = Math.max(Math.ceil(teams.length / nLines), 1);
+      teams.forEach(function (tm, k) {
+        var ln = Math.min(Math.floor(k / per), nLines - 1);
+        byDest[destKeys[ln]].push(tm);
+      });
+    }
+
     if (scope === 'overall') {
       // Pool agregado: classifica todo mundo junto e recorta faixas globais.
       var global = _globalStandings(prevGroups, computeStandings);
       mapping.forEach(function (mp) { pairInto(byDest[mp.dest], pickRange(global, mp)); });
     } else {
-      // Por grupo (default): colocação dentro de cada grupo; pareia dentro do grupo.
+      // Por grupo (v2.7.15): forma os times do grupo e DISTRIBUI nas linhas pela
+      // ESTRATÉGIA. As faixas do mapping só dizem QUANTOS avançam (profundidade =
+      // maior rankTo; >=999 ou ausente = todos do grupo). O destino (linha) vem da
+      // estratégia + ordem — fim do "destino por faixa de rank".
+      var destKeys = mapping.map(function (mp) { return mp.dest; });
+      var maxRankTo = mapping.reduce(function (mx, mp) { return Math.max(mx, parseInt(mp.rankTo, 10) || 0); }, 0);
       (prevGroups || []).forEach(function (g) {
         var standings = computeStandings(g) || [];
-        mapping.forEach(function (mp) { pairInto(byDest[mp.dest], pickRange(standings, mp)); });
+        var depth = (maxRankTo >= 999 || maxRankTo <= 0) ? standings.length : Math.min(maxRankTo, standings.length);
+        _distributePool(standings.slice(0, depth), destKeys);
       });
     }
     return byDest;
