@@ -2343,6 +2343,17 @@ function renderParticipants(container, tournamentId) {
   // Standby / waitlist panel
   const standbyPanelHtml = (typeof window._renderStandbyPanel === 'function') ? window._renderStandbyPanel(t, isOrg) : '';
 
+  // v2.7.48: barra de busca/sort/filtro vai pro back-header (FIXO) → sempre visível
+  // ao rolar a lista. A mensagem de "nenhum encontrado" fica perto dos cards.
+  const _filterBarCtrls = (parts.length > 6 && typeof window._inscritosFilterBar === 'function')
+    ? window._inscritosFilterBar({
+        stateKey: 'inscritos',
+        searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
+        onChange: 'window._partApplyFilter()',
+        skillCategories: (t.skillCategories || [])
+      })
+    : '';
+
   container.innerHTML = `
     ${(typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
@@ -2357,22 +2368,14 @@ function renderParticipants(container, tournamentId) {
             '<span class="badge badge-info" style="font-size:0.65rem;">' + ((window._formatDisplayName && t.format) ? window._formatDisplayName(t.format) : (t.format || _t('participants.defaultFormat'))) + '</span>' +
             '<span class="badge" style="background:rgba(255,255,255,0.1);color:var(--text-muted);font-size:0.65rem;">' + individualCount + '</span>' +
           '</div>',
-          belowHtml: (checkInControls || rollCallControls)
+          belowHtml: (checkInControls || rollCallControls) + (_filterBarCtrls ? '<div style="margin-top:8px;">' + _filterBarCtrls + '</div>' : '')
         })
       : ''}
     ${rollCallBanner}
     ${startBanner}
     ${startedBadge}
     ${readyBannerHtml}
-    ${(parts.length > 6 && typeof window._inscritosFilterBar === 'function') ? (
-      window._inscritosFilterBar({
-        stateKey: 'inscritos', // v2.7.30: persiste sort/gênero/habilidade/busca entre re-renders (ex.: após remover)
-        searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
-        onChange: 'window._partApplyFilter()',
-        skillCategories: (t.skillCategories || [])
-      }) +
-      '<div id="part-search-empty" style="display:none;text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;">Nenhum inscrito encontrado.</div>'
-    ) : ''}
+    ${_filterBarCtrls ? '<div id="part-search-empty" style="display:none;text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;">Nenhum inscrito encontrado.</div>' : ''}
     ${parts.length > 0 ? `
       <div style="${gridStyle}">
         ${cardsStr}
