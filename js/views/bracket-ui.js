@@ -3068,7 +3068,7 @@ window._tvBuildNextMatches = function(t) {
       if ((c.phase === 'groups' || c.phase === 'monarch') && Array.isArray(c.subgroups)) {
         // Label per subgroup (e.g., "Grupo A")
         c.subgroups.forEach(function(sg, gi) {
-          var label = _t('bui.groupLabel', { n: (sg && sg.name) || (gi + 1) });
+          var label = window._groupDisplayName(sg, gi);
           (sg && sg.matches || []).forEach(function(m) {
             if (m.p1 && m.p2 && !m.winner && !m.isBye) {
               m._roundLabel = label;
@@ -3100,7 +3100,7 @@ window._tvBuildNextMatches = function(t) {
     if (Array.isArray(t.groups)) {
       t.groups.forEach(function(g, gi) {
         (g.matches || []).forEach(function(m) {
-          if (m.p1 && m.p2 && !m.winner) { m._roundLabel = _t('bui.groupLabel', {n: g.name || (gi + 1)}); allMatches.push(m); }
+          if (m.p1 && m.p2 && !m.winner) { m._roundLabel = window._groupDisplayName(g, gi); allMatches.push(m); }
         });
       });
     }
@@ -3405,10 +3405,10 @@ window._showPlayerHistory = function(tId, playerName, filter) {
       // not c.matches — walk both so player history covers every phase.
       if ((c.phase === 'groups' || c.phase === 'monarch') && Array.isArray(c.subgroups)) {
         c.subgroups.forEach(function(sg, gi) {
-          var gname = (sg && sg.name) || window._groupLetter(gi);
+          var gname = window._groupDisplayName(sg, gi);
           (sg && sg.matches || []).forEach(function(m) {
             if (m && (m.p1 === playerName || m.p2 === playerName)) {
-              matches.push({ label: _t('bui.groupLabel', { n: gname }), m: m });
+              matches.push({ label: gname, m: m });
             }
           });
         });
@@ -3436,7 +3436,7 @@ window._showPlayerHistory = function(tId, playerName, filter) {
     if (Array.isArray(t.groups)) {
       t.groups.forEach(function(g, gi) {
         (g.matches || []).forEach(function(m) {
-          if (m.p1 === playerName || m.p2 === playerName) matches.push({ round: null, m: m, group: gi + 1 });
+          if (m.p1 === playerName || m.p2 === playerName) matches.push({ round: null, m: m, label: window._groupDisplayName(g, gi) });
         });
       });
     }
@@ -3461,7 +3461,7 @@ window._showPlayerHistory = function(tId, playerName, filter) {
       ? (m.p1 === playerName ? m.scoreP1 + ' × ' + m.scoreP2 : m.scoreP2 + ' × ' + m.scoreP1)
       : (m.winner ? '' : '—');
     var resultIcon = isDraw ? '🤝' : (isWin ? '✅' : (isLoss ? '❌' : '⏳'));
-    var roundLabel = item.label || (item.round ? 'Rodada ' + item.round : (item.group ? 'Grupo ' + item.group : (m.label || '')));
+    var roundLabel = item.label || (item.round ? 'Rodada ' + item.round : (m.label || ''));
     return {
       type: isWin ? 'win' : (isLoss ? 'loss' : (isDraw ? 'draw' : 'pending')),
       html: '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">' +

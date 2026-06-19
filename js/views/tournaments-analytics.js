@@ -1010,7 +1010,7 @@ window._buildActivityLog = function(tournamentId) {
             }
             if ((c.phase === 'groups' || c.phase === 'monarch') && Array.isArray(c.subgroups)) {
                 c.subgroups.forEach(function(sg, gi) {
-                    var label = 'Grupo ' + ((sg && sg.name) || window._groupLetter(gi));
+                    var label = window._groupDisplayName(sg, gi);
                     (sg && sg.matches || []).forEach(function(m) { allMatches.push({ m: m, label: label }); });
                 });
                 return;
@@ -1030,7 +1030,7 @@ window._buildActivityLog = function(tournamentId) {
         }
         if (Array.isArray(t.groups)) {
             t.groups.forEach(function(g, gi) {
-                (g.matches || []).forEach(function(m) { allMatches.push({ m: m, label: 'Grupo ' + (gi+1) }); });
+                (g.matches || []).forEach(function(m) { allMatches.push({ m: m, label: window._groupDisplayName(g, gi) }); });
             });
         }
         if (Array.isArray(t.rodadas)) {

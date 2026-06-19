@@ -13,6 +13,24 @@ window._groupLetter = window._groupLetter || function (i) {
   return String.fromCharCode(65 + (i % 26)) + (tier === 0 ? '' : (tier + 1));
 };
 
+// Nome COMPLETO do grupo a partir do índice: "Grupo A2" (prefixo via i18n
+// label.group). Único ponto que monta "Grupo " + letra — usar na CRIAÇÃO do
+// grupo (onde o name é gravado).
+window._groupName = window._groupName || function (i) {
+  var lbl = (typeof _t === 'function') ? _t('label.group') : 'Grupo';
+  return lbl + ' ' + window._groupLetter(i);
+};
+
+// Nome de EXIBIÇÃO de um grupo/subgrupo já existente: usa o `.name` gravado
+// (que já é canônico, ex.: "Grupo A" ou "R1 Grupo A") TAL QUAL — NÃO re-prefixa
+// "Grupo" (era isso que gerava "Grupo Grupo A" / "Grupo R1 Grupo A" nos renders).
+// Cai pro _groupName(i) só quando não há name. Aceita objeto {name} ou string.
+window._groupDisplayName = window._groupDisplayName || function (grp, i) {
+  var nm = (grp == null) ? '' : (typeof grp === 'string' ? grp : (grp.name || ''));
+  nm = (nm == null) ? '' : String(nm).trim();
+  return nm ? nm : window._groupName(i);
+};
+
 // ── Monarch (Rei/Rainha) individual standings per group ──
 window._computeMonarchStandings = function(group) {
   var stats = {};
@@ -2606,8 +2624,7 @@ function _buildMonarchGroup(opts) {
   var catLabel = category && window._displayCategoryName
     ? ' (' + window._displayCategoryName(category) + ')'
     : (category ? ' (' + category + ')' : '');
-  var groupName = 'R' + roundNum + ' ' + (typeof _t === 'function' ? _t('label.group') : 'Grupo')
-    + ' ' + window._groupLetter(gi) + nameSuffix;
+  var groupName = 'R' + roundNum + ' ' + window._groupName(gi) + nameSuffix;
   var A = P[0], B = P[1], C = P[2], D = P[3];
   var pairings = [{ t1: [A, B], t2: [C, D] }, { t1: [A, C], t2: [B, D] }, { t1: [A, D], t2: [B, C] }];
   var matches = pairings.map(function (pair, mi) {

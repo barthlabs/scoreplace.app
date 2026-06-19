@@ -904,9 +904,9 @@ function _resolveMatchRows(t) {
       }
       if ((c.phase === 'groups' || c.phase === 'monarch') && Array.isArray(c.subgroups)) {
         c.subgroups.forEach(function(sg, gi) {
-          var gname = (sg && sg.name) || window._groupLetter(gi);
+          var gname = window._groupDisplayName(sg, gi);
           (sg && sg.matches || []).forEach(function(m, mi) {
-            allMatches.push({ m: m, label: 'Grupo ' + gname + ' - Partida ' + (mi + 1) });
+            allMatches.push({ m: m, label: gname + ' - Partida ' + (mi + 1) });
           });
         });
         return;
@@ -925,7 +925,7 @@ function _resolveMatchRows(t) {
     }
     if (Array.isArray(t.groups)) {
       t.groups.forEach(function(g, gi) {
-        (g.matches || []).forEach(function(m, mi) { allMatches.push({ m: m, label: 'Grupo ' + (gi + 1) + ' - Partida ' + (mi + 1) }); });
+        (g.matches || []).forEach(function(m, mi) { allMatches.push({ m: m, label: window._groupDisplayName(g, gi) + ' - Partida ' + (mi + 1) }); });
       });
     }
     if (Array.isArray(t.rodadas)) {

@@ -762,7 +762,7 @@ window.generateDrawFunction = function (tId) {
             const players = [getName(participants[g*4]), getName(participants[g*4+1]), getName(participants[g*4+2]), getName(participants[g*4+3])];
             const [A, B, C, D] = players;
             groups.push({
-                name: _t('label.group') + ' ' + window._groupLetter(g),
+                name: window._groupName(g),
                 players: players,
                 rounds: [{
                     round: 1, status: 'active',
@@ -839,7 +839,7 @@ window.generateDrawFunction = function (tId) {
 
         // Distribute participants into groups (snake draft)
         const groups = Array.from({ length: numGroups }, (_, i) => ({
-            name: `${_t('label.group')} ${window._groupLetter(i)}`,
+            name: window._groupName(i),
             participants: [],
             standings: [],
             rounds: []
