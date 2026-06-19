@@ -1403,7 +1403,7 @@ window._showPhaseResolutionPanel = function (tId) {
         }).filter(Boolean).join('');
     }
     var opts = [
-        { key: 'playin', icon: '🔁', title: 'Play-in (classificatória)', sub: 'Todos jogam — os últimos disputam a vaga.' },
+        { key: 'playin', icon: '🔁', title: 'Play-in (repescagem)', sub: 'Todos jogam — os últimos disputam a vaga.' },
         { key: 'standby', icon: '⏱️', title: 'Lista de espera', sub: 'Os últimos ficam de espera (entram na chave abaixo) — disponíveis pra substituir num W.O.' },
         { key: 'bye', icon: '🥇', title: 'BYE (folga p/ cabeças)', sub: 'Os melhores folgam a 1ª rodada até a potência acima.' },
         { key: 'exclusion', icon: '🚫', title: 'Exclusão', sub: 'Corta os piores classificados até a potência abaixo.' }
@@ -1428,6 +1428,8 @@ window._showPhaseResolutionPanel = function (tId) {
     // justiça 45% · inclusão 35% · esforço 20%, cada um 0-10 → % = score*10.
     var _nashPay = { 'playin': { f: 8, i: 10, e: 6 }, 'standby': { f: 6, i: 4, e: 9 }, 'bye': { f: 6, i: 10, e: 9 }, 'exclusion': { f: 3, i: 2, e: 10 } };
     function nashPct(k) { var p = _nashPay[k]; return p ? Math.round((p.f * 0.45 + p.i * 0.35 + p.e * 0.20) * 10) : 0; }
+    // v2.7.66: apresenta as soluções em ordem decrescente de equilíbrio de Nash.
+    opts.sort(function (a, b) { return nashPct(b.key) - nashPct(a.key); });
     var _bestKey = '', _bestPct = -1;
     opts.forEach(function (o) { var p = nashPct(o.key); if (p > _bestPct) { _bestPct = p; _bestKey = o.key; } });
     // estado p/ seleção dinâmica
@@ -1440,11 +1442,14 @@ window._showPhaseResolutionPanel = function (tId) {
     var cards = opts.map(function (o) {
         var pct = nashPct(o.key); var isRec = (o.key === _bestKey); var isSel = (o.key === window._phaseResSel);
         return '<button id="phase-res-opt-' + o.key + '" data-key="' + o.key + '" onclick="window._phaseResSelect(\'' + o.key + '\')" style="text-align:left;background:' + (isSel ? 'rgba(99,102,241,0.16)' : 'rgba(255,255,255,0.04)') + ';border:2px solid ' + (isSel ? 'rgba(129,140,248,0.8)' : 'rgba(255,255,255,0.12)') + ';border-radius:14px;padding:12px 14px;cursor:pointer;color:#e2e8f0;transition:all 0.2s;">' +
-            '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:0.92rem;flex-wrap:wrap;">' + o.icon + ' ' + o.title +
-              (isRec ? ' <span style="font-size:0.6rem;background:rgba(16,185,129,0.25);color:#6ee7b7;padding:1px 7px;border-radius:6px;">recomendado</span>' : '') +
-              '<span style="margin-left:auto;font-size:0.62rem;font-weight:800;color:' + nashColor(pct) + ';background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);padding:1px 7px;border-radius:6px;white-space:nowrap;" title="Equilíbrio de Nash — quanto maior, melhor o equilíbrio entre justiça, inclusão e esforço">⚖️ Nash ' + pct + '%</span>' +
+            // linha 1: nome (esq) + Nash (dir) — SEMPRE na mesma posição relativa ao nome
+            '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:0.92rem;">' +
+              '<span>' + o.icon + ' ' + o.title + '</span>' +
+              '<span style="margin-left:auto;flex-shrink:0;font-size:0.62rem;font-weight:800;color:' + nashColor(pct) + ';background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);padding:1px 7px;border-radius:6px;white-space:nowrap;" title="Equilíbrio de Nash — quanto maior, melhor o equilíbrio entre justiça, inclusão e esforço">⚖️ Nash ' + pct + '%</span>' +
             '</div>' +
-            '<div style="font-size:0.74rem;color:var(--text-muted);margin:3px 0 5px;">' + o.sub + '</div>' +
+            // linha 2: recomendado (só no de maior Nash), abaixo do nome, à esquerda
+            (isRec ? '<div style="margin-top:3px;"><span style="font-size:0.6rem;background:rgba(16,185,129,0.25);color:#6ee7b7;padding:1px 7px;border-radius:6px;">recomendado</span></div>' : '') +
+            '<div style="font-size:0.74rem;color:var(--text-muted);margin:5px 0 5px;">' + o.sub + '</div>' +
             '<div style="font-size:0.72rem;color:#93c5fd;line-height:1.45;">' + descFor(o.key) + '</div>' +
         '</button>';
     }).join('');
@@ -1454,14 +1459,16 @@ window._showPhaseResolutionPanel = function (tId) {
     ov.style.cssText = 'position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:18px;';
     var linesSummary = info.lines.map(function (l) { return esc(l.label) + ': ' + l.size; }).join(' · ');
     var _selD = window._phaseResData[window._phaseResSel];
-    var estimateHtml = '<div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:9px 12px;margin-bottom:10px;font-size:0.82rem;color:var(--text-bright);">' +
-        '⏱️ <b>Estimativa</b> da solução selecionada: <b id="phase-res-est-val" style="color:#a5b4fc;">~' + _selD.fmt + '</b> ' +
-        '<span id="phase-res-est-sub" style="opacity:0.7;font-size:0.74rem;">(' + _selD.games + ' jogos · ' + _courts + ' quadra' + (_courts > 1 ? 's' : '') + ' · ' + _dur + ' min/jogo)</span></div>';
+    // v2.7.66: box VERDE de estimativa, STICKY (acompanha o scroll) e posicionado
+    // logo acima da solução clicada. Renderizado dentro do container das soluções
+    // (antes do card selecionado); _phaseResSelect o move pro card escolhido.
+    var estimateHtml = '<div id="phase-res-estimate" style="position:sticky;top:0;z-index:3;background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.5);border-radius:12px;padding:9px 12px;font-size:0.82rem;color:var(--text-bright);box-shadow:0 6px 14px rgba(0,0,0,0.3);">' +
+        '⏱️ <b>Estimativa</b>: <b id="phase-res-est-val" style="color:#6ee7b7;">~' + _selD.fmt + '</b> ' +
+        '<span id="phase-res-est-sub" style="opacity:0.78;font-size:0.74rem;">(' + _selD.games + ' jogos · ' + _courts + ' quadra' + (_courts > 1 ? 's' : '') + ' · ' + _dur + ' min/jogo)</span></div>';
     ov.innerHTML = '<div style="background:var(--bg-card,#1a1a2e);border:2px solid rgba(245,158,11,0.4);border-radius:18px;max-width:460px;width:100%;max-height:88vh;overflow-y:auto;padding:18px 18px 16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
         '<div style="font-size:1.05rem;font-weight:800;color:#fbbf24;margin-bottom:4px;">⚖️ Resolver as chaves da ' + esc(info.nextName) + '</div>' +
         '<div style="font-size:0.8rem;color:var(--text-main);line-height:1.4;margin-bottom:10px;">Alguma linha não fechou em potência de 2 (' + esc(linesSummary) + '). Escolha como resolver — vale pra <b>todas as linhas</b>:</div>' +
-        estimateHtml +
-        '<div style="display:flex;flex-direction:column;gap:8px;">' + cards + '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;">' + estimateHtml + cards + '</div>' +
         '<button onclick="window._applyPhaseResolution(\'' + tIdSafe + '\', window._phaseResSel)" class="btn btn-success" style="margin-top:12px;width:100%;">🏆 Avançar com esta solução</button>' +
         '<button onclick="document.getElementById(\'phase-res-panel\').remove()" style="margin-top:8px;width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);border-radius:10px;padding:8px;font-weight:600;cursor:pointer;">Cancelar</button>' +
     '</div>';
@@ -1481,6 +1488,10 @@ window._phaseResSelect = function (key) {
     if (!d) return;
     var v = document.getElementById('phase-res-est-val'); if (v) v.textContent = '~' + d.fmt;
     var s = document.getElementById('phase-res-est-sub'); if (s) s.textContent = '(' + d.games + ' jogos · ' + (window._phaseResCourts || '?') + ' quadra' + ((window._phaseResCourts || 1) > 1 ? 's' : '') + ')';
+    // move o box verde pra logo ACIMA da solução clicada (continua sticky)
+    var box = document.getElementById('phase-res-estimate');
+    var card = document.getElementById('phase-res-opt-' + key);
+    if (box && card && card.parentNode) card.parentNode.insertBefore(box, card);
 };
 window._applyPhaseResolution = function (tId, option) {
     var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
