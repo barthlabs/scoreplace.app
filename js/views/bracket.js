@@ -2104,7 +2104,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     _headerHtml = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
         <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-        <div id="header-btns-${m.id}" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${(readyBadge || _presenceTag) ? `<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;">${readyBadge}${_presenceTag}</div>` : ''}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
+        <div id="header-btns-${m.id}" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;">${(readyBadge || _presenceTag) ? `<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;flex-shrink:0;">${readyBadge}${_presenceTag}</div>` : ''}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
       </div>`;
   }
 
