@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.29-beta';
+window.SCOREPLACE_VERSION = '2.7.30-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2121,29 +2121,49 @@ window._effectiveScoring = function(t, match) {
 // opts: { searchId, sortId, genderId, skillId, onChange, skillCategories[], sort, gender, skill, search }
 // Mapeamento canônico: sort = order-asc|order-desc|name-asc|name-desc;
 // gênero = all|Masc|Fem|Misto|none; habilidade = all|<cat>|none.
+// v2.7.30: persistência CANÔNICA das escolhas da barra (busca/sort/gênero/habilidade)
+// entre re-renders. O consumidor passa `stateKey`; a barra grava as escolhas num store
+// e renderiza com elas — assim o sort escolhido sobrevive a remoções/edições. Vale pra
+// TODOS que usam _inscritosFilterBar (lista de Inscritos, relatório de inscrição…).
+window._filterBarState = window._filterBarState || {};
+window._persistFilterBar = function (key) {
+    if (!key) return;
+    var st = window._filterBarState[key] || (window._filterBarState[key] = {});
+    var els = document.querySelectorAll('[data-fbkey="' + key + '"]');
+    for (var i = 0; i < els.length; i++) {
+        var f = els[i].getAttribute('data-fbfield');
+        if (f) st[f] = els[i].value;
+    }
+};
 window._inscritosFilterBar = function (opts) {
     opts = opts || {};
+    var key = opts.stateKey || '';
+    var saved = (key && window._filterBarState[key]) || {};
     var on = opts.onChange || '';
+    // Persiste as escolhas ANTES de chamar o onChange do consumidor.
+    if (key) on = "window._persistFilterBar('" + key + "');" + on;
     var esc = window._safeHtml || function (s) { return s == null ? '' : String(s); };
     var ctrl = 'width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text-bright);';
-    function selOne(id, label, optsHtml) {
+    function fb(field) { return key ? (' data-fbkey="' + key + '" data-fbfield="' + field + '"') : ''; }
+    function selOne(id, field, label, optsHtml) {
         if (!id) return '';
         return '<div style="flex:1 1 108px;min-width:108px;">' +
             '<label style="display:block;font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">' + label + '</label>' +
-            '<select id="' + id + '" onchange="' + on + '" style="' + ctrl + 'padding:7px 8px;font-size:0.76rem;">' + optsHtml + '</select>' +
+            '<select id="' + id + '"' + fb(field) + ' onchange="' + on + '" style="' + ctrl + 'padding:7px 8px;font-size:0.76rem;">' + optsHtml + '</select>' +
         '</div>';
     }
     function opt(cur, v, lbl) { return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + lbl + '</option>'; }
-    var cs = opts.sort || 'order-asc';
+    var cs = opts.sort || saved.sort || 'order-asc';
     var sortOpts = opt(cs, 'order-asc', 'Inscrição ↑') + opt(cs, 'order-desc', 'Inscrição ↓') + opt(cs, 'name-asc', 'Nome A→Z') + opt(cs, 'name-desc', 'Nome Z→A');
-    var cg = opts.gender || 'all';
+    var cg = opts.gender || saved.gender || 'all';
     var genderOpts = opt(cg, 'all', 'Todos') + opt(cg, 'Masc', '♂ Masculino') + opt(cg, 'Fem', '♀ Feminino') + opt(cg, 'Misto', '⚥ Misto') + opt(cg, 'none', '? Sem gênero');
     var skills = (opts.skillCategories && opts.skillCategories.length) ? opts.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
-    var ck = opts.skill || 'all';
+    var ck = opts.skill || saved.skill || 'all';
     var skillOpts = opt(ck, 'all', 'Todas') + skills.map(function (s) { return opt(ck, esc(s), esc(s)); }).join('') + opt(ck, 'none', 'Sem habilidade');
     var html = '';
-    if (opts.searchId) html += '<input id="' + opts.searchId + '" type="text" oninput="' + on + '" placeholder="🔎 Buscar por nome…" autocomplete="off" value="' + esc(opts.search || '') + '" style="' + ctrl + 'padding:9px 12px;font-size:0.82rem;margin-bottom:8px;">';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">' + selOne(opts.sortId, 'Ordenar', sortOpts) + selOne(opts.genderId, 'Gênero', genderOpts) + selOne(opts.skillId, 'Habilidade', skillOpts) + '</div>';
+    var searchVal = opts.search || saved.search || '';
+    if (opts.searchId) html += '<input id="' + opts.searchId + '"' + fb('search') + ' type="text" oninput="' + on + '" placeholder="🔎 Buscar por nome…" autocomplete="off" value="' + esc(searchVal) + '" style="' + ctrl + 'padding:9px 12px;font-size:0.82rem;margin-bottom:8px;">';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">' + selOne(opts.sortId, 'sort', 'Ordenar', sortOpts) + selOne(opts.genderId, 'gender', 'Gênero', genderOpts) + selOne(opts.skillId, 'skill', 'Habilidade', skillOpts) + '</div>';
     return html;
 };
 // v2.6.108: normaliza o gênero do perfil/inscrito pro código canônico do filtro.

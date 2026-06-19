@@ -2349,8 +2349,9 @@ function renderParticipants(container, tournamentId) {
     ${readyBannerHtml}
     ${(parts.length > 6 && typeof window._inscritosFilterBar === 'function') ? (
       window._inscritosFilterBar({
+        stateKey: 'inscritos', // v2.7.30: persiste sort/gênero/habilidade/busca entre re-renders (ex.: após remover)
         searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
-        onChange: 'window._partApplyFilter()', search: (window._partSearch || ''),
+        onChange: 'window._partApplyFilter()',
         skillCategories: (t.skillCategories || [])
       }) +
       '<div id="part-search-empty" style="display:none;text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;">Nenhum inscrito encontrado.</div>'
