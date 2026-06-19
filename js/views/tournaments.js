@@ -1610,7 +1610,7 @@ function renderTournaments(container, tournamentId = null) {
         // fallback de recovery — assim organizador não fica preso sem ação.
         // Ligas novas criadas a partir da v0.16.56 sempre têm drawFirstDate
         // (default: amanhã 19:00) — esse fallback só pega legado.
-        const isLigaAutoDraw = isLigaFormat && t.drawManual !== true && !!t.drawFirstDate;
+        const isLigaAutoDraw = window._isLigaAutoDraw(t); // v2.7.5: canônico (store.js)
         const isAutoDrawFormat = isSuicoFormat || isLigaAutoDraw;
         let sortearBtn = '';
         let sortearAberto = '';

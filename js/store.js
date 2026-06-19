@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.4-beta';
+window.SCOREPLACE_VERSION = '2.7.5-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -8,6 +8,14 @@ window._formatDisplayName = function (fmt) {
   if (fmt === 'Liga' || fmt === 'Ranking') return 'Pontos Corridos';
   if (fmt === 'Fase de Grupos + Eliminatórias') return 'Fase de Grupos';
   return fmt;
+};
+
+// v2.7.5: ÚNICA fonte de "Pontos Corridos com sorteio AUTOMÁTICO agendado".
+// Antes duplicado idêntico em tournaments.js e participants.js (roll-call /
+// auto-format). É Liga (ou Ranking) + sorteio não-manual + data agendada — sem
+// drawFirstDate é auto mal-configurado e cai no fallback manual (v0.16.56).
+window._isLigaAutoDraw = function (t) {
+  return !!(t && (window._isLigaFormat && window._isLigaFormat(t)) && t.drawManual !== true && t.drawFirstDate);
 };
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────

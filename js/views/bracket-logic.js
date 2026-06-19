@@ -2303,6 +2303,13 @@ function _generateNextRound(t) {
     catch (_e) { if (window._warn) window._warn('[draw] weakest-assign falhou', _e); }
   }
 
+  // v2.7.5: Pontos Corridos com sorteio AUTOMÁTICO (drawManual !== true) NÃO tem
+  // passo "Iniciar Torneio" — SORTEAR É INICIAR. Marcado AQUI no gerador (roda no
+  // cliente, no poller _fireLigaAutoDraw, no "Realizar Sorteio" e na Cloud Function
+  // autoDraw via vendor — 100% sozinho, sem depender de ninguém abrir nada). Manual
+  // (drawManual===true) mantém o passo explícito (rede de segurança do banner).
+  if (t.drawManual !== true && !t.tournamentStarted) t.tournamentStarted = Date.now();
+
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
 
   // v2.5.1: nº da rodada deste sorteio calculado UMA vez, ANTES do loop de
@@ -3338,22 +3345,6 @@ window._annulPendingDraw = function (tId) {
   } else { go(); }
 };
 
-// v2.7.4: Pontos Corridos (Liga/Suíço) com sorteio AUTOMÁTICO (drawManual !== true)
-// NÃO tem passo "Iniciar Torneio" — sortear É iniciar. Marca tournamentStarted
-// assim que há sorteio, pra check-in/badges/banners refletirem "em andamento". O
-// sorteio MANUAL (drawManual===true) mantém o passo explícito (rede de segurança do
-// banner). Idempotente: já iniciado / manual / sem sorteio → no-op. Usado no
-// sorteio auto E como auto-cura no render (torneios já sorteados antes deste fix).
-window._maybeAutoStartLiga = function (t) {
-  if (!t || t.tournamentStarted) return false;
-  if (t.drawManual === true) return false;
-  if (!(window._isLigaFormat && window._isLigaFormat(t))) return false;
-  var hasDraw = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-  if (!hasDraw) return false;
-  t.tournamentStarted = Date.now();
-  return true;
-};
-
 async function _fireLigaAutoDraw(t, scheduledTime) {
   // First guard — the upstream _checkLigaAutoDraws already checks deleted
   // ids, but this function is also called directly from "generate round
@@ -3396,7 +3387,6 @@ async function _fireLigaAutoDraw(t, scheduledTime) {
     t.drawVisibility = t.drawVisibility || 'public';
 
     _generateNextRound(t);
-    window._maybeAutoStartLiga(t); // sortear É iniciar (auto-draw não tem "Iniciar Torneio")
 
     var firstRound = t.rounds[t.rounds.length - 1];
     var firstMatchCount = (firstRound && firstRound.matches || []).filter(function(m) { return !m.isSitOut; }).length;

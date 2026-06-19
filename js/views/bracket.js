@@ -211,16 +211,10 @@ function renderBracket(container, tournamentId, isInline) {
 
   // ── Banner "Iniciar Torneio" e Progress Bar (skip quando inline — já existem no card acima) ──
   const hasDrawContent = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);
-  // v2.7.4: auto-cura — auto-draw Liga já sorteado ANTES deste fix (tournamentStarted
-  // ausente) é marcado como iniciado no render e persistido. Sortear É iniciar.
-  if (isOrg && hasDrawContent && !t.tournamentStarted && typeof window._maybeAutoStartLiga === 'function') {
-    if (window._maybeAutoStartLiga(t) && window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
-  }
-  // v2.6.100: Pontos Corridos (Liga/Suíço) com sorteio AUTOMÁTICO (drawManual !== true)
-  // não tem passo "Iniciar Torneio" — sorteia e já começa. O banner (rede de
-  // segurança) fica só no sorteio MANUAL, por enquanto.
-  const _ligaAutoDraw = (isLiga || isSuico) && t.drawManual !== true;
-  const startTournamentBanner = (!isInline && isOrg && hasDrawContent && !t.tournamentStarted && !_ligaAutoDraw) ? `
+  // v2.7.5: banner "Iniciar Torneio" segue SÓ tournamentStarted (fonte única). Auto-draw
+  // Pontos Corridos já marca tournamentStarted no sorteio (_generateNextRound), então o
+  // banner some sozinho — sem caso especial _ligaAutoDraw. Manual mantém o banner.
+  const startTournamentBanner = (!isInline && isOrg && hasDrawContent && !t.tournamentStarted) ? `
     <div style="margin:1rem 0 1.5rem;padding:20px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.1));border:2px solid rgba(16,185,129,0.4);border-radius:16px;text-align:center;">
         <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:12px;">Sorteio realizado. Inicie o torneio para habilitar a chamada de presença.</p>
         <button class="btn btn-success btn-cta hover-lift" onclick="window._startTournament('${_tIdSafe}')">
