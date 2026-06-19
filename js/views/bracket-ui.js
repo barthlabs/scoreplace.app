@@ -7357,7 +7357,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">O outro jogador precisa confirmar o encerramento.</div>' +
         '</div>' +
         '<div id="close-pending-initiator-btns" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">' +
-          '<button onclick="window._casualCloseCancel()" style="background:rgba(239,68,68,0.15);border:1.5px solid rgba(239,68,68,0.5);color:#f87171;border-radius:14px;padding:12px 24px;font-size:0.92rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;">Cancelar</button>' +
+          '<button class="btn btn-danger" onclick="window._casualCloseCancel()">Cancelar</button>' +
         '</div>';
       document.body.appendChild(banner);
       // Escape "Fechar agora" só depois de 12s sem resposta (sala fantasma).
@@ -7369,7 +7369,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         _fb.id = 'close-pending-forcebtn';
         _fb.textContent = 'Fechar agora';
         _fb.setAttribute('onclick', 'window._closePendingForceClose()');
-        _fb.style.cssText = 'background:rgba(251,191,36,0.15);border:1.5px solid rgba(251,191,36,0.5);color:#fbbf24;border-radius:14px;padding:12px 24px;font-size:0.92rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;';
+        _fb.className = 'btn btn-warning';
         _btns.appendChild(_fb);
       }, 12000);
       return; // banner já appendado
@@ -7382,8 +7382,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">Confirme para todos voltarem à sala de espera da partida.</div>' +
         '</div>' +
         '<div style="display:flex;gap:12px;">' +
-          '<button onclick="window._casualCloseCancel()" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);color:#f87171;border-radius:12px;padding:10px 24px;font-size:0.88rem;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">Recusar</button>' +
-          '<button onclick="window._casualCloseConfirm()" style="background:rgba(34,197,94,0.15);border:1.5px solid rgba(34,197,94,0.45);color:#86efac;border-radius:12px;padding:10px 24px;font-size:0.88rem;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">Confirmar</button>' +
+          '<button class="btn btn-outline" onclick="window._casualCloseCancel()">Recusar</button>' +
+          '<button class="btn btn-success" onclick="window._casualCloseConfirm()">Confirmar</button>' +
         '</div>';
     }
     document.body.appendChild(banner);
@@ -10681,12 +10681,12 @@ window._openCasualMatch = function(restoreOpts) {
               '<div style="font-size:0.6rem;font-weight:600;color:#a855f7;text-transform:uppercase;letter-spacing:1px;">' + _t('casual.yourRoom') + '</div>' +
               '<div style="font-size:1.25rem;font-weight:900;letter-spacing:5px;color:#fbbf24;font-family:monospace;">' + window._safeHtml(_sessionRoomCode) + '</div>' +
             '</div>' +
-            '<button onclick="window._casualInvite()" style="padding:6px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;border:1px solid rgba(56,189,248,0.3);cursor:pointer;background:rgba(56,189,248,0.12);color:#38bdf8;-webkit-tap-highlight-color:transparent;white-space:nowrap;flex-shrink:0;">📲 ' + _t('casual.invite') + '</button>' +
+            '<button class="btn btn-cyan btn-micro" onclick="window._casualInvite()" style="font-size:0.7rem;white-space:nowrap;flex-shrink:0;">📲 ' + _t('casual.invite') + '</button>' +
           '</div>' +
           // Join room input row — input left, button right-aligned, same height (44px matches mobile button min-height)
           '<div style="display:flex;gap:4px;align-items:stretch;min-height:44px;">' +
             '<input type="text" id="casual-join-code" placeholder="' + _t('casual.joinRoomPlaceholder') + '" maxlength="6" style="flex:1;min-width:0;min-height:44px;padding:0 8px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-bright);font-size:0.8rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;outline:none;font-family:monospace;text-align:center;box-sizing:border-box;" />' +
-            '<button onclick="window._casualJoinRoom()" style="padding:0 12px;border-radius:8px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">' + _t('casual.join') + '</button>' +
+            '<button class="btn btn-purple btn-micro" onclick="window._casualJoinRoom()" style="font-size:0.72rem;padding:0 14px;white-space:nowrap;flex-shrink:0;">' + _t('casual.join') + '</button>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -13402,7 +13402,7 @@ window._renderCasualJoin = function(container, roomCode) {
               (isHost ? ' <span style="color:#fbbf24;font-size:0.68rem;">👑</span>' : '') +
             '</div>' +
           '</div>' +
-          (isMe && !isHost ? '<button onclick="window._casualLeaveMatch()" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;border-radius:8px;padding:4px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;">' + _t('casual.leave') + '</button>' : '<div style="font-size:1rem;">✅</div>') +
+          (isMe && !isHost ? '<button class="btn btn-danger btn-micro" onclick="window._casualLeaveMatch()" style="font-size:0.7rem;white-space:nowrap;">' + _t('casual.leave') + '</button>' : '<div style="font-size:1rem;">✅</div>') +
         '</div>';
       }
 
