@@ -507,16 +507,12 @@ window._assignMatchCourt = function(tId, matchId, court) {
 
 window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   var _t = window._t || function(k) { return k; };
-  // Merge both waitlist sources
-  var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
-  var _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
-  // Deduplicate: use standbyParticipants as primary, add waitlist entries not already present
-  var _spNames = new Set(_sp.map(function(p) { return typeof p === 'string' ? p : (p.displayName || p.name || ''); }));
-  var _merged = _sp.slice();
-  _wl.forEach(function(w) {
-    var wn = typeof w === 'string' ? w : (w.displayName || w.name || '');
-    if (wn && !_spNames.has(wn)) _merged.push(w);
-  });
+  // v2.7.52: LISTA DE ESPERA CANÔNICA — _getWaitlist une os 3 storages
+  // (waitlist + standbyParticipants + monarchWaitlist por categoria). Antes só lia
+  // os 2 primeiros → no Rei/Rainha (monarchWaitlist) o painel vinha vazio.
+  var _merged = (typeof window._getWaitlist === 'function')
+    ? window._getWaitlist(t)
+    : (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : []);
   if (_merged.length === 0) return '';
 
   const getName = (p) => window._pName(p, '?');

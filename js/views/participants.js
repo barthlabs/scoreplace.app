@@ -1544,14 +1544,13 @@ function renderParticipants(container, tournamentId) {
   const _hasRollCallData = Object.keys(checkedIn).length > 0 || Object.keys(absent).length > 0;
   const postDrawPresence = isOrg && drawDone && !canCheckIn && !isFinished && _hasRollCallData;
 
-  // Standby participants — merge both sources (waitlist + standbyParticipants, dedup by name)
-  // mesmo padrão de _declareAbsent, _autoSubstituteWO e bracket.js
+  // v2.7.52: LISTA DE ESPERA CANÔNICA — _getWaitlist une os 3 storages
+  // (waitlist + standbyParticipants + monarchWaitlist por categoria). Antes lia só
+  // os 2 primeiros e a espera do Rei/Rainha (monarchWaitlist) sumia dos Inscritos.
   const _getStandbyName = p => window._pName(p);
-  const _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
-  const _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
-  const _spNameSet = new Set(_sp.map(_getStandbyName));
-  const standbyParts = _sp.slice();
-  _wl.forEach(w => { const wn = _getStandbyName(w); if (wn && !_spNameSet.has(wn)) standbyParts.push(w); });
+  const standbyParts = (typeof window._getWaitlist === 'function')
+    ? window._getWaitlist(t)
+    : (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : []);
 
   // Count stats (includes standby): 3 states — presente, ausente, sem confirmação
   let totalIndividuals = 0;
@@ -2073,16 +2072,19 @@ function renderParticipants(container, tournamentId) {
       // v2.7.45: cor do CARD por status. VIP DOURADO sempre tem prioridade; senão
       // presente=verde, W.O.(ausente declarado)=vermelho, lista de espera=âmbar,
       // aguardando=roxo (mantido). A borda acompanha o status (mesmo no VIP dourado).
-      const _statusGrad = mc ? 'linear-gradient(135deg, rgba(6,95,70,0.6) 0%, rgba(16,185,129,0.5) 100%)'
+      // v2.7.52: LISTA DE ESPERA tem prioridade na cor — quem está na espera é SEMPRE
+      // âmbar, mesmo presente/ausente (antes presente pintava verde por cima). VIP
+      // dourado só vence pra VIP de verdade (isVipPlayer).
+      const _statusGrad = isStandby ? 'linear-gradient(135deg, rgba(146,64,14,0.58) 0%, rgba(245,158,11,0.45) 100%)'
+        : mc ? 'linear-gradient(135deg, rgba(6,95,70,0.6) 0%, rgba(16,185,129,0.5) 100%)'
         : isAbsent ? 'linear-gradient(135deg, rgba(127,29,29,0.62) 0%, rgba(220,38,38,0.5) 100%)'
-        : isStandby ? 'linear-gradient(135deg, rgba(146,64,14,0.58) 0%, rgba(245,158,11,0.45) 100%)'
         : 'linear-gradient(135deg, rgba(67,56,202,0.6) 0%, rgba(99,102,241,0.6) 100%)';
-      const _riGrad = isVipPlayer
+      const _riGrad = (isVipPlayer && !isStandby)
         ? 'linear-gradient(135deg, rgba(161,98,7,0.6) 0%, rgba(234,179,8,0.45) 100%)'
         : _statusGrad;
-      const _riBorder = mc ? '2px solid rgba(16,185,129,0.7)'
+      const _riBorder = isStandby ? '2px solid rgba(251,191,36,0.6)'
+        : mc ? '2px solid rgba(16,185,129,0.7)'
         : isAbsent ? '2px solid rgba(239,68,68,0.6)'
-        : isStandby ? '2px solid rgba(251,191,36,0.6)'
         : isVipPlayer ? '2px solid rgba(251,191,36,0.6)'
         : '1px solid rgba(99,102,241,0.5)';
       const _riGlow = mc ? 'box-shadow:0 0 0 1px rgba(16,185,129,0.45),0 4px 10px rgba(0,0,0,0.12);' : 'box-shadow:0 4px 10px rgba(0,0,0,0.1);';
@@ -2128,6 +2130,9 @@ function renderParticipants(container, tournamentId) {
       var o = (p && typeof p === 'object') ? Object.assign({}, p) : { displayName: String(p), name: String(p) };
       o._isStandbyEntry = true; _gridParts.push(o);
     });
+    // v2.7.52: quem está em inscritos E na espera também é espera (âmbar) — sem
+    // mutar o objeto de parts; o card consulta este set.
+    const _gridWaitSet = (typeof window._waitlistNameSet === 'function') ? window._waitlistNameSet(t) : {};
 
     cardsStr = _gridParts.map((p, idx) => {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
@@ -2149,7 +2154,7 @@ function renderParticipants(container, tournamentId) {
       }
 
       const vipsMap = t.vips || {};
-      const _isStandbyEntry = !!(p && typeof p === 'object' && p._isStandbyEntry);
+      const _isStandbyEntry = !!(p && typeof p === 'object' && p._isStandbyEntry) || !!_gridWaitSet[(pName || '').toLowerCase().trim()];
       const isVipEarly = !!vipsMap[pName];
       let cardStyle = '';
       if (isVipEarly) {

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.51-beta';
+window.SCOREPLACE_VERSION = '2.7.52-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -1863,6 +1863,57 @@ window._pName = function(p, fallback) {
          || (p.phone ? String(p.phone) : '')
          || fb;
   return _pNameDisplay(raw) || fb;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LISTA DE ESPERA — CANÔNICA (v2.7.52)
+// A espera é UM conceito, igual em qualquer formato (Liga/Pontos Corridos,
+// Rei/Rainha, Eliminatórias, Fase de Grupos). Historicamente o storage ficou
+// fragmentado em 3 lugares, cada formato escreveu no seu:
+//   • t.waitlist            (array)  — Sorteio de Vagas / inscrição tardia
+//   • t.standbyParticipants (array)  — fluxo de substituição W.O.
+//   • t.monarchWaitlist     (map por categoria, ex {_default_:[...]}) — Rei/Rainha
+// _getWaitlist UNE os três numa lista única e deduplicada — é a ÚNICA forma
+// correta de LER a espera. Todo display/lógica deve passar por aqui.
+window._getWaitlist = function(t) {
+  if (!t) return [];
+  var out = [], seen = {};
+  function add(e) {
+    var nm = String(window._pName ? window._pName(e, '') : (typeof e === 'string' ? e : ((e && (e.displayName || e.name || e.email)) || ''))).trim();
+    if (!nm) return;
+    var k = nm.toLowerCase();
+    if (seen[k]) return; seen[k] = 1;
+    out.push((e && typeof e === 'object') ? e : { name: nm, displayName: nm });
+  }
+  if (Array.isArray(t.waitlist)) t.waitlist.forEach(add);
+  if (Array.isArray(t.standbyParticipants)) t.standbyParticipants.forEach(add);
+  if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object' && !Array.isArray(t.monarchWaitlist)) {
+    Object.keys(t.monarchWaitlist).forEach(function(cat) {
+      var arr = t.monarchWaitlist[cat];
+      if (Array.isArray(arr)) arr.forEach(add);
+    });
+  }
+  return out;
+};
+
+// Conjunto de nomes (lowercase) na espera — inclui membros de duplas "A / B".
+window._waitlistNameSet = function(t) {
+  var s = {};
+  window._getWaitlist(t).forEach(function(e) {
+    var nm = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim().toLowerCase();
+    if (!nm) return;
+    if (nm.indexOf('/') !== -1) nm.split('/').forEach(function(x) { var k = x.trim(); if (k) s[k] = 1; });
+    else s[nm] = 1;
+  });
+  return s;
+};
+
+// Comportamento canônico da espera: 'expand' = forma NOVOS confrontos conforme
+// a fila enche; 'substitute' = só REPÕE jogadores faltantes (W.O.). Dirigido pelo
+// campo legado t.lateEnrollment ('expand' | 'standby'). Default = 'substitute'.
+window._waitlistMode = function(t) {
+  if (t && t.lateEnrollment === 'expand') return 'expand';
+  return 'substitute';
 };
 
 // v1.8.9-beta: participant avatar HTML — photo with initial fallback
