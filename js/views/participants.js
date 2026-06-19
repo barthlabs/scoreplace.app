@@ -2198,8 +2198,20 @@ function renderParticipants(container, tournamentId) {
       const _rcCardExtra = (canRollCall || postDrawPresence) ? (rcMc ? 'box-shadow:0 0 0 2px rgba(16,185,129,0.55),0 4px 10px rgba(0,0,0,0.1);' : rcAbs ? 'opacity:0.55;' : '') : '';
 
       const bgNum = isVip ? '⭐' : idx + 1;
+      // v2.7.27: data-attrs canônicos p/ a barra de filtro/sort (_inscritosFilterBar
+      // + _partApplyFilter) funcionar TAMBÉM na grade — antes só a lista compacta os
+      // tinha. Espelha a lógica de _canonGender/skill/_partEnrollIdx da lista.
+      const _gPart = (typeof p === 'object' && p !== null) ? p : (_nameToParticipant && _nameToParticipant[pName]);
+      const _fGender = (typeof window._canonGender === 'function') ? window._canonGender(_gPart && _gPart.gender) : 'none';
+      let _fSkill = 'none';
+      const _fSkillCats = t.skillCategories || [];
+      const _fCatStr = (_gPart && typeof _gPart === 'object') ? (_gPart.category || '') : '';
+      for (let _fi = 0; _fi < _fSkillCats.length; _fi++) { if (_fCatStr === _fSkillCats[_fi] || _fCatStr.endsWith(' ' + _fSkillCats[_fi])) { _fSkill = _fSkillCats[_fi]; break; } }
+      const _fKey = (pName || '').toLowerCase().trim();
+      const _fOrder = (_partEnrollIdx && _partEnrollIdx[_fKey] != null) ? _partEnrollIdx[_fKey] : idx;
+      const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
       return `
-        <div class="participant-card" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+        <div class="participant-card" data-part-card="1" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
             <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(bgNum).length > 2 ? '2.8rem' : '3.5rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${bgNum}</div>
             <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:0;">
                 <div style="display:flex;align-items:center;gap:12px;">
