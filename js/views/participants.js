@@ -2004,7 +2004,9 @@ function renderParticipants(container, tournamentId) {
         // v2.7.43: "vs" na linha do 1º time, "Jogo N" alinhado à direita na linha do 2º.
         var _jR = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;flex-shrink:0;">${matchLabel}</span>` : '';
         var _row = function (line, right) {
-          return `<div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:3px;line-height:1.3;">${line || ''}</div><div style="flex-shrink:0;">${right || ''}</div></div>`;
+          // v2.7.44: font-size + line-height tight no container (antes herdava 16px →
+          // caixas de linha de ~25px e os times ficavam longe). Volta à distância apertada.
+          return `<div style="display:flex;align-items:center;gap:8px;font-size:0.66rem;line-height:1.2;"><div style="flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;">${line || ''}</div><div style="flex-shrink:0;">${right || ''}</div></div>`;
         };
         _matchStrip = (teamLine && opponentLine)
           ? `<div style="margin-top:7px;display:flex;flex-direction:column;gap:2px;">${_row(teamLine, vsCell || '')}${_row(opponentLine, _jR)}</div>`
