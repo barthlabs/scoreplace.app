@@ -1834,19 +1834,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   // Confirm button: only for undecided matches with inputs (no pending state)
   const headerConfirmBtn = showInputs && !isDecided
-    ? `<button id="confirm-${m.id}" onclick="window._saveResultInline('${_esc(tId)}','${_esc(m.id)}')"
-        style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;"
-        onmouseover="this.style.background='rgba(16,185,129,0.3)'" onmouseout="this.style.background='rgba(16,185,129,0.15)'">✓ ${_t('bracket.confirm')}</button>`
+    ? `<button id="confirm-${m.id}" class="btn btn-success btn-micro" onclick="window._saveResultInline('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;">✓ ${_t('bracket.confirm')}</button>`
     : '';
 
   // Edit button: for decided matches — opens inline inputs for editing.
   // v2.1.85: NÃO aparece em partidas decididas por W.O. de time (m.wo) — nelas
   // não há placar real pra editar; o caminho é "Reverter W.O." (headerWoRevertBtn).
   const headerEditBtn = isDecided && !isByeMatch && canEnterResult && !m.wo && !compactDone
-    ? `<button onclick="window._editResultInline('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#fbbf24;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:3px;"
-          onmouseover="this.style.background='rgba(245,158,11,0.2)'" onmouseout="this.style.background='rgba(245,158,11,0.1)'"
-          title="${_t('bracket.editResult')}">✏️ ${_t('bracket.editResult')}</button>`
+    ? `<button class="btn btn-warning btn-micro" onclick="window._editResultInline('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.editResult')}">✏️ ${_t('bracket.editResult')}</button>`
     : '';
 
   const matchLabel = matchNum ? _t('bracket.matchNum', {n: matchNum}) : (m.label || _t('bracket.matchLabel'));
@@ -1865,10 +1860,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // vivo iniciado) — nesse ponto o W.O. não é mais reversível.
   const _woRevertable = !(typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m));
   const headerWoRevertBtn = (m.wo && isDecided && _isAuthorityCard && _woRevertable)
-    ? `<button onclick="window._revertWO('${_esc(tId)}','${_esc(m.id)}')"
-          style="background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.4);color:#60a5fa;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:3px;"
-          onmouseover="this.style.background='rgba(96,165,250,0.25)'" onmouseout="this.style.background='rgba(96,165,250,0.12)'"
-          title="Desfazer o W.O. e reabrir a partida">↩️ Reverter W.O.</button>`
+    ? `<button class="btn btn-primary btn-micro" onclick="window._revertWO('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;" title="Desfazer o W.O. e reabrir a partida">↩️ Reverter W.O.</button>`
     : '';
 
   // v0.17.26: bloco de Approve/Reject/Cancel MOVIDO pra depois das const
@@ -1987,11 +1979,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     (_isMyMatch && window._resultEntryIncludes(t, 'players', m)) ||
     (_cu && _cu.uid && window._resultEntryIncludes(t, 'referee', m))
   );
+  // v2.7.57: botões do header do card no PADRÃO do app (.btn + cor + .btn-micro,
+  // sólido com volume) — não mais etiqueta flat com estilo inline.
   const liveBtn = _canScoreLive
-    ? `<button onclick="window._openLiveScoring('${_esc(tId)}','${_esc(m.id)}')"
-        style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:3px;"
-        onmouseover="this.style.background='rgba(239,68,68,0.3)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'"
-        title="${_t('bracket.liveScore')}">${_t('bracket.liveBtn')}</button>`
+    ? `<button class="btn btn-danger btn-micro" onclick="window._openLiveScoring('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.liveScore')}">${_t('bracket.liveBtn')}</button>`
     : '';
 
   // v2.4.1: presença PEER — em torneio onde os JOGADORES lançam o placar
@@ -2003,9 +1994,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   if (typeof window._participantsSelfPresence === 'function' && window._participantsSelfPresence(t) &&
       _isMyMatch && !isDecided && !isByeMatch && !hasTBD && _cuName) {
     const _meHere = !!(t && t.checkedIn && t.checkedIn[_cuName]);
+    // v2.7.57: presente vira uma TAG simples (não texto solto); antes de chegar, um
+    // BOTÃO padrão "Cheguei" (cyan, distinto do verde Confirmar).
     _arrivedBtn = _meHere
-      ? `<span style="font-size:0.66rem;font-weight:700;color:#34d399;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;">✅ ${_t('bracket.youArrived') || 'Você chegou'}</span>`
-      : `<button onclick="event.stopPropagation(); window._toggleCheckIn('${_esc(tId)}','${_esc(_cuName)}')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:#34d399;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;" title="${_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)'}">📍 ${_t('bracket.arrived') || 'Cheguei'}</button>`;
+      ? `<span style="font-size:0.6rem;font-weight:800;color:#10b981;background:rgba(16,185,129,0.16);border:1px solid rgba(16,185,129,0.4);padding:2px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;flex-shrink:0;">✓ Presente</span>`
+      : `<button class="btn btn-cyan btn-micro" onclick="event.stopPropagation(); window._toggleCheckIn('${_esc(tId)}','${_esc(_cuName)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.arrivedTip') || 'Marcar que você chegou no local (confirma pelo GPS)'}">📍 ${_t('bracket.arrived') || 'Cheguei'}</button>`;
   }
 
   // User's own matches: indigo border + glow (distinct from amber partial)
