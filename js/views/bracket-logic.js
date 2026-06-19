@@ -2275,16 +2275,7 @@ window._drawFromRoundRobinSchedule = function(t, category, _rn) {
   allActive.forEach(function(name, si) {
     if (allPlaying.indexOf(name) === -1) {
       var avgPts = _sitOutComp(t, name, category); // PA quando o torneio usa Pontos Avançados; senão pontos simples
-      var soObj = {
-        id: 'sitout-rr-r' + roundNum + '-' + si + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        // v2.3.9: folga (sit-out) NÃO tem vencedor — não é um jogo disputado.
-        // O jogador recebe sitOutPoints na classificação (sem contar vitória).
-        p1: name, p2: 'FOLGA',
-        isSitOut: true, sitOutPoints: avgPts, sitOutReason: 'remainder',
-        label: 'R' + roundNum + ' • Folga' + catLabel
-      };
-      if (category) soObj.category = category;
+      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: 'remainder', points: avgPts });
       allMatches.push(soObj);
       _recordSitOut(t, [name], category);
     }
@@ -2617,6 +2608,47 @@ function _buildMonarchGroup(opts) {
 }
 window._buildMonarchGroup = _buildMonarchGroup;
 
+// v2.7.3: ÚNICA fonte da partida de FOLGA (sit-out). Antes construída à mão em 3
+// lugares (round-robin, Rei/Rainha, Suíço) — drift de label/reason/pontos.
+// opts: { player, roundNum, roundIndex, category, ts, idPrefix, idIndex, reason, points }
+function _buildSitOut(opts) {
+  var category = opts.category || null;
+  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
+  var catLabel = category && window._displayCategoryName
+    ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
+  var reason = opts.reason || 'remainder';
+  var isInactive = reason === 'inactive';
+  var o = {
+    id: opts.idPrefix + opts.roundNum + '-' + opts.idIndex + catSuffix + '-' + opts.ts,
+    round: opts.roundNum, roundIndex: opts.roundIndex,
+    // folga NÃO tem vencedor — recebe sitOutPoints na classificação, sem vitória.
+    p1: opts.player, p2: 'FOLGA',
+    isSitOut: true, sitOutPoints: opts.points, sitOutReason: reason,
+    label: 'R' + opts.roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
+  };
+  if (category) o.category = category;
+  return o;
+}
+window._buildSitOut = _buildSitOut;
+
+// v2.7.3: ÚNICA fonte da partida BYE. Antes em 3 lugares.
+// opts: { player, roundNum, roundIndex, category, ts, idPrefix }
+function _buildBye(opts) {
+  var category = opts.category || null;
+  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
+  var catLabel = category && window._displayCategoryName
+    ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
+  var o = {
+    id: opts.idPrefix + opts.roundNum + catSuffix + '-' + opts.ts,
+    round: opts.roundNum, roundIndex: opts.roundIndex,
+    p1: opts.player, p2: 'BYE', winner: opts.player, isBye: true,
+    label: 'R' + opts.roundNum + ' • BYE' + catLabel
+  };
+  if (category) o.category = category;
+  return o;
+}
+window._buildBye = _buildBye;
+
 function _monarchWaitKey(category) { return (category || '_default_').replace(/\s+/g, '_'); }
 window._getMonarchWaitlist = function (t, category) {
   var k = _monarchWaitKey(category);
@@ -2829,17 +2861,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     allSitOuts.forEach(function(name, si) {
       var isInactive = inactiveSitOuts.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
-      var soObj = {
-        id: 'sitout-rr-r' + roundNum + '-' + si + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        // v2.3.9: folga (sit-out) NÃO tem vencedor — não é um jogo disputado.
-        // O jogador recebe sitOutPoints na classificação (sem contar vitória).
-        p1: name, p2: 'FOLGA',
-        isSitOut: true, sitOutPoints: avgPts,
-        sitOutReason: isInactive ? 'inactive' : 'remainder',
-        label: 'R' + roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
-      };
-      if (category) soObj.category = category;
+      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
       sitOutMatches.push(soObj);
     });
   }
@@ -2861,24 +2883,12 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
           if (category) rObj.category = category;
           remainderMatches.push(rObj);
         } else {
-          var byeObj = {
-            id: 'bye-rr-r' + roundNum + catSuffix + '-' + ts,
-            round: roundNum, roundIndex: (t.rounds || []).length,
-            p1: remPlayers[ri], p2: 'BYE', winner: remPlayers[ri], isBye: true,
-            label: 'R' + roundNum + ' • BYE' + catLabel
-          };
-          if (category) byeObj.category = category;
+          var byeObj = _buildBye({ player: remPlayers[ri], roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
           remainderMatches.push(byeObj);
         }
       }
     } else if (remRemainder === 1) {
-      var byeObj2 = {
-        id: 'bye-rr-r' + roundNum + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        p1: players[players.length - 1], p2: 'BYE', winner: players[players.length - 1], isBye: true,
-        label: 'R' + roundNum + ' • BYE' + catLabel
-      };
-      if (category) byeObj2.category = category;
+      var byeObj2 = _buildBye({ player: players[players.length - 1], roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
       remainderMatches.push(byeObj2);
     }
   }
@@ -2990,17 +3000,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
     allSitOuts.forEach(function(name, idx) {
       var isInactive = inactiveSitOutsSwiss.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
-      var soObj = {
-        id: 'sitout-r' + roundNum + '-' + idx + catSuffix + '-' + timestamp,
-        round: roundNum, roundIndex: roundIdx,
-        // v2.3.9: folga (sit-out) NÃO tem vencedor — não é um jogo disputado.
-        // O jogador recebe sitOutPoints na classificação (sem contar vitória).
-        p1: name, p2: 'FOLGA',
-        isSitOut: true, sitOutPoints: avgPts,
-        sitOutReason: isInactive ? 'inactive' : 'remainder',
-        label: 'R' + roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
-      };
-      if (category) soObj.category = category;
+      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'sitout-r', idIndex: idx, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
       newMatches.push(soObj);
     });
 
@@ -3067,13 +3067,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
 
   // Remainder: BYE for non-Liga
   players.filter(p => !matched.has(p)).forEach(p => {
-    var byeObj = {
-      id: `bye-r${roundNum}${catSuffix}-${timestamp}`,
-      round: roundNum, roundIndex: roundIdx,
-      p1: p, p2: 'BYE', winner: p, isBye: true,
-      label: `R${roundNum} • BYE` + catLabel
-    };
-    if (category) byeObj.category = category;
+    var byeObj = _buildBye({ player: p, roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'bye-r' });
     newMatches.push(byeObj);
   });
 
