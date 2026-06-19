@@ -3405,7 +3405,7 @@ window._showPlayerHistory = function(tId, playerName, filter) {
       // not c.matches — walk both so player history covers every phase.
       if ((c.phase === 'groups' || c.phase === 'monarch') && Array.isArray(c.subgroups)) {
         c.subgroups.forEach(function(sg, gi) {
-          var gname = (sg && sg.name) || String.fromCharCode(65 + gi);
+          var gname = (sg && sg.name) || window._groupLetter(gi);
           (sg && sg.matches || []).forEach(function(m) {
             if (m && (m.p1 === playerName || m.p2 === playerName)) {
               matches.push({ label: _t('bui.groupLabel', { n: gname }), m: m });

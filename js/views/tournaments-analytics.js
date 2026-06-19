@@ -1010,7 +1010,7 @@ window._buildActivityLog = function(tournamentId) {
             }
             if ((c.phase === 'groups' || c.phase === 'monarch') && Array.isArray(c.subgroups)) {
                 c.subgroups.forEach(function(sg, gi) {
-                    var label = 'Grupo ' + ((sg && sg.name) || String.fromCharCode(65 + gi));
+                    var label = 'Grupo ' + ((sg && sg.name) || window._groupLetter(gi));
                     (sg && sg.matches || []).forEach(function(m) { allMatches.push({ m: m, label: label }); });
                 });
                 return;

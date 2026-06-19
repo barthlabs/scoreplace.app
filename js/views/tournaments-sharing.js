@@ -904,7 +904,7 @@ function _resolveMatchRows(t) {
       }
       if ((c.phase === 'groups' || c.phase === 'monarch') && Array.isArray(c.subgroups)) {
         c.subgroups.forEach(function(sg, gi) {
-          var gname = (sg && sg.name) || String.fromCharCode(65 + gi);
+          var gname = (sg && sg.name) || window._groupLetter(gi);
           (sg && sg.matches || []).forEach(function(m, mi) {
             allMatches.push({ m: m, label: 'Grupo ' + gname + ' - Partida ' + (mi + 1) });
           });

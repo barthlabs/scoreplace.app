@@ -3033,7 +3033,7 @@ function renderTournaments(container, tournamentId = null) {
         const _grpNavHtml = _hasGrpNav ? '<div style="display:flex;gap:5px;flex-wrap:nowrap;align-items:center;">' +
           _grpTour.groups.map(function(g, i) {
             var c = _grpColors[i % _grpColors.length];
-            var letter = String.fromCharCode(65 + i);
+            var letter = window._groupLetter(i);
             return '<button onclick="var el=document.getElementById(\'group-section-' + i + '\');if(el){el.scrollIntoView({behavior:\'smooth\',block:\'start\'});}" style="min-width:28px;height:28px;padding:0 8px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;border:1.5px solid ' + c + ';background:' + c + '20;color:' + c + ';transition:all 0.15s;white-space:nowrap;line-height:1;" onmouseover="this.style.background=\'' + c + '40\'" onmouseout="this.style.background=\'' + c + '20\'">' + letter + '</button>';
           }).join('') + '</div>' : '';
 

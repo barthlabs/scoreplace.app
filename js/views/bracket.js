@@ -182,7 +182,7 @@ function renderBracket(container, tournamentId, isInline) {
     return '<div id="group-nav-btns" style="display:flex;gap:5px;flex-wrap:nowrap;align-items:center;">' +
       t.groups.map((g, i) => {
         const c = colors[i % colors.length];
-        const letter = String.fromCharCode(65 + i);
+        const letter = window._groupLetter(i);
         return '<button onclick="var el=document.getElementById(\'group-section-' + i + '\');if(el){el.scrollIntoView({behavior:\'smooth\',block:\'start\'});}" style="min-width:28px;height:28px;padding:0 8px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;border:1.5px solid ' + c + ';background:' + c + '20;color:' + c + ';transition:all 0.15s;white-space:nowrap;line-height:1;" onmouseover="this.style.background=\'' + c + '40\'" onmouseout="this.style.background=\'' + c + '20\'">' + letter + '</button>';
       }).join('') +
     '</div>';

@@ -1,6 +1,18 @@
 // ── Bracket Logic & Computation ──
 var _t = window._t || function(k) { return k; };
 
+// ── Nome de grupo por índice (canônico) ──
+// 0→A … 25→Z, 26→A2, 27→B2 … 51→Z2, 52→A3 … Acima de 26 grupos cicla a letra e
+// soma um número (A2, B2…), em vez de estourar pra '[', '\', ']' como fazia o
+// String.fromCharCode(65+i) cru. Único ponto de verdade — todo nome de grupo
+// (criação e fallback de render) usa este helper. Roda no cliente e no servidor
+// (vendor) porque bracket-logic.js é o arquivo sincronizado pro autoDraw.
+window._groupLetter = window._groupLetter || function (i) {
+  i = (typeof i === 'number' && i >= 0) ? Math.floor(i) : 0;
+  var tier = Math.floor(i / 26);
+  return String.fromCharCode(65 + (i % 26)) + (tier === 0 ? '' : (tier + 1));
+};
+
 // ── Monarch (Rei/Rainha) individual standings per group ──
 window._computeMonarchStandings = function(group) {
   var stats = {};
@@ -2595,7 +2607,7 @@ function _buildMonarchGroup(opts) {
     ? ' (' + window._displayCategoryName(category) + ')'
     : (category ? ' (' + category + ')' : '');
   var groupName = 'R' + roundNum + ' ' + (typeof _t === 'function' ? _t('label.group') : 'Grupo')
-    + ' ' + String.fromCharCode(65 + gi) + nameSuffix;
+    + ' ' + window._groupLetter(gi) + nameSuffix;
   var A = P[0], B = P[1], C = P[2], D = P[3];
   var pairings = [{ t1: [A, B], t2: [C, D] }, { t1: [A, C], t2: [B, D] }, { t1: [A, D], t2: [B, C] }];
   var matches = pairings.map(function (pair, mi) {
