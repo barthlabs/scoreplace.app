@@ -2034,7 +2034,7 @@ function renderTournaments(container, tournamentId = null) {
                 // 2. Já começou e AINDA HÁ sorteios por vir? → countdown para próximo sorteio.
                 // v2.4.68: o último sorteio já feito (rodada atual = última planejada)
                 // não tem "próximo sorteio" — cai pro countdown de fim do torneio (passo 3).
-                if (!_ligaEvent && !t.drawManual && t.drawFirstDate && typeof window._calcNextDrawDate === 'function') {
+                if (!_ligaEvent && !t.drawManual && t.drawFirstDate && !(window._isMultiPhase && window._isMultiPhase(t)) && typeof window._calcNextDrawDate === 'function') {
                   var _lpDraw = (typeof window._ligaTournamentProgress === 'function') ? window._ligaTournamentProgress(t) : null;
                   var _moreDraws = !_lpDraw || _lpDraw.currentRoundNum < _lpDraw.roundsPlanned;
                   if (_moreDraws) {

@@ -720,6 +720,125 @@ window._ligaTournamentProgress = function(t) {
   return { perRound: perRound, completedAll: completedAll, roundsPlanned: roundsPlanned,
            totalPlanned: totalPlanned, pct: pct, currentRoundNum: t.rounds.length };
 };
+
+// ─── v2.7.12: PLANO DE JOGOS DO TORNEIO INTEIRO (todas as fases) ──────────────
+// Construtor de fases: o total de jogos previstos é a SOMA de todas as fases —
+// fase já materializada conta os jogos reais; fase futura é estimada por formato.
+// Fase única (legado) NÃO usa isto (continua no _ligaTournamentProgress). Canônico.
+window._isMultiPhase = function (t) { return !!(t && Array.isArray(t.phases) && t.phases.length > 1); };
+
+// Código interno do formato (cfg.format guarda o rótulo de exibição). reiRainha
+// vem do flag da fase.
+window._phaseFormatCode = function (cfg) {
+  cfg = cfg || {};
+  if (cfg.reiRainha || cfg.drawMode === 'rei_rainha') return { code: 'liga', reiRainha: true };
+  var f = String(cfg.format || '').toLowerCase();
+  if (f.indexOf('dupla') !== -1) return { code: 'elim_dupla', reiRainha: false };
+  if (f.indexOf('grupos') !== -1) return { code: 'grupos_mata', reiRainha: false };
+  if (f.indexOf('su') === 0 || f.indexOf('suí') !== -1 || f.indexOf('sui') !== -1) return { code: 'suico', reiRainha: false };
+  if (f.indexOf('pontos') !== -1 || f.indexOf('liga') !== -1 || f.indexOf('ranking') !== -1) return { code: 'liga', reiRainha: false };
+  return { code: 'elim_simples', reiRainha: false };
+};
+
+// Jogos de UMA fase de CHAVE (bracket) com `teams` entrantes.
+window._bracketGames = function (teams, code) {
+  teams = parseInt(teams) || 0;
+  if (teams < 2) return 0;
+  if (code === 'elim_dupla') return (teams - 1) * 2 + 1;  // upper + lower + grande final
+  return teams - 1;                                       // elim_simples / suíço aprox.
+};
+
+// Jogos da fase CLASSIFICATÓRIA (fase 0) — SÓ os jogos do estágio, sem a
+// eliminação dos classificados (que no construtor é a próxima fase). rounds
+// respeitado (1 rodada = 1 rodada — nada de intervalo presumido).
+window._classifierGames = function (N, cfg) {
+  N = parseInt(N) || 0;
+  if (N < 2) return 0;
+  var fc = window._phaseFormatCode(cfg);
+  var rounds = Math.max(parseInt(cfg && cfg.rounds) || 1, 1);
+  if (fc.reiRainha) return Math.max(Math.floor(N / 4), 1) * 3 * rounds; // 3 jogos/grupo de 4
+  if (fc.code === 'liga') return Math.floor(N / 2) * rounds;
+  if (fc.code === 'grupos_mata') {
+    var g = Math.max(parseInt(cfg && cfg.gruposCount) || 4, 1);
+    var gs = Math.ceil(N / g);
+    return Math.max(gs - 1, 1) * Math.max(Math.floor(gs / 2) * g, 1);  // round-robin nos grupos
+  }
+  return window._bracketGames(N, fc.code);  // chave como fase 0 (raro)
+};
+
+// Quantos avançam da fase classificatória → entrantes da próxima fase.
+// materializedGroups: nº real de grupos da fase 0 (quando já sorteada) → mais preciso.
+window._phaseQualifiers = function (N, cfg, nextCfg, materializedGroups) {
+  var fc = window._phaseFormatCode(cfg);
+  var groups;
+  if (typeof materializedGroups === 'number' && materializedGroups > 0) groups = materializedGroups;
+  else if (fc.reiRainha) groups = Math.max(Math.floor((parseInt(N) || 0) / 4), 1);
+  else groups = Math.max(parseInt(cfg && cfg.gruposCount) || 4, 1);
+  var perGroup = fc.reiRainha
+    ? Math.max(parseInt(cfg && cfg.monarchClassified) || 1, 1)
+    : Math.max(parseInt(cfg && cfg.gruposClassified) || 2, 1);
+  var qualifiers = groups * perGroup;
+  if (nextCfg && nextCfg.fixedPairs) qualifiers = Math.max(Math.floor(qualifiers / 2), 1); // duplas fixas → pares
+  return Math.max(qualifiers, 0);
+};
+
+// Jogos reais já materializados de uma fase (i=0 → t.rounds; i>0 → t.matches[phaseIndex]).
+function _materializedPhaseGames(t, phaseIdx) {
+  function real(m) {
+    if (!m || m.isBye || m.isSitOut) return false;
+    var p1 = m.p1 || '', p2 = m.p2 || '';
+    if (!p1 || !p2 || p1 === 'BYE' || p2 === 'BYE' || p1 === 'TBD' || p2 === 'TBD') return false;
+    return true;
+  }
+  if (phaseIdx === 0) {
+    var c = 0;
+    (t.rounds || []).forEach(function (r) { (r.matches || []).forEach(function (m) { if (real(m)) c++; }); });
+    return c;
+  }
+  return (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && real(m); }).length;
+}
+
+// PLANO canônico: total de jogos previstos somando TODAS as fases.
+window._tournamentGamesPlan = function (t) {
+  var prog = window._getTournamentProgress(t);
+  var done = prog.completed != null ? prog.completed : (prog.completedAll || 0);
+  if (!window._isMultiPhase(t)) {
+    var lp = window._ligaTournamentProgress(t);
+    var totalSingle = lp ? lp.totalPlanned : prog.total;
+    return { multiPhase: false, totalPlanned: totalSingle, totalDone: done,
+             pct: totalSingle > 0 ? Math.round(done / totalSingle * 100) : 0, phasesCount: 1 };
+  }
+  var phases = t.phases;
+  var curIdx = t.currentPhaseIndex || 0;
+  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  var N0 = parts.length;
+  // grupos reais da fase 0 (Rei/Rainha) por rodada → classificados precisos
+  var rounds0 = Math.max(parseInt((phases[0] || {}).rounds) || 1, 1);
+  var monGroupsTotal = 0;
+  (t.rounds || []).forEach(function (r) { if (r && Array.isArray(r.monarchGroups)) monGroupsTotal += r.monarchGroups.length; });
+  var groupsPerRound = monGroupsTotal > 0 ? Math.round(monGroupsTotal / rounds0) : 0;
+
+  var totalP = 0, entrants = N0;
+  phases.forEach(function (cfg, i) {
+    var games;
+    if (i === 0) {
+      var realP0 = _materializedPhaseGames(t, 0);
+      games = realP0 > 0 ? realP0 : window._classifierGames(N0, cfg);
+      entrants = window._phaseQualifiers(N0, cfg, phases[1], groupsPerRound);
+    } else {
+      var realPi = _materializedPhaseGames(t, i);
+      var fc = window._phaseFormatCode(cfg);
+      games = realPi > 0 ? realPi : window._bracketGames(entrants, fc.code);
+      entrants = Math.max(Math.floor(entrants / 2), 1); // próxima fase de chave (aprox.)
+    }
+    totalP += games;
+  });
+  if (totalP < done) totalP = done;
+  return { multiPhase: true, totalPlanned: totalP, totalDone: done,
+           pct: totalP > 0 ? Math.round(done / totalP * 100) : 0,
+           phasesCount: phases.length, currentPhaseIndex: curIdx };
+};
+
 // HTML interno (recomputado a cada tick).
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
@@ -745,6 +864,7 @@ window._buildProgressInner = function(t) {
   // desta rodada até o PRÓXIMO sorteio); início real = 1º ponto da rodada;
   // final real = último ponto (round.completedAt).
   var _isLiga = !!(window._isLigaFormat && window._isLigaFormat(t)) && Array.isArray(t.rounds) && t.rounds.length > 0;
+  var _mp = !!(window._isMultiPhase && window._isMultiPhase(t));
   var _roundComplete = false, _roundCompletedMs = null, _roundNum = 0;
   var _labelSchedStart = 'início programado', _labelSchedEnd = 'final programado', _labelHead = 'Progresso do Torneio';
   if (_isLiga) {
@@ -781,13 +901,40 @@ window._buildProgressInner = function(t) {
     _labelSchedStart = 'sorteio da rodada';
     _labelSchedEnd = 'próximo sorteio';
     _labelHead = 'Rodada ' + _roundNum;
+    // v2.7.12: MULTI-FASE — a fase atual NÃO tem intervalo de sorteio (ex.: Fase 0
+    // Rei/Rainha de 1 rodada). O "programado" usa as DATAS CONFIGURADAS (fase ou
+    // torneio), nunca 1ºsorteio+intervalo (era de onde saía o 25/06). Sem data
+    // configurada → estima pelo tempo de quadra desta rodada. Rótulos viram
+    // "início/final programado" (não há "próximo sorteio" em rodada única).
+    if (_mp) {
+      var _ph = (t.phases && t.phases[t.currentPhaseIndex || 0]) || {};
+      var _cfgStartMs = window._tProgParseMs(_ph.startDate ? (_ph.startDate + (_ph.startTime ? ('T' + _ph.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
+      var _cfgEndMs = window._tProgParseMs(_ph.endDate ? (_ph.endDate + (_ph.endTime ? ('T' + _ph.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
+      if (_cfgStartMs) schedStart = _cfgStartMs;
+      if (_cfgEndMs) { plannedEnd = _cfgEndMs; }
+      else {
+        var _gdMp = parseInt(t.gameDuration) || 30, _ctMp = parseInt(t.callTime) || 0, _wuMp = parseInt(t.warmupTime) || 0;
+        var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = _gdMp + _ctMp + _wuMp + 5;
+        plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_rTotal / _crtMp) * _slotMp * 60000;
+      }
+      _labelSchedStart = 'início programado';
+      _labelSchedEnd = 'final programado';
+    }
   }
 
   // v2.3.8/2.3.18: barra do TORNEIO inteiro (Liga multi-rodada) com data/hora
   // do 1º ponto e do limite do último ponto.
   var _ligaBarHtml = '';
   var _lp = window._ligaTournamentProgress(t);
-  if (_lp && _lp.roundsPlanned > 1) {
+  var _gp = (window._tournamentGamesPlan ? window._tournamentGamesPlan(t) : null);
+  // v2.7.12: a barra "Torneio completo" aparece na Liga multi-rodada E no
+  // construtor de fases (soma TODAS as fases via _tournamentGamesPlan).
+  var _useGp = _mp && _gp && _gp.totalPlanned > 0;
+  if ((_lp && _lp.roundsPlanned > 1) || _useGp) {
+    var _barDone = _useGp ? _gp.totalDone : _lp.completedAll;
+    var _barTotal = _useGp ? _gp.totalPlanned : _lp.totalPlanned;
+    var _barPct = _useGp ? _gp.pct : _lp.pct;
+    var _barSuffix = _useGp ? (' · fase ' + (((_gp.currentPhaseIndex) || 0) + 1) + ' de ' + _gp.phasesCount) : (' · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned);
     // v2.4.78: duração REAL do torneio inteiro — do 1º placar lançado (primeiro
     // m.startedAt de todas as rodadas) ao último (maior m.resultAt). Espelha o
     // painel da rodada (INÍCIO REAL / DUROU / FINAL REAL), mas cobrindo a Liga
@@ -801,10 +948,16 @@ window._buildProgressInner = function(t) {
       });
       if (r && r.completedAt) _endsFallback.push(+r.completedAt);
     });
+    // v2.7.12: fases de chave (1+) vivem em t.matches → cobrem o fim REAL do torneio.
+    if (_mp) (t.matches || []).forEach(function(m){
+      if (!m || m.isSitOut) return;
+      if (m.startedAt) _allStarts.push(+m.startedAt);
+      if (m.resultAt) _allEnds.push(+m.resultAt);
+    });
     var _firstPointMs = _allStarts.length ? Math.min.apply(null, _allStarts) : (t.tournamentStarted ? (+t.tournamentStarted) : null);
     var _lastPointMs = _allEnds.length ? Math.max.apply(null, _allEnds) : (_endsFallback.length ? Math.max.apply(null, _endsFallback) : null);
     var _deadlineMs = window._tProgParseMs(t.endDate);
-    var _tournDone = _lp.pct >= 100;
+    var _tournDone = _barPct >= 100;
 
     // Linha INÍCIO REAL / DUROU / FINAL REAL (só quando há 1º e último placar).
     var _durRow = '';
@@ -846,10 +999,10 @@ window._buildProgressInner = function(t) {
     _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
         '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
-        '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _lp.completedAll + '/' + _lp.totalPlanned + ' jogos (' + _lp.pct + '%) · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned + '</span>' +
+        '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _barDone + '/' + _barTotal + ' jogos (' + _barPct + '%)' + _barSuffix + '</span>' +
       '</div>' +
       '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">' +
-        '<div style="width:' + _lp.pct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
+        '<div style="width:' + _barPct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
       '</div>' + _durRow + _limiteLine +
     '</div>';
   }
