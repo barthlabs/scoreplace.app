@@ -2048,12 +2048,20 @@ function renderParticipants(container, tournamentId) {
       // (infoBlock) + toggle Presente + W.O. dentro dele. Presença vira borda/glow
       // (verde=presente, vermelho=ausente, âmbar=lista de espera) — sem perder a
       // leitura rápida de quem está presente.
-      const _riGrad = isVipPlayer
-        ? 'linear-gradient(135deg, rgba(161,98,7,0.5) 0%, rgba(234,179,8,0.35) 100%)'
+      // v2.7.45: cor do CARD por status. VIP DOURADO sempre tem prioridade; senão
+      // presente=verde, W.O.(ausente declarado)=vermelho, lista de espera=âmbar,
+      // aguardando=roxo (mantido). A borda acompanha o status (mesmo no VIP dourado).
+      const _statusGrad = mc ? 'linear-gradient(135deg, rgba(6,95,70,0.6) 0%, rgba(16,185,129,0.5) 100%)'
+        : isAbsent ? 'linear-gradient(135deg, rgba(127,29,29,0.62) 0%, rgba(220,38,38,0.5) 100%)'
+        : isStandby ? 'linear-gradient(135deg, rgba(146,64,14,0.58) 0%, rgba(245,158,11,0.45) 100%)'
         : 'linear-gradient(135deg, rgba(67,56,202,0.6) 0%, rgba(99,102,241,0.6) 100%)';
+      const _riGrad = isVipPlayer
+        ? 'linear-gradient(135deg, rgba(161,98,7,0.6) 0%, rgba(234,179,8,0.45) 100%)'
+        : _statusGrad;
       const _riBorder = mc ? '2px solid rgba(16,185,129,0.7)'
-        : isAbsent ? '2px solid rgba(239,68,68,0.55)'
-        : isStandby ? '2px solid rgba(251,191,36,0.5)'
+        : isAbsent ? '2px solid rgba(239,68,68,0.6)'
+        : isStandby ? '2px solid rgba(251,191,36,0.6)'
+        : isVipPlayer ? '2px solid rgba(251,191,36,0.6)'
         : '1px solid rgba(99,102,241,0.5)';
       const _riGlow = mc ? 'box-shadow:0 0 0 1px rgba(16,185,129,0.45),0 4px 10px rgba(0,0,0,0.12);' : 'box-shadow:0 4px 10px rgba(0,0,0,0.1);';
       const _riDim = isAbsent ? 'opacity:0.62;' : (isWOOrphan ? 'opacity:0.75;' : '');
