@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.30-beta';
+window.SCOREPLACE_VERSION = '2.7.31-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2121,50 +2121,92 @@ window._effectiveScoring = function(t, match) {
 // opts: { searchId, sortId, genderId, skillId, onChange, skillCategories[], sort, gender, skill, search }
 // Mapeamento canônico: sort = order-asc|order-desc|name-asc|name-desc;
 // gênero = all|Masc|Fem|Misto|none; habilidade = all|<cat>|none.
-// v2.7.30: persistência CANÔNICA das escolhas da barra (busca/sort/gênero/habilidade)
-// entre re-renders. O consumidor passa `stateKey`; a barra grava as escolhas num store
-// e renderiza com elas — assim o sort escolhido sobrevive a remoções/edições. Vale pra
-// TODOS que usam _inscritosFilterBar (lista de Inscritos, relatório de inscrição…).
+// v2.7.31: barra de filtro/sort ENXUTA e CANÔNICA — controles de ícone em vez de
+// dropdowns. A-Z com ↑/↓ (alfabético cresc/decr), 🕐 com ↑/↓ (cronológico cresc/decr),
+// botão de gênero cíclico (⚥ ambos → ♂ → ♀ → – sem gênero) e botão de habilidade
+// cíclico (– todas → A/B/C/D/FUN → ⊘ sem habilidade). Estado por `stateKey` em
+// _filterBarState (persiste entre re-renders); inputs OCULTOS com os mesmos IDs
+// (sortId/genderId/skillId) mantêm os leitores (_partApplyFilter/_erRenderInscritos)
+// funcionando sem mudança. Vale pra TODOS que usam _inscritosFilterBar.
 window._filterBarState = window._filterBarState || {};
-window._persistFilterBar = function (key) {
-    if (!key) return;
+window._filterBarCfg = window._filterBarCfg || {};
+// Aplica uma escolha: grava no store + espelha no input oculto + re-renderiza os
+// botões (refletir estado) + dispara o onChange do consumidor.
+window._fbAction = function (key, field, val, noRerender) {
     var st = window._filterBarState[key] || (window._filterBarState[key] = {});
-    var els = document.querySelectorAll('[data-fbkey="' + key + '"]');
-    for (var i = 0; i < els.length; i++) {
-        var f = els[i].getAttribute('data-fbfield');
-        if (f) st[f] = els[i].value;
+    st[field] = val;
+    var opts = window._filterBarCfg[key] || {};
+    var idMap = { sort: opts.sortId, gender: opts.genderId, skill: opts.skillId, search: opts.searchId };
+    var el = idMap[field] && document.getElementById(idMap[field]);
+    if (el && el.value !== val) el.value = val;
+    if (!noRerender) {
+        var wrap = document.getElementById('fbwrap-' + key);
+        if (wrap) wrap.innerHTML = window._fbInner(key);
     }
+    if (opts.onChange) { try { (new Function(opts.onChange))(); } catch (e) {} }
+};
+window._fbInner = function (key) {
+    var opts = window._filterBarCfg[key] || {};
+    var st = window._filterBarState[key] || (window._filterBarState[key] = {});
+    var esc = window._safeHtml || function (s) { return s == null ? '' : String(s); };
+    var sort = st.sort || opts.sort || 'order-asc';
+    var gender = st.gender || opts.gender || 'all';
+    var skill = st.skill || opts.skill || 'all';
+    var search = (st.search != null ? st.search : (opts.search || ''));
+    st.sort = sort; st.gender = gender; st.skill = skill; st.search = search;
+    function btn(active, extra) {
+        return 'display:inline-flex;align-items:center;justify-content:center;height:30px;min-width:26px;padding:0 6px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:800;line-height:1;'
+            + 'border:1px solid ' + (active ? 'rgba(99,102,241,0.85)' : 'rgba(255,255,255,0.12)') + ';'
+            + 'background:' + (active ? 'rgba(99,102,241,0.30)' : 'rgba(255,255,255,0.04)') + ';'
+            + 'color:' + (active ? '#c7d2fe' : 'var(--text-muted)') + ';transition:all 0.15s;' + (extra || '');
+    }
+    function sortGroup(icon, label, valAsc, valDesc) {
+        var aAsc = sort === valAsc, aDesc = sort === valDesc, on = aAsc || aDesc;
+        return '<div style="display:inline-flex;align-items:center;gap:2px;background:rgba(255,255,255,0.03);border-radius:9px;padding:2px 3px;">'
+            + '<span title="' + label + '" style="font-size:0.7rem;font-weight:800;color:' + (on ? '#a5b4fc' : 'var(--text-muted)') + ';padding:0 2px;letter-spacing:0.3px;">' + icon + '</span>'
+            + '<button type="button" title="' + label + ' — crescente" onclick="window._fbAction(\'' + key + '\',\'sort\',\'' + valAsc + '\')" style="' + btn(aAsc) + '">↑</button>'
+            + '<button type="button" title="' + label + ' — decrescente" onclick="window._fbAction(\'' + key + '\',\'sort\',\'' + valDesc + '\')" style="' + btn(aDesc) + '">↓</button>'
+            + '</div>';
+    }
+    var azGroup = sortGroup('A-Z', 'Ordem alfabética', 'name-asc', 'name-desc');
+    var clockGroup = sortGroup('🕒', 'Ordem cronológica (inscrição)', 'order-asc', 'order-desc');
+    // Gênero cíclico: ambos(all) → masc → fem → sem-gênero(none)
+    var gOrder = ['all', 'Masc', 'Fem', 'none'];
+    var gMap = { all: { s: '⚥', t: 'Ambos os gêneros' }, Masc: { s: '♂', t: 'Masculino' }, Fem: { s: '♀', t: 'Feminino' }, none: { s: '–', t: 'Sem gênero' } };
+    var gCur = gMap[gender] ? gender : 'all';
+    var gNext = gOrder[(gOrder.indexOf(gCur) + 1) % gOrder.length];
+    var genderBtn = '<button type="button" title="Gênero: ' + gMap[gCur].t + ' — clique p/ alternar" onclick="window._fbAction(\'' + key + '\',\'gender\',\'' + gNext + '\')" style="' + btn(gCur !== 'all', 'font-size:1.05rem;min-width:32px;') + '">' + gMap[gCur].s + '</button>';
+    // Habilidade cíclica: todas(-) → categorias → sem-habilidade(⊘)
+    var skills = (opts.skillCategories && opts.skillCategories.length) ? opts.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
+    var sOrder = ['all'].concat(skills).concat(['none']);
+    var sCur = (sOrder.indexOf(skill) >= 0) ? skill : 'all';
+    var sNext = sOrder[(sOrder.indexOf(sCur) + 1) % sOrder.length];
+    var sLabel = sCur === 'all' ? '–' : (sCur === 'none' ? '⊘' : esc(sCur));
+    var sTitle = sCur === 'all' ? 'Todas' : (sCur === 'none' ? 'Sem habilidade' : sCur);
+    var skillBtn = '<button type="button" title="Habilidade: ' + sTitle + ' — clique p/ alternar" onclick="window._fbAction(\'' + key + '\',\'skill\',\'' + sNext + '\')" style="' + btn(sCur !== 'all', 'min-width:30px;') + '">' + sLabel + '</button>';
+    // inputs ocultos lidos pelos consumidores
+    var hidden = '';
+    if (opts.sortId) hidden += '<input type="hidden" id="' + opts.sortId + '" value="' + sort + '">';
+    if (opts.genderId) hidden += '<input type="hidden" id="' + opts.genderId + '" value="' + gCur + '">';
+    if (opts.skillId) hidden += '<input type="hidden" id="' + opts.skillId + '" value="' + sCur + '">';
+    var searchInp = '';
+    if (opts.searchId) {
+        var sctrl = 'box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text-bright);';
+        searchInp = '<input id="' + opts.searchId + '" type="text" oninput="window._fbAction(\'' + key + '\',\'search\',this.value,true)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'flex:1 1 130px;min-width:110px;padding:7px 10px;font-size:0.8rem;">';
+    }
+    return hidden
+        + '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;">'
+        + azGroup + clockGroup
+        + '<span style="width:1px;height:22px;background:rgba(255,255,255,0.12);margin:0 1px;"></span>'
+        + genderBtn + skillBtn + searchInp
+        + '</div>';
 };
 window._inscritosFilterBar = function (opts) {
     opts = opts || {};
-    var key = opts.stateKey || '';
-    var saved = (key && window._filterBarState[key]) || {};
-    var on = opts.onChange || '';
-    // Persiste as escolhas ANTES de chamar o onChange do consumidor.
-    if (key) on = "window._persistFilterBar('" + key + "');" + on;
-    var esc = window._safeHtml || function (s) { return s == null ? '' : String(s); };
-    var ctrl = 'width:100%;box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text-bright);';
-    function fb(field) { return key ? (' data-fbkey="' + key + '" data-fbfield="' + field + '"') : ''; }
-    function selOne(id, field, label, optsHtml) {
-        if (!id) return '';
-        return '<div style="flex:1 1 108px;min-width:108px;">' +
-            '<label style="display:block;font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">' + label + '</label>' +
-            '<select id="' + id + '"' + fb(field) + ' onchange="' + on + '" style="' + ctrl + 'padding:7px 8px;font-size:0.76rem;">' + optsHtml + '</select>' +
-        '</div>';
-    }
-    function opt(cur, v, lbl) { return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + lbl + '</option>'; }
-    var cs = opts.sort || saved.sort || 'order-asc';
-    var sortOpts = opt(cs, 'order-asc', 'Inscrição ↑') + opt(cs, 'order-desc', 'Inscrição ↓') + opt(cs, 'name-asc', 'Nome A→Z') + opt(cs, 'name-desc', 'Nome Z→A');
-    var cg = opts.gender || saved.gender || 'all';
-    var genderOpts = opt(cg, 'all', 'Todos') + opt(cg, 'Masc', '♂ Masculino') + opt(cg, 'Fem', '♀ Feminino') + opt(cg, 'Misto', '⚥ Misto') + opt(cg, 'none', '? Sem gênero');
-    var skills = (opts.skillCategories && opts.skillCategories.length) ? opts.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
-    var ck = opts.skill || saved.skill || 'all';
-    var skillOpts = opt(ck, 'all', 'Todas') + skills.map(function (s) { return opt(ck, esc(s), esc(s)); }).join('') + opt(ck, 'none', 'Sem habilidade');
-    var html = '';
-    var searchVal = opts.search || saved.search || '';
-    if (opts.searchId) html += '<input id="' + opts.searchId + '"' + fb('search') + ' type="text" oninput="' + on + '" placeholder="🔎 Buscar por nome…" autocomplete="off" value="' + esc(searchVal) + '" style="' + ctrl + 'padding:9px 12px;font-size:0.82rem;margin-bottom:8px;">';
-    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">' + selOne(opts.sortId, 'sort', 'Ordenar', sortOpts) + selOne(opts.genderId, 'gender', 'Gênero', genderOpts) + selOne(opts.skillId, 'skill', 'Habilidade', skillOpts) + '</div>';
-    return html;
+    var key = opts.stateKey || opts.sortId || 'fb';
+    window._filterBarCfg[key] = opts;
+    if (!window._filterBarState[key]) window._filterBarState[key] = {};
+    return '<div id="fbwrap-' + key + '">' + window._fbInner(key) + '</div>';
 };
 // v2.6.108: normaliza o gênero do perfil/inscrito pro código canônico do filtro.
 window._canonGender = function (g) {
