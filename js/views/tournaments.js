@@ -2175,6 +2175,7 @@ function renderTournaments(container, tournamentId = null) {
                       torneio no banco usava. A fase final da Liga agora é uma fase do
                       construtor de fases (t.phases[]), adicionada em sequência à Liga. */ ''}
                 ${(window.AppStore.isCreator(t) && hasDraw) ? `<button class="btn btn-tool-amber hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._resetTournamentToEnrollment('${t.id}')" title="Apaga sorteio, rodadas e fases; mantém os inscritos">🔄 Resetar (manter inscritos)</button>` : ''}
+                ${(hasDraw && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window._devSimulateCurrentPhase('${t.id}')" title="DEV (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
                 ${window.AppStore.isCreator(t) ? `<button class="btn btn-danger hover-lift" style="margin-top:4px;" onclick="event.stopPropagation(); window.deleteTournamentFunction('${t.id}')">🗑️ ${_t('enroll.deleteTournament') || 'Apagar Torneio'}</button>` : ''}
               </div>
             </div>`;

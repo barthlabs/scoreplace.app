@@ -63,6 +63,94 @@ window._resetTournamentToEnrollment = function (tId) {
   );
 };
 
+// v2.7.62: DEV — simula os resultados da FASE ATUAL (só SP_TEST_IDENTITIES via
+// _isTestIdentity). Preenche vencedor + placar E os horários (startedAt/resultAt)
+// IGUAL ao lançamento real, com resultAt escalonado terminando AGORA — assim o
+// painel de tempo da rodada congela certo (DECORRIDO→DUROU, FINAL ESTIMADO→FINAL REAL).
+// Botão visível só pro dono, ao lado do "Resetar". Não toca em jogos já decididos.
+window._devSimulateCurrentPhase = function (tId) {
+  if (typeof window._isTestIdentity === 'function' && !window._isTestIdentity()) return;
+  var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
+  if (!t) return;
+  function realTeam(s) { return s && s !== 'TBD' && s !== 'BYE' && s !== '—'; }
+  function byeSlot(s) { return !s || s === 'BYE' || s === '—'; } // BYE/vazio (NÃO TBD — TBD = não pronto)
+  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+  var todo = all.filter(function (m) {
+    if (!m || m.winner || m.isSitOut || m.isBye) return false;
+    var p1ok = realTeam(m.p1), p2ok = realTeam(m.p2);
+    if (p1ok && p2ok) return true;            // jogo normal
+    if (p1ok && byeSlot(m.p2)) return true;   // time vs BYE → time vence
+    if (p2ok && byeSlot(m.p1)) return true;   // BYE vs time → time vence
+    return false;                             // TBD / ambos vazios → não simula
+  });
+  if (!todo.length) { if (typeof showNotification === 'function') showNotification('Simular', 'Nenhum jogo pendente na fase atual.', 'info'); return; }
+
+  var _run = function () {
+    var now = Date.now();
+    // janela realista: início programado da rodada atual → agora
+    var startMs = now - 3 * 3600 * 1000;
+    try {
+      var ri = (Array.isArray(t.rounds) && t.rounds.length) ? t.rounds.length - 1 : 0;
+      var fdStr = String(t.drawFirstDate || '').indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate ? (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')) : '');
+      var fdMs = fdStr ? new Date(fdStr).getTime() : NaN;
+      var intv = parseInt(t.drawIntervalDays) || 7; if (intv < 1) intv = 1;
+      if (!isNaN(fdMs)) { var cand = fdMs + ri * intv * 86400000; if (cand < now) startMs = cand; }
+    } catch (e) {}
+    var span = Math.max(60000, now - startMs);
+    var byId = {};
+    todo.forEach(function (m, i) {
+      var p1ok = realTeam(m.p1), p2ok = realTeam(m.p2);
+      var s1, s2;
+      if (p1ok && p2ok) {
+        if (Math.random() < 0.5) { s1 = 6; s2 = Math.floor(Math.random() * 5); } else { s2 = 6; s1 = Math.floor(Math.random() * 5); }
+      } else if (p1ok) { s1 = 6; s2 = 0; } else { s1 = 0; s2 = 6; } // BYE → time real vence
+      m.scoreP1 = s1; m.scoreP2 = s2;
+      m.winner = (s1 > s2) ? m.p1 : m.p2;
+      m.draw = false;
+      m.startedAt = startMs;
+      m.resultAt = Math.round(startMs + ((i + 1) / todo.length) * span); // último = agora
+      if (m.id != null) byId[String(m.id)] = m;
+    });
+    // sincroniza Rei/Rainha (monarchGroups) por id, caso sejam objetos separados de round.matches
+    if (Array.isArray(t.rounds)) {
+      t.rounds.forEach(function (r) {
+        if (r && Array.isArray(r.monarchGroups)) {
+          r.monarchGroups.forEach(function (g) {
+            if (g && Array.isArray(g.matches)) g.matches.forEach(function (gm) {
+              var src = (gm && gm.id != null) ? byId[String(gm.id)] : null;
+              if (src && gm !== src) { gm.scoreP1 = src.scoreP1; gm.scoreP2 = src.scoreP2; gm.winner = src.winner; gm.draw = src.draw; gm.startedAt = src.startedAt; gm.resultAt = src.resultAt; }
+            });
+          });
+        }
+      });
+    }
+    // avança vencedores em chaves eliminatórias (não-rodada, não-grupo)
+    if (typeof window._advanceWinner === 'function') {
+      todo.forEach(function (m) {
+        var isRound = m.roundIndex !== undefined || (Array.isArray(t.rounds) && t.rounds.some(function (r) { return (r.matches || []).some(function (rm) { return rm.id === m.id; }); }));
+        var isGroup = m.group !== undefined;
+        if (!isRound && !isGroup) { try { window._advanceWinner(t, m); } catch (e) {} }
+      });
+    }
+    t.updatedAt = new Date().toISOString();
+    var done = function () {
+      if (typeof showNotification === 'function') showNotification('✅ Simulado', todo.length + ' jogos preenchidos com horários.', 'success');
+      var c = document.getElementById('view-container');
+      if (typeof window._rerenderBracket === 'function') window._rerenderBracket(String(tId));
+      else if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
+    };
+    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+      window.FirestoreDB.saveTournament(t).then(done).catch(function (err) { window._error && window._error('[devSimulate] save error:', err); done(); });
+    } else { try { window.AppStore.sync(); } catch (e) {} done(); }
+  };
+
+  if (typeof showAlertDialog === 'function') {
+    showAlertDialog('🎲 Simular resultados? (dev)',
+      'Preenche <strong>' + todo.length + '</strong> jogos pendentes da fase atual com placar e horários aleatórios — como se tivessem sido jogados do início da rodada até agora. Jogos já decididos não são tocados.',
+      _run, { type: 'warning', confirmText: 'Simular', cancelText: 'Cancelar' });
+  } else { _run(); }
+};
+
 // v1.9.85: forma duplas/times preservando a IDENTIDADE (uid/email/foto) de
 // cada membro. ANTES, o sorteio convertia os participantes em STRINGS de nome
 // ("A / B") via name.join(' / ') — destruindo todos os uids. Consequências
