@@ -2094,7 +2094,20 @@ function renderParticipants(container, tournamentId) {
     // ── Normal mode: team cards with drag/split/delete ──
     gridStyle = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:1rem;';
 
-    cardsStr = parts.map((p, idx) => {
+    // v2.7.49: inclui os da LISTA DE ESPERA no grid pré-sorteio (antes só apareciam
+    // no painel de Lista de Espera, sumindo dos Inscritos). Intercalados, com badge
+    // âmbar "Lista de Espera" e SEM as ações de inscrito (gestão é no painel).
+    const _gridSeen = {};
+    parts.forEach(function (p) { var n = window._pName(p); if (n) _gridSeen[n.toLowerCase().trim()] = 1; });
+    const _gridParts = parts.slice();
+    standbyParts.forEach(function (p) {
+      var n = window._pName(p); if (!n) return; var k = n.toLowerCase().trim();
+      if (_gridSeen[k]) return; _gridSeen[k] = 1;
+      var o = (p && typeof p === 'object') ? Object.assign({}, p) : { displayName: String(p), name: String(p) };
+      o._isStandbyEntry = true; _gridParts.push(o);
+    });
+
+    cardsStr = _gridParts.map((p, idx) => {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
       const isTeam = pName.includes('/');
       // v2.7.37: estrela do organizador (sempre visível) + pin no topo (data-part-org).
@@ -2114,10 +2127,13 @@ function renderParticipants(container, tournamentId) {
       }
 
       const vipsMap = t.vips || {};
+      const _isStandbyEntry = !!(p && typeof p === 'object' && p._isStandbyEntry);
       const isVipEarly = !!vipsMap[pName];
       let cardStyle = '';
       if (isVipEarly) {
         cardStyle = 'background: linear-gradient(135deg, rgba(161,98,7,0.5) 0%, rgba(234,179,8,0.35) 100%); border: 2px solid rgba(251,191,36,0.7); box-shadow: 0 0 12px rgba(251,191,36,0.15);';
+      } else if (_isStandbyEntry) {
+        cardStyle = 'background: linear-gradient(135deg, rgba(146,64,14,0.55) 0%, rgba(245,158,11,0.42) 100%); border: 2px solid rgba(251,191,36,0.55);';
       } else if (isTeam) {
         cardStyle = 'background: linear-gradient(135deg, rgba(15, 118, 110, 0.6) 0%, rgba(20, 184, 166, 0.6) 100%); border: 1px solid rgba(20, 184, 166, 0.5);';
       } else {
@@ -2171,7 +2187,8 @@ function renderParticipants(container, tournamentId) {
           else if (origin === 'formada') teamLabel = _t('tourn.teamFormed');
           else teamLabel = _t('tourn.teamFormed');
       }
-      const typeText = teamLabel + vipBadge;
+      const _standbyBadge = _isStandbyEntry ? '<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;">🕐 Lista de Espera</span>' : '';
+      const typeText = _isStandbyEntry ? (_standbyBadge + vipBadge) : (teamLabel + vipBadge);
 
       // Skill category badge/dropdown for normal (grid) mode
       const _nmSkillCats = t.skillCategories || [];
@@ -2183,7 +2200,7 @@ function renderParticipants(container, tournamentId) {
           const _sk = _nmSkillCats[_si];
           if (_nmCatStr === _sk || _nmCatStr.endsWith(' ' + _sk)) { _nmCurrentSkill = _sk; break; }
         }
-        if (isOrg) {
+        if (isOrg && !_isStandbyEntry) {
           // v2.3.50: dropdown de atribuição de nível pelo organizador. Pra
           // não-organizador o nível já aparece no badge de meta (gênero ·
           // categoria · idade) abaixo do nome — não duplica aqui.
@@ -2200,7 +2217,7 @@ function renderParticipants(container, tournamentId) {
       if (isOrg && p && typeof p === 'object' && p._mergedFrom) {
         undoMergeBtn = `<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window._undoMergeParticipant('${t.id}', '${safeP}');">↩️</button>`;
       }
-      if (isOrg) {
+      if (isOrg && !_isStandbyEntry) {
         // v2.0.0: drag habilitado pro organizador também — a MESCLAGEM funciona
         // enquanto a grade estiver visível (inclui o estado "sorteado, antes de
         // iniciar"). Formar equipe / VIP / remover continuam só pré-sorteio.
