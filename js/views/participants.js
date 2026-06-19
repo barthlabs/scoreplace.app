@@ -1596,7 +1596,9 @@ function renderParticipants(container, tournamentId) {
 
   if (canCheckIn) {
     // ── Check-in mode: individual list with checkboxes ──
-    gridStyle = 'display:flex;flex-direction:column;gap:6px;';
+    // v2.7.28: card ÚNICO — pós-sorteio usa a MESMA grade rica do pré-sorteio
+    // (o jogo/parceiro/adversários/presença entram dentro do card).
+    gridStyle = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:1rem;';
 
     // v0.17.36: lookup é POR NOME DE MEMBRO, não por team string. Quando
     // substituição W.O. acontece, o match é atualizado pra novo team
@@ -1974,7 +1976,9 @@ function renderParticipants(container, tournamentId) {
       const nameCell = `<div style="display:flex;align-items:baseline;gap:6px;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${vipTag}${isStandby ? presenceDot : ''}${jogoInline}</div>`;
       // Inline layout: name+Jogo anchored to top-left, teams stack to the right, "vs" at top-right.
       // Mobile (< 768px) falls back to name on top, matchup block below.
-      const _isNarrow = typeof window !== 'undefined' && window.innerWidth && window.innerWidth < 768;
+      // v2.7.28: card único em grade → célula estreita; sempre empilha (nome em
+      // cima, jogo embaixo) pra não estourar a coluna de ~240px.
+      const _isNarrow = true;
       let infoBlock;
       if (isWOOrphan && ind.woMeta) {
         // v0.17.35: W.O. orphan card — só "Estava no Jogo N com [parceiro]".
@@ -2002,10 +2006,10 @@ function renderParticipants(container, tournamentId) {
       // Skill category badge/dropdown for check-in mode
       const _ciSkillCats = t.skillCategories || [];
       let _ciSkillHtml = '';
+      let _ciCurrentSkill = ''; // v2.7.28: hoisted — usado fora do bloco (data-part-skill); antes dava ReferenceError
       if (_ciSkillCats.length > 0) {
         const _ciPObj = _nameToParticipant[ind.name];
         const _ciCatStr = (_ciPObj && typeof _ciPObj === 'object') ? (_ciPObj.category || '') : '';
-        let _ciCurrentSkill = '';
         for (let _si = 0; _si < _ciSkillCats.length; _si++) {
           const _sk = _ciSkillCats[_si];
           if (_ciCatStr === _sk || _ciCatStr.endsWith(' ' + _sk)) { _ciCurrentSkill = _sk; break; }
@@ -2025,19 +2029,38 @@ function renderParticipants(container, tournamentId) {
       const _ciGender = (typeof window._canonGender === 'function') ? window._canonGender(_ciPart && _ciPart.gender) : 'none';
       const _ciSkillVal = _ciCurrentSkill || 'none';
       const _ciOrder = (_partEnrollIdx[(ind.name || '').toLowerCase().trim()] != null) ? _partEnrollIdx[(ind.name || '').toLowerCase().trim()] : 9999;
+      // v2.7.28: CARD ÚNICO — mesmo shell rico do pré-sorteio (gradiente roxo/VIP +
+      // nº de inscrição em marca d'água), mas com o jogo/parceiro/adversários
+      // (infoBlock) + toggle Presente + W.O. dentro dele. Presença vira borda/glow
+      // (verde=presente, vermelho=ausente, âmbar=lista de espera) — sem perder a
+      // leitura rápida de quem está presente.
+      const _riGrad = isVipPlayer
+        ? 'linear-gradient(135deg, rgba(161,98,7,0.5) 0%, rgba(234,179,8,0.35) 100%)'
+        : 'linear-gradient(135deg, rgba(67,56,202,0.6) 0%, rgba(99,102,241,0.6) 100%)';
+      const _riBorder = mc ? '2px solid rgba(16,185,129,0.7)'
+        : isAbsent ? '2px solid rgba(239,68,68,0.55)'
+        : isStandby ? '2px solid rgba(251,191,36,0.5)'
+        : '1px solid rgba(99,102,241,0.5)';
+      const _riGlow = mc ? 'box-shadow:0 0 0 1px rgba(16,185,129,0.45),0 4px 10px rgba(0,0,0,0.12);' : 'box-shadow:0 4px 10px rgba(0,0,0,0.1);';
+      const _riDim = isAbsent ? 'opacity:0.62;' : (isWOOrphan ? 'opacity:0.75;' : '');
+      const _riNum = (typeof _ciOrder === 'number' && _ciOrder !== 9999) ? (_ciOrder + 1) : '';
+      const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
-        <div data-part-card="1" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${cardBg};border:1px solid ${cardBorder};${isVipPlayer ? 'border-left:3px solid #fbbf24;' : ''}${isWOOrphan ? 'opacity:0.75;' : ''}transition:all 0.2s;">
-            <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.4)' : isAbsent ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
-            <div style="flex:1;overflow:hidden;">
-                ${standbyHeader}
-                ${infoBlock}
-                ${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}
-                ${_ciSkillHtml}
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-                ${isWOOrphan ? '<div style="font-size:0.7rem;font-weight:800;padding:4px 12px;border-radius:8px;background:rgba(239,68,68,0.15);color:#f87171;flex-shrink:0;border:1px solid rgba(239,68,68,0.3);">W.O.</div>' : woBadge}
-                ${(_showActions && !isAbsent) ? presentToggle : ''}
-                ${_showActions ? woBtn : ''}
+        <div class="participant-card" data-part-card="1" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
+            ${_riNum !== '' ? `<div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(_riNum).length > 2 ? '2.4rem' : '3rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${_riNum}</div>` : ''}
+            <div style="position:relative;z-index:1;display:flex;align-items:center;gap:10px;">
+                <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
+                <div style="flex:1;min-width:0;overflow:hidden;">
+                    ${standbyHeader}
+                    ${infoBlock}
+                    ${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}
+                    ${_ciSkillHtml}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;">
+                    ${_riWoBadge}
+                    ${(_showActions && !isAbsent) ? presentToggle : ''}
+                    ${_showActions ? woBtn : ''}
+                </div>
             </div>
         </div>`;
     }).join('');
