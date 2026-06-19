@@ -9,7 +9,18 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.38-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.61-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎟️ Lista de espera unificada.</b> Quem está na lista de espera agora aparece <b>entre os inscritos</b> (em âmbar, na ordem alfabética/cronológica como todo mundo) e também no painel "Lista de Espera" — com o número de inscrição e removível pelo organizador a partir de qualquer card. Funciona igual em qualquer formato: Pontos Corridos, Rei/Rainha, Eliminatórias e Fase de Grupos.</li>' +
+        '<li><b>🔘 Botões com cara de botão.</b> Em todo o app — chaves, "Meus Resultados" na tela inicial e lobby de Partida Casual — os botões de ação ganharam o visual sólido com volume do padrão: Ao Vivo, Confirmar, Cheguei, Editar, Convidar, Entrar e os demais.</li>' +
+        '<li><b>📍 Presença mais clara nas chaves.</b> Antes de chegar, um botão <b>Cheguei</b>; depois de confirmar, uma tag <b>Presente</b> discreta logo abaixo do status do jogo (Parcial/Pronto).</li>' +
+        '<li><b>🏷️ Status sempre à direita.</b> A tag "Inscrições Abertas / Encerradas / Temporada Ativa" fica alinhada à direita tanto no detalhe do torneio quanto nos cards da tela inicial.</li>' +
+        '<li><b>🔢 Número de inscrição em todos os cards.</b> Inclusive de quem entrou por telefone e de quem está na lista de espera.</li>' +
+        '<li><b>🃏 Card de inscrito remodelado.</b> O nome do jogador nunca é cortado, a foto fica ao lado, as categorias logo abaixo, e a cor do card reflete o status (presente, ausente, lista de espera ou VIP dourado).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.38-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🃏 Card único de inscritos.</b> O mesmo card vale antes e depois do sorteio — com foto, gênero, categoria e idade; quando sorteado, mostra o jogo, o parceiro e os adversários, com a presença (presente/ausente/W.O.) dentro do próprio card.</li>' +
         '<li><b>🎛️ Barra de filtro/ordenação enxuta.</b> Ordene por nome (A-Z ↑↓) ou por inscrição (🕒 ↑↓), filtre por gênero (colorido) e habilidade, e busque por nome — tudo em controles de ícone compactos. A ordem escolhida não se perde ao remover alguém.</li>' +
