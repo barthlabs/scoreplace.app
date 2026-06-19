@@ -1602,8 +1602,9 @@ function setupCreateTournamentModal() {
     var nLines = lines.length;
     var quantity = ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top');
     if (quantity === 'all') {
-      if (nLines === 1) return [{ dest: lines[0].dest, rankFrom: 1, rankTo: 999, label: (lines[0].label || '').trim() }];
-      return lines.map(function (ln) { return { dest: ln.dest, rankFrom: parseInt(ln.rankFrom, 10) || 1, rankTo: parseInt(ln.rankTo, 10) || 2, label: (ln.label || '').trim() }; });
+      // v2.7.17: 'Todos' = profundidade ampla (rankTo 999) em TODAS as linhas — o
+      // destino vem da estratégia, então a faixa só sinaliza "todos avançam".
+      return lines.map(function (ln) { return { dest: ln.dest, rankFrom: 1, rankTo: 999, label: (ln.label || '').trim() }; });
     }
     var topN = Math.max(parseInt(ph.qualifyTopN, 10) || 2, 1);
     var per = Math.floor(topN / nLines), rem = topN - per * nLines, start = 1;
@@ -1652,6 +1653,12 @@ function setupCreateTournamentModal() {
   window._setPhasePairing = function(i, strategy) {
     var ph = window._extraPhases[i]; if (!ph) return;
     ph.pairingStrategy = strategy;
+    // v2.7.17: Cabeças de chave precisa do ranking GERAL (espalha os melhores
+    // entre as linhas) → força escopo geral.
+    if (strategy === 'seed') {
+      ph.scope = 'overall';
+      ph.qualifyMode = (ph.qualifyQuantity === 'all') ? 'all' : 'overall';
+    }
     window._renderPhases();
   };
   // v2.6.83: "Os X melhores" — quantos avançam (eixo quantidade). Grava em qualifyTopN
@@ -1822,7 +1829,7 @@ function setupCreateTournamentModal() {
       h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_fixed ? 'pares travados para toda a fase' : 'classificados entram individualmente') + '</span>';
       h += '</div>';
       h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-      [['draw_among', '🎲 Sorteio'], ['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.']].forEach(function(p){
+      [['draw_among', '🎲 Sorteio'], ['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.'], ['seed', '🎯 Cabeças de chave']].forEach(function(p){
         var act = _ps === p[0];
         h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
       });
@@ -1833,7 +1840,8 @@ function setupCreateTournamentModal() {
       if (_nLx >= 2) {
         var _Lx = ph.mapping.map(function(mp, k){ return (mp.label || '').trim() || ('Linha ' + (k + 1)); });
         var _expl;
-        if (_ps === 'balanced') _expl = '<b>' + esc(_Lx[0]) + '</b> recebe a dupla 1º+4º (forte+fraco); <b>' + esc(_Lx[1]) + '</b> recebe 2º+3º — linhas equilibradas.';
+        if (_ps === 'seed') _expl = 'Os <b>' + _nLx + ' melhores</b> (ranking geral) viram <b>cabeças de chave</b> — 1 por linha, espalhados pra só se cruzarem no fim; as demais vagas são <b>sorteadas</b> entre as linhas. <span style="opacity:0.8;">(usa escopo Geral)</span>';
+        else if (_ps === 'balanced') _expl = '<b>' + esc(_Lx[0]) + '</b> recebe a dupla 1º+4º (forte+fraco); <b>' + esc(_Lx[1]) + '</b> recebe 2º+3º — linhas equilibradas.';
         else if (_ps === 'draw_among') _expl = 'As duplas de cada grupo são <b>sorteadas</b> e distribuídas igualmente entre as ' + _nLx + ' linhas.';
         else _expl = '<b>' + esc(_Lx[0]) + '</b> recebe os <b>vencedores</b> (1º+2º de cada grupo); <b>' + esc(_Lx[1]) + '</b> recebe os <b>derrotados</b> (3º+4º)' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
         h += '<div style="margin-top:8px;font-size:0.72rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:7px 10px;line-height:1.4;">↳ ' + _expl + '</div>';

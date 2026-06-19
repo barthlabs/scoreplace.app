@@ -116,41 +116,6 @@
     var byDest = {};
     mapping.forEach(function (mp) { if (!byDest[mp.dest]) byDest[mp.dest] = []; });
 
-    // Combina uma lista de classificados (já recortada por faixa de colocação) em
-    // times dentro de byDest[dest], respeitando keep/fixedPairs/estratégia.
-    function pairInto(destArr, picked) {
-      if (!picked || !picked.length) return;
-      // keep: rankingBasis='team' OU as colocações já vêm como dupla → passa direto.
-      if (basis === 'team' || _isTeamEntry(picked[0])) {
-        picked.forEach(function (s) { destArr.push(_asTeam(s)); });
-        return;
-      }
-      if (!fixedPairs) {
-        picked.forEach(function (s) { destArr.push(mkTeam([s])); });
-        return;
-      }
-      var list = picked.slice();
-      if (pairingStrategy === 'draw_among') {
-        // Sorteio entre os classificados, depois pareia adjacentes do embaralhado.
-        list = shuffle(list);
-        for (var i = 0; i < list.length; i += 2) destArr.push(mkTeam(list.slice(i, i + 2)));
-      } else if (pairingStrategy === 'balanced') {
-        // Equilibrado: 1º+último, 2º+penúltimo… (junta forte com fraco)
-        var lo = 0, hi = list.length - 1;
-        while (lo < hi) { destArr.push(mkTeam([list[lo], list[hi]])); lo++; hi--; }
-        if (lo === hi) destArr.push(mkTeam([list[lo]])); // sobra ímpar = solo
-      } else {
-        // 'top' (default): adjacentes — 1º+2º, 3º+4º…
-        for (var j = 0; j < list.length; j += 2) destArr.push(mkTeam(list.slice(j, j + 2)));
-      }
-    }
-
-    function pickRange(standings, mp) {
-      var picked = [];
-      for (var r = mp.rankFrom; r <= mp.rankTo; r++) { var s = standings[r - 1]; if (s) picked.push(s); }
-      return picked;
-    }
-
     // v2.7.15: distribuição DIRIGIDA PELA ESTRATÉGIA. Forma os times (duplas ou
     // indivíduos) de um POOL de classificados e distribui nas N linhas EM ORDEM.
     // O destino da dupla vem da ESTRATÉGIA + ordem, não mais da faixa de rank:
@@ -163,13 +128,46 @@
     function _distributePool(pool, destKeys) {
       var nLines = destKeys.length;
       if (!pool || !pool.length || !nLines) return;
-      if (basis === 'team' || _isTeamEntry(pool[0])) {
+      var alreadyTeams = (basis === 'team' || _isTeamEntry(pool[0]));
+
+      // ── Cabeças de chave (v2.7.17): espalha os N melhores 1 por linha (cabeça =
+      // topo da chave → só se cruzam tarde) e SORTEIA o resto entre as linhas.
+      //   • dupla já formada (fase anterior c/ dupla fixa): cabeças = N melhores
+      //     DUPLAS; demais duplas sorteadas.
+      //   • indivíduos + duplas fixas nesta fase: cabeças = N melhores JOGADORES;
+      //     o parceiro de cada cabeça E as demais duplas são sorteados.
+      //   • indivíduos sem duplas: cabeças = N melhores; resto sorteado.
+      if (pairingStrategy === 'seed') {
+        var seedTeams, restTeams, i2;
+        if (alreadyTeams) {
+          var tms = pool.map(function (s) { return _asTeam(s); });
+          seedTeams = tms.slice(0, nLines);
+          restTeams = shuffle(tms.slice(nLines));
+        } else if (fixedPairs) {
+          var seedsInd = pool.slice(0, nLines);
+          var poolRest = shuffle(pool.slice(nLines));
+          seedTeams = seedsInd.map(function (s) { var p = poolRest.shift(); return mkTeam(p ? [s, p] : [s]); });
+          restTeams = [];
+          for (i2 = 0; i2 < poolRest.length; i2 += 2) restTeams.push(mkTeam(poolRest.slice(i2, i2 + 2)));
+        } else {
+          var ind = pool.map(function (s) { return mkTeam([s]); });
+          seedTeams = ind.slice(0, nLines);
+          restTeams = shuffle(ind.slice(nLines));
+        }
+        seedTeams.forEach(function (tm, k) { byDest[destKeys[k % nLines]].push(tm); }); // 1 cabeça por linha, no topo
+        restTeams.forEach(function (tm, idx) { byDest[destKeys[idx % nLines]].push(tm); });
+        return;
+      }
+
+      // ── keep (duplas já formadas, estratégia não-seed): distribui tiered ──
+      if (alreadyTeams) {
         pool.forEach(function (s, k) {
           var ln = Math.min(Math.floor(k * nLines / pool.length), nLines - 1);
           byDest[destKeys[ln]].push(_asTeam(s));
         });
         return;
       }
+      // ── forma times por estratégia (top/balanced/draw) e distribui tiered ──
       var teams = [];
       if (!fixedPairs) {
         teams = pool.map(function (s) { return mkTeam([s]); });
@@ -180,7 +178,7 @@
         var lo = 0, hi = pool.length - 1;
         while (lo < hi) { teams.push(mkTeam([pool[lo], pool[hi]])); lo++; hi--; }
         if (lo === hi) teams.push(mkTeam([pool[lo]]));
-      } else { // 'top'/'performance' (e 'seed' por ora cai aqui)
+      } else { // 'top'/'performance'
         for (var j = 0; j < pool.length; j += 2) teams.push(mkTeam(pool.slice(j, j + 2)));
       }
       var per = Math.max(Math.ceil(teams.length / nLines), 1);
@@ -190,17 +188,17 @@
       });
     }
 
+    // v2.7.15/17: profundidade (quantos avançam) = maior rankTo do mapping
+    // (>=999 ou ausente = todos). O destino (linha) vem da ESTRATÉGIA, não da faixa.
+    var destKeys = mapping.map(function (mp) { return mp.dest; });
+    var maxRankTo = mapping.reduce(function (mx, mp) { return Math.max(mx, parseInt(mp.rankTo, 10) || 0); }, 0);
     if (scope === 'overall') {
-      // Pool agregado: classifica todo mundo junto e recorta faixas globais.
+      // Pool agregado (ranking geral) — usado por Cabeças de chave e por qualquer
+      // estratégia em escopo Geral.
       var global = _globalStandings(prevGroups, computeStandings);
-      mapping.forEach(function (mp) { pairInto(byDest[mp.dest], pickRange(global, mp)); });
+      var gdepth = (maxRankTo >= 999 || maxRankTo <= 0) ? global.length : Math.min(maxRankTo, global.length);
+      _distributePool(global.slice(0, gdepth), destKeys);
     } else {
-      // Por grupo (v2.7.15): forma os times do grupo e DISTRIBUI nas linhas pela
-      // ESTRATÉGIA. As faixas do mapping só dizem QUANTOS avançam (profundidade =
-      // maior rankTo; >=999 ou ausente = todos do grupo). O destino (linha) vem da
-      // estratégia + ordem — fim do "destino por faixa de rank".
-      var destKeys = mapping.map(function (mp) { return mp.dest; });
-      var maxRankTo = mapping.reduce(function (mx, mp) { return Math.max(mx, parseInt(mp.rankTo, 10) || 0); }, 0);
       (prevGroups || []).forEach(function (g) {
         var standings = computeStandings(g) || [];
         var depth = (maxRankTo >= 999 || maxRankTo <= 0) ? standings.length : Math.min(maxRankTo, standings.length);
