@@ -2724,7 +2724,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       ${rankingCountdownHtml}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
         <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound ? '👑 ' : ''}${isSwissQualifier ? _swissQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : '— ' + _t('bracket.ongoing')}</h3>
-        ${isOrg && !isFinished && allComplete ? `
+        ${isOrg && !isFinished && allComplete && !(window._phasesPhaseComplete && window._phasesPhaseComplete(t)) ? `
           <button class="btn btn-success btn-sm hover-lift" onclick="window._closeRound('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${currentRound - 1})">
             ${_t('bracket.closeRound')}
           </button>` : ''}
@@ -3515,7 +3515,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     var _currentStatusBadge = currentRoundData.status === 'complete'
       ? '<span style="color:#4ade80;font-size:0.7rem;font-weight:700;white-space:nowrap;">✓ ' + _t('bracket.complete') + '</span>'
       : (isFinished ? '<span style="color:#fbbf24;font-weight:700;font-size:0.7rem;white-space:nowrap;">' + _t('bracket.tournamentFinished') + '</span>' : '');
-    var _closeBtn = (isOrg && !isFinished && allComplete)
+    var _closeBtn = (isOrg && !isFinished && allComplete && !(window._phasesPhaseComplete && window._phasesPhaseComplete(t)))
       ? '<button class="btn btn-success btn-sm" onclick="window._closeRound(\'' + _tIdEsc + '\', ' + (currentRound - 1) + ')" style="font-size:0.72rem;white-space:nowrap;">' + _t('bracket.closeRound') + '</button>'
       : '';
     _roundColumns.push(
