@@ -9,7 +9,19 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.38-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🃏 Card único de inscritos.</b> O mesmo card vale antes e depois do sorteio — com foto, gênero, categoria e idade; quando sorteado, mostra o jogo, o parceiro e os adversários, com a presença (presente/ausente/W.O.) dentro do próprio card.</li>' +
+        '<li><b>🎛️ Barra de filtro/ordenação enxuta.</b> Ordene por nome (A-Z ↑↓) ou por inscrição (🕒 ↑↓), filtre por gênero (colorido) e habilidade, e busque por nome — tudo em controles de ícone compactos. A ordem escolhida não se perde ao remover alguém.</li>' +
+        '<li><b>👤 O perfil manda.</b> A categoria e o gênero exibidos e filtrados vêm do perfil de cada pessoa naquela modalidade — "sem habilidade" passa a ser só quem realmente não preencheu, e mudar no perfil reflete na lista.</li>' +
+        '<li><b>⭐ Organizadores no topo.</b> Quem organiza ganha uma estrela no card e fica sempre no topo da lista de inscritos, independente do filtro ou da ordem.</li>' +
+        '<li><b>⚖️ Chaves que não fecham em potência de 2.</b> Ao avançar de fase, o app pergunta como resolver — play-in, lista de espera, folga (BYE) ou exclusão — em vez de aplicar folga escondida.</li>' +
+        '<li><b>🔧 Permitir auto-desativação (Pontos Corridos).</b> Novo controle na criação/edição: por padrão os inscritos podem ficar de fora de um sorteio; desligando, o controle some de todos e todos ficam sempre ativos.</li>' +
+        '<li><b>🛠️ Correções e ajustes:</b> remover inscrito voltou a funcionar; VIPs fixam no topo; "Liga" aparece como "Pontos Corridos" na lista de inscritos; e o coração de favorito ficou à direita, alinhado ao nome do torneio.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🧩 Construtor de fases — distribuição completa por estratégia.</b> Ao avançar de uma fase pra outra, você escolhe como as duplas se distribuem nas chaves: <b>Performance</b> (vencedores 1º+2º → linha Ouro, derrotados 3º+4º → Prata), <b>Equilíbrio</b> (1º+4º / 2º+3º), <b>Sorteio</b> (aleatório) ou <b>Cabeças de chave</b> (os melhores espalhados, 1 por chave). Com 1, 2 ou 4 linhas e grande final opcional — e o seletor explica na hora quem vai pra cada linha.</li>' +
         '<li><b>📊 Classificação por grupo.</b> Quando os classificados avançam por grupo, cada grupo Rei/Rainha mostra a sua própria classificação (1º/2º/3º/4º) — pra ver quem vai pra qual chave.</li>' +
