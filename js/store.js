@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.20-beta';
+window.SCOREPLACE_VERSION = '2.7.21-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2079,11 +2079,11 @@ window._tournamentLogoRadius = function(t) {
 // Mantém legibilidade sobre a foto em qualquer tema sem forçar box escuro no escuro.
 window._photoReadBox = function () {
     var th = (document.documentElement.getAttribute('data-theme') || 'dark');
-    var light = (th === 'light' || th === 'sunset');
+    var light = (th === 'light'); // v2.7.21: só 2 temas (dark/light); sunset/ocean removidos
     // v2.7.20: TEMA ESCURO → tarja MAIS ESCURA que o fundo (scrim preto sobre o
     // bg, indo pro preto sem ser preto absoluto) + fonte CLARA (não branca pura).
     // Antes o escuro usava bg CLARO (226,232,240) → "brilho agressivo" sobre o
-    // fundo escuro (pedido do dono). Tema claro/sunset INTOCADO. Consistente em
+    // fundo escuro (pedido do dono). Tema CLARO INTOCADO. Consistente em
     // dashboard, detalhe e utils (todos chamam este helper).
     return light
         ? { bg: 'rgba(30,41,59,0.72)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' }
