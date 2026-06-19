@@ -1913,7 +1913,9 @@ function renderParticipants(container, tournamentId) {
       // independente de o jogo já ter resultado ou W.O. (check-in é independente do resultado)
       // v2.2.8: standby players marcados como ausentes ficam com toggle desabilitado — usar "Reverter"
       const isAbsentStandby = isStandby && isAbsent;
-      const presentToggle = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAbsentStandby ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} ${isAbsentStandby ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}');"`}><span class="toggle-slider"></span></label><span style="font-size:0.68rem;font-weight:700;color:${mc ? '#4ade80' : '#64748b'};white-space:nowrap;">${mc ? 'Presente' : 'Ausente'}</span>`;
+      // v2.7.42: switch e palavra SEPARADOS (pra montar "Ausente [toggle] W.O." numa linha).
+      const _toggleSwitch = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAbsentStandby ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} ${isAbsentStandby ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}');"`}><span class="toggle-slider"></span></label>`;
+      const _presenceWord = `<span style="font-size:0.68rem;font-weight:700;color:${mc ? '#4ade80' : '#94a3b8'};white-space:nowrap;">${mc ? 'Presente' : 'Ausente'}</span>`;
 
       // W.O. button — marca W.O. / reverte W.O.
       // Standby players use simple toggle; active participants always go through the
@@ -2052,19 +2054,19 @@ function renderParticipants(container, tournamentId) {
         <div class="participant-card" data-part-card="1" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${_riNum !== '' ? `<div style="position:absolute;right:8px;top:8px;font-size:${String(_riNum).length > 2 ? '1.9rem' : '2.4rem'};font-weight:900;color:rgba(255,255,255,0.07);line-height:1;pointer-events:none;user-select:none;">${_riNum}</div>` : ''}
             <div style="position:relative;z-index:1;">
+                <!-- HEADER: avatar + nome + estrela | Jogo N -->
                 <div style="display:flex;align-items:flex-start;gap:8px;">
-                    <div style="flex:1;min-width:0;">
-                        <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-                            <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
-                            <div style="flex:1;min-width:0;">${standbyHeader}${_nameRow}</div>
-                        </div>
-                        <div style="margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow:hidden;">${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}${_ciSkillHtml}</div>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0;">
-                        ${_jogoTop}
-                        ${_riWoBadge}
-                        ${(_showActions && !isAbsent) ? presentToggle : ''}
-                        ${(woBtn || _vipBtnC) ? `<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">${_showActions ? woBtn : ''}${_vipBtnC}</div>` : ''}
+                    <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
+                    <div style="flex:1;min-width:0;">${standbyHeader}${_nameRow}</div>
+                    ${_jogoTop ? `<div style="flex-shrink:0;">${_jogoTop}</div>` : ''}
+                </div>
+                <!-- LINHA COMBINADA (v2.7.42): VIP + categorias (esquerda) | Ausente/Presente + toggle + W.O. (direita) -->
+                <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">${_vipBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}${_ciSkillHtml}</div>
+                    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;">
+                        ${_presenceWord}
+                        ${isAbsent ? _riWoBadge : _toggleSwitch}
+                        ${woBtn}
                     </div>
                 </div>
                 ${_matchStrip}
