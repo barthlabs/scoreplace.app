@@ -153,7 +153,7 @@ function renderBracket(container, tournamentId, isInline) {
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift" onclick="window._exportTournamentCSV('${_tIdSafe}')">📊 CSV</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._tvMode('${_tIdSafe}')">📺 Modo TV</button>` : '<span></span>'}
       ${isOrg && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
-      ${(isOrg && hasContent && window.AppStore.isCreator && window.AppStore.isCreator(t)) ? `<button class="btn btn-sm hover-lift no-print" style="grid-column:span 2;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#fbbf24;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="Apaga sorteio, rodadas e fases; mantém os inscritos">🔄 Resetar (manter inscritos)</button>` : ''}
+      ${(isOrg && hasContent && window.AppStore.isCreator && window.AppStore.isCreator(t)) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="Apaga sorteio, rodadas e fases; mantém os inscritos">🔄 Resetar (manter inscritos)</button>` : ''}
     </div>
     <style>
       @media (min-width: 768px) {
@@ -1906,13 +1906,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     // vez de esticar o card) e SEM margin-left (espaçamento vem do gap do
     // container, evita gap duplo / margem na borda). Regra: vermelho à esquerda,
     // verde à direita.
-    var _pbBtn = 'flex:1 1 auto;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;';
-    var _btnEdit = `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
-        style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;${_pbBtn}">✏️ Editar</button>`;
-    var _btnConfirm = `<button onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')"
-        style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#4ade80;${_pbBtn}">✅ Confirmar</button>`;
-    var _btnContest = `<button onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')"
-        style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);color:#f87171;${_pbBtn}">❌ Contestar</button>`;
+    // v2.7.58: botões de disputa no PADRÃO do app (.btn + cor + .btn-sm, com volume),
+    // mantendo flex:1 pra dividirem a largura do card. Vermelho à esquerda, verde à direita.
+    var _pbBtn = 'flex:1 1 auto;font-size:0.78rem;';
+    var _btnEdit = `<button class="btn btn-indigo btn-sm" onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">✏️ Editar</button>`;
+    var _btnConfirm = `<button class="btn btn-success btn-sm" onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">✅ Confirmar</button>`;
+    var _btnContest = `<button class="btn btn-danger btn-sm" onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">❌ Contestar</button>`;
     // v1.9.77: Fase 4 (em disputa) — NINGUÉM tem botão no corpo do card. Os
     // jogadores veem só a tag PENDENTE; o organizador resolve exclusivamente
     // pelo painel do banner (Confirmar / Editar / Refazer). Sem isso, o
@@ -2030,12 +2029,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         // v1.9.77: caminho ÚNICO do organizador. "Confirmar placar (X × Y)"
         // finaliza o placar atual direto (via _approveResult). "Editar" abre os
         // campos pra lançar outro placar (e finaliza). "Refazer (0×0)" reabre.
-        var _btnOrgConfirm = `<button onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')"
-            style="background:rgba(16,185,129,0.22);border:1px solid rgba(16,185,129,0.5);color:#4ade80;border-radius:8px;padding:7px 13px;font-size:0.78rem;font-weight:800;cursor:pointer;">✅ Confirmar placar (${_scoreDisp})</button>`;
-        var _btnOrgEdit = `<button onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')"
-            style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a78bfa;border-radius:8px;padding:7px 13px;font-size:0.78rem;font-weight:700;cursor:pointer;">✏️ Editar placar</button>`;
-        var _btnOrgRedo = `<button onclick="window._organizerResetMatch('${_esc(tId)}','${_esc(m.id)}')"
-            style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#fbbf24;border-radius:8px;padding:7px 13px;font-size:0.78rem;font-weight:700;cursor:pointer;">🔄 Refazer (0×0)</button>`;
+        var _btnOrgConfirm = `<button class="btn btn-success btn-sm" onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')" style="font-size:0.78rem;">✅ Confirmar placar (${_scoreDisp})</button>`;
+        var _btnOrgEdit = `<button class="btn btn-indigo btn-sm" onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')" style="font-size:0.78rem;">✏️ Editar placar</button>`;
+        var _btnOrgRedo = `<button class="btn btn-warning btn-sm" onclick="window._organizerResetMatch('${_esc(tId)}','${_esc(m.id)}')" style="font-size:0.78rem;">🔄 Refazer (0×0)</button>`;
         _orgResolvePanel = `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(239,68,68,0.35);">
           <div style="font-size:0.68rem;color:#fca5a5;font-weight:700;margin-bottom:6px;">🛠️ Você está atuando como <b>ORGANIZADOR</b> — decida o resultado definitivo:</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">${_btnOrgConfirm}${_btnOrgEdit}${_btnOrgRedo}</div>
@@ -2724,8 +2720,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
         <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound ? '👑 ' : ''}${isSwissQualifier ? _swissQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : '— ' + _t('bracket.ongoing')}</h3>
         ${isOrg && !isFinished && allComplete ? `
-          <button onclick="window._closeRound('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${currentRound - 1})"
-            style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#4ade80;border-radius:8px;padding:8px 18px;font-weight:600;cursor:pointer;font-size:0.85rem;">
+          <button class="btn btn-success btn-sm hover-lift" onclick="window._closeRound('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${currentRound - 1})">
             ${_t('bracket.closeRound')}
           </button>` : ''}
         ${isFinished ? `<span style="color:#fbbf24;font-weight:700;">${_t('bracket.tournamentFinished')}</span>` : ''}
@@ -3516,7 +3511,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       ? '<span style="color:#4ade80;font-size:0.7rem;font-weight:700;white-space:nowrap;">✓ ' + _t('bracket.complete') + '</span>'
       : (isFinished ? '<span style="color:#fbbf24;font-weight:700;font-size:0.7rem;white-space:nowrap;">' + _t('bracket.tournamentFinished') + '</span>' : '');
     var _closeBtn = (isOrg && !isFinished && allComplete)
-      ? '<button onclick="window._closeRound(\'' + _tIdEsc + '\', ' + (currentRound - 1) + ')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#4ade80;border-radius:8px;padding:5px 12px;font-weight:600;cursor:pointer;font-size:0.72rem;white-space:nowrap;">' + _t('bracket.closeRound') + '</button>'
+      ? '<button class="btn btn-success btn-sm" onclick="window._closeRound(\'' + _tIdEsc + '\', ' + (currentRound - 1) + ')" style="font-size:0.72rem;white-space:nowrap;">' + _t('bracket.closeRound') + '</button>'
       : '';
     _roundColumns.push(
       '<div class="bracket-round-column" data-round-num="' + currentRound + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
