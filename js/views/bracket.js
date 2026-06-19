@@ -2952,11 +2952,39 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // Renderização das ordens fixas (myGroups primeiro, depois otherGroups)
         // mantém numeração consistente independente do sort visual.
         var _monarchGlobalMatchNum = _monarchPrevRoundsMatches;
+        // v2.7.18: classificação POR GRUPO volta quando a transição p/ a próxima
+        // fase é POR GRUPO — o organizador precisa ver 1º/2º/3º/4º de cada grupo
+        // pra entender quem vai pra qual linha (Ouro/Prata). A geral continua acima.
+        var _nextPhT = (window._isMultiPhase && window._isMultiPhase(t)) ? (t.phases[(t.currentPhaseIndex || 0) + 1] || null) : null;
+        var _nextScopeT = _nextPhT ? (((_nextPhT.source && _nextPhT.source.scope) || _nextPhT.scope || 'per_group')) : null;
+        var _showGroupStandings = !!_nextPhT && _nextScopeT !== 'overall';
         var _renderGroup = function(g) {
           // v2.3.19: classificação POR GRUPO removida — a classificação geral
           // (todos os jogadores) fica acima das rodadas. Aqui só renderizamos
           // os jogos do grupo. `gDone` ainda é usado no badge/borda do grupo.
           var gDone = g.matches.length > 0 && g.matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
+          // v2.7.18: classificação individual DESTE grupo (1º…4º) — só quando a
+          // transição é por grupo. Reusa _computeMonarchStandings (mesma do motor).
+          var _grpStTable = '';
+          if (_showGroupStandings && typeof window._computeMonarchStandings === 'function') {
+            var _gst = window._computeMonarchStandings({ players: g.players, matches: g.matches }) || [];
+            if (_gst.length) {
+              var _gstRows = _gst.map(function(s, idx) {
+                var _pos = idx + 1, _md = _pos === 1 ? '🥇' : _pos === 2 ? '🥈' : _pos === 3 ? '🥉' : '';
+                var _sld = (s.pointsFor || 0) - (s.pointsAgainst || 0);
+                return '<tr style="border-top:1px solid rgba(255,255,255,0.06);">' +
+                  '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
+                  '<td style="padding:3px 6px;color:var(--text-bright);">' + (_md ? _md + ' ' : '') + window._safeHtml(s.name) + '</td>' +
+                  '<td style="padding:3px 6px;text-align:center;color:#4ade80;font-weight:700;">' + (s.wins || 0) + '</td>' +
+                  '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (_sld >= 0 ? '+' : '') + _sld + '</td>' +
+                '</tr>';
+              }).join('');
+              _grpStTable = '<div style="margin-bottom:0.6rem;background:rgba(0,0,0,0.18);border-radius:8px;padding:6px 9px;">' +
+                '<div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.4px;color:#fbbf24;font-weight:700;margin-bottom:3px;">📊 Classificação do grupo</div>' +
+                '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead><tr style="color:var(--text-muted);font-size:0.58rem;text-transform:uppercase;"><th></th><th style="text-align:left;font-weight:600;">Jogador</th><th style="font-weight:600;">V</th><th style="font-weight:600;">Saldo</th></tr></thead><tbody>' + _gstRows + '</tbody></table>' +
+              '</div>';
+            }
+          }
           // v0.16.52: cards de jogo viram itens de CSS Grid em vez de flex.
           // Antes (`flex:1 + max-width:320px`): cards na mesma linha disputavam
           // espaço (ficavam menores que max), mas o último sozinho na linha
@@ -3000,6 +3028,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           return '<div style="background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + _monarchBadge + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + (_ligaCtrl ? '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">' + _ligaCtrl + '</span>' : '') + '</div>' +
             '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">Jogadores: ' + g.players.map(function(n){ return (_woName && n === _woName) ? ('<span style="text-decoration:line-through;opacity:0.6;">' + window._safeHtml(n) + '</span> <span style="color:#f87171;font-weight:800;font-size:0.66rem;">W.O.</span>') : window._safeHtml(n); }).join(', ') + '</div>' +
+            _grpStTable +
             '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">' + gCards + '</div>' +
           '</div>';
         };
