@@ -2264,6 +2264,12 @@ function renderParticipants(container, tournamentId) {
         </button>
     </div>` : '';
 
+  // v2.7.4: auto-cura — auto-draw Liga já sorteado marca tournamentStarted (sortear
+  // É iniciar) e persiste, escondendo este banner pra Pontos Corridos automático.
+  // Sorteio MANUAL mantém o banner (passo explícito de iniciar).
+  if (isOrg && drawDone && !t.tournamentStarted && typeof window._maybeAutoStartLiga === 'function') {
+    if (window._maybeAutoStartLiga(t) && window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+  }
   // ── "Iniciar Torneio" banner (after draw, before start) ──
   const startBanner = (isOrg && drawDone && !t.tournamentStarted) ? `
     <div style="margin-bottom:1.5rem;padding:20px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.1));border:2px solid rgba(16,185,129,0.4);border-radius:16px;text-align:center;">

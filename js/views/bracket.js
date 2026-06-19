@@ -211,6 +211,11 @@ function renderBracket(container, tournamentId, isInline) {
 
   // ── Banner "Iniciar Torneio" e Progress Bar (skip quando inline — já existem no card acima) ──
   const hasDrawContent = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);
+  // v2.7.4: auto-cura — auto-draw Liga já sorteado ANTES deste fix (tournamentStarted
+  // ausente) é marcado como iniciado no render e persistido. Sortear É iniciar.
+  if (isOrg && hasDrawContent && !t.tournamentStarted && typeof window._maybeAutoStartLiga === 'function') {
+    if (window._maybeAutoStartLiga(t) && window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+  }
   // v2.6.100: Pontos Corridos (Liga/Suíço) com sorteio AUTOMÁTICO (drawManual !== true)
   // não tem passo "Iniciar Torneio" — sorteia e já começa. O banner (rede de
   // segurança) fica só no sorteio MANUAL, por enquanto.
