@@ -1399,20 +1399,53 @@ window._showPhaseResolutionPanel = function (tId) {
             else if (optKey === 'playin') d = excess + ' classificatória' + (excess > 1 ? 's' : '') + ' → chave de ' + lo;
             else if (optKey === 'standby') d = excess + ' pra lista de espera → chave de ' + lo;
             else d = 'corta ' + excess + ' → chave de ' + lo;
-            return '<b>' + esc(l.label) + '</b> (' + s + '): ' + d;
-        }).filter(Boolean).join(' · ');
+            return '<div style="margin-top:2px;"><b>' + esc(l.label) + '</b> (' + s + '): ' + d + '</div>';
+        }).filter(Boolean).join('');
     }
     var opts = [
-        { key: 'playin', icon: '🔁', title: 'Play-in (classificatória)', sub: 'Todos jogam — os últimos disputam a vaga.', rec: true },
-        { key: 'standby', icon: '⏱️', title: 'Lista de espera', sub: 'Os últimos ficam de espera (entram na chave abaixo) — disponíveis pra substituir num W.O.', rec: false },
-        { key: 'bye', icon: '🥇', title: 'BYE (folga p/ cabeças)', sub: 'Os melhores folgam a 1ª rodada até a potência acima.', rec: false },
-        { key: 'exclusion', icon: '🚫', title: 'Exclusão', sub: 'Corta os piores classificados até a potência abaixo.', rec: false }
+        { key: 'playin', icon: '🔁', title: 'Play-in (classificatória)', sub: 'Todos jogam — os últimos disputam a vaga.' },
+        { key: 'standby', icon: '⏱️', title: 'Lista de espera', sub: 'Os últimos ficam de espera (entram na chave abaixo) — disponíveis pra substituir num W.O.' },
+        { key: 'bye', icon: '🥇', title: 'BYE (folga p/ cabeças)', sub: 'Os melhores folgam a 1ª rodada até a potência acima.' },
+        { key: 'exclusion', icon: '🚫', title: 'Exclusão', sub: 'Corta os piores classificados até a potência abaixo.' }
     ];
+    // v2.7.65: nº de jogos por solução (somando TODAS as linhas) → estimativa de tempo.
+    function gamesFor(optKey) {
+        var total = 0;
+        info.lines.forEach(function (l) {
+            var s = l.size; if (s <= 1) return;
+            if ((s & (s - 1)) === 0) { total += s - 1; return; } // já é potência de 2
+            var lo = pow2lo(s);
+            // play-in e BYE: todos os s jogadores entram → s-1 jogos; espera/exclusão: só os lo de baixo → lo-1
+            total += (optKey === 'playin' || optKey === 'bye') ? (s - 1) : (lo - 1);
+        });
+        return total;
+    }
+    var _dur = parseInt(t.gameDuration) || 30;
+    var _courts = parseInt(t.courtCount) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 2;
+    window._phaseResCourts = _courts;
+    function fmtMin(m) { var h = Math.floor(m / 60), mm = m % 60; return h > 0 ? (h + 'h' + (mm ? ' ' + mm + 'm' : '')) : (mm + 'm'); }
+    // Equilíbrio de Nash por solução (mesma matriz de payoff do _computeNashRecommendation):
+    // justiça 45% · inclusão 35% · esforço 20%, cada um 0-10 → % = score*10.
+    var _nashPay = { 'playin': { f: 8, i: 10, e: 6 }, 'standby': { f: 6, i: 4, e: 9 }, 'bye': { f: 6, i: 10, e: 9 }, 'exclusion': { f: 3, i: 2, e: 10 } };
+    function nashPct(k) { var p = _nashPay[k]; return p ? Math.round((p.f * 0.45 + p.i * 0.35 + p.e * 0.20) * 10) : 0; }
+    var _bestKey = '', _bestPct = -1;
+    opts.forEach(function (o) { var p = nashPct(o.key); if (p > _bestPct) { _bestPct = p; _bestKey = o.key; } });
+    // estado p/ seleção dinâmica
+    window._phaseResTId = tIdSafe;
+    window._phaseResSel = _bestKey;
+    window._phaseResData = {};
+    opts.forEach(function (o) { var g = gamesFor(o.key); window._phaseResData[o.key] = { games: g, mins: Math.ceil(g / Math.max(1, _courts)) * _dur, label: o.title, fmt: fmtMin(Math.ceil(g / Math.max(1, _courts)) * _dur) }; });
+
+    function nashColor(pct) { return pct >= 80 ? '#6ee7b7' : pct >= 60 ? '#fde68a' : '#fca5a5'; }
     var cards = opts.map(function (o) {
-        return '<button onclick="window._applyPhaseResolution(\'' + tIdSafe + '\',\'' + o.key + '\')" style="text-align:left;background:' + (o.rec ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)') + ';border:2px solid ' + (o.rec ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.12)') + ';border-radius:14px;padding:12px 14px;cursor:pointer;color:#e2e8f0;transition:all 0.2s;" onmouseover="this.style.filter=\'brightness(1.12)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.filter=\'\';this.style.transform=\'\'">' +
-            '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:0.92rem;">' + o.icon + ' ' + o.title + (o.rec ? ' <span style="font-size:0.6rem;background:rgba(16,185,129,0.25);color:#6ee7b7;padding:1px 7px;border-radius:6px;">recomendado</span>' : '') + '</div>' +
+        var pct = nashPct(o.key); var isRec = (o.key === _bestKey); var isSel = (o.key === window._phaseResSel);
+        return '<button id="phase-res-opt-' + o.key + '" data-key="' + o.key + '" onclick="window._phaseResSelect(\'' + o.key + '\')" style="text-align:left;background:' + (isSel ? 'rgba(99,102,241,0.16)' : 'rgba(255,255,255,0.04)') + ';border:2px solid ' + (isSel ? 'rgba(129,140,248,0.8)' : 'rgba(255,255,255,0.12)') + ';border-radius:14px;padding:12px 14px;cursor:pointer;color:#e2e8f0;transition:all 0.2s;">' +
+            '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:0.92rem;flex-wrap:wrap;">' + o.icon + ' ' + o.title +
+              (isRec ? ' <span style="font-size:0.6rem;background:rgba(16,185,129,0.25);color:#6ee7b7;padding:1px 7px;border-radius:6px;">recomendado</span>' : '') +
+              '<span style="margin-left:auto;font-size:0.62rem;font-weight:800;color:' + nashColor(pct) + ';background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);padding:1px 7px;border-radius:6px;white-space:nowrap;" title="Equilíbrio de Nash — quanto maior, melhor o equilíbrio entre justiça, inclusão e esforço">⚖️ Nash ' + pct + '%</span>' +
+            '</div>' +
             '<div style="font-size:0.74rem;color:var(--text-muted);margin:3px 0 5px;">' + o.sub + '</div>' +
-            '<div style="font-size:0.72rem;color:#93c5fd;">' + descFor(o.key) + '</div>' +
+            '<div style="font-size:0.72rem;color:#93c5fd;line-height:1.45;">' + descFor(o.key) + '</div>' +
         '</button>';
     }).join('');
     var old = document.getElementById('phase-res-panel'); if (old) old.remove();
@@ -1420,13 +1453,34 @@ window._showPhaseResolutionPanel = function (tId) {
     ov.id = 'phase-res-panel';
     ov.style.cssText = 'position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:18px;';
     var linesSummary = info.lines.map(function (l) { return esc(l.label) + ': ' + l.size; }).join(' · ');
-    ov.innerHTML = '<div style="background:var(--bg-card,#1a1a2e);border:2px solid rgba(245,158,11,0.4);border-radius:18px;max-width:460px;width:100%;padding:18px 18px 16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    var _selD = window._phaseResData[window._phaseResSel];
+    var estimateHtml = '<div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:9px 12px;margin-bottom:10px;font-size:0.82rem;color:var(--text-bright);">' +
+        '⏱️ <b>Estimativa</b> da solução selecionada: <b id="phase-res-est-val" style="color:#a5b4fc;">~' + _selD.fmt + '</b> ' +
+        '<span id="phase-res-est-sub" style="opacity:0.7;font-size:0.74rem;">(' + _selD.games + ' jogos · ' + _courts + ' quadra' + (_courts > 1 ? 's' : '') + ' · ' + _dur + ' min/jogo)</span></div>';
+    ov.innerHTML = '<div style="background:var(--bg-card,#1a1a2e);border:2px solid rgba(245,158,11,0.4);border-radius:18px;max-width:460px;width:100%;max-height:88vh;overflow-y:auto;padding:18px 18px 16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
         '<div style="font-size:1.05rem;font-weight:800;color:#fbbf24;margin-bottom:4px;">⚖️ Resolver as chaves da ' + esc(info.nextName) + '</div>' +
         '<div style="font-size:0.8rem;color:var(--text-main);line-height:1.4;margin-bottom:10px;">Alguma linha não fechou em potência de 2 (' + esc(linesSummary) + '). Escolha como resolver — vale pra <b>todas as linhas</b>:</div>' +
+        estimateHtml +
         '<div style="display:flex;flex-direction:column;gap:8px;">' + cards + '</div>' +
-        '<button onclick="document.getElementById(\'phase-res-panel\').remove()" style="margin-top:12px;width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);border-radius:10px;padding:8px;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '<button onclick="window._applyPhaseResolution(\'' + tIdSafe + '\', window._phaseResSel)" class="btn btn-success" style="margin-top:12px;width:100%;">🏆 Avançar com esta solução</button>' +
+        '<button onclick="document.getElementById(\'phase-res-panel\').remove()" style="margin-top:8px;width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);border-radius:10px;padding:8px;font-weight:600;cursor:pointer;">Cancelar</button>' +
     '</div>';
     document.body.appendChild(ov);
+};
+// v2.7.65: seleção dinâmica no painel de resolução — destaca o card e atualiza a
+// estimativa de tempo acima dos botões, sem aplicar (o "Avançar" aplica).
+window._phaseResSelect = function (key) {
+    window._phaseResSel = key;
+    ['playin', 'standby', 'bye', 'exclusion'].forEach(function (k) {
+        var el = document.getElementById('phase-res-opt-' + k); if (!el) return;
+        var on = (k === key);
+        el.style.background = on ? 'rgba(99,102,241,0.16)' : 'rgba(255,255,255,0.04)';
+        el.style.borderColor = on ? 'rgba(129,140,248,0.8)' : 'rgba(255,255,255,0.12)';
+    });
+    var d = window._phaseResData && window._phaseResData[key];
+    if (!d) return;
+    var v = document.getElementById('phase-res-est-val'); if (v) v.textContent = '~' + d.fmt;
+    var s = document.getElementById('phase-res-est-sub'); if (s) s.textContent = '(' + d.games + ' jogos · ' + (window._phaseResCourts || '?') + ' quadra' + ((window._phaseResCourts || 1) > 1 ? 's' : '') + ')';
 };
 window._applyPhaseResolution = function (tId, option) {
     var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
