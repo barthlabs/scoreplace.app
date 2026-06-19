@@ -3668,7 +3668,18 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     // "a classificação geral fica embaixo e só vai para cima quando todos os
     // placares da rodada forem lançados." Combina com o lançamento in-place
     // (_finalizeRoundCardInPlace) que mantém a página estática durante a rodada.
+    // v2.7.22: transição POR GRUPO → classificação geral vai pro FINAL (depois das
+    // chaves concluídas), não no topo — a classificação por grupo no topo de cada
+    // chave já mostra quem avança. Pedido do dono. (Transição GERAL mantém no topo.)
+    var _txPerGroup = (window._isMultiPhase && window._isMultiPhase(t)) && (function () {
+      var _np = t.phases[(t.currentPhaseIndex || 0) + 1];
+      var _sc = _np ? (((_np.source && _np.source.scope) || _np.scope || 'per_group')) : null;
+      return !!_np && _sc !== 'overall';
+    })();
     if (allComplete) {
+      if (_txPerGroup) {
+        return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+      }
       return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + standingsTablesHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
     }
     return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
