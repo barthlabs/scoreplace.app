@@ -779,6 +779,11 @@ window._partApplyFilter = function () {
       var va = a.getAttribute('data-part-vip') === '1' ? 1 : 0;
       var vb = b.getAttribute('data-part-vip') === '1' ? 1 : 0;
       if (va !== vb) return vb - va;
+      // v2.7.50: LISTA DE ESPERA sempre no rodapé (depois de todos os inscritos),
+      // independente do sort. Dentro do grupo da espera, o sort escolhido vale.
+      var sa = a.getAttribute('data-part-standby') === '1' ? 1 : 0;
+      var sb = b.getAttribute('data-part-standby') === '1' ? 1 : 0;
+      if (sa !== sb) return sa - sb;
       if (sort === 'name-asc' || sort === 'name-desc') {
         var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
         return sort === 'name-desc' ? -r : r;
@@ -1728,6 +1733,23 @@ function renderParticipants(container, tournamentId) {
       }
     });
 
+    // v2.7.50: quem está na LISTA DE ESPERA mas TAMBÉM em t.participants → a dedup
+    // acima mantém a versão sem isStandby (a de parts) e o card sai roxo, não âmbar.
+    // Marca isStandby no resultado SE não estiver num jogo real (com matchNum já foi
+    // promovido). Assim todo mundo da espera fica âmbar, esteja só na espera ou em ambos.
+    (function () {
+      var _sbSet = {};
+      standbyParts.forEach(function (p) {
+        var n = (typeof p === 'string') ? p : (p && (p.displayName || p.name || p.email)) || '';
+        n = String(n);
+        if (n.indexOf('/') !== -1) { n.split('/').forEach(function (x) { var k = x.trim().toLowerCase(); if (k) _sbSet[k] = 1; }); }
+        else { var k = n.trim().toLowerCase(); if (k) _sbSet[k] = 1; }
+      });
+      _dedupedIndividuals.forEach(function (ind) {
+        if (!ind.isStandby && !ind.matchNum && _sbSet[(ind.name || '').toLowerCase().trim()]) ind.isStandby = true;
+      });
+    })();
+
     // v1.0.83-beta: SAFETY NET — todo substituto (replacedBy em t.woHistory)
     // deve aparecer na lista geral em sua posição alfabética, mesmo se algum
     // path upstream esqueceu de adicioná-lo a t.participants. User: "na lista
@@ -2068,7 +2090,7 @@ function renderParticipants(container, tournamentId) {
       const _riNum = (typeof _ciOrder === 'number' && _ciOrder !== 9999) ? (_ciOrder + 1) : '';
       const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
-        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
+        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${_riNum !== '' ? `<div style="position:absolute;right:8px;top:8px;font-size:${String(_riNum).length > 2 ? '1.9rem' : '2.4rem'};font-weight:900;color:rgba(255,255,255,0.07);line-height:1;pointer-events:none;user-select:none;">${_riNum}</div>` : ''}
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->
@@ -2279,7 +2301,7 @@ function renderParticipants(container, tournamentId) {
       const _fOrder = (_partEnrollIdx && _partEnrollIdx[_fKey] != null) ? _partEnrollIdx[_fKey] : idx;
       const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
       return `
-        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="${_isStandbyEntry ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
             <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(bgNum).length > 2 ? '2.8rem' : '3.5rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${bgNum}</div>
             <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:0;">
                 <div style="display:flex;align-items:center;gap:12px;">
