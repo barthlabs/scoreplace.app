@@ -1957,6 +1957,8 @@ function renderParticipants(container, tournamentId) {
       const vipMap = t.vips || {};
       const isVipPlayer = !!vipMap[ind.name] || (ind.teamName && !!vipMap[ind.teamName]);
       const vipTag = isVipPlayer ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.55rem;font-weight:900;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;flex-shrink:0;">💎 VIP</span>' : '';
+      // v2.7.40: botão VIP ao lado do W.O. — SÓ pro organizador (toggle marca/desmarca).
+      const _vipBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}','${safeName}')" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)'};color:${isVipPlayer ? '#fbbf24' : '#d4a72a'};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';
 
       const _safeName = (ind.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
       const _pSeed = encodeURIComponent(ind.name);
@@ -1988,7 +1990,7 @@ function renderParticipants(container, tournamentId) {
       // não quando isWO (match-level). Parceiro presente não deve ter riscado.
       // v2.7.39: NOME COMPLETO — nunca trunca (quebra linha se preciso). Jogo N saiu
       // da linha do nome e foi pra coluna da direita (não disputa espaço com o nome).
-      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span style="font-weight:700;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${_orgStarC}${vipTag}${isStandby ? presenceDot : ''}</div>`;
+      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${_orgStarC}${vipTag}${isStandby ? presenceDot : ''}</div>`;
       const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';
@@ -2056,14 +2058,13 @@ function renderParticipants(container, tournamentId) {
                             <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
                             <div style="flex:1;min-width:0;">${standbyHeader}${_nameRow}</div>
                         </div>
-                        <div style="margin-top:5px;">${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}</div>
-                        ${_ciSkillHtml}
+                        <div style="margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow:hidden;">${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}${_ciSkillHtml}</div>
                     </div>
                     <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0;">
                         ${_jogoTop}
                         ${_riWoBadge}
                         ${(_showActions && !isAbsent) ? presentToggle : ''}
-                        ${_showActions ? woBtn : ''}
+                        ${(woBtn || _vipBtnC) ? `<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">${_showActions ? woBtn : ''}${_vipBtnC}</div>` : ''}
                     </div>
                 </div>
                 ${_matchStrip}
