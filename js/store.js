@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.53-beta';
+window.SCOREPLACE_VERSION = '2.7.54-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -1914,6 +1914,42 @@ window._waitlistNameSet = function(t) {
 window._waitlistMode = function(t) {
   if (t && t.lateEnrollment === 'expand') return 'expand';
   return 'substitute';
+};
+
+// Formas do nome de um participante/entrada (cru displayName/name/email + formatado
+// via _pName), em lowercase. Usado pra casar nomes que aparecem em formas diferentes
+// (ex.: telefone cru "+5511981933576" vs formatado "+55 (11) 98193-3576").
+window._nameForms = function(e) {
+  var forms = [];
+  if (window._pName) { var f = String(window._pName(e, '') || ''); if (f) forms.push(f); }
+  if (e && typeof e === 'object') {
+    ['displayName', 'name', 'email'].forEach(function(k) { if (e[k]) forms.push(String(e[k])); });
+  } else if (typeof e === 'string') { forms.push(e); }
+  return forms.map(function(s) { return s.trim().toLowerCase(); }).filter(Boolean);
+};
+
+// Remove um nome de TODOS os storages da espera (waitlist + standbyParticipants +
+// monarchWaitlist por categoria). Casa nome cru/formatado. Retorna true se removeu algo.
+window._removeFromWaitlist = function(t, name) {
+  if (!t || !name) return false;
+  var target = String(name).trim().toLowerCase();
+  var removed = false;
+  function matches(e) { return window._nameForms(e).indexOf(target) !== -1; }
+  if (Array.isArray(t.waitlist)) {
+    var b = t.waitlist.length; t.waitlist = t.waitlist.filter(function(e) { return !matches(e); });
+    if (t.waitlist.length < b) removed = true;
+  }
+  if (Array.isArray(t.standbyParticipants)) {
+    var b2 = t.standbyParticipants.length; t.standbyParticipants = t.standbyParticipants.filter(function(e) { return !matches(e); });
+    if (t.standbyParticipants.length < b2) removed = true;
+  }
+  if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object' && !Array.isArray(t.monarchWaitlist)) {
+    Object.keys(t.monarchWaitlist).forEach(function(cat) {
+      var arr = t.monarchWaitlist[cat];
+      if (Array.isArray(arr)) { var b3 = arr.length; t.monarchWaitlist[cat] = arr.filter(function(e) { return !matches(e); }); if (t.monarchWaitlist[cat].length < b3) removed = true; }
+    });
+  }
+  return removed;
 };
 
 // v1.8.9-beta: participant avatar HTML — photo with initial fallback

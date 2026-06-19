@@ -1799,11 +1799,34 @@ function renderParticipants(container, tournamentId) {
     _dedupedIndividuals.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
 
     // v2.6.108: índice de inscrição (ordem em t.participants) por nome — pro sort "Inscrição".
+    // v2.7.54: indexa por TODAS as formas do nome (cru displayName/name/email + formatado
+    // via _pName) — senão um participante cujo ind.name é cru (ex.: telefone
+    // "+5511981933576") não casa com a chave formatada e perde o número da ordem.
     var _partEnrollIdx = {};
-    (Array.isArray(t.participants) ? t.participants : []).forEach(function (p, i) {
-      var nm = String((window._pName ? window._pName(p, '') : (p.displayName || p.name || '')) || '').toLowerCase();
-      nm.split(' / ').forEach(function (n) { n = n.trim(); if (n && _partEnrollIdx[n] == null) _partEnrollIdx[n] = i; });
-    });
+    function _idxKeys(p) {
+      var ks = [];
+      if (window._pName) { var f = String(window._pName(p, '') || ''); if (f) ks.push(f); }
+      if (p && typeof p === 'object') {
+        ['displayName', 'name', 'email'].forEach(function (k) { if (p[k]) ks.push(String(p[k])); });
+      } else if (typeof p === 'string') { ks.push(p); }
+      return ks;
+    }
+    function _addIdx(p, i) {
+      var any = false;
+      _idxKeys(p).forEach(function (raw) {
+        String(raw).toLowerCase().split(' / ').forEach(function (n) {
+          n = n.trim(); if (n && _partEnrollIdx[n] == null) { _partEnrollIdx[n] = i; any = true; }
+        });
+      });
+      return any;
+    }
+    (Array.isArray(t.participants) ? t.participants : []).forEach(function (p, i) { _addIdx(p, i); });
+    // v2.7.54: a LISTA DE ESPERA continua a numeração (são os próximos a entrar) —
+    // assim ZZZZ e cia. também ganham o número da ordem no canto do card.
+    var _nextEnrollIdx = (Array.isArray(t.participants) ? t.participants : []).length;
+    if (typeof window._getWaitlist === 'function') {
+      window._getWaitlist(t).forEach(function (e) { if (_addIdx(e, _nextEnrollIdx)) _nextEnrollIdx++; });
+    }
 
     // v1.0.83-beta: diagnóstico observável — se Bot 05 ainda sumir, podemos
     // inspecionar window._debugLastParticipantsRender no console pra ver
@@ -1981,6 +2004,10 @@ function renderParticipants(container, tournamentId) {
       const vipTag = isVipPlayer ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.55rem;font-weight:900;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;flex-shrink:0;">💎 VIP</span>' : '';
       // v2.7.40: botão VIP ao lado do W.O. — SÓ pro organizador (toggle marca/desmarca).
       const _vipBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}','${safeName}')" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)'};color:${isVipPlayer ? '#fbbf24' : '#d4a72a'};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';
+      // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
+      // jogador do card, inclusive os da lista de espera. A remoção (tournaments.js)
+      // tira de participants E dos storages da espera, casando nome cru/formatado.
+      const _delBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}')" title="Remover inscrito" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;border-radius:7px;flex-shrink:0;background:rgba(239,68,68,0.1);color:#ef4444;border:1px dashed rgba(239,68,68,0.5);">🗑️</button>` : '';
 
       const _safeName = (ind.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
       const _pSeed = encodeURIComponent(ind.name);
@@ -2106,6 +2133,7 @@ function renderParticipants(container, tournamentId) {
                         ${_presenceWord}
                         ${isAbsent ? _riWoBadge : _toggleSwitch}
                         ${woBtn}
+                        ${_delBtnC}
                     </div>
                 </div>
                 ${_matchStrip}

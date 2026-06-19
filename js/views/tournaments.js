@@ -13,17 +13,21 @@ window.removeParticipantFunction = function (tId, participantName) {
         _t('tourn.removeParticipantMsg'),
         () => {
             const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
-            if (t && t.participants) {
-                let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+            if (t) {
+                // v2.7.54: casa nome CRU/FORMATADO (telefone "+5511981933576" vs
+                // "+55 (11) 98193-3576") e remove TAMBÉM dos storages da lista de espera
+                // — assim o organizador remove qualquer um, inclusive quem só está na espera.
+                var _target = String(participantName).trim().toLowerCase();
+                var _removedP = null;
+                let arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
                 var idx = arr.findIndex(function(p, i) {
-                    var name = window._pName(p);
-                    if (name) return name === participantName;
-                    return ('Participante ' + (i + 1)) === participantName;
+                    var forms = (typeof window._nameForms === 'function') ? window._nameForms(p) : [String(window._pName(p) || '').toLowerCase()];
+                    if (forms.indexOf(_target) !== -1) return true;
+                    return ('participante ' + (i + 1)) === _target;
                 });
-                if (idx === -1) return;
-                var _removedP = arr[idx];
-                arr.splice(idx, 1);
-                t.participants = arr;
+                if (idx !== -1) { _removedP = arr[idx]; arr.splice(idx, 1); t.participants = arr; }
+                var _removedFromWait = (typeof window._removeFromWaitlist === 'function') ? window._removeFromWaitlist(t, participantName) : false;
+                if (idx === -1 && !_removedFromWait) return; // nada pra remover
                 if (_removedP && typeof _removedP === 'object' && _removedP.uid && typeof window._sendUserNotification === 'function') {
                     var _cuRem = window.AppStore && window.AppStore.currentUser;
                     var _remover = (_cuRem && (_cuRem.displayName || _cuRem.email)) || 'o organizador';
