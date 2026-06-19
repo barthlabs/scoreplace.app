@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.34-beta';
+window.SCOREPLACE_VERSION = '2.7.35-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2691,6 +2691,7 @@ window._loadParticipantProfilesByName = function(list) {
 window._patchProfileMetaSlots = function(container, t) {
   if (!container) return;
   var slots = container.querySelectorAll('[data-pmeta-name]');
+  var touchedFilter = false;
   slots.forEach(function(slot) {
     var nm = slot.getAttribute('data-pmeta-name') || '';
     var prof = (window._partProfileByName && window._partProfileByName[nm]) || null;
@@ -2702,7 +2703,24 @@ window._patchProfileMetaSlots = function(container, t) {
     var skill = window._profileMetaExtractSkill(skillRaw, t) || window._profileMetaExtractSkill(fbCat, t);
     var birth = (prof && prof.birthDate) || '';
     slot.innerHTML = window._profileMetaBadgesHtml(gender, skill, birth, prefixName, t);
+    // v2.7.35: o PERFIL é a fonte da verdade e propaga PRA TUDO — aqui pro filtro/sort.
+    // O badge usa profile.skillBySport[sport]/gender; o card carregava data-part-skill/
+    // gender de p.category/p.gender (muitas vezes vazios) → "sem habilidade"/"sem gênero"
+    // errado. Agora o card herda o MESMO valor efetivo do badge. (Sem isso, quem tem
+    // skill só no perfil caía no 🚫.) Slot single-membro (individual) → 1 card.
+    var card = (slot.closest && !(/\s\/\s/.test(slot.getAttribute('data-pmeta-prefix') || ''))) ? slot.closest('[data-part-card]') : null;
+    if (card && !slot.getAttribute('data-pmeta-prefix')) {
+      var cg = (typeof window._canonGender === 'function') ? window._canonGender(gender) : (gender || 'none');
+      card.setAttribute('data-part-gender', cg || 'none');
+      card.setAttribute('data-part-skill', skill || 'none');
+      touchedFilter = true;
+    }
   });
+  // Re-aplica o filtro/sort SÓ na página de Inscritos (onde existe a barra canônica),
+  // pra refletir os data-part-* recém-herdados do perfil. Guard: input oculto part-sort.
+  if (touchedFilter && document.getElementById('part-sort') && typeof window._partApplyFilter === 'function') {
+    try { window._partApplyFilter(); } catch (e) {}
+  }
 };
 
 // Replace button content with a spinner to indicate command received (enroll/unenroll etc).
@@ -3354,6 +3372,25 @@ window.AppStore = {
     this._profileUnsubscribe = window.FirestoreDB.db
       .collection('users').doc(cu.uid)
       .onSnapshot(function(doc) {
+        // v2.7.35: PERFIL É A FONTE DA VERDADE e propaga PRA TUDO dinamicamente.
+        // A cada mudança do perfil do usuário, atualiza o cache _partProfileByName
+        // (que alimenta os badges gênero·nível·idade E o filtro/sort dos Inscritos)
+        // com os dados frescos — sem precisar reabrir nada. Cross-user: outros
+        // perfis ficam frescos a cada sessão (cache zera no reload).
+        try {
+          if (doc.exists) {
+            var _pd = doc.data();
+            var _dn = String((_pd && (_pd.displayName || _pd.name)) || '').toLowerCase();
+            if (_dn) { window._partProfileByName = window._partProfileByName || {}; window._partProfileByName[_dn] = _pd; }
+          }
+          // Se a página de Inscritos está aberta, re-aplica badges + filtro AO VIVO.
+          var _h = window.location.hash || '';
+          if (_h.indexOf('#participants/') === 0 && document.getElementById('part-sort')) {
+            var _t = store.getTournament ? store.getTournament(_h.split('/')[1]) : null;
+            var _vc = document.getElementById('view-container');
+            if (_t && _vc && typeof window._patchProfileMetaSlots === 'function') window._patchProfileMetaSlots(_vc, _t);
+          }
+        } catch (e) {}
         // First snapshot: aproveitamos para RESUMIR uma partida ao vivo
         // em andamento. Cenário real: o celular cai da mão durante o
         // placar ao vivo, a aba fecha, o user volta — espera cair
