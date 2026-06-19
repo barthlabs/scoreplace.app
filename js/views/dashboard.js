@@ -1896,11 +1896,13 @@ function renderDashboard(container) {
 
       var defaultHeaderBtns = '';
       if (headerBtns === null) {
+        // v2.7.56: botões no PADRÃO do app (.btn + variante de cor + .btn-micro =
+        // sólido, com volume almofadado), não mais etiqueta flat com estilo inline.
         var liveBtnHtml = (!pendingScores && canLaunch)
-          ? '<button onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;" onmouseover="this.style.background=\'rgba(239,68,68,0.3)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.15)\'">📡 Ao Vivo</button>'
+          ? '<button class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">📡 Ao Vivo</button>'
           : '';
         var confirmBtnHtml = (!pendingScores && canLaunch)
-          ? '<button id="confirm-' + mId + '" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap;" onmouseover="this.style.background=\'rgba(16,185,129,0.3)\'" onmouseout="this.style.background=\'rgba(16,185,129,0.15)\'">✓ Confirmar</button>'
+          ? '<button id="confirm-' + mId + '" class="btn btn-success btn-micro" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">✓ Confirmar</button>'
           : '';
         defaultHeaderBtns = liveBtnHtml + confirmBtnHtml;
       }
@@ -1910,7 +1912,7 @@ function renderDashboard(container) {
       // (mesma fonte/padding/raio, flat) só com a cor índigo — antes era .btn .btn-sm
       // (maior, com volume) e quebrava pra outra linha. Fica na MESMA linha dos outros
       // 2, FORA do #header-btns (que é reescrito in-place no fluxo de aprovação).
-      var goToBtn = '<button onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;" onmouseover="this.style.background=\'rgba(99,102,241,0.3)\'" onmouseout="this.style.background=\'rgba(99,102,241,0.15)\'">Ir para Torneio →</button>';
+      var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">Ir para Torneio →</button>';
 
       return '<div style="min-width:300px;max-width:360px;display:flex;flex-direction:column;gap:0.6rem;">' +
         (opts.hideFaseHeader ? '' :
