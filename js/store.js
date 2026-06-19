@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.32-beta';
+window.SCOREPLACE_VERSION = '2.7.33-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2145,6 +2145,17 @@ window._fbAction = function (key, field, val, noRerender) {
     }
     if (opts.onChange) { try { (new Function(opts.onChange))(); } catch (e) {} }
 };
+// v2.7.33 (Opção 1): pílula de sort por critério — clicar a ATIVA inverte a seta
+// (cresc↔decr); clicar a inativa ativa-a com a direção lembrada (st.nameDir/orderDir).
+window._fbSortPill = function (key, dim) {
+    var st = window._filterBarState[key] || (window._filterBarState[key] = {});
+    var cur = st.sort || 'order-asc';
+    var curDim = cur.indexOf('name') === 0 ? 'name' : 'order';
+    var curDir = cur.indexOf('-desc') >= 0 ? 'desc' : 'asc';
+    var nd = (curDim === dim) ? (curDir === 'asc' ? 'desc' : 'asc') : (st[dim + 'Dir'] || 'asc');
+    st[dim + 'Dir'] = nd;
+    window._fbAction(key, 'sort', dim + '-' + nd);
+};
 window._fbInner = function (key) {
     var opts = window._filterBarCfg[key] || {};
     var st = window._filterBarState[key] || (window._filterBarState[key] = {});
@@ -2154,36 +2165,50 @@ window._fbInner = function (key) {
     var skill = st.skill || opts.skill || 'all';
     var search = (st.search != null ? st.search : (opts.search || ''));
     st.sort = sort; st.gender = gender; st.skill = skill; st.search = search;
-    function btn(active, extra) {
-        return 'display:inline-flex;align-items:center;justify-content:center;height:30px;min-width:26px;padding:0 6px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:800;line-height:1;'
-            + 'border:1px solid ' + (active ? 'rgba(99,102,241,0.85)' : 'rgba(255,255,255,0.12)') + ';'
-            + 'background:' + (active ? 'rgba(99,102,241,0.30)' : 'rgba(255,255,255,0.04)') + ';'
-            + 'color:' + (active ? '#c7d2fe' : 'var(--text-muted)') + ';transition:all 0.15s;' + (extra || '');
+    // pílula genérica: cor própria quando "active"; neutra (cinza) quando off.
+    function pill(active, c, inner, onclick, title, extra) {
+        var bg = active ? c.bg : 'rgba(255,255,255,0.05)';
+        var bd = active ? c.bd : 'rgba(255,255,255,0.14)';
+        var fg = active ? c.fg : 'var(--text-muted)';
+        return '<button type="button" title="' + title + '" onclick="' + onclick + '" style="display:inline-flex;align-items:center;justify-content:center;gap:3px;height:30px;min-width:30px;padding:0 9px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:800;line-height:1;background:' + bg + ';border:1px solid ' + bd + ';color:' + fg + ';transition:all 0.15s;' + (extra || '') + '">' + inner + '</button>';
     }
-    function sortGroup(icon, label, valAsc, valDesc) {
-        var aAsc = sort === valAsc, aDesc = sort === valDesc, on = aAsc || aDesc;
-        return '<div style="display:inline-flex;align-items:center;gap:2px;background:rgba(255,255,255,0.03);border-radius:9px;padding:2px 3px;">'
-            + '<span title="' + label + '" style="font-size:0.7rem;font-weight:800;color:' + (on ? '#a5b4fc' : 'var(--text-muted)') + ';padding:0 2px;letter-spacing:0.3px;">' + icon + '</span>'
-            + '<button type="button" title="' + label + ' — crescente" onclick="window._fbAction(\'' + key + '\',\'sort\',\'' + valAsc + '\')" style="' + btn(aAsc) + '">↑</button>'
-            + '<button type="button" title="' + label + ' — decrescente" onclick="window._fbAction(\'' + key + '\',\'sort\',\'' + valDesc + '\')" style="' + btn(aDesc) + '">↓</button>'
-            + '</div>';
-    }
-    var azGroup = sortGroup('A-Z', 'Ordem alfabética', 'name-asc', 'name-desc');
-    var clockGroup = sortGroup('🕒', 'Ordem cronológica (inscrição)', 'order-asc', 'order-desc');
-    // Gênero cíclico: ambos(all) → masc → fem → sem-gênero(none)
+    var IND = { bg: 'rgba(99,102,241,0.30)', bd: 'rgba(99,102,241,0.85)', fg: '#c7d2fe' };
+    var RED = { bg: 'rgba(248,113,113,0.18)', bd: 'rgba(248,113,113,0.6)', fg: '#f87171' };
+    // SORT (Opção 1): A-Z e 🕒, cada um uma pílula; ativo indigo + seta da direção.
+    var curDim = sort.indexOf('name') === 0 ? 'name' : 'order';
+    var curDir = sort.indexOf('-desc') >= 0 ? 'desc' : 'asc';
+    if (!st.nameDir) st.nameDir = (curDim === 'name') ? curDir : 'asc';
+    if (!st.orderDir) st.orderDir = (curDim === 'order') ? curDir : 'asc';
+    var nameActive = curDim === 'name', orderActive = curDim === 'order';
+    var nameDir = nameActive ? curDir : st.nameDir;
+    var orderDir = orderActive ? curDir : st.orderDir;
+    function ar(d) { return '<span style="font-size:0.95rem;margin-left:1px;">' + (d === 'desc' ? '↓' : '↑') + '</span>'; }
+    var azPill = pill(nameActive, IND, 'A-Z' + ar(nameDir), "window._fbSortPill('" + key + "','name')",
+        'Ordem alfabética ' + (nameDir === 'desc' ? '(Z→A)' : '(A→Z)') + ' — clique p/ inverter', 'min-width:auto;');
+    var clockPill = pill(orderActive, IND, '🕒' + ar(orderDir), "window._fbSortPill('" + key + "','order')",
+        'Ordem de inscrição ' + (orderDir === 'desc' ? '(mais recentes 1º)' : '(mais antigos 1º)') + ' — clique p/ inverter', 'min-width:auto;');
+    // GÊNERO cíclico colorido: ⚥ ambos(verde) → ♂ masc(azul) → ♀ fem(rosa) → 🚫 sem gênero(vermelho)
     var gOrder = ['all', 'Masc', 'Fem', 'none'];
-    var gMap = { all: { s: '⚥', t: 'Ambos os gêneros' }, Masc: { s: '♂', t: 'Masculino' }, Fem: { s: '♀', t: 'Feminino' }, none: { s: '–', t: 'Sem gênero' } };
+    var gMap = {
+        all:  { sym: '⚥',  t: 'Ambos os gêneros', c: { bg: 'rgba(52,211,153,0.20)', bd: 'rgba(52,211,153,0.7)', fg: '#6ee7b7' } },
+        Masc: { sym: '♂',  t: 'Masculino',         c: { bg: 'rgba(96,165,250,0.22)', bd: 'rgba(96,165,250,0.7)', fg: '#93c5fd' } },
+        Fem:  { sym: '♀',  t: 'Feminino',          c: { bg: 'rgba(244,114,182,0.22)', bd: 'rgba(244,114,182,0.7)', fg: '#f9a8d4' } },
+        none: { sym: '🚫', t: 'Sem gênero',        c: RED }
+    };
     var gCur = gMap[gender] ? gender : 'all';
     var gNext = gOrder[(gOrder.indexOf(gCur) + 1) % gOrder.length];
-    var genderBtn = '<button type="button" title="Gênero: ' + gMap[gCur].t + ' — clique p/ alternar" onclick="window._fbAction(\'' + key + '\',\'gender\',\'' + gNext + '\')" style="' + btn(gCur !== 'all', 'font-size:1.05rem;min-width:32px;') + '">' + gMap[gCur].s + '</button>';
-    // Habilidade cíclica: todas(-) → categorias → sem-habilidade(⊘)
+    var genderBtn = pill(true, gMap[gCur].c, gMap[gCur].sym, "window._fbAction('" + key + "','gender','" + gNext + "')",
+        'Gênero: ' + gMap[gCur].t + ' — clique p/ alternar', 'font-size:1.02rem;min-width:34px;');
+    // HABILIDADE cíclica: todas(–, NEUTRA = mostra todas) → categorias(indigo) → sem habilidade(🚫 vermelho)
     var skills = (opts.skillCategories && opts.skillCategories.length) ? opts.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
     var sOrder = ['all'].concat(skills).concat(['none']);
     var sCur = (sOrder.indexOf(skill) >= 0) ? skill : 'all';
     var sNext = sOrder[(sOrder.indexOf(sCur) + 1) % sOrder.length];
-    var sLabel = sCur === 'all' ? '–' : (sCur === 'none' ? '⊘' : esc(sCur));
-    var sTitle = sCur === 'all' ? 'Todas' : (sCur === 'none' ? 'Sem habilidade' : sCur);
-    var skillBtn = '<button type="button" title="Habilidade: ' + sTitle + ' — clique p/ alternar" onclick="window._fbAction(\'' + key + '\',\'skill\',\'' + sNext + '\')" style="' + btn(sCur !== 'all', 'min-width:30px;') + '">' + sLabel + '</button>';
+    var skillBtn;
+    var sClick = "window._fbAction('" + key + "','skill','" + sNext + "')";
+    if (sCur === 'all') skillBtn = pill(false, IND, '–', sClick, 'Habilidade: Todas — clique p/ alternar', 'min-width:32px;');
+    else if (sCur === 'none') skillBtn = pill(true, RED, '🚫', sClick, 'Habilidade: Sem habilidade — clique p/ alternar', 'min-width:32px;font-size:0.95rem;');
+    else skillBtn = pill(true, IND, esc(sCur), sClick, 'Habilidade: ' + sCur + ' — clique p/ alternar', 'min-width:32px;');
     // inputs ocultos lidos pelos consumidores
     var hidden = '';
     if (opts.sortId) hidden += '<input type="hidden" id="' + opts.sortId + '" value="' + sort + '">';
@@ -2196,7 +2221,7 @@ window._fbInner = function (key) {
     }
     return hidden
         + '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;">'
-        + azGroup + clockGroup
+        + azPill + clockPill
         + '<span style="width:1px;height:22px;background:rgba(255,255,255,0.12);margin:0 1px;"></span>'
         + genderBtn + skillBtn + searchInp
         + '</div>';
