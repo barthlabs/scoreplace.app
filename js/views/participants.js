@@ -2297,7 +2297,7 @@ function renderParticipants(container, tournamentId) {
             '</h2>' +
           '</div>',
           rightHtml: '<div style="display:flex;gap:4px;flex-shrink:0;">' +
-            '<span class="badge badge-info" style="font-size:0.65rem;">' + (t.format || _t('participants.defaultFormat')) + '</span>' +
+            '<span class="badge badge-info" style="font-size:0.65rem;">' + ((window._formatDisplayName && t.format) ? window._formatDisplayName(t.format) : (t.format || _t('participants.defaultFormat'))) + '</span>' +
             '<span class="badge" style="background:rgba(255,255,255,0.1);color:var(--text-muted);font-size:0.65rem;">' + individualCount + '</span>' +
           '</div>',
           belowHtml: (checkInControls || rollCallControls)
@@ -2307,7 +2307,7 @@ function renderParticipants(container, tournamentId) {
     ${startBanner}
     ${startedBadge}
     ${readyBannerHtml}
-    ${(parts.length > 6 && (canRollCall || postDrawPresence || canCheckIn) && typeof window._inscritosFilterBar === 'function') ? (
+    ${(parts.length > 6 && typeof window._inscritosFilterBar === 'function') ? (
       window._inscritosFilterBar({
         searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
         onChange: 'window._partApplyFilter()', search: (window._partSearch || ''),
