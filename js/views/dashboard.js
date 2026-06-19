@@ -780,25 +780,19 @@ function renderDashboard(container) {
                     if (!isNaN(_ssd2.getTime())) { var _end = new Date(_ssd2); _end.setMonth(_end.getMonth() + parseInt(_sm2)); var _eTs = _end.getTime(); if (!isNaN(_eTs) && _eTs > _now) _ligaEv = { ts: _eTs, label: _t('tourn.seasonEnd'), icon: '🏁', color: '#8b5cf6' }; }
                   }
                 }
-                if (!_ligaEv) return '';
-                var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
-                var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
-                var _rgb = _cm[_ligaEv.color] || '139,92,246';
-                // v0.16.91: toggle Liga "Ativado/Desativado" alinhado à direita
-                // logo acima do countdown — mesmo aspecto do card de detalhe.
-                // Pedido do usuário: "o botao ativado deve aparecer de forma
-                // consistente tambem no card da dashboard."
+                // v2.7.41: toggle Liga "Ativado/Desativado" SEMPRE à direita (igual ao
+                // detalhe), independente de haver countdown. Antes ficava DENTRO do bloco
+                // de countdown (return '' se !_ligaEv) → sumia em torneios multi-fase.
                 var _ligaToggleDash = (typeof window._buildLigaActiveToggleHtml === 'function')
                   ? window._buildLigaActiveToggleHtml(t)
                   : '';
-                // v0.16.92: stopPropagation no wrapper da row pra cobrir
-                // cliques fora do toggle (área vazia à esquerda). Caso
-                // contrário a row inteira é "área quente" do card click.
-                // v2.6.21: toggle é pílula sólida verde/vermelha — sem tarja escura.
-                var _toggleInner = _ligaToggleDash;
                 var _toggleRowDash = _ligaToggleDash
-                  ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _toggleInner + '</div>'
+                  ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
                   : '';
+                if (!_ligaEv) return _toggleRowDash; // sem countdown → só o toggle (direita)
+                var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
+                var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
+                var _rgb = _cm[_ligaEv.color] || '139,92,246';
                 var _ctColor = _pReadBg ? _pReadFg : _ligaEv.color; // tarja theme-aware
                 return _toggleRowDash +
                   '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +

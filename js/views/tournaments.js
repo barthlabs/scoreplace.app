@@ -1967,8 +1967,10 @@ function renderTournaments(container, tournamentId = null) {
                 : '<div></div>';
               // v2.6.21: o toggle agora é pílula sólida verde/vermelha (cor própria)
               // — não envolver em tarja escura (_pReadBg).
-              var _toggleWrapped = ligaActiveToggleHtml || '';
-              return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();">${_updatedHtml}${_toggleWrapped}</div>`;
+              // v2.7.41: toggle SEMPRE à direita (margin-left:auto) — mesmo quando
+              // quebra pra linha de baixo (antes ia pra esquerda com space-between).
+              var _toggleWrapped = ligaActiveToggleHtml ? '<div style="margin-left:auto;">' + ligaActiveToggleHtml + '</div>' : '';
+              return `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();">${_updatedHtml}${_toggleWrapped}</div>`;
             })()}
             ${(typeof window._buildTimeEstimation === 'function') ? window._buildTimeEstimation(t) : ''}
             ${t.venue ? `
