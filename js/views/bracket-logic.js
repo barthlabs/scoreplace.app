@@ -3308,6 +3308,10 @@ window._publishPendingDraw = async function (tId) {
   if (pd.standings) t.standings = pd.standings;
   if (pd.sitOutHistory) t.sitOutHistory = pd.sitOutHistory;
   if (pd.opponentHistory) t.opponentHistory = pd.opponentHistory;
+  // v2.7.9: a lista de espera do Rei/Rainha mora em t.monarchWaitlist (sobra da
+  // divisão por 4). O staged draw a calcula no servidor mas o publish não a
+  // carregava → após Publicar a espera sumia. Carrega aqui.
+  if (pd.monarchWaitlist) t.monarchWaitlist = pd.monarchWaitlist;
   t.status = pd.status || 'active';
   t.drawVisibility = t.drawVisibility || 'public';
   // v2.7.8: PUBLICAR um sorteio automático É INICIAR o torneio — mesma regra
