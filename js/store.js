@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.19-beta';
+window.SCOREPLACE_VERSION = '2.7.20-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2080,14 +2080,14 @@ window._tournamentLogoRadius = function(t) {
 window._photoReadBox = function () {
     var th = (document.documentElement.getAttribute('data-theme') || 'dark');
     var light = (th === 'light' || th === 'sunset');
-    // v2.6.45: alpha SUAVE pra bater com a aparência efetiva dos boxes sem-foto
-    // (.stat-box 0.92/0.95 dentro de seção com opacity:0.75 ≈ 0.69/0.71 composto).
-    // Boxes com foto NÃO herdam aquele opacity → usar alpha ~0.70 direto, senão fica
-    // "brilho agressivo" vs o card sem foto. Cor alinhada à CSS .stat-box
-    // (claro 226,232,240 / escuro 30,41,59).
+    // v2.7.20: TEMA ESCURO → tarja MAIS ESCURA que o fundo (scrim preto sobre o
+    // bg, indo pro preto sem ser preto absoluto) + fonte CLARA (não branca pura).
+    // Antes o escuro usava bg CLARO (226,232,240) → "brilho agressivo" sobre o
+    // fundo escuro (pedido do dono). Tema claro/sunset INTOCADO. Consistente em
+    // dashboard, detalhe e utils (todos chamam este helper).
     return light
         ? { bg: 'rgba(30,41,59,0.72)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' }
-        : { bg: 'rgba(226,232,240,0.70)', fg: '#1e293b', border: 'rgba(0,0,0,0.06)' };
+        : { bg: 'rgba(0,0,0,0.40)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.10)' };
 };
 // v2.6.60: CONFIG POR FASE — resolve woScope / resultEntry da FASE de um match
 // (multifase), com FALLBACK pro top-level (= fase 0 / default). Single-phase ou
