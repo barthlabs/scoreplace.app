@@ -1534,7 +1534,14 @@ window._buildTournamentConfigBox = function (t, opts) {
     // (escuro→box claro/texto escuro; claro→box escuro/texto claro).
     var _rbC = (opts.bg && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
     var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';') : '';
-    var openAttr = opts.open ? ' open' : '';
+    // v2.7.47: persiste colapsado/expandido POR TORNEIO. Uma vez colapsado, fica
+    // colapsado (mesmo após re-render / mudança de versão); só expande se o usuário
+    // expandir. Sem estado salvo → usa o default (opts.open).
+    var _cfgKey = 'scoreplace_cfgbox_' + String((t && t.id) || '');
+    var _cfgSaved = null; try { _cfgSaved = localStorage.getItem(_cfgKey); } catch (e) {}
+    var _cfgOpen = (_cfgSaved === '1') ? true : (_cfgSaved === '0') ? false : !!(opts && opts.open);
+    var _cfgKeyJs = _cfgKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var openAttr = _cfgOpen ? ' open' : '';
     var summary = esc(fmt) + ' · ' + fmtGameType().replace(' — 2 categorias', ' (2 cat.)');
 
     // v2.6.29: hardening contra overflow lateral. Como esta caixa é um flex item
@@ -1544,6 +1551,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     // label "configuração ▾" do fim é cortada. O <span> do meio elipsa o texto
     // longo; o do fim nunca encolhe (flex-shrink:0 + nowrap) — fica sempre legível.
     return '<details class="info-box tourn-config-box"' + openAttr +
+        ' ontoggle="try{localStorage.setItem(\'' + _cfgKeyJs + '\', this.open?\'1\':\'0\')}catch(e){}"' +
         ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;' + bgStyle + '">' +
         '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;">' +
         '<span style="flex-shrink:0;">⚙️</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + summary + '</span>' +
