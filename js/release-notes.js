@@ -9,7 +9,19 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🧩 Construtor de fases — distribuição completa por estratégia.</b> Ao avançar de uma fase pra outra, você escolhe como as duplas se distribuem nas chaves: <b>Performance</b> (vencedores 1º+2º → linha Ouro, derrotados 3º+4º → Prata), <b>Equilíbrio</b> (1º+4º / 2º+3º), <b>Sorteio</b> (aleatório) ou <b>Cabeças de chave</b> (os melhores espalhados, 1 por chave). Com 1, 2 ou 4 linhas e grande final opcional — e o seletor explica na hora quem vai pra cada linha.</li>' +
+        '<li><b>📊 Classificação por grupo.</b> Quando os classificados avançam por grupo, cada grupo Rei/Rainha mostra a sua própria classificação (1º/2º/3º/4º) — pra ver quem vai pra qual chave.</li>' +
+        '<li><b>🏆 Progresso e fim do torneio inteiro.</b> A barra "Torneio completo" soma os jogos previstos de <b>todas as fases</b> e recalcula sozinha quando você muda a configuração; o "Fim do torneio" passa a considerar o fim da <b>última fase</b>, com início e fim previstos do torneio todo.</li>' +
+        '<li><b>▶️ Correção: "Iniciar Torneio" fantasma.</b> Não reaparece mais depois de publicar um sorteio automático em revisão.</li>' +
+        '<li><b>🕒 Correção: lista de espera do Rei/Rainha.</b> Não some mais quando o sorteio é automático.</li>' +
+        '<li><b>🔤 Grupos acima de Z.</b> Em torneios com muitos grupos, passam a se chamar A2, B2, C2… em vez de símbolos.</li>' +
+        '<li><b>🎨 Tema escuro mais legível.</b> As tarjas de informação (datas, local, contagens) ficaram mais escuras com texto claro — antes ficavam claras demais sobre o fundo escuro.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(18 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🧩 Construtor de fases.</b> Monte o torneio em quantas fases quiser — ex.: Pontos Corridos / Rei-Rainha classificando para uma eliminatória em chaves (Ouro/Prata) que convergem numa grande final. Cada fase com seu formato, placar, pareamento e regra de quem classifica.</li>' +
         '<li><b>🕒 Lista de espera no Rei/Rainha.</b> Quem sobra da divisão por 4 — e novos inscritos — entram numa lista de espera; ao juntar 4, forma um grupo novo automaticamente, sem você precisar fazer nada.</li>' +
