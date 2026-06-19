@@ -2102,7 +2102,7 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId) {
     // ANTES da hora — e inflando o "X/Y partidas" (o progresso soma TODAS as
     // rodadas existentes). Liga manual e Suíço seguem gerando na conclusão,
     // pois têm gatilho próprio (botão / fluxo contínuo do Suíço).
-    var _ligaScheduled = (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) && t.drawManual !== true && !!t.drawFirstDate;
+    var _ligaScheduled = window._isLigaAutoDraw(t); // v2.7.6: canônico
     if (_ligaScheduled) {
       showNotification(
         _t('bui.roundClosedTitle') || 'Rodada encerrada',
@@ -3343,6 +3343,16 @@ window._annulPendingDraw = function (tId) {
   if (typeof window.showConfirmDialog === 'function') {
     window.showConfirmDialog('Anular sorteio?', 'O sorteio em revisão será descartado (nada foi publicado). Um novo será gerado automaticamente no próximo ciclo.', go, null, { confirmText: 'Anular', cancelText: 'Cancelar', danger: true });
   } else { go(); }
+};
+
+// v2.7.6: ÚNICA fonte de "Pontos Corridos com sorteio AUTOMÁTICO agendado" — Liga
+// (ou Ranking) + sorteio não-manual + data agendada. Definido AQUI (e não em store.js)
+// de propósito: bracket-logic.js é vendored pra Cloud Function autoDraw, que não
+// carrega store.js — assim cliente e CF compartilham a MESMA regra. Sem drawFirstDate
+// é auto mal-configurado e cai no fallback manual (v0.16.56). Usado por tournaments.js,
+// participants.js e _ligaScheduled abaixo.
+window._isLigaAutoDraw = function (t) {
+  return !!(t && (window._isLigaFormat && window._isLigaFormat(t)) && t.drawManual !== true && t.drawFirstDate);
 };
 
 async function _fireLigaAutoDraw(t, scheduledTime) {
