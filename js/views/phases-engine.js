@@ -209,37 +209,68 @@
   }
 
   // Gera uma chave de eliminatória simples a partir de uma lista de times semeada.
-  // Seeding simples 1×N, 2×(N-1)… (mesma convenção de _advanceMonarchToElimination),
-  // padding com BYE até potência de 2. Devolve matches com links nextMatchId/nextSlot.
-  function genTierBracket(teams, bracketKey, idPrefix) {
+  // Seeding 1×N, 2×(N-1)… Quando NÃO é potência de 2, `resolution` decide como
+  // resolver (canonização — espelha o painel da fase única):
+  //   'bye' (default): padding com BYE até a potência ACIMA (cabeças folgam) — comportamento legado.
+  //   'exclusion': corta os piores colocados até a potência ABAIXO → chave limpa.
+  //   'playin': classificatória (round 0) entre os últimos → reduz pra potência abaixo;
+  //             os melhores entram direto, os vencedores do play-in completam a chave.
+  function genTierBracket(teams, bracketKey, idPrefix, resolution) {
     teams = teams || [];
+    resolution = resolution || 'bye';
     var n = teams.length;
     if (n === 0) return { matches: [], finalMatchId: null, soleWinner: null };
     if (n === 1) return { matches: [], finalMatchId: null, soleWinner: teams[0].displayName };
 
-    var pow = 1; while (pow < n) pow *= 2;
-    var totalRounds = Math.round(Math.log(pow) / Math.log(2));
     var counter = 0;
     function mkId() { return idPrefix + '-' + (counter++); }
-
     var matches = [];
+
+    var isPow2 = (n & (n - 1)) === 0;
+    var lo = 1; while (lo * 2 <= n) lo *= 2; // maior potência de 2 <= n
+
+    // EXCLUSÃO — corta os piores até a potência abaixo (chave limpa, sem BYE).
+    if (!isPow2 && resolution === 'exclusion') {
+      teams = teams.slice(0, lo); n = lo; isPow2 = true;
+    }
+
+    // PLAY-IN — os (lo - excess) melhores entram direto; os 2*excess piores jogam
+    // `excess` partidas classificatórias (round 0); os vencedores completam a chave.
+    var slots; // entrantes da chave principal: {team} ou {fromPlayIn: matchObj}
+    if (!isPow2 && resolution === 'playin') {
+      var excess = n - lo, directCount = lo - excess;
+      var pool = teams.slice(directCount);
+      slots = teams.slice(0, directCount).map(function (tm) { return { team: tm }; });
+      for (var pi = 0; pi < excess; pi++) {
+        var a = pool[pi], b = pool[pool.length - 1 - pi];
+        var pim = { id: mkId(), round: 0, bracket: bracketKey, isPlayIn: true,
+          p1: a ? a.displayName : 'BYE', p2: b ? b.displayName : 'BYE', winner: null };
+        if (a) pim.team1Obj = a; if (b) pim.team2Obj = b;
+        matches.push(pim); slots.push({ fromPlayIn: pim });
+      }
+    } else {
+      slots = teams.map(function (tm) { return { team: tm }; });
+    }
+
+    var pow = 1; while (pow < slots.length) pow *= 2; // 'bye' → pow > n; senão pow == lo
+    var totalRounds = Math.round(Math.log(pow) / Math.log(2));
     var roundsMap = {};
     var r1 = [];
     for (var i = 0; i < pow / 2; i++) {
-      var t1 = teams[i] || null;
-      var t2 = teams[pow - 1 - i] || null;
-      var p1 = t1 ? t1.displayName : 'BYE';
-      var p2 = t2 ? t2.displayName : 'BYE';
-      var isBye = !t1 || !t2;
+      var s1 = slots[i] || null, s2 = slots[pow - 1 - i] || null;
+      var t1 = (s1 && s1.team) ? s1.team : null, t2 = (s2 && s2.team) ? s2.team : null;
+      var pi1 = (s1 && s1.fromPlayIn) ? s1.fromPlayIn : null, pi2 = (s2 && s2.fromPlayIn) ? s2.fromPlayIn : null;
+      var isBye = !s1 || !s2;
+      var p1 = t1 ? t1.displayName : (pi1 ? 'TBD' : 'BYE');
+      var p2 = t2 ? t2.displayName : (pi2 ? 'TBD' : 'BYE');
       var m = {
-        id: mkId(), round: 1, bracket: bracketKey,
-        p1: p1, p2: p2,
-        winner: isBye ? (t1 ? p1 : (t2 ? p2 : null)) : null,
-        isBye: isBye
+        id: mkId(), round: 1, bracket: bracketKey, p1: p1, p2: p2,
+        winner: isBye ? (s1 ? p1 : (s2 ? p2 : null)) : null, isBye: isBye
       };
-      if (t1) m.team1Obj = t1;
-      if (t2) m.team2Obj = t2;
+      if (t1) m.team1Obj = t1; if (t2) m.team2Obj = t2;
       r1.push(m); matches.push(m);
+      if (pi1) { pi1.nextMatchId = m.id; pi1.nextSlot = 'p1'; }
+      if (pi2) { pi2.nextMatchId = m.id; pi2.nextSlot = 'p2'; }
     }
     roundsMap[1] = r1;
 
@@ -313,7 +344,10 @@
 
     destOrder.forEach(function (dest) {
       var bracketKey = DEST_BRACKET[dest] || dest;
-      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey);
+      // v2.7.23: resolução de potência-de-2 escolhida pelo organizador (uma só pra
+      // todas as linhas). Default 'bye' = comportamento legado. Setado pelo painel.
+      var _res = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
+      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res);
       // v2.6.79: nome da linha/chave = o que o organizador digitou (mapping[].label);
       // sem ícone de medalha hardcoded. Fallback genérico "Chave N" (ordem da linha).
       var _mp = mapping.filter(function (m) { return m.dest === dest; })[0];
