@@ -3310,6 +3310,16 @@ window._publishPendingDraw = async function (tId) {
   if (pd.opponentHistory) t.opponentHistory = pd.opponentHistory;
   t.status = pd.status || 'active';
   t.drawVisibility = t.drawVisibility || 'public';
+  // v2.7.8: PUBLICAR um sorteio automático É INICIAR o torneio — mesma regra
+  // canônica de _generateNextRound (SORTEAR É INICIAR). O staged draw nasce no
+  // servidor em t.pendingDraw e NUNCA passa pelo gerador no cliente (o poller
+  // pula torneios staged), então tournamentStarted nunca era marcado e o banner
+  // "Iniciar Torneio" reaparecia depois de Publicar. Marca aqui, no momento em
+  // que o sorteio vai a público. Manual (drawManual===true) mantém o passo.
+  if (t.drawManual !== true && !t.tournamentStarted) {
+    var _genMs = pd.generatedAt ? new Date(pd.generatedAt).getTime() : NaN;
+    t.tournamentStarted = (!isNaN(_genMs) && _genMs > 0) ? _genMs : Date.now();
+  }
   t.lastAutoDrawAt = pd.generatedAt || t.lastAutoDrawAt || new Date().toISOString();
   t.pendingDraw = null;
   t.updatedAt = new Date().toISOString();
