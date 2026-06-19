@@ -1827,6 +1827,17 @@ function setupCreateTournamentModal() {
         h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
       });
       h += '</div>';
+      // v2.7.15: explicação DINÂMICA de quem vai pra qual linha (resolve "o seletor
+      // não diz quem vai pra Ouro/Prata"). Atualiza ao trocar estratégia/linhas.
+      var _nLx = (ph.mapping && ph.mapping.length) || 1;
+      if (_nLx >= 2) {
+        var _Lx = ph.mapping.map(function(mp, k){ return (mp.label || '').trim() || ('Linha ' + (k + 1)); });
+        var _expl;
+        if (_ps === 'balanced') _expl = '<b>' + esc(_Lx[0]) + '</b> recebe a dupla 1º+4º (forte+fraco); <b>' + esc(_Lx[1]) + '</b> recebe 2º+3º — linhas equilibradas.';
+        else if (_ps === 'draw_among') _expl = 'As duplas de cada grupo são <b>sorteadas</b> e distribuídas igualmente entre as ' + _nLx + ' linhas.';
+        else _expl = '<b>' + esc(_Lx[0]) + '</b> recebe os <b>vencedores</b> (1º+2º de cada grupo); <b>' + esc(_Lx[1]) + '</b> recebe os <b>derrotados</b> (3º+4º)' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
+        h += '<div style="margin-top:8px;font-size:0.72rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:7px 10px;line-height:1.4;">↳ ' + _expl + '</div>';
+      }
     }
     } // fim if(!_txCol)
     h += '</div>'; // fim transição
