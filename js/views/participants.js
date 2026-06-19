@@ -1604,9 +1604,11 @@ function renderParticipants(container, tournamentId) {
 
   if (canCheckIn) {
     // ── Check-in mode: individual list with checkboxes ──
-    // v2.7.28: card ÚNICO — pós-sorteio usa a MESMA grade rica do pré-sorteio
-    // (o jogo/parceiro/adversários/presença entram dentro do card).
-    gridStyle = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:1rem;';
+    // v2.7.28: card ÚNICO — pós-sorteio usa a MESMA grade rica do pré-sorteio.
+    // v2.7.39: o card pós-sorteio é mais largo (jogo/parceiro/adversários) → grade
+    // de cards LARGOS: 1 coluna no mobile, 2-3 nas telas maiores (não muitas estreitas).
+    // min(100%,440px) garante 1 coluna sem overflow em telas estreitas.
+    gridStyle = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 440px), 1fr));gap:1rem;';
 
     // v0.17.36: lookup é POR NOME DE MEMBRO, não por team string. Quando
     // substituição W.O. acontece, o match é atualizado pra novo team
@@ -1830,7 +1832,7 @@ function renderParticipants(container, tournamentId) {
         const a = !!absent[name];
         const dotColor = p ? '#10b981' : a ? '#ef4444' : '#64748b';
         const textColor = p ? '#4ade80' : a ? '#f87171' : '#94a3b8';
-        return `<span style="display:inline-flex;align-items:center;gap:2px;"><span style="width:6px;height:6px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span><span style="font-size:0.7rem;color:${textColor};">${name}</span></span>`;
+        return `<span style="display:inline-flex;align-items:center;gap:2px;"><span style="width:5px;height:5px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span><span style="font-size:0.66rem;color:${textColor};">${name}</span></span>`;
       };
 
       // Standby puro (ainda não substituiu ninguém) = sem parceiro/jogo/adversário
@@ -1929,13 +1931,13 @@ function renderParticipants(container, tournamentId) {
       // jogo já foi resolvido por W.O. mas que ainda não estão marcados ausentes.
       const _showWoBtn = isOrg && !mc;
       const woBtn = _showWoBtn
-        ? window._woBtnHtml('event.stopPropagation(); ' + woAction, !isAbsent, { label: woLabel, size: 'btn-micro', fontSize: '0.7rem' })
+        ? window._woBtnHtml('event.stopPropagation(); ' + woAction, !isAbsent, { label: woLabel, size: 'btn-micro', fontSize: '0.7rem', extraStyle: 'min-height:0;height:24px;line-height:1;padding:0 12px;' })
         : '';
       // v2.2.0: badge W.O. só aparece quando ESTE jogador está em t.absent —
       // não deve aparecer no parceiro presente nem em quem simplesmente não
       // fez check-in. A partida ter wo:true é info de resultado do jogo, não
       // de status individual do jogador.
-      const woBadge = isAbsent ? `<div style="font-size:0.7rem;font-weight:800;padding:4px 12px;border-radius:8px;background:rgba(239,68,68,0.15);color:#f87171;flex-shrink:0;border:1px solid rgba(239,68,68,0.3);">W.O.</div>` : '';
+      const woBadge = isAbsent ? `<div style="font-size:0.66rem;font-weight:800;height:22px;line-height:22px;padding:0 10px;border-radius:7px;background:rgba(239,68,68,0.15);color:#f87171;flex-shrink:0;border:1px solid rgba(239,68,68,0.3);">W.O.</div>` : '';
 
       // Colors: 3 estados + standby amarelo
       // v2.2.0: isWO (match-level) removido dos visuais — só isAbsent torna o card
@@ -1984,30 +1986,18 @@ function renderParticipants(container, tournamentId) {
         : '';
       // v2.2.0: strikethrough só quando isAbsent (player em t.absent) —
       // não quando isWO (match-level). Parceiro presente não deve ter riscado.
-      const nameCell = `<div style="display:flex;align-items:baseline;gap:6px;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${_orgStarC}${vipTag}${isStandby ? presenceDot : ''}${jogoInline}</div>`;
-      // Inline layout: name+Jogo anchored to top-left, teams stack to the right, "vs" at top-right.
-      // Mobile (< 768px) falls back to name on top, matchup block below.
-      // v2.7.28: card único em grade → célula estreita; sempre empilha (nome em
-      // cima, jogo embaixo) pra não estourar a coluna de ~240px.
-      const _isNarrow = true;
-      let infoBlock;
+      // v2.7.39: NOME COMPLETO — nunca trunca (quebra linha se preciso). Jogo N saiu
+      // da linha do nome e foi pra coluna da direita (não disputa espaço com o nome).
+      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span style="font-weight:700;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${_orgStarC}${vipTag}${isStandby ? presenceDot : ''}</div>`;
+      const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
+      // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
+      let _matchStrip = '';
       if (isWOOrphan && ind.woMeta) {
-        // v0.17.35: W.O. orphan card — só "Estava no Jogo N com [parceiro]".
-        // Pedido do usuário: "deveria aparecer o número do jogo que ele
-        // estava antes do W.O. e seu parceiro antes do W.O. SÓ ISSO."
-        // Removido "substituído por [substituto]" — info redundante (o
-        // substituto aparece no próprio time agora).
         const _woNameSafe = (ind.woMeta.partner || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const _woMatchNum = ind.woMeta.matchNum || '?';
-        const _woNote = `<div style="font-size:0.7rem;color:#f87171;margin-top:3px;font-weight:600;">❌ W.O. — Estava no Jogo ${_woMatchNum}${_woNameSafe ? ` com <span style="color:#94a3b8;font-weight:500;">${_woNameSafe}</span>` : ''}</div>`;
-        infoBlock = nameCell + _woNote;
-      } else if (hasMatchup && !_isNarrow) {
-        infoBlock = `<div style="display:grid;grid-template-columns:auto 1fr auto;column-gap:10px;align-items:start;min-width:0;">${nameCell}${teamsCell || '<span></span>'}${vsCell || '<span></span>'}</div>`;
-      } else if (hasMatchup) {
-        const matchupRow = `<div style="display:grid;grid-template-columns:auto auto;column-gap:8px;align-items:start;margin-top:3px;">${teamsCell || '<span></span>'}${vsCell || '<span></span>'}</div>`;
-        infoBlock = nameCell + matchupRow;
-      } else {
-        infoBlock = nameCell;
+        _matchStrip = `<div style="font-size:0.68rem;color:#f87171;margin-top:6px;font-weight:600;">❌ W.O. — Estava no Jogo ${_woMatchNum}${_woNameSafe ? ` com <span style="color:#94a3b8;font-weight:500;">${_woNameSafe}</span>` : ''}</div>`;
+      } else if (teamsCell) {
+        _matchStrip = `<div style="margin-top:7px;display:flex;align-items:center;gap:10px;"><div style="flex:1;min-width:0;">${teamsCell}</div>${vsCell || ''}</div>`;
       }
       // v2.1.96: todos os W.O. devem ter Reverter disponível — sem restrição
       // por status do jogo. User: "aqui todos os WO deveriam estar com o
@@ -2058,20 +2048,25 @@ function renderParticipants(container, tournamentId) {
       const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
         <div class="participant-card" data-part-card="1" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
-            ${_riNum !== '' ? `<div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(_riNum).length > 2 ? '2.4rem' : '3rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${_riNum}</div>` : ''}
-            <div style="position:relative;z-index:1;display:flex;align-items:center;gap:10px;">
-                <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
-                <div style="flex:1;min-width:0;overflow:hidden;">
-                    ${standbyHeader}
-                    ${infoBlock}
-                    ${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}
-                    ${_ciSkillHtml}
+            ${_riNum !== '' ? `<div style="position:absolute;right:8px;top:8px;font-size:${String(_riNum).length > 2 ? '1.9rem' : '2.4rem'};font-weight:900;color:rgba(255,255,255,0.07);line-height:1;pointer-events:none;user-select:none;">${_riNum}</div>` : ''}
+            <div style="position:relative;z-index:1;">
+                <div style="display:flex;align-items:flex-start;gap:8px;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                            <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
+                            <div style="flex:1;min-width:0;">${standbyHeader}${_nameRow}</div>
+                        </div>
+                        <div style="margin-top:5px;">${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false)}</div>
+                        ${_ciSkillHtml}
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0;">
+                        ${_jogoTop}
+                        ${_riWoBadge}
+                        ${(_showActions && !isAbsent) ? presentToggle : ''}
+                        ${_showActions ? woBtn : ''}
+                    </div>
                 </div>
-                <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;">
-                    ${_riWoBadge}
-                    ${(_showActions && !isAbsent) ? presentToggle : ''}
-                    ${_showActions ? woBtn : ''}
-                </div>
+                ${_matchStrip}
             </div>
         </div>`;
     }).join('');
