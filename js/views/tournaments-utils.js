@@ -804,6 +804,29 @@ window._tournamentGamesPlan = function (t) {
            phasesCount: phases.length, currentPhaseIndex: curIdx, partial: !simComplete };
 };
 
+// Janela PROGRAMADA do TORNEIO INTEIRO: início = MENOR data de início entre todas
+// as fases (e top-level); fim = MAIOR data de fim entre todas as fases. No multi-
+// fase o fim do torneio é o fim da ÚLTIMA fase (ex.: Confra = 12/11), não o fim da
+// fase atual (19/06). Datas por fase: phase.startDate/startTime, phase.endDate/endTime.
+window._tournamentScheduledWindow = function (t) {
+  var starts = [], ends = [];
+  function add(arr, dateStr, timeStr) {
+    if (!dateStr) return;
+    var s = String(dateStr).indexOf('T') > -1 ? dateStr : (dateStr + (timeStr ? ('T' + timeStr) : ''));
+    var ms = window._tProgParseMs(s); if (ms != null) arr.push(ms);
+  }
+  add(starts, t.startDate, t.startTime);
+  add(ends, t.endDate, t.endTime);
+  if (Array.isArray(t.phases)) t.phases.forEach(function (ph) {
+    add(starts, ph.startDate, ph.startTime);
+    add(ends, ph.endDate, ph.endTime);
+  });
+  return {
+    startMs: starts.length ? Math.min.apply(null, starts) : null,
+    endMs: ends.length ? Math.max.apply(null, ends) : null
+  };
+};
+
 // HTML interno (recomputado a cada tick).
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
@@ -921,7 +944,11 @@ window._buildProgressInner = function(t) {
     });
     var _firstPointMs = _allStarts.length ? Math.min.apply(null, _allStarts) : (t.tournamentStarted ? (+t.tournamentStarted) : null);
     var _lastPointMs = _allEnds.length ? Math.max.apply(null, _allEnds) : (_endsFallback.length ? Math.max.apply(null, _endsFallback) : null);
-    var _deadlineMs = window._tProgParseMs(t.endDate);
+    // v2.7.14: fim do torneio inteiro = fim da ÚLTIMA fase (janela programada),
+    // não t.endDate (que no multi-fase é a fase ATUAL, ex.: 19/06). O fim real é
+    // o da última fase (ex.: Confra 12/11). Janela também dá o início do todo.
+    var _win = (_mp && window._tournamentScheduledWindow) ? window._tournamentScheduledWindow(t) : null;
+    var _deadlineMs = (_win && _win.endMs) ? _win.endMs : window._tProgParseMs(t.endDate);
     var _tournDone = _barPct >= 100;
 
     // Linha INÍCIO REAL / DUROU / FINAL REAL (só quando há 1º e último placar).
@@ -961,6 +988,26 @@ window._buildProgressInner = function(t) {
             '</div>'
           : '');
 
+    // v2.7.14: linha PROGRAMADO do TORNEIO INTEIRO (início da 1ª fase → fim da
+    // última fase). Responde "cadê o início do torneio todo" e mostra o fim real
+    // (12/11) em vez do fim da fase atual. Só multi-fase com janela definida; nesse
+    // caso substitui o "🏁 limite" (que vira redundante com o "fim programado").
+    var _schedRow = '';
+    if (_win && _win.startMs && _win.endMs) {
+      var _spLblS = 'font-size:0.6rem;color:#60a5fa;text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
+      var _spCol = function(ms, label, align) {
+        return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
+          '<span style="font-size:1rem;font-weight:800;color:#93c5fd;line-height:1.1;">' + _time(ms) + '</span>' +
+          '<span style="font-size:0.72rem;color:#60a5fa;font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
+          '<span style="' + _spLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+        '</div>';
+      };
+      _schedRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:9px;gap:8px;">' +
+        _spCol(_win.startMs, 'início programado', 'flex-start') +
+        _spCol(_win.endMs, 'fim programado', 'flex-end') +
+      '</div>';
+    }
+
     _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
         '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
@@ -968,7 +1015,7 @@ window._buildProgressInner = function(t) {
       '</div>' +
       '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">' +
         '<div style="width:' + _barPct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
-      '</div>' + _durRow + _limiteLine +
+      '</div>' + _durRow + (_schedRow || _limiteLine) +
     '</div>';
   }
 

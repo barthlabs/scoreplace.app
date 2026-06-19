@@ -2031,6 +2031,13 @@ function renderTournaments(container, tournamentId = null) {
                     }
                   }
                 }
+                // v2.7.14: multi-fase → fim do torneio = fim da ÚLTIMA fase (janela
+                // programada), não t.endDate (que é a fase ATUAL). Ex.: Confra acaba
+                // 12/11 (fim da fase 1), não 19/06 (fim da fase 0).
+                if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentScheduledWindow === 'function') {
+                  var _winEnd = window._tournamentScheduledWindow(t);
+                  if (_winEnd && _winEnd.endMs) _tEndTs = _winEnd.endMs;
+                }
                 // 2. Já começou e AINDA HÁ sorteios por vir? → countdown para próximo sorteio.
                 // v2.4.68: o último sorteio já feito (rodada atual = última planejada)
                 // não tem "próximo sorteio" — cai pro countdown de fim do torneio (passo 3).
