@@ -497,6 +497,13 @@ function setupCreateTournamentModal() {
               <!-- Campos específicos: Liga (unificado com antigo Ranking) -->
               <div id="liga-fields" style="display:none; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.ligaConfig')}</p>
+                <!-- v2.7.80: toggle "Ativado/Desativado dos inscritos" PROMOVIDO pro topo da
+                     config da fase (antes ficava enterrado lá embaixo e o organizador não
+                     achava). Controla o canon do "Ativado/Desativado" que aparece nos cards. -->
+                <div class="toggle-row" style="margin-bottom:0.75rem;">
+                  <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">Deixar inscritos ficarem de fora (Ativado/Desativado)</span><div class="toggle-desc">Cada inscrito pode se marcar como <b>Desativado</b> pra ficar de fora de um sorteio. Desligue pra que ninguém fique de fora — todos sempre <b>Ativados</b> e o controle some dos cards.</div></div></div>
+                  <label class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation" checked><span class="toggle-slider"></span></label>
+                </div>
                 <!-- v2.6.56: "Temporada contínua" removida — início/fim da fase já definem a temporada
                      (t.temporada=true por padrão no save; sem elemento). -->
                 <div class="form-group" style="margin-bottom:0.5rem;">
@@ -547,12 +554,6 @@ function setupCreateTournamentModal() {
                 <div class="form-group" id="liga-inactivity-x-container" style="display:none;">
                   <label class="form-label">${_t('create.ligaInactRounds')}</label>
                   <input type="number" class="form-control" id="liga-inactivity-x" min="1" value="3">
-                </div>
-                <!-- v2.7.38: permitir que inscritos se auto-desativem (ficar de fora de um sorteio).
-                     Ligado por padrão. Desligado → o controle some de todos os inscritos e todos ficam ativos. -->
-                <div class="toggle-row" style="margin-bottom:0.75rem;">
-                  <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">Permitir auto-desativação</span><div class="toggle-desc">Inscritos podem ficar de fora de um sorteio. Desligado: ninguém se desativa e todos ficam sempre ativos.</div></div></div>
-                  <label class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation" checked><span class="toggle-slider"></span></label>
                 </div>
                 <!-- v2.6.56: "Inscrições abertas durante toda a temporada" removida — redundante com
                      "Inscrições durante a fase" (Fechadas/Aberta). ligaOpenEnrollment é DERIVADO do
