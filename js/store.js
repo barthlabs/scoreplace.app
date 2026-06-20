@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.69-beta';
+window.SCOREPLACE_VERSION = '2.7.70-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -1237,12 +1237,26 @@ window._reflowChrome = function() {
   // Mesmo problema entre dropdown do hamburger e back-header. Como
   // topbar/dropdown/back-header todos usam var(--bg-darker), 1px de
   // overlap é invisível e cobre qualquer rounding antialiased.
+  // v2.7.70: a margem do conteúdo precisa ir no primeiro irmão VISÍVEL — senão um
+  // irmão display:none logo após o header (ex.: #part-search-empty na tela de
+  // Inscritos) recebe a margem (e some), e o conteúdo de verdade fica COBERTO pelo
+  // header fixo. Pula invisíveis (display:none / 0×0).
+  function _firstVisibleSibling(el) {
+    var s = el && el.nextElementSibling;
+    while (s) {
+      var cs = window.getComputedStyle(s);
+      var r = s.getBoundingClientRect();
+      if (cs.display !== 'none' && cs.visibility !== 'hidden' && !(r.width === 0 && r.height === 0)) return s;
+      s = s.nextElementSibling;
+    }
+    return null;
+  }
   var bhOffset = topbarH + ddH - 1;
   backHeaders.forEach(function(bh) {
     var isFixed = window.getComputedStyle(bh).position === 'fixed';
     if (isFixed) {
       bh.style.top = bhOffset + 'px';
-      var next = bh.nextElementSibling;
+      var next = _firstVisibleSibling(bh);
       if (next) {
         var bhH = Math.ceil(bh.getBoundingClientRect().height);
         // Use !important because overlay CSS uses `margin-top: 0 !important`
@@ -1250,7 +1264,7 @@ window._reflowChrome = function() {
         next.style.setProperty('margin-top', (ddH + bhH + 8) + 'px', 'important');
       }
     } else {
-      var next = bh.nextElementSibling;
+      var next = _firstVisibleSibling(bh);
       if (next) {
         var mt = ddH > 0 ? (ddH + 8) + 'px' : '0';
         next.style.setProperty('margin-top', mt, 'important');
