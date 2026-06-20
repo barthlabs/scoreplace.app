@@ -238,23 +238,69 @@
       teams = teams.slice(0, lo); n = lo; isPow2 = true;
     }
 
-    // PLAY-IN — os (lo - excess) melhores entram direto; os 2*excess piores jogam
-    // `excess` partidas classificatórias (round 0); os vencedores completam a chave.
-    var slots; // entrantes da chave principal: {team} ou {fromPlayIn: matchObj}
+    // REPESCAGEM (v2.7.69) — substitui o antigo "play-in" (que era BYE disfarçado:
+    // os melhores entravam de graça). Agora TODOS jogam a R1 (round 0). O PIOR
+    // colocado fica de fora se n é ímpar e disputa a repescagem. Os g=floor(n/2)
+    // vencedores entram na chave de T (=lo) como sementes ALTAS; as (T-g) vagas
+    // restantes são preenchidas pelos MELHORES PERDEDORES (rankeados pela R1 +
+    // critérios de desempate) como sementes BAIXAS. A escolha dos perdedores só dá
+    // pra fazer DEPOIS da R1 → os slots nascem como repDirect/repGame e são
+    // preenchidos por window._resolveRepechage quando a R1 fecha (no _advanceWinner).
     if (!isPow2 && resolution === 'playin') {
-      var excess = n - lo, directCount = lo - excess;
-      var pool = teams.slice(directCount);
-      slots = teams.slice(0, directCount).map(function (tm) { return { team: tm }; });
-      for (var pi = 0; pi < excess; pi++) {
-        var a = pool[pi], b = pool[pool.length - 1 - pi];
-        var pim = { id: mkId(), round: 0, bracket: bracketKey, isPlayIn: true,
-          p1: a ? a.displayName : 'BYE', p2: b ? b.displayName : 'BYE', winner: null };
-        if (a) pim.team1Obj = a; if (b) pim.team2Obj = b;
-        matches.push(pim); slots.push({ fromPlayIn: pim });
+      var T = lo;
+      var g = Math.floor(n / 2);
+      var hasSat = (n - 2 * g) === 1;
+      var satTeam = hasSat ? teams[n - 1] : null;                 // pior semente fica de fora
+      var playing = hasSat ? teams.slice(0, n - 1) : teams.slice();
+      var repSpots = T - g;                                       // vagas vindas de perdedores/satout
+      var repGames = hasSat ? 1 : 0;                              // 1 jogo de repescagem (loser × satout)
+      var directSpots = repSpots - repGames;                      // melhores perdedores entram direto
+      // R1: g jogos, semente 1×2g, 2×(2g-1)…
+      var r1 = [];
+      for (var gi = 0; gi < g; gi++) {
+        var ra = playing[gi], rb = playing[playing.length - 1 - gi];
+        var rm = { id: mkId(), round: 0, bracket: bracketKey, isPhaseRepR1: true,
+          p1: ra.displayName, p2: rb.displayName, team1Obj: ra, team2Obj: rb,
+          p1Seed: gi, p2Seed: (playing.length - 1 - gi), winner: null };
+        r1.push(rm); matches.push(rm);
       }
-    } else {
-      slots = teams.map(function (tm) { return { team: tm }; });
+      // jogo de repescagem (se há satout): satout × (perdedor de rank directSpots), p2 preenchido depois.
+      var repGame = null;
+      if (repGames === 1) {
+        repGame = { id: mkId(), round: 0, bracket: bracketKey, isPhaseRepGame: true,
+          p1: satTeam.displayName, team1Obj: satTeam, p2: 'TBD', winner: null, repLoserRank: directSpots };
+        matches.push(repGame);
+      }
+      // entrantes da chave de T (semente 0..T-1): 0..g-1 vencedores R1; depois repescados.
+      var entrants = [];
+      for (var ei = 0; ei < g; ei++) entrants.push({ fromR1: r1[ei] });
+      for (var di = 0; di < directSpots; di++) entrants.push({ repDirect: di });   // di-ésimo melhor perdedor
+      if (repGame) entrants.push({ fromRepGame: repGame });
+      // chave de T single-elim (semente 1×T, 2×(T-1)…) → repescados (sementes baixas) pegam os melhores
+      function _wireEntrant(ent, slot, mGame) {
+        if (!ent) return;
+        if (ent.fromR1) { ent.fromR1.nextMatchId = mGame.id; ent.fromR1.nextSlot = slot; }
+        else if (ent.fromRepGame) { ent.fromRepGame.nextMatchId = mGame.id; ent.fromRepGame.nextSlot = slot; }
+        else if (ent.repDirect != null) { if (slot === 'p1') mGame.repDirectP1 = ent.repDirect; else mGame.repDirectP2 = ent.repDirect; }
+      }
+      var totalRoundsR = Math.round(Math.log(T) / Math.log(2));
+      var roundsMapR = {}; var rr1 = [];
+      for (var pj = 0; pj < T / 2; pj++) {
+        var em = { id: mkId(), round: 1, bracket: bracketKey, p1: 'TBD', p2: 'TBD', winner: null };
+        _wireEntrant(entrants[pj], 'p1', em);
+        _wireEntrant(entrants[T - 1 - pj], 'p2', em);
+        rr1.push(em); matches.push(em);
+      }
+      roundsMapR[1] = rr1;
+      for (var rr = 2; rr <= totalRoundsR; rr++) {
+        var prevR = roundsMapR[rr - 1]; var cntR = prevR.length / 2; roundsMapR[rr] = [];
+        for (var jj = 0; jj < cntR; jj++) { var mmR = { id: mkId(), round: rr, bracket: bracketKey, p1: 'TBD', p2: 'TBD', winner: null }; roundsMapR[rr].push(mmR); matches.push(mmR); }
+        prevR.forEach(function (pmR, idx) { var nmR = roundsMapR[rr][Math.floor(idx / 2)]; pmR.nextMatchId = nmR.id; pmR.nextSlot = (idx % 2 === 0) ? 'p1' : 'p2'; });
+      }
+      return { matches: matches, finalMatchId: roundsMapR[totalRoundsR][0].id, soleWinner: null, totalRounds: totalRoundsR, waitlist: [] };
     }
+
+    var slots = teams.map(function (tm) { return { team: tm }; });
 
     var pow = 1; while (pow < slots.length) pow *= 2; // 'bye' → pow > n; senão pow == lo
     var totalRounds = Math.round(Math.log(pow) / Math.log(2));
@@ -694,6 +740,51 @@
     if (window.showNotification) window.showNotification('Avançou para ' + nm, 'Chaves geradas a partir das colocações da fase anterior.', 'success');
   }
 
+  // v2.7.69: RESOLUÇÃO DA REPESCAGEM — chamada pelo _advanceWinner quando uma
+  // partida isRepechageR1 fecha. Rankeia os perdedores da R1 (saldo desc, score
+  // desc, semente da fase anterior asc como desempate) e preenche os slots de
+  // repescagem da chave de T (repDirectP1/P2) + o p2 do jogo de repescagem
+  // (loser × satout). Idempotente: só age quando TODOS os R1 da chave têm vencedor
+  // e ainda há slot pendente. Roda igual no cliente, no poller e na CF (vendor).
+  function resolveRepechage(t, bracketKey) {
+    if (!t || !bracketKey) return false;
+    var all = (typeof window !== 'undefined' && window._collectAllMatches) ? window._collectAllMatches(t)
+      : (typeof _collectAllMatches === 'function' ? _collectAllMatches(t) : []);
+    var r1 = all.filter(function (m) { return m && m.isPhaseRepR1 && m.bracket === bracketKey; });
+    if (!r1.length) return false;
+    if (r1.some(function (m) { return !m.winner; })) return false;          // R1 ainda não fechou
+    var pending = all.filter(function (m) {
+      return m && m.bracket === bracketKey && (m.repDirectP1 != null || m.repDirectP2 != null ||
+        (m.isPhaseRepGame && m.repLoserRank != null));
+    });
+    if (!pending.length) return false;                                       // já resolvido
+    var losers = r1.map(function (m) {
+      var s1 = parseFloat(m.scoreP1) || 0, s2 = parseFloat(m.scoreP2) || 0;
+      var loserIsP1 = (m.winner !== m.p1);
+      return {
+        name: loserIsP1 ? m.p1 : m.p2,
+        obj: loserIsP1 ? m.team1Obj : m.team2Obj,
+        saldo: loserIsP1 ? (s1 - s2) : (s2 - s1),
+        score: loserIsP1 ? s1 : s2,
+        seed: (loserIsP1 ? m.p1Seed : m.p2Seed)
+      };
+    });
+    losers.forEach(function (l) { if (l.seed == null) l.seed = 9999; });
+    losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.seed - b.seed); });
+    all.forEach(function (m) {
+      if (!m || m.bracket !== bracketKey) return;
+      if (m.repDirectP1 != null && losers[m.repDirectP1]) { m.p1 = losers[m.repDirectP1].name; if (losers[m.repDirectP1].obj) m.team1Obj = losers[m.repDirectP1].obj; delete m.repDirectP1; }
+      if (m.repDirectP2 != null && losers[m.repDirectP2]) { m.p2 = losers[m.repDirectP2].name; if (losers[m.repDirectP2].obj) m.team2Obj = losers[m.repDirectP2].obj; delete m.repDirectP2; }
+    });
+    var repGame = all.filter(function (m) { return m && m.isPhaseRepGame && m.bracket === bracketKey; })[0];
+    if (repGame && repGame.repLoserRank != null && losers[repGame.repLoserRank]) {
+      repGame.p2 = losers[repGame.repLoserRank].name;
+      if (losers[repGame.repLoserRank].obj) repGame.team2Obj = losers[repGame.repLoserRank].obj;
+      delete repGame.repLoserRank;
+    }
+    return true;
+  }
+
   var api = {
     isMultiPhase: isMultiPhase,
     mkTeam: mkTeam,
@@ -705,7 +796,8 @@
     bracketPhaseGroups: bracketPhaseGroups,
     phaseComplete: phaseComplete,
     materializeNextPhase: materializeNextPhase,
-    groupTeamStandings: _groupTeamStandings
+    groupTeamStandings: _groupTeamStandings,
+    resolveRepechage: resolveRepechage
   };
 
   // Exposição: browser (window) + node (module.exports) para teste headless.
@@ -714,6 +806,7 @@
     window._isMultiPhase = isMultiPhase;
     window._phasesPhaseComplete = phaseComplete;
     window._advanceMultiPhase = advanceMultiPhase;
+    window._resolveRepechage = resolveRepechage;
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;

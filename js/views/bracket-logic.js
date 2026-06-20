@@ -892,6 +892,14 @@ function _advanceWinner(t, completedMatch) {
   if (completedMatch.isRepechageR1 && t.repechageConfig) {
     _assignRepechageLosers(t);
   }
+  // v2.7.69: REPESCAGEM DO CONSTRUTOR DE FASES (diferente da repescagem de
+  // eliminatória acima). Quando uma partida isPhaseRepR1 fecha, resolve os melhores
+  // perdedores da R1 daquela chave → preenche os slots de repescagem + o jogo de
+  // repescagem. _resolveRepechage é idempotente (só age quando todos os R1 da chave
+  // têm vencedor e ainda há slot pendente).
+  if (completedMatch.isPhaseRepR1 && typeof window !== 'undefined' && typeof window._resolveRepechage === 'function') {
+    try { window._resolveRepechage(t, completedMatch.bracket); } catch (e) {}
+  }
   // Repechage: when repechage match completes, check if ALL done → advance best loser
   if (completedMatch.isRepechage && t.repechageConfig && t.repechageConfig.bestLoserCount > 0) {
     _advanceBestLoser(t);
