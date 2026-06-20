@@ -2263,8 +2263,10 @@ function renderParticipants(container, tournamentId) {
         }
       }
 
-      let actionsDiv = '';
       let dragProps = '';
+      // v2.7.72: botões expostos (VIP à esquerda com a meta; split/undo/excluir à
+      // direita) pra montar a LINHA COMBINADA igual ao card pós-sorteio (canônico).
+      let _vipBtn = '', _delBtn = '', _splitBtn = '';
       // v2.0.0: botão "Desfazer mesclagem" — aparece quando o card resultou de
       // uma mesclagem (p._mergedFrom), em qualquer estado do torneio.
       let undoMergeBtn = '';
@@ -2277,15 +2279,11 @@ function renderParticipants(container, tournamentId) {
         // iniciar"). Formar equipe / VIP / remover continuam só pré-sorteio.
         dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
         if (!drawDone) {
-          const vipBtn = `<button class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)'}; color: ${isVip ? '#fbbf24' : '#a3842a'}; border: 1px ${isVip ? 'solid' : 'dashed'} ${isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)'}; letter-spacing: 0.5px;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
-          const delBtn = `<button class="btn btn-micro" title="${_t('btn.remove')}" style="background: rgba(239,68,68,0.1); color: #ef4444; border: 1px dashed #ef4444;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">🗑️</button>`;
-          let splitBtn = '';
+          _vipBtn = `<button class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)'}; color: ${isVip ? '#fbbf24' : '#a3842a'}; border: 1px ${isVip ? 'solid' : 'dashed'} ${isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)'};" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
+          _delBtn = `<button class="btn btn-micro" title="${_t('btn.remove')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(239,68,68,0.1); color: #ef4444; border: 1px dashed rgba(239,68,68,0.5);" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">🗑️</button>`;
           if (pName.includes('/')) {
-            splitBtn = `<button class="btn btn-micro" title="${_t('participants.splitTeam')}" style="background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
+            _splitBtn = `<button class="btn btn-micro" title="${_t('participants.splitTeam')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
           }
-          actionsDiv = `<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:6px;">${vipBtn}${splitBtn}${undoMergeBtn}${delBtn}</div>`;
-        } else if (undoMergeBtn) {
-          actionsDiv = `<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:6px;">${undoMergeBtn}</div>`;
         }
       }
 
@@ -2334,17 +2332,17 @@ function renderParticipants(container, tournamentId) {
       const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
       return `
         <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="${_isStandbyEntry ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
-            <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:${String(bgNum).length > 2 ? '2.8rem' : '3.5rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${bgNum}</div>
-            <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:0;">
-                <div style="display:flex;align-items:center;gap:12px;">
-                    <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;justify-content:center;">
-                        ${pNameHtml}
-                        ${_metaSlotsFor(p, pName, isTeam)}
-                        <div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;margin-top:5px;">${typeText}</div>
-                        ${_nmSkillHtml}
-                    </div>
+            ${(function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return _n !== '' ? `<div style="position:absolute;right:8px;top:8px;font-size:${String(_n).length > 2 ? '1.9rem' : '2.4rem'};font-weight:900;color:rgba(255,255,255,0.07);line-height:1;pointer-events:none;user-select:none;">${_n}</div>` : ''; })()}
+            <div style="position:relative;z-index:1;">
+                <!-- HEADER: avatar + nome + estrela (igual ao card pós-sorteio) -->
+                ${pNameHtml}
+                <!-- LINHA COMBINADA (canônica): VIP + meta + nível (esquerda) | split/desfazer/excluir (direita) -->
+                <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">${_vipBtn}${_metaSlotsFor(p, pName, isTeam, { inline: true })}${_nmSkillHtml}</div>
+                    ${(_splitBtn || undoMergeBtn || _delBtn) ? `<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:auto;">${_splitBtn}${undoMergeBtn}${_delBtn}</div>` : ''}
                 </div>
-                ${actionsDiv}
+                <!-- tipo de inscrição onde no pós-sorteio fica o jogo (sem parceiro/adversários aqui) -->
+                <div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;margin-top:6px;">${typeText}</div>
                 ${rollCallRow}
             </div>
         </div>`;
