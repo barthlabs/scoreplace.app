@@ -9,7 +9,17 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.61-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔁 Repescagem de verdade.</b> No construtor de fases, a opção de repescagem deixou de ser um "BYE disfarçado" (os melhores entravam de graça). Agora <b>todos jogam</b> a primeira rodada; os melhores perdedores voltam — os 3 primeiros direto e o 4º disputa uma vaga contra quem ficou de fora — até fechar a chave. O ranking é pelo desempenho na rodada (com os critérios de desempate).</li>' +
+        '<li><b>⚖️ Painel de resolução de fase repaginado.</b> Cada solução (Repescagem, Lista de espera, BYE, Exclusão) mostra o <b>equilíbrio de Nash em %</b> e fica ordenada do melhor pro pior. Cada divisão (Ouro, Prata…) numa linha própria. E uma <b>estimativa de tempo</b> que muda conforme a solução escolhida, com os botões Avançar/Cancelar logo ao lado dela.</li>' +
+        '<li><b>🔒 Fundo não rola mais atrás dos modais.</b> Ao abrir qualquer janela/overlay, a tela de trás fica travada — acabou aquele "scroll vaza pra tela de baixo" em todo o app.</li>' +
+        '<li><b>➡️ Botões dos seus jogos sempre à direita.</b> No chaveamento, os botões do seu próprio jogo (Cheguei/Ao Vivo/Confirmar) ficam alinhados à direita como nas demais chaves.</li>' +
+        '<li><b>🧹 Ajustes finos.</b> O cabeçalho da lista de Inscritos não cobre mais o primeiro card; o botão "Encerrar Rodada" some quando a fase já pode avançar (o "Avançar" já faz o papel).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.61-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🎟️ Lista de espera unificada.</b> Quem está na lista de espera agora aparece <b>entre os inscritos</b> (em âmbar, na ordem alfabética/cronológica como todo mundo) e também no painel "Lista de Espera" — com o número de inscrição e removível pelo organizador a partir de qualquer card. Funciona igual em qualquer formato: Pontos Corridos, Rei/Rainha, Eliminatórias e Fase de Grupos.</li>' +
         '<li><b>🔘 Botões com cara de botão.</b> Em todo o app — chaves, "Meus Resultados" na tela inicial e lobby de Partida Casual — os botões de ação ganharam o visual sólido com volume do padrão: Ao Vivo, Confirmar, Cheguei, Editar, Convidar, Entrar e os demais.</li>' +
