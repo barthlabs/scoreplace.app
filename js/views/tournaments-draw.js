@@ -643,6 +643,23 @@ window.showFinalReviewPanel = function (tId) {
 };
 
 
+// v2.7.82: Sortear MANUAL num torneio de SORTEIO AUTOMÁTICO. O botão fica omitido
+// por padrão (o auto-draw é o responsável), mas o organizador pode forçar o sorteio
+// na mão — ex.: auto-draw sem data agendada. Confirma avisando que é auto-draw, e
+// que o automático segue valendo pras próximas rodadas. Não é dev-only.
+window._confirmManualAutoDraw = function (tId) {
+    var t = window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === tId.toString(); });
+    if (!t) return;
+    if (typeof showConfirmDialog !== 'function') { window.generateDrawFunction(tId); return; }
+    showConfirmDialog(
+        '🎲 Sortear manualmente?',
+        'Este torneio está configurado para <b>sorteio automático</b>. Você quer fazer o sorteio <b>agora, manualmente</b>?<br><br>O sorteio automático continua valendo para as próximas rodadas.',
+        function () { if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId); },
+        null,
+        { type: 'warning', confirmText: 'Sortear agora', cancelText: 'Cancelar' }
+    );
+};
+
 window.generateDrawFunction = function (tId) {
     const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
     if (!t) return;

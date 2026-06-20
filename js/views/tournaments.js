@@ -1581,7 +1581,14 @@ function renderTournaments(container, tournamentId = null) {
         let sortearAberto = '';
         if (isOrg) {
             if (isLigaAutoDraw) {
-                // Sem botão manual — auto-draw fica responsável.
+                // v2.7.82: o sorteio é automático, então o botão manual era OMITIDO.
+                // Mas o organizador ainda pode precisar sortear na mão (ex.: auto-draw
+                // não agendado pro futuro). Mostra o botão COM confirmação de que o
+                // torneio é de sorteio automático. Vale pra todo organizador (não dev).
+                if (t.status !== 'finished') {
+                    var _adManualLbl = hasDraw ? '🎲 Próxima Rodada (manual)' : '🎲 Sortear agora (manual)';
+                    sortearBtn = `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
+                }
             } else if (isLigaFormat && t.drawManual) {
                 sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window.generateDrawFunction('${t.id}')">🎲 Sortear</button>` : '';
                 sortearAberto = (t.status !== 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="${sortearOnClick}">🎲 Sortear</button>` : '';
