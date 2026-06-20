@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.86-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🖐️ Arrastar ficou bem mais fácil.</b> Quando você começa a arrastar um card de inscrito (pra formar dupla, mesclar ou promover a co-organizador), os <b>outros cards encolhem e mostram só o nome</b>, em 2-3 colunas — assim o caminho até soltar fica curtinho. Soltou, tudo volta ao tamanho normal.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🤝 Convite de dupla aparece também na tela inicial.</b> Quando alguém te convida pra formar dupla, agora aparece um aviso âmbar logo na sua tela inicial — <b>"Fulano quer formar dupla com você"</b> — com os botões <b>✅ Confirmar / ❌ Cancelar</b> ali mesmo, sem precisar entrar no torneio. (E continua aparecendo dentro do torneio também.)</li>' +
       '</ul>' +
