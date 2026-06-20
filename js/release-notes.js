@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.84-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🤝 Convite de dupla agora funciona de ponta a ponta.</b> Quando você arrasta seu card sobre o de um parceiro, o convite aparece pra ele com <b>✅ Confirmar / ❌ Cancelar</b> (e na notificação). Ao confirmar, a dupla vira verde em "Duplas formadas", o convidante é avisado e todos os inscritos recebem o aviso da nova dupla. Antes o convite podia não chegar até o botão de aceitar — corrigido.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📝 Inscrição mais simples: sempre individual.</b> Acabou a escolha "Individual × Times Montados" na criação do torneio — todo mundo se inscreve sozinho. Em torneios de <b>duplas</b>, as duplas são formadas por <b>vocês</b> (cada um arrasta seu card sobre o de um parceiro) ou pelo <b>sorteio</b>.</li>' +
         '<li><b>🆚 Times Sorteados Separados dos Montados.</b> Em torneios de duplas, um novo controle permite separar em <b>duas categorias</b>: duplas <b>montadas</b> só enfrentam montadas e <b>sorteadas</b> só enfrentam sorteadas (dupla montada costuma ter mais afinidade e jogar melhor). Desligado, todas disputam juntas. Ligar isso já libera os participantes a formarem suas duplas.</li>' +
