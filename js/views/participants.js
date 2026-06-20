@@ -2039,7 +2039,7 @@ function renderParticipants(container, tournamentId) {
       // não quando isWO (match-level). Parceiro presente não deve ter riscado.
       // v2.7.39: NOME COMPLETO — nunca trunca (quebra linha se preciso). Jogo N saiu
       // da linha do nome e foi pra coluna da direita (não disputa espaço com o nome).
-      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${_orgStarC}${vipTag}${isStandby ? presenceDot : ''}</div>`;
+      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span style="font-weight:600;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_safeName}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
       const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';
@@ -2242,7 +2242,8 @@ function renderParticipants(container, tournamentId) {
           else teamLabel = _t('tourn.teamFormed');
       }
       const _standbyBadge = _isStandbyEntry ? '<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;">🕐 Lista de Espera</span>' : '';
-      const typeText = _isStandbyEntry ? (_standbyBadge + vipBadge) : (teamLabel + vipBadge);
+      // v2.7.73: SEM tag VIP redundante — o card dourado + o botão VIP ativo já indicam.
+      const typeText = _isStandbyEntry ? _standbyBadge : teamLabel;
 
       // Skill category badge/dropdown for normal (grid) mode
       const _nmSkillCats = t.skillCategories || [];
