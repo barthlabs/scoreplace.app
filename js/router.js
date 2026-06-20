@@ -250,6 +250,15 @@ function initRouter() {
           window.location.replace('#dashboard');
         }
         break;
+      case 'pair':
+        // v2.7.94: deep-link dos botões Aceitar/Recusar (email/WhatsApp).
+        // #pair/<accept|reject>/<tId>/<reqId> → executa a ação e pula pro card.
+        if (typeof window._pairActionFromLink === 'function') {
+          window._pairActionFromLink(parts[1], parts[2], parts[3]);
+        } else {
+          window.location.hash = '#tournaments/' + (parts[2] || '');
+        }
+        break;
       case 'pre-draw':
         renderPreDraw(viewContainer, cleanParam);
         break;

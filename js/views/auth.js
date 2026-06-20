@@ -4988,6 +4988,19 @@ async function simulateLoginSuccess(user) {
     return;
   }
 
+  // v2.7.94: retoma a ação de convite de dupla (deep-link Aceitar/Recusar do
+  // email/WhatsApp) após o login. O handler espera o torneio carregar e navega.
+  try {
+    var _pp = sessionStorage.getItem('sp_pendingPairAction');
+    if (_pp) {
+      sessionStorage.removeItem('sp_pendingPairAction');
+      var _ppo = JSON.parse(_pp);
+      if (_ppo && _ppo.tId && _ppo.reqId && typeof window._pairActionFromLink === 'function') {
+        setTimeout(function(){ window._pairActionFromLink(_ppo.act, _ppo.tId, _ppo.reqId); }, 1200);
+      }
+    }
+  } catch(e) {}
+
   // Redirect to pending invite tournament if there was one
   if (window._pendingInviteHash) {
     var dest = window._pendingInviteHash;

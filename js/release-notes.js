@@ -9,7 +9,21 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.89-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>❤️ Favorito vira emoji.</b> O coração de favoritar torneios agora é o emoji ❤️ em todos os lugares (detalhe, cards, filtro).</li>' +
+        '<li><b>📛 Nome do torneio no cabeçalho</b> do detalhe, entre Voltar e "Só meus jogos".</li>' +
+        '<li><b>🎲 Pontos Corridos com sorteio automático:</b> o "Sortear (manual)" sorteia <b>entre todos os ativos</b> (sem a tela de presença, que só faz sentido em evento presencial); quem não fecha grupo vai pra lista de espera. Resetar mantém o automático ligado e reagenda a data.</li>' +
+        '<li><b>⚖️ Resolver as chaves (fase de eliminatória):</b> Repescagem, BYE, Lista de espera e Exclusão como cards; a estimativa de tempo/jogos e o botão Avançar acompanham a solução escolhida.</li>' +
+        '<li><b>🔁 Repescagem por chave:</b> todos jogam a 1ª rodada; os vencedores se cruzam (V1×V2, V3×V4…) e, quando acabam, os <b>melhores perdedores</b> entram pra completar a chave. Quem entra repescado leva a tag âmbar <b>REP</b> (some ao vencer).</li>' +
+        '<li><b>🥉 Disputa de 3º lugar</b> gerada automaticamente em cada chave, abaixo da final.</li>' +
+        '<li><b>🏷️ Rodadas com nome certo:</b> Rodada 1 → Oitavas → Quartas → Semifinais → Final, pela função de cada uma.</li>' +
+        '<li><b>📊 Classificação geral por linha</b> (Ouro/Prata), colapsável, do último ao 1º.</li>' +
+        '<li><b>⏱️ Tempo decorrido</b> em torneios multi-fase passa a contar só a partir do 1º jogo realmente jogado.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.89-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🤝 Convite de dupla vira um card pendente na lista.</b> Ao arrastar seu card sobre o de um parceiro, forma-se um <b>card de dupla pendente em âmbar</b> na seção "Sem dupla", visível a todos. No card, <b>quem convidou</b> tem "Cancelar convite"; <b>quem foi convidado</b> tem "✅ Confirmar / ❌ Cancelar". Aceitou, a dupla vira verde em "Duplas formadas".</li>' +
         '<li><b>🎯 Ao arrastar, a lista compacta centraliza onde você pegou o card</b> — a grade de nomes aparece embaixo do dedo, deixando o caminho até soltar bem curto.</li>' +

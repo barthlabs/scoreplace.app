@@ -1802,31 +1802,10 @@ function renderParticipants(container, tournamentId) {
     // v2.7.54: indexa por TODAS as formas do nome (cru displayName/name/email + formatado
     // via _pName) — senão um participante cujo ind.name é cru (ex.: telefone
     // "+5511981933576") não casa com a chave formatada e perde o número da ordem.
-    var _partEnrollIdx = {};
-    function _idxKeys(p) {
-      var ks = [];
-      if (window._pName) { var f = String(window._pName(p, '') || ''); if (f) ks.push(f); }
-      if (p && typeof p === 'object') {
-        ['displayName', 'name', 'email'].forEach(function (k) { if (p[k]) ks.push(String(p[k])); });
-      } else if (typeof p === 'string') { ks.push(p); }
-      return ks;
-    }
-    function _addIdx(p, i) {
-      var any = false;
-      _idxKeys(p).forEach(function (raw) {
-        String(raw).toLowerCase().split(' / ').forEach(function (n) {
-          n = n.trim(); if (n && _partEnrollIdx[n] == null) { _partEnrollIdx[n] = i; any = true; }
-        });
-      });
-      return any;
-    }
-    (Array.isArray(t.participants) ? t.participants : []).forEach(function (p, i) { _addIdx(p, i); });
-    // v2.7.54: a LISTA DE ESPERA continua a numeração (são os próximos a entrar) —
-    // assim ZZZZ e cia. também ganham o número da ordem no canto do card.
-    var _nextEnrollIdx = (Array.isArray(t.participants) ? t.participants : []).length;
-    if (typeof window._getWaitlist === 'function') {
-      window._getWaitlist(t).forEach(function (e) { if (_addIdx(e, _nextEnrollIdx)) _nextEnrollIdx++; });
-    }
+    // v2.7.92: ordem de inscrição CANÔNICA — helper único (uid-first; nome só fallback
+    // pra participante SEM conta), inclui a lista de espera. Substitui o índice por-nome
+    // antigo e alinha #participants aos cards do detalhe (mesmo número em todo lugar).
+    var _enrollOrderMap = (typeof window._buildEnrollOrderMap === 'function') ? window._buildEnrollOrderMap(t) : {};
 
     // v1.0.83-beta: diagnóstico observável — se Bot 05 ainda sumir, podemos
     // inspecionar window._debugLastParticipantsRender no console pra ver
@@ -2089,7 +2068,8 @@ function renderParticipants(container, tournamentId) {
       const _ciInactive = (_ciPart && _ciPart.ligaActive === false) ? '1' : '0';
       const _ciGender = (typeof window._canonGender === 'function') ? window._canonGender(_ciPart && _ciPart.gender) : 'none';
       const _ciSkillVal = _ciCurrentSkill || 'none';
-      const _ciOrder = (_partEnrollIdx[(ind.name || '').toLowerCase().trim()] != null) ? _partEnrollIdx[(ind.name || '').toLowerCase().trim()] : 9999;
+      const _ciEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _ciPart || (ind && ind.name) || '') : '';
+      const _ciOrder = (_ciEnrollNum !== '' && _ciEnrollNum != null) ? (_ciEnrollNum - 1) : 9999;
       // v2.7.28: CARD ÚNICO — mesmo shell rico do pré-sorteio (gradiente roxo/VIP +
       // nº de inscrição em marca d'água), mas com o jogo/parceiro/adversários
       // (infoBlock) + toggle Presente + W.O. dentro dele. Presença vira borda/glow
@@ -2329,7 +2309,8 @@ function renderParticipants(container, tournamentId) {
       const _fCatStr = (_gPart && typeof _gPart === 'object') ? (_gPart.category || '') : '';
       for (let _fi = 0; _fi < _fSkillCats.length; _fi++) { if (_fCatStr === _fSkillCats[_fi] || _fCatStr.endsWith(' ' + _fSkillCats[_fi])) { _fSkill = _fSkillCats[_fi]; break; } }
       const _fKey = (pName || '').toLowerCase().trim();
-      const _fOrder = (_partEnrollIdx && _partEnrollIdx[_fKey] != null) ? _partEnrollIdx[_fKey] : idx;
+      const _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
+      const _fOrder = (_fEnrollNum !== '' && _fEnrollNum != null) ? (_fEnrollNum - 1) : idx;
       const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
       return `
         <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="${_isStandbyEntry ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">

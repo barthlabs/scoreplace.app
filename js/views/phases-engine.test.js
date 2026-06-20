@@ -411,5 +411,47 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   eq(eng.groupTeamStandings(group, { tiebreakers: ['vitorias'] }).map(n).slice(0, 2).sort(), ['A', 'B'], 'tiebreak: vitorias mantém A,B no topo');
 })();
 
+// v2.8.14: 3º/4º POR LINHA quando linhas são INDEPENDENTES (sem grande final);
+// e NÃO por linha quando há convergência (o 3º é do nível da grande final).
+(function () {
+  var cs = function (g) { return (g.players || []).map(function (nm) { return { name: nm, displayName: nm }; }); };
+  function grp(names) { return { players: names.slice(), matches: [] }; }
+  var groups = [grp(['A1', 'A2', 'A3', 'A4']), grp(['B1', 'B2', 'B3', 'B4']), grp(['C1', 'C2', 'C3', 'C4']), grp(['D1', 'D2', 'D3', 'D4'])];
+  var mapping = [{ dest: 'upper', rankFrom: 1, rankTo: 2 }, { dest: 'lower', rankFrom: 3, rankTo: 4 }];
+  // INDEPENDENTES: cada linha (8 times → chave de 8) tem 1 jogo de 3º/4º, com as 2 semis linkadas
+  var indep = eng.buildPhaseBrackets(groups, { name: 'E', source: { mapping: mapping }, fixedPairs: false, grandFinal: false }, cs, 'th-i');
+  var goldThird = indep.matches.filter(function (m) { return m.bracket === 'gold' && m.isThirdPlace; });
+  var silverThird = indep.matches.filter(function (m) { return m.bracket === 'silver' && m.isThirdPlace; });
+  eq(goldThird.length, 1, '3º/4º por linha: Ouro tem 1 jogo de 3º lugar (independentes)');
+  eq(silverThird.length, 1, '3º/4º por linha: Prata tem 1 jogo de 3º lugar (independentes)');
+  var goldSemisLinked = indep.matches.filter(function (m) { return m.bracket === 'gold' && m.loserNextMatchId === goldThird[0].id; });
+  eq(goldSemisLinked.length, 2, '3º/4º por linha: as 2 semis do Ouro mandam o perdedor pro 3º lugar');
+  // CONVERGÊNCIA: 0 por linha; o 3º vem do nível da grande final
+  var conv = eng.buildPhaseBrackets(groups, { name: 'E', source: { mapping: mapping }, fixedPairs: false, grandFinal: true }, cs, 'th-c');
+  eq(conv.matches.filter(function (m) { return m.bracket === 'gold' && m.isThirdPlace; }).length, 0, 'convergência: SEM 3º por linha no Ouro');
+  ok(!!(conv.converge && conv.converge.third), 'convergência: 3º/4º existe no nível da grande final');
+})();
+
+// v2.8.17: repescagem cruza VENCEDORES ADJACENTES na oitavas (W jogo1 × W jogo2,
+// W jogo3 × W jogo4 …); quando acabam, os melhores perdedores se enfrentam (R1×R2, R3×R4).
+(function () {
+  var cs = function (g) { return (g.players || []).map(function (n) { return { name: n, displayName: n }; }); };
+  var names = []; for (var i = 1; i <= 24; i++) names.push('T' + i);
+  var r = eng.buildPhaseBrackets([{ players: names, matches: [] }],
+    { name: 'E', source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 24 }] }, fixedPairs: false, grandFinal: false, bracketResolution: 'playin' }, cs, 'rw');
+  var ms = r.matches.filter(function (m) { return m.bracket === 'main'; });
+  var r1 = ms.filter(function (m) { return m.isPhaseRepR1; });
+  var oit = ms.filter(function (m) { return m.round === 1; });
+  eq(r1.length, 12, 'repescagem 24: R1 tem 12 jogos');
+  eq(oit.length, 8, 'repescagem 24: oitavas tem 8 jogos');
+  function src(oid, slot) { var s = r1.filter(function (x) { return x.nextMatchId === oid && x.nextSlot === slot; })[0]; return s ? (r1.indexOf(s) + 1) : null; }
+  eq([src(oit[0].id, 'p1'), src(oit[0].id, 'p2')], [1, 2], 'oitavas[0] = vencedor jogo1 × vencedor jogo2');
+  eq([src(oit[1].id, 'p1'), src(oit[1].id, 'p2')], [3, 4], 'oitavas[1] = vencedor jogo3 × vencedor jogo4');
+  eq([src(oit[5].id, 'p1'), src(oit[5].id, 'p2')], [11, 12], 'oitavas[5] = vencedor jogo11 × vencedor jogo12');
+  // últimas 2 oitavas: sem vencedor ligado (só repescados via repDirectP1/P2)
+  eq([src(oit[6].id, 'p1'), src(oit[6].id, 'p2')], [null, null], 'oitavas[6] = repescados (sem vencedor)');
+  ok(oit[6].repDirectP1 != null && oit[6].repDirectP2 != null, 'oitavas[6] preenchida por 2 melhores perdedores');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

@@ -312,6 +312,34 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
 window._dispatchChannels = function(channelResult, templateType, templateData) {
     if (!channelResult) return;
     templateData = templateData || {};
+    // v2.7.94: CONVITE DE DUPLA — email e WhatsApp com BOTÕES funcionais (Aceitar verde /
+    // Recusar vermelho) que executam a ação via deep-link (#pair/...). Bypassa o digest
+    // de email porque cada convite precisa dos seus próprios botões.
+    if (templateType === 'pair_invite' && (templateData.acceptUrl || templateData.rejectUrl)) {
+        var _safe = window._safeHtml || function(s){ return s; };
+        var _inv = _safe(templateData.pairInviterName || 'Alguém');
+        var _tn  = _safe(templateData.tournamentName || '');
+        var _acc = templateData.acceptUrl || templateData.tournamentUrl || '';
+        var _rej = templateData.rejectUrl || templateData.tournamentUrl || '';
+        if (channelResult.emails && channelResult.emails.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
+            var _html =
+              '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;background:#0f172a;border-radius:14px;padding:28px 24px;color:#e2e8f0;">' +
+                '<div style="font-size:1.3rem;font-weight:800;margin-bottom:6px;color:#fbbf24;">🤝 Convite de dupla</div>' +
+                '<p style="font-size:1rem;line-height:1.5;margin:0 0 22px;color:#cbd5e1;"><b>' + _inv + '</b> quer formar dupla com você' + (_tn ? ' em <b>' + _tn + '</b>' : '') + '.</p>' +
+                '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>' +
+                  '<td style="padding:0 6px;"><a href="' + _rej + '" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">❌ Recusar</a></td>' +
+                  '<td style="padding:0 6px;"><a href="' + _acc + '" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">✅ Aceitar</a></td>' +
+                '</tr></table>' +
+                '<p style="font-size:0.78rem;color:#64748b;margin:22px 0 0;text-align:center;">Clique em um botão pra responder — você será levado ao torneio.</p>' +
+              '</div>';
+            window.FirestoreDB.queueEmail(channelResult.emails, '🤝 Convite de dupla — ' + (templateData.tournamentName || 'scoreplace.app'), _html);
+        }
+        if (channelResult.phones && channelResult.phones.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
+            var _wa = '🔴 🤝 *Convite de dupla*\n\n' + (templateData.pairInviterName || 'Alguém') + ' quer formar dupla com você' + (templateData.tournamentName ? ' em ' + templateData.tournamentName : '') + '.\n\n✅ Aceitar: ' + _acc + '\n❌ Recusar: ' + _rej;
+            window.FirestoreDB.queueWhatsApp(channelResult.phones, _wa);
+        }
+        return; // não cai no digest
+    }
     // ── Email ──
     // v2.1.19: e-mails de notificação agora vão pra fila de DIGEST (janela por
     // importância 5/15/30 min) em vez de um e-mail por evento. A Cloud Function

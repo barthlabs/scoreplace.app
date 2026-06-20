@@ -6,6 +6,7 @@
 window.NOTIF_CATALOG = {
   // Enrollment events
   enrollment_new:              { level: 'all',         icon: '✅', color: 'var(--success-color)' },
+  pair_invite:                 { level: 'fundamental', icon: '🤝', color: '#f59e0b' },
   enrollment_confirm:          { level: 'all',         icon: '🎉', color: 'var(--success-color)' },
   enrollment_cancelled:        { level: 'important',   icon: '🛑', color: 'var(--danger-color, #ef4444)' },
   enrollment_cancelled_confirm:{ level: 'important',   icon: '🛑', color: 'var(--danger-color, #ef4444)' },

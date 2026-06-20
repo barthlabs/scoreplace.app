@@ -215,7 +215,7 @@
   //   'exclusion': corta os piores colocados até a potência ABAIXO → chave limpa.
   //   'playin': classificatória (round 0) entre os últimos → reduz pra potência abaixo;
   //             os melhores entram direto, os vencedores do play-in completam a chave.
-  function genTierBracket(teams, bracketKey, idPrefix, resolution) {
+  function genTierBracket(teams, bracketKey, idPrefix, resolution, tierThird) {
     teams = teams || [];
     resolution = resolution || 'bye';
     var n = teams.length;
@@ -225,6 +225,21 @@
     var counter = 0;
     function mkId() { return idPrefix + '-' + (counter++); }
     var matches = [];
+
+    // v2.8.14: disputa de 3º/4º POR LINHA — os 2 perdedores das semifinais (round
+    // totalR-1, que tem exatamente 2 jogos) jogam pela 3ª colocação. Sai 1 jogo,
+    // numerado logo ANTES da final. Só quando há semifinais (chave ≥ 4). O loser de
+    // cada semi é roteado via loserNextMatchId/loserNextSlot (já tratado no _advanceWinner).
+    function _addTierThird(rmap, totalR) {
+      if (!tierThird || totalR < 2) return null;
+      var semis = rmap[totalR - 1];
+      if (!semis || semis.length !== 2) return null;
+      var third = { id: mkId(), round: totalR, bracket: bracketKey, isThirdPlace: true, p1: 'TBD', p2: 'TBD', winner: null };
+      matches.push(third);
+      semis[0].loserNextMatchId = third.id; semis[0].loserNextSlot = 'p1';
+      semis[1].loserNextMatchId = third.id; semis[1].loserNextSlot = 'p2';
+      return third;
+    }
 
     var isPow2 = (n & (n - 1)) === 0;
     var lo = 1; while (lo * 2 <= n) lo *= 2; // maior potência de 2 <= n
@@ -285,10 +300,15 @@
       }
       var totalRoundsR = Math.round(Math.log(T) / Math.log(2));
       var roundsMapR = {}; var rr1 = [];
+      // v2.8.17: pareamento ADJACENTE — oitavas[k] = entrants[2k] × entrants[2k+1].
+      // entrants = [vencedores da R1 em ordem de jogo … depois os melhores perdedores],
+      // então dá JOGO13 = V(jogo1)×V(jogo2), JOGO14 = V(jogo3)×V(jogo4)… e, quando os
+      // vencedores acabam, os repescados se enfrentam (melhor×2º melhor, 3º×4º).
+      // (Antes era semente 1×T = V1 × último repescado.)
       for (var pj = 0; pj < T / 2; pj++) {
         var em = { id: mkId(), round: 1, bracket: bracketKey, p1: 'TBD', p2: 'TBD', winner: null };
-        _wireEntrant(entrants[pj], 'p1', em);
-        _wireEntrant(entrants[T - 1 - pj], 'p2', em);
+        _wireEntrant(entrants[2 * pj], 'p1', em);
+        _wireEntrant(entrants[2 * pj + 1], 'p2', em);
         rr1.push(em); matches.push(em);
       }
       roundsMapR[1] = rr1;
@@ -297,6 +317,7 @@
         for (var jj = 0; jj < cntR; jj++) { var mmR = { id: mkId(), round: rr, bracket: bracketKey, p1: 'TBD', p2: 'TBD', winner: null }; roundsMapR[rr].push(mmR); matches.push(mmR); }
         prevR.forEach(function (pmR, idx) { var nmR = roundsMapR[rr][Math.floor(idx / 2)]; pmR.nextMatchId = nmR.id; pmR.nextSlot = (idx % 2 === 0) ? 'p1' : 'p2'; });
       }
+      _addTierThird(roundsMapR, totalRoundsR);
       return { matches: matches, finalMatchId: roundsMapR[totalRoundsR][0].id, soleWinner: null, totalRounds: totalRoundsR, waitlist: [] };
     }
 
@@ -349,6 +370,7 @@
       });
     }
 
+    _addTierThird(roundsMap, totalRounds);
     var finalMatchId = roundsMap[totalRounds][0].id;
     return { matches: matches, finalMatchId: finalMatchId, soleWinner: null, totalRounds: totalRounds, waitlist: waitlistTeams };
   }
@@ -393,12 +415,19 @@
     var destOrder = ['upper', 'lower', 'main'].filter(function (d) { return byDest[d]; });
     Object.keys(byDest).forEach(function (d) { if (destOrder.indexOf(d) === -1) destOrder.push(d); });
 
+    // v2.8.14: 3º/4º POR LINHA só quando a linha é INDEPENDENTE (sem grande final).
+    // Com convergência (grande final entre 2/4 linhas), o 3º/4º é o do nível da
+    // convergência (perdedores das finais das linhas), não interno a cada linha.
+    var _wgf = phaseCfg ? (phaseCfg.grandFinal !== false) : true;
+    var _wth = phaseCfg ? (phaseCfg.thirdPlace !== false) : true;
+    var _tierThird = _wth && !(_wgf && (destOrder.length === 2 || destOrder.length === 4));
+
     destOrder.forEach(function (dest) {
       var bracketKey = DEST_BRACKET[dest] || dest;
       // v2.7.23: resolução de potência-de-2 escolhida pelo organizador (uma só pra
       // todas as linhas). Default 'bye' = comportamento legado. Setado pelo painel.
       var _res = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
-      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res);
+      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res, _tierThird);
       // v2.6.79: nome da linha/chave = o que o organizador digitou (mapping[].label);
       // sem ícone de medalha hardcoded. Fallback genérico "Chave N" (ordem da linha).
       var _mp = mapping.filter(function (m) { return m.dest === dest; })[0];
@@ -773,8 +802,10 @@
     losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.seed - b.seed); });
     all.forEach(function (m) {
       if (!m || m.bracket !== bracketKey) return;
-      if (m.repDirectP1 != null && losers[m.repDirectP1]) { m.p1 = losers[m.repDirectP1].name; if (losers[m.repDirectP1].obj) m.team1Obj = losers[m.repDirectP1].obj; delete m.repDirectP1; }
-      if (m.repDirectP2 != null && losers[m.repDirectP2]) { m.p2 = losers[m.repDirectP2].name; if (losers[m.repDirectP2].obj) m.team2Obj = losers[m.repDirectP2].obj; delete m.repDirectP2; }
+      // v2.8.18: marca FromRepechage no slot preenchido por melhor-perdedor → tag âmbar REP
+      // (some quando o time avança por vitória; o flag fica só no slot de entrada na chave).
+      if (m.repDirectP1 != null && losers[m.repDirectP1]) { m.p1 = losers[m.repDirectP1].name; if (losers[m.repDirectP1].obj) m.team1Obj = losers[m.repDirectP1].obj; m.p1FromRepechage = true; delete m.repDirectP1; }
+      if (m.repDirectP2 != null && losers[m.repDirectP2]) { m.p2 = losers[m.repDirectP2].name; if (losers[m.repDirectP2].obj) m.team2Obj = losers[m.repDirectP2].obj; m.p2FromRepechage = true; delete m.repDirectP2; }
     });
     var repGame = all.filter(function (m) { return m && m.isPhaseRepGame && m.bracket === bracketKey; })[0];
     if (repGame && repGame.repLoserRank != null && losers[repGame.repLoserRank]) {

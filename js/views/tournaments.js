@@ -306,8 +306,13 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
     var _p1 = arr2[fi1]; var _p2 = arr2[fi2];
     var _u1 = uid1 || (typeof _p1==='object' ? (_p1.uid||'') : '');
     var _u2 = uid2 || (typeof _p2==='object' ? (_p2.uid||'') : '');
+    // v2.7.97: preserva o nº de inscrição ORIGINAL de cada membro (p1Seq/p2Seq) =
+    // o enrollSeq que cada um tinha como solo, pra o card da dupla mostrar os dois.
+    if (window._ensureEnrollSeqs) window._ensureEnrollSeqs(t);
+    var _seq1 = (_p1 && typeof _p1==='object' && _p1.enrollSeq != null) ? _p1.enrollSeq : null;
+    var _seq2 = (_p2 && typeof _p2==='object' && _p2.enrollSeq != null) ? _p2.enrollSeq : null;
     var newName = name1 + ' / ' + name2;
-    var merged = { displayName: newName, name: newName, uid: _u1 || _u2 || '', p1Name: name1, p1Uid: _u1, p2Name: name2, p2Uid: _u2, ligaActive: true };
+    var merged = { displayName: newName, name: newName, uid: _u1 || _u2 || '', p1Name: name1, p1Uid: _u1, p2Name: name2, p2Uid: _u2, p1Seq: _seq1, p2Seq: _seq2, ligaActive: true };
     var maxI = Math.max(fi1, fi2), minI = Math.min(fi1, fi2);
     arr2.splice(maxI, 1); arr2.splice(minI, 1); arr2.splice(minI, 0, merged);
     t.participants = arr2;
@@ -375,6 +380,34 @@ window._cancelPairRequest = function(tId, reqId) {
     window.FirestoreDB.saveTournament(t);
     if (typeof showNotification !== 'undefined') showNotification('Convite cancelado', '', 'info');
     if (typeof window._softRefreshView === 'function') window._softRefreshView();
+};
+
+// v2.7.94: deep-link dos botões Aceitar/Recusar do EMAIL e do WHATSAPP.
+// #pair/<accept|reject>/<tId>/<reqId> → executa a ação e pula pro torneio (card).
+// Segurança: _acceptPairRequest/_cancelPairRequest já verificam que o usuário logado
+// é o convidado/convidante (via currentUser.uid). Deslogado → guarda a intenção e abre
+// o torneio (gate de login); auth.js retoma após o login (sp_pendingPairAction).
+window._pairActionFromLink = async function(act, tId, reqId) {
+    act = (act === 'accept') ? 'accept' : 'reject';
+    if (!tId || !reqId) { window.location.hash = '#dashboard'; return; }
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) {
+        try { sessionStorage.setItem('sp_pendingPairAction', JSON.stringify({ act: act, tId: String(tId), reqId: String(reqId) })); } catch (e) {}
+        window.location.hash = '#tournaments/' + tId;
+        return;
+    }
+    var _find = function () { return (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); }); };
+    var t = _find();
+    // logo após o login o realtime listener pode não ter populado ainda — espera um pouco.
+    for (var i = 0; i < 12 && !t; i++) { await new Promise(function (r) { setTimeout(r, 250); }); t = _find(); }
+    if (!t && window.FirestoreDB && typeof window.FirestoreDB.getTournament === 'function') {
+        try { var doc = await window.FirestoreDB.getTournament(tId); if (doc) { (window.AppStore.tournaments = window.AppStore.tournaments || []).push(doc); t = doc; } } catch (e) {}
+    }
+    if (!t) { if (typeof showNotification !== 'undefined') showNotification('Torneio não encontrado', 'Abra pelo app.', 'warning'); window.location.hash = '#tournaments/' + tId; return; }
+    if (act === 'accept') window._acceptPairRequest(String(tId), String(reqId));
+    else window._cancelPairRequest(String(tId), String(reqId));
+    try { sessionStorage.setItem('sp_scrollToMyCard', '1'); } catch (e) {}
+    window.location.hash = '#tournaments/' + tId;
 };
 
 function renderTournaments(container, tournamentId = null) {
@@ -511,19 +544,21 @@ function renderTournaments(container, tournamentId = null) {
         if (idx === -1) return;
 
         var entry = arr[idx];
-        // Extrair os dois nomes e uids armazenados na entrada
+        // Extrair os dois nomes e uids armazenados na entrada — v2.7.90: p1Name/p2Name
+        // primeiro; split " / " só como fallback. Antes, dupla com displayName sem "/"
+        // (ex.: "Kelly Barth") batia em parts.length<2 e o Desfazer não fazia nada.
         var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
         var parts = nm.split(' / ');
-        if (parts.length < 2) return;
-
         var p1Name = (entry.p1Name || parts[0] || '').trim();
         var p2Name = (entry.p2Name || parts[1] || '').trim();
+        if (!p1Name || !p2Name) return;
         var p1Uid  = entry.p1Uid || '';
         var p2Uid  = entry.p2Uid || '';
 
-        // Criar entradas limpas para cada membro
-        var solo1 = p1Uid ? { displayName: p1Name, name: p1Name, uid: p1Uid, ligaActive: true } : p1Name;
-        var solo2 = p2Uid ? { displayName: p2Name, name: p2Name, uid: p2Uid, ligaActive: true } : p2Name;
+        // Criar entradas limpas para cada membro — v2.7.97: restaura o nº de inscrição
+        // original (enrollSeq) que cada um tinha antes de formar a dupla.
+        var solo1 = p1Uid ? { displayName: p1Name, name: p1Name, uid: p1Uid, ligaActive: true, enrollSeq: (entry.p1Seq != null ? entry.p1Seq : undefined) } : p1Name;
+        var solo2 = p2Uid ? { displayName: p2Name, name: p2Name, uid: p2Uid, ligaActive: true, enrollSeq: (entry.p2Seq != null ? entry.p2Seq : undefined) } : p2Name;
 
         arr.splice(idx, 1, solo1, solo2);
         t.participants = arr;
@@ -659,6 +694,12 @@ function renderTournaments(container, tournamentId = null) {
     window._showPresenceDrawChoice = function(tId, startDraw) {
         var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
         if (!t) return;
+        // v2.8.4: Liga/Pontos Corridos NÃO tem chamada/presença — é multi-dia, normalmente
+        // auto-draw, ninguém "presente". O sorteio é entre TODOS OS ATIVOS (ligaActive) e
+        // quem não fecha grupo de 4 (Rei/Rainha) vai pra lista de espera (o motor de rodada
+        // já faz isso). O diálogo "Sortear com todos / Só entre os presentes" só faz sentido
+        // em torneio PRESENCIAL de 1 dia (Eliminatórias / Fase de Grupos). Pular pra Liga.
+        if (window._isLigaFormat && window._isLigaFormat(t)) { if (typeof startDraw === 'function') startDraw(); return; }
         var existing = document.getElementById('presence-draw-choice');
         if (existing) existing.remove();
         var dialog = document.createElement('div');
@@ -1338,6 +1379,11 @@ function renderTournaments(container, tournamentId = null) {
                 if (typeof p === 'object' && p !== null && Array.isArray(p.participants)) {
                     teamCount++;
                     individualCount += p.participants.length;
+                } else if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
+                    // v2.7.99: dupla ESTRUTURAL (p1Name/p2Name, displayName pode não ter "/")
+                    // conta como 2 pessoas e 1 equipe. Antes contava 1 ("12 em vez de 13").
+                    teamCount++;
+                    individualCount += 2;
                 } else {
                     const pStr = window._pName(p);
                     if (pStr.includes('/')) {
@@ -1564,7 +1610,7 @@ function renderTournaments(container, tournamentId = null) {
         const _confirmedPlayers = Math.max(0, (individualCount || 0) - (Array.isArray(t.waitlist) ? t.waitlist.length : 0));
         const _teamSizeN = parseInt(t.teamSize) || 1;
         const _enoughForGame = Math.floor(_confirmedPlayers / _teamSizeN) >= 2;
-        const _glowGame = (_enoughForGame && !sorteioRealizado) ? ' sp-glow-amber' : '';
+        const _glowGame = (_enoughForGame && !sorteioRealizado) ? ' btn-shine' : '';
         // v2.3.1: brilho de Análise e Editar usa o MESMO efeito dos botões
         // especiais da hero box (.btn-shine — sweep de luz periódico), não o
         // pulse box-shadow (sp-glow-*). Sempre ligado, igual à hero box.
@@ -1936,8 +1982,8 @@ function renderTournaments(container, tournamentId = null) {
               </div>
               ${/* v2.7.36: coração de favorito SEMPRE à direita, alinhado à 1ª linha do nome
                     (align-self:flex-start + margin-top centra na primeira linha do h4). */ ''}
-              ${tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" title="${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}" style="font-size:1.5rem;cursor:pointer;flex-shrink:0;align-self:flex-start;margin-top:6px;color:${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '♥' : '♡'}</span>` : ''}
-              ${!tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" style="font-size:1.8rem;cursor:pointer;flex-shrink:0;align-self:flex-start;color:${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '♥' : '♡'}</span>` : ''}
+              ${tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" title="${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}" style="font-size:1.5rem;cursor:pointer;flex-shrink:0;align-self:flex-start;margin-top:6px;color:${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:all 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '❤️' : '♡'}</span>` : ''}
+              ${!tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" style="font-size:1.8rem;cursor:pointer;flex-shrink:0;align-self:flex-start;color:${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:all 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '❤️' : '♡'}</span>` : ''}
             </div>
             ${/* v2.3.85: linha direta com o desenvolvedor — logo abaixo do nome,
                   só pro organizador na página de detalhe do torneio. */ ''}
@@ -2424,15 +2470,12 @@ function renderTournaments(container, tournamentId = null) {
                 if (typeof window._patchProfileMetaSlots === 'function') window._patchProfileMetaSlots(container, t);
             }).catch(function() {});
         }
-        let individualCountParts = 0;
-        parts.forEach(p => {
-            const pStr = window._pName(p);
-            if (pStr.includes('/')) {
-                individualCountParts += pStr.split('/').filter(n => n.trim().length > 0).length;
-            } else {
-                individualCountParts++;
-            }
-        });
+        // v2.7.97: conta PESSOAS (dupla = 2). Antes usava "/" no nome → dupla com
+        // displayName sem "/" (ex.: "Kelly Barth", p1Name/p2Name) contava como 1
+        // ("12 em vez de 13"). _personCount conta pela estrutura (p1Name && p2Name).
+        let individualCountParts = (typeof window._personCount === 'function')
+            ? window._personCount(t)
+            : (function(){ var c = 0; parts.forEach(p => { const s = window._pName(p); c += s.includes('/') ? s.split('/').filter(n => n.trim().length > 0).length : 1; }); return c; })();
 
         if (parts.length > 0) {
             // Liga context: each participant has a ligaActive toggle (default ON; undefined ⇒ active)
@@ -2639,6 +2682,9 @@ function renderTournaments(container, tournamentId = null) {
                   return parts.indexOf(a) - parts.indexOf(b);
                 });
 
+                // v2.7.92: número = ORDEM DE INSCRIÇÃO canônica (uid-keyed), igual em TODOS os cards
+                // (inline, dupla, #participants). Antes o inline usava a posição na lista exibida.
+                const _enrollOrderMap = window._buildEnrollOrderMap(t);
                 cardsStr = _sortedParts.map((p, sortedIdx) => {
                     // Use original index in parts array for drag operations
                     var idx = parts.indexOf(p);
@@ -2765,7 +2811,8 @@ function renderTournaments(container, tournamentId = null) {
                         dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
                     }
 
-                    const bgNum = sortedIdx + 1; // sempre número; VIP aparece inline ao lado do nome
+                    // v2.7.92: ordem de inscrição canônica (uid-keyed); fallback p/ índice no array.
+                    const bgNum = (window._enrollNumber ? window._enrollNumber(_enrollOrderMap, p) : '') || (idx + 1); // VIP aparece inline ao lado do nome
 
                     // Liga: per-card active/inactive toggle (default ON; undefined ⇒ active).
                     // Editable only for the current user's own entry; others render disabled.
@@ -2870,8 +2917,37 @@ function renderTournaments(container, tournamentId = null) {
             // ── Torneios de duplas: layout em duas seções ─────────────────────────
             const _isDoublesTournament = (t.enrollmentMode === 'time' || t.enrollmentMode === 'misto') && parseInt(t.teamSize || 2) === 2;
             const _allParts = Array.isArray(t.participants) ? t.participants : [];
-            const _soloParticipants  = _isDoublesTournament ? _allParts.filter(function(p) { var n = typeof p === 'string' ? p : (p.displayName || p.name || ''); return n && !n.includes('/'); }) : [];
-            const _pairedParticipants = _isDoublesTournament ? _allParts.filter(function(p) { var n = typeof p === 'string' ? p : (p.displayName || p.name || ''); return n && n.includes('/'); }) : [];
+            // v2.7.90: dupla = entrada com p1Name E p2Name (verdade ESTRUTURAL) OU nome
+            // "A / B" (legado). NÃO depender só de "/" no displayName: duplas formadas
+            // pelo aceite de convite gravam displayName = só o nome do p1 (ex.: "Kelly
+            // Barth", com p1Name/p2Name separados) — antes caíam em SOLO e o card da dupla
+            // sumia (membros viravam solos fantasmas), por isso "os cards não indicavam".
+            function _isPairEntry(p) {
+              if (typeof p !== 'object' || !p) return false;
+              if (p.p1Name && p.p2Name) return true;
+              var n = p.displayName || p.name || '';
+              return n.indexOf('/') !== -1;
+            }
+            const _pairedParticipants = _isDoublesTournament ? _allParts.filter(_isPairEntry) : [];
+            // v2.7.92: número de inscrição CANÔNICO (uid-keyed) — mesmo em todos os cards.
+            const _enrollOrderMapD = window._buildEnrollOrderMap(t);
+            // v2.7.91/92: quem já é membro de uma dupla NUNCA aparece como solo — nem com
+            // entrada solo DUPLICADA no participants[]. Identidade = UID; nome só entra como
+            // chave pra membro SEM conta (princípio uid-first: nunca comparar conta por nome).
+            var _pairedMemberKeys = {};
+            _pairedParticipants.forEach(function(pp) {
+              if (pp.p1Uid) _pairedMemberKeys['u:' + pp.p1Uid] = 1;
+              else if (pp.p1Name) _pairedMemberKeys['n:' + String(pp.p1Name).trim().toLowerCase()] = 1;
+              if (pp.p2Uid) _pairedMemberKeys['u:' + pp.p2Uid] = 1;
+              else if (pp.p2Name) _pairedMemberKeys['n:' + String(pp.p2Name).trim().toLowerCase()] = 1;
+            });
+            const _soloParticipants = _isDoublesTournament ? _allParts.filter(function(p) {
+              if (_isPairEntry(p)) return false;
+              var u = typeof p === 'object' ? (p.uid || '') : '';
+              if (u) return !_pairedMemberKeys['u:' + u];   // com conta: SÓ uid decide (nunca nome)
+              var n = (typeof p === 'string' ? p : (p.displayName || p.name || '')).trim().toLowerCase();
+              return !(n && _pairedMemberKeys['n:' + n]);    // sem conta: nome é o único id
+            }) : [];
 
             function _duplaCard(p, draggable, tIdStr) {
               var nm   = typeof p === 'string' ? p : (p.displayName || p.name || '');
@@ -2885,8 +2961,11 @@ function renderTournaments(container, tournamentId = null) {
               // Coroa se for organizador
               var _isOrgP = uid ? !!_orgUidsShared[uid] : (email && !!_orgEmailsShared[email]);
               var _crown  = _isOrgP ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
-              // Membros da dupla (para cards formados)
-              var members = nm.includes('/') ? nm.split('/').map(function(s){return s.trim();}).filter(Boolean) : null;
+              // Membros da dupla (para cards formados) — v2.7.90: p1Name/p2Name primeiro
+              // (verdade estrutural), só caindo pro split "A / B" quando faltam os campos.
+              var members = (typeof p === 'object' && p && p.p1Name && p.p2Name)
+                ? [String(p.p1Name).trim(), String(p.p2Name).trim()].filter(Boolean)
+                : (nm.includes('/') ? nm.split('/').map(function(s){return s.trim();}).filter(Boolean) : null);
               var nameHtml;
               if (members) {
                 nameHtml = members.map(function(n) {
@@ -2901,33 +2980,57 @@ function renderTournaments(container, tournamentId = null) {
               var bgStyle = draggable
                 ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'
                 : 'background:linear-gradient(135deg,rgba(15,118,110,0.6),rgba(20,184,166,0.6));border:1px solid rgba(20,184,166,0.5);';
-              var dragAttrs = draggable
+              // v2.7.93: participante só pode arrastar pra formar dupla se a REGRA permitir
+              // (manualPairing === 'open'); organizador sempre pode. Quando não pode, o card
+              // de solo NEM fica arrastável (antes arrastava, soltava e só então dizia "não pode").
+              var _canPairDrag = isOrg || (t && t.manualPairing === 'open');
+              var dragAttrs = (draggable && _canPairDrag)
                 ? 'draggable="true" ondragstart="window._duplaDragStart(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')" ondragover="event.preventDefault();this.style.outline=\'3px solid #f59e0b\'" ondragleave="this.style.outline=\'\'" ondrop="event.preventDefault();this.style.outline=\'\';window._duplaDropOn(event,\'' + _safeAttr(uid||nm) + '\',\'' + _safeAttr(tIdStr) + '\')"'
                 : '';
-              var labelHtml = draggable
-                ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
-                : '<div style="font-size:0.65rem;color:#34d399;margin-top:3px;">✅ Dupla formada</div>';
+              var labelHtml = !draggable
+                ? '<div style="font-size:0.65rem;color:#34d399;margin-top:3px;">✅ Dupla formada</div>'
+                : (_canPairDrag
+                    ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
+                    : '<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:3px;">Sem dupla</div>');
               var desfazerBtn = (!draggable && isOrg)
                 ? '<button type="button" class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="min-height:0;height:28px;line-height:1;padding:0 12px;font-size:0.72rem;font-weight:800;white-space:nowrap;flex-shrink:0;margin-left:6px;">↩️ Desfazer</button>'
                 : '';
               // v2.7.87: DUPLA FORMADA em 2 colunas — cada pessoa com as categorias DELA
               // logo abaixo do nome; 1ª à esquerda, 2ª à direita (mesma linha quando couber).
+              // v2.7.99: número de inscrição POR PESSOA, VISÍVEL (não marca-d'água atrás
+              // da foto). Cada membro mostra o SEU nº de inscrição original na borda externa
+              // do seu lado: membro da ESQUERDA → nº à esquerda; da DIREITA → nº à direita.
+              var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p1Uid) || '', displayName: (p && p.p1Name) || members[0], name: (p && p.p1Name) || members[0] }) : '';
+              var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
               var _body;
               if (members) {
-                var _memBlock = function(n, right) {
+                var _memBlock = function(n, right, seq) {
                   var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                   var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
-                  var _av = '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;max-width:100%;"><img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.9rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(n) + '</span></div>';
+                  var _num = (seq === '' || seq == null) ? '' : '<span style="font-weight:900;font-size:1rem;color:rgba(255,255,255,0.55);flex-shrink:0;line-height:1.1;align-self:center;" title="Nº de inscrição">' + seq + '</span>';
+                  var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+                  // nome COMPLETO (quebra linha, não trunca); avatar 28px igual ao card individual.
+                  var _nmSpan = '<span style="font-weight:700;font-size:0.92rem;color:var(--text-bright);white-space:normal;word-break:break-word;line-height:1.2;">' + window._safeHtml(n) + '</span>';
+                  // nº de inscrição na borda EXTERNA: esquerda→antes do avatar; direita→depois do nome.
+                  var _av = right
+                    ? '<div style="display:flex;align-items:flex-start;gap:7px;max-width:100%;justify-content:flex-end;">' + _img + _nmSpan + _num + '</div>'
+                    : '<div style="display:flex;align-items:flex-start;gap:7px;max-width:100%;">' + _num + _img + _nmSpan + '</div>';
                   var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
-                  return '<div style="min-width:0;display:flex;flex-direction:column;gap:2px;flex:1 1 40%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
+                  return '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 42%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
                 };
-                _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(members[0], false) + (members[1] ? _memBlock(members[1], true) : '') + '</div>';
+                _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(members[0], false, _s1) + (members[1] ? _memBlock(members[1], true, _s2) : '') + '</div>';
               } else {
                 _body = nameHtml + ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, false, t, isOrg) : '');
               }
+              // Solo: número único marca-d'água (canto sup. dir., como o card individual).
+              // Dupla: os números já vão inline (visíveis) em cada membro acima → sem marca-d'água.
+              var _enrollBadge = (!members && window._enrollNumberBadge && window._enrollNumber)
+                ? window._enrollNumberBadge(window._enrollNumber(_enrollOrderMapD, p))
+                : '';
               return '<div class="participant-card" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
-                ' style="' + bgStyle + 'border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
-                '<div style="display:flex;flex-direction:column;gap:6px;">' +
+                ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+                _enrollBadge +
+                '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' +
                   _body +
                   '<div style="display:flex;align-items:center;justify-content:space-between;">' +
                     labelHtml +
@@ -2947,33 +3050,36 @@ function renderTournaments(container, tournamentId = null) {
               var _pendUids = {};
               _reqs.forEach(function(r){ if (r && r.inviterUid) _pendUids[r.inviterUid] = 1; if (r && r.inviteeUid) _pendUids[r.inviteeUid] = 1; });
               var _soloAvailable = _soloParticipants.filter(function(p){ var u = typeof p === 'object' ? (p.uid || '') : ''; return !(u && _pendUids[u]); });
-              var _pendAv = function(n){
+              // v2.7.93: bloco de membro do card PENDENTE — igual ao da dupla FORMADA
+              // (avatar + nome + categorias da pessoa abaixo), 1º à esquerda, 2º à direita.
+              var _pendMemBlock = function(n, right){
                 var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                 var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
-                return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;min-width:0;"><img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.9rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(n) + '</span></div>';
+                var _av = '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;max-width:100%;"><img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.9rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(n) + '</span></div>';
+                var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
+                return '<div style="min-width:0;display:flex;flex-direction:column;gap:2px;flex:1 1 40%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
               };
               var _pendingCard = function(r){
                 var amInvitee = _cuUid && r.inviteeUid === _cuUid;
                 var amInviter = _cuUid && r.inviterUid === _cuUid;
                 var tIdA = _safeAttr(String(t.id)), rIdA = _safeAttr(r.id);
+                var _bConfirm = '<button type="button" class="btn btn-success btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">✅ Confirmar</button>';
+                var _bCancel = function(label){ return '<button type="button" class="btn btn-danger btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">' + label + '</button>'; };
                 var _btns = '';
-                if (amInvitee) {
-                  _btns = '<button type="button" class="btn btn-success btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">✅ Confirmar</button>'
-                        + '<button type="button" class="btn btn-danger btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;margin-left:6px;" onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">❌ Cancelar</button>';
-                } else if (amInviter) {
-                  _btns = '<button type="button" class="btn btn-danger btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 12px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">Cancelar convite</button>';
-                } else if (isOrg) {
-                  _btns = '<button type="button" class="btn btn-danger btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 12px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">Cancelar</button>';
-                }
+                // v2.7.93: alinhados à DIREITA, embaixo. Convidado: Cancelar à ESQUERDA, Confirmar à DIREITA.
+                if (amInvitee)      _btns = _bCancel('❌ Cancelar') + _bConfirm;
+                else if (amInviter) _btns = _bCancel('Cancelar convite');
+                else if (isOrg)     _btns = _bCancel('Cancelar');
                 var _status = amInvitee ? ('⏳ ' + window._safeHtml(r.inviterName || 'Alguém') + ' te convidou — aceite ou recuse')
-                            : amInviter ? ('⏳ Convite enviado — aguardando ' + window._safeHtml(r.inviteeName || ''))
+                            : amInviter ? ('⏳ Você convidou ' + window._safeHtml(r.inviteeName || '') + ' — aguardando aceite')
                             : '⏳ Dupla pendente — aguardando aceite';
+                var _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _pendMemBlock(r.inviterName || '', false) + _pendMemBlock(r.inviteeName || '', true) + '</div>';
                 return '<div style="background:linear-gradient(135deg,rgba(180,130,20,0.32),rgba(251,191,36,0.16));border:1px solid rgba(251,191,36,0.55);border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);">' +
-                  '<div style="display:flex;flex-direction:column;gap:6px;">' +
-                    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;">' + _pendAv(r.inviterName || '') + '<span style="color:#fbbf24;font-weight:800;flex-shrink:0;">+</span>' + _pendAv(r.inviteeName || '') + '</div>' +
+                  '<div style="display:flex;flex-direction:column;gap:8px;">' +
+                    _body +
                     '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
-                      '<span style="font-size:0.72rem;color:#fbbf24;font-weight:600;min-width:0;">' + _status + '</span>' +
-                      (_btns ? '<span style="flex-shrink:0;white-space:nowrap;">' + _btns + '</span>' : '') +
+                      '<span style="font-size:0.72rem;color:#fbbf24;font-weight:600;min-width:0;flex:1 1 auto;">' + _status + '</span>' +
+                      (_btns ? '<span style="display:flex;justify-content:flex-end;gap:6px;flex-shrink:0;white-space:nowrap;margin-left:auto;">' + _btns + '</span>' : '') +
                     '</div>' +
                   '</div></div>';
               };
@@ -2990,7 +3096,7 @@ function renderTournaments(container, tournamentId = null) {
                   <div style="margin-bottom:1.2rem;">
                     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
                       <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (${_semDuplaTotal})</span>
-                      <span style="font-size:0.65rem;color:var(--text-muted);">— Arraste um card sobre outro para formar a dupla</span>
+                      <span style="font-size:0.65rem;color:var(--text-muted);">${(isOrg || t.manualPairing === 'open') ? '— Arraste um card sobre outro para formar a dupla' : '— As duplas são formadas pelo organizador'}</span>
                     </div>
                     ${_soloAvailable.length > 0 ? `<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">${_soloAvailable.map(function(p) { return _duplaCard(p, true, String(t.id)); }).join('')}</div>` : ''}
                     ${_pendingCardsHtml}
@@ -3054,10 +3160,23 @@ function renderTournaments(container, tournamentId = null) {
             return '<button onclick="var el=document.getElementById(\'group-section-' + i + '\');if(el){el.scrollIntoView({behavior:\'smooth\',block:\'start\'});}" style="min-width:28px;height:28px;padding:0 8px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;border:1.5px solid ' + c + ';background:' + c + '20;color:' + c + ';transition:all 0.15s;white-space:nowrap;line-height:1;" onmouseover="this.style.background=\'' + c + '40\'" onmouseout="this.style.background=\'' + c + '20\'">' + letter + '</button>';
           }).join('') + '</div>' : '';
 
+        // v2.8.1: nome do torneio NO MEIO do cabeçalho (entre Voltar e "Só meus jogos"),
+        // pra lembrar que NÃO está na dashboard. Fonte e nº de linhas (até 2) escalam com
+        // o tamanho do nome. Quando há nav de grupos, fica abaixo do nome.
+        var _hdrNameHtml = function (nm) {
+          nm = String(nm || '').trim(); if (!nm) return '';
+          var len = nm.length;
+          var fs = len <= 16 ? '1.05rem' : len <= 28 ? '0.95rem' : len <= 44 ? '0.83rem' : '0.74rem';
+          return '<div title="' + window._safeHtml(nm) + '" style="font-weight:800;color:var(--text-bright);font-size:' + fs + ';line-height:1.15;text-align:center;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;padding:0 4px;">' + window._safeHtml(nm) + '</div>';
+        };
+        var _hdrMiddle = '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;">' +
+          _hdrNameHtml(_grpTour && _grpTour.name) +
+          (_grpNavHtml ? '<div style="max-width:100%;overflow-x:auto;">' + _grpNavHtml + '</div>' : '') +
+          '</div>';
         headerHtml = (typeof window._renderBackHeader === 'function'
           ? window._renderBackHeader({
               href: '#dashboard',
-              middleHtml: _grpNavHtml ? ('<div style="flex:1;min-width:0;overflow-x:auto;">' + _grpNavHtml + '</div>') : '<div style="flex:1;"></div>',
+              middleHtml: _hdrMiddle,
               rightHtml: _myToggleHtml
             })
           : '');

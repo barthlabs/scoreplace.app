@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.89-beta';
+window.SCOREPLACE_VERSION = '2.8.19-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -535,11 +535,21 @@ window._softRefreshView = function() {
                   document.getElementById('unified-resolution-panel') ||
                   document.getElementById('groups-config-panel') ||
                   document.getElementById('remainder-resolution-panel') ||
+                  document.getElementById('phase-res-panel') ||
                   document.getElementById('vagas-draw-panel') ||
                   document.getElementById('removal-subchoice-panel') ||
                   document.getElementById('simulation-panel') ||
                   document.getElementById('incomplete-teams-panel') ||
                   document.getElementById('flyer-print-overlay') ||
+                  // v2.7.96: diálogos padrão (confirm/alert/input). Sem isto, em torneio
+                  // VIVO (Confra: snapshots frequentes ao simular resultados) o snapshot
+                  // disparava _softRefreshView → initRouter → _dismissAllOverlays e varria a
+                  // confirmação ANTES do clique. Sintoma: "clico em Sortear/Resetar, a janela
+                  // de confirmação abre e fecha; só fica depois de ~4 cliques".
+                  document.getElementById('custom-confirm-dialog') ||
+                  document.getElementById('custom-alert-dialog') ||
+                  document.getElementById('custom-input-dialog') ||
+                  document.getElementById('custom-multi-input-dialog') ||
                   // v2.4.9: escolha de categoria/dados na INSCRIÇÃO. Sem isto, o
                   // snapshot do Firestore (frequente em torneio ao vivo) disparava
                   // _softRefreshView → initRouter → _dismissAllOverlays e varria o
@@ -1880,6 +1890,16 @@ window._pName = function(p, fallback) {
   var fb = (fallback !== undefined && fallback !== null) ? fallback : '';
   if (!p) return fb;
   if (typeof p === 'string') return _pNameDisplay(p) || fb;
+  // v2.7.98: dupla ESTRUTURAL (p1Name && p2Name) cujo displayName é só o nome do p1
+  // (ex.: "Kelly Barth", sem "/") → mostra os DOIS membros. Sem isto, toda tela que
+  // usa _pName (lista de inscritos #participants, notificações, contagens por "/")
+  // escondia o parceiro (p2) e contava a dupla como 1. Canoniza o nome em 1 lugar só.
+  if (p.p1Name && p.p2Name) {
+    var _dn = String(p.displayName || p.name || '');
+    if (_dn.indexOf('/') === -1) {
+      return (_pNameDisplay(p.p1Name) || p.p1Name) + ' / ' + (_pNameDisplay(p.p2Name) || p.p2Name);
+    }
+  }
   // Prioridade: displayName > name > email > phone (todos passam por _pNameDisplay)
   var raw = p.displayName || p.name || p.email
          || (p.phone ? String(p.phone) : '')
@@ -3172,7 +3192,9 @@ window._toggleFavorite = function(tId, event) {
   // Update heart icons on the page
   var stars = document.querySelectorAll('[data-fav-id="' + id + '"]');
   stars.forEach(function(el) {
-    el.textContent = nowFav ? '♥' : '♡';
+    // v2.8.5: favoritado = emoji ❤️ (volume nativo); não-favoritado = ♡ (contorno).
+    // Antes o clique sobrescrevia com ♥ (texto), revertendo o emoji do render inicial.
+    el.textContent = nowFav ? '❤️' : '♡';
     el.title = nowFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
     el.style.color = nowFav ? '#f43f5e' : 'rgba(255,255,255,0.4)';
   });
@@ -4535,6 +4557,13 @@ window._userMatchesParticipant = function(user, p) {
     return parts.some(matchMember);
   }
   if (matchMember(p)) return true;
+  // v2.7.91: dupla formada pelo aceite grava p1Name/p2Name/p1Uid/p2Uid com displayName
+  // = só o nome do p1 (ex.: "Kelly Barth"). Sem checar esses campos, o p2 (ex.: Rodrigo)
+  // não era reconhecido como inscrito → botão "Inscrever-se" reaparecia → inscrição em
+  // DOBRO. Esta é a RAIZ da duplicata, não só um sintoma de render.
+  if (uu && ((p.p1Uid && p.p1Uid === uu) || (p.p2Uid && p.p2Uid === uu))) return true;
+  if (un && ((p.p1Name && p.p1Name === un) || (p.p2Name && p.p2Name === un))) return true;
+  if (ue && ((p.p1Email && p.p1Email.toLowerCase() === ue) || (p.p2Email && p.p2Email.toLowerCase() === ue))) return true;
   if (Array.isArray(p.participants) && p.participants.some(matchMember)) return true;
   var label = p.displayName || p.name || '';
   if (label && label.indexOf(' / ') !== -1) {
@@ -4547,6 +4576,82 @@ window._isUserEnrolledInTournament = function(user, tournament) {
   if (!user || !tournament) return false;
   var arr = Array.isArray(tournament.participants) ? tournament.participants : (tournament.participants ? Object.values(tournament.participants) : []);
   return arr.some(function(p) { return window._userMatchesParticipant(user, p); });
+};
+
+// v2.7.97: NÚMERO DE INSCRIÇÃO POR PESSOA. Antes a dupla compartilhava UM número e a
+// contagem somava 1 pela dupla ("12 em vez de 13"). Agora CADA pessoa tem o SEU número:
+// solo → p.enrollSeq; dupla → p.p1Seq (membro esquerdo) e p.p2Seq (membro direito).
+// _ensureEnrollSeqs atribui seqs faltantes (legado/novos inscritos) preenchendo lacunas
+// SEM colidir com os já guardados (o form guarda os originais → ficam estáveis).
+window._ensureEnrollSeqs = function(t) {
+  if (!t) return;
+  var arr = Array.isArray(t.participants) ? t.participants : [];
+  var used = {};
+  function mark(s){ if (s != null && !isNaN(s)) used[s] = 1; }
+  arr.forEach(function(p){ if (p && typeof p === 'object') { mark(p.enrollSeq); mark(p.p1Seq); mark(p.p2Seq); } });
+  var nf = 1;
+  function alloc(){ while (used[nf]) nf++; used[nf] = 1; return nf; }
+  arr.forEach(function(p){
+    if (!p || typeof p !== 'object') return; // string legada: tratada on-the-fly no map
+    if (p.p1Name && p.p2Name) {
+      if (p.p1Seq == null) p.p1Seq = alloc();
+      if (p.p2Seq == null) p.p2Seq = alloc();
+    } else if (p.enrollSeq == null) {
+      p.enrollSeq = alloc();
+    }
+  });
+};
+window._buildEnrollOrderMap = function(t) {
+  if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(t);
+  var map = {};
+  var arr = Array.isArray(t.participants) ? t.participants : [];
+  var maxSeq = 0;
+  arr.forEach(function(p){ if (p && typeof p === 'object') [p.enrollSeq, p.p1Seq, p.p2Seq].forEach(function(s){ if (s != null && s > maxSeq) maxSeq = s; }); });
+  var strNext = maxSeq;
+  function put(uid, name, seq){ if (seq == null) return; if (uid) map['u:'+uid] = seq; if (name) map['n:'+String(name).trim().toLowerCase()] = seq; }
+  arr.forEach(function(p){
+    if (typeof p === 'string') { String(p).split(' / ').forEach(function(nm){ nm = nm.trim(); if (nm) put(null, nm, ++strNext); }); return; }
+    if (!p || typeof p !== 'object') return;
+    if (p.p1Name && p.p2Name) { put(p.p1Uid, p.p1Name, p.p1Seq); put(p.p2Uid, p.p2Name, p.p2Seq); }
+    else { put(p.uid, p.displayName || p.name, p.enrollSeq); }
+  });
+  return map;
+};
+// nº de inscrição de UMA pessoa (1-based) — uid primeiro, nome como fallback.
+window._enrollNumber = function(orderMap, p) {
+  if (!orderMap || !p) return '';
+  var cand = [];
+  if (typeof p === 'object') {
+    if (p.uid)   cand.push('u:' + p.uid);
+    if (p.p1Uid) cand.push('u:' + p.p1Uid);
+    if (p.p2Uid) cand.push('u:' + p.p2Uid);
+    [p.displayName, p.name].forEach(function(nm){ if (nm) cand.push('n:' + String(nm).toLowerCase().trim()); });
+  } else {
+    cand.push('n:' + String(p).toLowerCase().trim());
+  }
+  for (var i = 0; i < cand.length; i++) { if (orderMap[cand[i]] != null) return orderMap[cand[i]]; }
+  return '';
+};
+// total de PESSOAS inscritas (dupla conta 2) — pra a contagem "Inscritos".
+window._personCount = function(t) {
+  var arr = Array.isArray(t && t.participants) ? t.participants : [];
+  var n = 0;
+  arr.forEach(function(p){
+    if (typeof p === 'string') { n += (String(p).split(' / ').filter(function(s){ return s.trim(); }).length) || 1; return; }
+    if (p && typeof p === 'object' && p.p1Name && p.p2Name) { n += 2; return; }
+    var nm = (p && typeof p === 'object') ? (p.displayName || p.name || '') : '';
+    if (nm.indexOf(' / ') !== -1) { n += nm.split(' / ').filter(function(s){ return s.trim(); }).length; return; }
+    n += 1;
+  });
+  return n;
+};
+// Marca d'água do número de inscrição no canto sup. direito (mesmo estilo do card de
+// inscrito do participants.js): grande, semitransparente, não-interativo.
+window._enrollNumberBadge = function(num) {
+  if (num === '' || num == null) return '';
+  var n = String(num);
+  var fs = n.length > 2 ? '1.9rem' : '2.4rem';
+  return '<div style="position:absolute;right:8px;top:8px;font-size:' + fs + ';font-weight:900;color:rgba(255,255,255,0.10);line-height:1;pointer-events:none;user-select:none;">' + n + '</div>';
 };
 
 // ─── Competitors helper: filter out non-competing organizers from participants ─

@@ -1396,7 +1396,16 @@ window._showPhaseResolutionPanel = function (tId) {
             var s = l.size; if (s <= 1 || (s & (s - 1)) === 0) return null;
             var lo = pow2lo(s), hi = lo * 2, excess = s - lo, missing = hi - s, d;
             if (optKey === 'bye') d = 'chave de ' + hi + ' (' + missing + ' folga' + (missing > 1 ? 's' : '') + ')';
-            else if (optKey === 'playin') d = excess + ' classificatória' + (excess > 1 ? 's' : '') + ' → chave de ' + lo;
+            else if (optKey === 'playin') {
+                // v2.8.11: repescagem real (espelha genTierBracket): TODOS jogam a R1;
+                // os g=floor(s/2) vencedores entram + (lo-g) melhores perdedores; se
+                // s é ímpar, 1 sobra e disputa um jogo de repescagem pela última vaga.
+                var g = Math.floor(s / 2), rep = lo - g, odd = (s % 2) === 1, direto = odd ? (rep - 1) : rep;
+                var partes = [g + ' vencem'];
+                if (direto > 0) partes.push(direto + (direto > 1 ? ' melhores perdedores' : ' melhor perdedor'));
+                if (odd) partes.push('1 repescagem');
+                d = 'todos jogam a 1ª rodada (' + g + ' jogo' + (g > 1 ? 's' : '') + (odd ? ', 1 sobra' : '') + ') → ' + partes.join(' + ') + ' → chave de ' + lo;
+            }
             else if (optKey === 'standby') d = excess + ' pra lista de espera → chave de ' + lo;
             else d = 'corta ' + excess + ' → chave de ' + lo;
             return '<div style="margin-top:2px;"><b>' + esc(l.label) + '</b> (' + s + '): ' + d + '</div>';
@@ -1415,8 +1424,12 @@ window._showPhaseResolutionPanel = function (tId) {
             var s = l.size; if (s <= 1) return;
             if ((s & (s - 1)) === 0) { total += s - 1; return; } // já é potência de 2
             var lo = pow2lo(s);
-            // play-in e BYE: todos os s jogadores entram → s-1 jogos; espera/exclusão: só os lo de baixo → lo-1
-            total += (optKey === 'playin' || optKey === 'bye') ? (s - 1) : (lo - 1);
+            // v2.8.11: BYE = chave de hi com folgas → s-1 jogos. PLAY-IN (repescagem):
+            // TODOS jogam a R1 (floor(s/2) jogos) + chave de lo (lo-1) + 1 jogo de
+            // repescagem se s é ímpar → custa MAIS que o BYE. espera/exclusão = lo-1.
+            if (optKey === 'bye') total += s - 1;
+            else if (optKey === 'playin') total += Math.floor(s / 2) + (lo - 1) + (s % 2);
+            else total += lo - 1;
         });
         return total;
     }

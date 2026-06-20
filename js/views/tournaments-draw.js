@@ -17,6 +17,10 @@ window._clearTournamentDraw = function (t) {
   t.currentPhaseIndex = 0;
   t.currentStage = null;
   t._phaseMaterialized = 0;
+  // v2.7.96: bracketResolution é decisão de RUNTIME (escolhida no painel de potência
+  // de 2 ao avançar de fase), não config do construtor. Sem limpar, o re-avanço após
+  // reset PULAVA o painel — "avancei e não veio a página de solução de potência de 2".
+  if (Array.isArray(t.phases)) t.phases.forEach(function (ph) { if (ph && ph.bracketResolution != null) { try { delete ph.bracketResolution; } catch (e) { ph.bracketResolution = null; } } });
   // flags de encerramento / relógio
   if (t.status === 'finished') t.status = 'closed';
   t.finishedAt = null;
@@ -27,6 +31,11 @@ window._clearTournamentDraw = function (t) {
   t.sitOutHistory = null;
   t.ligaGhosts = null;
   t.nextDrawAt = null;
+  // v2.7.96: lastAutoDrawAt é estado de sorteio (quando rolou o último auto-draw).
+  // Sem zerar, o cálculo da próxima data/contagem ficava preso no horário antigo
+  // mesmo após resetar — "o tempo de início não reseta". Agora a próxima data
+  // recomputa limpa a partir de drawFirstDate (config, preservada de propósito).
+  t.lastAutoDrawAt = null;
 };
 
 // v2.6.98 — "Resetar para inscrições (manter inscritos)": apaga sorteio/rodadas/
@@ -42,14 +51,29 @@ window._resetTournamentToEnrollment = function (tId) {
     if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
   };
   if (typeof showAlertDialog !== 'function') return;
+  var _wasAuto = (t.drawManual !== true && t.drawFirstDate);
   showAlertDialog('🔄 Resetar para inscrições?',
-    'Isto apaga TODO o sorteio, rodadas e fases e volta o torneio para "inscrições abertas". Os <strong>' + n + '</strong> inscritos são MANTIDOS. Não dá pra desfazer.',
+    'Isto apaga TODO o sorteio, rodadas e fases e volta o torneio para "inscrições abertas". Os <strong>' + n + '</strong> inscritos são MANTIDOS.' + (_wasAuto ? ' O sorteio automático <strong>continua ligado</strong>; como a data programada já passou, ele é <strong>reagendado pra amanhã</strong> (ajuste no Editar) — ou use <strong>Sortear (manual)</strong> agora.' : '') + ' Não dá pra desfazer.',
     function () {
       window._clearTournamentDraw(t);
       t.status = 'open';
+      // v2.8.4: o reset MANTÉM o torneio como auto-draw (drawManual continua false → o
+      // botão segue "Sortear (manual)", a identidade de auto é preservada). Mas se a data
+      // programada já PASSOU, o auto re-sortearia na hora ("resetei e o tempo continua");
+      // então reagenda pro dia seguinte (mesmo horário) — futuro = não dispara agora.
+      // (v2.8.2 setava drawManual=true e virava "manual", o que estava errado.)
+      if (_wasAuto) {
+        try {
+          var _dfMs = new Date(t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')).getTime();
+          if (isNaN(_dfMs) || _dfMs <= Date.now()) {
+            var _d = new Date(); _d.setDate(_d.getDate() + 1);
+            t.drawFirstDate = _d.getFullYear() + '-' + ('0' + (_d.getMonth() + 1)).slice(-2) + '-' + ('0' + _d.getDate()).slice(-2);
+          }
+        } catch (e) {}
+      }
       t.updatedAt = new Date().toISOString();
       var done = function () {
-        if (typeof showNotification === 'function') showNotification('Torneio resetado', 'Voltou para inscrições abertas — ' + n + ' inscritos mantidos.', 'success');
+        if (typeof showNotification === 'function') showNotification('Torneio resetado', 'Voltou para inscrições abertas — ' + n + ' inscritos mantidos.' + (_wasAuto ? ' Sorteio automático reagendado pra amanhã.' : ''), 'success');
         _refresh();
       };
       if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
@@ -446,6 +470,12 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   var t = window.AppStore && window.AppStore.tournaments &&
           window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
   if (!t) return false;
+  // v2.8.7: Liga/Pontos Corridos forma os pares DENTRO de cada rodada (Rei/Rainha =
+  // grupos de 4 com parceiros ROTATIVOS; padrão = duplas aleatórias por rodada) — NÃO
+  // existe dupla FIXA pra formar antes do sorteio. O diálogo "Sorteio de duplas"
+  // (gênero + Livre/Equilibrado) só faz sentido em Eliminatórias/Grupos de duplas fixas.
+  // Pular pra Liga — senão o "Sortear" abre essa tela errada (exposto após reset).
+  if (window._isLigaFormat && window._isLigaFormat(t)) return false;
   var enrMode = t.enrollmentMode || t.enrollment || 'individual';
   var teamSize = parseInt(t.teamSize) || 1;
   if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
@@ -650,6 +680,13 @@ window.showFinalReviewPanel = function (tId) {
 window._confirmManualAutoDraw = function (tId) {
     var t = window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === tId.toString(); });
     if (!t) return;
+    // v2.8.3: multi-fase com a fase atual COMPLETA → "Sortear" AVANÇA pra próxima fase
+    // (abre o painel de potência de 2), NÃO re-sorteia a fase atual. Antes, generateDraw
+    // re-rodava o sorteio inicial e RESETAVA a fase 0 ("cliquei em sortear/próxima e ele
+    // resetou e refez o sorteio em vez de ir pra solução de potência de 2").
+    if (window._isMultiPhase && window._isMultiPhase(t) && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && ((t.currentPhaseIndex || 0) + 1) < ((t.phases || []).length)) {
+        if (typeof window._advanceMultiPhase === 'function') { window._advanceMultiPhase(tId); return; }
+    }
     if (typeof showConfirmDialog !== 'function') { window.generateDrawFunction(tId); return; }
     showConfirmDialog(
         '🎲 Sortear manualmente?',
@@ -1923,11 +1960,16 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         var p2final = arr[i2];
         var fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
         var fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
+        // v2.7.97: preserva o nº de inscrição original de cada membro (p1Seq/p2Seq).
+        if (window._ensureEnrollSeqs) window._ensureEnrollSeqs(t);
+        var fseq1 = (typeof p1final === 'object' && p1final.enrollSeq != null) ? p1final.enrollSeq : null;
+        var fseq2 = (typeof p2final === 'object' && p2final.enrollSeq != null) ? p2final.enrollSeq : null;
         var mergedEntry = {
             displayName: newName, name: newName,
             uid: fuid1 || fuid2 || '',
             p1Name: name1, p1Uid: fuid1,
             p2Name: name2, p2Uid: fuid2,
+            p1Seq: fseq1, p2Seq: fseq2,
             ligaActive: true
         };
         var maxI = Math.max(i1, i2);
@@ -2185,7 +2227,25 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
         // rejeitar (antes era silencioso: o convite não persistia e o convidado ficava
         // sem o botão de aceitar). Só notifica/avisa "enviado" após o save confirmar.
         Promise.resolve(window.FirestoreDB.saveTournament(t)).then(function() {
-            if (typeof window._sendUserNotification === 'function') window._sendUserNotification(uid2, { type: 'enrollment_new', title: '🤝 Convite de dupla', message: name1 + ' quer formar dupla com você em ' + window._safeHtml(t.name || '') + '. Abra o torneio para aceitar ou recusar.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
+            if (typeof window._sendUserNotification === 'function') {
+                // v2.7.94: tipo 'pair_invite' + reqId + deep-links → botões Aceitar/Recusar
+                // funcionais na plataforma, no email e no WhatsApp.
+                var _reqId = uid1 + '__' + uid2;
+                var _base = 'https://scoreplace.app/#pair/';
+                window._sendUserNotification(uid2, {
+                    type: 'pair_invite',
+                    title: '🤝 Convite de dupla',
+                    message: name1 + ' quer formar dupla com você em ' + (t.name || '') + '.',
+                    tournamentId: String(t.id),
+                    tournamentName: t.name || '',
+                    pairRequestId: _reqId,
+                    pairInviterName: name1,
+                    pairInviteeName: name2,
+                    acceptUrl: _base + 'accept/' + encodeURIComponent(String(t.id)) + '/' + encodeURIComponent(_reqId),
+                    rejectUrl: _base + 'reject/' + encodeURIComponent(String(t.id)) + '/' + encodeURIComponent(_reqId),
+                    level: 'fundamental'
+                });
+            }
             if (typeof showNotification === 'function') showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
         }).catch(function(e) {

@@ -909,6 +909,12 @@ window._buildProgressInner = function(t) {
         var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = _gdMp + _ctMp + _wuMp + 5;
         plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_rTotal / _crtMp) * _slotMp * 60000;
       }
+      // v2.8.8: multi-fase — "início real" é SÓ o 1º ponto da rodada (_roundStart).
+      // Não herdar tournamentStarted (linha ~840) nem o fallback _thisDraw (linha ~890):
+      // no multi-fase _thisDraw vem de drawFirstDate+intervalo (que NÃO se aplica) e
+      // gerava "INÍCIO REAL 21/06 (futuro/passado) + DECORRIDO 0/21h". Sem ponto jogado
+      // → actualStart null → _notStarted true → selo "⏳ Aguardando início".
+      actualStart = _roundStart || null;
       _labelSchedStart = 'início programado';
       _labelSchedEnd = 'final programado';
     }

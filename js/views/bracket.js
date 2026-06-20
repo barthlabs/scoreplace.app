@@ -1324,8 +1324,13 @@ function _renderPhaseBracket(t, canEnterResult) {
 
   function colsFor(bracketKey) {
     var byRound = {};
-    pm.filter(function (m) { return m.bracket === bracketKey; }).forEach(function (m) {
-      var r = m.round || 1;
+    // v2.8.14: o 3º/4º (isThirdPlace) NÃO entra nas colunas por rodada — é renderizado
+    // à parte, como coluna logo antes da final (numerado final-1) no renderTier.
+    pm.filter(function (m) { return m.bracket === bracketKey && !m.isThirdPlace; }).forEach(function (m) {
+      // v2.8.12: NÃO usar `m.round || 1` — a repescagem é round 0, e `0 || 1` virava 1,
+      // FUNDINDO round 0 (repescagem, 12 jogos) com round 1 (oitavas, 8 jogos) numa
+      // coluna só de 20 jogos (as oitavas sumiam). Preservar o 0.
+      var r = (m.round == null) ? 1 : m.round;
       if (!byRound[r]) byRound[r] = [];
       byRound[r].push(m);
     });
@@ -1335,27 +1340,72 @@ function _renderPhaseBracket(t, canEnterResult) {
 
   var globalNum = 0;
   function roundLabel(cols, idx) {
+    var col = cols[idx];
+    var games = col.matches.length;
     var fromEnd = cols.length - idx;
-    var games = cols[idx].matches.length;
     if (fromEnd === 1) return _t('bracket.final');
     if (fromEnd === 2 && games === 2) return _t('bracket.semiFinal');
     if (fromEnd === 3 && games === 4) return _t('bracket.quarterFinal');
     if (fromEnd === 4 && games === 8) return _t('bracket.roundOf16');
-    return _t('bracket.round', { n: cols[idx].round });
+    // v2.8.13: rodada que NÃO define oitavas/quartas/semi/finalistas (ex.: a 1ª rodada
+    // que leva às oitavas) = "Rodada N" por posição do INÍCIO (1-based). NÃO se chama
+    // "Repescagem" — repescagem é só o FATO de perdedores serem repescados pra completar
+    // a rodada seguinte (já mostrado na tag laranja no time repescado).
+    return _t('bracket.round', { n: idx + 1 });
+  }
+
+  // v2.8.19: classificação geral POR LINHA (último → 1º), colapsável, entre o título
+  // Ouro/Prata e a chave. Reusa _updateProgressiveClassification (mesma lógica da fase
+  // única) rodando num torneio-faux só com as partidas DESTA linha (3º lugar vai como
+  // thirdPlaceMatch). Aparece só quando já há classificação (resultados lançados).
+  function _tierClassifHtml(bracketKey, color) {
+    if (typeof _updateProgressiveClassification !== 'function') return '';
+    var lm = pm.filter(function (m) { return m.bracket === bracketKey; });
+    if (!lm.length) return '';
+    var third = lm.filter(function (m) { return m.isThirdPlace; })[0] || null;
+    var rest = lm.filter(function (m) { return !m.isThirdPlace; });
+    var faux = { matches: rest, format: 'Eliminatórias Simples', thirdPlaceMatch: third, tiebreakers: t.tiebreakers };
+    try { _updateProgressiveClassification(faux); } catch (e) { return ''; }
+    var cl = faux.classification || {};
+    var keys = Object.keys(cl);
+    if (!keys.length) return '';
+    var medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+    var entries = keys.map(function (k) { return [k, cl[k]]; }).sort(function (a, b) { return b[1] - a[1]; }); // último → 1º
+    var rows = entries.map(function (e) {
+      var name = e[0], pos = e[1];
+      var c = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
+      var nameHtml = (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(name, t) : window._safeHtml(name));
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
+        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + c + ';">' + pos + 'º</span>' +
+        '<span style="font-weight:600;color:' + c + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml + '</span>' +
+        (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
+        '</div>';
+    }).join('');
+    return '<details style="margin-bottom:1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">📊 Classificação — ' + entries.length + ' (último → 1º)</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + rows + '</div></details>';
   }
 
   function renderTier(bracketKey, title, color) {
     var cols = colsFor(bracketKey);
     if (!cols.length) return '';
+    // v2.8.15: 3º lugar (1 jogo) — numerado ANTES da final (final-1, número menor), mas
+    // renderizado ABAIXO da final na mesma coluna, com header próprio "🥉 3º lugar".
+    var thirdM = pm.filter(function (m) { return m.bracket === bracketKey && m.isThirdPlace; })[0];
     var colsHtml = cols.map(function (col, idx) {
       var label = roundLabel(cols, idx);
+      var isFinalCol = (idx === cols.length - 1);
+      var thirdNum = 0;
+      if (isFinalCol && thirdM) { globalNum++; thirdNum = globalNum; } // reserva o nº (final-1) ANTES da final
       var cards = col.matches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
+      var thirdHtml = (isFinalCol && thirdM)
+        ? '<h5 style="color:#cd7f32;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .5rem;border-left:3px solid #cd7f32;padding-left:8px;">🥉 3º lugar</h5>' + renderMatchCard(thirdM, canEnterResult, t.id, thirdNum)
+        : '';
       return '<div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
         '<h5 style="color:' + color + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ' + color + ';padding-left:8px;">' + label + '</h5>' +
-        cards + '</div>';
+        cards + thirdHtml + '</div>';
     }).join('');
     return '<div style="margin-bottom:2rem;">' +
       '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + color + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' +
+      _tierClassifHtml(bracketKey, color) +
       '<div class="bracket-scroll-container" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
       '</div>';
   }
@@ -1781,7 +1831,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _p2ByeBadge = m.p2FromBye ? _byeTag : '';
   // v2.1.36: tag "Repescagem" no TIME que entrou por repescagem NESTA rodada
   // (preenchido via melhor-derrotado). Quem avança por vitória NÃO recebe a tag.
-  var _repTag = '<span style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:#fb923c;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">Repescagem</span>';
+  var _repTag = '<span title="Passou por repescagem nesta rodada" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:#fb923c;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">REP</span>';
   var _p1RepBadge = m.p1FromRepechage ? _repTag : '';
   var _p2RepBadge = m.p2FromRepechage ? _repTag : '';
 
