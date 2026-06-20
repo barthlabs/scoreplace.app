@@ -2688,8 +2688,9 @@ function renderTournaments(container, tournamentId = null) {
                           ? !!_orgUids[_pUid]                  // uid match: org ou co-host ativo
                           : (_pEmail && !!_orgEmails[_pEmail]); // fallback email para legados
                         var _crownInline = _isOrgParticipant ? ' <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
-                        // Estrela VIP inline ao lado do nome (igual à coroa de organizador)
-                        var _vipInline = isVip ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;margin-left:2px;" title="VIP"><path d="M12 2L2 9l10 13L22 9z"/></svg>' : '';
+                        // v2.7.74: sem estrela VIP ao lado do nome — o card dourado + o botão
+                        // VIP ativo já indicam (igual ao card #participants, canônico).
+                        var _vipInline = '';
                         var _pPendBadge = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, pName, _pUid, _pEmail)) ? window._pendingCoHostBadgeHtml() : '';
                         const _pNSafe = pName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
                         const _pUidOpts = _pUid ? (',uid:\''+_pUid+'\'') : '';
@@ -2737,7 +2738,8 @@ function renderTournaments(container, tournamentId = null) {
                         }
                     }
                     // Enrollment type label — shown at bottom-left
-                    const typeLabel = _teamLabel + vipBadge;
+                    // v2.7.74: sem tag VIP redundante (card dourado + botão VIP já indicam).
+                    const typeLabel = _teamLabel;
 
                     let actionsHtml = '';
                     let dragProps = '';
@@ -2750,19 +2752,17 @@ function renderTournaments(container, tournamentId = null) {
                     if (isOrg && drawDone) {
                         dragProps = `draggable="true" ondragstart="window._mergeDragStart(event, '${safeP}', '${t.id}')" ondragend="window._mergeDragEnd(event)" ondragover="event.preventDefault();event.dataTransfer.dropEffect='move';" ondragenter="window._mergeDragEnter(event)" ondragleave="window._mergeDragLeave(event)" ondrop="window._mergeDrop(event, '${safeP}', '${t.id}')"`;
                     }
+                    // v2.7.74: botões canônicos (btn-micro, altura fixa 24px) expostos pra
+                    // montar a LINHA COMBINADA — VIP à esquerda com a meta; split/desfazer/excluir
+                    // à direita. Igual ao card #participants.
+                    let _vipBtn2 = '', _delBtn2 = '', _splitBtn2 = '';
                     if (isOrg && !drawDone) {
-                        const vipBtn = `<button title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)'}; color: ${isVip ? '#fbbf24' : '#a3842a'}; border: 1px ${isVip ? 'solid' : 'dashed'} ${isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)'}; border-radius: 6px; cursor: pointer; padding: 2px 8px; font-size: 0.7rem; font-weight: 800; transition: transform 0.2s; letter-spacing: 0.5px;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
-                        const delBtn = `<button title="Remover" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px dashed #ef4444;border-radius:6px;cursor:pointer;padding:2px 6px;font-size:0.75rem;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">🗑️</button>`;
-                        let splitBtn = '';
+                        _vipBtn2 = `<button type="button" class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)'}; color: ${isVip ? '#fbbf24' : '#d4a72a'}; border: 1px ${isVip ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
+                        _delBtn2 = `<button type="button" class="btn btn-micro" title="Remover" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background:rgba(239,68,68,0.1);color:#ef4444;border:1px dashed rgba(239,68,68,0.5);" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">🗑️</button>`;
                         if (pName.includes('/')) {
-                            splitBtn = `<button title="Desfazer Equipe" style="background:rgba(14,165,233,0.1);color:#38bdf8;border:1px dashed #0ea5e9;border-radius:6px;cursor:pointer;padding:2px 6px;font-size:0.75rem;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='none'" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
+                            _splitBtn2 = `<button type="button" class="btn btn-micro" title="Desfazer Equipe" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background:rgba(14,165,233,0.1);color:#38bdf8;border:1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
                         }
-                        actionsHtml = `<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:6px;">${vipBtn}${splitBtn}${undoMergeBtn}${delBtn}</div>`;
                         dragProps = `draggable="true" ondragstart="window.handleDragStart(event, ${idx}, '${t.id}')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ${idx})"`;
-                    }
-                    // Pós-sorteio: sem o bloco de ações acima — mas se for card mesclado, mostra só o Desfazer.
-                    if (isOrg && drawDone && undoMergeBtn) {
-                        actionsHtml = `<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:6px;">${undoMergeBtn}</div>`;
                     }
 
                     const bgNum = sortedIdx + 1; // sempre número; VIP aparece inline ao lado do nome
@@ -2794,32 +2794,27 @@ function renderTournaments(container, tournamentId = null) {
                         '</div>';
                     }
 
-                    // Bottom row: type label on the left, action buttons on the right
-                    var bottomRow = '';
-                    if (typeLabel || actionsHtml) {
-                        var actionsInline = actionsHtml.replace('margin-top:6px;', 'margin-top:0;');
-                        var leftSide = '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;">' +
-                            (typeLabel ? '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.5;">' + typeLabel + '</span>' : '') +
-                        '</div>';
-                        bottomRow = '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:6px;">' +
-                            leftSide +
-                            actionsInline +
-                            '</div>';
-                    }
+                    // v2.7.74: grupo de ações à direita da linha combinada (split/desfazer/excluir).
+                    var _orgActions2 = (_splitBtn2 || undoMergeBtn || _delBtn2)
+                        ? '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:auto;">' + _splitBtn2 + undoMergeBtn + _delBtn2 + '</div>'
+                        : '';
 
                     return `
-                      <div class="participant-card" data-participant-name="${window._safeHtml(pName)}" data-merge-name="${window._safeHtml(pName)}" ${dragProps} style="${cardStyle} border-radius:12px;padding:10px 12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+                      <div class="participant-card" data-participant-name="${window._safeHtml(pName)}" data-merge-name="${window._safeHtml(pName)}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                           <div style="position:absolute;right:8px;bottom:6px;font-size:${String(bgNum).length > 2 ? '1.6rem' : '2rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${bgNum}</div>
-                          <div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:0;">
-                              <div style="display:flex;align-items:center;gap:12px;">
-                                  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;justify-content:center;min-width:0;">
-                                      ${pNameHtml}
-                                      ${(typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg) : ''}
-                                      ${catBadgeRow}
-                                  </div>
+                          <div style="position:relative;z-index:1;">
+                              <!-- HEADER: avatar + nome + coroa (igual ao card #participants) | toggle ativado/desativado da Liga -->
+                              <div style="display:flex;align-items:center;gap:8px;">
+                                  <div style="flex:1;min-width:0;">${pNameHtml}</div>
                                   ${ligaCardToggle}
                               </div>
-                              ${bottomRow}
+                              <!-- LINHA COMBINADA (canônica): VIP + meta + categoria (esquerda) | split/desfazer/excluir (direita) -->
+                              <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                  <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">${_vipBtn2}${(typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg, { inline: true }) : ''}${catBadgeRow}</div>
+                                  ${_orgActions2}
+                              </div>
+                              <!-- tipo de inscrição onde no pós-sorteio fica o jogo -->
+                              ${typeLabel ? '<div style="font-size:0.65rem;color:var(--text-muted);opacity:0.5;margin-top:6px;">' + typeLabel + '</div>' : ''}
                           </div>
                       </div>`;
                 }).join('');
