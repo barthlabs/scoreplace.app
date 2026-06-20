@@ -1859,7 +1859,9 @@ window._showDropChoiceOverlay = function(opts) {
     var teamEl = document.getElementById('dc-team');
     if (teamEl) teamEl.onclick = function() {
         close();
-        window._formTeamConfirm(opts.tId, opts.sourceName, opts.sourceUid, opts.targetName, opts.targetUid, { changeRule: !opts.ruleAllowsTeam });
+        // v2.7.81: o overlay já é a decisão → forma DIRETO (sem 2º confirm) quando a
+        // regra já permite times; só confirma quando formar vai MUDAR a regra pra todos.
+        window._formTeamConfirm(opts.tId, opts.sourceName, opts.sourceUid, opts.targetName, opts.targetUid, { changeRule: !opts.ruleAllowsTeam, skipConfirm: !!opts.ruleAllowsTeam });
     };
     if (opts.canMerge) {
         var mergeEl = document.getElementById('dc-merge');
@@ -1877,51 +1879,56 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
     if (!t) return;
     var newName = name1 + ' / ' + name2;
     var _changeRule = !!(opts && opts.changeRule);
+    // v2.7.81: lógica de formar a dupla extraída — o overlay chama isto DIRETO
+    // (skipConfirm) porque já é a decisão; só o caso "muda a regra" passa por confirm.
+    var _doForm = function() {
+        if (_changeRule) { t.enrollmentMode = 'misto'; } // passa a permitir times pra todos
+        var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+        var findIdx = function(uid, name) {
+            if (uid) {
+                var i = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uid; });
+                if (i !== -1) return i;
+            }
+            return arr.findIndex(function(p) {
+                var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
+                return n === name;
+            });
+        };
+        var i1 = findIdx(uid1, name1);
+        var i2 = findIdx(uid2, name2);
+        if (i1 === -1 || i2 === -1 || i1 === i2) return;
+        var p1final = arr[i1];
+        var p2final = arr[i2];
+        var fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
+        var fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
+        var mergedEntry = {
+            displayName: newName, name: newName,
+            uid: fuid1 || fuid2 || '',
+            p1Name: name1, p1Uid: fuid1,
+            p2Name: name2, p2Uid: fuid2,
+            ligaActive: true
+        };
+        var maxI = Math.max(i1, i2);
+        var minI = Math.min(i1, i2);
+        arr.splice(maxI, 1);
+        arr.splice(minI, 1);
+        arr.splice(minI, 0, mergedEntry);
+        t.participants = arr;
+        if (!t.teamOrigins) t.teamOrigins = {};
+        t.teamOrigins[newName] = 'formada';
+        window.FirestoreDB.saveTournament(t);
+        var container = document.getElementById('view-container');
+        if (container) renderTournaments(container, tId);
+        if (typeof showNotification === 'function') showNotification('👫 Dupla formada!', newName, 'success');
+    };
+    if (opts && opts.skipConfirm) { _doForm(); return; }
     var _msg = _changeRule
         ? ('Este torneio é individual. Formar a dupla "' + newName + '" vai <b>passar a permitir times pra todos</b> (a regra do torneio muda). Confirmar?')
         : (name1 + ' e ' + name2 + ' formarão a dupla "' + newName + '". Confirmar?');
     showConfirmDialog(
         _changeRule ? 'Formar dupla (muda a regra)' : 'Formar dupla',
         _msg,
-        function() {
-            if (_changeRule) { t.enrollmentMode = 'misto'; } // passa a permitir times pra todos
-            var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-            var findIdx = function(uid, name) {
-                if (uid) {
-                    var i = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uid; });
-                    if (i !== -1) return i;
-                }
-                return arr.findIndex(function(p) {
-                    var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-                    return n === name;
-                });
-            };
-            var i1 = findIdx(uid1, name1);
-            var i2 = findIdx(uid2, name2);
-            if (i1 === -1 || i2 === -1 || i1 === i2) return;
-            var p1final = arr[i1];
-            var p2final = arr[i2];
-            var fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
-            var fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
-            var mergedEntry = {
-                displayName: newName, name: newName,
-                uid: fuid1 || fuid2 || '',
-                p1Name: name1, p1Uid: fuid1,
-                p2Name: name2, p2Uid: fuid2,
-                ligaActive: true
-            };
-            var maxI = Math.max(i1, i2);
-            var minI = Math.min(i1, i2);
-            arr.splice(maxI, 1);
-            arr.splice(minI, 1);
-            arr.splice(minI, 0, mergedEntry);
-            t.participants = arr;
-            if (!t.teamOrigins) t.teamOrigins = {};
-            t.teamOrigins[newName] = 'formada';
-            window.FirestoreDB.saveTournament(t);
-            var container = document.getElementById('view-container');
-            if (container) renderTournaments(container, tId);
-        },
+        _doForm,
         null,
         { type: 'info', confirmText: 'Formar dupla', cancelText: _t('btn.keepSeparate') }
     );
