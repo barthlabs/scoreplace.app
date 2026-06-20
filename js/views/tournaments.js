@@ -382,49 +382,28 @@ function renderTournaments(container, tournamentId = null) {
 
         var isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
 
-        // ── Organizador: forma na hora (com confirmação) ──
+        // ── v2.7.78: CANONIZADO — mesmo fluxo do drag de card (handleDropTeam).
+        //    Organizador → overlay (🔵 Formar equipe / 🔴 Mesclar / Cancelar);
+        //    participante → pareia a si mesmo (convite com aceite). Sem confirm
+        //    avulso "Formar dupla?" que destoava do resto.
+        var _hasMatchesDD = (Array.isArray(t.matches) && t.matches.length) ||
+                            (Array.isArray(t.rounds) && t.rounds.length) ||
+                            (Array.isArray(t.groups) && t.groups.length);
         if (isOrg) {
-            var _formNow = function() { window._formDuplaByUids(tId, name1, uid1, name2, uid2); };
-            if (typeof showConfirmDialog === 'function') showConfirmDialog('👫 Formar dupla?', '"' + name1 + '" e "' + name2 + '" vão formar a dupla.', _formNow, null, { type: 'info', confirmText: 'Formar dupla', cancelText: 'Cancelar' });
-            else _formNow();
-            return;
-        }
-
-        // ── Participante: só com manualPairing='open', arrastando o PRÓPRIO card,
-        //    sobre alguém com conta. Em vez de formar, manda convite pendente. ──
-        var cu = window.AppStore && window.AppStore.currentUser;
-        var myUid = cu && cu.uid;
-        if (t.manualPairing !== 'open') {
-            if (typeof showNotification !== 'undefined') showNotification('Apenas o organizador', 'Neste torneio, só o organizador forma as duplas.', 'info');
-            return;
-        }
-        if (!myUid || uid1 !== myUid) {
-            if (typeof showNotification !== 'undefined') showNotification('Arraste o seu card', 'Você só pode formar dupla arrastando o seu próprio card sobre o de outra pessoa.', 'info');
-            return;
-        }
-        if (!uid2) {
-            if (typeof showNotification !== 'undefined') showNotification('Sem conta', name2 + ' não tem conta para aceitar o convite. Peça ao organizador para formar a dupla.', 'info');
-            return;
-        }
-        var _sendInvite = function() {
-            if (!window._teamFormation) return;
-            var res = window._teamFormation.requestPair(t, uid1, uid2, name1, name2);
-            if (!res.ok) { if (typeof showNotification !== 'undefined') showNotification('Não foi possível', window._pairErrorMsg(res.error), 'warning'); return; }
-            if (res.action === 'confirm') {
-                // recíproco: forma na ordem do 1º proponente
-                var iN = (res.inviterUid === uid1) ? name1 : name2, iU = res.inviterUid;
-                var eN = (res.inviterUid === uid1) ? name2 : name1, eU = (res.inviterUid === uid1) ? uid2 : uid1;
-                window._formDuplaByUids(tId, iN, iU, eN, eU);
-                return;
+            if (typeof window._showDropChoiceOverlay === 'function') {
+                window._showDropChoiceOverlay({
+                    tId: tId,
+                    sourceName: name1, sourceUid: uid1,
+                    targetName: name2, targetUid: uid2,
+                    ruleAllowsTeam: (t.enrollmentMode !== 'individual'),
+                    drawDone: !!_hasMatchesDD || t.status === 'started' || t.status === 'in_progress',
+                    canMerge: (!!uid1) !== (!!uid2)
+                });
             }
-            t.updatedAt = new Date().toISOString();
-            window.FirestoreDB.saveTournament(t);
-            if (typeof window._sendUserNotification === 'function') window._sendUserNotification(uid2, { type: 'enrollment_new', title: '🤝 Convite de dupla', message: name1 + ' quer formar dupla com você em ' + window._safeHtml(t.name || '') + '. Abra o torneio para aceitar.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
-            if (typeof showNotification !== 'undefined') showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
-            if (typeof window._softRefreshView === 'function') window._softRefreshView();
-        };
-        if (typeof showConfirmDialog === 'function') showConfirmDialog('🤝 Convidar para dupla?', 'Enviar convite para "' + name2 + '" formar dupla com você?', _sendInvite, null, { type: 'info', confirmText: 'Enviar convite', cancelText: 'Cancelar' });
-        else _sendInvite();
+            return;
+        }
+        // Participante: pareia A SI MESMO (convite pendente que o parceiro aceita).
+        if (typeof window._participantSelfPair === 'function') window._participantSelfPair(tId, name1, uid1, name2, uid2);
     };
 
     // Forma a dupla de fato (caminho canônico, reusado por organizador e por aceite
