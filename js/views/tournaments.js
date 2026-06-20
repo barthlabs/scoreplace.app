@@ -424,6 +424,8 @@ function renderTournaments(container, tournamentId = null) {
     window._duplaDragStart = function(evt, uidOrName, tId) {
         evt.dataTransfer.setData('text/plain', JSON.stringify({ uidOrName: uidOrName, tId: tId }));
         evt.dataTransfer.effectAllowed = 'move';
+        // v2.7.86: compacta os outros cards durante o arraste (drop mais perto).
+        setTimeout(function () { if (window._setDragCompact) window._setDragCompact(true); }, 0);
     };
 
     window._duplaDropOn = function(evt, targetUidOrName, tId) {
@@ -2961,7 +2963,7 @@ function renderTournaments(container, tournamentId = null) {
                       <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (${_soloParticipants.length})</span>
                       <span style="font-size:0.65rem;color:var(--text-muted);">— Arraste um card sobre outro para formar a dupla</span>
                     </div>
-                    <div style="display:flex;flex-direction:column;gap:6px;">
+                    <div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">
                       ${_soloParticipants.map(function(p) { return _duplaCard(p, true, String(t.id)); }).join('')}
                     </div>
                   </div>` : '<div style="margin-bottom:1rem;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:0.82rem;color:#34d399;text-align:center;">✅ Todos com dupla formada</div>'}
@@ -2971,7 +2973,7 @@ function renderTournaments(container, tournamentId = null) {
                   ${_pairedParticipants.length > 0 ? `
                   <div>
                     <div style="font-size:0.75rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas formadas (${_pairedParticipants.length})</div>
-                    <div style="display:flex;flex-direction:column;gap:6px;">
+                    <div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">
                       ${_pairedParticipants.map(function(p) { return _duplaCard(p, false, String(t.id)); }).join('')}
                     </div>
                   </div>` : ''}
@@ -2989,7 +2991,7 @@ function renderTournaments(container, tournamentId = null) {
                    ${checkInControls}
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
                    ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela brilha quando você começa a arrastar. No celular, <b>toque na estrela do organizador</b> e escolha quem promover. Funciona durante o torneio também.</div>' : ''}
-                   <div data-merge-container="${t.id}" style="${gridStyle}">
+                   <div data-merge-container="${t.id}" class="sp-dnd-host" style="${gridStyle}">
                       ${cardsStr}
                    </div>
                    ${(_hasTournCats && isOrg) ? `<div id="inline-cat-mgr-${t.id}"></div>` : ''}

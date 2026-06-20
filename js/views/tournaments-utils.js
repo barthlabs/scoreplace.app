@@ -130,6 +130,8 @@ window._mergeDragStart = function(e, name, tId) {
     window._mergeDragData = { name: name, tId: tId };
     e.dataTransfer.effectAllowed = 'move';
     try { e.dataTransfer.setData('text/plain', name); } catch(ex) {}
+    // v2.7.86: compacta os outros cards durante o arraste (drop mais perto).
+    setTimeout(function () { if (window._setDragCompact) window._setDragCompact(true); }, 0);
     // v2.3.79: revela a estrela de co-organização (#crown-org-btn) e popula
     // window._participantDragData — assim arrastar um inscrito pós-sorteio
     // (caminho merge, ex.: Liga já sorteada) também permite soltar na estrela

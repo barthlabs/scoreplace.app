@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.85-beta';
+window.SCOREPLACE_VERSION = '2.7.86-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2249,6 +2249,28 @@ window._photoReadBox = function () {
         ? { bg: 'rgba(30,41,59,0.72)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' }
         : { bg: 'rgba(0,0,0,0.40)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.10)' };
 };
+
+// v2.7.86: MODO COMPACTO no arrastar-soltar (mesclar / formar dupla / co-organizador).
+// Enquanto arrasta, os outros cards encolhem pra SÓ O NOME (sem cortes) numa grade de
+// 2-3 colunas → distância de drop bem menor. Soltou (qualquer dragend), volta ao normal.
+// O nome aparece via CSS `content: attr(data-participant-name)`, então não precisa mexer
+// no conteúdo dos cards. Liga-se nos dragstart; o desliga é GLOBAL (listener no document),
+// pra nunca ficar preso mesmo que o card seja re-renderizado no drop.
+window._setDragCompact = function (on) {
+  try {
+    var b = document.body; if (!b) return;
+    // Só liga/desliga a classe do BODY — os containers de cards já têm a classe
+    // permanente `.sp-dnd-host` (no HTML do renderizador), então sobrevive a um
+    // re-render no meio do arraste. CSS: `body.sp-drag-compact .sp-dnd-host`.
+    if (on) b.classList.add('sp-drag-compact'); else b.classList.remove('sp-drag-compact');
+  } catch (e) {}
+};
+// Desliga o modo compacto em QUALQUER fim de arraste (uma vez só).
+if (!window._spDragCompactWired) {
+  window._spDragCompactWired = true;
+  try { document.addEventListener('dragend', function () { window._setDragCompact(false); }, true); } catch (e) {}
+  try { document.addEventListener('drop', function () { setTimeout(function () { window._setDragCompact(false); }, 0); }, true); } catch (e) {}
+}
 // v2.6.60: CONFIG POR FASE — resolve woScope / resultEntry da FASE de um match
 // (multifase), com FALLBACK pro top-level (= fase 0 / default). Single-phase ou
 // match sem phaseIndex → sempre o top-level (comportamento idêntico ao de sempre).

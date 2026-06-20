@@ -595,6 +595,41 @@ button[style*="linear-gradient"]:not(.btn):active {
    `.info-box strong` genérico por vir depois com mesma especificidade. */
 .tourn-config-box strong { color: inherit; opacity: 0.72; }
 
+/* v2.7.86: MODO COMPACTO durante o arrastar-soltar (mesclar/dupla/co-org).
+   _setDragCompact() liga `body.sp-drag-compact` e marca os containers de cards com
+   `.sp-dnd-host`. Aí os cards viram só o NOME (via data-participant-name), numa grade
+   de 2-3 colunas — o trajeto até o alvo de drop fica bem curto. Soltou, volta tudo. */
+body.sp-drag-compact .sp-dnd-host {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)) !important;
+  gap: 6px !important;
+  align-items: stretch !important;
+}
+body.sp-drag-compact .sp-dnd-host .participant-card {
+  padding: 7px 5px !important;
+  min-height: 40px !important;
+  box-shadow: none !important;
+  cursor: grab !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transform: none !important;
+}
+/* esconde TODO o conteúdo real do card e mostra só o nome centralizado, sem cortes */
+body.sp-drag-compact .sp-dnd-host .participant-card > * { display: none !important; }
+body.sp-drag-compact .sp-dnd-host .participant-card::before {
+  content: attr(data-participant-name);
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.15;
+  text-align: center;
+}
+
 /* --- Botões Compactos (ações em cards de participantes) --- */
 .btn-micro {
   font-size: 0.7rem;

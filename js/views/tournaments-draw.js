@@ -1715,6 +1715,9 @@ window.handleDragStart = function (e, idx, tId) {
     e.dataTransfer.setData('text/plain', JSON.stringify({ idx, tId }));
     e.dataTransfer.effectAllowed = 'move';
     setTimeout(() => e.target.style.opacity = '0.4', 0);
+    // v2.7.86: compacta os outros cards (só-nome, grade) — drop mais perto. setTimeout
+    // pra não corromper a imagem do drag (capturada no início do dragstart).
+    setTimeout(function () { if (window._setDragCompact) window._setDragCompact(true); }, 0);
     // Store participant data for potential use
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     if (t && Array.isArray(t.participants) && t.participants[idx]) {
