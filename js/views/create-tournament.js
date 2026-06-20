@@ -865,27 +865,31 @@ function setupCreateTournamentModal() {
 
               <!-- (Categorias movido para o box FASE 1) -->
 
-              <!-- Modo de Inscrição (toggles não-excludentes) -->
-              <div class="form-group mb-3">
-                <label class="form-label">${_t('create.enrollMode')}</label>
+              <!-- v2.7.83: "Modo de Inscrição" REMOVIDO da UI — inscrição é sempre
+                   INDIVIDUAL. O enrollmentMode é DERIVADO no save: 'misto' quando o
+                   pareamento (Participantes podem formar duplas) está ligado, senão
+                   'individual'. Os toggles Individual/Times ficam OCULTOS, só como
+                   mecanismo da derivação (driven por _syncManualPairing). -->
+              <div class="form-group mb-3" id="inscricao-section">
                 <input type="hidden" id="select-inscricao" value="individual">
-                <div id="enroll-mode-buttons" style="display:flex;flex-direction:column;gap:8px;">
-                  <div class="toggle-row" id="enroll-row-individual" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">👤</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.enrollIndividual')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.enrollIndividualDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="enroll-toggle-individual" aria-label="Inscrição individual" checked onchange="window._syncEnrollToggles()"><span class="toggle-slider"></span></label>
+                <div id="enroll-mode-buttons" style="display:none;">
+                  <div class="toggle-row" id="enroll-row-individual">
+                    <label><input type="checkbox" id="enroll-toggle-individual" checked onchange="window._syncEnrollToggles()"></label>
                   </div>
-                  <div class="toggle-row" id="enroll-row-team" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">👥</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.enrollTeam')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.enrollTeamDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="enroll-toggle-team" aria-label="Inscrição em times" onchange="window._syncEnrollToggles()"><span class="toggle-slider"></span></label>
+                  <div class="toggle-row" id="enroll-row-team">
+                    <label><input type="checkbox" id="enroll-toggle-team" onchange="window._syncEnrollToggles()"></label>
                   </div>
                 </div>
-                <small class="text-muted" style="display:block;margin-top:6px;" id="enroll-mode-desc">${_t('create.enrollModeIndividualDesc')}</small>
-                <!-- v2.2.46: terceiro toggle — só no modo misto (Individual + Times) -->
+                <small id="enroll-mode-desc" style="display:none;"></small>
+                <!-- Times Sorteados Separados dos Montados (duas categorias) — só em Duplas
+                     (visibilidade controlada por _syncGameTypeToggles). Ligar isto liga
+                     automaticamente "Participantes podem formar duplas". -->
                 <input type="hidden" id="mixed-pairing-separated" value="false">
-                <div id="mixed-pairing-container" style="display:none;margin-top:8px;">
+                <div id="mixed-pairing-container" style="margin-top:8px;">
+                  <label class="form-label">Categorias de duplas</label>
                   <div class="toggle-row" id="mixed-pairing-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🆚</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.mixedPairingLabel')}</span><div class="toggle-desc" id="mixed-pairing-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.mixedPairingFreeDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="mixed-pairing-toggle" aria-label="Separar duplas por origem" onchange="window._syncMixedPairing()"><span class="toggle-slider"></span></label>
+                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🆚</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Times Sorteados Separados dos Montados</span><div class="toggle-desc" id="mixed-pairing-desc" style="font-size:0.72rem;margin-top:2px;">Desligado: duplas montadas e sorteadas disputam juntas, numa categoria só.</div></div></div>
+                    <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="mixed-pairing-toggle" aria-label="Separar duplas montadas das sorteadas" onchange="window._syncMixedPairing()"><span class="toggle-slider"></span></label>
                   </div>
                 </div>
               </div>
@@ -1211,7 +1215,17 @@ function setupCreateTournamentModal() {
       if (gameTypesField) gameTypesField.value = 'simples';
       if (teamSizeField) teamSizeField.value = '1';
     }
-    // Enrollment mode is independent — not synced from game type
+    // v2.7.83: "Participantes podem formar duplas" + "Times Sorteados Separados" só
+    // valem em DUPLAS (dOn). Em Simples puro, escondem e desligam (cascata: pareamento
+    // off → separados off + modo individual).
+    var _mpc = document.getElementById('manual-pairing-container');
+    var _sepc = document.getElementById('mixed-pairing-container');
+    if (_mpc) _mpc.style.display = dOn ? '' : 'none';
+    if (_sepc) _sepc.style.display = dOn ? '' : 'none';
+    if (!dOn) {
+      var _mp = document.getElementById('manual-pairing-toggle');
+      if (_mp && _mp.checked) { _mp.checked = false; if (typeof window._syncManualPairing === 'function') window._syncManualPairing(); }
+    }
 
     // Update description
     var descEl = document.getElementById('game-type-desc');
@@ -1949,10 +1963,9 @@ function setupCreateTournamentModal() {
     if (sel) sel.value = value;
     var descEl = document.getElementById('enroll-mode-desc');
     if (descEl) descEl.textContent = _enrollModeDescs[value] || '';
-    // v2.2.46: terceiro toggle (separar duplas por origem) só faz sentido no
-    // modo misto — Individual (sorteadas) + Times Montados (formadas) juntos.
-    var mpc = document.getElementById('mixed-pairing-container');
-    if (mpc) mpc.style.display = (value === 'misto') ? 'block' : 'none';
+    // v2.7.83: a visibilidade do "Times Sorteados Separados" passou a ser controlada
+    // pelo TIPO DE JOGO (só em Duplas), em _syncGameTypeToggles — não mais pelo modo
+    // de inscrição (que saiu da UI). Aqui só sincroniza o aviso.
     if (typeof window._updateManualPairingNotice === 'function') window._updateManualPairingNotice();
   };
 
@@ -1962,12 +1975,23 @@ function setupCreateTournamentModal() {
     var hidden = document.getElementById('manual-pairing');
     var on = !!(tgl && tgl.checked);
     if (hidden) hidden.value = on ? 'open' : 'organizer_only';
-    // v2.6.90: se os participantes formam suas duplas, eles se inscrevem JÁ com parceiro
-    // = "Times Montados". Liga o modo Times automaticamente (mantém Individual como está;
-    // os dois ligados = misto — indivíduos podem se juntar formando duplas).
-    if (on) {
-      var team = document.getElementById('enroll-toggle-team');
-      if (team && !team.checked) { team.checked = true; if (typeof window._syncEnrollToggles === 'function') window._syncEnrollToggles(); }
+    // v2.7.83: inscrição é sempre individual. Pareamento LIGADO = duplas MONTADAS
+    // possíveis → enrollmentMode 'misto' (montadas + sorteadas). DESLIGADO = só
+    // sorteadas → 'individual'. O toggle interno "Times Montados" (oculto) espelha o
+    // pareamento e é quem deriva o select-inscricao via _syncEnrollToggles.
+    // inscrição é SEMPRE individual (toggle interno sempre ligado); team = pareamento.
+    // Assim o enrollmentMode derivado é 'misto' (pareamento on) ou 'individual' (off),
+    // nunca 'time' — migra torneios legados de "só times" também.
+    var indiv = document.getElementById('enroll-toggle-individual');
+    var team = document.getElementById('enroll-toggle-team');
+    var _chg = false;
+    if (indiv && !indiv.checked) { indiv.checked = true; _chg = true; }
+    if (team && team.checked !== on) { team.checked = on; _chg = true; }
+    if (_chg && typeof window._syncEnrollToggles === 'function') window._syncEnrollToggles();
+    // "Times Sorteados Separados" só faz sentido com pareamento ligado.
+    if (!on) {
+      var sep = document.getElementById('mixed-pairing-toggle');
+      if (sep && sep.checked) { sep.checked = false; if (typeof window._syncMixedPairing === 'function') window._syncMixedPairing(); }
     }
     window._updateManualPairingNotice();
   };
@@ -1993,8 +2017,13 @@ function setupCreateTournamentModal() {
     var on = tgl.checked;
     if (hidden) hidden.value = on ? 'true' : 'false';
     if (desc) desc.textContent = on
-      ? (window._t ? window._t('create.mixedPairingSeparatedDesc') : 'Chaveamentos separados.')
-      : (window._t ? window._t('create.mixedPairingFreeDesc') : 'Enfrentam-se livremente.');
+      ? 'Duas categorias: duplas MONTADAS só enfrentam montadas; SORTEADAS só enfrentam sorteadas (montada costuma jogar melhor).'
+      : 'Desligado: duplas montadas e sorteadas disputam juntas, numa categoria só.';
+    // v2.7.83: separar pressupõe que existam duplas montadas → liga o pareamento.
+    if (on) {
+      var mp = document.getElementById('manual-pairing-toggle');
+      if (mp && !mp.checked) { mp.checked = true; if (typeof window._syncManualPairing === 'function') window._syncManualPairing(); }
+    }
   };
 
   // v2.1.65: avisa que faltam montar os times e leva pra edição do Modo de
