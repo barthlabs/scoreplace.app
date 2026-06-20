@@ -610,6 +610,10 @@ body.sp-drag-compact .sp-dnd-host {
    propósito (0,4,1) pra vencer a regra do card compacto `…participant-card{display:flex!important}`. */
 body.sp-drag-compact .sp-dnd-host .participant-card.sp-drag-source,
 body.sp-drag-compact .participant-card.sp-drag-source { display: none !important; }
+/* v2.7.88: espaço extra embaixo durante o arraste — assim QUALQUER seção de cards
+   (mesmo perto do fim da página) consegue ser rolada até o CENTRO da tela. Invisível
+   (abaixo da dobra) enquanto se arrasta; some ao soltar. */
+body.sp-drag-compact { padding-bottom: 60vh !important; }
 body.sp-drag-compact .sp-dnd-host .participant-card {
   padding: 7px 5px !important;
   min-height: 40px !important;

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.87-beta';
+window.SCOREPLACE_VERSION = '2.7.88-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2263,6 +2263,24 @@ window._setDragCompact = function (on) {
     // permanente `.sp-dnd-host` (no HTML do renderizador), então sobrevive a um
     // re-render no meio do arraste. CSS: `body.sp-drag-compact .sp-dnd-host`.
     if (on) b.classList.add('sp-drag-compact'); else b.classList.remove('sp-drag-compact');
+    if (on) {
+      // v2.7.88: centraliza a SEÇÃO dos cards na tela quando eles encolhem — assim a
+      // grade compacta fica no meio do viewport e o trajeto de drop é mínimo. Centra a
+      // .sp-dnd-host do card que está sendo arrastado (ou a 1ª disponível).
+      var _srcCard = document.querySelector('.sp-drag-source');
+      var _host = (_srcCard && _srcCard.closest) ? _srcCard.closest('.sp-dnd-host') : null;
+      if (!_host) _host = document.querySelector('.sp-dnd-host');
+      if (_host) {
+        // Cálculo MANUAL de scroll (mais confiável que scrollIntoView, que sofre com
+        // scroll-padding do header fixo e centra a host AINDA grande). getBoundingClientRect
+        // força reflow → já mede a host JÁ compacta. Centra o meio da host no meio do viewport.
+        var _r = _host.getBoundingClientRect();
+        var _yOff = (window.pageYOffset != null ? window.pageYOffset : (window.scrollY || 0));
+        var _target = _yOff + _r.top + _r.height / 2 - (window.innerHeight / 2);
+        if (_target < 0) _target = 0;
+        try { window.scrollTo({ top: _target, behavior: 'auto' }); } catch (e2) { try { window.scrollTo(0, _target); } catch (e3) {} }
+      }
+    }
     if (!on) {
       // v2.7.87: limpa o marcador do card que estava sendo arrastado (ele fica
       // ESCONDIDO da lista durante o drag — não pode aparecer entre os demais).
