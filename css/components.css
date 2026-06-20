@@ -569,14 +569,16 @@ button[style*="linear-gradient"]:not(.btn):active {
   min-width: 100px;
   width: fit-content;
 }
-/* v2.6.26: stat-box e config-box INVERTEM em relação ao tema pra se destacar do
-   fundo do card. Temas escuros (padrão) → box CLARO + texto ESCURO; tema claro →
-   box ESCURO + texto CLARO. Quando estão sobre FOTO de local, o inline _pReadBg
-   (+ color !important) vence essas regras e mantém tarja escura + texto claro. */
+/* v2.7.77: REVERTIDO o "inverter" da v2.6.26 (box CLARO no tema escuro) — ficava
+   claro/agressivo. Agora o box é MAIS ESCURO que o card (não preto) + fonte CLARA
+   (não branca), iguais ao _photoReadBox() (scrim rgba(0,0,0,0.40) sobre o card →
+   ACOMPANHA a tonalidade do card, dashboard e detalhe idênticos). Sobre FOTO o
+   inline _pReadBg usa os MESMOS valores, então fica tudo consistente. Tema CLARO
+   mantém box escuro + texto claro (também "mais escuro que o card"). */
 .stat-box, .tourn-config-box {
-  background: rgba(226,232,240,0.92);
-  color: #1e293b;
-  border: 1px solid rgba(0,0,0,0.06);
+  background: rgba(0,0,0,0.40);
+  color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,0.10);
 }
 [data-theme="light"] .stat-box,
 [data-theme="light"] .tourn-config-box {
