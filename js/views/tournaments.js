@@ -424,6 +424,8 @@ function renderTournaments(container, tournamentId = null) {
     window._duplaDragStart = function(evt, uidOrName, tId) {
         evt.dataTransfer.setData('text/plain', JSON.stringify({ uidOrName: uidOrName, tId: tId }));
         evt.dataTransfer.effectAllowed = 'move';
+        // v2.7.89: guarda onde o card foi pego (centra a seção compacta nesse ponto).
+        window._spDragPickY = (typeof evt.clientY === 'number' && evt.clientY > 0) ? evt.clientY : (window.innerHeight / 2);
         // v2.7.86/87: esconde o card arrastado + compacta os outros (drop mais perto).
         setTimeout(function () { if (window._markDragSource) window._markDragSource(evt.target); if (window._setDragCompact) window._setDragCompact(true); }, 0);
     };
@@ -2936,53 +2938,63 @@ function renderTournaments(container, tournamentId = null) {
             function _safeAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 
             if (_isDoublesTournament && !drawDone) {
-              // Convites de dupla pendentes (manualPairing='open') — visível a todos.
+              // v2.7.89: convite pendente vira CARD DE DUPLA PENDENTE (âmbar) DENTRO da
+              // seção "Sem dupla" — visível a todos. Os dois envolvidos saem da lista de
+              // solos (estão em dupla pendente). Botões por papel: convidante = "Cancelar
+              // convite"; convidado = "Confirmar/Cancelar"; demais = sem botão.
               var _cuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
               var _reqs = Array.isArray(t.pairRequests) ? t.pairRequests : [];
-              var _pendingHtml = '';
-              if (_reqs.length) {
-                _pendingHtml = '<div style="margin-bottom:1.2rem;">'
-                  + '<div style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">⏳ Convites de dupla (' + _reqs.length + ')</div>'
-                  + '<div style="display:flex;flex-direction:column;gap:6px;">'
-                  + _reqs.map(function(r){
-                      var amInvitee = _cuUid && r.inviteeUid === _cuUid;
-                      var amInviter = _cuUid && r.inviterUid === _cuUid;
-                      var label = amInvitee ? (window._safeHtml(r.inviterName || 'Alguém') + ' quer formar dupla com você')
-                                : amInviter ? ('Convite enviado para ' + window._safeHtml(r.inviteeName || ''))
-                                : (window._safeHtml(r.inviterName || '') + ' → ' + window._safeHtml(r.inviteeName || '') + ' (aguardando)');
-                      var btns = '';
-                      var tIdA = _safeAttr(String(t.id)), rIdA = _safeAttr(r.id);
-                      if (amInvitee) {
-                        btns = '<button onclick="event.stopPropagation();window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;color:#34d399;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;">✅ Confirmar</button>'
-                            + '<button onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;color:#f87171;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;margin-left:6px;">❌ Cancelar</button>';
-                      } else if (amInviter || isOrg) {
-                        btns = '<button onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;color:#f87171;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;">Cancelar</button>';
-                      }
-                      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 12px;">'
-                           + '<span style="font-size:0.85rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;">⏳ ' + label + '</span>'
-                           + '<span style="flex-shrink:0;white-space:nowrap;">' + btns + '</span></div>';
-                    }).join('')
-                  + '</div></div>';
-              }
-              // Modo duplas pré-sorteio: duas seções com drag-drop
+              var _pendUids = {};
+              _reqs.forEach(function(r){ if (r && r.inviterUid) _pendUids[r.inviterUid] = 1; if (r && r.inviteeUid) _pendUids[r.inviteeUid] = 1; });
+              var _soloAvailable = _soloParticipants.filter(function(p){ var u = typeof p === 'object' ? (p.uid || '') : ''; return !(u && _pendUids[u]); });
+              var _pendAv = function(n){
+                var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+                var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
+                return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;min-width:0;"><img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.9rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(n) + '</span></div>';
+              };
+              var _pendingCard = function(r){
+                var amInvitee = _cuUid && r.inviteeUid === _cuUid;
+                var amInviter = _cuUid && r.inviterUid === _cuUid;
+                var tIdA = _safeAttr(String(t.id)), rIdA = _safeAttr(r.id);
+                var _btns = '';
+                if (amInvitee) {
+                  _btns = '<button type="button" class="btn btn-success btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">✅ Confirmar</button>'
+                        + '<button type="button" class="btn btn-danger btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;margin-left:6px;" onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">❌ Cancelar</button>';
+                } else if (amInviter) {
+                  _btns = '<button type="button" class="btn btn-danger btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 12px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">Cancelar convite</button>';
+                } else if (isOrg) {
+                  _btns = '<button type="button" class="btn btn-danger btn-micro" style="min-height:0;height:28px;line-height:1;padding:0 12px;font-size:0.72rem;font-weight:800;" onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">Cancelar</button>';
+                }
+                var _status = amInvitee ? ('⏳ ' + window._safeHtml(r.inviterName || 'Alguém') + ' te convidou — aceite ou recuse')
+                            : amInviter ? ('⏳ Convite enviado — aguardando ' + window._safeHtml(r.inviteeName || ''))
+                            : '⏳ Dupla pendente — aguardando aceite';
+                return '<div style="background:linear-gradient(135deg,rgba(180,130,20,0.32),rgba(251,191,36,0.16));border:1px solid rgba(251,191,36,0.55);border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);">' +
+                  '<div style="display:flex;flex-direction:column;gap:6px;">' +
+                    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;">' + _pendAv(r.inviterName || '') + '<span style="color:#fbbf24;font-weight:800;flex-shrink:0;">+</span>' + _pendAv(r.inviteeName || '') + '</div>' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
+                      '<span style="font-size:0.72rem;color:#fbbf24;font-weight:600;min-width:0;">' + _status + '</span>' +
+                      (_btns ? '<span style="flex-shrink:0;white-space:nowrap;">' + _btns + '</span>' : '') +
+                    '</div>' +
+                  '</div></div>';
+              };
+              var _pendingCardsHtml = _reqs.length ? ('<div style="display:flex;flex-direction:column;gap:6px;' + (_soloAvailable.length ? 'margin-top:6px;' : '') + '">' + _reqs.map(_pendingCard).join('') + '</div>') : '';
+              var _semDuplaTotal = _soloAvailable.length + _reqs.length;
+              // Modo duplas pré-sorteio: Sem Dupla (solos arrastáveis + duplas pendentes âmbar) + Duplas formadas
               participantsHtml = `
                 <div class="mt-5 mb-4">
                   <h3 style="margin-bottom:1.2rem;font-size:1.1rem;color:var(--text-bright);border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     👥 Inscritos <span style="font-size:0.8rem;background:rgba(255,255,255,0.1);padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">${individualCountParts}</span>
                   </h3>
 
-                  ${_soloParticipants.length > 0 ? `
+                  ${(_soloAvailable.length > 0 || _reqs.length > 0) ? `
                   <div style="margin-bottom:1.2rem;">
-                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                      <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (${_soloParticipants.length})</span>
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+                      <span style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (${_semDuplaTotal})</span>
                       <span style="font-size:0.65rem;color:var(--text-muted);">— Arraste um card sobre outro para formar a dupla</span>
                     </div>
-                    <div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">
-                      ${_soloParticipants.map(function(p) { return _duplaCard(p, true, String(t.id)); }).join('')}
-                    </div>
+                    ${_soloAvailable.length > 0 ? `<div class="sp-dnd-host" style="display:flex;flex-direction:column;gap:6px;">${_soloAvailable.map(function(p) { return _duplaCard(p, true, String(t.id)); }).join('')}</div>` : ''}
+                    ${_pendingCardsHtml}
                   </div>` : '<div style="margin-bottom:1rem;padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:0.82rem;color:#34d399;text-align:center;">✅ Todos com dupla formada</div>'}
-
-                  ${_pendingHtml}
 
                   ${_pairedParticipants.length > 0 ? `
                   <div>

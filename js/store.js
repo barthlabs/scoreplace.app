@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.88-beta';
+window.SCOREPLACE_VERSION = '2.7.89-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2271,12 +2271,14 @@ window._setDragCompact = function (on) {
       var _host = (_srcCard && _srcCard.closest) ? _srcCard.closest('.sp-dnd-host') : null;
       if (!_host) _host = document.querySelector('.sp-dnd-host');
       if (_host) {
-        // Cálculo MANUAL de scroll (mais confiável que scrollIntoView, que sofre com
-        // scroll-padding do header fixo e centra a host AINDA grande). getBoundingClientRect
-        // força reflow → já mede a host JÁ compacta. Centra o meio da host no meio do viewport.
+        // v2.7.89: a seção é centrada ONDE O CARD FOI PEGO (clientY do dragstart) — não no
+        // meio da tela. Assim a grade compacta fica embaixo do dedo. Cálculo MANUAL de scroll
+        // (mais confiável que scrollIntoView). getBoundingClientRect força reflow → já mede a
+        // host JÁ compacta.
         var _r = _host.getBoundingClientRect();
         var _yOff = (window.pageYOffset != null ? window.pageYOffset : (window.scrollY || 0));
-        var _target = _yOff + _r.top + _r.height / 2 - (window.innerHeight / 2);
+        var _pickY = (typeof window._spDragPickY === 'number') ? window._spDragPickY : (window.innerHeight / 2);
+        var _target = _yOff + _r.top + _r.height / 2 - _pickY;
         if (_target < 0) _target = 0;
         try { window.scrollTo({ top: _target, behavior: 'auto' }); } catch (e2) { try { window.scrollTo(0, _target); } catch (e3) {} }
       }

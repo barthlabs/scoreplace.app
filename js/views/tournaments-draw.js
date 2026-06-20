@@ -1715,6 +1715,8 @@ window.handleDragStart = function (e, idx, tId) {
     e.dataTransfer.setData('text/plain', JSON.stringify({ idx, tId }));
     e.dataTransfer.effectAllowed = 'move';
     setTimeout(() => e.target.style.opacity = '0.4', 0);
+    // v2.7.89: guarda ONDE o card foi pego (pra centrar a seção compacta nesse ponto).
+    window._spDragPickY = (typeof e.clientY === 'number' && e.clientY > 0) ? e.clientY : (window.innerHeight / 2);
     // v2.7.86/87: esconde o card arrastado da lista + compacta os outros (só-nome,
     // grade) — drop mais perto. setTimeout pra não corromper a imagem do drag.
     setTimeout(function () { if (window._markDragSource) window._markDragSource(e.target); if (window._setDragCompact) window._setDragCompact(true); }, 0);
