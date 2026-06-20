@@ -125,7 +125,12 @@ service cloud.firestore {
           'pairRequests',
           // v2.7.75: pedidos de vínculo/mescla pendentes — o usuário real aceita
           // (assume a vaga do genérico) ou recusa, alterando pendingMerges.
-          'pendingMerges'
+          'pendingMerges',
+          // v2.7.84: nextDrawAt é um índice DERIVADO recomputado em TODO save (cliente
+          // e servidor). Qualquer save de participante (placar, convite de dupla, etc.)
+          // recalcula esse campo — sem permiti-lo, a regra rejeitava o save inteiro
+          // (ex.: convite de dupla do participante não persistia → sem botão de aceite).
+          'nextDrawAt'
         ]);
     }
 

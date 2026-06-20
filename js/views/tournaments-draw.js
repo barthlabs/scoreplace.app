@@ -2176,10 +2176,19 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
             return;
         }
         t.updatedAt = new Date().toISOString();
-        window.FirestoreDB.saveTournament(t);
-        if (typeof window._sendUserNotification === 'function') window._sendUserNotification(uid2, { type: 'enrollment_new', title: '🤝 Convite de dupla', message: name1 + ' quer formar dupla com você em ' + window._safeHtml(t.name || '') + '. Abra o torneio para aceitar.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
-        if (typeof showNotification === 'function') showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
-        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        // v2.7.84: salva o convite ANTES de notificar — e mostra erro se o Firestore
+        // rejeitar (antes era silencioso: o convite não persistia e o convidado ficava
+        // sem o botão de aceitar). Só notifica/avisa "enviado" após o save confirmar.
+        Promise.resolve(window.FirestoreDB.saveTournament(t)).then(function() {
+            if (typeof window._sendUserNotification === 'function') window._sendUserNotification(uid2, { type: 'enrollment_new', title: '🤝 Convite de dupla', message: name1 + ' quer formar dupla com você em ' + window._safeHtml(t.name || '') + '. Abra o torneio para aceitar ou recusar.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
+            if (typeof showNotification === 'function') showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        }).catch(function(e) {
+            // não persistiu → remove o convite local e avisa (loud failure)
+            try { if (window._teamFormation && window._teamFormation.cancelPair) window._teamFormation.cancelPair(t, uid1 + '__' + uid2, uid1); } catch (_) {}
+            if (typeof showNotification === 'function') showNotification('Não foi possível enviar', 'O convite não pôde ser salvo (' + ((e && (e.code || e.message)) || 'erro') + '). Tente de novo.', 'error');
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        });
     };
     if (typeof showConfirmDialog === 'function') showConfirmDialog('🤝 Convidar para dupla?', 'Enviar convite para "' + name2 + '" formar dupla com você?', _send, null, { type: 'info', confirmText: 'Enviar convite', cancelText: 'Cancelar' });
     else _send();

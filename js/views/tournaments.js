@@ -469,6 +469,16 @@ function renderTournaments(container, tournamentId = null) {
             return;
         }
         window._formDuplaByUids(tId, res.inviterName, res.inviterUid, res.inviteeName, res.inviteeUid);
+        // v2.7.84: comunicados de ACEITE — pro convidante (fundamental) + formação da
+        // dupla pra todos os inscritos (caráter geral).
+        var _t2 = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        var _newTeam = (res.inviterName || '') + ' / ' + (res.inviteeName || '');
+        if (res.inviterUid && typeof window._sendUserNotification === 'function') {
+            window._sendUserNotification(res.inviterUid, { type: 'enrollment_new', title: '✅ Dupla aceita!', message: window._safeHtml(res.inviteeName || '') + ' aceitou formar dupla com você em ' + window._safeHtml((_t2 && _t2.name) || '') + ': ' + window._safeHtml(_newTeam), tournamentId: String(tId), tournamentName: (_t2 && _t2.name) || '', level: 'fundamental' });
+        }
+        if (_t2 && typeof window._notifyTournamentParticipants === 'function') {
+            window._notifyTournamentParticipants(_t2, { type: 'enrollment_new', title: '👫 Nova dupla formada', message: 'A dupla ' + window._safeHtml(_newTeam) + ' foi formada em ' + window._safeHtml(_t2.name || '') + '.', tournamentId: String(tId), tournamentName: _t2.name || '', level: 'all' });
+        }
     };
 
     // Cancelar/recusar um convite pendente (iniciante ou alvo).
@@ -2927,8 +2937,8 @@ function renderTournaments(container, tournamentId = null) {
                       var btns = '';
                       var tIdA = _safeAttr(String(t.id)), rIdA = _safeAttr(r.id);
                       if (amInvitee) {
-                        btns = '<button onclick="event.stopPropagation();window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;color:#34d399;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;">✅ Aceitar</button>'
-                            + '<button onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;color:#f87171;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;margin-left:6px;">❌ Recusar</button>';
+                        btns = '<button onclick="event.stopPropagation();window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;color:#34d399;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;">✅ Confirmar</button>'
+                            + '<button onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;color:#f87171;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;margin-left:6px;">❌ Cancelar</button>';
                       } else if (amInviter || isOrg) {
                         btns = '<button onclick="event.stopPropagation();window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;color:#f87171;font-size:0.72rem;font-weight:600;padding:4px 10px;cursor:pointer;">Cancelar</button>';
                       }
