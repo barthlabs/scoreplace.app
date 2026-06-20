@@ -1469,3 +1469,19 @@ button[data-spinning="1"] {
   background: #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
+
+/* v2.7.68: TRAVA DE SCROLL DE FUNDO + fim do scroll chaining.
+   (1) Quando há overlay de tela cheia aberto, o store.js adiciona .sp-scroll-locked
+       no <body> → a página atrás NÃO rola (iOS-safe: position:fixed + restaura scroll).
+   (2) overscroll-behavior:contain impede o scroll de modais/listas "vazar" pra trás. */
+body.sp-scroll-locked {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+  overflow: hidden;
+}
+html, body,
+.modal-overlay, .modal, .modal-content, .bottom-sheet {
+  overscroll-behavior: contain;
+}

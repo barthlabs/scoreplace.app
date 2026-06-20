@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.67-beta';
+window.SCOREPLACE_VERSION = '2.7.68-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -1951,6 +1951,57 @@ window._removeFromWaitlist = function(t, name) {
   }
   return removed;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v2.7.68: TRAVA DE SCROLL DE FUNDO (global) — quando um overlay/modal de tela
+// cheia está aberto, a página ATRÁS não rola mais. Resolve o bug de "scrollar o
+// modal e a tela de baixo rolar junto" em TODO o programa, sem tocar em cada
+// overlay. Detecta qualquer filho de <body> position:fixed cobrindo ~toda a
+// viewport com z-index alto e trava o body (iOS-safe: position:fixed + restaura o
+// scroll ao fechar). Cobre overlays criados dinamicamente E modais .active.
+(function () {
+  if (typeof window === 'undefined' || typeof MutationObserver === 'undefined') return;
+  var locked = false, savedY = 0, raf = null;
+  function isOverlay(el) {
+    if (!el || el.nodeType !== 1) return false;
+    var tag = el.tagName;
+    if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK' || tag === 'NOSCRIPT' || tag === 'TEMPLATE') return false;
+    var cs; try { cs = window.getComputedStyle(el); } catch (e) { return false; }
+    if (!cs || cs.position !== 'fixed') return false;
+    if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity || '1') === 0 || cs.pointerEvents === 'none') return false;
+    if ((parseInt(cs.zIndex, 10) || 0) < 50) return false;
+    var r; try { r = el.getBoundingClientRect(); } catch (e) { return false; }
+    return r.width >= window.innerWidth * 0.9 && r.height >= window.innerHeight * 0.9;
+  }
+  function anyOpen() {
+    var b = document.body; if (!b) return false;
+    var k = b.children;
+    for (var i = 0; i < k.length; i++) { if (isOverlay(k[i])) return true; }
+    return false;
+  }
+  function apply() {
+    var want = anyOpen();
+    if (want && !locked) {
+      locked = true;
+      savedY = window.scrollY || window.pageYOffset || 0;
+      document.body.style.top = (-savedY) + 'px';
+      document.body.classList.add('sp-scroll-locked');
+    } else if (!want && locked) {
+      locked = false;
+      document.body.classList.remove('sp-scroll-locked');
+      document.body.style.top = '';
+      window.scrollTo(0, savedY);
+    }
+  }
+  function schedule() { if (raf) return; raf = requestAnimationFrame(function () { raf = null; apply(); }); }
+  function start() {
+    if (!document.body) { document.addEventListener('DOMContentLoaded', start); return; }
+    try { new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] }); } catch (e) {}
+    apply();
+  }
+  start();
+  window._refreshScrollLock = schedule; // pra forçar re-checagem se necessário
+})();
 
 // v1.8.9-beta: participant avatar HTML — photo with initial fallback
 // pp: {photoURL, displayName/name} or string name; size: px integer
