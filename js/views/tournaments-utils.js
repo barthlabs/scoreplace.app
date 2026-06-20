@@ -1024,14 +1024,33 @@ window._buildProgressInner = function(t) {
     '<span style="font-size:0.92rem;font-weight:800;">' + prog.completed + '/' + prog.total + (_isLiga ? ' jogos' : ' partidas') + ' (' + prog.pct + '%)</span>' +
   '</div>';
 
-  // Sem timeline confiável → barra simples (comportamento antigo).
-  if (!actualStart || !schedStart || !plannedEnd || plannedEnd <= schedStart) {
+  // v2.7.79: barra simples ("pobre") SÓ quando não há janela programada (sem
+  // início/fim confiável). Antes exigia também actualStart → torneio sorteado mas
+  // ainda não iniciado caía na pobre mesmo tendo datas. Agora, havendo janela, usa
+  // a barra RICA em modo "aguardando início" (sem a linha de tempo real ainda).
+  if (!schedStart || !plannedEnd || plannedEnd <= schedStart) {
+    // v2.7.79: sem âncora de tempo (torneio sem data E sem 1º jogo lançado) não dá
+    // pra desenhar a janela programada. Mesmo assim NUNCA mostra a barra pelada:
+    // estado "⏳ Aguardando início" + DURAÇÃO ESTIMADA (defaults quando faltam os
+    // campos). Quando o 1º placar é lançado (grava tournamentStarted) ou há data,
+    // sobe pra barra rica completa (dupla verde+azul + horários).
     var c = prog.pct === 100 ? '#10b981' : (prog.pct > 50 ? '#3b82f6' : '#f59e0b');
-    return head +
+    var _pending = !isFinished && prog.pct < 100 && !actualStart;
+    var _waitTop2 = _pending
+      ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:#93c5fd;">⏳ Aguardando início</div>'
+      : '';
+    var _estMin2 = Math.round(window._estimateTournamentMinutes ? (window._estimateTournamentMinutes(t) || 0) : 0);
+    var _estH = Math.floor(_estMin2 / 60), _estM = _estMin2 % 60;
+    var _estStr2 = _estH > 0 ? (_estH + 'h' + (_estM ? (' ' + _estM + 'min') : '')) : (_estM + 'min');
+    var _estLine2 = (_pending && _estMin2 > 0)
+      ? '<div style="margin-top:7px;font-size:0.72rem;color:#93c5fd;font-weight:600;text-align:center;">⏱️ Duração estimada: ~' + _estStr2 + '</div>'
+      : '';
+    return head + _waitTop2 +
       '<div style="width:100%;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">' +
         '<div style="width:' + prog.pct + '%;height:100%;background:' + c + ';border-radius:4px;transition:width 0.5s ease;"></div>' +
       '</div>' +
       (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ ' + (_isLiga ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
+      _estLine2 +
       _ligaBarHtml;
   }
 
@@ -1040,7 +1059,10 @@ window._buildProgressInner = function(t) {
   // fim "real" da rodada (Liga) quando completa → congela o cronômetro
   var _roundEndReal = (_isLiga && _roundComplete && _roundCompletedMs) ? _roundCompletedMs : null;
   var endForElapsed = _roundEndReal ? _roundEndReal : ((isFinished && finishedMs != null) ? finishedMs : now);
-  var elapsedMs = endForElapsed - actualStart;
+  // v2.7.79: não iniciado (sorteado, sem 1º ponto) → modo "aguardando início":
+  // não há "início real / decorrido"; usamos só a janela programada + barras.
+  var _notStarted = !actualStart;
+  var elapsedMs = _notStarted ? 0 : (endForElapsed - actualStart);
   var expectedFrac = (now - schedStart) / (plannedEnd - schedStart);
   if (expectedFrac < 0) expectedFrac = 0;
   if (expectedFrac > 1) expectedFrac = 1;
@@ -1058,13 +1080,13 @@ window._buildProgressInner = function(t) {
   var estEndMs;
   if (_roundEndReal) estEndMs = _roundEndReal;
   else if (isFinished) estEndMs = (finishedMs != null ? finishedMs : now);
-  else if (progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
+  else if (!_notStarted && progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
   else estEndMs = plannedEnd;
 
   var _endLabel = _roundEndReal ? 'final real' : (isFinished ? 'final real' : 'final estimado');
   var _elapsedLabel = (_roundEndReal || isFinished) ? 'durou' : 'decorrido';
   // mostra DATA quando início e fim caem em dias diferentes
-  var _multiDay = _date(actualStart) !== _date(estEndMs);
+  var _multiDay = !_notStarted && (_date(actualStart) !== _date(estEndMs));
 
   var _timeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
   var _lblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
@@ -1085,14 +1107,18 @@ window._buildProgressInner = function(t) {
     '</div>';
   };
 
-  var topRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
-    _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
-    '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
-      '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
-      '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
-    '</div>' +
-    _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
-  '</div>';
+  // v2.7.79: antes de iniciar não há "início real / decorrido" — mostra só um
+  // selo "⏳ Aguardando início" (a janela programada vem na linha de baixo).
+  var topRow = _notStarted
+    ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:#93c5fd;">⏳ Aguardando início</div>'
+    : '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
+        _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
+          '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
+          '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
+        '</div>' +
+        _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
+      '</div>';
   var realBar = '<div style="width:100%;height:11px;background:rgba(255,255,255,0.1);border-radius:6px 6px 0 0;overflow:hidden;">' +
     '<div style="width:' + Math.round(progFrac * 100) + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' +
   '</div>';
