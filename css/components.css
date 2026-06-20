@@ -605,6 +605,11 @@ body.sp-drag-compact .sp-dnd-host {
   gap: 6px !important;
   align-items: stretch !important;
 }
+/* v2.7.87: o card que está sendo arrastado some da lista (não pode aparecer entre
+   os demais — o "fantasma" do drag já segue o cursor). Especificidade ALTA de
+   propósito (0,4,1) pra vencer a regra do card compacto `…participant-card{display:flex!important}`. */
+body.sp-drag-compact .sp-dnd-host .participant-card.sp-drag-source,
+body.sp-drag-compact .participant-card.sp-drag-source { display: none !important; }
 body.sp-drag-compact .sp-dnd-host .participant-card {
   padding: 7px 5px !important;
   min-height: 40px !important;

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.86-beta';
+window.SCOREPLACE_VERSION = '2.7.87-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2263,6 +2263,19 @@ window._setDragCompact = function (on) {
     // permanente `.sp-dnd-host` (no HTML do renderizador), então sobrevive a um
     // re-render no meio do arraste. CSS: `body.sp-drag-compact .sp-dnd-host`.
     if (on) b.classList.add('sp-drag-compact'); else b.classList.remove('sp-drag-compact');
+    if (!on) {
+      // v2.7.87: limpa o marcador do card que estava sendo arrastado (ele fica
+      // ESCONDIDO da lista durante o drag — não pode aparecer entre os demais).
+      var src = document.querySelectorAll('.sp-drag-source');
+      for (var i = 0; i < src.length; i++) src[i].classList.remove('sp-drag-source');
+    }
+  } catch (e) {}
+};
+// Marca o card que está sendo arrastado (pra escondê-lo da lista durante o drag).
+window._markDragSource = function (el) {
+  try {
+    var card = el && el.closest ? el.closest('.participant-card') : null;
+    if (card) card.classList.add('sp-drag-source');
   } catch (e) {}
 };
 // Desliga o modo compacto em QUALQUER fim de arraste (uma vez só).

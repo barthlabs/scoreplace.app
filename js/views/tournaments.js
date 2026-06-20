@@ -424,8 +424,8 @@ function renderTournaments(container, tournamentId = null) {
     window._duplaDragStart = function(evt, uidOrName, tId) {
         evt.dataTransfer.setData('text/plain', JSON.stringify({ uidOrName: uidOrName, tId: tId }));
         evt.dataTransfer.effectAllowed = 'move';
-        // v2.7.86: compacta os outros cards durante o arraste (drop mais perto).
-        setTimeout(function () { if (window._setDragCompact) window._setDragCompact(true); }, 0);
+        // v2.7.86/87: esconde o card arrastado + compacta os outros (drop mais perto).
+        setTimeout(function () { if (window._markDragSource) window._markDragSource(evt.target); if (window._setDragCompact) window._setDragCompact(true); }, 0);
     };
 
     window._duplaDropOn = function(evt, targetUidOrName, tId) {
@@ -2906,13 +2906,27 @@ function renderTournaments(container, tournamentId = null) {
                 ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
                 : '<div style="font-size:0.65rem;color:#34d399;margin-top:3px;">✅ Dupla formada</div>';
               var desfazerBtn = (!draggable && isOrg)
-                ? '<button onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;color:#f87171;font-size:0.7rem;padding:3px 8px;cursor:pointer;white-space:nowrap;flex-shrink:0;margin-left:6px;">↩️ Desfazer</button>'
+                ? '<button type="button" class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="min-height:0;height:28px;line-height:1;padding:0 12px;font-size:0.72rem;font-weight:800;white-space:nowrap;flex-shrink:0;margin-left:6px;">↩️ Desfazer</button>'
                 : '';
+              // v2.7.87: DUPLA FORMADA em 2 colunas — cada pessoa com as categorias DELA
+              // logo abaixo do nome; 1ª à esquerda, 2ª à direita (mesma linha quando couber).
+              var _body;
+              if (members) {
+                var _memBlock = function(n, right) {
+                  var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+                  var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
+                  var _av = '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;max-width:100%;"><img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.9rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(n) + '</span></div>';
+                  var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
+                  return '<div style="min-width:0;display:flex;flex-direction:column;gap:2px;flex:1 1 40%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
+                };
+                _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(members[0], false) + (members[1] ? _memBlock(members[1], true) : '') + '</div>';
+              } else {
+                _body = nameHtml + ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, false, t, isOrg) : '');
+              }
               return '<div class="participant-card" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
                 ' style="' + bgStyle + 'border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
-                '<div style="display:flex;flex-direction:column;gap:0;">' +
-                  nameHtml +
-                  ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, !!members, t, isOrg) : '') +
+                '<div style="display:flex;flex-direction:column;gap:6px;">' +
+                  _body +
                   '<div style="display:flex;align-items:center;justify-content:space-between;">' +
                     labelHtml +
                     desfazerBtn +
