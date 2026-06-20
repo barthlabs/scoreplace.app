@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.88-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.89-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🤝 Convite de dupla vira um card pendente na lista.</b> Ao arrastar seu card sobre o de um parceiro, forma-se um <b>card de dupla pendente em âmbar</b> na seção "Sem dupla", visível a todos. No card, <b>quem convidou</b> tem "Cancelar convite"; <b>quem foi convidado</b> tem "✅ Confirmar / ❌ Cancelar". Aceitou, a dupla vira verde em "Duplas formadas".</li>' +
+        '<li><b>🎯 Ao arrastar, a lista compacta centraliza onde você pegou o card</b> — a grade de nomes aparece embaixo do dedo, deixando o caminho até soltar bem curto.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.88-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🖐️ Arrastar cards ficou ainda melhor.</b> Ao arrastar, os outros cards encolhem pra só o nome, a <b>seção fica centralizada na tela</b> (caminho de drop mínimo) e o <b>card que você está segurando some da lista</b> (não fica duplicado). Soltou, tudo volta ao normal.</li>' +
         '<li><b>👫 Card de dupla formada mais legível.</b> Cada pessoa aparece com as <b>categorias logo abaixo do nome</b>, lado a lado (um à esquerda, outro à direita). E o botão <b>Desfazer</b> agora tem a cara dos botões do app.</li>' +
