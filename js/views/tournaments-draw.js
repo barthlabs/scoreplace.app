@@ -1789,26 +1789,40 @@ window.handleDropTeam = function (e, targetIdx) {
         const uid2 = typeof p2snap === 'object' ? (p2snap.uid || '') : '';
         const newName = name1 + ' / ' + name2;
 
-        // v2.0.0: em vez de ir direto pra "Formar dupla", abre o overlay com 2
-        // opções — Mesclar participante (amarelo, esquerda) e Formar equipe
-        // (azul, direita). source = quem foi arrastado (pessoa); target = onde
-        // soltou (placeholder).
+        // v2.7.75: organizador SEMPRE recebe o overlay com 🔵 Formar equipe +
+        // 🔴 Mesclar (vermelho). Mesclar só aparece quando EXATAMENTE um lado é
+        // real (tem uid) e o outro é genérico — e passa por aceite do usuário
+        // real. Formar equipe num torneio individual passa a permitir times pra
+        // todos. Participante (não-org) só pareia A SI MESMO (nunca mescla).
         var _hasMatchesD = (Array.isArray(t.matches) && t.matches.length) ||
                            (Array.isArray(t.rounds) && t.rounds.length) ||
                            (Array.isArray(t.groups) && t.groups.length);
         var _drawDoneD = !!_hasMatchesD || t.status === 'started' || t.status === 'in_progress';
-        var _allowTeam = !_drawDoneD && t.enrollmentMode !== 'individual';
+        var _isOrgDrag = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+        var _oneRealOneGeneric = (!!uid1) !== (!!uid2); // mescla só com 1 real + 1 genérico
+
+        if (!_isOrgDrag) {
+            // Participante: arrastar o PRÓPRIO card sobre outro = propor dupla (com aceite).
+            window._participantSelfPair(tId, name1, uid1, name2, uid2);
+            return;
+        }
         window._showDropChoiceOverlay({
             tId: tId,
             sourceName: name1, sourceUid: uid1,
             targetName: name2, targetUid: uid2,
-            allowTeam: _allowTeam
+            ruleAllowsTeam: (t.enrollmentMode !== 'individual'),
+            drawDone: _drawDoneD,
+            canMerge: _oneRealOneGeneric
         });
 
     } catch (err) { window._error(err); }
 };
 
-// ── v2.0.0: overlay de escolha ao soltar um participante sobre outro ─────────
+// ── v2.7.75: overlay de escolha ao soltar um card sobre outro (organizador) ───
+//  🔵 Formar equipe (azul) SEMPRE — se a regra é individual, avisa que vai
+//     passar a permitir times pra todos.
+//  🔴 Mesclar jogador (vermelho) só quando 1 lado é real (uid) e o outro é
+//     genérico — e dispara aceite do usuário real (vale só no torneio).
 window._showDropChoiceOverlay = function(opts) {
     var old = document.getElementById('drop-choice-overlay');
     if (old) old.remove();
@@ -1816,53 +1830,58 @@ window._showDropChoiceOverlay = function(opts) {
     var ov = document.createElement('div');
     ov.id = 'drop-choice-overlay';
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10045;display:flex;align-items:center;justify-content:center;padding:20px;';
-    var btnMerge = '<button id="dc-merge" style="flex:1;background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1a2e;border:none;border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;">🟡 Mesclar participante</button>';
-    var btnTeam = opts.allowTeam
-        ? '<button id="dc-team" style="flex:1;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border:none;border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;">🔵 Formar equipe</button>'
+    var btnTeam = '<button id="dc-team" style="flex:1;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border:none;border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;">🔵 Formar equipe</button>';
+    var btnMerge = opts.canMerge
+        ? '<button id="dc-merge" style="flex:1;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border:none;border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;">🔴 Mesclar jogador</button>'
         : '';
-    var desc = opts.allowTeam
-        ? 'O que deseja fazer com esses dois participantes?'
-        : '“' + esc(opts.sourceName) + '” vai assumir a vaga de “' + esc(opts.targetName) + '”.';
-    ov.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:20px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.4);">' +
+    // Notas explicativas — distinguir CLARAMENTE formar dupla de mesclar pessoas.
+    var teamNote = opts.ruleAllowsTeam
+        ? '<div style="font-size:0.72rem;color:#93c5fd;margin-top:2px;">🔵 <b>Formar equipe</b>: os dois viram uma dupla.</div>'
+        : '<div style="font-size:0.72rem;color:#fbbf24;margin-top:2px;">🔵 <b>Formar equipe</b>: este torneio é individual — formar dupla vai <b>passar a permitir times pra todos</b>.</div>';
+    var mergeNote = opts.canMerge
+        ? '<div style="font-size:0.72rem;color:#fca5a5;margin-top:4px;">🔴 <b>Mesclar jogador</b>: vincula um participante genérico ao usuário real (com conta). O real assume os jogos do genérico <b>neste torneio</b>. Exige o <b>aceite</b> dele.</div>'
+        : '';
+    ov.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:20px;max-width:400px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.4);">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:1rem;margin-bottom:4px;">' + esc(opts.sourceName) + ' &rarr; ' + esc(opts.targetName) + '</div>' +
-        '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px;">' + desc + '</div>' +
-        '<div style="display:flex;gap:10px;">' + btnMerge + btnTeam + '</div>' +
-        '<button id="dc-cancel" style="width:100%;margin-top:10px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);border-radius:10px;padding:9px;font-weight:600;cursor:pointer;">Cancelar</button>' +
+        '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">O que você quer fazer com esses dois?</div>' +
+        '<div style="display:flex;gap:10px;">' + btnTeam + btnMerge + '</div>' +
+        teamNote + mergeNote +
+        '<button id="dc-cancel" style="width:100%;margin-top:12px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);border-radius:10px;padding:9px;font-weight:600;cursor:pointer;">Cancelar</button>' +
         '</div>';
     document.body.appendChild(ov);
     var close = function() { ov.remove(); };
     var cancelEl = document.getElementById('dc-cancel');
     if (cancelEl) cancelEl.onclick = close;
     ov.onclick = function(e) { if (e.target === ov) close(); };
-    var mergeEl = document.getElementById('dc-merge');
-    if (mergeEl) mergeEl.onclick = function() {
+    var teamEl = document.getElementById('dc-team');
+    if (teamEl) teamEl.onclick = function() {
         close();
-        showConfirmDialog(
-            'Mesclar participante',
-            '“' + opts.sourceName + '” vai assumir a vaga de “' + opts.targetName + '”: entra nos jogos de ' + opts.targetName + ' na chave e o card passa a ser ' + opts.sourceName + '. Você poderá desfazer depois. Confirmar?',
-            function() { window._mergeParticipantConfirm(opts.tId, opts.sourceName, opts.sourceUid, opts.targetName, opts.targetUid); },
-            null,
-            { type: 'warning', confirmText: 'Mesclar', cancelText: 'Cancelar' }
-        );
+        window._formTeamConfirm(opts.tId, opts.sourceName, opts.sourceUid, opts.targetName, opts.targetUid, { changeRule: !opts.ruleAllowsTeam });
     };
-    if (opts.allowTeam) {
-        var teamEl = document.getElementById('dc-team');
-        if (teamEl) teamEl.onclick = function() {
+    if (opts.canMerge) {
+        var mergeEl = document.getElementById('dc-merge');
+        if (mergeEl) mergeEl.onclick = function() {
             close();
-            window._formTeamConfirm(opts.tId, opts.sourceName, opts.sourceUid, opts.targetName, opts.targetUid);
+            window._requestMergeAcceptance(opts);
         };
     }
 };
 
-// ── v2.0.0: formar equipe (lógica preservada da versão anterior) ─────────────
-window._formTeamConfirm = function(tId, name1, uid1, name2, uid2) {
+// ── v2.0.0: formar equipe (lógica preservada) — v2.7.75: opts.changeRule muda a
+//    regra do torneio pra permitir times (quando era individual) PRA TODOS. ────
+window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
     var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
     if (!t) return;
     var newName = name1 + ' / ' + name2;
+    var _changeRule = !!(opts && opts.changeRule);
+    var _msg = _changeRule
+        ? ('Este torneio é individual. Formar a dupla "' + newName + '" vai <b>passar a permitir times pra todos</b> (a regra do torneio muda). Confirmar?')
+        : (name1 + ' e ' + name2 + ' formarão a dupla "' + newName + '". Confirmar?');
     showConfirmDialog(
-        'Formar dupla',
-        name1 + ' e ' + name2 + ' formarão a dupla "' + newName + '". Confirmar?',
+        _changeRule ? 'Formar dupla (muda a regra)' : 'Formar dupla',
+        _msg,
         function() {
+            if (_changeRule) { t.enrollmentMode = 'misto'; } // passa a permitir times pra todos
             var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
             var findIdx = function(uid, name) {
                 if (uid) {
@@ -1976,6 +1995,167 @@ window._mergeParticipantConfirm = function(tId, personName, personUid, placehold
     var container = document.getElementById('view-container');
     if (container) renderTournaments(container, tId);
     if (typeof showNotification === 'function') showNotification('Mesclado', personName + ' assumiu a vaga de ' + placeholderName + '.', 'success');
+};
+
+// ── v2.7.75: MESCLA COM ACEITE ───────────────────────────────────────────────
+// Mesclar vincula um participante GENÉRICO (sem conta) ao usuário REAL (com uid).
+// O real assume os jogos/resultados do genérico NESTE torneio. Como é uma
+// identidade real sendo afetada, NÃO mescla na hora: registra uma pendência em
+// t.pendingMerges[], notifica o uid real e só mescla quando ELE aceitar.
+window._requestMergeAcceptance = function(opts) {
+    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === opts.tId.toString(); });
+    if (!t) return;
+    // Identifica quem é o real (tem uid) e quem é o genérico (sem uid).
+    var realName, realUid, genericName;
+    if (opts.sourceUid && !opts.targetUid) { realName = opts.sourceName; realUid = opts.sourceUid; genericName = opts.targetName; }
+    else if (!opts.sourceUid && opts.targetUid) { realName = opts.targetName; realUid = opts.targetUid; genericName = opts.sourceName; }
+    else {
+        if (typeof showNotification === 'function') showNotification('Não dá pra mesclar', 'A mescla só vincula UM participante genérico a UM usuário real (com conta).', 'warning');
+        return;
+    }
+    showConfirmDialog(
+        '🔴 Mesclar jogador',
+        '“' + window._safeHtml(realName) + '” (usuário real) vai assumir os jogos de “' + window._safeHtml(genericName) + '” <b>só neste torneio</b>. ' +
+        'Vamos enviar um pedido de aceite pra <b>' + window._safeHtml(realName) + '</b> — a mescla só acontece se ele aceitar. Enviar o pedido?',
+        function() {
+            var req = {
+                id: 'merge__' + Date.now() + '__' + Math.floor(Math.random() * 1e6),
+                realName: realName, realUid: realUid,
+                genericName: genericName,
+                byUid: (window.AppStore.currentUser || {}).uid || '',
+                byName: (window.AppStore.currentUser || {}).displayName || 'O organizador',
+                at: new Date().toISOString()
+            };
+            if (!Array.isArray(t.pendingMerges)) t.pendingMerges = [];
+            // evita duplicar o mesmo pedido (mesmo real + mesmo genérico)
+            t.pendingMerges = t.pendingMerges.filter(function(r) { return !(r.realUid === realUid && r.genericName === genericName); });
+            t.pendingMerges.push(req);
+            t.updatedAt = new Date().toISOString();
+            window.FirestoreDB.saveTournament(t);
+            if (typeof window._sendUserNotification === 'function') {
+                window._sendUserNotification(realUid, {
+                    type: 'enrollment_new',
+                    title: '🔗 Pedido de vínculo',
+                    message: req.byName + ' quer que você assuma a participação de “' + window._safeHtml(genericName) + '” no torneio ' + window._safeHtml(t.name || '') + '. Abra o torneio para aceitar ou recusar.',
+                    tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental'
+                });
+            }
+            if (typeof showNotification === 'function') showNotification('Pedido enviado', 'Aguardando ' + realName + ' aceitar o vínculo.', 'success');
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        },
+        null,
+        { type: 'warning', confirmText: 'Enviar pedido', cancelText: 'Cancelar' }
+    );
+};
+
+// O usuário REAL aceita o vínculo → executa a mescla (assume a vaga do genérico).
+window._acceptMergeRequest = function(tId, reqId) {
+    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    if (!t || !Array.isArray(t.pendingMerges)) return;
+    var req = t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
+    if (!req) return;
+    var myUid = (window.AppStore.currentUser || {}).uid;
+    if (!myUid || myUid !== req.realUid) {
+        if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o usuário indicado pode aceitar este vínculo.', 'warning');
+        return;
+    }
+    // remove a pendência ANTES de mesclar (a mescla re-renderiza)
+    t.pendingMerges = t.pendingMerges.filter(function(r) { return r.id !== reqId; });
+    if (window._mergePromptShown) delete window._mergePromptShown[reqId];
+    // person (real) assume a vaga do placeholder (genérico, sem uid)
+    window._mergeParticipantConfirm(tId, req.realName, req.realUid, req.genericName, '');
+    if (req.byUid && typeof window._sendUserNotification === 'function') {
+        window._sendUserNotification(req.byUid, {
+            type: 'enrollment_new', title: '✅ Vínculo aceito',
+            message: window._safeHtml(req.realName) + ' aceitou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.',
+            tournamentId: String(t.id), tournamentName: t.name || '', level: 'all'
+        });
+    }
+};
+
+// O usuário REAL recusa o vínculo → descarta a pendência e avisa o organizador.
+window._rejectMergeRequest = function(tId, reqId) {
+    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    if (!t || !Array.isArray(t.pendingMerges)) return;
+    var req = t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
+    if (!req) return;
+    t.pendingMerges = t.pendingMerges.filter(function(r) { return r.id !== reqId; });
+    if (window._mergePromptShown) delete window._mergePromptShown[reqId];
+    t.updatedAt = new Date().toISOString();
+    window.FirestoreDB.saveTournament(t);
+    if (req.byUid && typeof window._sendUserNotification === 'function') {
+        window._sendUserNotification(req.byUid, {
+            type: 'enrollment_new', title: '❌ Vínculo recusado',
+            message: window._safeHtml(req.realName) + ' recusou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.',
+            tournamentId: String(t.id), tournamentName: t.name || '', level: 'all'
+        });
+    }
+    if (typeof showNotification === 'function') showNotification('Vínculo recusado', '', 'info');
+    if (typeof window._softRefreshView === 'function') window._softRefreshView();
+};
+
+// Mostra ao usuário REAL (quando abre o torneio) o pedido de vínculo pendente.
+// Uma vez por sessão por pedido (não fica re-disparando no soft-refresh).
+window._checkPendingMerges = function(t) {
+    if (!t || !Array.isArray(t.pendingMerges) || !t.pendingMerges.length) return;
+    var myUid = (window.AppStore.currentUser || {}).uid;
+    if (!myUid) return;
+    var req = t.pendingMerges.filter(function(r) { return r.realUid === myUid; })[0];
+    if (!req) return;
+    if (!window._mergePromptShown) window._mergePromptShown = {};
+    if (window._mergePromptShown[req.id]) return;
+    window._mergePromptShown[req.id] = 1;
+    showConfirmDialog(
+        '🔗 Pedido de vínculo',
+        '<b>' + window._safeHtml(req.byName) + '</b> quer que você assuma a participação de “' + window._safeHtml(req.genericName) + '” no torneio <b>' + window._safeHtml(t.name || '') + '</b>. ' +
+        'Você herda os jogos e resultados desse participante <b>neste torneio</b>. Aceitar?',
+        function() { window._acceptMergeRequest(String(t.id), req.id); },
+        function() { window._rejectMergeRequest(String(t.id), req.id); },
+        { type: 'info', confirmText: 'Aceitar', cancelText: 'Recusar' }
+    );
+};
+
+// ── v2.7.75: PARTICIPANTE pareia A SI MESMO (arrastou o próprio card sobre outro)
+//    Só com a regra permitindo times + manualPairing='open'. Nunca mescla. Vira
+//    convite pendente que o parceiro aceita. Espelha o fluxo de _duplaDropOn.
+window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
+    var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+    if (!t) return;
+    if (t.enrollmentMode === 'individual') {
+        if (typeof showNotification === 'function') showNotification('Torneio individual', 'Este torneio não permite a formação de times.', 'info');
+        return;
+    }
+    if (t.manualPairing !== 'open') {
+        if (typeof showNotification === 'function') showNotification('Apenas o organizador', 'Neste torneio, só o organizador forma as duplas.', 'info');
+        return;
+    }
+    var myUid = (window.AppStore.currentUser || {}).uid;
+    if (!myUid || uid1 !== myUid) {
+        if (typeof showNotification === 'function') showNotification('Arraste o seu card', 'Você só pode formar dupla arrastando o SEU próprio card sobre o de outra pessoa.', 'info');
+        return;
+    }
+    if (!uid2) {
+        if (typeof showNotification === 'function') showNotification('Sem conta', name2 + ' não tem conta para aceitar o convite. Peça ao organizador para formar a dupla.', 'info');
+        return;
+    }
+    var _send = function() {
+        if (!window._teamFormation) return;
+        var res = window._teamFormation.requestPair(t, uid1, uid2, name1, name2);
+        if (!res.ok) { if (typeof showNotification === 'function') showNotification('Não foi possível', window._pairErrorMsg ? window._pairErrorMsg(res.error) : res.error, 'warning'); return; }
+        if (res.action === 'confirm' && typeof window._formDuplaByUids === 'function') {
+            var iN = (res.inviterUid === uid1) ? name1 : name2, iU = res.inviterUid;
+            var eN = (res.inviterUid === uid1) ? name2 : name1, eU = (res.inviterUid === uid1) ? uid2 : uid1;
+            window._formDuplaByUids(tId, iN, iU, eN, eU);
+            return;
+        }
+        t.updatedAt = new Date().toISOString();
+        window.FirestoreDB.saveTournament(t);
+        if (typeof window._sendUserNotification === 'function') window._sendUserNotification(uid2, { type: 'enrollment_new', title: '🤝 Convite de dupla', message: name1 + ' quer formar dupla com você em ' + window._safeHtml(t.name || '') + '. Abra o torneio para aceitar.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
+        if (typeof showNotification === 'function') showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    };
+    if (typeof showConfirmDialog === 'function') showConfirmDialog('🤝 Convidar para dupla?', 'Enviar convite para "' + name2 + '" formar dupla com você?', _send, null, { type: 'info', confirmText: 'Enviar convite', cancelText: 'Cancelar' });
+    else _send();
 };
 
 // ── v2.0.0: DESFAZER MESCLAGEM — restaura o placeholder na posição e devolve a

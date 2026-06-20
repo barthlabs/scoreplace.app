@@ -3142,6 +3142,10 @@ function renderTournaments(container, tournamentId = null) {
         if (_nt && window._checkPollNotifications) {
             window._checkPollNotifications(_nt);
         }
+        // v2.7.75: pedido de vínculo (mescla) pendente pro usuário real aceitar/recusar
+        if (_nt && window._checkPendingMerges) {
+            window._checkPendingMerges(_nt);
+        }
         // v2.1.67: sincroniza o "Planejar ida" do usuário com a data/hora/local
         // atuais do torneio — propaga mudanças feitas pelo organizador (cada um
         // atualiza o próprio plano ao abrir o torneio).

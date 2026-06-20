@@ -122,7 +122,10 @@ service cloud.firestore {
           // v1.8.99: memberUids sempre recomputado em saveTournament
           'memberUids',
           // Convites de dupla pendentes (participante envia/aceita/cancela)
-          'pairRequests'
+          'pairRequests',
+          // v2.7.75: pedidos de vínculo/mescla pendentes — o usuário real aceita
+          // (assume a vaga do genérico) ou recusa, alterando pendingMerges.
+          'pendingMerges'
         ]);
     }
 
