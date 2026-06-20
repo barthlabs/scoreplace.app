@@ -9,7 +9,17 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.71-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.81-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🃏 Card de inscrito igual em todo lugar.</b> O mesmo card vale na lista de inscritos e na página do torneio, antes e depois do sorteio. O VIP passa a ser indicado só pelo card dourado mais o botão (sem etiquetas repetidas), e os botões (VIP, excluir) ficam com a altura e a posição certas.</li>' +
+        '<li><b>👫 Arrastar um card sobre o outro ficou claro.</b> Aparece um aviso com duas opções bem separadas: <b>🔵 Formar equipe</b> (vira dupla, direto, sem perguntar duas vezes) e <b>🔴 Mesclar jogador</b> (vincula um participante genérico ao usuário real — e só acontece com o <b>aceite</b> dessa pessoa, valendo só naquele torneio). Vale arrastando tanto na lista de inscritos quanto na seção "Sem Dupla".</li>' +
+        '<li><b>🎨 Caixas escuras e legíveis no tema escuro.</b> As caixas de "Inscritos", "configuração" e afins deixaram de ficar claras e estouradas — agora são mais escuras que o card (acompanhando a cor dele) com texto claro, igual na tela inicial e no detalhe do torneio, em todos os torneios.</li>' +
+        '<li><b>📊 Barra de progresso rica desde o começo.</b> Mesmo antes do torneio começar, a barra mostra "aguardando início" com a janela programada (início e fim). Quando o torneio não tem data marcada, mostra a duração estimada em vez de uma barra crua.</li>' +
+        '<li><b>🎚️ Controle de "ficar de fora" mais fácil de achar.</b> Na criação e edição de Pontos Corridos, a opção de permitir (ou não) que cada inscrito se marque como Desativado pra ficar de fora de um sorteio agora fica logo no topo da configuração da fase.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.7.71-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(19 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🧭 Cabeçalho do topo mais firme.</b> Ao puxar a tela além do topo (o efeito elástico), o cabeçalho com o logo deixou de "passar por trás" do segundo cabeçalho — agora ele fica fixo no lugar e só o conteúdo dá a elástica.</li>' +
         '<li><b>🔁 Repescagem de verdade.</b> No construtor de fases, a opção de repescagem deixou de ser um "BYE disfarçado" (os melhores entravam de graça). Agora <b>todos jogam</b> a primeira rodada; os melhores perdedores voltam — os 3 primeiros direto e o 4º disputa uma vaga contra quem ficou de fora — até fechar a chave. O ranking é pelo desempenho na rodada (com os critérios de desempate).</li>' +
