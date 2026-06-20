@@ -91,10 +91,19 @@
   flex-wrap: nowrap;
   overflow: visible;
   gap: 4px;
-  position: sticky;
+  /* v2.7.71: topbar FIXED (era sticky). Com sticky, ao puxar além do topo (elástica
+     do overscroll) a topbar descia junto e cruzava o back-header (que é fixed) —
+     deixando os cabeçalhos desalinhados. Fixed mantém a topbar pinada no topo; só o
+     conteúdo dá a elástica. O .main-content ganha padding-top (dinâmico em
+     _reflowChrome) pra compensar a topbar sair do fluxo. */
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: var(--z-topbar);  /* see style.css z-index hierarchy */
 }
+/* compensação default da topbar fixa (refinada por _reflowChrome com a altura real) */
+.main-content { padding-top: 76px; }
 
 .page-title {
   display: flex;

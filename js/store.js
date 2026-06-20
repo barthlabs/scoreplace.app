@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.7.70-beta';
+window.SCOREPLACE_VERSION = '2.7.71-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -1271,6 +1271,14 @@ window._reflowChrome = function() {
       }
     }
   });
+  // v2.7.71: topbar agora é FIXED (não mais sticky) → compensa a saída do fluxo com
+  // padding-top no .main-content = altura REAL da topbar. Dinâmico: acompanha a
+  // topbar quebrando em 2 linhas em telas estreitas. Sem isso o conteúdo subiria
+  // pra trás da topbar.
+  // !important pra vencer a regra `.main-content { padding:0 !important }` (centralização em telas largas).
+  var mc = document.querySelector('.main-content');
+  if (mc && topbarH > 0) mc.style.setProperty('padding-top', (topbarH + 16) + 'px', 'important'); // +16 = o respiro (1rem) que a topbar tinha em margin-bottom
+
   var vc = document.getElementById('view-container');
   if (vc) {
     if (!hasBackHeader) {
