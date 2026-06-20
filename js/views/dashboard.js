@@ -1548,6 +1548,38 @@ function renderDashboard(container) {
   // v1.8.2-beta: seção abaixo da hero box com (a) partidas pendentes de
   // resultado ou aprovação, (b) próximas partidas (unificado com "Suas Próximas
   // Partidas" em v1.9.0-beta), (c) últimos resultados confirmados.
+  // v2.7.85: convites de DUPLA pendentes pro usuário CONVIDADO — banner âmbar no
+  // dashboard com Confirmar/Cancelar (antes só aparecia dentro do torneio).
+  function _buildPendingPairInvitesHtml() {
+    var cu = window.AppStore.currentUser;
+    if (!cu || !cu.uid) return '';
+    var myUid = cu.uid;
+    var tours = (typeof window.AppStore.getVisibleTournaments === 'function') ? (window.AppStore.getVisibleTournaments() || []) : (window.AppStore.tournaments || []);
+    var items = [];
+    (tours || []).forEach(function(t) {
+      if (!t || !Array.isArray(t.pairRequests) || !t.pairRequests.length) return;
+      var drawn = (Array.isArray(t.matches) && t.matches.length) || (Array.isArray(t.rounds) && t.rounds.length) || (Array.isArray(t.groups) && t.groups.length);
+      if (drawn) return;
+      t.pairRequests.forEach(function(r) { if (r && r.inviteeUid === myUid) items.push({ t: t, r: r }); });
+    });
+    if (!items.length) return '';
+    var esc = function(s) { return window._safeHtml ? window._safeHtml(s) : String(s == null ? '' : s); };
+    var sa = function(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+    var rows = items.map(function(it) {
+      var tIdA = sa(String(it.t.id)), rIdA = sa(it.r.id);
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:10px 12px;">'
+        + '<div style="min-width:0;flex:1;"><div style="font-size:0.9rem;color:var(--text-bright);font-weight:600;">🤝 ' + esc(it.r.inviterName || 'Alguém') + ' quer formar dupla com você</div>'
+        + '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:2px;">' + esc(it.t.name || '') + '</div></div>'
+        + '<div style="display:flex;gap:6px;flex-shrink:0;">'
+        + '<button class="btn btn-success" style="min-height:0;height:30px;line-height:1;padding:0 12px;font-size:0.78rem;font-weight:800;" onclick="window._acceptPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">✅ Confirmar</button>'
+        + '<button class="btn btn-danger" style="min-height:0;height:30px;line-height:1;padding:0 12px;font-size:0.78rem;font-weight:800;" onclick="window._cancelPairRequest(\'' + tIdA + '\',\'' + rIdA + '\')">❌ Cancelar</button>'
+        + '</div></div>';
+    }).join('');
+    return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">'
+      + '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;">🤝 Convites de Dupla (' + items.length + ')</h3>'
+      + '<div style="display:flex;flex-direction:column;gap:8px;">' + rows + '</div></div>';
+  }
+
   function _buildMyResultsHtml() {
     var cu = window.AppStore.currentUser;
     if (!cu) return '';
@@ -2961,6 +2993,9 @@ function renderDashboard(container) {
         ${_statPill('⚔️', _socialMatchesDisplay, 'Partidas', _socialMatchesClick, _socialMatchesTitle, { wider: true, labelOnTop: true, subtitle: _socialMatchesSubtitle, dataAttrs: 'data-stat-matches-pill', countDataAttr: 'data-stat-matches-count', subtitleDataAttr: 'data-stat-matches-subtitle' })}
       </div>
     </div>
+
+    <!-- v2.7.85: Convites de dupla pendentes (pro convidado) — banner âmbar prominente -->
+    ${_buildPendingPairInvitesHtml()}
 
     <!-- Meus Resultados (v1.8.2-beta): pendentes de ação + últimos confirmados -->
     ${_buildMyResultsHtml()}
