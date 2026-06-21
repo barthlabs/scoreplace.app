@@ -2341,6 +2341,26 @@ function renderTournaments(container, tournamentId = null) {
             _hint +
           '</div>';
         }
+        // v2.8.48: convite de co-organização PENDENTE → box âmbar PONTILHADO ao lado
+        // do organizador (onde a pessoa ficará se aceitar), já com a tag "Pendente de
+        // aceite". Substitui o antigo "só na lista de inscritos". canRemove (criador)
+        // mostra ✕ pra cancelar o convite.
+        function _buildPendingOrgCard(name, removeKey, canRemove) {
+          var _oSeed = encodeURIComponent(name || '?');
+          var _oFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _oSeed + '&backgroundColor=ffe7b3,ffd5dc,ffdfbf';
+          var _lc = (name || '').toLowerCase();
+          var _oPhoto = (window._playerPhotoCache && window._playerPhotoCache[_lc] && window._playerPhotoCache[_lc].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_lc] : _oFallback;
+          var _safeTId = window._safeHtml(String(_t.id));
+          var _rmBtn = canRemove ? '<button style="background:none;border:none;color:#fbbf24;cursor:pointer;font-size:1rem;padding:2px;line-height:1;" title="Cancelar convite" onclick="event.stopPropagation();window._removeCoHost(\'' + _safeTId + '\',\'' + window._safeHtml(removeKey) + '\')">✕</button>' : '';
+          return '<div class="sp-org-card sp-org-pending" style="position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);border-radius:10px;min-width:160px;">' +
+            '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(251,191,36,0.5);opacity:0.85;" />' +
+            '<div style="flex:1;min-width:0;">' +
+              '<div style="font-weight:700;font-size:0.82rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(name) + '</div>' +
+              '<div style="font-size:0.6rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.3px;margin-top:1px;">⭐ Pendente de aceite</div>' +
+            '</div>' +
+            _rmBtn +
+          '</div>';
+        }
         var _orgBgPrimary = 'background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.1));border:1px solid rgba(99,102,241,0.3);';
         var _orgBgCohost = 'background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);';
 
@@ -2399,14 +2419,17 @@ function renderTournaments(container, tournamentId = null) {
         _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', _isCreatorNow);
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
-            if (ch.status !== 'active') return;
-            var _chGender = ch.gender || _resolveOrgGender(ch.email, ch.uid);
-            var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
-            _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.email);
+            if (!ch) return;
+            if (ch.status === 'active') {
+              var _chGender = ch.gender || _resolveOrgGender(ch.email, ch.uid);
+              var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
+              _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.email);
+            } else if (ch.status === 'pending') {
+              // v2.8.48: convidado pendente aparece AQUI (box âmbar pontilhado, ao
+              // lado do organizador), não mais só na lista de inscritos.
+              _orgCards += _buildPendingOrgCard(ch.displayName || ch.email, ch.email || ch.uid || '', _isCreatorNow);
+            }
           });
-          // v2.4.83: convites PENDENTES não aparecem aqui — o convidado continua
-          // na lista de inscritos com a tag âmbar "Aguardando aceite" (estrela à
-          // esquerda) até aceitar; só então vira card de co-organizador ativo.
         }
         // "Falar com o organizador" — visível só pra quem NÃO faz parte da
         // organização (participantes/visitantes logados). O próprio organizador
@@ -3002,32 +3025,38 @@ function renderTournaments(container, tournamentId = null) {
               var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
               var _body;
               if (members) {
-                var _memBlock = function(n, right, seq) {
+                var _memBlock = function(n, right) {
                   var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                   var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
-                  var _num = (seq === '' || seq == null) ? '' : '<span style="font-weight:900;font-size:1rem;color:rgba(255,255,255,0.55);flex-shrink:0;line-height:1.1;align-self:center;" title="Nº de inscrição">' + seq + '</span>';
                   var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
                   // nome COMPLETO (quebra linha, não trunca); avatar 28px igual ao card individual.
                   var _nmSpan = '<span style="font-weight:700;font-size:0.92rem;color:var(--text-bright);white-space:normal;word-break:break-word;line-height:1.2;">' + window._safeHtml(n) + '</span>';
-                  // nº de inscrição na borda EXTERNA: esquerda→antes do avatar; direita→depois do nome.
                   var _av = right
-                    ? '<div style="display:flex;align-items:flex-start;gap:7px;max-width:100%;justify-content:flex-end;">' + _img + _nmSpan + _num + '</div>'
-                    : '<div style="display:flex;align-items:flex-start;gap:7px;max-width:100%;">' + _num + _img + _nmSpan + '</div>';
+                    ? '<div style="display:flex;align-items:flex-start;gap:7px;max-width:100%;justify-content:flex-end;">' + _img + _nmSpan + '</div>'
+                    : '<div style="display:flex;align-items:flex-start;gap:7px;max-width:100%;">' + _img + _nmSpan + '</div>';
                   var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
                   return '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 42%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
                 };
-                _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(members[0], false, _s1) + (members[1] ? _memBlock(members[1], true, _s2) : '') + '</div>';
+                _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(members[0], false) + (members[1] ? _memBlock(members[1], true) : '') + '</div>';
               } else {
                 _body = nameHtml + ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, false, t, isOrg) : '');
               }
-              // Solo: número único marca-d'água (canto sup. dir., como o card individual).
-              // Dupla: os números já vão inline (visíveis) em cada membro acima → sem marca-d'água.
+              // v2.8.49: número de inscrição como MARCA D'ÁGUA no fundo do card (igual ao
+              // card individual). Solo: 1 nº no canto sup. dir. Dupla: o nº ORIGINAL de cada
+              // pessoa no SEU lado — esquerda→canto sup. esquerdo, direita→canto sup. direito.
+              function _wmNum(seq, side) {
+                if (seq === '' || seq == null) return '';
+                var _n = String(seq); var _fs = _n.length > 2 ? '1.9rem' : '2.4rem';
+                return '<div style="position:absolute;' + side + ':10px;top:8px;font-size:' + _fs + ';font-weight:900;color:rgba(255,255,255,0.10);line-height:1;pointer-events:none;user-select:none;z-index:0;">' + _n + '</div>';
+              }
               var _enrollBadge = (!members && window._enrollNumberBadge && window._enrollNumber)
                 ? window._enrollNumberBadge(window._enrollNumber(_enrollOrderMapD, p))
                 : '';
+              var _wmL = members ? _wmNum(_s1, 'left') : '';
+              var _wmR = (members && members[1]) ? _wmNum(_s2, 'right') : '';
               return '<div class="participant-card" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
                 ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
-                _enrollBadge +
+                _enrollBadge + _wmL + _wmR +
                 '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' +
                   _body +
                   '<div style="display:flex;align-items:center;justify-content:space-between;">' +
