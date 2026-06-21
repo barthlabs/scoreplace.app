@@ -459,6 +459,22 @@ function renderTournaments(container, tournamentId = null) {
         window._spDragPickY = (typeof evt.clientY === 'number' && evt.clientY > 0) ? evt.clientY : (window.innerHeight / 2);
         // v2.7.86/87: esconde o card arrastado + compacta os outros (drop mais perto).
         setTimeout(function () { if (window._markDragSource) window._markDragSource(evt.target); if (window._setDragCompact) window._setDragCompact(true); }, 0);
+        // v2.8.50: TAMBÉM popular _participantDragData + ativar a vaga de co-organização.
+        // Sem isto, arrastar um card "Sem dupla" pra vaga de co-org lia null e "nada
+        // acontecia" (só _duplaDragData era setado, que serve pra parear, não pra co-org).
+        try {
+          var _td = (window.AppStore && window.AppStore.tournaments || []).find(function(x){ return String(x.id) === String(tId); });
+          var _pd = null;
+          if (_td && Array.isArray(_td.participants)) {
+            _pd = _td.participants.find(function(p){
+              if (!p || typeof p !== 'object') return false;
+              return (p.uid && p.uid === uidOrName) || ((p.displayName || p.name) === uidOrName) || (p.email && p.email === uidOrName);
+            });
+          }
+          window._participantDragData = (_pd && typeof _pd === 'object') ? _pd : { displayName: uidOrName, name: uidOrName };
+          window._participantDragTId = tId;
+          if (window._setOrgDropActive) window._setOrgDropActive(true);
+        } catch (e) {}
     };
 
     window._duplaDropOn = function(evt, targetUidOrName, tId) {
@@ -2361,6 +2377,21 @@ function renderTournaments(container, tournamentId = null) {
             _rmBtn +
           '</div>';
         }
+        // v2.8.50: VAGA de co-organização — box dashed âmbar SEPARADO, à direita do
+        // organizador, onde cai o co-org. É o alvo de soltar (drag) E o toque (picker).
+        // Tem a classe .sp-org-droptarget → o listener global de dragstart o faz pulsar.
+        function _buildDropzone() {
+          var _safeTId = window._safeHtml(String(_t.id));
+          return '<div class="sp-org-card sp-org-droptarget sp-org-dropzone" data-org-drop="1" title="Arraste um inscrito aqui ou toque para co-organizar" ' +
+            'ondragover="event.preventDefault();event.dataTransfer.dropEffect=\'move\';this.classList.add(\'sp-org-drop-hover\');" ' +
+            'ondragleave="this.classList.remove(\'sp-org-drop-hover\');" ' +
+            'ondrop="this.classList.remove(\'sp-org-drop-hover\');if(window._handleCrownDrop)window._handleCrownDrop(event,\'' + _safeTId + '\')" ' +
+            'onclick="if(window._openOrgPickerDialog)window._openOrgPickerDialog(\'' + _safeTId + '\')" ' +
+            'style="position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px;background:rgba(251,191,36,0.06);border:2px dashed rgba(251,191,36,0.55);border-radius:10px;min-width:150px;min-height:62px;text-align:center;flex:1;">' +
+            '<span class="sp-org-star" style="display:inline-flex;align-items:center;">' + _crownSvg + '</span>' +
+            '<span style="font-size:0.66rem;font-weight:700;color:#fbbf24;line-height:1.2;">Arraste ou toque<br>p/ co-organizar</span>' +
+          '</div>';
+        }
         var _orgBgPrimary = 'background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.1));border:1px solid rgba(99,102,241,0.3);';
         var _orgBgCohost = 'background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);';
 
@@ -2416,7 +2447,9 @@ function renderTournaments(container, tournamentId = null) {
         var _primaryGender = _resolveOrgGender(_t.organizerEmail, _t.creatorUid);
         var _orgRoleLabel = _gw(_primaryGender, 'Organizador', 'Organizadora');
         // Card principal vira alvo de soltar só pro CRIADOR (quem pode promover).
-        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', _isCreatorNow);
+        // v2.8.50: o card do organizador NÃO é mais o alvo de soltar (sem dashed em
+        // volta). O alvo agora é uma VAGA separada (_buildDropzone) à direita.
+        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', false);
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
             if (!ch) return;
@@ -2431,6 +2464,8 @@ function renderTournaments(container, tournamentId = null) {
             }
           });
         }
+        // VAGA de co-organização (alvo de drag + toque) — só pra quem pode promover.
+        if (_isCreatorNow) _orgCards += _buildDropzone();
         // "Falar com o organizador" — visível só pra quem NÃO faz parte da
         // organização (participantes/visitantes logados). O próprio organizador
         // e co-organizadores não veem o botão.

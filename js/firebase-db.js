@@ -1032,6 +1032,8 @@ window.FirestoreDB = {
           message: message || '',
           tournamentName: opts.tournamentName || '',
           tournamentUrl: opts.tournamentUrl || '',
+          ctaLabel: opts.ctaLabel || '',
+          ctaUrl: opts.ctaUrl || '',
           createdAt: now,
           flushAtMs: now + mins * 60 * 1000
         });

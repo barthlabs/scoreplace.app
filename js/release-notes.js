@@ -9,9 +9,17 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.49-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(21 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.51-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(21 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>👑 Convite de co-organização mais claro.</b> Ao promover alguém, o convidado já aparece num <b>box âmbar pontilhado ao lado do organizador</b> (onde vai ficar se aceitar), com a tag <b>"Pendente de aceite"</b> e um ✕ pra cancelar. A notificação vai pro convidado; ao aceitar, vira o card sólido de co-organizador.</li>' +
+        '<li><b>🔔 Notificações com botão de ação.</b> Toda notificação (WhatsApp <b>e</b> e-mail) agora vem com um link/botão direto pra agir — <b>Ver chave</b>, <b>Ver torneio</b>, <b>Conferir placar</b>, <b>Responder</b> (convites), <b>Ver local</b>, <b>Ver partida</b> — em vez de só texto.</li>' +
+        '<li><b>👑 Co-organizar ficou direto.</b> A vaga do co-organizador é um <b>box âmbar pontilhado à direita do organizador</b>; arraste o card do inscrito pra dentro (ou toque) pra convidar — funciona também nos <b>torneios de duplas</b>. Fica "Pendente de aceite" até a pessoa aceitar.</li>' +
+        '<li><b>✨ Tela mais firme.</b> Acabou o "piscar" ao arrastar cards — a tela não recarrega no meio do arraste.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.49-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(21 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👑 Convite de co-organização mais claro.</b> Ao promover alguém, o convidado já aparece num <b>box âmbar pontilhado</b> (onde vai ficar se aceitar), com a tag <b>"Pendente de aceite"</b> e um ✕ pra cancelar. A notificação vai pro convidado; ao aceitar, vira o card sólido de co-organizador.</li>' +
         '<li><b>👫 Número de inscrição certo nas duplas.</b> No card de dupla formada, cada pessoa mostra o <b>seu número original de inscrição individual</b> como marca d\'água no fundo — o da esquerda à esquerda, o da direita à direita (mesmo estilo do card individual).</li>' +
       '</ul>' +
     '</div>' +

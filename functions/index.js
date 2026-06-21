@@ -539,7 +539,11 @@ function _buildDigestHtml(items) {
     const meta = _digestLevelMeta(it.level);
     const msgHtml = _digestEscape(it.message).replace(/\n/g, "<br>");
     const tName = it.tournamentName ? ('<div style="font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">🏆 ' + _digestEscape(it.tournamentName) + "</div>") : "";
-    const link = it.tournamentUrl ? ('<div style="margin-top:8px;"><a href="' + _digestEscape(it.tournamentUrl) + '" style="color:#fbbf24;font-size:0.78rem;text-decoration:none;font-weight:600;">Ver no scoreplace.app →</a></div>') : "";
+    // v2.8.51: CTA por tipo (botão âmbar). Usa ctaUrl/ctaLabel quando vierem; senão
+    // cai no tournamentUrl genérico. Toda notificação ganha um botão de ação.
+    const _ctaUrl = it.ctaUrl || it.tournamentUrl || "";
+    const _ctaLabel = it.ctaLabel || "Ver no scoreplace.app";
+    const link = _ctaUrl ? ('<div style="margin-top:10px;"><a href="' + _digestEscape(_ctaUrl) + '" style="display:inline-block;background:#fbbf24;color:#3a2300;font-size:0.82rem;text-decoration:none;font-weight:800;padding:9px 18px;border-radius:9px;">👉 ' + _digestEscape(_ctaLabel) + "</a></div>") : "";
     return (
       '<tr><td style="padding:0 0 14px;">' +
         '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#111827;border-left:4px solid ' + meta.color + ';border-radius:10px;">' +

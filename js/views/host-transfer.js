@@ -117,10 +117,13 @@
     if (!t || !user) return;
 
     if (!Array.isArray(t.coHosts)) t.coHosts = [];
-    // Check if already invited/active
-    var existing = t.coHosts.find(function(ch) { return ch.email === target.email; });
+    // Check if already invited/active — v2.8.50: por uid OU email (uid-only não casava
+    // por email e podia duplicar o convite).
+    var existing = t.coHosts.find(function(ch) {
+      return (target.uid && ch.uid && ch.uid === target.uid) || (target.email && ch.email && ch.email === target.email);
+    });
     if (existing) {
-      if (typeof showNotification === 'function') showNotification(_tH('org.alreadyInvited'), (target.displayName || target.email) + ' ' + _tH('org.alreadyInvitedMsg'), 'warning');
+      if (typeof showNotification === 'function') showNotification(_tH('org.alreadyInvited'), (target.displayName || target.email || _pName(target)) + ' ' + _tH('org.alreadyInvitedMsg'), 'warning');
       return;
     }
 
@@ -411,12 +414,20 @@
     var orgEmails = [t.organizerEmail];
     if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) { if (ch.email && ch.status === 'active') orgEmails.push(ch.email); });
 
+    // v2.8.50: elegível por UID **ou** email (antes exigia email → inscritos só-uid,
+    // comuns em torneios de duplas, NÃO apareciam e não dava pra promover). Exclui o
+    // próprio usuário, o organizador e co-orgs ativos (por uid e por email).
+    var orgUids = [t.creatorUid];
+    if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) { if (ch.uid && ch.status === 'active') orgUids.push(ch.uid); });
     var eligible = parts.filter(function(p) {
       if (typeof p === 'string') return false;
       var email = p.email || '';
-      if (!email) return false;
-      if (email === user.email) return false;
-      if (orgEmails.indexOf(email) !== -1) return false;
+      var puid = p.uid || '';
+      if (!email && !puid) return false; // precisa de algum identificador
+      if (puid && user.uid && puid === user.uid) return false;
+      if (email && user.email && email === user.email) return false;
+      if (email && orgEmails.indexOf(email) !== -1) return false;
+      if (puid && orgUids.indexOf(puid) !== -1) return false;
       return true;
     });
 

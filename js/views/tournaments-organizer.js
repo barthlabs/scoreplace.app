@@ -309,6 +309,27 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
  * @param {string} templateType - email template type (e.g. 'draw', 'tournament_deleted')
  * @param {Object} templateData - { tournamentName, tournamentUrl, subject, ... }
  */
+// v2.8.51: call-to-action canônico por tipo de notificação → { label, url }.
+// Usado pra anexar um botão/link em TODA notificação (WhatsApp + email). Deriva a
+// rota certa do tipo: chave (#bracket) pra sorteio/resultado, #venues pra presença,
+// #casual pra partida casual, #notifications pra amizade, senão #tournaments.
+window._notifCta = function(type, td) {
+  td = td || {};
+  var base = (window.SCOREPLACE_URL || 'https://scoreplace.app');
+  var tId = td.tournamentId || (td.tournamentUrl && td.tournamentUrl.indexOf('#tournaments/') !== -1 ? td.tournamentUrl.split('#tournaments/')[1] : '');
+  var tUrl = td.tournamentUrl || (tId ? base + '/#tournaments/' + tId : '');
+  var t = String(type || '');
+  if (['draw','new_round','result','tournament_finished','match-pending-approval','match-rejected','match-disputed'].indexOf(t) !== -1 && tId) {
+    return { label: (t === 'match-pending-approval' ? 'Conferir placar' : 'Ver chave'), url: base + '/#bracket/' + tId };
+  }
+  if (['cohost_invite','host_transfer_invite'].indexOf(t) !== -1 && tUrl) return { label: 'Responder', url: tUrl };
+  if ((t === 'presence_plan' || t === 'presence_checkin') && td.placeId) return { label: 'Ver local', url: base + '/#venues/' + td.placeId };
+  if ((t === 'casual_invite' || t === 'casual_link_accepted' || t === 'casual_link_rejected' || t === 'casual_link_request') && td.roomCode) return { label: 'Ver partida', url: base + '/#casual/' + String(td.roomCode).toUpperCase() };
+  if (t === 'friend_request') return { label: 'Responder', url: base + '/#notifications' };
+  if (tUrl) return { label: 'Ver torneio', url: tUrl };
+  return { label: 'Abrir scoreplace', url: base };
+};
+
 window._dispatchChannels = function(channelResult, templateType, templateData) {
     if (!channelResult) return;
     templateData = templateData || {};
@@ -349,10 +370,16 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
         var _emCat = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[templateType]) || {};
         var _emLvl = _emCat.level || 'all';
         var _emMsg = templateData.message || templateData.tournamentName || 'Notificação';
+        // v2.8.51: CTA por tipo no email também (botão no digest). ctaUrl pode ir pra
+        // #bracket/#venues/#casual conforme o tipo; o digest usa ctaLabel/ctaUrl e cai
+        // no tournamentUrl genérico se ausentes.
+        var _emCta = window._notifCta(templateType, templateData);
         if (window.FirestoreDB && typeof window.FirestoreDB.queueNotifEmail === 'function') {
             window.FirestoreDB.queueNotifEmail(channelResult.emails, _emLvl, _emMsg, {
                 tournamentName: templateData.tournamentName || '',
-                tournamentUrl: templateData.tournamentUrl || ''
+                tournamentUrl: templateData.tournamentUrl || '',
+                ctaLabel: (_emCta && _emCta.label) || '',
+                ctaUrl: (_emCta && _emCta.url) || ''
             });
         } else if (typeof window._emailTemplate === 'function' && window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
             var html = window._emailTemplate(templateType, templateData);
@@ -369,6 +396,10 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
         var _waLvl = _waCat.level || 'all';
         var _waEmoji = _waLvl === 'fundamental' ? '🔴' : (_waLvl === 'important' ? '🟠' : '🟢');
         waMsg = _waEmoji + ' ' + waMsg;
+        // v2.8.51: TODA notificação WhatsApp leva um call-to-action (link) — antes era
+        // só texto ("X se inscreveu") sem como agir. Ex.: "👉 Ver chave: <url>".
+        var _waCta = window._notifCta(templateType, templateData);
+        if (_waCta && _waCta.url) waMsg += '\n\n👉 ' + _waCta.label + ': ' + _waCta.url;
         if (window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
             window.FirestoreDB.queueWhatsApp(channelResult.phones, waMsg);
         }

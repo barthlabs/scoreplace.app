@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.8.49-beta';
+window.SCOREPLACE_VERSION = '2.8.51-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -570,7 +570,11 @@ window._softRefreshView = function() {
                   document.getElementById('modal-birthdate-enroll');
   var active = document.activeElement;
   var isTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable);
-  if (openModal || isTyping) {
+  // v2.8.51: NÃO re-renderiza durante um arraste em andamento (body.sp-drag-compact).
+  // Um snapshot do Firestore no meio do drag rebuildava os cards (o card arrastado
+  // sumia/voltava) → a tela "piscava que nem louco". Adia até o arraste terminar.
+  var _dragging = document.body && document.body.classList.contains('sp-drag-compact');
+  if (openModal || isTyping || _dragging) {
     clearTimeout(window._pendingSoftRefresh);
     window._pendingSoftRefresh = setTimeout(function() { window._softRefreshView(); }, 500);
     return;
@@ -2359,7 +2363,7 @@ if (!window._spDragCompactWired) {
         }
       } catch (e1) {}
     }, true);
-    document.addEventListener('dragend', function () { try { if (typeof window._setOrgDropActive === 'function') window._setOrgDropActive(false); } catch (e) {} }, true);
+    document.addEventListener('dragend', function () { try { if (typeof window._setOrgDropActive === 'function') window._setOrgDropActive(false); window._participantDragData = null; } catch (e) {} }, true);
   } catch (e) {}
 }
 // v2.6.60: CONFIG POR FASE — resolve woScope / resultEntry da FASE de um match
