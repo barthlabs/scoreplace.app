@@ -354,20 +354,6 @@ window._propagateMatchUpdate = _propagateMatchUpdate;
 // fica pendente. o organizador também pode aprovar um placar lançado pelo
 // usuário."
 
-// Retorna array de nomes que compõem o lado (1 ou 2) do match.
-// Suporta: monarch (m.team1/m.team2 arrays), duplas ("X / Y"), individual.
-function _matchSideMembers(m, side) {
-  if (!m) return [];
-  if (m.isMonarch) {
-    if (side === 1 && Array.isArray(m.team1)) return m.team1.slice();
-    if (side === 2 && Array.isArray(m.team2)) return m.team2.slice();
-  }
-  var s = side === 1 ? m.p1 : m.p2;
-  if (!s || s === 'TBD' || s === 'BYE') return [];
-  if (s.indexOf('/') !== -1) return s.split('/').map(function(n) { return n.trim(); }).filter(Boolean);
-  return [s.trim()];
-}
-
 // Retorna 1 ou 2 se user está num dos lados do match; 0 se em nenhum.
 // Compara por uid (preferido), email e displayName.
 function _userTeamInMatch(t, m, user) {
@@ -544,7 +530,6 @@ function _notifyPendingApproval(t, m, proposerName) {
   }
 }
 
-window._matchSideMembers = _matchSideMembers;
 window._userTeamInMatch = _userTeamInMatch;
 window._isUserOrgOrCoHost = _isUserOrgOrCoHost;
 window._resultNeedsApproval = _resultNeedsApproval;
@@ -980,7 +965,7 @@ function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGames
 
 // Auto-substitute: find first W.O. player in bracket and replace with first present standby
 window._autoSubstituteWO = function(tId, overrideReplacementName) {
-  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
 
   var ab = t.absent || {};
@@ -1541,7 +1526,7 @@ window._highlightWinner = function (matchId) {
 
 
 window._saveSetResult = function(tId, matchId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   const m = _findMatch(t, matchId);
   if (!m) return;
@@ -1797,7 +1782,7 @@ function _finalizeRoundCardInPlace(t, m, tId, matchId) {
 }
 
 window._saveResultInline = function (tId, matchId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   const m = _findMatch(t, matchId);
   if (!m) return;
@@ -2091,7 +2076,7 @@ window._saveResultInline = function (tId, matchId) {
 // organizador/co-host. Usuário que propôs não pode aprovar a própria
 // proposta (UI esconde o botão pra ele).
 window._approveResult = function(tId, matchId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
   var m = _findMatch(t, matchId);
   if (!m || !m.pendingResult) {
@@ -2233,7 +2218,7 @@ window._approveResult = function(tId, matchId) {
 // organizador. Marca m.pendingResult.disputed=true e notifica o organizador
 // para apurar e lançar o resultado definitivo (ou desclassificar uma dupla).
 window._contestResult = function(tId, matchId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
   var m = _findMatch(t, matchId);
   if (!m || !m.pendingResult) {
@@ -2332,7 +2317,7 @@ function _notifyMatchParticipants(t, m, notifData) {
 // partida seja jogada novamente. Limpa pendingResult + disputed. Notifica
 // todos os participantes individuais. Só autoridade (org/co-host) pode.
 window._organizerResetMatch = function(tId, matchId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
   var m = _findMatch(t, matchId);
   if (!m) { showNotification('Jogo não encontrado', '', 'warning'); return; }
@@ -2390,7 +2375,7 @@ window._organizerResetMatch = function(tId, matchId) {
 //     encerrado por esse jogo.
 // Só autoridade (organizador/co-host) pode reverter.
 window._revertWO = function(tId, matchId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
   var m = _findMatch(t, matchId);
   if (!m) { showNotification('Jogo não encontrado', '', 'warning'); return; }
@@ -2506,7 +2491,7 @@ window._revertWO = function(tId, matchId) {
 // por Cancelar + Propor. Ao propor, cria novo pendingResult e notifica o
 // time original (que propôs primeiro) para aprovar ou contestar.
 window._editPendingResult = function(tId, matchId) {
-  var t = window.AppStore && window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  var t = window.AppStore && window._findTournamentById(tId);
   if (!t) return;
   var m = _findMatch(t, matchId);
   if (!m) {
@@ -2644,177 +2629,12 @@ window._editPendingResult = function(tId, matchId) {
   // Não auto-focar no mobile — iOS scroll ao focar input causa UX confusa
 };
 
-// Internal: confirm the edit.
-// Authority → confirms directly (no pending, result is final).
-// Player → stores as new pendingResult and notifies opposing side.
-window._confirmEditPending = function(tId, matchId) {
-  var overlay = document.getElementById('edit-pending-overlay');
-  var s1El = document.getElementById('edit-pending-s1');
-  var s2El = document.getElementById('edit-pending-s2');
-  var s1 = s1El ? parseInt(s1El.value, 10) : NaN;
-  var s2 = s2El ? parseInt(s2El.value, 10) : NaN;
-  if (isNaN(s1) || isNaN(s2)) {
-    showNotification('Placar inválido', 'Preencha os dois campos.', 'warning');
-    return;
-  }
-  if (overlay) overlay.remove();
-
-  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
-  if (!t) return;
-  var m = _findMatch(t, matchId);
-  if (!m) return;
-  var cu = window.AppStore && window.AppStore.currentUser;
-  if (!cu) return;
-
-  var isAuthority = _isUserAuthority(t, cu);
-  var winner = s1 > s2 ? m.p1 : (s2 > s1 ? m.p2 : null);
-  var editorName = cu.displayName || cu.email || 'Usuário';
-
-  // Fase 4 — Organizador lança 0×0 = REFAZER partida (não é empate definitivo).
-  // User: "O organizador pode estipular um placar e esse se torna definitivo
-  // (salvo o 0 a 0)." 0×0 significa reabrir/refazer.
-  if (isAuthority && s1 === 0 && s2 === 0) {
-    var _ov0 = document.getElementById('edit-pending-overlay');
-    if (_ov0) _ov0.remove();
-    if (typeof window._organizerResetMatch === 'function') {
-      window._organizerResetMatch(tId, matchId);
-    }
-    return;
-  }
-
-  if (isAuthority) {
-    // ── Authority path: confirm directly (mirrors _approveResult logic) ──
-    // Detecta se está resolvendo uma DISPUTA (Fase 4) — o organizador troca
-    // de papel: atuava como jogador até a Fase 3, agora atua como organizador.
-    var _wasDisputed = !!(m.pendingResult && m.pendingResult.disputed);
-    var pr = m.pendingResult || {};
-    if (pr.useSets && Array.isArray(pr.sets)) {
-      m.sets = pr.sets.slice();
-      m.setsWonP1 = pr.setsWonP1 || 0;
-      m.setsWonP2 = pr.setsWonP2 || 0;
-      if (pr.isFixedSet) m.fixedSet = true;
-      m.scoreP1 = s1;
-      m.scoreP2 = s2;
-      m.totalGamesP1 = pr.totalGamesP1 != null ? pr.totalGamesP1 : s1;
-      m.totalGamesP2 = pr.totalGamesP2 != null ? pr.totalGamesP2 : s2;
-    } else {
-      m.scoreP1 = s1;
-      m.scoreP2 = s2;
-    }
-    m.winner = winner;
-    m.draw = s1 === s2;
-    m.resultAt = Date.now(); if (!m.startedAt) m.startedAt = m.resultAt; // v2.3.17
-    delete m.pendingResult;
-
-    if (!t.checkedIn) t.checkedIn = {};
-    if (!t.absent) t.absent = {};
-    [m.p1, m.p2].forEach(function(side) {
-      if (!side || side === 'TBD' || side === 'BYE') return;
-      if (side.indexOf(' / ') !== -1) {
-        side.split(' / ').forEach(function(n) { var nm = n.trim(); if (nm) { t.checkedIn[nm] = t.checkedIn[nm] || Date.now(); delete t.absent[nm]; } });
-      } else {
-        t.checkedIn[side] = t.checkedIn[side] || Date.now();
-        delete t.absent[side];
-      }
-    });
-    if (!t.tournamentStarted) t.tournamentStarted = Date.now();
-
-    var isGroupMatch = m.group !== undefined;
-    var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function(r) {
-      return (r.matches || []).some(function(rm) { return rm.id === matchId; });
-    }));
-
-    if (!isGroupMatch && !isRoundMatch) {
-      _advanceWinner(t, m);
-      showNotification('✅ Resultado confirmado', (m.winner || 'Resultado') + ' registrado!', 'success');
-    } else if (isRoundMatch) {
-      showNotification('✅ Resultado confirmado', m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner}), 'success');
-      var _roundIdxAuto = -1;
-      (t.rounds || []).forEach(function(r, idx) {
-        (r.matches || []).forEach(function(rm) { if (rm.id === matchId) _roundIdxAuto = idx; });
-      });
-      if (_roundIdxAuto >= 0) {
-        var _thisRound = t.rounds[_roundIdxAuto];
-        var _thisComplete = (_thisRound.matches || []).every(function(rm) { return !!rm.winner; });
-        var _isLast = _roundIdxAuto === (t.rounds.length - 1);
-        if (_thisComplete && _isLast && _thisRound.status !== 'complete') {
-          setTimeout(function() {
-            if (typeof window._closeRound === 'function') window._closeRound(tId, _roundIdxAuto, matchId);
-          }, 0);
-        }
-      }
-    } else {
-      _checkGroupRoundComplete(t, m.group);
-      showNotification('✅ Resultado confirmado', m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner}), 'success');
-    }
-
-    _propagateMatchUpdate(t, m);
-    window.AppStore.logAction(tId, 'Resultado confirmado por ' + editorName + ': ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + (m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner));
-    window.AppStore.syncImmediate(tId);
-
-    try {
-      if (pr.kind === 'gsm' && typeof _persistGSMTournamentMatchRecord === 'function') {
-        _persistGSMTournamentMatchRecord(t, m);
-      } else {
-        _persistInlineTournamentMatchRecord(t, m, s1, s2, pr.tbP1, pr.tbP2, !!pr.isTiebreakEntry, !!pr.useSets);
-      }
-    } catch(e) {}
-
-    if (typeof window._sendUserNotification === 'function') {
-      var resultText = m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — ' + (m.draw ? _t('bui.drawResult') : _t('bui.matchWon', {winner: m.winner}));
-      // Fase 4: se resolveu uma disputa, deixa claro que foi decisão do organizador.
-      var notifData = _wasDisputed ? {
-        type: 'result',
-        title: '⚖️ Resultado definido pelo organizador',
-        message: resultText + ' — placar definitivo lançado por ' + editorName + ' (organizador).',
-        tournamentId: tId,
-        tournamentName: t.name,
-        matchId: m.id,
-        level: 'fundamental',
-        timestamp: Date.now()
-      } : {
-        type: 'result',
-        title: '✅ Resultado confirmado',
-        message: resultText,
-        tournamentId: tId,
-        tournamentName: t.name,
-        matchId: m.id,
-        level: 'fundamental',
-        timestamp: Date.now()
-      };
-      // Notifica todos os UIDs individuais (p1Uid + p2Uid de duplas).
-      _notifyMatchParticipants(t, m, notifData);
-    }
-
-  } else {
-    // ── Player path: update pendingResult, notify other side ──
-    m.pendingResult = {
-      scoreP1: s1,
-      scoreP2: s2,
-      winner: winner,
-      draw: s1 === s2,
-      proposedBy: cu.uid || '',
-      proposedByEmail: cu.email || '',
-      proposedByName: editorName,
-      proposedAt: Date.now(),
-      kind: 'inline'
-    };
-    _propagateMatchUpdate(t, m);
-    window.AppStore.logAction(tId, 'Resultado atualizado por ' + editorName + ': ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2);
-    window.AppStore.syncImmediate(tId);
-    _notifyPendingApproval(t, m, editorName);
-    showNotification('✏️ Placar atualizado', 'O time adversário foi notificado para aprovar.', 'success');
-  }
-
-  _rerenderBracket(tId, matchId);
-};
-
 window._editResult = function (tId, matchId) {
   showConfirmDialog(
     _t('bui.editResultTitle'),
     _t('bui.editResultConfirm'),
     () => {
-      const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+      const t = window._findTournamentById(tId);
       if (!t) return;
       const m = _findMatch(t, matchId);
       if (!m) return;
@@ -2872,7 +2692,7 @@ window._editResult = function (tId, matchId) {
 window._editResultInline = function(tId, matchId) {
   var card = document.getElementById('card-' + matchId);
   if (!card) return;
-  var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
   var m = window._findMatch ? window._findMatch(t, matchId) : null;
   if (!m) return;
@@ -2942,7 +2762,7 @@ window._editResultInline = function(tId, matchId) {
 
 // ─── Share match result ──────────────────────────────────────────────────────
 window._shareMatchResult = function(tId, matchId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
   // Find match in all structures
   var sources = (typeof window._collectAllMatches === 'function')
@@ -3152,7 +2972,7 @@ window._tvBuildAttendance = function(t) {
 };
 
 window._tvMode = function(tId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+  var t = window._findTournamentById(tId);
   if (!t) {
     if (typeof showAlertDialog === 'function') showAlertDialog(_t('bui.tournNotFoundTitle'), _t('bui.tournNotFoundAlertMsg'), null, { type: 'warning' });
     return;
@@ -3271,7 +3091,7 @@ window._tvMode = function(tId) {
     var ov = document.getElementById('tv-mode-overlay');
     if (!ov) { clearInterval(window._tvModeInterval); clearInterval(window._tvModeClockInterval); return; }
     // Reload tournament data
-    var tNow = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var tNow = window._findTournamentById(tId);
     if (!tNow) return;
     var vc = document.getElementById('view-container');
     if (vc && typeof renderBracket === 'function') {
@@ -3392,7 +3212,7 @@ window._ensureStHeaderExplainer = function() {
 
 window._showPlayerHistory = function(tId, playerName, filter) {
   var _flt = filter || 'all'; // 'all' | 'wins' | 'losses'
-  var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
   var matches = [];
   // Prefer canonical adapter: picks up thirdPlace + rodadas + sub-rounds,
@@ -3511,7 +3331,7 @@ window._showPlayerHistory = function(tId, playerName, filter) {
 
 // ─── Advanced Points breakdown popup ─────────────────────────────────────────
 window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
-  var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+  var t = window._findTournamentById(tId);
   if (!t || typeof window._calcAdvancedPoints !== 'function') return;
   var result = window._calcAdvancedPoints(t, playerName, category || null);
   var itemLabels = {
@@ -3702,7 +3522,7 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
 
 // ─── Advance from Groups to Elimination ─────────────────────────────────────
 window._advanceToElimination = function (tId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t || !t.groups) return;
 
   const classified = t.gruposClassified || 2;
@@ -3817,7 +3637,7 @@ window._advanceToElimination = function (tId) {
 
 // ─── Advance Monarch to Elimination ──────────────────────────────────────────
 window._advanceMonarchToElimination = function(tId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+  var t = window._findTournamentById(tId);
   if (!t || !t.groups) return;
   // Liga uses Rei/Rainha as round format only — no elimination phase
   if (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) return;
@@ -3891,11 +3711,41 @@ window._advanceMonarchToElimination = function(tId) {
 // Supports both simple scoring and GSM (Game-Set-Match) with tennis rules.
 // Also supports casual mode: _openLiveScoring(null, null, { scoring, p1Name, p2Name, title })
 
+// v2.8.20: resolver CANÔNICO da config de pontuação do placar ao vivo. Garante que,
+// pra esporte com padrão GSM (Beach Tennis, Tênis, Padel…), o placar NUNCA caia em
+// "games direto" (gamesPerSet=1) por config vazia/incompleta — bug intermitente em
+// partida casual quando o scoring chegava {} (race/doc stale). Regras:
+//   (a) já é GSM (type:'sets') → completa campos faltantes (countingType etc.) pelo padrão do esporte;
+//   (b) config VAZIA + esporte tem padrão GSM → usa o padrão (evita numeric/games-direto);
+//   (c) escolha explícita de placar livre (tem campos, sem type:'sets') OU esporte sem padrão → respeita.
+window._resolveLiveScoring = function(rawSc, sportName) {
+  var sc = (rawSc && typeof rawSc === 'object') ? rawSc : {};
+  var defs = window._sportScoringDefaults || {};
+  var key = String(sportName || '').replace(/^[^\wÀ-ɏ]+/u, '').trim();
+  var def = defs[key];
+  var hasKeys = Object.keys(sc).length > 0;
+  if (sc.type === 'sets') {
+    if (def && def.type === 'sets') {
+      var merged = {}, k;
+      for (k in def) if (Object.prototype.hasOwnProperty.call(def, k)) merged[k] = def[k];
+      for (k in sc) if (Object.prototype.hasOwnProperty.call(sc, k) && sc[k] !== undefined) merged[k] = sc[k];
+      return merged;
+    }
+    return sc;
+  }
+  if (!hasKeys && def && def.type === 'sets') {
+    var c = {}, k2;
+    for (k2 in def) if (Object.prototype.hasOwnProperty.call(def, k2)) c[k2] = def[k2];
+    return c;
+  }
+  return sc;
+};
+
 window._openLiveScoring = function(tId, matchId, opts) {
   var isCasual = !!(opts && opts.casual);
   var t = null, m = null;
   if (!isCasual) {
-    t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    t = window._findTournamentById(tId);
     if (!t) return;
     m = _findMatch(t, matchId);
     if (!m) return;
@@ -3904,7 +3754,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (m && !m.startedAt && !m.winner) m.startedAt = Date.now();
   }
 
-  var sc = isCasual ? (opts.scoring || {}) : (((typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring) || {});
+  var sc = isCasual
+    ? window._resolveLiveScoring(opts.scoring, opts.sportName)
+    : (((typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring) || {});
   var useSets = sc.type === 'sets';
   // v2.1.35: se o torneio não tem GSM configurado mas o ESPORTE tem padrão
   // (Beach Tennis, Tênis, Padel, Pickleball, Vôlei de Praia, Futevôlei…), usa o
@@ -3922,6 +3774,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       }
     }
   }
+  // v2.8.20: completa campos faltantes do GSM (ex.: countingType) pelo padrão do esporte —
+  // mesma canonização do casual; nunca rebaixa GSM já configurado pra numeric.
+  if (!isCasual) { sc = window._resolveLiveScoring(sc, t.sport); useSets = sc.type === 'sets'; }
   var p1Name = isCasual ? (opts.p1Name || '') : (m.p1 || '');
   var p2Name = isCasual ? (opts.p2Name || '') : (m.p2 || '');
   var casualTitle = isCasual ? (opts.title || (typeof _t === 'function' ? _t('casual.title') : 'Partida Casual')) : '';

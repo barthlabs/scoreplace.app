@@ -47,7 +47,7 @@ function renderBracket(container, tournamentId, isInline) {
   const tId = tournamentId || window._lastActiveTournamentId;
 
   // v1.8.94: buscar em tournaments (membro/org) E publicDiscovery (torneios públicos)
-  let t = tId && window.AppStore ? window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString()) : null;
+  let t = tId && window.AppStore ? window._findTournamentById(tId) : null;
   if (!t && tId && window.AppStore && Array.isArray(window.AppStore.publicDiscovery)) {
     t = window.AppStore.publicDiscovery.find(tour => tour.id.toString() === tId.toString()) || null;
   }
@@ -1354,10 +1354,12 @@ function _renderPhaseBracket(t, canEnterResult) {
     return _t('bracket.round', { n: idx + 1 });
   }
 
-  // v2.8.19: classificação geral POR LINHA (último → 1º), colapsável, entre o título
-  // Ouro/Prata e a chave. Reusa _updateProgressiveClassification (mesma lógica da fase
-  // única) rodando num torneio-faux só com as partidas DESTA linha (3º lugar vai como
-  // thirdPlaceMatch). Aparece só quando já há classificação (resultados lançados).
+  // v2.8.19: classificação geral POR LINHA, colapsável, entre o título Ouro/Prata e a
+  // chave. Reusa _updateProgressiveClassification (mesma lógica da fase única) rodando
+  // num torneio-faux só com as partidas DESTA linha (3º lugar vai como thirdPlaceMatch).
+  // Só atribui posição a quem JÁ foi eliminado (não pode mais melhorar) — semifinalistas
+  // vivos não aparecem; 1º-4º só quando final/3º forem jogados. v2.8.21: ordem CAMPEÃO
+  // no topo → último embaixo (1º → último).
   function _tierClassifHtml(bracketKey, color) {
     if (typeof _updateProgressiveClassification !== 'function') return '';
     var lm = pm.filter(function (m) { return m.bracket === bracketKey; });
@@ -1370,7 +1372,7 @@ function _renderPhaseBracket(t, canEnterResult) {
     var keys = Object.keys(cl);
     if (!keys.length) return '';
     var medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
-    var entries = keys.map(function (k) { return [k, cl[k]]; }).sort(function (a, b) { return b[1] - a[1]; }); // último → 1º
+    var entries = keys.map(function (k) { return [k, cl[k]]; }).sort(function (a, b) { return a[1] - b[1]; }); // 1º → último (campeão no topo)
     var rows = entries.map(function (e) {
       var name = e[0], pos = e[1];
       var c = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
@@ -1381,7 +1383,7 @@ function _renderPhaseBracket(t, canEnterResult) {
         (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
         '</div>';
     }).join('');
-    return '<details style="margin-bottom:1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">📊 Classificação — ' + entries.length + ' (último → 1º)</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + rows + '</div></details>';
+    return '<details style="margin-bottom:1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">📊 Classificação parcial — ' + entries.length + ' definidos</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + rows + '</div></details>';
   }
 
   function renderTier(bracketKey, title, color) {
@@ -1390,23 +1392,49 @@ function _renderPhaseBracket(t, canEnterResult) {
     // v2.8.15: 3º lugar (1 jogo) — numerado ANTES da final (final-1, número menor), mas
     // renderizado ABAIXO da final na mesma coluna, com header próprio "🥉 3º lugar".
     var thirdM = pm.filter(function (m) { return m.bracket === bracketKey && m.isThirdPlace; })[0];
+    // v2.8.24: ocultar/mostrar rodadas CONCLUÍDAS por linha (LIFO). Estado por-tier em
+    // window._hiddenRoundsTier[tId|bracketKey]. O nº dos JOGOs é preservado ao ocultar
+    // (a coluna oculta avança o globalNum sem renderizar). A final NUNCA é ocultável.
+    var _tIdEsc = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var _bkEsc = String(bracketKey).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var hiddenSet = (window._hiddenRoundsTier && window._hiddenRoundsTier[t.id + '|' + bracketKey]) || null;
+    function _roundComplete(col) { return col.matches.length > 0 && col.matches.every(function (m) { return m.winner || m.isBye || m.isSitOut; }); }
+    var hiddenCount = 0;
     var colsHtml = cols.map(function (col, idx) {
-      var label = roundLabel(cols, idx);
       var isFinalCol = (idx === cols.length - 1);
+      var isHidden = !isFinalCol && hiddenSet && hiddenSet.has(col.round);
+      if (isHidden) {
+        hiddenCount++;
+        globalNum += col.matches.length; // preserva a numeração dos JOGOs visíveis
+        return '';
+      }
+      var label = roundLabel(cols, idx);
       var thirdNum = 0;
       if (isFinalCol && thirdM) { globalNum++; thirdNum = globalNum; } // reserva o nº (final-1) ANTES da final
       var cards = col.matches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
       var thirdHtml = (isFinalCol && thirdM)
         ? '<h5 style="color:#cd7f32;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .5rem;border-left:3px solid #cd7f32;padding-left:8px;">🥉 3º lugar</h5>' + renderMatchCard(thirdM, canEnterResult, t.id, thirdNum)
         : '';
+      // botão Ocultar (direita, alinhado ao box) só em rodada CONCLUÍDA e não-final
+      var hideBtn = (!isFinalCol && _roundComplete(col))
+        ? '<button class="btn btn-micro btn-outline" onclick="window._tierHideRound(\'' + _tIdEsc + '\',\'' + _bkEsc + '\',' + col.round + ')" style="flex-shrink:0;">Ocultar</button>'
+        : '';
       return '<div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
-        '<h5 style="color:' + color + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ' + color + ';padding-left:8px;">' + label + '</h5>' +
+        '<h5 style="display:flex;align-items:center;justify-content:space-between;gap:8px;color:' + color + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ' + color + ';padding-left:8px;"><span>' + label + '</span>' + hideBtn + '</h5>' +
         cards + thirdHtml + '</div>';
     }).join('');
+    // v2.8.33: "Mostrar ocultas" fica à ESQUERDA das chaves, EM PÉ (vertical) e
+    // STICKY no scroll vertical — top abaixo da topbar(60) + back-header fixo(~44).
+    var showHiddenBtn = hiddenCount > 0
+      ? '<button class="btn btn-micro btn-outline" onclick="window._tierRevealOne(\'' + _tIdEsc + '\',\'' + _bkEsc + '\')" title="Mostrar a rodada oculta mais recente (1 por clique)" style="position:sticky;top:112px;align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">👁 Mostrar ocultas (' + hiddenCount + ')</button>'
+      : '';
     return '<div style="margin-bottom:2rem;">' +
       '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + color + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' +
       _tierClassifHtml(bracketKey, color) +
-      '<div class="bracket-scroll-container" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
+      '<div style="display:flex;align-items:flex-start;gap:10px;">' +
+        showHiddenBtn +
+        '<div class="bracket-scroll-container" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
+      '</div>' +
       '</div>';
   }
 
@@ -1442,10 +1470,31 @@ function _renderPhaseBracket(t, canEnterResult) {
 }
 window._renderPhaseBracket = _renderPhaseBracket;
 
+// v2.8.24: ocultar/mostrar rodadas concluídas POR LINHA (gold/silver…) no bracket de
+// fase. Estado por-tier em window._hiddenRoundsTier['<tId>|<bracketKey>'] (Set de round).
+if (!window._hiddenRoundsTier) window._hiddenRoundsTier = {};
+window._tierHideRound = function (tId, bracketKey, roundNum) {
+  var key = tId + '|' + bracketKey;
+  if (!window._hiddenRoundsTier[key]) window._hiddenRoundsTier[key] = new Set();
+  window._hiddenRoundsTier[key].add(Number(roundNum));
+  if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+};
+// "Mostrar ocultas": revela UMA rodada por clique — a oculta mais recente (maior round,
+// 1 nível para trás), nunca todas de uma vez.
+window._tierRevealOne = function (tId, bracketKey) {
+  var key = tId + '|' + bracketKey;
+  var set = window._hiddenRoundsTier && window._hiddenRoundsTier[key];
+  if (!set || !set.size) return;
+  var mx = -Infinity;
+  set.forEach(function (r) { if (r > mx) mx = r; });
+  set.delete(mx);
+  if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+};
+
 // ─── Match Card — inline score entry ─────────────────────────────────────────
 function _getCheckInStatus(tId, teamName) {
   // Returns: 'full' (all members present), 'partial' (some), 'none'
-  const t = window.AppStore ? window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString()) : null;
+  const t = window.AppStore ? window._findTournamentById(tId) : null;
   if (!t || !t.checkedIn || !teamName || teamName === 'TBD' || teamName === 'BYE') return 'none';
   const ci = t.checkedIn;
   if (teamName.includes(' / ')) {
@@ -1674,7 +1723,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       </div>`;
   }
 
-  const t = window.AppStore ? window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString()) : null;
+  const t = window.AppStore ? window._findTournamentById(tId) : null;
   // v2.6.96: placar efetivo do match (fase pode ter GSM próprio — "Personalizado").
   const _msc = (t && typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : (t && t.scoring);
   const useSets = t && _msc && _msc.type === 'sets';

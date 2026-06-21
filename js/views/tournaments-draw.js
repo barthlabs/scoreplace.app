@@ -589,7 +589,7 @@ window._gdConfirm = function(){
 };
 
 window.showFinalReviewPanel = function (tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     const existing = document.getElementById('final-review-panel');
@@ -698,7 +698,7 @@ window._confirmManualAutoDraw = function (tId) {
 };
 
 window.generateDrawFunction = function (tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     // ── Proteção contra re-sorteio acidental ────────────────────────
@@ -1821,7 +1821,7 @@ window.handleDropTeam = function (e, targetIdx) {
 
         if (sourceIdx === targetIdx) return;
 
-        const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+        const t = window._findTournamentById(tId);
         if (!t) return;
 
         // v2.0.0: modo individual NÃO bloqueia mais o drop — a MESCLAGEM
@@ -1934,7 +1934,7 @@ window._showDropChoiceOverlay = function(opts) {
 // ── v2.0.0: formar equipe (lógica preservada) — v2.7.75: opts.changeRule muda a
 //    regra do torneio pra permitir times (quando era individual) PRA TODOS. ────
 window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
     var newName = name1 + ' / ' + name2;
     var _changeRule = !!(opts && opts.changeRule);
@@ -2030,7 +2030,7 @@ window._replaceParticipantNameInBracket = function(t, oldName, newName) {
 // vira a da pessoa; a entrada avulsa da pessoa é removida; o nome é substituído
 // na chave (placeholder → pessoa). Guarda snapshot pra desfazer.
 window._mergeParticipantConfirm = function(tId, personName, personUid, placeholderName, placeholderUid) {
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
     var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
     var findIdx = function(uid, name) {
@@ -2124,7 +2124,7 @@ window._requestMergeAcceptance = function(opts) {
 
 // O usuário REAL aceita o vínculo → executa a mescla (assume a vaga do genérico).
 window._acceptMergeRequest = function(tId, reqId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (!t || !Array.isArray(t.pendingMerges)) return;
     var req = t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
     if (!req) return;
@@ -2149,7 +2149,7 @@ window._acceptMergeRequest = function(tId, reqId) {
 
 // O usuário REAL recusa o vínculo → descarta a pendência e avisa o organizador.
 window._rejectMergeRequest = function(tId, reqId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (!t || !Array.isArray(t.pendingMerges)) return;
     var req = t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
     if (!req) return;
@@ -2262,7 +2262,7 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
 // ── v2.0.0: DESFAZER MESCLAGEM — restaura o placeholder na posição e devolve a
 // pessoa como participante avulso; reverte o nome na chave (pessoa → placeholder).
 window._undoMergeParticipant = function(tId, ref) {
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
     var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
     // v2.0.2: ref pode ser o NOME (string, robusto p/ múltiplas mesclagens) ou

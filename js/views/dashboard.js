@@ -219,7 +219,14 @@ function _reRenderDashKeepScroll() {
 }
 
 function renderDashboard(container) {
-  const visible = window.AppStore.getVisibleTournaments();
+  // v2.8.40: torneios ocultados pelo usuário somem de TODAS as seções (filtro na
+  // fonte) e reaparecem só na seção "Torneios ocultados" no fim.
+  const _hidIds = (typeof window._getHidden === 'function') ? window._getHidden() : [];
+  const _hidSet = {}; _hidIds.forEach(function(id){ _hidSet[String(id)] = 1; });
+  // v2.8.46: a busca NÃO filtra mais no render (virou in-place, ver _setDashSearch /
+  // _applyDashSearchInPlace) — só o filtro de ocultos roda aqui.
+  const _allVisibleRaw = window.AppStore.getVisibleTournaments();
+  const visible = _hidIds.length ? _allVisibleRaw.filter(function(t){ return !_hidSet[String(t.id)]; }) : _allVisibleRaw;
 
   // Filtros Básicos
   const torneiosCount = visible.length;
@@ -369,9 +376,18 @@ function renderDashboard(container) {
     return (t.status !== 'closed' && t.status !== 'finished' && !_hasDraw && !_deadlinePassed) || _ligaAberta;
   };
 
-  const discovery = (window.AppStore && Array.isArray(window.AppStore.publicDiscovery))
+  const _discoveryRaw = (window.AppStore && Array.isArray(window.AppStore.publicDiscovery))
     ? window.AppStore.publicDiscovery
     : [];
+  const discovery = _hidIds.length ? _discoveryRaw.filter(function(t){ return !_hidSet[String(t.id)]; }) : _discoveryRaw;
+  // v2.8.40: coleta os ocultados (dedup) pra renderizar na seção própria no fim.
+  const hiddenTournaments = [];
+  if (_hidIds.length) {
+    var _seenHid = {};
+    _allVisibleRaw.concat(_discoveryRaw).forEach(function(t){
+      if (t && _hidSet[String(t.id)] && !_seenHid[String(t.id)]) { _seenHid[String(t.id)] = 1; hiddenTournaments.push(t); }
+    });
+  }
 
   // v0.16.57: helper que classifica um torneio em uma das 4 categorias do
   // discovery feed pra renderizar na ordem pedida pelo usuário:
@@ -534,7 +550,13 @@ function renderDashboard(container) {
     else if (t.enrollmentMode === 'time') enrollmentText = _t('enroll.modeTeam');
     else if (t.enrollmentMode === 'misto') enrollmentText = _t('enroll.modeMixed');
 
-    const isOrg = window.AppStore.currentUser && t.organizerEmail === window.AppStore.currentUser.email;
+    // v2.8.42: isOrg por UID (identidade primária) — email só como fallback legado
+    // (torneios antigos sem creatorUid). Org por uid/telefone (sem email) agora conta.
+    const _cuIsOrg = window.AppStore.currentUser;
+    const isOrg = !!(_cuIsOrg && (
+      (t.creatorUid && _cuIsOrg.uid && t.creatorUid === _cuIsOrg.uid) ||
+      (t.organizerEmail && _cuIsOrg.email && t.organizerEmail === _cuIsOrg.email)
+    ));
 
     // v2.1.95-beta: usa função centralizada (igual ao detalhe do torneio)
     // para detectar inscrição. A lógica inline anterior pulava duplas
@@ -662,7 +684,7 @@ function renderDashboard(container) {
     const _pReadFg = _rb ? _rb.fg : '#f1f5f9';
     const _pReadBd = _rb ? _rb.border : 'rgba(255,255,255,0.12)';
     return `
-        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'">
+        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}" data-search-blob="${window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '')}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'">
           ${isOrg ? `
              <div style="position: absolute; bottom: 6px; right: 8px; opacity: 0.9; pointer-events: none;" title="${window._genderWord ? window._genderWord(window.AppStore && window.AppStore.currentUser, 'Organizador', 'Organizadora') : 'Organizador'}">
                <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(251,191,36,0.95)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -953,6 +975,20 @@ function renderDashboard(container) {
               return _html;
             })()}
 
+            ${(function(){
+              // v2.8.40: "Ocultar" no rodapé de todo card que o usuário NÃO está
+              // inscrito NEM organiza/co-organiza/criou. Na seção de ocultados vira
+              // "Desocultar". isOrg (do card) só pega org por email — reforço aqui
+              // com creatorUid + co-hosts (org por uid/telefone não tem email).
+              var _hid = (typeof window._isHidden === 'function') && window._isHidden(t.id);
+              if (_hid) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Mostrar de novo na lista" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.9);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;">👁 Desocultar</button></div>';
+              var _cuX = window.AppStore && window.AppStore.currentUser;
+              var _amOrgX = isOrg || (_cuX && t.creatorUid && _cuX.uid === t.creatorUid) ||
+                (_cuX && Array.isArray(t.coHosts) && t.coHosts.some(function(ch){ return ch && ch.status === 'active' && ((ch.uid && ch.uid === _cuX.uid) || (ch.email && ch.email === _cuX.email)); }));
+              if (!isParticipating && !_amOrgX) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Ocultar este torneio da sua lista" style="background:transparent;border:1px solid rgba(255,255,255,0.16);color:rgba(255,255,255,0.5);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;" onmouseover="this.style.color=\'rgba(255,255,255,0.85)\'" onmouseout="this.style.color=\'rgba(255,255,255,0.5)\'">🙈 Ocultar</button></div>';
+              return '';
+            })()}
+
           </div>
         </div>
       `;
@@ -994,6 +1030,16 @@ function renderDashboard(container) {
   });
 
   const sportsArr = Array.from(sportsSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  // v2.8.44: o filtro cíclico percorre TODAS as modalidades canônicas (não só as
+  // presentes nos torneios do usuário) — antes ciclava só "Todas ↔ Beach Tennis"
+  // quando só havia BT. União: canônicas (_sportScoringDefaults, menos _default) +
+  // quaisquer esportes presentes que não estejam na lista canônica (legado).
+  var _canonSports = (window._sportScoringDefaults)
+    ? Object.keys(window._sportScoringDefaults).filter(function(k){ return k && k !== '_default'; })
+    : ['Beach Tennis', 'Pickleball', 'Tênis', 'Tênis de Mesa', 'Padel', 'Vôlei de Praia', 'Futevôlei'];
+  var _sportUnion = _canonSports.slice();
+  sportsArr.forEach(function(s){ if (s && _sportUnion.indexOf(s) === -1) _sportUnion.push(s); });
+  window._dashSportsList = _sportUnion;
   const locationsArr = Array.from(locationsSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const formatsArr = Array.from(formatsSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
@@ -1025,29 +1071,41 @@ function renderDashboard(container) {
   window._applyDashFilter = function(filter) {
     window._dashFilter = filter;
     window._dashPage = 1;
-    var c = document.getElementById('view-container');
-    if (c && typeof renderDashboard === 'function') renderDashboard(c);
+    window._dashRerender();
   };
   window._applyDashSport = function(sport) {
     window._dashSport = (window._dashSport === sport) ? '' : sport;
-    var c = document.getElementById('view-container');
-    if (c && typeof renderDashboard === 'function') renderDashboard(c);
+    window._dashRerender();
+  };
+  // v2.8.41: filtro CÍCLICO de modalidade — clica e passa pra próxima; depois da
+  // última volta pra "Todas" (''). Lista vem de window._dashSportsList (modalidades
+  // presentes nos torneios), gravada no render.
+  window._cycleDashSport = function() {
+    var list = Array.isArray(window._dashSportsList) ? window._dashSportsList : [];
+    var cycle = [''].concat(list);
+    var cur = window._dashSport || '';
+    var i = cycle.indexOf(cur); if (i === -1) i = 0;
+    window._dashSport = cycle[(i + 1) % cycle.length];
+    window._dashRerender();
+  };
+  // v2.8.46: busca IN-PLACE (sem re-render) — não pula a tela nem perde o foco.
+  // Casa nome/local/participante/organizador via data-search-blob de cada card.
+  window._setDashSearch = function(val) {
+    window._dashSearch = val || '';
+    if (typeof window._applyDashSearchInPlace === 'function') window._applyDashSearchInPlace();
   };
   window._applyDashLocation = function(loc) {
     window._dashLocation = (window._dashLocation === loc) ? '' : loc;
-    var c = document.getElementById('view-container');
-    if (c && typeof renderDashboard === 'function') renderDashboard(c);
+    window._dashRerender();
   };
   window._applyDashFormat = function(fmt) {
     window._dashFormat = (window._dashFormat === fmt) ? '' : fmt;
-    var c = document.getElementById('view-container');
-    if (c && typeof renderDashboard === 'function') renderDashboard(c);
+    window._dashRerender();
   };
   window._setDashView = function(view) {
     window._dashView = view;
     try { localStorage.setItem('scoreplace_dashView', view); } catch(e) {}
-    var c = document.getElementById('view-container');
-    if (c && typeof renderDashboard === 'function') renderDashboard(c);
+    window._dashRerender();
   };
   // v0.16.73: removidos handlers _dashForceFetchDiscovery e
   // _dashDiagnoseTournaments (v0.16.60-61) — eram acionados por botões do
@@ -1056,8 +1114,7 @@ function renderDashboard(container) {
   window._loadMoreDiscovery = function() {
     if (!window.AppStore || typeof window.AppStore.loadPublicDiscovery !== 'function') return;
     window.AppStore.loadPublicDiscovery({ append: true }).then(function() {
-      var c = document.getElementById('view-container');
-      if (c && typeof renderDashboard === 'function') renderDashboard(c);
+      window._dashRerender();
     });
   };
   // Restore saved view preference
@@ -1193,356 +1250,6 @@ function renderDashboard(container) {
     var el = document.getElementById('dash-profile-nudge');
     if (el) el.remove();
   };
-
-  function _buildUpcomingMatchesHtml() {
-    var cu = window.AppStore.currentUser;
-    if (!cu || !cu.email) return '';
-
-    var email = cu.email.toLowerCase();
-    var dName = (cu.displayName || '').toLowerCase();
-    var pending = [];
-
-    function _isMe(label) {
-      if (!label) return false;
-      var l = label.toLowerCase();
-      return l === email || (dName && l === dName) || (cu.uid && l === cu.uid);
-    }
-    function _isMeByUid(name, tournament) {
-      if (!cu.uid || !name || !tournament) return false;
-      var parts = Array.isArray(tournament.participants) ? tournament.participants : [];
-      for (var _i = 0; _i < parts.length; _i++) {
-        var _p = parts[_i];
-        if (!_p || typeof _p !== 'object') continue;
-        if (_p.p1Name === name && _p.p1Uid === cu.uid) return true;
-        if (_p.p2Name === name && _p.p2Uid === cu.uid) return true;
-      }
-      return false;
-    }
-
-    participacoes.forEach(function(t) {
-      if (t.status === 'finished') return;
-      var _tFallback = window._t || function(k) { return k; };
-      var tName = t.name || _tFallback('dashboard.tournamentName');
-      var tId = t.id;
-
-      // Collect pending matches (no winner yet, player is p1 or p2)
-      var matchSources = (typeof window._collectAllMatches === 'function')
-        ? window._collectAllMatches(t).slice()
-        : [];
-      if (matchSources.length === 0 && typeof window._collectAllMatches !== 'function') {
-        // Defensive fallback: bracket-model.js not loaded.
-        if (Array.isArray(t.matches)) matchSources = matchSources.concat(t.matches);
-        if (t.thirdPlaceMatch) matchSources.push(t.thirdPlaceMatch);
-        if (Array.isArray(t.rounds)) {
-          t.rounds.forEach(function(r) {
-            if (Array.isArray(r)) matchSources = matchSources.concat(r);
-            else if (r && Array.isArray(r.matches)) matchSources = matchSources.concat(r.matches);
-          });
-        }
-        if (Array.isArray(t.groups)) {
-          t.groups.forEach(function(g) {
-            if (g && Array.isArray(g.matches)) matchSources = matchSources.concat(g.matches);
-            if (g && Array.isArray(g.rounds)) {
-              g.rounds.forEach(function(gr) {
-                if (Array.isArray(gr)) matchSources = matchSources.concat(gr);
-              });
-            }
-          });
-        }
-        if (Array.isArray(t.rodadas)) {
-          t.rodadas.forEach(function(r) {
-            if (Array.isArray(r)) matchSources = matchSources.concat(r);
-            else if (r && Array.isArray(r.matches)) matchSources = matchSources.concat(r.matches);
-          });
-        }
-      }
-
-      // v0.16.80: para Liga/Suíço, só consideramos matches da ÚLTIMA rodada
-      // como "próximas partidas". Pedido do usuário: "na liga quando há um
-      // novo sorteio, os jogos da rodada anterior que não tiverem resultado
-      // registrado devem ser considerados encerrados. ... jogos que não
-      // tiveram os resultaos lançados não podem constar como próximas
-      // partidas do jogador." Antes, qualquer match sem winner aparecia
-      // como pendente — incluindo rounds antigos abandonados (jogo nunca
-      // foi disputado, novo sorteio veio sem resultado registrado). Agora
-      // filtramos pela rodada mais alta encontrada (m.round máximo) entre
-      // todos os matches do torneio. Outros formatos (Eliminatórias, Grupos)
-      // mantêm comportamento atual — nesses todo match pendente é válido
-      // até que seja resolvido.
-      var isLigaFmt = (typeof window._isLigaFormat === 'function')
-        ? window._isLigaFormat(t)
-        : (t.format === 'Liga' || t.format === 'Ranking');
-      var isSwissFmt = t.format === 'Suíço' || t.format === 'Suico';
-      if (isLigaFmt || isSwissFmt) {
-        var maxRound = -Infinity;
-        matchSources.forEach(function(m) {
-          if (m && typeof m.round === 'number' && m.round > maxRound) maxRound = m.round;
-        });
-        if (isFinite(maxRound)) {
-          matchSources = matchSources.filter(function(m) {
-            return m && m.round === maxRound;
-          });
-        }
-      }
-
-      // v0.16.74: extrai info rica de cada match — formato, fase, parceiro,
-      // adversários, e (pra Rei/Rainha) os 4 do grupo. Antes só mostrava
-      // "vs Adv" + nome do torneio. Pedido do usuário: "coloque o nome do
-      // torneio que tem próximas partidas e coloque o parceiro e os
-      // adversários e a fase da partida no torneio. se for rei/rainha
-      // coloque isso e os sorteados junto."
-      matchSources.forEach(function(m) {
-        if (!m || m.winner) return; // Already has result
-        if (m.isSitOut || m.p1 === 'FOLGA' || m.p2 === 'FOLGA') return; // folga não é jogo a disputar
-        if (m.p1 === 'TBD' || m.p2 === 'TBD' || m.p1 === 'BYE' || m.p2 === 'BYE') return;
-
-        // Detecta se sou parte do match (singles, doubles slash-separated, ou monarch team).
-        var isMonarchMatch = m.isMonarch && Array.isArray(m.team1) && Array.isArray(m.team2);
-        var inTeam1 = false, inTeam2 = false;
-        var team1Names = [], team2Names = [];
-        if (isMonarchMatch) {
-          team1Names = m.team1.slice();
-          team2Names = m.team2.slice();
-          inTeam1 = team1Names.some(_isMe);
-          inTeam2 = team2Names.some(_isMe);
-        } else {
-          // Singles: m.p1/p2 são nomes; doubles: slash-separated.
-          team1Names = String(m.p1 || '').split(/\s*\/\s*/).filter(Boolean);
-          team2Names = String(m.p2 || '').split(/\s*\/\s*/).filter(Boolean);
-          inTeam1 = team1Names.some(_isMe) || _isMe(m.p1) || team1Names.some(function(n) { return _isMeByUid(n, t); });
-          inTeam2 = team2Names.some(_isMe) || _isMe(m.p2) || team2Names.some(function(n) { return _isMeByUid(n, t); });
-        }
-        if (!inTeam1 && !inTeam2) return;
-
-        var myTeam = inTeam1 ? team1Names : team2Names;
-        var oppTeam = inTeam1 ? team2Names : team1Names;
-        // Parceiro = qualquer nome no meu time que não sou eu.
-        var partner = null;
-        for (var pi = 0; pi < myTeam.length; pi++) {
-          if (!_isMe(myTeam[pi])) { partner = myTeam[pi]; break; }
-        }
-
-        // Format label
-        var formatLabel = '';
-        if (isMonarchMatch) formatLabel = 'Rei/Rainha';
-        else if (t.format) formatLabel = window._formatDisplayName ? window._formatDisplayName(t.format) : t.format;
-        // Liga com rodadas Rei/Rainha
-        if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && isMonarchMatch) {
-          formatLabel = 'Pontos Corridos · Rei/Rainha';
-        }
-
-        // Phase label — Rei/Rainha tem m.label rico ("R1 Grupo A • Jogo 1"),
-        // Liga/Suíço usa rodada, Eliminatórias deriva de m.round.
-        var phaseLabel = '';
-        if (m.label) {
-          phaseLabel = String(m.label);
-        } else if (m.roundLabel) {
-          phaseLabel = String(m.roundLabel);
-        } else if (m.round != null) {
-          phaseLabel = 'Rodada ' + m.round;
-        }
-
-        pending.push({
-          tournament: tName,
-          tournamentId: tId,
-          sport: t.sport || '',
-          formatLabel: formatLabel,
-          phaseLabel: phaseLabel,
-          partner: partner,
-          oppTeam: oppTeam,
-          isMonarch: isMonarchMatch,
-          // Pra Rei/Rainha, o "grupo" é os 4 nomes — usuário pediu pra
-          // mostrar os sorteados juntos (rotação de duplas a cada jogo).
-          monarchGroup: isMonarchMatch ? [].concat(team1Names, team2Names) : null
-        });
-      });
-    });
-
-    if (pending.length === 0) return '';
-
-    // v0.16.75: agrupa partidas que dividem o mesmo torneio + grupo Rei/Rainha
-    // (ou tournament + phase pra não-monarch). Pedido do usuário: "como sao 3
-    // jogos do mesmo torneio, podemos colocar o torneio, modo rei/rainha, grupo
-    // do sorteio uma unica vez e já colocar em boxes os confrontos em seguinda
-    // alinhados numa unica linha." Antes cada match era um card próprio com
-    // headers repetidos (3 cards iguais com "liga / Liga · Rei/Rainha · R2
-    // Grupo H / 🎲 Grupo: A·B·C·D" idênticos, só mudando "Você + X vs Y + Z").
-    // Agora um único card por (tournament + group/phase) com header + N linhas
-    // compactas de confrontos.
-    var grouped = [];
-    var keyToIdx = {};
-    pending.forEach(function(p) {
-      var key;
-      if (p.isMonarch && p.monarchGroup && p.monarchGroup.length > 0) {
-        // Grupo Rei/Rainha = mesmo torneio + mesmo conjunto canônico de 4.
-        key = p.tournamentId + '|monarch|' + p.monarchGroup.slice().sort().join(',');
-      } else {
-        // Não-monarch: agrupa por torneio + fase (mesma rodada de Liga/Suíço).
-        key = p.tournamentId + '|single|' + (p.phaseLabel || '');
-      }
-      if (keyToIdx[key] == null) {
-        keyToIdx[key] = grouped.length;
-        // v0.16.82: guarda referência ao tournament real pra computar
-        // standings ao renderizar (Liga/Suíço) sem precisar buscar de novo.
-        var tRef = participacoes.find(function(tt) { return tt.id === p.tournamentId; });
-        grouped.push({
-          tournament: p.tournament, tournamentId: p.tournamentId, sport: p.sport,
-          formatLabel: p.formatLabel, phaseLabel: p.phaseLabel,
-          isMonarch: p.isMonarch, monarchGroup: p.monarchGroup,
-          matches: [],
-          tRef: tRef
-        });
-      }
-      grouped[keyToIdx[key]].matches.push({
-        partner: p.partner, oppTeam: p.oppTeam, phaseLabel: p.phaseLabel
-      });
-      // v0.16.76: pra Liga com sorteio automático, guarda referência ao
-      // próximo draw scheduled — countdown vai pro header do card.
-      if (!grouped[keyToIdx[key]].nextDrawAt) {
-        var tFull = grouped[keyToIdx[key]].tRef;
-        if (tFull && tFull.format === 'Liga' && !tFull.drawManual && tFull.drawFirstDate &&
-            typeof window._calcNextDrawDate === 'function') {
-          // v2.4.68: fim do torneio (endDate, ou temporada por meses)
-          var _tEndW = null;
-          if (tFull.endDate) {
-            var _edW = String(tFull.endDate).indexOf('T') > -1 ? tFull.endDate : (tFull.endDate + 'T23:59:59');
-            var _edMsW = new Date(_edW).getTime();
-            if (!isNaN(_edMsW)) _tEndW = _edMsW;
-          }
-          if (_tEndW == null) {
-            var _smW = tFull.ligaSeasonMonths || tFull.rankingSeasonMonths;
-            if (_smW && tFull.startDate) {
-              var _ssdW = new Date(tFull.startDate);
-              if (!isNaN(_ssdW.getTime())) { var _seW = new Date(_ssdW); _seW.setMonth(_seW.getMonth() + parseInt(_smW)); _tEndW = _seW.getTime(); }
-            }
-          }
-          // Ainda há sorteios por vir? (rodada atual < última planejada)
-          var _lpW = (typeof window._ligaTournamentProgress === 'function') ? window._ligaTournamentProgress(tFull) : null;
-          var _moreDrawsW = !_lpW || _lpW.currentRoundNum < _lpW.roundsPlanned;
-          var _setNextW = false;
-          if (_moreDrawsW) {
-            var nd = window._calcNextDrawDate(tFull);
-            if (nd) {
-              var _ndMsW = nd.getTime();
-              if (_tEndW == null || _ndMsW <= _tEndW) {
-                grouped[keyToIdx[key]].nextDrawAt = _ndMsW;
-                grouped[keyToIdx[key]].countdownIcon = '⏱️';
-                grouped[keyToIdx[key]].countdownLabel = 'próximo sorteio em';
-                _setNextW = true;
-              }
-            }
-          }
-          // Último sorteio já feito → countdown para o fim do torneio
-          if (!_setNextW && _tEndW != null && _tEndW > Date.now()) {
-            grouped[keyToIdx[key]].nextDrawAt = _tEndW;
-            grouped[keyToIdx[key]].countdownIcon = '🏆';
-            grouped[keyToIdx[key]].countdownLabel = 'fim do torneio em';
-          }
-        }
-      }
-    });
-
-    var maxShowGroups = Math.min(grouped.length, 5);
-    var html = '<div style="margin-bottom:1.25rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:14px 16px;">';
-    var _t2 = window._t || function(k) { return k; };
-    var _safe = window._safeHtml || function(s) { return String(s || ''); };
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><span style="font-size:1.1rem;">⚔️</span><span style="font-size:0.9rem;font-weight:700;color:var(--text-bright);">' + _t2('dashboard.nextMatches') + '</span><span style="font-size:0.7rem;color:var(--text-muted);margin-left:auto;">' + pending.length + '</span></div>';
-
-    for (var gi = 0; gi < maxShowGroups; gi++) {
-      var g = grouped[gi];
-      var safeTourney = _safe(g.tournament);
-      // Pra Rei/Rainha, descasca "• Jogo N" do phaseLabel pro header (deixa
-      // só "R2 Grupo H"); pra não-monarch, mantém o phaseLabel inteiro.
-      var headerPhase = g.phaseLabel;
-      if (g.isMonarch && headerPhase) {
-        headerPhase = headerPhase.replace(/\s*[•·]\s*Jogo\s*\d+.*/i, '');
-      }
-      var fmtPhase = [];
-      if (g.formatLabel) fmtPhase.push(_safe(g.formatLabel));
-      if (headerPhase) fmtPhase.push(_safe(headerPhase));
-      var fmtPhaseLine = fmtPhase.length > 0
-        ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + fmtPhase.join(' · ') + '</div>'
-        : '';
-      // v0.16.76: dice line "🎲 Grupo: ..." removida — usuário pediu pra
-      // limpar a duplicação ("já tem a informação abaixo" — os 4 nomes
-      // aparecem nos confrontos Jogo 1/2/3 logo abaixo).
-      var monarchLine = '';
-      // v0.16.76/77: countdown pro próximo sorteio em Liga com auto-draw —
-      // INCLUI segundos via tick global em store.js. Pedido do usuário: "a
-      // contagem regressiva deve conter os segundos tambem". span tem
-      // data-countdown-target=timestamp; setInterval(1s) em store.js
-      // re-renderiza textContent via window._formatCountdown — formato
-      // "3d 2h 15m 30s" / "18h 30m 15s" / "45m 22s" / "30s".
-      var ligaCountdownLine = '';
-      if (g.nextDrawAt) {
-        var diffMs = g.nextDrawAt - Date.now();
-        var urgent = diffMs > 0 && diffMs < 24 * 3600 * 1000;
-        var color = urgent ? '#fbbf24' : '#a5b4fc';
-        var bg = urgent ? 'rgba(251,191,36,0.12)' : 'rgba(99,102,241,0.12)';
-        var border = urgent ? 'rgba(251,191,36,0.3)' : 'rgba(99,102,241,0.3)';
-        var initialText = (typeof window._formatCountdown === 'function' && diffMs > 0)
-          ? window._formatCountdown(diffMs)
-          : (diffMs <= 0 ? 'Agora!' : '...');
-        // v0.16.90: toggle Liga "Ativado/Desativado" agora aparece numa
-        // linha própria acima do countdown, alinhado à direita (mesmo
-        // aspecto dos cards de torneio). Em widget compacto não há linha
-        // "Atualizado em" pra encostar — toggle solo na borda direita.
-        var _ligaToggleWidget = (g.tRef && typeof window._buildLigaActiveToggleHtml === 'function')
-          ? window._buildLigaActiveToggleHtml(g.tRef)
-          : '';
-        // v0.16.92: stopPropagation na row do toggle (mesmo padrão da
-        // dashboard card) — clique no toggle não dispara navegação pra
-        // detalhe via card click handler.
-        var _toggleRow = _ligaToggleWidget
-          ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleWidget + '</div>'
-          : '';
-        var _cdIcon = g.countdownIcon || '⏱️';
-        var _cdLabel = g.countdownLabel || 'próximo sorteio em';
-        ligaCountdownLine = _toggleRow +
-          '<div style="display:inline-flex;align-items:center;gap:6px;font-size:0.7rem;font-weight:600;color:' + color + ';background:' + bg + ';border:1px solid ' + border + ';border-radius:999px;padding:2px 10px;margin-top:6px;">' + _cdIcon + ' ' + _cdLabel + ' <span data-countdown-target="' + g.nextDrawAt + '">' + initialText + '</span></div>';
-      }
-      // Linhas de confronto — uma por match no grupo
-      var matchLines = '';
-      g.matches.forEach(function(m, mi) {
-        var meLbl = m.partner ? 'Você + ' + _safe(m.partner) : 'Você';
-        var oppLbl = (m.oppTeam || []).map(_safe).join(' + ');
-        // Pra monarch, extrai "Jogo N" do phaseLabel da própria match (cada
-        // match no grupo tem phaseLabel diferente: "R2 Grupo H • Jogo 1/2/3").
-        var jogoBadge = '';
-        if (g.isMonarch && m.phaseLabel) {
-          var jm = m.phaseLabel.match(/Jogo\s*(\d+)/i);
-          if (jm) jogoBadge = '<span style="display:inline-block;font-size:0.66rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;padding:1px 7px;margin-right:8px;flex-shrink:0;">Jogo ' + jm[1] + '</span>';
-        }
-        // Box compacto numa linha — Você+Partner vs Adv+Adv
-        matchLines += '<div style="display:flex;align-items:center;font-size:0.78rem;padding:5px 0;' + (mi > 0 ? 'border-top:1px dashed rgba(255,255,255,0.06);' : '') + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-          jogoBadge +
-          '<span style="color:var(--text-color);overflow:hidden;text-overflow:ellipsis;">' +
-            meLbl + ' <span style="opacity:0.5;font-weight:400;margin:0 4px;">vs</span> <span style="color:var(--text-muted);">' + oppLbl + '</span>' +
-          '</span>' +
-        '</div>';
-      });
-      // v0.16.84: classificação removida do widget — fica APENAS na tela de
-      // detalhe do torneio. Pedido do usuário: "a classificação geral da liga
-      // deve aparecer apenas no detalhe da liga e não na dashboard". Mantém
-      // dashboard enxuta (foco em "o que vou jogar agora") e o detalhe é o
-      // home da informação completa de standings.
-      html += '<div onclick="window.location.hash=\'#tournaments/' + g.tournamentId + '\'" style="display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:8px;cursor:pointer;transition:background 0.15s;' + (gi > 0 ? 'border-top:1px solid var(--border-color);margin-top:6px;padding-top:14px;' : '') + '" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'transparent\'">';
-      html += '<span style="font-size:1.1rem;line-height:1.2;flex-shrink:0;margin-top:1px;">' + getSportIcon(g.sport) + '</span>';
-      html += '<div style="flex:1;min-width:0;overflow:hidden;">';
-      html +=   '<div style="font-size:0.86rem;font-weight:700;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + safeTourney + '</div>';
-      html +=   fmtPhaseLine;
-      html +=   ligaCountdownLine;
-      html +=   '<div style="margin-top:8px;display:flex;flex-direction:column;">' + matchLines + '</div>';
-      html += '</div>';
-      html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.5;margin-top:3px;"><path d="M9 18l6-6-6-6"/></svg>';
-      html += '</div>';
-    }
-    if (grouped.length > maxShowGroups) {
-      html += '<div style="text-align:center;font-size:0.7rem;color:var(--text-muted);padding:4px 0;">' + _t2('dashboard.andMore', {count: grouped.length - maxShowGroups}) + '</div>';
-    }
-    html += '</div>';
-    return html;
-  }
 
   // ── Meus Resultados ─────────────────────────────────────────────────────────
   // v1.8.2-beta: seção abaixo da hero box com (a) partidas pendentes de
@@ -1757,8 +1464,15 @@ function renderDashboard(container) {
     };
 
     var _hasPendingApproval = (pendingForMe.length + pendingByMe.length + disputedMatches.length) > 0;
+    // v2.8.32: seção colapsável; preferência persiste entre versões (chave estável,
+    // sem número de versão → sobrevive a deploy/cache novo).
+    var _mrCollapsed = false;
+    try { _mrCollapsed = localStorage.getItem('scoreplace_collapse_myresults') === '1'; } catch (e) {}
     var html = '<div id="meus-resultados-section"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
-    html += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;">🏅 Meus Resultados</h3>';
+    html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
+      '<span id="mr-chevron" style="font-size:0.8rem;display:inline-block;">' + (_mrCollapsed ? '▸' : '▾') + '</span>' +
+      '🏅 Meus Últimos Resultados</h3>';
+    html += '<div id="meus-resultados-body" style="margin-top:12px;' + (_mrCollapsed ? 'display:none;' : '') + '">';
 
     // Calcula label de fase para eliminatórias (FINAL, SEMI-FINAL etc.)
     function _elabFaseLabel(t, m) {
@@ -1815,22 +1529,6 @@ function renderDashboard(container) {
         phaseStr = 'Rodada ' + curRound;
       }
       return phaseStr;
-    }
-
-    // helper: card de match com linha de nomes formatada
-    function _matchCard(item, bgStyle, borderStyle, extra) {
-      var nav = 'window.location.hash=\'#bracket/' + _sf(item.tId) + '\'';
-      var nameLine = _formatMatchLine(item.m.p1 || '', item.m.p2 || '', item.inP1);
-      var subMeta = item.subLine
-        ? _sf(item.tName) + ' <span style="opacity:0.5;">·</span> ' + _sf(item.subLine)
-        : _sf(item.tName);
-      return '<div onclick="' + nav + '" style="cursor:pointer;' + bgStyle + ';border:1px solid ' + borderStyle + ';border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:flex-start;gap:8px;">' +
-        '<span style="font-size:1rem;flex-shrink:0;margin-top:2px;">' + _sportIcon(item.sport) + '</span>' +
-        '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:0.79rem;line-height:1.4;color:#f1f5f9;">' + nameLine + '</div>' +
-          '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + subMeta + '</div>' +
-          (extra || '') +
-        '</div>';
     }
 
     // helper: mini bracket card — estrutura idêntica ao bracket.js:
@@ -2111,7 +1809,6 @@ function renderDashboard(container) {
     // ── Últimos resultados confirmados — estilo chave (não card flat) ──
     if (recentConfirmed.length > 0) {
       html += '<div>';
-      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.04em;">✅ Últimos resultados (' + recentConfirmed.length + ')</p>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
       // v2.3.52: agrupa resultados que compartilham GRUPO + TORNEIO. Quando
       // 2+ chaves repetem "R2 GRUPO A … TESTE DE LIGA", mostra esse rótulo uma
@@ -2160,24 +1857,6 @@ function renderDashboard(container) {
         // mesmo estilo de coluna que _miniBracketCard
         var matchLabel2 = m2.label || 'JOGO 1';
         var rowStyle2 = 'display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:4px;';
-        function _teamRowResult(teamStr, isWinnerSide) {
-          var bg = isWinnerSide ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:rgba(255,255,255,0.02);';
-          var parts2 = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
-          var playersHtml = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
-          parts2.forEach(function(n) {
-            var isMe2 = _isMe(n);
-            var _pc2 = (window._playerPhotoCache && window._playerPhotoCache[(n || '').toLowerCase()]);
-            var photo2 = (_pc2 && _pc2.indexOf('dicebear.com') === -1) ? _pc2
-              : ((isMe2 && cu && cu.photoURL && cu.photoURL.indexOf('dicebear.com') === -1) ? cu.photoURL : null);
-            var _ini2url = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n || '?') + '&backgroundColor=' + (isMe2 ? '6366f1' : '94a3b8') + '&textColor=ffffff&fontSize=42&size=26';
-            var av2 = '<img src="' + (photo2 || _ini2url) + '" data-player-name="' + _sf(n) + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src=\'' + _ini2url + '\'">';
-            playersHtml += '<div style="display:flex;align-items:center;gap:6px;">' + av2 +
-              '<span style="font-size:0.78rem;font-weight:' + (isMe2 ? '700' : '400') + ';color:' + (isMe2 ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(n) + (isMe2 ? ' <span style="font-size:0.62em;color:#818cf8;">(você)</span>' : '') + '</span>' +
-              '</div>';
-          });
-          playersHtml += '</div>';
-          return '<div style="' + rowStyle2 + bg + '">' + playersHtml + '</div>';
-        }
 
         var p1IsWinner = !m2.draw && m2.winner === m2.p1;
         var p2IsWinner = !m2.draw && m2.winner === m2.p2;
@@ -2304,7 +1983,8 @@ function renderDashboard(container) {
       html += '</div>';
     }
 
-    html += '</div>';
+    html += '</div>'; // fecha #meus-resultados-body
+    html += '</div>'; // fecha #meus-resultados-section
     return html;
   }
 
@@ -2481,14 +2161,15 @@ function renderDashboard(container) {
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
       : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
     if (activeList.length > visibleActive.length) {
-      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;var c=document.getElementById(\'view-container\');if(c&&typeof renderDashboard===\'function\')renderDashboard(c);" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
+      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
     }
     if (finishedList.length > 0) {
       // Separate: user's finished tournaments first, then others
       var _cu = window.AppStore.currentUser;
       var myFinished = finishedList.filter(function(t) {
         if (!_cu) return false;
-        if (t.organizerEmail === _cu.email) return true;
+        if (_cu.uid && t.creatorUid && t.creatorUid === _cu.uid) return true;
+        if (t.organizerEmail && t.organizerEmail === _cu.email) return true;
         var pArr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
         return pArr.some(function(p) {
           if (typeof p === 'string') return p === _cu.email || p === _cu.displayName;
@@ -2516,7 +2197,8 @@ function renderDashboard(container) {
     if (curFilter === 'encerrados' && window.AppStore.currentUser) {
       var _cu2 = window.AppStore.currentUser;
       var _isMine = function(t) {
-        if (t.organizerEmail === _cu2.email) return true;
+        if (_cu2.uid && t.creatorUid && t.creatorUid === _cu2.uid) return true;
+        if (t.organizerEmail && t.organizerEmail === _cu2.email) return true;
         var pArr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
         return pArr.some(function(p) {
           if (typeof p === 'string') return p === _cu2.email || p === _cu2.displayName;
@@ -2581,7 +2263,7 @@ function renderDashboard(container) {
       filteredHtml = (runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml) ? '' : '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
     }
     if (_sortedFiltered.length > visibleItems.length) {
-      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;var c=document.getElementById(\'view-container\');if(c&&typeof renderDashboard===\'function\')renderDashboard(c);" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: _sortedFiltered.length - visibleItems.length}) + '</button></div>';
+      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: _sortedFiltered.length - visibleItems.length}) + '</button></div>';
     } else if (curFilter === 'abertos' && window.AppStore && window.AppStore._publicDiscoveryHasMore) {
       // When viewing the public discovery feed and the client has rendered
       // everything loaded, offer to fetch the next server page via cursor.
@@ -2591,31 +2273,12 @@ function renderDashboard(container) {
     if (_finishedSubSection) filteredHtml += _finishedSubSection;
   }
 
-  // Build filter pills for sports
-  let sportsPills = sportsArr.map(s => {
-    const active = curSport === s;
-    return `<button onclick="window._applyDashSport('${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}')" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;border:1px solid ${active ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)'};background:${active ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)'};color:${active ? '#a5b4fc' : 'var(--text-muted)'};font-size:0.75rem;font-weight:${active ? '700' : '500'};cursor:pointer;white-space:nowrap;transition:all 0.2s;"><span>${getSportIcon(s)}</span>${s}</button>`;
-  }).join('');
+  // v2.8.43: pills de modalidade/local/formato removidas (substituídas pelo filtro
+  // cíclico + busca na barra sticky). Os _apply* continuam definidos (usados pelo cíclico).
 
-  // Build filter pills for locations
-  let locationPills = locationsArr.map(l => {
-    const active = curLocation === l;
-    return `<button onclick="window._applyDashLocation('${l.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}')" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;border:1px solid ${active ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.1)'};background:${active ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.04)'};color:${active ? '#4ade80' : 'var(--text-muted)'};font-size:0.75rem;font-weight:${active ? '700' : '500'};cursor:pointer;white-space:nowrap;transition:all 0.2s;">📍${l}</button>`;
-  }).join('');
-
-  // Build filter pills for formats
-  let formatPills = formatsArr.map(f => {
-    const active = curFormat === f;
-    return `<button onclick="window._applyDashFormat('${f.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}')" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;border:1px solid ${active ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.1)'};background:${active ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)'};color:${active ? '#fbbf24' : 'var(--text-muted)'};font-size:0.75rem;font-weight:${active ? '700' : '500'};cursor:pointer;white-space:nowrap;transition:all 0.2s;">🏅${window._formatDisplayName ? window._formatDisplayName(f) : f}</button>`;
-  }).join('');
-
-  const hasSecondaryFilters = sportsArr.length > 0 || locationsArr.length > 0 || formatsArr.length > 0;
-  const filterBarHtml = hasSecondaryFilters ? `
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.2rem;align-items:center;">
-      ${sportsPills}${locationPills}${formatPills}
-      ${(curSport || curLocation || curFormat) ? `<button class="btn btn-micro btn-pill" onclick="window._dashSport='';window._dashLocation='';window._dashFormat='';window._applyDashFilter(window._dashFilter||'todos')" style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.3);">${_t('dashboard.clearFilters')}</button>` : ''}
-    </div>
-  ` : '';
+  // v2.8.43: pills de modalidade/formato/local REMOVIDAS do topo — substituídas pelo
+  // filtro cíclico de modalidade + busca na barra sticky abaixo (pedido do usuário).
+  const filterBarHtml = '';
 
   // Build compact list view
   const _buildCompactList = function(items) {
@@ -2652,7 +2315,7 @@ function renderDashboard(container) {
       var _rowBgH = _lt ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.07)';
       var _rowBd = _lt ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)';
       var statusBadgeBgRgb = statusColor === '#4ade80' ? '16,185,129' : statusColor === '#60a5fa' ? '96,165,250' : '148,163,184';
-      return '<a href="#tournaments/' + t.id + '" class="compact-row" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + _rowBg + ';border:1px solid ' + _rowBd + ';text-decoration:none;color:inherit;transition:background 0.2s;" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
+      return '<a href="#tournaments/' + t.id + '" class="compact-row" data-search-blob="' + window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + _rowBg + ';border:1px solid ' + _rowBd + ';text-decoration:none;color:inherit;transition:background 0.2s;" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
         (t.logoData ? '<img src="' + t.logoData + '" class="compact-logo" style="width:36px;height:36px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:cover;flex-shrink:0;">' : '<div class="compact-logo" style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">' + (getSportIcon(t.sport)) + '</div>') +
         '<div class="compact-info" style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;">' +
           '<div class="compact-name-block" style="flex:1;min-width:0;">' +
@@ -3023,14 +2686,20 @@ function renderDashboard(container) {
          da lista que eles filtram. -->
     ${filterBarHtml}
 
-    <!-- View Toggle + Tournament Cards -->
-    <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
-      <div style="display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
-        <button class="btn btn-pill btn-sm" onclick="window._setDashView('cards')" style="background:${(window._dashView||'cards')==='cards'?'rgba(99,102,241,0.25)':'rgba(255,255,255,0.04)'};color:${(window._dashView||'cards')==='cards'?'#a5b4fc':'var(--text-muted)'};border:none;" title="${_t('dashboard.cards')}">▦ ${_t('dashboard.cards')}</button>
-        <button class="btn btn-pill btn-sm" onclick="window._setDashView('compact')" style="border-left:1px solid rgba(255,255,255,0.1);background:${window._dashView==='compact'?'rgba(99,102,241,0.25)':'rgba(255,255,255,0.04)'};color:${window._dashView==='compact'?'#a5b4fc':'var(--text-muted)'};border-radius:0;" title="${_t('dashboard.compact')}">☰ ${_t('dashboard.compact')}</button>
-      </div>
+    <!-- v2.8.43: toggle "Lista" (desligado=cards padrão / ligado=lista) — substitui os 2 botões -->
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:0.75rem;">
+      <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted);user-select:none;">☰ ${_t('dashboard.compact') || 'Lista'}</span>
+      <label class="toggle-switch" style="--toggle-on-bg:#6366f1;" title="Ver em lista (desligado = cards)"><input type="checkbox" ${window._dashView === 'compact' ? 'checked' : ''} onchange="window._setDashView(this.checked ? 'compact' : 'cards')"><span class="toggle-slider"></span></label>
     </div>
     <div class="dashboard-list" style="margin-bottom: 2rem;">
+      <!-- v2.8.41: barra de filtro (modalidade cíclica) + busca, STICKY abaixo da topbar -->
+      <div class="dash-filter-bar" style="position:sticky;top:calc(var(--topbar-h, 60px) + var(--hamburger-dd-h, 0px));z-index:30;display:flex;gap:8px;align-items:center;background:var(--bg-dark,#0f172a);padding:10px 0;margin-bottom:6px;">
+        <button onclick="window._cycleDashSport()" title="Filtrar por modalidade — clique para alternar (− = Todas)" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;background:${curSport ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.06)'};color:${curSport ? '#a5b4fc' : 'var(--text-muted,#94a3b8)'};border:1px solid ${curSport ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.14)'};border-radius:10px;padding:9px 12px;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">
+          <span style="font-size:1rem;line-height:1;">${curSport ? getSportIcon(curSport) : '🎯'}</span>
+          <span>${curSport ? window._safeHtml(curSport) : 'Todas'}</span>
+        </button>
+        <input id="dash-search-input" type="search" value="${window._safeHtml(window._dashSearch || '')}" oninput="window._setDashSearch(this.value)" placeholder="🔍 Buscar torneio…" autocomplete="off" style="flex:1;min-width:0;background:var(--bg-card,#1a1a2e);color:var(--text-bright,#f1f5f9);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:9px 12px;font-size:0.85rem;box-sizing:border-box;">
+      </div>
       ${runningBandHtml}
       ${awaitingStartHtml}
       ${favoritesBandHtml}
@@ -3088,8 +2757,18 @@ function renderDashboard(container) {
         _section('🏁 Encerrados (públicos)', _finishedDiscovery, '#94a3b8', true) +
       '</div>';
     })()}
+    ${(function(){
+      // v2.8.40: seção dos torneios que o usuário ocultou — colapsável, no fim de tudo.
+      if (!hiddenTournaments || !hiddenTournaments.length) return '';
+      return '<div style="margin-top:1.5rem;"><details><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;"><div class="cards-grid">' + hiddenTournaments.map(function(t){ return renderTournamentCard(t, ''); }).join('') + '</div></div></details></div>';
+    })()}
   `;
   container.innerHTML = html;
+  // v2.8.46: re-aplica a busca in-place após qualquer re-render (ex.: trocar
+  // modalidade com busca ativa) — sem isso a busca "sumiria" no re-render.
+  if (window._dashSearch && typeof window._applyDashSearchInPlace === 'function') {
+    try { window._applyDashSearchInPlace(); } catch (e) {}
+  }
 
   // Regra "sempre usar foto do perfil para usuário cadastrado": o dashboard
   // não passa pelo bracket, então o _playerPhotoCache pode estar frio. Pré-
@@ -3198,7 +2877,10 @@ function renderDashboard(container) {
         window._log('[Discovery v0.16.60] re-fetch retornou', { newLen: newLen, oldLen: _curLen });
         // Re-render se ainda estamos no dashboard E o count mudou.
         // v1.9.94: preserva scroll + não re-dispara auto-scroll (sem "pulo").
-        if (window.location.hash === '' || window.location.hash === '#' || window.location.hash.indexOf('#dashboard') === 0) {
+        // v2.8.23: só re-renderiza ATRÁS do boot loader (dashboard ainda não revelada).
+        // Com a dashboard já mostrada, re-render = "travada no scroll" → não faz; os dados
+        // novos do discovery entram na próxima navegação/entrada.
+        if (window._bootInProgress && (window.location.hash === '' || window.location.hash === '#' || window.location.hash.indexOf('#dashboard') === 0)) {
           if (newLen !== _curLen) {
             _reRenderDashKeepScroll();
           }
@@ -3233,17 +2915,10 @@ function renderDashboard(container) {
       if (!_onDash) return;
       if (!window.AppStore || typeof window.AppStore.loadPublicDiscovery !== 'function') return;
       if (!window.AppStore.currentUser) return;
-      var _prevLen = (window.AppStore.publicDiscovery || []).length;
       window.AppStore._publicDiscoveryLastFetch = Date.now();
-      window.AppStore.loadPublicDiscovery().then(function() {
-        var _newLen = (window.AppStore.publicDiscovery || []).length;
-        if (_newLen === _prevLen) return;
-        var _h2 = window.location.hash || '';
-        if (_h2 === '' || _h2 === '#' || _h2.indexOf('#dashboard') === 0) {
-          // v1.9.94: preserva scroll (poll a cada 25s não deve dar "pulo").
-          _reRenderDashKeepScroll();
-        }
-      }).catch(function() {});
+      // v2.8.23: o poll só MANTÉM os dados frescos (pra próxima navegação/entrada) —
+      // NÃO re-renderiza a dashboard já mostrada (re-render visível = travada no scroll).
+      window.AppStore.loadPublicDiscovery().catch(function() {});
     }, 25000);
   }
 
@@ -3286,6 +2961,64 @@ function renderDashboard(container) {
     setTimeout(function () { try { window._coach.autoStartDashboard(); } catch (e) {} }, 1100);
   }
 }
+
+// v2.8.32: colapso da seção "Meus Últimos Resultados". Preferência persistida em
+// chave ESTÁVEL (sem número de versão) → sobrevive a deploy/cache novo. Escopo de
+// módulo (definido 1x), não dentro de renderDashboard.
+// v2.8.45: re-render CANÔNICO da dashboard preservando o scroll. Substituir o
+// innerHTML inteiro reseta a posição (a tela "pula"). Salva o scrollY, renderiza
+// e restaura — inclusive num requestAnimationFrame (a altura pode mudar após o
+// layout assentar). Todo clique que re-renderiza a dashboard (filtros, busca,
+// toggle, ocultar) deve usar isto em vez de chamar renderDashboard direto.
+window._dashRerender = function() {
+  var c = document.getElementById('view-container');
+  if (!c || typeof window.renderDashboard !== 'function') return;
+  var y = window.pageYOffset || window.scrollY || 0;
+  window.renderDashboard(c);
+  try { window.scrollTo(0, y); } catch (e) {}
+  try { requestAnimationFrame(function(){ try { window.scrollTo(0, y); } catch (e2) {} }); } catch (e3) {}
+};
+
+// v2.8.46: busca da dashboard = filtro IN-PLACE (esconde/mostra cards sem re-render)
+// → digitar NÃO pula a tela nem perde o foco do input. Casa em qualquer parte do
+// NOME do torneio, do LOCAL, e dos PARTICIPANTES/ORGANIZADOR. Cada card carrega o
+// texto pesquisável em data-search-blob; aqui só alternamos display.
+window._tournamentSearchBlob = function(t) {
+  if (!t) return '';
+  var parts = [t.name || '', t.venueName || '', t.organizerName || '', t.organizerEmail || ''];
+  var pl = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
+  for (var i = 0; i < pl.length; i++) {
+    var p = pl[i];
+    if (typeof p === 'string') parts.push(p);
+    else if (p) { parts.push(p.displayName || ''); parts.push(p.name || ''); parts.push(p.p1Name || ''); parts.push(p.p2Name || ''); }
+  }
+  return parts.join(' ').toLowerCase();
+};
+window._applyDashSearchInPlace = function() {
+  var q = (window._dashSearch || '').trim().toLowerCase();
+  var root = document.getElementById('view-container');
+  if (!root) return;
+  root.querySelectorAll('[data-search-blob]').forEach(function(card){
+    var hit = !q || (card.getAttribute('data-search-blob') || '').indexOf(q) !== -1;
+    card.style.display = hit ? '' : 'none';
+  });
+  // some o espaço de grids que ficaram sem nenhum card visível
+  root.querySelectorAll('.cards-grid, .compact-list').forEach(function(grid){
+    if (!q) { grid.style.display = ''; return; }
+    var any = Array.prototype.some.call(grid.querySelectorAll('[data-search-blob]'), function(c){ return c.style.display !== 'none'; });
+    grid.style.display = any ? '' : 'none';
+  });
+};
+
+window._toggleMyResultsCollapse = function() {
+  var body = document.getElementById('meus-resultados-body');
+  var chev = document.getElementById('mr-chevron');
+  if (!body) return;
+  var willCollapse = body.style.display !== 'none';
+  body.style.display = willCollapse ? 'none' : '';
+  if (chev) chev.textContent = willCollapse ? '▸' : '▾';
+  try { localStorage.setItem('scoreplace_collapse_myresults', willCollapse ? '1' : '0'); } catch (e) {}
+};
 
 // v0.17.4: real-time listeners. Mantém listener vivo enquanto o dashboard
 // está no DOM. Cada snapshot do Firestore (write de qualquer pessoa que

@@ -2,16 +2,6 @@
 // salvas com eles caem no padrão pela validação abaixo.)
 var _validThemes = ['dark', 'light'];
 
-function applyTheme(themeValue) {
-  var activeTheme = themeValue;
-  if (themeValue === 'auto') {
-    var isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    activeTheme = isDarkMode ? 'dark' : 'light';
-  }
-  if (_validThemes.indexOf(activeTheme) === -1) activeTheme = 'dark';
-  document.documentElement.setAttribute('data-theme', activeTheme);
-}
-
 // Chamar imediatamente para evitar FOUC
 (function checkInitialTheme() {
   var pref = null;

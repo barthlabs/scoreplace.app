@@ -1,7 +1,7 @@
 function renderRules(container, tournamentId) {
   const _t = window._t || function(k) { return k; };
   const tId = tournamentId || window._lastActiveTournamentId;
-  const t = tId && window.AppStore ? window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString()) : null;
+  const t = tId && window.AppStore ? window._findTournamentById(tId) : null;
 
   if (!t) {
     container.innerHTML = `

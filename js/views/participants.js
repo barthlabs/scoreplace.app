@@ -44,7 +44,7 @@ function _reRenderParticipants() {
 // 5. Sync no fim se houve qualquer mutação
 // ─────────────────────────────────────────────────────────────────────────────
 window._processWoSubstitutions = function(tId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return { ok: false, reason: 'no-tournament' };
   if (!t.absent || Object.keys(t.absent).length === 0) return { ok: false, reason: 'no-absent', subCount: 0 };
   if (!t.checkedIn) return { ok: false, reason: 'no-checkedIn', subCount: 0 };
@@ -234,7 +234,7 @@ window._processWoSubstitutions = function(tId) {
 //   • qualquer outro caso → bloqueado com aviso.
 // O organizador sempre pode dar/retirar (cai no 1º caso).
 window._toggleCheckIn = function (tId, playerName) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   const user = window.AppStore && window.AppStore.currentUser;
 
@@ -274,7 +274,7 @@ window._toggleCheckIn = function (tId, playerName) {
 };
 
 window._applyCheckInToggle = function (tId, playerName) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   if (!t.checkedIn) t.checkedIn = {};
   if (!t.absent) t.absent = {};
@@ -327,7 +327,7 @@ window._applyCheckInToggle = function (tId, playerName) {
 };
 
 window._markAbsent = function (tId, playerName) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   // v2.3.82: W.O. (declarar ausente / reverter) só por autoridade (org/co-org/
   // árbitro). O W.O. por consenso entre participantes virá num próximo passo.
@@ -425,7 +425,7 @@ window._markAbsent = function (tId, playerName) {
 };
 
 window._resetCheckIn = function (tId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   t.checkedIn = {};
   t.absent = {};
@@ -442,7 +442,7 @@ window._resetCheckIn = function (tId) {
 // ou cancelar. Em seguida o pipeline normal de sorteio roda só com os presentes.
 // ════════════════════════════════════════════════════════════════════════════
 window._drawPresentOnly = function (tId) {
-  const t = window.AppStore.tournaments.find(tour => String(tour.id) === String(tId));
+  const t = window._findTournamentById(tId);
   if (!t) return;
   if (!t.checkedIn) t.checkedIn = {};
   const parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
@@ -530,7 +530,7 @@ window._showAbsenteeResolutionDialog = function (tId, present, absentees, procee
 // Aplica o destino dos ausentes (lista de espera ou desclassificação), filtra
 // t.participants para os presentes, persiste e dispara `proceed` (o sorteio).
 window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
-  const t = window.AppStore.tournaments.find(function (tour) { return String(tour.id) === String(tId); });
+  const t = window._findTournamentById(tId);
   if (!t) return;
   if (!t.checkedIn) t.checkedIn = {};
   if (!t.absent) t.absent = {};
@@ -616,7 +616,7 @@ window._editParticipantName = function(tId, oldName) {
       span.textContent = oldName; // revert
       return;
     }
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
     // Update in participants array
     var parts = Array.isArray(t.participants) ? t.participants : [];
@@ -713,7 +713,7 @@ window._editParticipantName = function(tId, oldName) {
 };
 
 window._startTournament = function (tId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   t.tournamentStarted = Date.now();
   // Se não houver data de início, preencher com a data atual
@@ -796,7 +796,7 @@ window._partApplyFilter = function () {
 };
 
 window._toggleVip = function (tId, participantName) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   if (!t.vips) t.vips = {};
   if (t.vips[participantName]) {
@@ -814,7 +814,7 @@ window._declareAbsent = function (tId, playerName) {
   // porque a confirm callback re-fetcha e re-deriva tudo a partir do t mais
   // recente do AppStore — onSnapshot pode ter substituído store.tournaments
   // entre dialog-open e confirm.
-  let t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  let t = window._findTournamentById(tId);
   if (!t) return;
   // v2.3.82: W.O. só por autoridade (org/co-org/árbitro). Consenso de
   // participantes virá num próximo passo.
@@ -904,7 +904,7 @@ window._declareAbsent = function (tId, playerName) {
     // Fix: pegar t mais recente AGORA, e re-derivar standby/checkedIn/etc.
     // a partir dele. Match e teamName ainda são válidos (referenciamos por
     // nome/id, não por ref de objeto).
-    const _tFresh = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const _tFresh = window._findTournamentById(tId);
     if (_tFresh) t = _tFresh;
     // Re-derivar standby a partir do t fresh:
     const _spFresh = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
@@ -982,7 +982,7 @@ window._declareAbsent = function (tId, playerName) {
           });
         } else {
           // Sem sub — descobrir por quê e mostrar toast informativo
-          const tF = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+          const tF = window._findTournamentById(tId);
           const _spF = tF && Array.isArray(tF.standbyParticipants) ? tF.standbyParticipants : [];
           const _wlF = tF && Array.isArray(tF.waitlist) ? tF.waitlist : [];
           const _stbCount = _spF.length + _wlF.length;
@@ -1423,7 +1423,7 @@ window._declareAbsent = function (tId, playerName) {
 
 function renderParticipants(container, tournamentId) {
   const tId = tournamentId;
-  const t = tId && window.AppStore ? window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString()) : null;
+  const t = tId && window.AppStore ? window._findTournamentById(tId) : null;
 
   var _t = window._t || function(k) { return k; };
   if (!t) {

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.8.19-beta';
+window.SCOREPLACE_VERSION = '2.8.47-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -255,7 +255,13 @@ window._devWhatsAppBtnHtml = function (opts) {
   var _reads = [];        // [{t, n, label}]
   var _lastReport = 0;
   var WINDOW_MS = 10000;
-  var RATE_THRESHOLD = 15; // leituras/s no cliente (acima do alerta GCP de 10/s)
+  // v2.8.39: 15→25/s. O limiar antigo (150 reads/10s) disparava no COLD-LOAD
+  // legítimo de torneio grande (ex.: Confra ~84 inscritos → autofix-uid≈98 +
+  // rt-snap/discovery ≈50 = ~150), caminho JÁ cacheado (≈0 após o 1º load da
+  // sessão) e batched (`in`, 10/query). Era o ruído #1 do Sentry. 25/s (250/10s)
+  // ignora o burst único de abertura, mas ainda pega loop descontrolado — que é
+  // SUSTENTADO e muito maior (milhares), não um pico único que cai sozinho.
+  var RATE_THRESHOLD = 25; // leituras/s no cliente (acima do alerta GCP de 10/s)
   window._noteFsReads = function(n, label) {
     try {
       n = parseInt(n, 10) || 0;
@@ -518,6 +524,11 @@ window._softRefreshView = function() {
   // close/redirect. Block entirely; user exits intentionally via Voltar/Salvar.
   var _currentView = (window.location.hash || '').replace('#', '').split('/')[0];
   if (_currentView === 'novo-torneio') return;
+  // v2.8.23: a DASHBOARD nunca faz soft-refresh. Re-render da dashboard já mostrada
+  // (rebuild do innerHTML em cada snapshot) é a causa das "travadas no scroll". Dados
+  // frescos entram na próxima navegação/entrada (que passa pelo gate de carregamento do
+  // boot). Views ao vivo (bracket, detalhe do torneio) seguem com soft-refresh normal.
+  if (_currentView === '' || _currentView === 'dashboard') return;
 
   // 1. If any modal is open or user is typing, defer — retry in 500ms
   // v1.0.62-beta: simulation-panel adicionado ao safe-list. Bug reportado:
@@ -1297,6 +1308,14 @@ window._reflowChrome = function() {
       vc.style.paddingTop = '';
     }
   }
+  // v2.8.47: expõe a altura REAL da topbar + a do dropdown do hamburger (0 fechado).
+  // Qualquer sticky abaixo da topbar (ex.: barra de filtro/busca da dashboard) usa
+  // `top: calc(var(--topbar-h) + var(--hamburger-dd-h))` pra grudar no fundo da
+  // topbar (que cresce ao quebrar linha no mobile) e descer com o menu aberto.
+  try {
+    document.documentElement.style.setProperty('--topbar-h', topbarH + 'px');
+    document.documentElement.style.setProperty('--hamburger-dd-h', ((ddOpen ? ddH : 0)) + 'px');
+  } catch (e) {}
 };
 window._hamburgerOutsideClick = function(e) {
   var dd = document.getElementById('hamburger-dropdown');
@@ -2323,6 +2342,25 @@ if (!window._spDragCompactWired) {
   window._spDragCompactWired = true;
   try { document.addEventListener('dragend', function () { window._setDragCompact(false); }, true); } catch (e) {}
   try { document.addEventListener('drop', function () { setTimeout(function () { window._setDragCompact(false); }, 0); }, true); } catch (e) {}
+  // v2.8.42: ativação GLOBAL da estrela de co-organização ao iniciar QUALQUER
+  // arraste de card de inscrito — independente de qual dragstart inline rodou
+  // (_mergeDragStart / handleDragStart / _duplaDragStart) ou se o try/catch dele
+  // falhou. Era o motivo de "a estrela não se transforma com frequência": os
+  // caminhos divergiam e nem todos chamavam _setOrgDropActive(true). Captura +
+  // re-assert no setTimeout (sobrevive a re-render/compact no meio do dragstart).
+  try {
+    document.addEventListener('dragstart', function (e) {
+      try {
+        var card = e && e.target && e.target.closest ? (e.target.closest('.participant-card') || e.target.closest('[draggable="true"]')) : null;
+        if (!card) return;
+        if (typeof window._setOrgDropActive === 'function' && document.querySelector('.sp-org-droptarget')) {
+          window._setOrgDropActive(true);
+          setTimeout(function () { try { if (document.querySelector('.sp-org-droptarget')) window._setOrgDropActive(true); } catch (e2) {} }, 30);
+        }
+      } catch (e1) {}
+    }, true);
+    document.addEventListener('dragend', function () { try { if (typeof window._setOrgDropActive === 'function') window._setOrgDropActive(false); } catch (e) {} }, true);
+  } catch (e) {}
 }
 // v2.6.60: CONFIG POR FASE — resolve woScope / resultEntry da FASE de um match
 // (multifase), com FALLBACK pro top-level (= fase 0 / default). Single-phase ou
@@ -2778,6 +2816,19 @@ window._safeHtml = function(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 
+// v2.8.36 (canonização B-2): distância great-circle em KM entre dois pontos
+// (lat1,lon1)→(lat2,lon2). Fonte única — antes havia 4 cópias idênticas
+// (venues/presence-geo/tournaments-organizer/arbitros), cada uma delegando agora.
+window._haversineKm = function(lat1, lon1, lat2, lon2) {
+  var R = 6371;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLon = (lon2 - lon1) * Math.PI / 180;
+  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 // ─── v2.3.52: badges de perfil do participante (gênero · nível · faixa etária) ──
 // Usados no card de inscritos — tanto na seção "Inscritos Confirmados" do detalhe
 // do torneio (tournaments.js) quanto na página #participants (participants.js).
@@ -3200,12 +3251,69 @@ window._toggleFavorite = function(tId, event) {
   });
 };
 
+// v2.8.40: torneios OCULTADOS pelo usuário — somem da lista normal e vão pra uma
+// seção "Torneios ocultados" no fim da dashboard. Mesmo esquema de chaves dos
+// favoritos (uid + email, união na leitura), pra sobreviver a troca de identidade.
+// Só faz sentido pra torneios em que o usuário NÃO está inscrito (o botão só
+// aparece neles). Toggle re-renderiza a dashboard (o card muda de seção).
+window._hiddenReadKeys = function() {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var keys = [];
+  if (cu && cu.uid) keys.push('scoreplace_hidden_uid_' + cu.uid);
+  if (cu && cu.email) keys.push('scoreplace_hidden_' + cu.email);
+  if (keys.length === 0) keys.push('scoreplace_hidden');
+  return keys;
+};
+window._getHidden = function() {
+  try {
+    var set = {};
+    window._hiddenReadKeys().forEach(function(k) {
+      try { var raw = localStorage.getItem(k); if (raw) JSON.parse(raw).forEach(function(id){ set[String(id)] = 1; }); } catch (e) {}
+    });
+    return Object.keys(set);
+  } catch (e) { return []; }
+};
+window._isHidden = function(tId) { return window._getHidden().indexOf(String(tId)) !== -1; };
+window._toggleHidden = function(tId, event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  var list = window._getHidden();
+  var id = String(tId);
+  var idx = list.indexOf(id);
+  if (idx === -1) list.push(id); else list.splice(idx, 1);
+  var payload = JSON.stringify(list);
+  window._hiddenReadKeys().forEach(function(k) { try { localStorage.setItem(k, payload); } catch (e) {} });
+  // v2.8.45: re-render preservando o scroll (não pula a tela).
+  if (typeof window._dashRerender === 'function') { window._dashRerender(); return; }
+  var c = document.getElementById('view-container');
+  if (c && typeof window.renderDashboard === 'function') window.renderDashboard(c);
+};
+
 // ========================================
 // scoreplace.app — AppStore (Firestore Backend)
 // ========================================
 // All tournament data persists in Cloud Firestore.
 // Local cache in localStorage for instant first-paint.
 // Real-time listener (onSnapshot) keeps data fresh without refresh.
+
+// v2.8.29: lookup CANÔNICO de torneio por id (auditoria B-3). Busca nos torneios do
+// usuário E no feed de descoberta pública — sem isso, ações em torneio DESCOBERTO (não
+// inscrito), como "Falar com o organizador", davam "Torneio não encontrado" (só olhavam
+// AppStore.tournaments). Comparação por String (ids podem vir number/string).
+window._findTournamentById = function (tId) {
+  if (tId == null) return null;
+  var s = String(tId);
+  var A = window.AppStore;
+  if (!A) return null;
+  var lists = [A.tournaments, A.publicDiscovery];
+  for (var li = 0; li < lists.length; li++) {
+    var arr = lists[li];
+    if (!Array.isArray(arr)) continue;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] && String(arr[i].id) === s) return arr[i];
+    }
+  }
+  return null;
+};
 
 window.AppStore = {
   currentUser: null,

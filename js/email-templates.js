@@ -52,8 +52,11 @@
     return _TYPE_HEADINGS[type] || { icon: '🔔', title: 'Notificação' };
   }
 
+  // v2.8.37 (canonização B-1): delega ao window._safeHtml (store.js); fallback
+  // local preservado caso _safeHtml não esteja disponível.
   function _escape(s) {
     if (s == null) return '';
+    if (typeof window._safeHtml === 'function') return window._safeHtml(s);
     return String(s)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')

@@ -4721,7 +4721,7 @@ function setupCreateTournamentModal() {
   };
 
   window.openEditTournamentModal = function (tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     // v1.6.2-beta: defensive reinit — modal may not exist if setupCreateTournamentModal
@@ -7011,7 +7011,6 @@ window._prefillFromTemplate = function(tpl) {
   // Público/privado
   if (tpl.isPublic !== undefined) {
     _setV('tourn-public', tpl.isPublic ? 'true' : 'false');
-    if (typeof window._syncPublicToggle === 'function') { try { window._syncPublicToggle(); } catch (e) {} }
   }
   // Tipo de jogo, lotação, lançamento de resultado, W.O. já tratado, encerrar ao lotar
   _setV('tourn-game-types', tpl.gameTypes);

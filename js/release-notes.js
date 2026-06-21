@@ -9,7 +9,21 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.47-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(21 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔎 Busca de verdade na dashboard.</b> Procure por <b>nome do torneio, local, participante ou organizador</b> — filtra ao vivo enquanto você digita, sem a tela pular.</li>' +
+        '<li><b>🎯 Filtro de modalidade no topo (cíclico).</b> Clique pra alternar entre todas as modalidades; "Todas" mostra tudo. A barra de filtro + busca fica fixa no topo ao rolar (e desce quando você abre o menu).</li>' +
+        '<li><b>🙈 Ocultar torneios.</b> Botão "Ocultar" nos torneios que você não organiza/participa — vão pra uma seção "Torneios ocultados" no fim. Dá pra desocultar quando quiser.</li>' +
+        '<li><b>☰ Cards/Lista virou um interruptor só</b> ("Lista" desligado = cards).</li>' +
+        '<li><b>📋 "Meus Últimos Resultados" colapsável</b> — recolha a seção; o app lembra a sua preferência.</li>' +
+        '<li><b>💬 "Falar com o organizador"</b> agora funciona também nos torneios que você descobre (sem estar inscrito).</li>' +
+        '<li><b>📍 Presença mais esperta.</b> Ao abrir o app no local, ele <b>pergunta</b> antes de marcar presença (em vez de marcar sozinho) — a menos que você já tenha planejado ir. E sugere salvar como preferido um local que você frequenta.</li>' +
+        '<li><b>⏳ Nova barra de carregamento</b> e ajustes visuais (ordem padrão dos botões: confirmar à direita).</li>' +
+        '<li><b>🧹 Por baixo dos panos:</b> limpeza de código, identidade por conta (uid), arrastar-para-co-organizar mais confiável e menos ruído de erros.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(20 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>❤️ Favorito vira emoji.</b> O coração de favoritar torneios agora é o emoji ❤️ em todos os lugares (detalhe, cards, filtro).</li>' +
         '<li><b>📛 Nome do torneio no cabeçalho</b> do detalhe, entre Voltar e "Só meus jogos".</li>' +

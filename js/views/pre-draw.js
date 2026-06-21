@@ -2,7 +2,7 @@ var _t = window._t || function(k) { return k; };
 function renderPreDraw(container, tournamentId) {
   // Resolve tournament ID from param or last active
   const tId = tournamentId || window._lastActiveTournamentId;
-  const t = tId && window.AppStore ? window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString()) : null;
+  const t = tId && window.AppStore ? window._findTournamentById(tId) : null;
 
   if (!t) {
     container.innerHTML = `
@@ -268,7 +268,7 @@ function renderPreDraw(container, tournamentId) {
   };
 
   window._preDrawChangeFormat = function (tId, newFormat) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
     t.format = newFormat;
     window.AppStore.logAction(tId, `Formato alterado na Janela Pré-Sorteio para: ${newFormat}`);
@@ -280,7 +280,7 @@ function renderPreDraw(container, tournamentId) {
 
   window._runPreDrawConfirm = function (tId) {
     // Save category assignments back to participants
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
     const pd = window._preDraw;
 

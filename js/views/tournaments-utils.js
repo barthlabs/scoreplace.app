@@ -654,16 +654,6 @@ window._tProgParseMs = function(s) {
   var ms = d.getTime();
   return isNaN(ms) ? null : ms;
 };
-window._tProgFmtClock = function(ms) {
-  if (ms == null) return '—';
-  var d = new Date(ms);
-  var hh = String(d.getHours()).padStart(2, '0');
-  var mm = String(d.getMinutes()).padStart(2, '0');
-  var today = new Date();
-  var sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
-  if (sameDay) return hh + ':' + mm;
-  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + hh + ':' + mm;
-};
 window._tProgFmtDur = function(ms) {
   if (ms == null || ms < 0) ms = 0;
   var s = Math.floor(ms / 1000);

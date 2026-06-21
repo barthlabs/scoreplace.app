@@ -271,7 +271,7 @@ window.enrollCurrentUser = function (tId) {
     // (torneios públicos que o usuário ainda não entrou). Torneios do
     // discovery vivem em AppStore.publicDiscovery até o usuário se inscrever;
     // antes desta hidratação a chamada falhava silenciosamente pra eles.
-    let t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    let t = window._findTournamentById(tId);
     if (!t && Array.isArray(window.AppStore.publicDiscovery)) {
       const fromDiscovery = window.AppStore.publicDiscovery.find(tour => String(tour.id) === String(tId));
       if (fromDiscovery) {
@@ -413,7 +413,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // Mesma hidratação defensiva: se o torneio veio direto do discovery feed
     // (dashboard clicou "Inscrever" num card público), precisa estar em
     // tournaments pro push otimista de participants funcionar.
-    let t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    let t = window._findTournamentById(tId);
     if (!t && Array.isArray(window.AppStore.publicDiscovery)) {
       const fromDiscovery = window.AppStore.publicDiscovery.find(tour => String(tour.id) === String(tId));
       if (fromDiscovery) {
@@ -593,7 +593,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
 };
 
 window.submitTeamEnroll = function (tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     // LGPD: identidade verificada contra Firebase Auth
     const user = (typeof window._verifiedCurrentUser === 'function') ? window._verifiedCurrentUser() : window.AppStore.currentUser;
     if (!t || !user) return;
@@ -780,7 +780,7 @@ window.submitTeamEnroll = function (tId) {
 // sorteio, Fechadas OFF) coloca o usuário na espera; deenrollCurrentUser só
 // mexe em participants, então a saída da espera precisa desta função própria.
 window._leaveStandby = function (tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     var user = (typeof window._verifiedCurrentUser === 'function') ? window._verifiedCurrentUser() : window.AppStore.currentUser;
     if (!t || !user) return;
     var _matchUser = function(p) {
@@ -809,7 +809,7 @@ window._leaveStandby = function (tId) {
 };
 
 window.deenrollCurrentUser = function (tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     // LGPD: identidade verificada contra Firebase Auth
     const user = (typeof window._verifiedCurrentUser === 'function') ? window._verifiedCurrentUser() : window.AppStore.currentUser;
     if (!user) return;
@@ -878,7 +878,7 @@ window.deenrollCurrentUser = function (tId) {
 };
 
 window.addParticipantFunction = function (tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
     // Block if enrollments are closed (except Liga with open enrollment)
     var _isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
@@ -970,7 +970,7 @@ window.addParticipantFunction = function (tId) {
 };
 
 window.addTeamFunction = function (tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
     // Block if enrollments are closed (except Liga with open enrollment)
     var _isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');

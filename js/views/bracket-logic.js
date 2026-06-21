@@ -1318,6 +1318,25 @@ function _updateProgressiveClassification(t) {
   var totalRounds = rounds.length;
   if (totalRounds < 1) return;
 
+  // v2.8.22: round MÁXIMO em que cada equipe aparece. Com REPESCAGEM, um perdedor do
+  // round R pode reaparecer em rounds > R (foi repescado) — ainda vivo ou eliminado
+  // depois. A classificação só pode tratar um perdedor do round R como ELIMINADO ali
+  // se R for a última aparição dele (maxRound==R). Sem isso, um repescado AINDA VIVO
+  // (perdeu o round 0 mas está nas semis) ganhava posição no bloco do round 0 →
+  // estourava o total (25º numa linha de 24) e dava posição a quem não foi eliminado.
+  var maxRoundByName = {};
+  allMatches.forEach(function(m) {
+    if (!m || m.bracket === 'lower' || m.bracket === 'grand') return;
+    if (m.round === undefined || m.round === null) return;
+    [m.p1, m.p2].forEach(function(nm) {
+      if (!nm || nm === 'TBD' || nm === 'BYE') return;
+      if (maxRoundByName[nm] === undefined || m.round > maxRoundByName[nm]) maxRoundByName[nm] = m.round;
+    });
+  });
+  function _advancedPast(name, roundNum) {
+    return maxRoundByName[name] !== undefined && maxRoundByName[name] > roundNum;
+  }
+
   // Helper: get loser's score and winner's score from a match
   function _getLoserStats(m) {
     var loser = m.winner === m.p1 ? m.p2 : m.p1;
@@ -1409,6 +1428,7 @@ function _updateProgressiveClassification(t) {
           var stats = _getLoserStats(m);
           if (!stats.loser || stats.loser === 'TBD' || stats.loser === 'BYE') return;
           if (placed[stats.loser]) return;
+          if (_advancedPast(stats.loser, roundNum)) return; // repescado: ainda em jogo OU já classificado por uma derrota posterior
           var history = _getPlayerHistory(stats.loser);
           semiLosers.push({ name: stats.loser, stats: stats, history: history });
         });
@@ -1426,6 +1446,7 @@ function _updateProgressiveClassification(t) {
         var stats = _getLoserStats(m);
         if (!stats.loser || stats.loser === 'TBD' || stats.loser === 'BYE') return;
         if (placed[stats.loser]) return;
+        if (_advancedPast(stats.loser, roundNum)) return; // repescado: avançou além deste round → não é eliminado aqui
         var history = _getPlayerHistory(stats.loser);
         losers.push({ name: stats.loser, stats: stats, history: history });
       });
@@ -2021,7 +2042,7 @@ window._autoApprovePendingResults = function(t) {
 // _rerenderBracket fazia fallback pra "primeiro card visível" → scroll
 // jumpava após aprovações.
 window._closeRound = function (tId, roundIdx, anchorMatchId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   const round = (t.rounds || [])[roundIdx];
   if (!round) return;
@@ -3332,8 +3353,8 @@ window._renderPendingDrawBanner = function (t) {
       '<div style="margin-top:8px;max-height:380px;overflow:auto;">' + preview + '</div>' +
     '</details>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-      '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
       '<button class="btn btn-outline" style="color:#f87171;border-color:rgba(248,113,113,0.5);" onclick="event.stopPropagation(); window._annulPendingDraw(\'' + esc(t.id) + '\')">✕ Anular</button>' +
+      '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
     '</div>' +
   '</div>';
 };

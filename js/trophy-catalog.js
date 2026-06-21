@@ -26,19 +26,6 @@
 //   descFn:      function(n, next) → desc do que falta
 //   trigger:     evento que dispara a checagem
 //
-// ─── Utilitário ──────────────────────────────────────────────────────────────
-
-// Gera array aritmético de thresholds: [start, start+step, start+2*step, ...]
-// com maxLevels valores (padrão 200 — infinito na prática).
-function _arithmeticThresholds(start, step, maxLevels) {
-  maxLevels = maxLevels || 200;
-  var arr = [];
-  for (var i = 0; i < maxLevels; i++) {
-    arr.push(start + step * i);
-  }
-  return arr;
-}
-
 // ─── Catálogo de Troféus Fixos ────────────────────────────────────────────────
 // ~40 troféus cobrindo os 5 pilares + especiais.
 // Tier "null" → calculado dinamicamente por raridade em trophies.js.

@@ -447,14 +447,9 @@ window._checkTournamentReminders = async function() {
  * Called on app load when new tournaments exist.
  */
 // Haversine distance in km between two lat/lng points
+// v2.8.36: delega ao canônico window._haversineKm (store.js).
 function _haversineKm(lat1, lon1, lat2, lon2) {
-    var R = 6371;
-    var dLat = (lat2 - lat1) * Math.PI / 180;
-    var dLon = (lon2 - lon1) * Math.PI / 180;
-    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return window._haversineKm(lat1, lon1, lat2, lon2);
 }
 
 window._checkNearbyTournaments = async function() {
@@ -546,7 +541,7 @@ window._checkNearbyTournaments = async function() {
  * Prompts for message text and importance level.
  */
 window._sendOrgCommunication = function(tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
 
     // Build a custom modal for the communication
@@ -577,8 +572,8 @@ window._sendOrgCommunication = function(tId) {
             '<input type="hidden" id="org-comm-level-' + tId + '" value="important">' +
           '</div>' +
           '<div style="display: flex; gap: 8px;">' +
-            '<button type="button" class="btn btn-primary" style="flex: 1;" onclick="window._confirmSendComm(\'' + tId + '\')">' + (window._t||function(k){return k;})('org.sendComm') + '</button>' +
             '<button type="button" class="btn btn-outline" style="flex: 0.6;" onclick="document.getElementById(\'' + modalId + '\').remove();">' + (window._t||function(k){return k;})('org.cancel') + '</button>' +
+            '<button type="button" class="btn btn-primary" style="flex: 1;" onclick="window._confirmSendComm(\'' + tId + '\')">' + (window._t||function(k){return k;})('org.sendComm') + '</button>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -613,7 +608,7 @@ window._confirmSendComm = async function(tId) {
     // _t('org.commFullMsg', …) jogava "TypeError: _t is not a function",
     // travando o envio. Por isso o botão "Enviar Comunicado" não funcionava.
     var _t = window._t || function(k) { return k; };
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
     var textEl = document.getElementById('org-comm-text-' + tId);
     var levelEl = document.getElementById('org-comm-level-' + tId);
@@ -872,16 +867,27 @@ window._hydrateContactOrgButtons = async function(root) {
 
 // Entry point — resolve o contato do organizador e abre o diálogo.
 window._contactOrganizer = async function(tId) {
-  var t = window.AppStore && window.AppStore.tournaments &&
-          window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  // v2.8.29: busca tb na descoberta pública (torneio não inscrito) — antes só
+  // AppStore.tournaments → "Torneio não encontrado" pra quem descobre o torneio.
+  var t = window._findTournamentById(tId);
   if (!t) { if (typeof showNotification !== 'undefined') showNotification('Torneio não encontrado', '', 'error'); return; }
 
   var profile = null;
-  try {
-    if (t.creatorUid && window.FirestoreDB && window.FirestoreDB.loadUserProfile) {
-      profile = await window.FirestoreDB.loadUserProfile(t.creatorUid);
-    }
-  } catch (e) { profile = null; }
+  // v2.8.28: o botão já hidratou (e cacheou) o perfil do organizador via
+  // _hydrateContactOrgButtons. Usa o cache SÍNCRONO → o modal abre NA HORA, sem
+  // travar no `await` (numa rede lenta o clique parecia "não fazer nada"). Sem
+  // cache, cai no await normal e popula o cache.
+  var _ocache = window._spOrgProfileCache = window._spOrgProfileCache || {};
+  if (t.creatorUid && Object.prototype.hasOwnProperty.call(_ocache, t.creatorUid)) {
+    profile = _ocache[t.creatorUid];
+  } else {
+    try {
+      if (t.creatorUid && window.FirestoreDB && window.FirestoreDB.loadUserProfile) {
+        profile = await window.FirestoreDB.loadUserProfile(t.creatorUid);
+        _ocache[t.creatorUid] = profile || null;
+      }
+    } catch (e) { profile = null; }
+  }
 
   var orgName = t.organizerName || (profile && profile.displayName) ||
                 (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador';
@@ -909,7 +915,7 @@ window._messageOrganizer = function(tId) { return window._contactOrganizer(tId);
 
 window._openContactOrgDialog = function(tId) {
   var pend = window._pendingContactOrg || {};
-  var t = window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
   var modalId = 'modal-msg-org-' + tId;
   var old = document.getElementById(modalId); if (old) old.remove();
@@ -941,8 +947,8 @@ window._openContactOrgDialog = function(tId) {
         '<p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 1rem;">Mensagem para <b>' + window._safeHtml(pend.orgName || 'o organizador') + '</b>. ' + channelNote + '</p>' +
         '<textarea id="msg-org-text-' + tId + '" class="form-control" rows="4" placeholder="Escreva sua mensagem…" style="width:100%;box-sizing:border-box;resize:vertical;">' + window._safeHtml(greet) + '</textarea>' +
         '<div style="display:flex;gap:8px;margin-top:1rem;">' +
-          '<button type="button" class="sp-send-org hover-lift" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;' + sendStyle + 'border-radius:10px;padding:10px 14px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="window._submitContactOrg(\'' + tId + '\')">' + sendLabel + '</button>' +
           '<button type="button" class="btn btn-outline" style="flex:0.5;" onclick="document.getElementById(\'' + modalId + '\').remove();">Cancelar</button>' +
+          '<button type="button" class="sp-send-org hover-lift" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;' + sendStyle + 'border-radius:10px;padding:10px 14px;font-size:0.85rem;font-weight:700;cursor:pointer;" onclick="window._submitContactOrg(\'' + tId + '\')">' + sendLabel + '</button>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -957,7 +963,7 @@ window._openContactOrgDialog = function(tId) {
 
 window._submitContactOrg = async function(tId) {
   var pend = window._pendingContactOrg || {};
-  var t = window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
+  var t = window._findTournamentById(tId);
   if (!t) return;
   var textEl = document.getElementById('msg-org-text-' + tId);
   var fullMsg = textEl ? textEl.value.trim() : '';

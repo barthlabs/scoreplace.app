@@ -63,8 +63,8 @@ function renderNotifications(container) {
       if ((n.type === 'host_transfer_invite' || n.type === 'cohost_invite') && isUnread) {
         var _invType = n.type === 'host_transfer_invite' ? 'transfer' : 'cohost';
         actionHtml = '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
-          '<button class="btn btn-sm" style="background: var(--success-color); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 600;" onclick="event.stopPropagation(); window._acceptHostInvite(\'' + safeTournamentId + '\',\'' + _invType + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.accept') + '</button>' +
           '<button class="btn btn-sm" style="background: transparent; color: var(--danger-color); border: 1px solid var(--danger-color); padding: 4px 14px; font-size: 0.75rem;" onclick="event.stopPropagation(); window._rejectHostInvite(\'' + safeTournamentId + '\',\'' + _invType + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.reject') + '</button>' +
+          '<button class="btn btn-sm" style="background: var(--success-color); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 600;" onclick="event.stopPropagation(); window._acceptHostInvite(\'' + safeTournamentId + '\',\'' + _invType + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.accept') + '</button>' +
         '</div>';
       } else if ((n.type === 'host_transfer_sent' || n.type === 'cohost_invite_sent') && isUnread) {
         var _cancelType = n.inviteType || 'cohost';
@@ -73,8 +73,8 @@ function renderNotifications(container) {
         '</div>';
       } else if (n.type === 'friend_request' && isUnread) {
         actionHtml = '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
-          '<button class="btn btn-sm" style="background: var(--success-color); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 600;" onclick="event.stopPropagation(); _acceptFriend(\'' + safeFromUid + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.accept') + '</button>' +
           '<button class="btn btn-sm" style="background: transparent; color: var(--danger-color); border: 1px solid var(--danger-color); padding: 4px 14px; font-size: 0.75rem;" onclick="event.stopPropagation(); _rejectFriend(\'' + safeFromUid + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.reject') + '</button>' +
+          '<button class="btn btn-sm" style="background: var(--success-color); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 600;" onclick="event.stopPropagation(); _acceptFriend(\'' + safeFromUid + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.accept') + '</button>' +
         '</div>';
       } else if (n.type === 'match-pending-approval' && n.tournamentId) {
         // v2.1.18: resultado pendente — botões Confirmar (verde) e Editar/Contestar
@@ -82,8 +82,8 @@ function renderNotifications(container) {
         // do jogo (Confirmar/Editar/Contestar bem testados). A mensagem já mostra
         // o placar quebrado em linhas, então a escolha é informada.
         actionHtml = '<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap:wrap;">' +
-          '<button class="btn btn-sm" style="background:#10b981;color:#fff;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✅ ' + (_t('notif.confirm') || 'Confirmar') + '</button>' +
           '<button class="btn btn-sm" style="background:#f59e0b;color:#1a1a2e;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✏️ ' + (_t('notif.editContest') || 'Editar / Contestar') + '</button>' +
+          '<button class="btn btn-sm" style="background:#10b981;color:#fff;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✅ ' + (_t('notif.confirm') || 'Confirmar') + '</button>' +
         '</div>';
       } else if (n.type === 'category-data-request') {
         // v2.3.92: inscrição pendente por falta de dado no perfil. Botão principal
@@ -138,8 +138,8 @@ function renderNotifications(container) {
           casualSport: n.casualSport || ''
         }).replace(/"/g, '&quot;').replace(/'/g, '\\\'');
         actionHtml = '<div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap:wrap;">' +
-          '<button class="btn btn-sm" style="background: var(--success-color); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 700;" onclick="event.stopPropagation(); var n=JSON.parse(this.getAttribute(\'data-notif\')); if(window._confirmCasualLinkRequest)window._confirmCasualLinkRequest(n,true);" data-notif="' + notifJsonSafe + '">✅ Sim, era eu</button>' +
           '<button class="btn btn-sm" style="background: transparent; color: var(--danger-color); border: 1px solid var(--danger-color); padding: 4px 14px; font-size: 0.75rem;" onclick="event.stopPropagation(); var n=JSON.parse(this.getAttribute(\'data-notif\')); if(window._confirmCasualLinkRequest)window._confirmCasualLinkRequest(n,false);" data-notif="' + notifJsonSafe + '">❌ Não, era outra pessoa</button>' +
+          '<button class="btn btn-sm" style="background: var(--success-color); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 700;" onclick="event.stopPropagation(); var n=JSON.parse(this.getAttribute(\'data-notif\')); if(window._confirmCasualLinkRequest)window._confirmCasualLinkRequest(n,true);" data-notif="' + notifJsonSafe + '">✅ Sim, era eu</button>' +
         '</div>';
       } else if ((n.type === 'casual_link_accepted' || n.type === 'casual_link_rejected') && n.casualRoomCode) {
         // Confirmação que veio de volta — botão pra revisar a partida.
@@ -149,8 +149,8 @@ function renderNotifications(container) {
         '</div>';
       }
 
-      // Escape HTML in message to prevent XSS
-      var safeMessage = (n.message || _t('notif.fallback')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      // Escape HTML in message to prevent XSS — v2.8.37: via window._safeHtml (canônico).
+      var safeMessage = window._safeHtml(n.message || _t('notif.fallback'));
 
       var safeNotifIdOnclick = (n._id || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
       // Borda esquerda colorida pela IMPORTÂNCIA (sempre visível, lida ou não).

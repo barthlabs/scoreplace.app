@@ -79,7 +79,7 @@ window._diagnoseAll = function(t) {
 // For "Fase de Grupos + Eliminatórias" — lets organizer choose group distribution
 
 window._showGroupsConfigPanel = function(tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
 
     var info = window._diagnoseAll(t);
@@ -96,8 +96,6 @@ window._showGroupsConfigPanel = function(tId) {
     overlay.id = 'groups-config-panel';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
     document.body.style.overflow = 'hidden';
-
-    window._groupsSelectedConfig = null;
 
     // Generate all valid group configurations
     function generateConfigs(n, classPerGroup) {
@@ -324,7 +322,7 @@ window._showGroupsConfigPanel = function(tId) {
     };
 
     window._selectGroupsConfig = function(tId, numGroups, classPerGroup) {
-        var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+        var t = window._findTournamentById(tId);
         if (!t) return;
         t.gruposCount = numGroups;
         t.gruposClassified = classPerGroup;
@@ -355,7 +353,7 @@ window._showGroupsConfigPanel = function(tId) {
     };
 
     window._cancelGroupsConfig = function(tId) {
-        var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+        var t = window._findTournamentById(tId);
         if (t && t._suspendedByPanel) {
             t.status = t._previousStatus || 'open';
             delete t._suspendedByPanel;
@@ -481,7 +479,7 @@ window._showRemainderPanel = function(tId, info, t) {
 };
 
 window._cancelRemainderPanel = function(tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (t && t._suspendedByPanel) {
         t.status = t._previousStatus || 'open';
         delete t._suspendedByPanel;
@@ -561,7 +559,7 @@ window._executeRemoval = function(tId, mode, method) {
     var panel = document.getElementById('removal-subchoice-panel');
     if (panel) panel.remove();
 
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
 
     var arr = Array.isArray(t.participants) ? t.participants.slice() : [];
@@ -637,7 +635,7 @@ window._executeRemoval = function(tId, mode, method) {
 // ============ UNIFIED RESOLUTION PANEL (POWER-OF-2) ============
 
 window.showUnifiedResolutionPanel = function(tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     // Swiss/Liga: skip power-of-2 and odd-number checks — these formats handle BYEs naturally
@@ -886,7 +884,7 @@ window.showUnifiedResolutionPanel = function(tId) {
     };
 
     window._handleUnifiedOption = function(tId, option) {
-        const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+        const t = window._findTournamentById(tId);
         if (!t) return;
 
         // Remove panel
@@ -913,7 +911,7 @@ window.showUnifiedResolutionPanel = function(tId) {
     };
 
     window._cancelUnifiedPanel = function(tId) {
-        const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+        const t = window._findTournamentById(tId);
         if (!t) return;
 
         // Restore enrollment to previous status
@@ -1001,7 +999,7 @@ window.showUnifiedResolutionPanel = function(tId) {
 };
 
 window._showReopenPanel = function(tId, info) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     const existing = document.getElementById('reopen-panel');
@@ -1080,7 +1078,7 @@ window.showIncompleteTeamsPanel = function (tId) {
 
 // Handler for incomplete teams resolution options
 window._handleIncompleteOption = function (tId, option) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     if (option === 'reopen') {
@@ -1117,7 +1115,7 @@ window._handleIncompleteOption = function (tId, option) {
 };
 
 window.showLotteryIncompletePanel = function (tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     showConfirmDialog(
@@ -1149,7 +1147,7 @@ window.showLotteryIncompletePanel = function (tId) {
 };
 
 window.showDissolveTeamsPanel = function (tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     const incomplete = window.checkIncompleteTeams(t);
@@ -1266,7 +1264,7 @@ window.showOddEntriesPanel = function (tId) {
 };
 
 window._handleOddOption = function (tId, option) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
     var oddInfo = window.checkOddEntries(t);
     var isTeam = oddInfo.teamSize > 1;
@@ -1366,7 +1364,7 @@ window.showPowerOf2Panel = function (tId) {
 window._cancelPowerOf2Panel = function (tId) {
     const panel = document.getElementById('p2-resolution-panel');
     if (panel) panel.remove();
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (t && t._suspendedByPanel) {
         t.status = t._previousStatus || 'open';
         delete t._suspendedByPanel;
@@ -1594,7 +1592,7 @@ window._computeNashRecommendation = function(pollOptions, context, info) {
 // ── Poll Creation Dialog ──
 // Organizer chooses which options to include and sets a deadline
 window._showPollCreationDialog = function(tId, context, pollOptions) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
 
     var info = (context === 'p2') ? window.checkPowerOf2(t) : null;
@@ -1765,7 +1763,7 @@ window._showPollCreationDialog = function(tId, context, pollOptions) {
 
 // ── Poll Voting UI (shown to participants) ──
 window._showPollVotingDialog = function(tId, pollId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.polls) return;
 
     var poll = null;
@@ -1922,7 +1920,7 @@ window._showPollVotingDialog = function(tId, pollId) {
 
 // ── Cast a vote ──
 window._castPollVote = function(tId, pollId, optionKey) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.polls) return;
 
     var poll = null;
@@ -2159,7 +2157,7 @@ window._renderClosedPollBanner = function(t, poll) {
 
 // ── Close poll early (organizer) ──
 window._closePollEarly = function(tId, pollId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.polls) return;
     var poll = null;
     for (var i = 0; i < t.polls.length; i++) {
@@ -2207,7 +2205,7 @@ window._restorePollSuspendedEnrollments = function(t) {
 
 // ── Reopen a closed poll (organizer can reconfigure deadline) ──
 window._reopenPoll = function(tId, pollId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.polls) return;
     var poll = null;
     for (var i = 0; i < t.polls.length; i++) {
@@ -2263,7 +2261,7 @@ window._reopenPoll = function(tId, pollId) {
 
 // ── Apply poll result — trigger the winning option's action ──
 window._applyPollResult = function(tId, pollId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.polls) return;
 
     var poll = null;
@@ -2321,7 +2319,7 @@ window._applyPollResult = function(tId, pollId) {
 };
 
 window._handleP2Option = function (tId, option) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     const info = window.checkPowerOf2(t);
@@ -2442,7 +2440,7 @@ window._showReopenPanel = function (tId, info) {
 };
 
 window._confirmReopen = function (tId, target) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
 
     const autoClose = document.getElementById('reopen-autoclose-cb');
@@ -2470,7 +2468,7 @@ window._confirmReopen = function (tId, target) {
 
 // ─── Encerrar Torneio (manual) ───
 window.finishTournament = function(tId) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
     if (t.status === 'finished') {
         showNotification(_t('draw.alreadyClosed'), _t('draw.alreadyClosedMsg'), 'info');
@@ -2531,7 +2529,7 @@ window.finishTournament = function(tId) {
 
 // ─── Painel Integrado de Encerramento ───
 window.toggleRegistrationStatus = function (tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) { return; }
 
     // Helper: save tournament
@@ -2826,7 +2824,7 @@ window.toggleRegistrationStatus = function (tId) {
 // Inscrições" quando enrollmentLimitMode === 'draw'. Mostra inscritos vs vagas,
 // VIPs garantidos e a política de chamada, e roda o sorteio em _runVagasDraw.
 window._showVagasDrawPanel = function (tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
     var slots = parseInt(t.targetSlots) || 0;
     if (slots <= 0) {
@@ -2886,7 +2884,7 @@ window._showVagasDrawPanel = function (tId) {
 // lista de espera na ordem sorteada (t.waitlistOrder). Generaliza o ramo
 // 'standby' de _confirmP2Resolution, mas com corte definido pelo organizador.
 window._runVagasDraw = function (tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
     var slots = parseInt(t.targetSlots) || 0;
     if (slots <= 0) return;
@@ -2962,7 +2960,7 @@ window._runVagasDraw = function (tId) {
 };
 
 window._handleClosureOption = function (tId, option) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
 
     if (option === 'just_close') {
@@ -2987,7 +2985,7 @@ window._handleClosureOption = function (tId, option) {
 };
 // ─── Anonymous Simulation Previews ───
 window.showResolutionSimulationPanel = function (tId, option) {
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
     const info = window.checkPowerOf2(t);
 
@@ -3864,7 +3862,7 @@ window.showResolutionSimulationPanel = function (tId, option) {
 
 window._confirmP2Resolution = function (tId, option) {
     // Apply the actual resolution logic here
-    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+    const t = window._findTournamentById(tId);
     if (!t) return;
     const info = window.checkPowerOf2(t);
 

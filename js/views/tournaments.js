@@ -12,7 +12,7 @@ window.removeParticipantFunction = function (tId, participantName) {
         _t('tourn.removeParticipantTitle'),
         _t('tourn.removeParticipantMsg'),
         () => {
-            const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+            const t = window._findTournamentById(tId);
             if (t) {
                 // v2.7.54: casa nome CRU/FORMATADO (telefone "+5511981933576" vs
                 // "+55 (11) 98193-3576") e remove TAMBÉM dos storages da lista de espera
@@ -56,7 +56,7 @@ window.splitParticipantFunction = function (tId, participantName) {
         _t('tourn.splitTeamTitle'),
         _t('tourn.splitTeamMsg'),
         () => {
-            const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+            const t = window._findTournamentById(tId);
             if (t && t.participants) {
                 let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
                 var idx = arr.findIndex(function(p) { return window._pName(p) === participantName; });
@@ -81,8 +81,6 @@ window.splitParticipantFunction = function (tId, participantName) {
         { type: 'warning', confirmText: _t('btn.undo'), cancelText: _t('btn.keepTeam') }
     );
 };
-window.removeParticipantSetupDone = true;
-window.splitParticipantSetupDone = true;
 
 // Self-healing: when enrollments are open (status not 'closed' AND no draw yet),
 // the waitlist/standby lists should always be empty. Anyone sitting there from a
@@ -832,7 +830,7 @@ function renderTournaments(container, tournamentId = null) {
                 _t('org.closeRegConfirmTitle'),
                 _t('org.closeRegConfirmMsg'),
                 () => {
-                    const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+                    const t = window._findTournamentById(tId);
                     if (t) {
                         t.status = 'closed';
                         if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {

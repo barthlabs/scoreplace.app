@@ -2251,16 +2251,11 @@
     } catch (e) { return null; }
   }
 
+  // v2.8.36: delega ao canônico window._haversineKm (store.js). Mantém a
+  // assinatura por OBJETOS {lat,lng} e o guard Infinity usados aqui.
   function _haversineKm(a, b) {
     if (!a || !b) return Infinity;
-    var R = 6371;
-    var toRad = function(d) { return d * Math.PI / 180; };
-    var dLat = toRad(b.lat - a.lat);
-    var dLng = toRad(b.lng - a.lng);
-    var s = Math.sin(dLat/2)*Math.sin(dLat/2) +
-            Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat)) *
-            Math.sin(dLng/2)*Math.sin(dLng/2);
-    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+    return window._haversineKm(a.lat, a.lng, b.lat, b.lng);
   }
 
   // Places nearby: lightweight discovery of external venues (not yet claimed
