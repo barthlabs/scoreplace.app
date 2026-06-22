@@ -237,6 +237,13 @@ function initRouter() {
     }
     _firstRoute = false;
 
+    // v2.8.82: marca render via NAVEGAÇÃO. Render functions checam isso pra NÃO
+    // auto-preservar scroll aqui (o router já fez scrollTo(0,0) em navegação ou
+    // preservou em soft-refresh). Limpa no próximo tick — fora do router (re-render
+    // por ação) o flag fica false → as funções preservam o scroll do usuário.
+    window._inRouterRender = true;
+    setTimeout(function() { window._inRouterRender = false; }, 0);
+
     switch (view) {
       case '':
       case 'dashboard':

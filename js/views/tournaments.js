@@ -429,6 +429,7 @@ window._coHostActionFromLink = async function(act, tId, inviteType) {
 
 function renderTournaments(container, tournamentId = null) {
     if (!window.AppStore) return;
+    if (window._autoKeepScroll) window._autoKeepScroll(); // v2.8.82: re-render por ação não pula scroll
     // Clear one-time check flags for OTHER tournaments (keep current)
     if (tournamentId) {
         var _curKey = '_tournChecks_' + tournamentId;

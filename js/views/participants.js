@@ -1422,6 +1422,7 @@ window._declareAbsent = function (tId, playerName) {
 };
 
 function renderParticipants(container, tournamentId) {
+  if (window._autoKeepScroll) window._autoKeepScroll(); // v2.8.82: re-render por ação não pula scroll
   const tId = tournamentId;
   const t = tId && window.AppStore ? window._findTournamentById(tId) : null;
 

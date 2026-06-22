@@ -1,4 +1,20 @@
-window.SCOREPLACE_VERSION = '2.8.81-beta';
+window.SCOREPLACE_VERSION = '2.8.82-beta';
+
+// v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
+// funções de render (renderTournaments/renderParticipants/renderBracket). Captura
+// o scroll atual e o restaura depois do innerHTML (que pode zerar o scroll),
+// fazendo o re-render "parecer que nada aconteceu". DURANTE a navegação do router
+// (window._inRouterRender) NÃO faz nada — lá o router já cuida (scrollTo(0,0) em
+// navegação nova, ou preserva em soft-refresh; scroll intencional pra um jogo via
+// _goToTournamentMatch também roda fora daqui).
+window._autoKeepScroll = function() {
+  if (window._inRouterRender) return;
+  var y = window.pageYOffset || window.scrollY || 0;
+  if (!y) return; // já no topo: nada a restaurar
+  var restore = function() { try { window.scrollTo(0, y); } catch (e) {} };
+  try { requestAnimationFrame(restore); } catch (e) {}
+  try { setTimeout(restore, 0); } catch (e) {}
+};
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
