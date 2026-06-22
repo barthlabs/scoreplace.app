@@ -2998,6 +2998,18 @@ function renderDashboard(container) {
   // ─── Pending invite detection: auto-redirect to tournament with pending co-org or participation invite ───
   _checkPendingInvitesAndRedirect(visible);
 
+  // v2.8.84: pop-up da enquete pro INSCRITO que ainda não votou — agora dispara
+  // na DASHBOARD (antes só ao abrir o detalhe do torneio, então quem só via a
+  // lista nunca recebia). _opMaybePopup filtra por inscrição (_canVote) +
+  // não-votou + 1x/sessão por enquete, então é seguro chamar pra cada torneio.
+  if (typeof window._opMaybePopup === 'function' && typeof window._opActivePoll === 'function') {
+    try {
+      for (var _opi = 0; _opi < visible.length; _opi++) {
+        if (window._opActivePoll(visible[_opi])) window._opMaybePopup(visible[_opi]);
+      }
+    } catch (_ope) {}
+  }
+
   // v2.3.24: jornada de coachmarks (menu → perfil). Atrasado pra dashboard
   // assentar e não competir com o boot loader. Self-guarda contra disabled/visto.
   if (window._coach && typeof window._coach.autoStartDashboard === 'function') {

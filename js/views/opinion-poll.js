@@ -59,8 +59,8 @@
     var label = voted ? '📊 Ver enquete' : '📊 Responder enquete';
     var q = poll.question ? (' · ' + _esc(poll.question.length > 38 ? poll.question.slice(0, 38) + '…' : poll.question)) : '';
     return '<button class="btn btn-shine hover-lift" onclick="event.stopPropagation(); window._opOpenVote(\'' + _attr(t.id) + '\')" ' +
-      'style="margin:6px 0 2px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;font-size:0.82rem;border:none;border-radius:12px;padding:9px 16px;box-shadow:0 0 14px rgba(139,92,246,0.55);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-      label + '<span style="font-weight:500;opacity:0.85;">' + q + '</span></button>';
+      'style="margin:8px 0 4px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:900;font-size:0.98rem;border:none;border-radius:12px;padding:14px 18px;box-shadow:0 0 16px rgba(139,92,246,0.6);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+      label + '<span style="font-weight:600;opacity:0.85;">' + q + '</span></button>';
   };
 
   // ─── Overlay helper ────────────────────────────────────────────────────────────
