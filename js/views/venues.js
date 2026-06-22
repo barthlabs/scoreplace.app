@@ -980,19 +980,32 @@
     var maxChips = (opts && opts.maxChips) || 0;
     var _scoreCache = {};
     var now = Date.now();
+    // v2.8.71: torneio (plano OU ocupação) só aparece em "Próximas horas" a partir de 2
+    // dias antes do evento — antes um torneio a 9 dias já poluía como "8h". Usa a data
+    // ATUAL do torneio (não o startsAt do doc, que pode estar defasado). Presença manual
+    // (sem torneio) continua aparecendo normal.
+    var _soonCut = now + 2 * 24 * 3600000;
+    function _tournTooFar(liveT) {
+      if (!liveT) return false;
+      var w = (typeof window._computeTournamentPlanWindow === 'function') ? window._computeTournamentPlanWindow(liveT) : null;
+      var s = (w && w.startsAt) || (liveT.startDate ? new Date(liveT.startDate).getTime() : 0);
+      return !!(s && s > _soonCut);
+    }
     var rows = [];
     (presences || []).forEach(function(p) {
       if (p.type === 'planned' && p.startsAt > now) {
         // v2.8.59: plano de presença vindo de TORNEIO ganha o nome do torneio (igual ao
         // dashboard) → cai no box "🏆 <torneio>" em vez de chip avulso sem contexto.
-        if (!p._tournamentName && (p.tournamentId || p.source === 'tournament') && typeof window._findTournamentById === 'function') {
+        if ((p.tournamentId || p.source === 'tournament') && typeof window._findTournamentById === 'function') {
           var _lt = p.tournamentId ? window._findTournamentById(p.tournamentId) : null;
-          if (_lt) { p._tournamentName = _lt.name || ''; p._tournamentId = p.tournamentId || _lt.id || _lt._id || ''; }
+          if (_tournTooFar(_lt)) return; // v2.8.71: torneio a >2 dias não entra
+          if (_lt && !p._tournamentName) { p._tournamentName = _lt.name || ''; p._tournamentId = p.tournamentId || _lt.id || _lt._id || ''; }
         }
         rows.push(p);
       }
     });
     (tournaments || []).forEach(function(t) {
+      if (_tournTooFar(t)) return; // v2.8.71: ocupação de torneio a >2 dias não entra
       _tournamentOccupancy(t, dayKeyStr).forEach(function(p) {
         if (p.startsAt > now) {
           p._tournamentName = t.name || 'torneio';
@@ -3281,6 +3294,24 @@
     if (ov) ov.remove();
   };
 
+  // v2.8.72: memória por-local do "Planejar ida" — lembra modalidades ativas/
+  // inativas e horários (chegada/saída) usados da última vez NESTE local. Chave
+  // estável por placeId (ou pid sintético / nome p/ preferidos label-only).
+  function _planMemKey(v) {
+    if (!v) return '';
+    var k = v.placeId || (typeof _prefSyntheticPid === 'function' ? _prefSyntheticPid(v) : '') || v.name || '';
+    return k ? ('scoreplace_planmem_' + k) : '';
+  }
+  function _loadPlanMem(v) {
+    try { var k = _planMemKey(v); if (!k) return null; var raw = localStorage.getItem(k); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  function _savePlanMem(v, active, chegada, saida) {
+    try { var k = _planMemKey(v); if (!k) return; localStorage.setItem(k, JSON.stringify({ active: active || [], chegada: chegada || '', saida: saida || '', savedAt: Date.now() })); } catch (e) {}
+  }
+  function _planNormEq(a, b) {
+    try { var n = window.PresenceDB && window.PresenceDB.normalizeSport; return n ? (n(a) === n(b)) : (a === b); } catch (e) { return a === b; }
+  }
+
   function _openInlinePlanOverlay(v, sports, editData) {
     // v2.1.8: contexto de edição vem SEMPRE explícito por parâmetro — fresh
     // (Planejar ida) passa undefined → null. Evita que uma edição anterior que
@@ -3288,6 +3319,7 @@
     // plano novo e acabe sobrescrevendo o plano antigo.
     _editingPlanData = editData || null;
     _pendingPlanState = { venue: v, sports: sports };
+    var _planMem = _loadPlanMem(v); // v2.8.72: memória ativa/inativa + horários
     var prev = document.getElementById('venue-plan-overlay');
     if (prev) prev.remove();
     var now = new Date();
@@ -3312,6 +3344,13 @@
     // v1.9.87: edição → fim vem do plano existente (se não for open-ended).
     var _editEnd = (_editingPlanData && _editingPlanData.endsAt && !_editingPlanData.openEnded) ? new Date(_editingPlanData.endsAt) : null;
     var defEndStr = _editEnd ? fmt(_editEnd) : _plusTwoHours(defStartStr);
+    // v2.8.72: sem edição → se há memória de horário pra este local, usa os
+    // horários da última vez (chegada/saída). Edição mantém os do próprio plano.
+    if (!_editingPlanData && _planMem) {
+      if (_planMem.chegada) defStartStr = _planMem.chegada;
+      if (_planMem.saida) defEndStr = _planMem.saida;
+      else if (_planMem.chegada) defEndStr = _plusTwoHours(defStartStr);
+    }
     // v1.9.87: dia default (hoje/amanhã) também vem do plano em edição.
     var _editIsTomorrow = false;
     if (_editStart) {
@@ -3322,11 +3361,30 @@
     // v0.16.24: pills de modalidade SEMPRE visíveis quando há pelo menos 1 esporte
     // na interseção venue∩preferências. Com só 1 opção, a pill confirma visualmente
     // qual modalidade será registrada. Todas ativas por padrão, clique desativa.
+    // v2.8.72: estado ativo/inativo por modalidade. Prioridade: (1) plano em
+    // edição → modalidades do próprio plano; (2) memória por-local; (3) 1ª vez →
+    // modalidades que o LOCAL oferece (∩ as exibidas); (4) fallback → todas. Se o
+    // resultado deixar tudo inativo, ativa todas (não dá pra confirmar vazio).
+    var _venueSet = (v && Array.isArray(v.sports)) ? v.sports : [];
+    var _editSports = (_editingPlanData && Array.isArray(_editingPlanData.sports)) ? _editingPlanData.sports : null;
+    var _defActive = {};
+    (sports || []).forEach(function(s) {
+      if (_editSports) { _defActive[s] = _editSports.some(function(es) { return _planNormEq(es, s); }); }
+      else if (_planMem && Array.isArray(_planMem.active)) { _defActive[s] = _planMem.active.indexOf(s) !== -1; }
+      else if (_venueSet.length) { _defActive[s] = _venueSet.indexOf(s) !== -1; }
+      else { _defActive[s] = true; }
+    });
+    if (!(sports || []).some(function(s) { return _defActive[s]; })) {
+      (sports || []).forEach(function(s) { _defActive[s] = true; });
+    }
+    var _pillOn = 'padding:6px 12px;border-radius:999px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:1px solid rgba(99,102,241,0.45);font-size:0.78rem;font-weight:600;cursor:pointer;transition:all 0.15s;';
+    var _pillOff = 'padding:6px 12px;border-radius:999px;background:var(--bg-darker);color:var(--text-muted);border:1px solid var(--border-color);font-size:0.78rem;font-weight:600;cursor:pointer;transition:all 0.15s;opacity:0.55;text-decoration:line-through;';
     var sportsPills = (sports || []).map(function(s) {
       var safeS = _safe(s);
-      return '<button type="button" class="plan-sport-pill" data-sport="' + safeS + '" data-active="1" ' +
+      var on = !!_defActive[s];
+      return '<button type="button" class="plan-sport-pill" data-sport="' + safeS + '" data-active="' + (on ? '1' : '0') + '" ' +
              'onclick="window._venuesTogglePlanSport(this)" ' +
-             'style="padding:6px 12px;border-radius:999px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:1px solid rgba(99,102,241,0.45);font-size:0.78rem;font-weight:600;cursor:pointer;transition:all 0.15s;">' +
+             'style="' + (on ? _pillOn : _pillOff) + '">' +
              safeS + '</button>';
     }).join('');
     var sportsBlock = (sports && sports.length >= 1)
@@ -3596,6 +3654,9 @@
     var startStr = (document.getElementById('venue-plan-start') || {}).value;
     var endStr = (document.getElementById('venue-plan-end') || {}).value;
     if (!startStr) return;
+    // v2.8.72: memoriza por-local as modalidades ativas + horários desta vez,
+    // pra restaurar no próximo "Planejar ida" neste mesmo local.
+    try { _savePlanMem(v, sports, startStr, endStr); } catch (e) {}
     // v0.16.36: lê o dia escolhido nas pills (Hoje/Amanhã). Default = hoje.
     var selectedDay = 'today';
     var dayBtn = document.querySelector('#plan-day-pills [data-day][data-active="1"]');
@@ -4244,11 +4305,16 @@
     }
     var venueSports = Array.isArray(v.sports) ? v.sports.slice() : [];
     var prefSports = (cu && Array.isArray(cu.preferredSports)) ? cu.preferredSports.slice() : [];
-    var picks = venueSports.length > 0 && prefSports.length > 0
-      ? venueSports.filter(function(s) { return prefSports.indexOf(s) !== -1; })
-      : (venueSports.length === 0 ? prefSports : []);
-    if (picks.length > 0) {
-      _openInlinePlanOverlay(v, picks, editData);
+    // v2.8.72: mostra TODAS as modalidades preferidas do perfil como pills. O
+    // estado ativo/inativo (1ª vez = o que o LOCAL oferece ∩ preferidas; depois =
+    // memória por-local) é resolvido dentro de _openInlinePlanOverlay.
+    if (prefSports.length > 0) {
+      _openInlinePlanOverlay(v, prefSports, editData);
+      return;
+    }
+    // Sem modalidades preferidas no perfil — cai no comportamento anterior.
+    if (venueSports.length > 0) {
+      _openInlinePlanOverlay(v, venueSports, editData);
       return;
     }
     if (placeId && placeId.indexOf('pref_') !== 0) {
