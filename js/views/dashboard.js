@@ -2693,12 +2693,12 @@ function renderDashboard(container) {
     </div>
     <div class="dashboard-list" style="margin-bottom: 2rem;">
       <!-- v2.8.41: barra de filtro (modalidade cíclica) + busca, STICKY abaixo da topbar -->
-      <div class="dash-filter-bar" style="position:sticky;top:calc(var(--topbar-h, 60px) + var(--hamburger-dd-h, 0px));z-index:30;display:flex;gap:8px;align-items:center;background:var(--bg-dark,#0f172a);padding:10px 0;margin-bottom:6px;">
-        <button onclick="window._cycleDashSport()" title="Filtrar por modalidade — clique para alternar (− = Todas)" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;background:${curSport ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.06)'};color:${curSport ? '#a5b4fc' : 'var(--text-muted,#94a3b8)'};border:1px solid ${curSport ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.14)'};border-radius:10px;padding:9px 12px;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">
+      <div class="dash-filter-bar" style="position:sticky;top:calc(var(--topbar-h, 60px) + var(--hamburger-dd-h, 0px));z-index:30;display:flex;gap:8px;align-items:center;background:var(--bg-dark,#0f172a);padding:0 0 8px;margin-bottom:6px;">
+        <button onclick="window._cycleDashSport()" title="Filtrar por modalidade — clique para alternar (− = Todas)" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;min-height:44px;box-sizing:border-box;background:${curSport ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.06)'};color:${curSport ? '#a5b4fc' : 'var(--text-muted,#94a3b8)'};border:1px solid ${curSport ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.14)'};border-radius:10px;padding:0 12px;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">
           <span style="font-size:1rem;line-height:1;">${curSport ? getSportIcon(curSport) : '🎯'}</span>
           <span>${curSport ? window._safeHtml(curSport) : 'Todas'}</span>
         </button>
-        <input id="dash-search-input" type="search" value="${window._safeHtml(window._dashSearch || '')}" oninput="window._setDashSearch(this.value)" placeholder="🔍 Buscar torneio…" autocomplete="off" style="flex:1;min-width:0;background:var(--bg-card,#1a1a2e);color:var(--text-bright,#f1f5f9);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:9px 12px;font-size:0.85rem;box-sizing:border-box;">
+        <input id="dash-search-input" type="search" value="${window._safeHtml(window._dashSearch || '')}" oninput="window._setDashSearch(this.value)" placeholder="🔍 Buscar torneio…" autocomplete="off" style="flex:1;min-width:0;height:44px;min-height:44px;background:var(--bg-card,#1a1a2e);color:var(--text-bright,#f1f5f9);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:0 12px;font-size:0.85rem;box-sizing:border-box;">
       </div>
       ${runningBandHtml}
       ${awaitingStartHtml}

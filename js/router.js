@@ -259,6 +259,15 @@ function initRouter() {
           window.location.hash = '#tournaments/' + (parts[2] || '');
         }
         break;
+      case 'cohost':
+        // v2.8.52: deep-link dos botões Aceitar/Recusar do convite de co-organização.
+        // #cohost/<accept|reject>/<tId>/<type> → executa a ação e abre o torneio.
+        if (typeof window._coHostActionFromLink === 'function') {
+          window._coHostActionFromLink(parts[1], parts[2], parts[3]);
+        } else {
+          window.location.hash = '#tournaments/' + (parts[2] || '');
+        }
+        break;
       case 'pre-draw':
         renderPreDraw(viewContainer, cleanParam);
         break;

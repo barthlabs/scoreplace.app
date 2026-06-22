@@ -135,9 +135,15 @@
       window._warn('[coHostInvite] saveTournament failed:', e);
     });
 
+    // v2.8.52: deep-links Aceitar/Recusar (#cohost/<accept|reject>/<tId>/cohost) pra
+    // o convite ter BOTÕES funcionais no e-mail e WhatsApp (não só um link pro torneio).
+    var _chBase = 'https://scoreplace.app/#cohost/';
     _notifyByEmail(target.uid || target.email, {
       type: 'cohost_invite', tournamentId: String(t.id), tournamentName: t.name,
       fromName: user.displayName, fromUid: user.uid,
+      inviterName: user.displayName || _tH('org.theOrganizer'),
+      acceptUrl: _chBase + 'accept/' + encodeURIComponent(String(t.id)) + '/cohost',
+      rejectUrl: _chBase + 'reject/' + encodeURIComponent(String(t.id)) + '/cohost',
       message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.invitedCohost') + ' "' + t.name + '".',
       level: 'fundamental',
       _fallbackEmail: target.email || '', _fallbackName: target.displayName || ''

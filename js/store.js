@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.8.51-beta';
+window.SCOREPLACE_VERSION = '2.8.54-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -1307,7 +1307,11 @@ window._reflowChrome = function() {
   var vc = document.getElementById('view-container');
   if (vc) {
     if (!hasBackHeader) {
-      vc.style.paddingTop = ddH > 0 ? (ddH + 'px') : '';
+      // v2.8.54: o .main-content já tem padding-top = topbarH + 16 (o respiro de 1rem
+      // abaixo da topbar). Com o menu aberto, somar ddH cheio deixava ESSE respiro de
+      // 16px como um gap escuro entre o menu e o conteúdo (ex.: barra de filtro/busca da
+      // dashboard). Subtrai o respiro pra o conteúdo grudar no fundo do menu.
+      vc.style.paddingTop = ddH > 0 ? (Math.max(0, ddH - 16) + 'px') : '';
     } else if (vc.style.paddingTop) {
       vc.style.paddingTop = '';
     }
@@ -4759,11 +4763,19 @@ window._personCount = function(t) {
 };
 // Marca d'água do número de inscrição no canto sup. direito (mesmo estilo do card de
 // inscrito do participants.js): grande, semitransparente, não-interativo.
-window._enrollNumberBadge = function(num) {
+// v2.8.53: número de inscrição como marca-d'água que ocupa ~90% da ALTURA do card
+// (5% de margem acima/abaixo), independente da altura do card (auto-height). SVG com
+// viewBox + preserveAspectRatio escala o dígito sozinho — `height:90%` resolve contra
+// a caixa do card (position:relative). `side` ('right' padrão | 'left') mantém a posição.
+window._enrollNumberBadge = function(num, side) {
   if (num === '' || num == null) return '';
+  side = (side === 'left') ? 'left' : 'right';
   var n = String(num);
-  var fs = n.length > 2 ? '1.9rem' : '2.4rem';
-  return '<div style="position:absolute;right:8px;top:8px;font-size:' + fs + ';font-weight:900;color:rgba(255,255,255,0.10);line-height:1;pointer-events:none;user-select:none;">' + n + '</div>';
+  var vbW = n.length * 82 + 8;            // viewBox cresce com o nº de dígitos
+  return '<svg aria-hidden="true" style="position:absolute;top:5%;' + side + ':8px;height:90%;width:auto;pointer-events:none;user-select:none;z-index:0;" ' +
+    'viewBox="0 0 ' + vbW + ' 100" preserveAspectRatio="xMidYMid meet">' +
+    '<text x="' + (vbW / 2) + '" y="50" text-anchor="middle" dominant-baseline="central" font-size="140" font-weight="900" ' +
+    'fill="rgba(255,255,255,0.10)" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif">' + window._safeHtml(n) + '</text></svg>';
 };
 
 // ─── Competitors helper: filter out non-competing organizers from participants ─

@@ -96,6 +96,9 @@ window._executeMerge = function(sourceName, targetName, tId) {
 // o soltar pra abrir o convite de co-organização.
 window._setOrgDropActive = function(on) {
   try {
+    // v2.8.52: a VAGA de co-organização (.sp-org-dropzone) só aparece DURANTE o
+    // arraste — body.sp-org-dragging controla a visibilidade via CSS.
+    if (document.body) document.body.classList.toggle('sp-org-dragging', !!on);
     document.querySelectorAll('.sp-org-droptarget').forEach(function(el) {
       el.classList.toggle('sp-org-drag-active', !!on);
       if (!on) el.classList.remove('sp-org-drop-hover');

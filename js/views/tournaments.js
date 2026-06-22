@@ -408,6 +408,25 @@ window._pairActionFromLink = async function(act, tId, reqId) {
     window.location.hash = '#tournaments/' + tId;
 };
 
+// v2.8.52: #cohost/<accept|reject>/<tId>/<type> → aceita/recusa o convite de
+// co-organização. _acceptHostInvite/_rejectHostInvite já leem fresh do Firestore e
+// validam pelo usuário logado. Deslogado → guarda a intenção (sp_pendingCohostAction)
+// e abre o torneio (gate de login); auth.js retoma após o login.
+window._coHostActionFromLink = async function(act, tId, inviteType) {
+    act = (act === 'accept') ? 'accept' : 'reject';
+    inviteType = (inviteType === 'transfer') ? 'transfer' : 'cohost';
+    if (!tId) { window.location.hash = '#dashboard'; return; }
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) {
+        try { sessionStorage.setItem('sp_pendingCohostAction', JSON.stringify({ act: act, tId: String(tId), inviteType: inviteType })); } catch (e) {}
+        window.location.hash = '#tournaments/' + tId;
+        return;
+    }
+    if (act === 'accept') { if (typeof window._acceptHostInvite === 'function') window._acceptHostInvite(String(tId), inviteType); }
+    else { if (typeof window._rejectHostInvite === 'function') window._rejectHostInvite(String(tId), inviteType); }
+    window.location.hash = '#tournaments/' + tId;
+};
+
 function renderTournaments(container, tournamentId = null) {
     if (!window.AppStore) return;
     // Clear one-time check flags for OTHER tournaments (keep current)
@@ -2334,27 +2353,23 @@ function renderTournaments(container, tournamentId = null) {
         // pelo criador), o card vira ALVO DE SOLTAR — arrastar um inscrito até a
         // estrela do organizador "transforma" o card (pulsa + estrela brilha) e o
         // soltar abre o convite de co-organização (_handleCrownDrop).
-        function _buildOrgCard(name, role, bgStyle, canRemove, removeEmail, isDropTarget) {
+        function _buildOrgCard(name, role, bgStyle, canRemove, removeEmail, isTapPicker) {
           var _oSeed = encodeURIComponent(name);
           var _oFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _oSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
           var _oPhoto = (window._playerPhotoCache && window._playerPhotoCache[(name || '').toLowerCase()] && window._playerPhotoCache[(name || '').toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[(name || '').toLowerCase()] : _oFallback;
           var _safeTId = window._safeHtml(String(_t.id));
-          var _dropCls = isDropTarget ? ' sp-org-droptarget' : '';
-          // Desktop: arrastar um inscrito até aqui promove. Mobile (sem HTML5
-          // drag no toque): tocar abre o seletor de quem promover.
-          var _dropAttrs = isDropTarget
-            ? ' data-org-drop="1" title="Arraste um inscrito aqui ou toque para co-organizar" ondragover="event.preventDefault();event.dataTransfer.dropEffect=\'move\';this.classList.add(\'sp-org-drop-hover\');" ondragleave="this.classList.remove(\'sp-org-drop-hover\');" ondrop="this.classList.remove(\'sp-org-drop-hover\');if(window._handleCrownDrop)window._handleCrownDrop(event,\'' + _safeTId + '\')" onclick="if(window._openOrgPickerDialog)window._openOrgPickerDialog(\'' + _safeTId + '\')"'
-            : '';
+          // v2.8.52: card do organizador principal (criador) é TOCÁVEL → abre o seletor
+          // de quem promover (entrada por toque, mobile). O ALVO de soltar é a VAGA
+          // separada (_buildDropzone), que só aparece durante o arraste.
+          var _tapAttrs = isTapPicker ? ' title="Toque para co-organizar" onclick="if(window._openOrgPickerDialog)window._openOrgPickerDialog(\'' + _safeTId + '\')"' : '';
           var _starSpan = '<span class="sp-org-star" style="display:inline-flex;align-items:center;flex-shrink:0;">' + _crownSvg + '</span>';
-          var _hint = isDropTarget ? '<div class="sp-org-drop-hint">⭐ Arraste ou toque p/ co-organizar</div>' : '';
-          return '<div class="sp-org-card' + _dropCls + '"' + _dropAttrs + ' style="position:relative;' + (isDropTarget ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;min-width:160px;">' +
+          return '<div class="sp-org-card"' + _tapAttrs + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:0 0 190px;height:58px;overflow:hidden;">' +
             '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);" />' +
             '<div style="flex:1;min-width:0;">' +
               '<div style="display:flex;align-items:center;gap:4px;font-weight:700;font-size:0.82rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(name) + ' ' + _starSpan + '</div>' +
               '<div style="font-size:0.65rem;color:var(--text-muted);">' + role + '</div>' +
             '</div>' +
-            (canRemove ? '<button style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;padding:2px;line-height:1;" title="Remover co-organizador" onclick="event.stopPropagation();window._removeCoHost(\'' + window._safeHtml(String(_t.id)) + '\',\'' + window._safeHtml(removeEmail) + '\')">✕</button>' : '') +
-            _hint +
+            (canRemove ? '<button style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;font-weight:900;padding:2px;line-height:1;" title="Remover co-organizador" onclick="event.stopPropagation();window._removeCoHost(\'' + window._safeHtml(String(_t.id)) + '\',\'' + window._safeHtml(removeEmail) + '\')">✕</button>' : '') +
           '</div>';
         }
         // v2.8.48: convite de co-organização PENDENTE → box âmbar PONTILHADO ao lado
@@ -2367,8 +2382,8 @@ function renderTournaments(container, tournamentId = null) {
           var _lc = (name || '').toLowerCase();
           var _oPhoto = (window._playerPhotoCache && window._playerPhotoCache[_lc] && window._playerPhotoCache[_lc].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_lc] : _oFallback;
           var _safeTId = window._safeHtml(String(_t.id));
-          var _rmBtn = canRemove ? '<button style="background:none;border:none;color:#fbbf24;cursor:pointer;font-size:1rem;padding:2px;line-height:1;" title="Cancelar convite" onclick="event.stopPropagation();window._removeCoHost(\'' + _safeTId + '\',\'' + window._safeHtml(removeKey) + '\')">✕</button>' : '';
-          return '<div class="sp-org-card sp-org-pending" style="position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);border-radius:10px;min-width:160px;">' +
+          var _rmBtn = canRemove ? '<button style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;font-weight:900;padding:2px;line-height:1;" title="Cancelar convite" onclick="event.stopPropagation();window._removeCoHost(\'' + _safeTId + '\',\'' + window._safeHtml(removeKey) + '\')">✕</button>' : '';
+          return '<div class="sp-org-card sp-org-pending" style="box-sizing:border-box;position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);border-radius:10px;flex:0 0 190px;height:58px;overflow:hidden;">' +
             '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(251,191,36,0.5);opacity:0.85;" />' +
             '<div style="flex:1;min-width:0;">' +
               '<div style="font-weight:700;font-size:0.82rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(name) + '</div>' +
@@ -2382,14 +2397,17 @@ function renderTournaments(container, tournamentId = null) {
         // Tem a classe .sp-org-droptarget → o listener global de dragstart o faz pulsar.
         function _buildDropzone() {
           var _safeTId = window._safeHtml(String(_t.id));
-          return '<div class="sp-org-card sp-org-droptarget sp-org-dropzone" data-org-drop="1" title="Arraste um inscrito aqui ou toque para co-organizar" ' +
+          // v2.8.52: MESMO tamanho do card do organizador; aparece SÓ durante o arraste
+          // (CSS .sp-org-dropzone + body.sp-org-dragging). Estilo = barra dourada EM CIMA
+          // (.sp-org-drop-hint) com estrela + "Arraste para co-organizar" (preferência do
+          // dono); corpo limpo com estrela fraca, sem texto interno.
+          return '<div class="sp-org-card sp-org-droptarget sp-org-dropzone" data-org-drop="1" title="Arraste um inscrito aqui para co-organizar" ' +
             'ondragover="event.preventDefault();event.dataTransfer.dropEffect=\'move\';this.classList.add(\'sp-org-drop-hover\');" ' +
             'ondragleave="this.classList.remove(\'sp-org-drop-hover\');" ' +
             'ondrop="this.classList.remove(\'sp-org-drop-hover\');if(window._handleCrownDrop)window._handleCrownDrop(event,\'' + _safeTId + '\')" ' +
-            'onclick="if(window._openOrgPickerDialog)window._openOrgPickerDialog(\'' + _safeTId + '\')" ' +
-            'style="position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px;background:rgba(251,191,36,0.06);border:2px dashed rgba(251,191,36,0.55);border-radius:10px;min-width:150px;min-height:62px;text-align:center;flex:1;">' +
-            '<span class="sp-org-star" style="display:inline-flex;align-items:center;">' + _crownSvg + '</span>' +
-            '<span style="font-size:0.66rem;font-weight:700;color:#fbbf24;line-height:1.2;">Arraste ou toque<br>p/ co-organizar</span>' +
+            'style="box-sizing:border-box;position:relative;align-items:center;justify-content:center;padding:8px 12px;background:rgba(251,191,36,0.05);border:2px dashed rgba(251,191,36,0.55);border-radius:10px;flex:0 0 190px;height:58px;">' +
+            '<div class="sp-org-drop-hint">⭐ Arraste para co-organizar</div>' +
+            '<span class="sp-org-star" style="display:inline-flex;align-items:center;opacity:0.32;">' + _crownSvg + '</span>' +
           '</div>';
         }
         var _orgBgPrimary = 'background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.1));border:1px solid rgba(99,102,241,0.3);';
@@ -2447,9 +2465,10 @@ function renderTournaments(container, tournamentId = null) {
         var _primaryGender = _resolveOrgGender(_t.organizerEmail, _t.creatorUid);
         var _orgRoleLabel = _gw(_primaryGender, 'Organizador', 'Organizadora');
         // Card principal vira alvo de soltar só pro CRIADOR (quem pode promover).
-        // v2.8.50: o card do organizador NÃO é mais o alvo de soltar (sem dashed em
-        // volta). O alvo agora é uma VAGA separada (_buildDropzone) à direita.
-        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', false);
+        // v2.8.50/52: o card do organizador NÃO é o alvo de soltar (sem dashed em
+        // volta); o alvo é a VAGA separada (_buildDropzone, só aparece no arraste). O
+        // card do CRIADOR é tocável → abre o seletor (entrada por toque no mobile).
+        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', _isCreatorNow);
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
             if (!ch) return;
@@ -2485,6 +2504,9 @@ function renderTournaments(container, tournamentId = null) {
           '.sp-org-droptarget.sp-org-drop-hover .sp-org-star{transform:scale(1.7);filter:drop-shadow(0 0 8px rgba(251,191,36,1));}' +
           '.sp-org-drop-hint{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#1a1a2e;font-size:0.58rem;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.4);opacity:0;pointer-events:none;transition:opacity 0.15s;z-index:5;}' +
           '.sp-org-droptarget.sp-org-drag-active .sp-org-drop-hint{opacity:1;}' +
+          // v2.8.52: a VAGA só aparece durante o arraste (body.sp-org-dragging).
+          '.sp-org-dropzone{display:none !important;}' +
+          'body.sp-org-dragging .sp-org-dropzone{display:flex !important;}' +
           '@keyframes spOrgPulse{0%,100%{box-shadow:0 0 0 rgba(251,191,36,0);}50%{box-shadow:0 0 16px rgba(251,191,36,0.4);}}' +
           '</style>';
         _organizersHtml = '<div style="margin-top:1.25rem;margin-bottom:0.5rem;">' + _orgDropCss +
@@ -3080,9 +3102,8 @@ function renderTournaments(container, tournamentId = null) {
               // card individual). Solo: 1 nº no canto sup. dir. Dupla: o nº ORIGINAL de cada
               // pessoa no SEU lado — esquerda→canto sup. esquerdo, direita→canto sup. direito.
               function _wmNum(seq, side) {
-                if (seq === '' || seq == null) return '';
-                var _n = String(seq); var _fs = _n.length > 2 ? '1.9rem' : '2.4rem';
-                return '<div style="position:absolute;' + side + ':10px;top:8px;font-size:' + _fs + ';font-weight:900;color:rgba(255,255,255,0.10);line-height:1;pointer-events:none;user-select:none;z-index:0;">' + _n + '</div>';
+                // v2.8.53: delega pro helper canônico (SVG 90% da altura do card).
+                return (window._enrollNumberBadge) ? window._enrollNumberBadge(seq, side) : '';
               }
               var _enrollBadge = (!members && window._enrollNumberBadge && window._enrollNumber)
                 ? window._enrollNumberBadge(window._enrollNumber(_enrollOrderMapD, p))

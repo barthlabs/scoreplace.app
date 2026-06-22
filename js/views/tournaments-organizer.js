@@ -361,6 +361,34 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
         }
         return; // não cai no digest
     }
+    // v2.8.52: CONVITE DE CO-ORGANIZAÇÃO — botões Aceitar (direita) / Recusar (esquerda)
+    // funcionais via deep-link (#cohost/...). Kelly recebeu só um link pro torneio antes;
+    // agora recebe os botões/links de ação. Bypassa o digest (precisa dos próprios botões).
+    if (templateType === 'cohost_invite' && (templateData.acceptUrl || templateData.rejectUrl)) {
+        var _cs = window._safeHtml || function(s){ return s; };
+        var _cwho = _cs(templateData.inviterName || templateData.fromName || 'O organizador');
+        var _ctn  = _cs(templateData.tournamentName || '');
+        var _cacc = templateData.acceptUrl || templateData.tournamentUrl || '';
+        var _crej = templateData.rejectUrl || templateData.tournamentUrl || '';
+        if (channelResult.emails && channelResult.emails.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
+            var _chtml =
+              '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;background:#0f172a;border-radius:14px;padding:28px 24px;color:#e2e8f0;">' +
+                '<div style="font-size:1.3rem;font-weight:800;margin-bottom:6px;color:#fbbf24;">👑 Convite de co-organização</div>' +
+                '<p style="font-size:1rem;line-height:1.5;margin:0 0 22px;color:#cbd5e1;"><b>' + _cwho + '</b> convidou você pra <b>co-organizar</b>' + (_ctn ? ' <b>' + _ctn + '</b>' : '') + '.</p>' +
+                '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>' +
+                  '<td style="padding:0 6px;"><a href="' + _crej + '" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">❌ Recusar</a></td>' +
+                  '<td style="padding:0 6px;"><a href="' + _cacc + '" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">✅ Aceitar</a></td>' +
+                '</tr></table>' +
+                '<p style="font-size:0.78rem;color:#64748b;margin:22px 0 0;text-align:center;">Clique em um botão pra responder — você será levado ao torneio.</p>' +
+              '</div>';
+            window.FirestoreDB.queueEmail(channelResult.emails, '👑 Convite de co-organização — ' + (templateData.tournamentName || 'scoreplace.app'), _chtml);
+        }
+        if (channelResult.phones && channelResult.phones.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
+            var _cwa = '🔴 👑 *Convite de co-organização*\n\n' + (templateData.inviterName || templateData.fromName || 'O organizador') + ' convidou você pra co-organizar' + (templateData.tournamentName ? ' ' + templateData.tournamentName : '') + '.\n\n✅ Aceitar: ' + _cacc + '\n❌ Recusar: ' + _crej;
+            window.FirestoreDB.queueWhatsApp(channelResult.phones, _cwa);
+        }
+        return; // não cai no digest
+    }
     // ── Email ──
     // v2.1.19: e-mails de notificação agora vão pra fila de DIGEST (janela por
     // importância 5/15/30 min) em vez de um e-mail por evento. A Cloud Function

@@ -4875,6 +4875,19 @@ async function simulateLoginSuccess(user) {
     }
   } catch(e) {}
 
+  // v2.8.52: retoma a ação de convite de CO-ORGANIZAÇÃO (deep-link Aceitar/Recusar)
+  // após o login, mesmo padrão do convite de dupla.
+  try {
+    var _pc = sessionStorage.getItem('sp_pendingCohostAction');
+    if (_pc) {
+      sessionStorage.removeItem('sp_pendingCohostAction');
+      var _pco = JSON.parse(_pc);
+      if (_pco && _pco.tId && typeof window._coHostActionFromLink === 'function') {
+        setTimeout(function(){ window._coHostActionFromLink(_pco.act, _pco.tId, _pco.inviteType); }, 1200);
+      }
+    }
+  } catch(e) {}
+
   // Redirect to pending invite tournament if there was one
   if (window._pendingInviteHash) {
     var dest = window._pendingInviteHash;

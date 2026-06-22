@@ -2099,7 +2099,7 @@ function renderParticipants(container, tournamentId) {
       const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
         <div class="participant-card" data-part-card="1" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
-            ${_riNum !== '' ? `<div style="position:absolute;right:8px;top:8px;font-size:${String(_riNum).length > 2 ? '1.9rem' : '2.4rem'};font-weight:900;color:rgba(255,255,255,0.07);line-height:1;pointer-events:none;user-select:none;">${_riNum}</div>` : ''}
+            ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_riNum, 'right') : ''}
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->
                 <div style="display:flex;align-items:center;gap:8px;">
@@ -2314,7 +2314,7 @@ function renderParticipants(container, tournamentId) {
       const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
       return `
         <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="${_isStandbyEntry ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
-            ${(function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return _n !== '' ? `<div style="position:absolute;right:8px;top:8px;font-size:${String(_n).length > 2 ? '1.9rem' : '2.4rem'};font-weight:900;color:rgba(255,255,255,0.07);line-height:1;pointer-events:none;user-select:none;">${_n}</div>` : ''; })()}
+            ${(function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })()}
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (igual ao card pós-sorteio) -->
                 ${pNameHtml}
