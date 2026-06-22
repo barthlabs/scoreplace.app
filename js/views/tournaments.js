@@ -3086,11 +3086,13 @@ function renderTournaments(container, tournamentId = null) {
                   var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                   var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
                   var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
-                  // nome COMPLETO (quebra linha, não trunca); avatar 28px igual ao card individual.
-                  var _nmSpan = '<span style="font-weight:700;font-size:0.92rem;color:var(--text-bright);white-space:normal;word-break:break-word;line-height:1.2;">' + window._safeHtml(n) + '</span>';
+                  // v2.8.66: nome em 1 linha (nowrap + ellipsis) pra NÃO quebrar à toa e o
+                  // avatar SEMPRE acompanhar o nome (align-items:center, grudados). title = nome
+                  // completo no hover. min-width:0 deixa o ellipsis funcionar dentro do flex.
+                  var _nmSpan = '<span title="' + window._safeHtml(n) + '" style="font-weight:700;font-size:0.86rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.2;">' + window._safeHtml(n) + '</span>';
                   var _av = right
-                    ? '<div style="display:flex;align-items:flex-start;gap:7px;max-width:100%;justify-content:flex-end;">' + _img + _nmSpan + '</div>'
-                    : '<div style="display:flex;align-items:flex-start;gap:7px;max-width:100%;">' + _img + _nmSpan + '</div>';
+                    ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _img + _nmSpan + '</div>'
+                    : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
                   var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
                   return '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 42%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
                 };

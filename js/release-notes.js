@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.65-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.66-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👫 Cards de dupla — gênero/categoria dos dois.</b> Agora o gênero e a categoria aparecem para <b>ambos</b> os jogadores da dupla (antes faltava no 2º). E a <b>foto fica sempre junto do nome</b>, sem quebrar linha à toa.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.65-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📊 Análise de Inscritos — correções.</b> Atribuir <b>gênero</b> a quem está em dupla agora <b>grava</b> certinho. Em torneio de <b>categoria única</b>, some o seletor de categoria por inscrito (não há o que escolher), e os cards ficam <b>todos da mesma altura</b>.</li>' +
         '<li><b>👑 Cards da Organização mais largos.</b> A estrela não corta mais e o "Co-organizador(a)" não quebra linha; o ✕ de remover ficou menor.</li>' +

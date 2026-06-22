@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.8.65-beta';
+window.SCOREPLACE_VERSION = '2.8.66-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2973,6 +2973,14 @@ window._loadParticipantProfilesByName = function(list) {
   var pairs = [];
   (list || []).forEach(function(p) {
     if (typeof p === 'string') { p.split(' / ').forEach(function(n) { n = n.trim(); if (n) pairs.push({ name: n, uid: '' }); }); return; }
+    // v2.8.66: DUPLA ESTRUTURAL (p1Name/p2Name) — carrega os DOIS membros com seus uids,
+    // mesmo quando displayName é só o p1 (duplas do aceite gravam só o p1). Sem isto, o
+    // perfil do p2 nunca era carregado e o gênero/categoria dele não aparecia no card.
+    if (p.p1Name && p.p2Name) {
+      pairs.push({ name: String(p.p1Name).trim(), uid: p.p1Uid || p.uid || '' });
+      pairs.push({ name: String(p.p2Name).trim(), uid: p.p2Uid || '' });
+      return;
+    }
     var dn = (p.displayName || p.name || '');
     var membersN = dn.split(' / ').map(function(n) { return n.trim(); }).filter(Boolean);
     if (membersN.length <= 1) {
