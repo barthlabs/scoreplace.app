@@ -517,11 +517,11 @@ function _notifyPendingApproval(t, m, proposerName) {
     window._sendUserNotification(orgUid, notifData);
     skipUids[orgUid] = true;
   } else {
-    // Fallback: look up organizer in participants by email
+    // Fallback: acha o organizador entre os participantes. v2.8.80: uid (creatorUid) primeiro, email fallback.
     var orgEmail = t.organizerEmail || t.creatorEmail;
-    if (orgEmail) {
+    if (orgEmail || t.creatorUid) {
       var orgPart = parts.find(function(p) {
-        return typeof p === 'object' && p.email === orgEmail;
+        return typeof p === 'object' && ((t.creatorUid && p.uid === t.creatorUid) || (orgEmail && p.email === orgEmail));
       });
       if (orgPart && orgPart.uid && !skipUids[orgPart.uid]) {
         window._sendUserNotification(orgPart.uid, notifData);
@@ -2273,7 +2273,7 @@ window._contestResult = function(tId, matchId) {
         } else {
           var orgEmail = t.organizerEmail || t.creatorEmail;
           var parts = Array.isArray(t.participants) ? t.participants : [];
-          var orgPart = parts.find(function(p) { return typeof p === 'object' && p.email === orgEmail; });
+          var orgPart = parts.find(function(p) { return typeof p === 'object' && ((t.creatorUid && p.uid === t.creatorUid) || (orgEmail && p.email === orgEmail)); }); // v2.8.80: uid primeiro
           if (orgPart && orgPart.uid) { _orgSeen[orgPart.uid] = true; window._sendUserNotification(orgPart.uid, notifOrg); }
         }
         // Notifica também co-organizadores ativos

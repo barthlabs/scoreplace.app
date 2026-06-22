@@ -86,7 +86,14 @@ function renderExplore(container) {
 }
 
 // ---- Helper: check if a participant entry matches a given user (by email OR displayName) ----
-function _participantMatchesUser(p, email, displayName) {
+function _participantMatchesUser(p, email, displayName, uid) {
+  // v2.8.80: uid é a identidade primária — casa por uid antes de email/nome.
+  if (uid && p && typeof p === 'object') {
+    if (typeof window._participantUids === 'function') {
+      try { if (window._participantUids(p).indexOf(uid) !== -1) return true; } catch (e) {}
+    }
+    if (p.uid === uid || p.p1Uid === uid || p.p2Uid === uid) return true;
+  }
   if (typeof p === 'string') {
     // Post-draw: participant is a team string like "Rodrigo Barth / Eduardo Mange"
     if (email && p === email) return true;
@@ -272,21 +279,22 @@ window._toggleOtrosSort = function(dimension) {
   _renderOtrosCards(resultsDiv, users);
 };
 
-function _computeSharedInfo(user, myEmail, myName) {
+function _computeSharedInfo(user, myEmail, myName, myUid) {
   var email = user.email || '';
   var name = user.displayName || '';
+  var uUid = user.uid || user._docId || '';
   var tournaments = window.AppStore.tournaments || [];
   var latest = 0;
   var count = 0;
   for (var i = 0; i < tournaments.length; i++) {
     var t = tournaments[i];
     var parts = Array.isArray(t.participants) ? t.participants : [];
-    var hasMe = t.organizerEmail === myEmail || parts.some(function(p) {
-      return _participantMatchesUser(p, myEmail, myName);
+    var hasMe = (myUid && t.creatorUid === myUid) || (myEmail && t.organizerEmail === myEmail) || parts.some(function(p) {
+      return _participantMatchesUser(p, myEmail, myName, myUid);
     });
     if (!hasMe) continue;
     var hasUser = parts.some(function(p) {
-      return _participantMatchesUser(p, email, name);
+      return _participantMatchesUser(p, email, name, uUid);
     });
     if (!hasUser) continue;
     count++;
@@ -355,7 +363,7 @@ function _renderSearchResults(resultsDiv, users, query, recentDays) {
   var _myEmail = cu.email || '';
   var _myName = cu.displayName || '';
   users.forEach(function(u) {
-    var shareInfo = _computeSharedInfo(u, _myEmail, _myName);
+    var shareInfo = _computeSharedInfo(u, _myEmail, _myName, cu.uid || ''); // v2.8.80: uid
     u._sharedCount = shareInfo.count;
     if (shareInfo.latest > 0) {
       u._latestTs = shareInfo.latest;
@@ -514,7 +522,7 @@ function _continueSearchRender(users, query, resultsDiv, _t) {
     var _myEmail = cu.email || '';
     var _myName = cu.displayName || '';
     users.forEach(function(u) {
-      var shareInfo = _computeSharedInfo(u, _myEmail, _myName);
+      var shareInfo = _computeSharedInfo(u, _myEmail, _myName, cu.uid || ''); // v2.8.80: uid
       u._sharedCount = shareInfo.count;
       if (shareInfo.latest > 0) {
         u._latestTs = shareInfo.latest;
@@ -899,16 +907,17 @@ function _renderMyFriends(myUid, friendIds) {
     var myTournaments = window.AppStore.tournaments || [];
     var _myEmail = (window.AppStore.currentUser && window.AppStore.currentUser.email) || '';
     var _myName = (window.AppStore.currentUser && window.AppStore.currentUser.displayName) || '';
+    var _myUid = (window.AppStore.currentUser && window.AppStore.currentUser.uid) || ''; // v2.8.80
     profiles.forEach(function(p) {
       var uid = p._docId;
       var sharedCount = 0;
       myTournaments.forEach(function(t) {
         var parts = Array.isArray(t.participants) ? t.participants : [];
-        var hasMe = t.organizerEmail === _myEmail || parts.some(function(pp) {
-          return _participantMatchesUser(pp, _myEmail, _myName);
+        var hasMe = (_myUid && t.creatorUid === _myUid) || (_myEmail && t.organizerEmail === _myEmail) || parts.some(function(pp) {
+          return _participantMatchesUser(pp, _myEmail, _myName, _myUid);
         });
         var hasFriend = parts.some(function(pp) {
-          return _participantMatchesUser(pp, p.email || '', p.displayName || '');
+          return _participantMatchesUser(pp, p.email || '', p.displayName || '', uid);
         });
         if (hasMe && hasFriend) sharedCount++;
       });
@@ -1416,22 +1425,24 @@ function _computeFriendStats(u) {
   var cu = window.AppStore ? (window.AppStore.currentUser || {}) : {};
   var myEmail = cu.email || '';
   var myName  = cu.displayName || '';
+  var myUid   = cu.uid || ''; // v2.8.80
   var frEmail = u.email || '';
   var frName  = u.displayName || '';
+  var frUid   = u.uid || u._docId || ''; // v2.8.80
   var stats = {
     tournaments: 0, tournamentNames: [],
     confrontos: { total: 0, myWins: 0, frWins: 0 },
     parcerias:  { total: 0, wins: 0, losses: 0 }
   };
-  if (!frEmail && !frName) return stats;
+  if (!frEmail && !frName && !frUid) return stats;
   var allT = window.AppStore ? (window.AppStore.tournaments || []) : [];
   allT.forEach(function(t) {
     var pList = Array.isArray(t.participants) ? t.participants : [];
-    var meIn = t.organizerEmail === myEmail || pList.some(function(pp) {
-      return _participantMatchesUser(pp, myEmail, myName);
+    var meIn = (myUid && t.creatorUid === myUid) || (myEmail && t.organizerEmail === myEmail) || pList.some(function(pp) {
+      return _participantMatchesUser(pp, myEmail, myName, myUid);
     });
     var frIn = pList.some(function(pp) {
-      return _participantMatchesUser(pp, frEmail, frName);
+      return _participantMatchesUser(pp, frEmail, frName, frUid);
     });
     if (!meIn || !frIn) return;
     stats.tournaments++;

@@ -9,9 +9,10 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.79-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.80-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🤝 Co-organizadores com acesso completo:</b> <b>todas as ferramentas do organizador</b> (incluindo a <b>Enquete</b>) agora aparecem e funcionam pra co-organizadores — inclusive quem entrou <b>por telefone</b> (sem e-mail). A identificação passou a ser sempre pelo seu cadastro, não pelo e-mail.</li>' +
+        '<li><b>📊 Estatísticas mais precisas:</b> torneios em comum, confrontos e parcerias agora reconhecem corretamente quem entrou <b>por telefone</b> (identificação por cadastro, não por e-mail/nome).</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
