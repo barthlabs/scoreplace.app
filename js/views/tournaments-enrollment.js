@@ -514,6 +514,8 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // v2.1.66: cria automaticamente um "Planejar ida" cobrindo a duração do
     // torneio quando ele tem data+hora e local. Dedup do PresenceDB evita duplicar.
     try { if (typeof window._maybeCreateTournamentPresencePlan === 'function') window._maybeCreateTournamentPresencePlan(t, user); } catch (_pp) {}
+    // v2.8.86: se há enquete ativa, notifica o novo inscrito pra responder (fundamental).
+    try { if (typeof window._opNotifyNewEnrollee === 'function') window._opNotifyNewEnrollee(t, user && user.uid); } catch (_op) {}
     // Post-enroll callback (ex: abrir picker de parceiro em torneios de duplas)
     if (typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
 
@@ -689,6 +691,13 @@ window.submitTeamEnroll = function (tId) {
     // Show success and navigate immediately (no wait for network)
     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.enrolledTitle'), _t('enroll.teamEnrolledMsg', { name: window._safeHtml(t.name) }), 'success');
     window._scrollToParticipant(tId, teamString);
+    // v2.8.86: enquete ativa → notifica cada novo inscrito da dupla (fundamental).
+    try {
+      if (typeof window._opNotifyNewEnrollee === 'function') {
+        var _newUids = (typeof window._participantUids === 'function') ? window._participantUids(participantObj) : [participantObj && participantObj.uid];
+        (_newUids || []).forEach(function(_u){ if (_u) window._opNotifyNewEnrollee(t, _u); });
+      }
+    } catch (_op) {}
 
     // --- Background: Firestore transaction for consistency ---
     if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {

@@ -148,16 +148,9 @@
     t.opinionPolls.push(poll);
     _save(t);
     window._opCloseOverlay();
-    if (typeof showNotification === 'function') showNotification('📊 Enquete criada', 'Os inscritos já podem votar.', 'success');
-    // notifica os inscritos
-    try {
-      if (typeof window._notifyTournamentParticipants === 'function') {
-        window._notifyTournamentParticipants(t, {
-          type: 'tournament_update', tournamentId: String(t.id), tournamentName: t.name,
-          message: 'Nova enquete em "' + t.name + '": ' + question, level: 'important'
-        }, (cu && cu.email) || '');
-      }
-    } catch (e) {}
+    if (typeof showNotification === 'function') showNotification('📊 Enquete criada', 'Notificando os inscritos…', 'success');
+    // notifica TODOS os inscritos (categoria fundamental) — exclui o organizador que criou
+    window._opNotifyEnrolled(t, poll, { excludeEmail: (cu && cu.email) || '' });
     if (typeof window._softRefreshView === 'function') window._softRefreshView();
   };
 
@@ -272,6 +265,61 @@
         var t2 = _findT(t.id); var p2 = t2 && window._opActivePoll(t2);
         if (p2 && p2.id === poll.id && !_hasVoted(p2, cu.uid)) window._opOpenVote(t.id, poll.id);
       }, 700);
+    } catch (e) {}
+  };
+
+  // ─── Notificação da enquete (categoria FUNDAMENTAL) ─────────────────────────────
+  function _opPollNotifData(t, poll) {
+    var q = (poll && poll.question) ? poll.question : 'enquete';
+    return {
+      type: 'poll', pollId: (poll && poll.id) || '',
+      tournamentId: String(t.id), tournamentName: t.name || '',
+      title: '📊 Responda a enquete',
+      message: 'O organizador abriu a enquete "' + q + '" em "' + (t.name || '') + '". Toque pra responder.',
+      level: 'fundamental'
+    };
+  }
+
+  // Notifica TODOS os inscritos — 1x por enquete (seta poll.notifiedAt). force re-dispara.
+  window._opNotifyEnrolled = function (t, poll, opts) {
+    opts = opts || {};
+    if (!t || !poll) return;
+    if (poll.notifiedAt && !opts.force) return;
+    // trava de sessão: blinda contra double-fire na corrida com o listener do Firestore
+    // (notifiedAt salvo é async; um re-render com doc fresco poderia disparar de novo)
+    window._opNotifiedThisSession = window._opNotifiedThisSession || {};
+    if (window._opNotifiedThisSession[poll.id] && !opts.force) return;
+    window._opNotifiedThisSession[poll.id] = true;
+    poll.notifiedAt = new Date().toISOString();
+    try { _save(t); } catch (e) {}
+    try {
+      if (typeof window._notifyTournamentParticipants === 'function') {
+        var cu = _cu();
+        var excl = opts.excludeEmail != null ? opts.excludeEmail : ((cu && cu.email) || '');
+        window._notifyTournamentParticipants(t, _opPollNotifData(t, poll), excl);
+      }
+    } catch (e2) {}
+  };
+
+  // Chamado pelo app do CRIADOR ao renderizar — dispara enquete ativa ainda não notificada.
+  // Só o creator dispara (evita duplicar entre co-orgs); notifiedAt garante 1x.
+  window._opMaybeNotifyExisting = function (t) {
+    try {
+      if (!t) return;
+      if (!(window.AppStore && typeof window.AppStore.isCreator === 'function' && window.AppStore.isCreator(t))) return;
+      var poll = window._opActivePoll(t); if (!poll || poll.closed) return;
+      if (poll.notifiedAt) return;
+      window._opNotifyEnrolled(t, poll, {});
+    } catch (e) {}
+  };
+
+  // Notifica um inscrito recém-chegado se há enquete ativa que ele ainda não respondeu.
+  window._opNotifyNewEnrollee = function (t, uid) {
+    try {
+      if (!t || !uid) return;
+      var poll = window._opActivePoll(t); if (!poll || poll.closed) return;
+      if (_hasVoted(poll, uid)) return;
+      if (typeof window._sendUserNotification === 'function') window._sendUserNotification(uid, _opPollNotifData(t, poll));
     } catch (e) {}
   };
 })();

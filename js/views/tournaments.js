@@ -2322,6 +2322,9 @@ function renderTournaments(container, tournamentId = null) {
 
         // v2.8.67: pop-up da enquete pro inscrito que ainda não votou (1x/sessão).
         if (typeof window._opMaybePopup === 'function') window._opMaybePopup(visible[0]);
+        // v2.8.86: se o CRIADOR abre um torneio com enquete ativa ainda não
+        // notificada, dispara a notificação (fundamental) pra todos os inscritos.
+        if (typeof window._opMaybeNotifyExisting === 'function') window._opMaybeNotifyExisting(visible[0]);
 
         // Fix orphaned match names
         if (typeof window._fixOrphanedMatchNames === 'function') {

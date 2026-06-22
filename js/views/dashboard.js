@@ -3002,10 +3002,13 @@ function renderDashboard(container) {
   // na DASHBOARD (antes só ao abrir o detalhe do torneio, então quem só via a
   // lista nunca recebia). _opMaybePopup filtra por inscrição (_canVote) +
   // não-votou + 1x/sessão por enquete, então é seguro chamar pra cada torneio.
-  if (typeof window._opMaybePopup === 'function' && typeof window._opActivePoll === 'function') {
+  if (typeof window._opActivePoll === 'function') {
     try {
       for (var _opi = 0; _opi < visible.length; _opi++) {
-        if (window._opActivePoll(visible[_opi])) window._opMaybePopup(visible[_opi]);
+        if (!window._opActivePoll(visible[_opi])) continue;
+        // inscrito não-votante → pop-up; CRIADOR com enquete não notificada → dispara (fundamental)
+        if (typeof window._opMaybePopup === 'function') window._opMaybePopup(visible[_opi]);
+        if (typeof window._opMaybeNotifyExisting === 'function') window._opMaybeNotifyExisting(visible[_opi]);
       }
     } catch (_ope) {}
   }

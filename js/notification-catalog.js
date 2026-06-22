@@ -24,6 +24,9 @@ window.NOTIF_CATALOG = {
   tournament_finished:         { level: 'important',   icon: '🏆', color: '#a78bfa' },
   tournament_invite:           { level: 'all',         icon: '🏆', color: 'var(--primary-color)' },
 
+  // Enquete do organizador (todos os inscritos precisam responder)
+  poll:                        { level: 'fundamental', icon: '📊', color: '#8b5cf6' },
+
   // Draw / rounds
   draw:                        { level: 'fundamental', icon: '🎲', color: 'var(--primary-color)' },
   new_round:                   { level: 'fundamental', icon: '🔄', color: 'var(--primary-color)' },

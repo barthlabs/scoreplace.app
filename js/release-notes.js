@@ -9,9 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.86-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>📊 Enquete mais visível:</b> o botão da enquete ficou <b>maior e mais destacado</b>, e o <b>pop-up</b> pra responder agora aparece <b>na própria dashboard</b> pra todo inscrito que ainda não votou (antes só ao abrir o torneio).</li>' +
+        '<li><b>📊 Enquete notifica todos:</b> ao criar uma enquete, <b>todos os inscritos são notificados</b> (e-mail + WhatsApp, categoria <b>fundamental</b>) pra responder — e quem se inscreve <b>depois</b> também recebe o aviso. O botão da enquete ficou maior e o <b>pop-up</b> pra responder aparece na própria dashboard.</li>' +
         '<li><b>🧭 Sem pulo de tela:</b> ações dentro de um torneio (inscrever, sair da lista, marcar presença, editar inscrito, etc.) agora <b>mantêm você no mesmo ponto da rolagem</b> em vez de jogar pro topo. Só muda de posição quando você realmente troca de página.</li>' +
         '<li><b>📍 Dashboard mais estável:</b> a seção <b>"Movimento nos seus locais"</b> não fica mais <b>sumindo e reaparecendo</b> (nem empurrando o que está abaixo) — inclusive ao trocar entre <b>Lista e Cards</b> ou aplicar filtros. Só re-renderiza quando algo realmente muda.</li>' +
         '<li><b>📋 Modo Lista para tudo:</b> o botão <b>Lista</b> da dashboard agora deixa <b>todos</b> os torneios em lista compacta — incluindo Favoritos, Em andamento e Encerrados (antes alguns continuavam como card).</li>' +
