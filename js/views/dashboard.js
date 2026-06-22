@@ -2723,7 +2723,7 @@ function renderDashboard(container) {
     <div id="dashboard-myactive-widget" style="margin-bottom:1rem;"></div>
 
     <!-- Friends' Presences (loaded async) -->
-    <div id="dashboard-presences-widget" style="margin-bottom:1.25rem;"></div>
+    <div id="dashboard-presences-widget" style="margin-bottom:1.25rem;">${window._dashMovementCache || ''}</div>
 
     <!-- v2.1.14: filtros de modalidade/formato/local movidos pra logo ACIMA do
          toggle Cards/Lista (pedido do usuário) — antes ficavam lá em cima, longe
@@ -3029,6 +3029,12 @@ window._dashRerender = function() {
   var c = document.getElementById('view-container');
   if (!c || typeof window.renderDashboard !== 'function') return;
   var y = window.pageYOffset || window.scrollY || 0;
+  // v2.8.85: captura o HTML JÁ HIDRATADO da seção "Movimento nos seus locais"
+  // antes de re-renderizar (toggle Lista/filtro/ocultar). renderDashboard re-injeta
+  // esse cache no slot, e o sig guard em _hydrateFriendsPresenceWidget pula a
+  // reconstrução (dados de presença iguais) → a seção NÃO some/reaparece nem
+  // empurra o que está abaixo. Sem isto, o slot vinha vazio → reconstruía → flash.
+  try { var _mv = document.getElementById('dashboard-presences-widget'); if (_mv && _mv.innerHTML) window._dashMovementCache = _mv.innerHTML; } catch (e) {}
   window.renderDashboard(c);
   try { window.scrollTo(0, y); } catch (e) {}
   try { requestAnimationFrame(function(){ try { window.scrollTo(0, y); } catch (e2) {} }); } catch (e3) {}
