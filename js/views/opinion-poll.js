@@ -161,12 +161,21 @@
     _renderVote(t, poll);
   };
 
-  function _renderVote(t, poll) {
+  // v2.8.88: reabre a votação pra quem já votou poder TROCAR o voto (opções pré-marcadas).
+  window._opEditVote = function (tId, pollId) {
+    var t = _findT(tId); if (!t) return;
+    var poll = _findPoll(t, pollId); if (!poll || poll.closed) return;
+    _renderVote(t, poll, true);
+  };
+
+  function _renderVote(t, poll, editMode) {
     var cu = _cu();
     var uid = cu && cu.uid;
     var voted = _hasVoted(poll, uid);
     var isOrg = _isOrg(t);
     var canVote = _canVote(t) && !poll.closed;
+    // v2.8.88: quem JÁ votou pode ALTERAR o voto — editMode reabre as opções (pré-marcadas).
+    var votingMode = canVote && (!voted || editMode);
     var showResults = poll.closed || voted || !poll.hideResultsUntilVote;
     var total = _totalVoters(poll);
     var myChoices = (uid && poll.votes && poll.votes[uid]) || [];
@@ -176,7 +185,7 @@
       var c = _optCount(poll, o.id);
       var pct = total > 0 ? Math.round((c / total) * 100) : 0;
       var mine = myChoices.indexOf(o.id) !== -1;
-      if (showResults && (voted || poll.closed || !canVote)) {
+      if (!votingMode) {
         // modo resultado (barra)
         body += '<div style="margin-bottom:10px;">' +
           '<div style="display:flex;justify-content:space-between;font-size:0.86rem;margin-bottom:3px;color:var(--text-bright);">' +
@@ -190,17 +199,22 @@
         // modo votação (botão/checkbox)
         var inputType = poll.multiSelect ? 'checkbox' : 'radio';
         body += '<label style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);border-radius:11px;cursor:pointer;margin-bottom:8px;">' +
-          '<input type="' + inputType + '" name="op-choice" value="' + _esc(o.id) + '" style="width:18px;height:18px;accent-color:#8b5cf6;flex-shrink:0;">' +
+          '<input type="' + inputType + '" name="op-choice" value="' + _esc(o.id) + '"' + (mine ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#8b5cf6;flex-shrink:0;">' +
           '<span style="font-size:0.92rem;color:var(--text-bright);font-weight:600;">' + _esc(o.text) + (showResults ? ' <span style="color:var(--text-muted);font-weight:500;">(' + c + ')</span>' : '') + '</span>' +
         '</label>';
       }
     });
 
     var footer = '';
-    if (canVote && !voted) {
-      footer += '<button type="button" onclick="window._opVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:12px;font-size:0.95rem;margin-top:6px;">✅ Votar</button>';
+    if (votingMode) {
+      footer += '<button type="button" onclick="window._opVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:12px;font-size:0.95rem;margin-top:6px;">' + (voted ? '✅ Salvar voto' : '✅ Votar') + '</button>';
+      if (voted) {
+        // cancelar a edição → volta pro modo resultado (sem alterar)
+        footer += '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:11px;padding:9px;font-size:0.82rem;margin-top:6px;">↩️ Cancelar</button>';
+      }
     } else if (voted && !poll.closed) {
       footer += '<div style="text-align:center;font-size:0.8rem;color:#34d399;font-weight:700;margin-top:4px;">✓ Você votou · ' + total + ' voto(s) no total</div>';
+      footer += '<button type="button" onclick="window._opEditVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.4);font-weight:700;border-radius:11px;padding:9px;font-size:0.85rem;margin-top:8px;">✏️ Alterar meu voto</button>';
     } else if (poll.closed) {
       footer += '<div style="text-align:center;font-size:0.8rem;color:var(--text-muted);font-weight:700;margin-top:4px;">🔒 Enquete encerrada · ' + total + ' voto(s)</div>';
     }
@@ -231,8 +245,10 @@
     if (!checked.length) { if (typeof showNotification === 'function') showNotification('Escolha uma opção', '', 'warning'); return; }
     if (!poll.multiSelect) checked = [checked[0]];
     if (!poll.votes) poll.votes = {};
+    var _wasVoted = _hasVoted(poll, cu.uid);
     poll.votes[cu.uid] = checked;
     _save(t);
+    if (typeof showNotification === 'function') showNotification(_wasVoted ? '✓ Voto atualizado' : '✓ Voto registrado', '', 'success');
     _renderVote(t, poll); // re-render no modo resultado
     if (typeof window._softRefreshView === 'function') window._softRefreshView();
   };

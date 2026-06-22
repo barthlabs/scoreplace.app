@@ -3151,7 +3151,13 @@ function renderTournaments(container, tournamentId = null) {
               var _pendMemBlock = function(n, right){
                 var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                 var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
-                var _av = '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;max-width:100%;"><img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.9rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(n) + '</span></div>';
+                var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+                // v2.8.88: nome longo NÃO trunca — encolhe a fonte e quebra em até 2 linhas
+                // respeitando a altura do avatar (28px), igual ao card de dupla formada.
+                var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="28" data-fit-max="13.5" style="font-weight:700;font-size:13.5px;color:var(--text-bright);line-height:1.1;max-height:28px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
+                var _av = right
+                  ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _img + _nmSpan + '</div>'
+                  : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
                 var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
                 return '<div style="min-width:0;display:flex;flex-direction:column;gap:2px;flex:1 1 40%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
               };
@@ -3170,8 +3176,15 @@ function renderTournaments(container, tournamentId = null) {
                             : amInviter ? ('⏳ Você convidou ' + window._safeHtml(r.inviteeName || '') + ' — aguardando aceite')
                             : '⏳ Dupla pendente — aguardando aceite';
                 var _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _pendMemBlock(r.inviterName || '', false) + _pendMemBlock(r.inviteeName || '', true) + '</div>';
-                return '<div style="background:linear-gradient(135deg,rgba(180,130,20,0.32),rgba(251,191,36,0.16));border:1px solid rgba(251,191,36,0.55);border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);">' +
-                  '<div style="display:flex;flex-direction:column;gap:8px;">' +
+                // v2.8.88: número de inscrição de cada membro como marca-d'água (igual ao
+                // card de dupla formada) — convidante à esquerda, convidado à direita.
+                var _ps1 = window._enrollNumber ? window._enrollNumber(_enrollOrderMapD, { uid: r.inviterUid || '', displayName: r.inviterName || '', name: r.inviterName || '' }) : '';
+                var _ps2 = window._enrollNumber ? window._enrollNumber(_enrollOrderMapD, { uid: r.inviteeUid || '', displayName: r.inviteeName || '', name: r.inviteeName || '' }) : '';
+                var _pwmL = (window._enrollNumberBadge && _ps1) ? window._enrollNumberBadge(_ps1, 'left') : '';
+                var _pwmR = (window._enrollNumberBadge && _ps2) ? window._enrollNumberBadge(_ps2, 'right') : '';
+                return '<div style="background:linear-gradient(135deg,rgba(180,130,20,0.32),rgba(251,191,36,0.16));border:1px solid rgba(251,191,36,0.55);border-radius:12px;padding:10px 12px;box-shadow:0 4px 10px rgba(0,0,0,0.1);position:relative;overflow:hidden;">' +
+                  _pwmL + _pwmR +
+                  '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:8px;">' +
                     _body +
                     '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
                       '<span style="font-size:0.72rem;color:#fbbf24;font-weight:600;min-width:0;flex:1 1 auto;">' + _status + '</span>' +

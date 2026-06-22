@@ -365,7 +365,12 @@
       r1.forEach(function (m) {
         if (m.isBye && m.winner && m.nextMatchId) {
           var nm = matches.filter(function (x) { return x.id === m.nextMatchId; })[0];
-          if (nm) { if (m.nextSlot === 'p1') nm.p1 = m.winner; else nm.p2 = m.winner; }
+          // v2.8.87: marca pXFromBye no slot que recebeu o vencedor do BYE → a chave
+          // mostra a tag âmbar "BYE" SÓ nessa rodada (some quando avança por vitória).
+          if (nm) {
+            if (m.nextSlot === 'p1') { nm.p1 = m.winner; nm.p1FromBye = true; }
+            else { nm.p2 = m.winner; nm.p2FromBye = true; }
+          }
         }
       });
     }

@@ -1419,9 +1419,14 @@ function _updateProgressiveClassification(t) {
         placed[loser] = true;
       });
     } else if (roundFromEnd === 1) {
-      // Semi: if 3rd place match exists, positions 3 & 4 are handled below.
-      // If not, rank semi-losers individually as 3rd/4th using tiebreakers.
-      if (!t.thirdPlaceMatch || !t.thirdPlaceMatch.winner) {
+      // Semi: se EXISTE jogo de 3º lugar, as posições 3 e 4 saem SÓ dele (abaixo),
+      // mesmo que ainda não tenha sido disputado — enquanto não houver vencedor, os
+      // dois perdedores de semi NÃO recebem 3º/4º (não dá pra saber quem é quem).
+      // v2.8.89: antes a condição tinha `|| !t.thirdPlaceMatch.winner`, então quando o
+      // jogo de 3º existia mas estava SEM resultado os perdedores de semi eram ranqueados
+      // 3º/4º por desempate — exatamente o que o organizador apontou que está errado.
+      // Só ranqueia por desempate quando NÃO há jogo de 3º lugar (formatos legados).
+      if (!t.thirdPlaceMatch) {
         var semiLosers = [];
         matchesInRound.forEach(function(m) {
           if (!m.winner || m.winner === 'draw' || m.isBye) return;

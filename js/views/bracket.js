@@ -1322,6 +1322,26 @@ function _renderPhaseBracket(t, canEnterResult) {
   var phaseCfg = (t.phases && t.phases[curPhase]) || {};
   var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === curPhase; });
 
+  // v2.8.87: infere p1FromBye/p2FromBye (display) p/ chaves já sorteadas sem o flag —
+  // o vencedor de um jogo BYE (rodada r) leva a tag âmbar SÓ na rodada r+1 (some quando
+  // avança por vitória). O gerador (phases-engine) já persiste isso em sorteios novos;
+  // aqui é fallback p/ não exigir re-sorteio. Não sobrescreve flag já existente.
+  (function _inferFromBye() {
+    var byeNext = {}; // "bracket|nome" -> rodada da tag (r+1)
+    pm.forEach(function (m) {
+      if (window._isByeMatch(m) && m.winner) {
+        var r = (m.round == null) ? 1 : m.round;
+        byeNext[(m.bracket || 'main') + '|' + m.winner] = r + 1;
+      }
+    });
+    pm.forEach(function (m) {
+      if (window._isByeMatch(m)) return;
+      var r = (m.round == null) ? 1 : m.round, bk = (m.bracket || 'main');
+      if (m.p1 && m.p1FromBye == null && byeNext[bk + '|' + m.p1] === r) m.p1FromBye = true;
+      if (m.p2 && m.p2FromBye == null && byeNext[bk + '|' + m.p2] === r) m.p2FromBye = true;
+    });
+  })();
+
   function colsFor(bracketKey) {
     var byRound = {};
     // v2.8.14: o 3º/4º (isThirdPlace) NÃO entra nas colunas por rodada — é renderizado
@@ -1402,16 +1422,21 @@ function _renderPhaseBracket(t, canEnterResult) {
     var hiddenCount = 0;
     var colsHtml = cols.map(function (col, idx) {
       var isFinalCol = (idx === cols.length - 1);
+      // v2.8.87: jogos BYE NÃO viram card "jogo não jogado" — quem passou de BYE
+      // aparece na rodada SEGUINTE com a tag âmbar. A rodada exibe só jogos a disputar.
+      var realMatches = col.matches.filter(function (m) { return !window._isByeMatch(m); });
       var isHidden = !isFinalCol && hiddenSet && hiddenSet.has(col.round);
       if (isHidden) {
         hiddenCount++;
-        globalNum += col.matches.length; // preserva a numeração dos JOGOs visíveis
+        globalNum += realMatches.length; // preserva a numeração dos JOGOs visíveis
         return '';
       }
+      // coluna que sobrou só com BYEs (nenhum jogo real) não é exibida
+      if (realMatches.length === 0 && !(isFinalCol && thirdM)) return '';
       var label = roundLabel(cols, idx);
       var thirdNum = 0;
       if (isFinalCol && thirdM) { globalNum++; thirdNum = globalNum; } // reserva o nº (final-1) ANTES da final
-      var cards = col.matches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
+      var cards = realMatches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
       var thirdHtml = (isFinalCol && thirdM)
         ? '<h5 style="color:#cd7f32;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .5rem;border-left:3px solid #cd7f32;padding-left:8px;">🥉 3º lugar</h5>' + renderMatchCard(thirdM, canEnterResult, t.id, thirdNum)
         : '';
@@ -1873,9 +1898,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : null;
 
   // v1.0.67-beta: tag "BYE" indicando que o jogador veio de BYE NESTA rodada.
-  // v1.0.70-beta: tag verde + posicionada à esquerda do placar (não dentro
-  // do nome) pra não quebrar layout do card.
-  var _byeTag = '<span style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">BYE</span>';
+  // v1.0.70-beta: posicionada à esquerda do placar (entre o nome e o placar).
+  // v2.8.87: tag ÂMBAR (era verde) — some quando o time avança por vitória.
+  var _byeTag = '<span title="Passou de BYE nesta rodada" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">BYE</span>';
   var _p1ByeBadge = m.p1FromBye ? _byeTag : '';
   var _p2ByeBadge = m.p2FromBye ? _byeTag : '';
   // v2.1.36: tag "Repescagem" no TIME que entrou por repescagem NESTA rodada
