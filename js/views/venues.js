@@ -683,6 +683,31 @@
   // v1.0.9-beta: opts.venueName/opts.realPid permitem renderizar CTA "Cadastrar
   // quadras" inline quando o venue não tem capacidade real cadastrada. Sem opts
   // (legacy callers), só não renderiza a CTA — comportamento anterior preservado.
+  // v2.8.73: regra ÚNICA de visibilidade temporal pra presença/plano vindo de
+  // TORNEIO — só "vale" a partir de 2 dias antes do evento (usa a data ATUAL do
+  // torneio, não o startsAt defasado do doc). Plano/presença MANUAL (sem torneio)
+  // é sempre visível. Usada no auto-focus (card PLANO ATIVO), no gráfico de
+  // movimento e na detecção de plano ativo dos botões inline. Assim um torneio a
+  // 9 dias para de aparecer como movimento/PLANO ATIVO no Place.
+  function _tournamentStartMs(liveT) {
+    if (!liveT) return 0;
+    var w = (typeof window._computeTournamentPlanWindow === 'function') ? window._computeTournamentPlanWindow(liveT) : null;
+    return (w && w.startsAt) || (liveT.startDate ? new Date(liveT.startDate).getTime() : 0);
+  }
+  function _tournVisibleNow(liveT) {
+    var s = _tournamentStartMs(liveT);
+    return !s || s <= (Date.now() + 2 * 24 * 3600000);
+  }
+  function _presenceVisibleNow(p) {
+    if (!p) return false;
+    var isTourn = !!(p.tournamentId || p.source === 'tournament' || p.type === 'tournament');
+    if (!isTourn) return true; // manual: sempre visível
+    var liveT = (p.tournamentId && typeof window._findTournamentById === 'function') ? window._findTournamentById(p.tournamentId) : null;
+    if (liveT) return _tournVisibleNow(liveT);
+    var s = p.startsAt || 0;
+    return !s || s <= (Date.now() + 2 * 24 * 3600000);
+  }
+
   function _renderPreferredChart(boxId, presences, tournaments, dayKeyStr, venueCapacity, opts) {
     var box = document.getElementById(boxId);
     if (!box) return;
@@ -712,8 +737,11 @@
     // (1 por participante) — mas só pra VOCÊ e AMIGOS (strangers continuam fora).
     // Assim o torneio do dia aparece no gráfico (ex.: barras às 17h). Dedup por
     // uid/hora (abaixo) evita contar 2x quem tem plano real + ocupação.
-    var _chartSource = (presences || []).slice();
+    // v2.8.73: planos vindos de torneio a >2 dias NÃO contam no movimento (antes
+    // 19 inscritos de um torneio a 9 dias enchiam as barras).
+    var _chartSource = (presences || []).filter(_presenceVisibleNow);
     (tournaments || []).forEach(function(tt) {
+      if (!_tournVisibleNow(tt)) return; // v2.8.73: ocupação de torneio distante fora
       try { _tournamentOccupancy(tt, dayKeyStr).forEach(function(op) { _chartSource.push(op); }); } catch (e) {}
     });
     var nowMs = Date.now();
@@ -766,6 +794,17 @@
       displayHours = [];
       for (var _dh = _lo; _dh <= _hi; _dh++) displayHours.push(_dh);
     }
+    // v2.8.74: estende a faixa pras horas do LOCAL (openingHours do dia) — assim o
+    // gráfico no "Planejar ida" cobre hora atual + horas de funcionamento. Com
+    // overflow-x:auto, o scroll lateral mostra tudo.
+    if (opts && Array.isArray(opts.forceHours) && opts.forceHours.length) {
+      var _flo = Math.min.apply(null, opts.forceHours);
+      var _fhi = Math.max.apply(null, opts.forceHours);
+      var _lo3 = Math.min(displayHours[0], _flo);
+      var _hi3 = Math.max(displayHours[displayHours.length - 1], _fhi);
+      displayHours = [];
+      for (var _d3 = _lo3; _d3 <= _hi3; _d3++) displayHours.push(_d3);
+    }
 
     // v0.16.49 / v1.0.8-beta: escala muda dependendo de ter capacidade do venue.
     //   - Com capacidade (courts cadastrados): denominador = capacidade fixa.
@@ -806,7 +845,7 @@
       var tooltipExtra = hasCapacity
         ? ' / ' + venueCapacity + ' (' + totalPct + '%)'
         : ' (escala estimada — local sem quadras cadastradas)';
-      bars += '<div title="' + labelH + 'h: ' + total + ' pessoa(s)' + tooltipExtra + '" style="flex:0 0 28px;display:flex;flex-direction:column;align-items:center;gap:2px;' + (isNow ? 'transform:scale(1.05);' : '') + '">' +
+      bars += '<div data-hour="' + slot + '" title="' + labelH + 'h: ' + total + ' pessoa(s)' + tooltipExtra + '" style="flex:0 0 28px;display:flex;flex-direction:column;align-items:center;gap:2px;' + (isNow ? 'transform:scale(1.05);' : '') + '">' +
         '<div style="position:relative;height:90px;width:20px;display:flex;flex-direction:column-reverse;border-radius:4px;background:' + (isNow ? 'rgba(99,102,241,0.1)' : 'rgba(150,150,150,0.08)') + ';overflow:hidden;' + (isNow ? 'outline:2px solid rgba(99,102,241,0.4);' : '') + '">' +
           (total > 0
             ? '<div style="height:' + totalPct + '%;width:100%;background:#fbbf24;"></div>'
@@ -828,7 +867,10 @@
         hasActivity = true; break;
       }
     }
-    if (!hasActivity) { box.innerHTML = ''; return; }
+    // v2.8.74: opts.alwaysShow força renderizar a grade de horas mesmo sem
+    // movimento (usado no "Planejar ida" — a tabela hora-a-hora serve de
+    // referência pra escolher o horário, mesmo com o local vazio).
+    if (!hasActivity && !(opts && opts.alwaysShow)) { box.innerHTML = ''; return; }
 
     // v0.16.28: self-wraps em container estilizado — assim o slot pode ficar
     // vazio (sem bg/borda de placeholder) quando não há atividade, e o mesmo
@@ -876,9 +918,20 @@
           '<span style="font-weight:700;color:var(--text-bright);font-size:0.9rem;">' + titleLabel + '</span>' +
           '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;color:var(--text-muted);"><span style="width:10px;height:10px;background:#fbbf24;border-radius:2px;"></span> você e amigos</span>' +
         '</div>' +
-        '<div style="display:flex;gap:2px;overflow-x:auto;padding-bottom:4px;justify-content:space-between;">' + bars + '</div>' +
+        '<div data-bars-scroll="1" style="display:flex;gap:2px;overflow-x:auto;padding-bottom:4px;justify-content:space-between;">' + bars + '</div>' +
         registerCta +
       '</div>';
+    // v2.8.74: foca o scroll na hora pedida (hora atual hoje / abertura do local
+    // amanhã). Deferido pra garantir layout antes de medir offsetLeft.
+    if (opts && typeof opts.scrollToHour === 'number') {
+      setTimeout(function() {
+        try {
+          var _wrap = box.querySelector('[data-bars-scroll]');
+          var _tgt = box.querySelector('[data-hour="' + opts.scrollToHour + '"]');
+          if (_wrap && _tgt) _wrap.scrollLeft = Math.max(0, _tgt.offsetLeft - 70);
+        } catch (e) {}
+      }, 0);
+    }
   }
 
   // v0.16.27 — "Agora no local": card com avatares+ícones de modalidade pros
@@ -1700,7 +1753,7 @@
       (myActive || []).forEach(function(p) {
         if (!p || p.placeId !== pid) return;
         if (p.type === 'checkin' && p.startsAt <= now && p.endsAt > now && !hereCheckin) hereCheckin = p;
-        if (p.type === 'planned' && !herePlan) herePlan = p; // v1.9.86: loadMyActive ja filtra endsAt>now; plano ativo mesmo com inicio passado
+        if (p.type === 'planned' && !herePlan && _presenceVisibleNow(p)) herePlan = p; // v1.9.86 + v2.8.73: plano de torneio distante (>2d) não conta como ativo aqui
       });
       var checkinBtn = hereCheckin
         ? '<button id="pref-checkin-btn-' + safePid + '" class="btn btn-sm hover-lift" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + String(hereCheckin._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","checkin")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:6px 10px;font-size:0.75rem;flex:1;min-width:0;" title="Você está registrado aqui · clique pra sair">✕ Cancelar presença</button>'
@@ -1946,6 +1999,7 @@
           for (var mi = 0; mi < myActive.length; mi++) {
             var mp = myActive[mi];
             if (!mp || !mp.placeId) continue;
+            if (!_presenceVisibleNow(mp)) continue; // v2.8.73: plano de torneio só foca ≤2 dias antes
             // v0.16.26: passa o presence doc inteiro — matching cai em
             // nome/coords quando placeId não casa (preferreds label-only).
             var prefForMp = _findPreferredByPid(mp);
@@ -2877,7 +2931,7 @@
     (myActive || []).forEach(function(p) {
       if (!p || p.placeId !== v.placeId) return;
       if (p.type === 'checkin' && p.startsAt <= now && p.endsAt > now && !hereCheckin) hereCheckin = p;
-      if (p.type === 'planned' && !herePlan) herePlan = p; // v1.9.86: loadMyActive ja filtra endsAt>now; plano ativo mesmo com inicio passado
+      if (p.type === 'planned' && !herePlan && _presenceVisibleNow(p)) herePlan = p; // v1.9.86 + v2.8.73: plano de torneio distante (>2d) não conta como ativo aqui
     });
     var safePid = _safe(v.placeId);
     var checkinBtn = hereCheckin
@@ -3311,6 +3365,60 @@
   function _planNormEq(a, b) {
     try { var n = window.PresenceDB && window.PresenceDB.normalizeSport; return n ? (n(a) === n(b)) : (a === b); } catch (e) { return a === b; }
   }
+  // v2.8.74: horas de funcionamento do local pra um dia da semana (0=dom..6=sáb),
+  // a partir do grid flat 7×24 (openingHours.grid). Vazio se não cadastrado.
+  function _venueOpenHoursForDay(venue, dow) {
+    try {
+      var grid = venue && venue.openingHours && Array.isArray(venue.openingHours.grid) ? venue.openingHours.grid : null;
+      if (!grid || grid.length < 168) return [];
+      var hours = [];
+      for (var h = 0; h < 24; h++) { if (grid[dow * 24 + h]) hours.push(h); }
+      return hours;
+    } catch (e) { return []; }
+  }
+  // v2.8.74: renderiza o gráfico hora-a-hora dentro do "Planejar ida" pro dia
+  // escolhido (hoje/amanhã), estendido pras horas do local + scroll focado.
+  function _renderPlanMovementChart(v, selectedDay) {
+    var slot = document.getElementById('plan-movement-slot');
+    if (!slot || !v || !v.placeId || !window.PresenceDB || typeof window.PresenceDB.loadForVenueDay !== 'function') return;
+    var baseDate = new Date();
+    if (selectedDay === 'tomorrow') baseDate.setDate(baseDate.getDate() + 1);
+    var dayKey = window.PresenceDB.dayKey(baseDate);
+    var dow = baseDate.getDay();
+    var venuePromise = (window.VenueDB && typeof window.VenueDB.loadVenue === 'function')
+      ? window.VenueDB.loadVenue(v.placeId).catch(function() { return null; })
+      : Promise.resolve(null);
+    Promise.all([
+      window.PresenceDB.loadForVenueDay(v.placeId, dayKey).catch(function() { return []; }),
+      venuePromise
+    ]).then(function(res) {
+      if (!document.getElementById('plan-movement-slot')) return; // overlay fechou
+      var presences = res[0] || [];
+      var venue = res[1] || v;
+      var capacity = _calcVenueCapacity(venue);
+      var cu = window.AppStore && window.AppStore.currentUser;
+      var myUid = cu && cu.uid;
+      var friends = (cu && Array.isArray(cu.friends)) ? cu.friends : [];
+      presences = presences.filter(function(p) {
+        if (!p) return false;
+        if (p.visibility === 'friends') { if (myUid && p.uid === myUid) return true; return p.uid && friends.indexOf(p.uid) !== -1; }
+        return true;
+      });
+      var openHours = _venueOpenHoursForDay(venue, dow);
+      var tournaments = (window.AppStore && window.AppStore.tournaments) || [];
+      var pKey = window.PresenceDB.venueKey(v.placeId, v.name || '');
+      var matchT = tournaments.filter(function(t) { if (!t) return false; var tk = window.PresenceDB.venueKey(t.venuePlaceId || '', t.venue || ''); return tk && tk === pKey; });
+      var scrollTo = (selectedDay === 'tomorrow')
+        ? (openHours.length ? openHours[0] : 7)
+        : new Date().getHours();
+      _renderPreferredChart('plan-movement-slot', presences, matchT, dayKey, capacity, {
+        venueName: v.name, realPid: v.placeId,
+        dayLabel: (selectedDay === 'tomorrow' ? 'amanhã' : 'hoje'),
+        forceHours: openHours, scrollToHour: scrollTo, alwaysShow: true
+      });
+    }).catch(function() {});
+  }
+  window._venuesRenderPlanMovement = _renderPlanMovementChart;
 
   function _openInlinePlanOverlay(v, sports, editData) {
     // v2.1.8: contexto de edição vem SEMPRE explícito por parâmetro — fresh
@@ -3427,7 +3535,7 @@
     // inputs 16→12, margin-bottom do grid 18→14 — tudo proporcionalmente mais
     // enxuto pra que os campos virem ELEMENTO do modal, não DOMINAREM ele.
     overlay.innerHTML =
-      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:18px;max-width:420px;width:100%;box-sizing:border-box;">' +
+      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:18px;max-width:420px;width:100%;box-sizing:border-box;max-height:88vh;overflow-y:auto;">' +
         '<h3 style="margin:0 0 10px 0;color:var(--text-bright);">🗓️ Planejar ida</h3>' +
         // v0.16.68/70: nome do local em destaque maior — usuário pediu (duas
         // vezes) mais ênfase. 1.05→1.2rem, font-weight 700.
@@ -3435,6 +3543,9 @@
         sportsBlock +
         '<form autocomplete="off" onsubmit="return false;" style="margin:0;">' +
           dayBlock +
+          // v2.8.74: gráfico hora-a-hora do local (movimento você+amigos) pro dia
+          // escolhido — ajuda a decidir o horário. Hidratado no setTimeout abaixo.
+          '<div id="plan-movement-slot" style="margin:2px 0 6px 0;"></div>' +
           // v0.16.70: largura FIXA dos inputs em vez de grid 1fr 1fr.
           // v0.16.71: alinhamento robusto. (1) `align-items:flex-end` no flex
           // pai garante que os inputs SEMPRE ficam na mesma linha da base
@@ -3508,6 +3619,8 @@
           if (endEl.value !== endEl.dataset.autoValue) endEl.dataset.autoValue = '';
         });
       }
+      // v2.8.74: hidrata o gráfico hora-a-hora do local pro dia inicial.
+      try { _renderPlanMovementChart(v, _editIsTomorrow ? 'tomorrow' : 'today'); } catch (e) {}
     }, 0);
   }
 
@@ -3601,6 +3714,10 @@
 
     // v0.16.37: ajustar Chegada baseado no dia escolhido (preserva edição manual)
     var day = btn.getAttribute('data-day');
+    // v2.8.74: re-renderiza o gráfico de movimento pro dia escolhido.
+    if (_pendingPlanState && _pendingPlanState.venue) {
+      try { _renderPlanMovementChart(_pendingPlanState.venue, day === 'tomorrow' ? 'tomorrow' : 'today'); } catch (e) {}
+    }
     var startEl = document.getElementById('venue-plan-start');
     var endEl = document.getElementById('venue-plan-end');
     if (!startEl || !endEl) return;
