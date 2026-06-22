@@ -9,8 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.91-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.95-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⏰ Plano de ida com status:</b> quem <b>se atrasou</b> (passou da hora de chegar e ainda não fez check-in) aparece com um <b>relógio âmbar</b>; quem <b>chegou antes</b> mostra "chegou antes"; e quem <b>passou da hora de sair</b> e continua no local segue aparecendo ("alongado"). Quem já fez check-in não duplica como plano.</li>' +
+        '<li><b>📍 Amigo no local volta a aparecer com nome:</b> um plano <b>em andamento</b> (já começou, não acabou) volta a mostrar o nome do amigo — antes sumia da lista mesmo estando no horário.</li>' +
+        '<li><b>🪪 Trocar de nome não quebra mais nada:</b> quando alguém muda o nome, a mudança <b>propaga pra tudo</b> (duplas, lista de espera, convites de dupla, chaves, classificação, presenças) — sempre <b>pelo seu cadastro (uid)</b>, não pelo nome. Corrige duplas que "reverteram" após renomear.</li>' +
         '<li><b>🔍 Buscar inscrito + filtro de categoria:</b> em torneios com muitos inscritos, a lista de inscritos ganhou uma <b>busca dinâmica por nome</b> (filtra enquanto você digita) e um <b>filtro de categoria cíclico</b> (cada categoria → Todas no fim).</li>' +
         '<li><b>↩️ Organizador desfaz duplas (e avisa):</b> o organizador agora pode <b>desfazer duplas formadas</b> e <b>cancelar convites de dupla pendentes</b>, e os <b>envolvidos são notificados</b> automaticamente.</li>' +
         '<li><b>🖼️ Cards de dupla alinhados:</b> nos cards de dupla, a <b>foto cola no nome</b> (avatares nas pontas, nomes no meio) — fim do espaço grande feio quando o nome era longo.</li>' +

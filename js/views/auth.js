@@ -6278,8 +6278,11 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
 
   window.AppStore.tournaments.forEach(function(t) {
     var changed = false;
-    var parts = Array.isArray(t.participants) ? t.participants : [];
-    parts.forEach(function(p, idx) {
+    // v2.8.93: MESMA lógica de propagação aplicada a participantes, lista de espera
+    // E standby — renomear tem que propagar pra TODAS as listas que guardam nome.
+    function _updatePartArray(parts) {
+      if (!Array.isArray(parts)) return;
+      parts.forEach(function(p, idx) {
       if (typeof p === 'string') {
         if (p === oldName) { parts[idx] = newName; changed = true; }
         // Handle team strings: "OldName / Partner" → "NewName / Partner"
@@ -6290,20 +6293,35 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
         return;
       }
       if (typeof p === 'object' && p !== null) {
-        var isUser = (matchUid && p.uid === matchUid) || (matchEmail && p.email === matchEmail) || p.displayName === oldName || p.name === oldName;
+        // v2.8.93: detecta a pessoa por UID em QUALQUER posição — inclusive como
+        // p1Uid/p2Uid de uma dupla (antes só p.uid; numa dupla o p.uid é o do capitão,
+        // então o p2 que renomeava não era detectado e o p2Name ficava defasado).
+        var isUser = (matchUid && (p.uid === matchUid || p.p1Uid === matchUid || p.p2Uid === matchUid)) || (matchEmail && p.email === matchEmail) || p.displayName === oldName || p.name === oldName;
         if (isUser) {
           // v1.8.90: NUNCA sobrescrever nomes de dupla (contêm " / ").
           // O uid do "capitão" da dupla é o mesmo da pessoa, mas o displayName
           // da dupla é "A / B" — propagação de nome individual não deve tocar.
           var _curName = p.displayName || p.name || '';
-          if (_curName.indexOf(' / ') !== -1) {
-            // Dupla: atualiza p1Name/p2Name e reconstrói o displayName
+          // v2.8.93: dupla é detectada pela ESTRUTURA (p1Name && p2Name), NÃO só por
+          // " / " no displayName — dupla formada por aceite guarda displayName só do p1,
+          // então renomear o p2 não atualizava o p2Name. Linkage por UID, não por nome.
+          var _isTeamEntry = !!(p.p1Name && p.p2Name) || _curName.indexOf(' / ') !== -1;
+          if (_isTeamEntry) {
+            // Dupla: atualiza p1Name/p2Name pelo UID (fallback por nome no legado sem uids)
             var _teamChanged = false;
             if (p.p1Uid === matchUid && p.p1Name === oldName) { p.p1Name = newName; _teamChanged = true; }
             if (p.p2Uid === matchUid && p.p2Name === oldName) { p.p2Name = newName; _teamChanged = true; }
+            if (!_teamChanged) {
+              if (p.p1Name === oldName) { p.p1Name = newName; _teamChanged = true; }
+              if (p.p2Name === oldName) { p.p2Name = newName; _teamChanged = true; }
+            }
             if (_teamChanged) {
-              var _newTeamName = [p.p1Name, p.p2Name].filter(Boolean).join(' / ');
-              if (_newTeamName) { p.displayName = _newTeamName; p.name = _newTeamName; }
+              // só reescreve o displayName no formato "A / B" se ele JÁ era assim —
+              // não transforma a dupla-do-aceite (displayName = só o p1) em "A / B".
+              if (_curName.indexOf(' / ') !== -1) {
+                var _newTeamName = [p.p1Name, p.p2Name].filter(Boolean).join(' / ');
+                if (_newTeamName) { p.displayName = _newTeamName; p.name = _newTeamName; }
+              }
               changed = true;
             }
           } else if (matchUid && p.uid === matchUid) {
@@ -6320,7 +6338,30 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
           // perfil real do usuário, sem depender do objeto participante.
         }
       }
-    });
+      });
+    }
+    _updatePartArray(t.participants);
+    _updatePartArray(t.standbyParticipants);
+    _updatePartArray(t.waitlist);
+
+    // v2.8.93: convites de dupla PENDENTES — atualiza inviterName/inviteeName por UID
+    // (era exatamente isso que ficava defasado ao renomear quem aceitou/convidou).
+    if (Array.isArray(t.pairRequests)) {
+      t.pairRequests.forEach(function(r) {
+        if (!r) return;
+        if (((matchUid && r.inviterUid === matchUid) || r.inviterName === oldName) && r.inviterName !== newName) { r.inviterName = newName; changed = true; }
+        if (((matchUid && r.inviteeUid === matchUid) || r.inviteeName === oldName) && r.inviteeName !== newName) { r.inviteeName = newName; changed = true; }
+      });
+    }
+    // v2.8.93: teamOrigins — chaves no formato "A / B"; re-chaveia trocando o nome.
+    if (t.teamOrigins && typeof t.teamOrigins === 'object') {
+      Object.keys(t.teamOrigins).forEach(function(k) {
+        if (k.indexOf(oldName) !== -1 && k.indexOf(' / ') !== -1) {
+          var nk = k.split(' / ').map(function(n) { return n.trim() === oldName ? newName : n.trim(); }).join(' / ');
+          if (nk !== k && t.teamOrigins[nk] === undefined) { t.teamOrigins[nk] = t.teamOrigins[k]; delete t.teamOrigins[k]; changed = true; }
+        }
+      });
+    }
 
     function _updateMatch(m) {
       if (!m) return;

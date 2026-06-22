@@ -944,10 +944,17 @@
     var box = document.getElementById(boxId);
     if (!box) return;
     var now = Date.now();
+    function _hhmm(ts){ try{ var d=new Date(ts); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }catch(e){ return ''; } }
+    // v2.8.95: ESTADA ALONGADA — check-in continua em "Agora no local" até 3h depois
+    // do horário previsto de saída ("ia embora tal hora mas não foi") ou até cancelar.
+    var _GRACE = 3 * 3600000;
     var active = (presences || []).filter(function(p) {
-      return p && p.startsAt <= now && p.endsAt > now && p.type !== 'planned';
+      return p && p.type !== 'planned' && p.startsAt <= now && ((p.endsAt || now) + _GRACE) > now;
     });
     if (active.length === 0) { box.innerHTML = ''; return; }
+    // v2.8.95: menor horário planejado por uid → detecta "chegou antes" (check-in antes do plano)
+    var _planStartByUid = {};
+    (presences || []).forEach(function(q){ if (q && q.type === 'planned' && q.uid && (q.endsAt||q.startsAt) > now) { if (_planStartByUid[q.uid] == null || q.startsAt < _planStartByUid[q.uid]) _planStartByUid[q.uid] = q.startsAt; } });
     var seen = {};
     var friendsHtml = [];
     var otherCount = 0;
@@ -962,6 +969,10 @@
         var name = klass === 'me' ? 'Você' : (p.displayName || 'Amigo');
         var mins = Math.max(0, Math.round((now - p.startsAt) / 60000));
         var subtitle = 'há ' + mins + ' min';
+        // v2.8.95: passou do horário previsto de saída → estada "alongada"
+        if (p.endsAt && p.endsAt < now) { subtitle = '⏱️ alongado · passou das ' + _hhmm(p.endsAt); }
+        // v2.8.95: fez check-in ANTES do horário que tinha planejado chegar
+        else if (p.uid && _planStartByUid[p.uid] != null && _planStartByUid[p.uid] > p.startsAt) { subtitle = '✅ chegou antes · planejou ' + _hhmm(_planStartByUid[p.uid]); }
         var borderColor = klass === 'me' ? '#10b981' : '#fbbf24';
         var avatar = p.photoURL
           ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:40px;height:40px;display:block;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';flex-shrink:0;">'
@@ -1044,9 +1055,21 @@
       var s = (w && w.startsAt) || (liveT.startDate ? new Date(liveT.startDate).getTime() : 0);
       return !!(s && s > _soonCut);
     }
+    // v2.8.95: quem JÁ fez check-in não aparece como plano (já está em "Agora no local").
+    var _checkedInUids = {};
+    (presences || []).forEach(function(p) {
+      if (p && p.type !== 'planned' && p.startsAt <= now && ((p.endsAt || now) + 3*3600000) > now && p.uid) _checkedInUids[p.uid] = true;
+    });
     var rows = [];
     (presences || []).forEach(function(p) {
-      if (p.type === 'planned' && p.startsAt > now) {
+      // v2.8.92: plano EM ANDAMENTO (já começou, ainda não acabou) também aparece —
+      // antes o filtro era `startsAt > now`, então um plano 19-21h às 19:47 sumia
+      // (não entra em "Agora no local", que é só check-in). Agora basta não ter acabado.
+      if (p.type === 'planned' && ((p.endsAt || p.startsAt) > now)) {
+        // v2.8.95: já fez check-in → não duplica como plano. Sem check-in e a hora
+        // de chegada já passou → ATRASADO (⏰): o plano continua até endsAt/cancelar.
+        if (p.uid && _checkedInUids[p.uid]) return;
+        p._late = (p.startsAt < now);
         // v2.8.59: plano de presença vindo de TORNEIO ganha o nome do torneio (igual ao
         // dashboard) → cai no box "🏆 <torneio>" em vez de chip avulso sem contexto.
         if ((p.tournamentId || p.source === 'tournament') && typeof window._findTournamentById === 'function') {
@@ -1080,9 +1103,13 @@
       '<div style="margin-top:10px;background:var(--bg-darker);border:1px solid rgba(99,102,241,0.25);border-radius:12px;padding:10px 12px;">' +
         '<div style="font-weight:700;color:var(--text-bright);margin-bottom:8px;font-size:0.88rem;">🗓️ Próximas horas</div>';
     // chip de uma pessoa (você/amigo) — mesma marcação usada antes.
+    function _hhmmU(ts){ try{ var d=new Date(ts); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }catch(e){ return ''; } }
     var _personChip = function(p, klass) {
       var name = klass === 'me' ? 'Você' : (p.displayName || 'Amigo');
-      var borderColor = klass === 'me' ? '#10b981' : '#fbbf24';
+      // v2.8.95: ATRASADO — plano cujo horário de chegada já passou (sem check-in).
+      var late = !!p._late;
+      var borderColor = late ? '#f59e0b' : (klass === 'me' ? '#10b981' : '#fbbf24');
+      var lateIcon = late ? '<span title="Atrasado — planejou chegar às ' + _hhmmU(p.startsAt) + ', ainda sem check-in" style="font-size:0.85rem;line-height:1;flex-shrink:0;">⏰</span>' : '';
       var avatar = p.photoURL
         ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:26px;height:26px;display:block;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';box-sizing:border-box;flex-shrink:0;">'
         : '<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.68rem;border:2px solid ' + borderColor + ';box-sizing:border-box;flex-shrink:0;">' + _safe(_initials(name)) + '</div>';
@@ -1095,7 +1122,8 @@
       }
       var chipSports = Array.isArray(p.sports) ? p.sports : [];
       var iconStr = _sportsIcons(chipSports);
-      return '<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:999px;padding:3px 10px 3px 6px;min-width:0;height:36px;box-sizing:border-box;line-height:1;">' +
+      return '<div title="' + (late ? 'Atrasado — sem check-in' : '') + '" style="display:inline-flex;align-items:center;gap:6px;background:' + (late ? 'rgba(245,158,11,0.16)' : 'rgba(251,191,36,0.08)') + ';border:1px solid ' + (late ? 'rgba(245,158,11,0.55)' : 'rgba(251,191,36,0.25)') + ';border-radius:999px;padding:3px 10px 3px 6px;min-width:0;height:36px;box-sizing:border-box;line-height:1;">' +
+        lateIcon +
         (iconStr ? '<span title="' + _safe(chipSports.join(', ')) + '" style="font-size:0.88rem;line-height:1;flex-shrink:0;">' + iconStr + '</span>' : '') +
         avatar +
         '<span style="font-size:0.76rem;color:var(--text-bright);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;">' + _safe(name) + '</span>' +
