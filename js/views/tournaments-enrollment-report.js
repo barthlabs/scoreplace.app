@@ -322,11 +322,15 @@
   // gênero/idade/habilidade) + a categoria do time.
   function _expandDuplas(parts) {
     var out = [];
-    (parts || []).forEach(function (p) {
+    (parts || []).forEach(function (p, idx) {
       if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
         var baseCats = (Array.isArray(p.categories) && p.categories.length) ? p.categories.slice() : (p.category ? [p.category] : []);
-        out.push({ uid: p.p1Uid || '', displayName: p.p1Name, name: p.p1Name, email: p.p1Email || '', categories: baseCats.slice(), category: p.category || '', _fromDupla: true });
-        out.push({ uid: p.p2Uid || '', displayName: p.p2Name, name: p.p2Name, email: p.p2Email || '', categories: baseCats.slice(), category: p.category || '', _fromDupla: true });
+        // v2.8.62: cada membro carrega a identidade da dupla (_duplaIdx = índice em
+        // t.participants, _duplaSide = 'p1'/'p2') pra o SAVE conseguir gravar o gênero
+        // de volta (p1Gender/p2Gender no doc da dupla). Lê o override per-membro que já
+        // exista (p1Gender/p2Gender) pra o relatório mostrar o que foi atribuído.
+        out.push({ uid: p.p1Uid || '', displayName: p.p1Name, name: p.p1Name, email: p.p1Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p1Gender || '', genderSource: p.p1Gender ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
+        out.push({ uid: p.p2Uid || '', displayName: p.p2Name, name: p.p2Name, email: p.p2Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p2Gender || '', genderSource: p.p2Gender ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
       } else {
         out.push(p);
       }
@@ -457,6 +461,9 @@
         resolvedVia: resolvedVia,           // null | 'email' | 'displayName'
         categoryCommAt: (p && p.categoryCommAt) || null,        // v2.3.92: quando a cobrança de perfil foi enviada
         categoryCommFields: (p && p.categoryCommFields) || null,
+        // v2.8.62: identidade da dupla (quando esta linha é um membro de dupla expandido)
+        _duplaSide: (p && p._duplaSide) || null,
+        _duplaIdx: (p && typeof p._duplaIdx === 'number') ? p._duplaIdx : null,
       };
     });
   }
@@ -977,19 +984,29 @@
       ? (window._getTournamentCategories(_liveState.t) || []) : [];
     var rowCat = (r.assigned && r.assigned.length > 0) ? r.assigned[0] : '';
     var curCat = (pe && 'category' in pe) ? pe.category : rowCat;
-    var skills;
-    if (isOrg && _catsList.length > 0) {
-      var cOpt = function (v, lbl) { return '<option value="' + _esc(v) + '"' + (curCat === v ? ' selected' : '') + '>' + _esc(lbl) + '</option>'; };
-      skills = '<select title="Editar categoria do inscrito" onchange="window._erStageCategory(' + r.order + ',this.value)" ' +
-        'style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
-        cOpt('', 'sem categoria ✎') +
-        _catsList.map(function (c) { return cOpt(c, (window._displayCategoryName ? window._displayCategoryName(c) : c)); }).join('') +
-        '</select>';
-    } else {
-      skills = (r.effectiveSkills && r.effectiveSkills.length > 0)
-        ? r.effectiveSkills.map(function (s) { return '<span style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border-radius:6px;padding:2px 7px;">' + _esc(s) + '</span>'; }).join('')
-        : '<span style="font-size:0.68rem;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">sem hab.</span>';
+    // v2.8.63: categoria por inscrito SÓ aparece quando há 2+ categorias. Em torneio de
+    // categoria única (ex.: só Misto) não há o que escolher — esconde o seletor/badge
+    // (mesmo princípio da seção de categorias, v2.8.55). Gênero continua (importa pra
+    // análise mesmo em Misto).
+    var skills = '';
+    if (_catsList.length > 1) {
+      if (isOrg) {
+        var cOpt = function (v, lbl) { return '<option value="' + _esc(v) + '"' + (curCat === v ? ' selected' : '') + '>' + _esc(lbl) + '</option>'; };
+        skills = '<select title="Editar categoria do inscrito" onchange="window._erStageCategory(' + r.order + ',this.value)" ' +
+          'style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
+          cOpt('', 'sem categoria ✎') +
+          _catsList.map(function (c) { return cOpt(c, (window._displayCategoryName ? window._displayCategoryName(c) : c)); }).join('') +
+          '</select>';
+      } else {
+        skills = (r.effectiveSkills && r.effectiveSkills.length > 0)
+          ? r.effectiveSkills.map(function (s) { return '<span style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border-radius:6px;padding:2px 7px;">' + _esc(s) + '</span>'; }).join('')
+          : '<span style="font-size:0.68rem;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">sem hab.</span>';
+      }
     }
+    // v2.8.63: categoria única (skills vazio) → reserva o espaço do seletor de categoria
+    // com um placeholder INVISÍVEL, pra TODOS os cards terem a mesma altura (como se o
+    // espaço da categoria estivesse preservado).
+    if (!skills) skills = '<select aria-hidden="true" disabled tabindex="-1" style="font-size:0.68rem;font-weight:700;padding:2px 6px;border:1px solid transparent;border-radius:6px;-webkit-appearance:none;appearance:none;visibility:hidden;"><option>sem categoria</option></select>';
     // v2.4.33: mostra a CATEGORIA por idade que a pessoa entraria (ex.: "50+"),
     // nunca a idade real (privacidade). Sem categoria de idade no torneio → nada.
     var ageBadge = (r.ageBuckets && r.ageBuckets.length > 0)
@@ -1077,12 +1094,21 @@
       var pe = _pendingEdits[orderKey]; if (!pe || Object.keys(pe).length === 0) return;
       var order = parseInt(orderKey, 10);
       var row = rows.filter(function (r) { return r.order === order; })[0];
-      var p = _erFindParticipant(parts, row, order);
+      // v2.8.62: linha de MEMBRO de dupla → o alvo é o DOC da dupla (parts[_duplaIdx])
+      // e o gênero é gravado per-membro (p1Gender/p2Gender). Antes _erFindParticipant
+      // não achava o membro em t.participants (ele é p1/p2 dentro da dupla) e o gênero
+      // "não gravava". Categoria continua no doc da dupla (o time tem 1 categoria).
+      var isDuplaMember = !!(row && row._duplaSide && typeof row._duplaIdx === 'number' && parts[row._duplaIdx] && typeof parts[row._duplaIdx] === 'object');
+      var p = isDuplaMember ? parts[row._duplaIdx] : _erFindParticipant(parts, row, order);
       if (!p) return;
       var asg = {};
       if ('gender' in pe) {
         var gv = (pe.gender === 'feminino' || pe.gender === 'masculino' || pe.gender === 'misto') ? pe.gender : '';
-        if (gv) { p.gender = gv; p.genderSource = 'organizador'; } else { delete p.gender; delete p.genderSource; }
+        if (isDuplaMember) {
+          if (gv) p[row._duplaSide + 'Gender'] = gv; else delete p[row._duplaSide + 'Gender'];
+        } else {
+          if (gv) { p.gender = gv; p.genderSource = 'organizador'; } else { delete p.gender; delete p.genderSource; }
+        }
         if (row) row.gender = gv || null;
         if (gv === 'feminino' || gv === 'masculino') asg.gender = gv; // CF só aceita masc/fem/outro
       }
@@ -1103,7 +1129,10 @@
           if (row) { row.assigned = []; row.effectiveSkills = row.profileSkill ? [row.profileSkill] : []; }
         }
       }
-      if (p.uid && (asg.gender || asg.category)) { asg.uid = p.uid; profileAssignments.push(asg); }
+      // v2.8.62: pro membro de dupla, o perfil a atualizar é o do MEMBRO (row.uid),
+      // não o do doc da dupla.
+      var _asgUid = (isDuplaMember && row && row.uid) ? row.uid : p.uid;
+      if (_asgUid && (asg.gender || asg.category)) { asg.uid = _asgUid; profileAssignments.push(asg); }
     });
     var nEdits = _erPendingCount();
     // grava a ficha do torneio (sorteio + inscritos sem conta)
