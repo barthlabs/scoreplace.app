@@ -201,6 +201,16 @@ window._dashEnroll = function(tId) {
 // novo. Resultado reportado: na entrada com jogo pendente, "ia pro jogo e
 // voltava pro topo 3x". Este helper preserva o scroll atual e marca
 // _isSoftRefresh durante o render pra NÃO re-disparar o auto-scroll.
+// v2.8.61: persiste o estado aberto/fechado das seções colapsáveis da dashboard
+// (Encerrados, Ocultados, descoberta) — antes resetavam a cada re-render/filtro.
+// Devolve os atributos do <details>: ` open` (se ficou aberto) + ontoggle que grava
+// no localStorage. defaultOpen = estado quando o usuário nunca tocou.
+function _dashDetailsAttr(key, defaultOpen) {
+  var v = null; try { v = localStorage.getItem(key); } catch (e) {}
+  var isOpen = (v === null) ? !!defaultOpen : (v === '1');
+  return (isOpen ? ' open' : '') + ' ontoggle="try{localStorage.setItem(\'' + key + '\', this.open?\'1\':\'0\')}catch(e){}"';
+}
+
 function _reRenderDashKeepScroll() {
   var c = document.getElementById('view-container');
   if (!c || typeof renderDashboard !== 'function') return;
@@ -1063,9 +1073,25 @@ function renderDashboard(container) {
 
   // Initialize filter state
   if (!window._dashFilter) window._dashFilter = 'todos';
-  if (!window._dashSport) window._dashSport = '';
+  // v2.8.60: filtro de modalidade PERSISTE (localStorage) — fica como o usuário deixou,
+  // mesmo após reload/nova entrada.
+  if (typeof window._dashSport === 'undefined') {
+    try { window._dashSport = localStorage.getItem('scoreplace_dashSport') || ''; } catch (e) { window._dashSport = ''; }
+  }
   if (!window._dashLocation) window._dashLocation = '';
   if (!window._dashFormat) window._dashFormat = '';
+
+  // v2.8.60: modalidades FAVORITAS do perfil (limpas) — pro filtro "Favoritas".
+  function _dashPrefSports() {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var raw = cu && cu.preferredSports;
+    var arr = Array.isArray(raw) ? raw : (typeof raw === 'string' && raw.trim() ? raw.split(/[,;]/) : []);
+    return arr.map(function (s) { return cleanSportName(s); }).filter(Boolean);
+  }
+  function _persistDashSport(v) {
+    window._dashSport = v || '';
+    try { localStorage.setItem('scoreplace_dashSport', window._dashSport); } catch (e) {}
+  }
 
   // Filter function
   window._applyDashFilter = function(filter) {
@@ -1074,18 +1100,18 @@ function renderDashboard(container) {
     window._dashRerender();
   };
   window._applyDashSport = function(sport) {
-    window._dashSport = (window._dashSport === sport) ? '' : sport;
+    _persistDashSport(window._dashSport === sport ? '' : sport);
     window._dashRerender();
   };
-  // v2.8.41: filtro CÍCLICO de modalidade — clica e passa pra próxima; depois da
-  // última volta pra "Todas" (''). Lista vem de window._dashSportsList (modalidades
-  // presentes nos torneios), gravada no render.
+  // v2.8.41/60: filtro CÍCLICO de modalidade — Todas → Favoritas (se o perfil tiver
+  // modalidades preferidas) → cada modalidade presente → volta pra Todas. Persiste a
+  // escolha. Lista vem de window._dashSportsList (gravada no render).
   window._cycleDashSport = function() {
     var list = Array.isArray(window._dashSportsList) ? window._dashSportsList : [];
-    var cycle = [''].concat(list);
+    var cycle = (_dashPrefSports().length > 0) ? ['', '__fav__'].concat(list) : [''].concat(list);
     var cur = window._dashSport || '';
     var i = cycle.indexOf(cur); if (i === -1) i = 0;
-    window._dashSport = cycle[(i + 1) % cycle.length];
+    _persistDashSport(cycle[(i + 1) % cycle.length]);
     window._dashRerender();
   };
   // v2.8.46: busca IN-PLACE (sem re-render) — não pula a tela nem perde o foco.
@@ -2026,7 +2052,12 @@ function renderDashboard(container) {
   }
 
   // Apply secondary filters
-  if (curSport) filtered = filtered.filter(t => cleanSportName(t.sport) === curSport);
+  if (curSport === '__fav__') {
+    var _favSports = _dashPrefSports();
+    if (_favSports.length > 0) filtered = filtered.filter(t => _favSports.indexOf(cleanSportName(t.sport)) !== -1);
+  } else if (curSport) {
+    filtered = filtered.filter(t => cleanSportName(t.sport) === curSport);
+  }
   if (curLocation) filtered = filtered.filter(t => t.venueName === curLocation);
   if (curFormat) filtered = filtered.filter(t => t.format === curFormat);
 
@@ -2189,7 +2220,7 @@ function renderDashboard(container) {
         if (myFinished.length > 0) finishedCards += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);margin-bottom:8px;opacity:0.7;">' + _t('dashboard.otherFinished', {count: otherFinished.length}) + '</div>';
         finishedCards += '<div class="cards-grid">' + otherFinished.map(t => renderTournamentCard(t, '')).join('') + '</div>';
       }
-      filteredHtml += '<div style="grid-column:1/-1;margin-top:0.5rem;"><details><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
+      filteredHtml += '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
     }
   } else {
     // When viewing "encerrados" filter, sort user's tournaments first
@@ -2220,7 +2251,7 @@ function renderDashboard(container) {
       var _finishedItems = _sortedFiltered.filter(function(t) { return t.status === 'finished'; });
       if (_finishedItems.length > 0) {
         _sortedFiltered = _activeItems;
-        _finishedSubSection = '<div style="grid-column:1/-1;margin-top:0.5rem;"><details><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: _finishedItems.length}) + '</summary><div style="margin-top:0.75rem;"><div class="cards-grid">' + _finishedItems.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div></div></details></div>';
+        _finishedSubSection = '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: _finishedItems.length}) + '</summary><div style="margin-top:0.75rem;"><div class="cards-grid">' + _finishedItems.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div></div></details></div>';
       }
     }
     const visibleItems = _sortedFiltered.slice(0, pageNum * PAGE_SIZE);
@@ -2695,8 +2726,8 @@ function renderDashboard(container) {
       <!-- v2.8.41: barra de filtro (modalidade cíclica) + busca, STICKY abaixo da topbar -->
       <div class="dash-filter-bar" style="position:sticky;top:calc(var(--topbar-h, 60px) + var(--hamburger-dd-h, 0px));z-index:30;display:flex;gap:8px;align-items:center;background:var(--bg-dark,#0f172a);padding:0 0 8px;margin-bottom:6px;">
         <button onclick="window._cycleDashSport()" title="Filtrar por modalidade — clique para alternar (− = Todas)" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;min-height:44px;box-sizing:border-box;background:${curSport ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.06)'};color:${curSport ? '#a5b4fc' : 'var(--text-muted,#94a3b8)'};border:1px solid ${curSport ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.14)'};border-radius:10px;padding:0 12px;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">
-          <span style="font-size:1rem;line-height:1;">${curSport ? getSportIcon(curSport) : '🎯'}</span>
-          <span>${curSport ? window._safeHtml(curSport) : 'Todas'}</span>
+          <span style="font-size:1rem;line-height:1;">${curSport === '__fav__' ? '⭐' : (curSport ? getSportIcon(curSport) : '🎯')}</span>
+          <span>${curSport === '__fav__' ? 'Favoritas' : (curSport ? window._safeHtml(curSport) : 'Todas')}</span>
         </button>
         <input id="dash-search-input" type="search" value="${window._safeHtml(window._dashSearch || '')}" oninput="window._setDashSearch(this.value)" placeholder="🔍 Buscar torneio…" autocomplete="off" style="flex:1;min-width:0;height:44px;min-height:44px;background:var(--bg-card,#1a1a2e);color:var(--text-bright,#f1f5f9);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:0 12px;font-size:0.85rem;box-sizing:border-box;">
       </div>
@@ -2746,7 +2777,7 @@ function renderDashboard(container) {
         if (!items || items.length === 0) return '';
         var _cards = '<div class="cards-grid">' + items.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>';
         if (collapsed) {
-          return '<details style="margin-top:1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.92rem;color:' + color + ';padding:8px 0;user-select:none;">' + title + ' (' + items.length + ')</summary><div style="margin-top:0.75rem;">' + _cards + '</div></details>';
+          return '<details style="margin-top:1rem;"' + _dashDetailsAttr('scoreplace_dash_sec_' + title.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 24), false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.92rem;color:' + color + ';padding:8px 0;user-select:none;">' + title + ' (' + items.length + ')</summary><div style="margin-top:0.75rem;">' + _cards + '</div></details>';
         }
         return '<div style="margin-top:1.25rem;"><div style="font-weight:800;font-size:0.95rem;color:' + color + ';margin-bottom:0.5rem;border-left:3px solid ' + color + ';padding-left:10px;">' + title + ' <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + items.length + ')</span></div>' + _cards + '</div>';
       };
@@ -2760,7 +2791,7 @@ function renderDashboard(container) {
     ${(function(){
       // v2.8.40: seção dos torneios que o usuário ocultou — colapsável, no fim de tudo.
       if (!hiddenTournaments || !hiddenTournaments.length) return '';
-      return '<div style="margin-top:1.5rem;"><details><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;"><div class="cards-grid">' + hiddenTournaments.map(function(t){ return renderTournamentCard(t, ''); }).join('') + '</div></div></details></div>';
+      return '<div style="margin-top:1.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_hidden_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;"><div class="cards-grid">' + hiddenTournaments.map(function(t){ return renderTournamentCard(t, ''); }).join('') + '</div></div></details></div>';
     })()}
   `;
   container.innerHTML = html;
@@ -2875,15 +2906,14 @@ function renderDashboard(container) {
       window.AppStore.loadPublicDiscovery().then(function() {
         var newLen = (window.AppStore.publicDiscovery || []).length;
         window._log('[Discovery v0.16.60] re-fetch retornou', { newLen: newLen, oldLen: _curLen });
-        // Re-render se ainda estamos no dashboard E o count mudou.
-        // v1.9.94: preserva scroll + não re-dispara auto-scroll (sem "pulo").
-        // v2.8.23: só re-renderiza ATRÁS do boot loader (dashboard ainda não revelada).
-        // Com a dashboard já mostrada, re-render = "travada no scroll" → não faz; os dados
-        // novos do discovery entram na próxima navegação/entrada.
-        if (window._bootInProgress && (window.location.hash === '' || window.location.hash === '#' || window.location.hash.indexOf('#dashboard') === 0)) {
-          if (newLen !== _curLen) {
-            _reRenderDashKeepScroll();
-          }
+        // Re-render se ainda estamos no dashboard E o count MUDOU (preserva scroll).
+        // v2.8.60: antes só re-renderizava ATRÁS do boot loader (v2.8.23) — com a
+        // dashboard já mostrada, torneios novos da descoberta só apareciam ao navegar
+        // ou ciclar o filtro (bug reportado). Agora re-renderiza também com a dashboard
+        // visível, mas SÓ quando o count muda (raro) e preservando scroll → sem trava.
+        var _onDash = (window.location.hash === '' || window.location.hash === '#' || window.location.hash.indexOf('#dashboard') === 0);
+        if (_onDash && newLen !== _curLen) {
+          _reRenderDashKeepScroll();
         }
         // v2.4.84: marco pro boot splash — a descoberta (e o re-render que ela
         // dispara) já assentou. Só então o boot revela a dashboard.
@@ -3491,9 +3521,28 @@ function _hydrateFriendsPresenceWidget() {
     // (check-in) ou índigo (plano) com horário, esporte, e botão Cancelar
     // logo no topo da seção.
     var nowMs = Date.now();
+    // v2.8.58: plano de presença vindo de TORNEIO (source:'tournament') só aparece a
+    // partir de 2 dias antes do evento — antes mostrava "ida planejada" assim que a
+    // pessoa se inscrevia (ex.: torneio dia 1/jul aparecia 9 dias antes). Pra valer "pra
+    // todos" mesmo que a data mude, usa a data ATUAL do torneio (não o startsAt do doc,
+    // que pode estar defasado): re-computa a janela pelo torneio vivo. Planos manuais
+    // continuam aparecendo sempre que futuros.
+    var TWO_DAYS_MS = 2 * 24 * 3600000;
     var ownActive = ownList.filter(function(p) { return p && !p.cancelled; });
     var ownCheckins = ownActive.filter(function(p) { return p.type === 'checkin' && p.startsAt <= nowMs && p.endsAt > nowMs; });
-    var ownPlans = ownActive.filter(function(p) { return p.type === 'planned' && p.startsAt > nowMs; });
+    var ownPlans = ownActive.filter(function(p) {
+      if (p.type !== 'planned') return false;
+      if (p.source === 'tournament') {
+        var liveT = (p.tournamentId && typeof window._findTournamentById === 'function') ? window._findTournamentById(p.tournamentId) : null;
+        var w = (liveT && typeof window._computeTournamentPlanWindow === 'function') ? window._computeTournamentPlanWindow(liveT) : null;
+        if (!w) return false; // torneio sem data/hora/local atual (ex.: virou Liga, multi-dia ou data removida)
+        p.startsAt = w.startsAt; p.endsAt = w.endsAt; p.venueName = w.venueName || p.venueName; // mostra a data viva
+        p._tournName = (liveT && liveT.name) || ''; // v2.8.59: nome do torneio no plano de ida
+        if (p.startsAt <= nowMs) return false;
+        return (p.startsAt - nowMs) <= TWO_DAYS_MS; // só ≤2 dias antes
+      }
+      return p.startsAt > nowMs;
+    });
     ownPlans.sort(function(a, b) { return a.startsAt - b.startsAt; });
     if (ownCheckins.length > 0 || ownPlans.length > 0) {
       var myRows = '';
@@ -3526,6 +3575,7 @@ function _hydrateFriendsPresenceWidget() {
             '<span style="font-size:1rem;flex-shrink:0;">🗓️</span>' +
             '<div style="flex:1;min-width:0;">' +
               '<div style="font-weight:700;color:var(--text-bright);font-size:0.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Você estará em <span style="color:#a5b4fc;">' + pVenue + '</span>' + (pSports ? ' <span style="font-weight:500;color:var(--text-muted);">· ' + _safe(pSports) + '</span>' : '') + '</div>' +
+              (p._tournName ? '<div style="font-size:0.7rem;color:#fbbf24;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🏆 ' + _safe(p._tournName) + '</div>' : '') +
               '<div style="font-size:0.7rem;color:var(--text-muted);">' + _safe(dayLabel) + ' às <b>' + _safe(hhmm) + '</b></div>' +
             '</div>' +
             '<button onclick="window._dashCancelPresence(\'' + docId + '\')" style="background:transparent;color:#ef4444;border:none;padding:0;margin:0;font-weight:900;font-size:1.05rem;line-height:1;cursor:pointer;flex-shrink:0;" title="Cancelar plano">✕</button>' +

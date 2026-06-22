@@ -9,7 +9,18 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.54-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(21 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.61-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔎 Filtro de modalidade da dashboard melhor.</b> Agora ele <b>fica como você deixou</b> (não reseta), e o ciclo virou <b>Todas → ⭐ Favoritas → cada modalidade</b> ("Favoritas" mostra só as modalidades do seu perfil). As seções <b>Encerrados</b> e <b>Ocultados</b> também lembram se você deixou abertas ou fechadas.</li>' +
+        '<li><b>✨ Torneios aparecem sozinhos.</b> Torneios novos entram na dashboard sem você precisar trocar de filtro pra eles aparecerem.</li>' +
+        '<li><b>📊 Análise de inscritos conta todo mundo.</b> Em torneios de dupla, cada pessoa da dupla é contada e analisada individualmente (antes a dupla contava como 1).</li>' +
+        '<li><b>🏷️ Categoria única, sem confusão.</b> Torneio com uma só categoria não mostra mais a seção de "arrastar entre categorias / sem categoria".</li>' +
+        '<li><b>📍 Plano de ida do torneio na hora certa.</b> A "ida planejada" de um torneio só aparece a partir de <b>2 dias antes</b> do evento (e mostra o <b>nome do torneio</b>, na dashboard e no Place). Também consertamos o aviso "Você está aqui?" ao chegar num local.</li>' +
+        '<li><b>🔢 Número de inscrição</b> nos cards ajustado para ~60% da altura.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.54-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(21 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>👑 Convite de co-organização com botões no WhatsApp e e-mail.</b> Em vez de um link solto, o convidado recebe <b>✅ Aceitar / ❌ Recusar</b> que respondem na hora. Os cards da Organização ficaram <b>todos do mesmo tamanho</b>, o ✕ de remover ficou <b>vermelho</b>, e a vaga de co-organizar <b>só aparece quando você arrasta</b> (barra dourada "Arraste para co-organizar").</li>' +
         '<li><b>🔢 Número de inscrição grande.</b> O número de cada inscrito aparece como marca-d\'água ocupando ~90% da altura — nos cards individuais, de dupla (um de cada lado) e no card do jogo sorteado.</li>' +

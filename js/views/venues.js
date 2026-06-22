@@ -982,7 +982,15 @@
     var now = Date.now();
     var rows = [];
     (presences || []).forEach(function(p) {
-      if (p.type === 'planned' && p.startsAt > now) rows.push(p);
+      if (p.type === 'planned' && p.startsAt > now) {
+        // v2.8.59: plano de presença vindo de TORNEIO ganha o nome do torneio (igual ao
+        // dashboard) → cai no box "🏆 <torneio>" em vez de chip avulso sem contexto.
+        if (!p._tournamentName && (p.tournamentId || p.source === 'tournament') && typeof window._findTournamentById === 'function') {
+          var _lt = p.tournamentId ? window._findTournamentById(p.tournamentId) : null;
+          if (_lt) { p._tournamentName = _lt.name || ''; p._tournamentId = p.tournamentId || _lt.id || _lt._id || ''; }
+        }
+        rows.push(p);
+      }
     });
     (tournaments || []).forEach(function(t) {
       _tournamentOccupancy(t, dayKeyStr).forEach(function(p) {
@@ -1064,7 +1072,9 @@
       var loose = { people: [], seen: {}, other: 0 };
       // 1ª passada: inscritos (presenças do torneio), agrupados por torneio
       list.forEach(function(p) {
-        if (p.type !== 'tournament') return;
+        // v2.8.59: ocupação virtual (type 'tournament') OU plano com nome de torneio
+        // resolvido entram no box do torneio.
+        if (p.type !== 'tournament' && !p._tournamentName) return;
         var tk = String(p._tournamentId || p._tournamentName || 'torneio');
         if (!byTournament[tk]) { byTournament[tk] = { name: p._tournamentName || 'torneio', id: p._tournamentId || '', people: [], seen: {}, other: 0 }; tOrder.push(tk); }
         var grp = byTournament[tk];
@@ -1079,7 +1089,7 @@
       });
       // 2ª passada: presenças avulsas (não-torneio), pulando quem já está inscrito
       list.forEach(function(p) {
-        if (p.type === 'tournament') return;
+        if (p.type === 'tournament' || p._tournamentName) return; // tournament-grouped acima
         if (p.uid && enrolledUids[p.uid]) return; // já aparece no box do torneio
         var klass = _classifyPresence(p);
         if (klass === 'me' || klass === 'friend') {

@@ -315,6 +315,25 @@
   // perfil.defaultCategory='D' + profile.gender='masc' = inscrito conta como
   // 'Masc D' nas estatísticas.
 
+  // v2.8.56: expande DUPLAS (entrada estrutural p1Name/p2Name) em 2 pessoas, pra a
+  // Análise contar e decompor CADA inscrito individualmente. Antes a dupla virava 1
+  // linha (só o p1) → o relatório mostrava menos gente do que o nº real de inscritos
+  // num torneio de casais. Cada membro carrega o próprio uid (perfil resolve
+  // gênero/idade/habilidade) + a categoria do time.
+  function _expandDuplas(parts) {
+    var out = [];
+    (parts || []).forEach(function (p) {
+      if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
+        var baseCats = (Array.isArray(p.categories) && p.categories.length) ? p.categories.slice() : (p.category ? [p.category] : []);
+        out.push({ uid: p.p1Uid || '', displayName: p.p1Name, name: p.p1Name, email: p.p1Email || '', categories: baseCats.slice(), category: p.category || '', _fromDupla: true });
+        out.push({ uid: p.p2Uid || '', displayName: p.p2Name, name: p.p2Name, email: p.p2Email || '', categories: baseCats.slice(), category: p.category || '', _fromDupla: true });
+      } else {
+        out.push(p);
+      }
+    });
+    return out;
+  }
+
   function _buildRows(t, parts, fetchResult) {
     var ageCats = (t.ageCategories || []).slice();
     var skillCats = (t.skillCategories || []).slice();
@@ -1249,7 +1268,8 @@
       window.location.replace('#dashboard');
       return;
     }
-    var parts = Array.isArray(t.participants) ? t.participants : [];
+    // v2.8.56: expande duplas em pessoas individuais (conta todos os inscritos).
+    var parts = _expandDuplas(Array.isArray(t.participants) ? t.participants : []);
 
     // Verifica se user é organizador — relatório é restrito.
     if (!window.AppStore || !window.AppStore.isOrganizer || !window.AppStore.isOrganizer(t)) {

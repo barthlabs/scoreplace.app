@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.8.54-beta';
+window.SCOREPLACE_VERSION = '2.8.61-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -524,11 +524,22 @@ window._softRefreshView = function() {
   // close/redirect. Block entirely; user exits intentionally via Voltar/Salvar.
   var _currentView = (window.location.hash || '').replace('#', '').split('/')[0];
   if (_currentView === 'novo-torneio') return;
-  // v2.8.23: a DASHBOARD nunca faz soft-refresh. Re-render da dashboard já mostrada
-  // (rebuild do innerHTML em cada snapshot) é a causa das "travadas no scroll". Dados
-  // frescos entram na próxima navegação/entrada (que passa pelo gate de carregamento do
-  // boot). Views ao vivo (bracket, detalhe do torneio) seguem com soft-refresh normal.
-  if (_currentView === '' || _currentView === 'dashboard') return;
+  // v2.8.23/60: a DASHBOARD não faz soft-refresh a cada snapshot (rebuild constante do
+  // innerHTML = "travada no scroll"). MAS quando o CONJUNTO de torneios muda de verdade
+  // (dados que chegaram async do listener — torneios que "não apareciam até navegar"),
+  // re-renderiza UMA vez preservando scroll. Gate por assinatura (ids + count) evita o
+  // re-render constante; só dispara quando o conteúdo realmente mudou.
+  if (_currentView === '' || _currentView === 'dashboard') {
+    try {
+      var _dts = (window.AppStore && window.AppStore.tournaments) || [];
+      var _dsig = _dts.length + '|' + _dts.map(function(t){ return t && t.id; }).join(',');
+      if (_dsig !== window._dashDataSig) {
+        window._dashDataSig = _dsig;
+        if (typeof window._dashRerender === 'function') window._dashRerender();
+      }
+    } catch (e) {}
+    return;
+  }
 
   // 1. If any modal is open or user is typing, defer — retry in 500ms
   // v1.0.62-beta: simulation-panel adicionado ao safe-list. Bug reportado:
@@ -4763,16 +4774,17 @@ window._personCount = function(t) {
 };
 // Marca d'água do número de inscrição no canto sup. direito (mesmo estilo do card de
 // inscrito do participants.js): grande, semitransparente, não-interativo.
-// v2.8.53: número de inscrição como marca-d'água que ocupa ~90% da ALTURA do card
-// (5% de margem acima/abaixo), independente da altura do card (auto-height). SVG com
-// viewBox + preserveAspectRatio escala o dígito sozinho — `height:90%` resolve contra
-// a caixa do card (position:relative). `side` ('right' padrão | 'left') mantém a posição.
+// v2.8.57: número de inscrição como marca-d'água que ocupa ~60% da ALTURA do card
+// (centralizado verticalmente → ~20% de margem acima/abaixo), independente da altura do
+// card (auto-height). SVG com viewBox + preserveAspectRatio escala o dígito sozinho —
+// `height:60%` resolve contra a caixa do card (position:relative). `side` ('right' padrão
+// | 'left') mantém a posição horizontal.
 window._enrollNumberBadge = function(num, side) {
   if (num === '' || num == null) return '';
   side = (side === 'left') ? 'left' : 'right';
   var n = String(num);
   var vbW = n.length * 82 + 8;            // viewBox cresce com o nº de dígitos
-  return '<svg aria-hidden="true" style="position:absolute;top:5%;' + side + ':8px;height:90%;width:auto;pointer-events:none;user-select:none;z-index:0;" ' +
+  return '<svg aria-hidden="true" style="position:absolute;top:20%;' + side + ':8px;height:60%;width:auto;pointer-events:none;user-select:none;z-index:0;" ' +
     'viewBox="0 0 ' + vbW + ' 100" preserveAspectRatio="xMidYMid meet">' +
     '<text x="' + (vbW / 2) + '" y="50" text-anchor="middle" dominant-baseline="central" font-size="140" font-weight="900" ' +
     'fill="rgba(255,255,255,0.10)" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif">' + window._safeHtml(n) + '</text></svg>';

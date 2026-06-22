@@ -166,13 +166,21 @@
     }
     var key = window.PresenceDB.venueKey(location.placeId || '', location.name || '');
     var nm = _normName(location.name);
+    var _todayKey = (typeof window.PresenceDB.dayKey === 'function') ? window.PresenceDB.dayKey(new Date()) : null;
     window.PresenceDB.loadMyActive(cu.uid).then(function(list) {
       var ci = false, pl = false;
       (list || []).forEach(function(d) {
         if (!d) return;
         var hit = (d.placeId && d.placeId === key) || (nm && d.venueName && _normName(d.venueName) === nm);
         if (!hit) return;
-        if (d.type === 'planned') pl = true; else ci = true;
+        // v2.8.58: um PLANO só conta como "ida programada" se for de HOJE. Antes
+        // qualquer plano futuro (ex.: torneio daqui a 9 dias) marcava planned=true →
+        // estando no local hoje, o GPS fazia check-in direto e NÃO mostrava o pop-up
+        // de "você está aqui?". Plano de outro dia é ignorado aqui.
+        if (d.type === 'planned') {
+          var _planKey = d.dayKey || (d.startsAt ? (typeof window.PresenceDB.dayKey === 'function' ? window.PresenceDB.dayKey(new Date(d.startsAt)) : null) : null);
+          if (!_todayKey || !_planKey || _planKey === _todayKey) pl = true;
+        } else ci = true;
       });
       cb({ checkedIn: ci, planned: pl });
     }).catch(function() { cb({ checkedIn: false, planned: false }); });

@@ -1159,7 +1159,10 @@ window._buildInlineCatMgrHTML = function(tId) {
     var t = window._findTournamentById(tId);
     if (!t) return '';
     var categories = window._sortCategoriesBySkillOrder((t.combinedCategories || []).slice(), t.skillCategories);
-    if (!categories || categories.length === 0) return '';
+    // v2.8.55: torneio de CATEGORIA ÚNICA (ou sem categorias) não mostra a seção de
+    // gerenciar categorias — não há "entre categorias" pra arrastar nem "sem categoria"
+    // a distinguir (todo mundo pertence à única categoria, e o sorteio já encaixa).
+    if (!categories || categories.length <= 1) return '';
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
 
     var catCounts = {};
