@@ -9,8 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.89-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.91-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔍 Buscar inscrito + filtro de categoria:</b> em torneios com muitos inscritos, a lista de inscritos ganhou uma <b>busca dinâmica por nome</b> (filtra enquanto você digita) e um <b>filtro de categoria cíclico</b> (cada categoria → Todas no fim).</li>' +
+        '<li><b>↩️ Organizador desfaz duplas (e avisa):</b> o organizador agora pode <b>desfazer duplas formadas</b> e <b>cancelar convites de dupla pendentes</b>, e os <b>envolvidos são notificados</b> automaticamente.</li>' +
+        '<li><b>🖼️ Cards de dupla alinhados:</b> nos cards de dupla, a <b>foto cola no nome</b> (avatares nas pontas, nomes no meio) — fim do espaço grande feio quando o nome era longo.</li>' +
         '<li><b>🥉 3º e 4º só após a disputa:</b> na classificação parcial, os perdedores das semifinais <b>não aparecem mais como 3º/4º antes do jogo de disputa de 3º lugar</b> — só depois que esse jogo é decidido (igual o 1º/2º que só saem após a final).</li>' +
         '<li><b>⏩ BYE mais limpo na chave:</b> quem passa de BYE não vira mais um "jogo não jogado" na rodada — aparece direto na <b>rodada seguinte com uma etiqueta âmbar BYE</b> (que some quando avança por vitória). A 1ª rodada mostra só os jogos a disputar.</li>' +
         '<li><b>🗳️ Trocar o voto na enquete:</b> quem já votou agora pode <b>alterar o voto</b> — é só tocar em "Alterar meu voto".</li>' +

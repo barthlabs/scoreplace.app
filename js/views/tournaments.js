@@ -372,12 +372,102 @@ window._cancelPairRequest = function(tId, reqId) {
     var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
     if (!t || !window._teamFormation) return;
     var myUid = (window.AppStore.currentUser || {}).uid;
-    var res = window._teamFormation.cancelPair(t, reqId, myUid);
+    // v2.8.91: o ORGANIZADOR também pode cancelar convite de dupla pendente — antes
+    // cancelPair só aceitava inviter/invitee, então o botão "Cancelar" do org falhava.
+    var isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    // captura o convite ANTES de cancelar (pra notificar os envolvidos depois).
+    var req = (Array.isArray(t.pairRequests) ? t.pairRequests : []).filter(function(r){ return r && r.id === reqId; })[0];
+    var res = window._teamFormation.cancelPair(t, reqId, isOrg ? null : myUid);
     if (!res.ok) { if (typeof showNotification !== 'undefined') showNotification('Não foi possível', window._pairErrorMsg(res.error), 'warning'); return; }
     t.updatedAt = new Date().toISOString();
     window.FirestoreDB.saveTournament(t);
+    // v2.8.91: notifica os DOIS envolvidos (menos quem cancelou) que o convite caiu.
+    try {
+        if (req) {
+            var _by = isOrg ? 'O organizador' : (window._safeHtml((window.AppStore.currentUser || {}).displayName || 'Alguém'));
+            var _msg = _by + ' cancelou o convite de dupla entre ' + window._safeHtml(req.inviterName || '') + ' e ' + window._safeHtml(req.inviteeName || '') + ' em ' + window._safeHtml(t.name || '') + '.';
+            [req.inviterUid, req.inviteeUid].forEach(function(uid){
+                if (uid && uid !== myUid && typeof window._sendUserNotification === 'function')
+                    window._sendUserNotification(uid, { type: 'enrollment_cancelled', title: '↩️ Convite de dupla cancelado', message: _msg, tournamentId: String(t.id), tournamentName: t.name || '', level: 'important' });
+            });
+        }
+    } catch(e){}
     if (typeof showNotification !== 'undefined') showNotification('Convite cancelado', '', 'info');
     if (typeof window._softRefreshView === 'function') window._softRefreshView();
+};
+
+// v2.8.90: busca dinâmica + filtro CÍCLICO de categoria na lista de inscritos
+// (torneios com muitos inscritos). Filtra IN-PLACE (mostra/esconde cards) — NÃO
+// re-renderiza, então não pula a tela nem perde o foco do campo de busca.
+var _INSC_DIACRITICS = new RegExp('[\\u0300-\\u036f]', 'g');
+function _inscNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(_INSC_DIACRITICS,''); }
+window._inscritosFilter = function(tId) {
+  try {
+    var inp = document.getElementById('inscritos-search-' + tId);
+    var q = inp ? _inscNorm((inp.value||'').trim()) : '';
+    var cat = (window._inscritosCat && window._inscritosCat[tId]) || '';
+    var container = document.querySelector('[data-merge-container="' + tId + '"]');
+    if (!container) return;
+    // categoria é derivada dos DADOS do torneio (por nome) — não exige data-attr no card
+    var catMap = null;
+    if (cat) {
+      var t = window._findTournamentById ? window._findTournamentById(tId) : null;
+      catMap = {};
+      var ps = (t && Array.isArray(t.participants)) ? t.participants : [];
+      ps.forEach(function(p){
+        var nm = (typeof p === 'string') ? p : (window._pName ? window._pName(p) : ((p && (p.displayName||p.name))||''));
+        if (!nm) return;
+        catMap[nm] = (window._getParticipantCategories ? window._getParticipantCategories(p) : ((p && p.categories) || (p && p.category ? [p.category] : []))) || [];
+      });
+    }
+    var cards = container.querySelectorAll('.participant-card');
+    var shown = 0;
+    cards.forEach(function(c){
+      var nm = c.getAttribute('data-participant-name') || '';
+      var ok = (!q || _inscNorm(nm).indexOf(q) !== -1);
+      if (ok && cat) { ok = (catMap[nm] || []).indexOf(cat) !== -1; }
+      c.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    var empty = document.getElementById('inscritos-empty-' + tId);
+    if (empty) empty.style.display = (shown === 0 && cards.length > 0) ? 'block' : 'none';
+  } catch (e) {}
+};
+// Ciclo: cada categoria → ... → Todas (no FINAL) → volta. Estado em window._inscritosCat[tId].
+window._inscritosCycleCat = function(tId) {
+  try {
+    var t = window._findTournamentById ? window._findTournamentById(tId) : null;
+    // ciclo derivado das categorias REAIS dos inscritos (mesma fonte do match) —
+    // garante que toda opção do ciclo casa com algum card. Ordena pela ordem do
+    // torneio quando disponível, senão alfabético.
+    var ps = (t && Array.isArray(t.participants)) ? t.participants : [];
+    var seen = {}, cats = [];
+    ps.forEach(function(p){
+      ((window._getParticipantCategories ? window._getParticipantCategories(p) : ((p && p.categories) || (p && p.category ? [p.category] : []))) || []).forEach(function(c){
+        if (c && !seen[c]) { seen[c] = 1; cats.push(c); }
+      });
+    });
+    var ord = ((window._getTournamentCategories ? window._getTournamentCategories(t) : (t && t.combinedCategories)) || []);
+    if (ord.length) cats.sort(function(a,b){ var ia=ord.indexOf(a), ib=ord.indexOf(b); if(ia===-1)ia=999; if(ib===-1)ib=999; return ia-ib || a.localeCompare(b); });
+    else cats.sort(function(a,b){ return a.localeCompare(b); });
+    if (!cats.length) return;
+    var cycle = cats.concat(['']); // categorias e, por último, '' (Todas)
+    window._inscritosCat = window._inscritosCat || {};
+    var cur = window._inscritosCat[tId] || '';
+    var i = cycle.indexOf(cur); if (i === -1) i = cycle.length - 1;
+    var next = cycle[(i + 1) % cycle.length];
+    window._inscritosCat[tId] = next;
+    var btn = document.getElementById('inscritos-cat-btn-' + tId);
+    if (btn) {
+      var lbl = next ? (window._displayCategoryName ? window._displayCategoryName(next) : next) : 'Todas';
+      btn.textContent = '🏷️ ' + lbl;
+      var on = !!next;
+      btn.style.background = on ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.12)';
+      btn.style.color = on ? '#c7d2fe' : '#a5b4fc';
+      btn.style.borderColor = on ? 'rgba(99,102,241,0.7)' : 'rgba(99,102,241,0.4)';
+    }
+    window._inscritosFilter(tId);
+  } catch (e) {}
 };
 
 // v2.7.94: deep-link dos botões Aceitar/Recusar do EMAIL e do WHATSAPP.
@@ -599,6 +689,15 @@ function renderTournaments(container, tournamentId = null) {
         t.updatedAt = new Date().toISOString();
 
         window.FirestoreDB.saveTournament(t).then(function() {
+            // v2.8.91: notifica os DOIS envolvidos que o organizador desfez a dupla.
+            try {
+                var _actorUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
+                var _msg = 'O organizador desfez a dupla "' + p1Name + ' / ' + p2Name + '" em ' + (t.name || '') + '. Você voltou para Sem Dupla.';
+                [p1Uid, p2Uid].forEach(function(uid){
+                    if (uid && uid !== _actorUid && typeof window._sendUserNotification === 'function')
+                        window._sendUserNotification(uid, { type: 'enrollment_cancelled', title: '↩️ Dupla desfeita', message: _msg, tournamentId: String(t.id), tournamentName: t.name || '', level: 'important' });
+                });
+            } catch(e){}
             if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', p1Name + ' e ' + p2Name + ' voltaram para Sem Dupla.', 'info');
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
         });
@@ -3102,7 +3201,7 @@ function renderTournaments(container, tournamentId = null) {
                   // (align-items:center). title = nome completo no hover.
                   var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="28" data-fit-max="13.5" style="font-weight:700;font-size:13.5px;color:var(--text-bright);line-height:1.1;max-height:28px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
                   var _av = right
-                    ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _img + _nmSpan + '</div>'
+                    ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
                     : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
                   var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
                   return '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 42%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
@@ -3156,7 +3255,7 @@ function renderTournaments(container, tournamentId = null) {
                 // respeitando a altura do avatar (28px), igual ao card de dupla formada.
                 var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="28" data-fit-max="13.5" style="font-weight:700;font-size:13.5px;color:var(--text-bright);line-height:1.1;max-height:28px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
                 var _av = right
-                  ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _img + _nmSpan + '</div>'
+                  ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
                   : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
                 var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ displayName: n, name: n }, n, false, t, isOrg) : '';
                 return '<div style="min-width:0;display:flex;flex-direction:column;gap:2px;flex:1 1 40%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + '</div>';
@@ -3223,18 +3322,34 @@ function renderTournaments(container, tournamentId = null) {
                 </div>`;
             } else {
               // Modo normal (individual ou duplas pós-sorteio)
+              // v2.8.90: barra de busca dinâmica + filtro cíclico de categoria pra torneios
+              // com muitos inscritos. Reseta o estado a cada render (busca vazia, "Todas").
+              if (window._inscritosCat) window._inscritosCat[t.id] = '';
+              var _inscritosBar = '';
+              if (parts.length >= 8) {
+                var _inscCatBtn = _hasTournCats
+                  ? '<button type="button" id="inscritos-cat-btn-' + t.id + '" onclick="window._inscritosCycleCat(\'' + t.id + '\')" title="Filtrar por categoria — clique pra alternar (Todas no fim)" style="padding:9px 14px;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;border:1px solid rgba(99,102,241,0.4);background:rgba(99,102,241,0.12);color:#a5b4fc;white-space:nowrap;flex-shrink:0;">🏷️ Todas</button>'
+                  : '';
+                _inscritosBar =
+                  '<div style="display:flex;gap:8px;align-items:center;margin:0 0 12px;flex-wrap:wrap;">' +
+                    '<input type="text" id="inscritos-search-' + t.id + '" placeholder="🔍 Buscar inscrito…" autocomplete="off" oninput="window._inscritosFilter(\'' + t.id + '\')" style="flex:1;min-width:150px;box-sizing:border-box;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:9px 12px;color:var(--text-bright);font-size:0.88rem;">' +
+                    _inscCatBtn +
+                  '</div>';
+              }
               participantsHtml = `
                 <div class="mt-5 mb-4">
                    <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; flex-wrap:wrap;">
                       👥 Inscritos Confirmados <span style="font-size: 0.8rem; background: rgba(255,255,255,0.1); padding: 3px 10px; border-radius: 12px; font-weight: 600; margin-left: 5px; color: var(--text-muted);">${individualCountParts}</span>
                       ${_sortBtns}
                    </h3>
+                   ${_inscritosBar}
                    ${checkInControls}
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
                    ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela brilha quando você começa a arrastar. No celular, <b>toque na estrela do organizador</b> e escolha quem promover. Funciona durante o torneio também.</div>' : ''}
                    <div data-merge-container="${t.id}" class="sp-dnd-host" style="${gridStyle}">
                       ${cardsStr}
                    </div>
+                   ${parts.length >= 8 ? `<div id="inscritos-empty-${t.id}" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum inscrito encontrado.</div>` : ''}
                    ${(_hasTournCats && isOrg) ? `<div id="inline-cat-mgr-${t.id}"></div>` : ''}
                 </div>
             `;
