@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.68-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🐛 Correção de uma falha</b> que podia travar telas do organizador (erro interno de cálculo de distância). Estabilidade.</li>' +
+        '<li><b>⚙️ Enquete:</b> os ajustes (ocultar resultados / mais de uma opção) usam o <b>interruptor padrão</b> do app.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.68-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📊 Nova ferramenta: Enquete.</b> O organizador cria uma pergunta com opções (botão <b>＋ opção</b>), com toggles pra <b>ocultar os resultados até a pessoa votar</b> e pra <b>permitir mais de uma escolha</b>. Quem ainda não votou recebe um <b>pop-up</b>; depois fica um <b>botão brilhante abaixo do nome do torneio</b> (dashboard e detalhe) até o organizador encerrar. Ao votar, aparecem os resultados.</li>' +
         '<li><b>👫 Nomes grandes nos cards de dupla.</b> Em vez de cortar com "…", a fonte do nome <b>diminui</b> pra caber em até 2 linhas, alinhada à foto.</li>' +

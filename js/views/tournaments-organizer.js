@@ -506,10 +506,10 @@ window._checkTournamentReminders = async function() {
  * Called on app load when new tournaments exist.
  */
 // Haversine distance in km between two lat/lng points
-// v2.8.36: delega ao canônico window._haversineKm (store.js).
-function _haversineKm(lat1, lon1, lat2, lon2) {
-    return window._haversineKm(lat1, lon1, lat2, lon2);
-}
+// v2.8.70: NÃO declarar _haversineKm aqui. Este arquivo NÃO está em IIFE, então uma
+// `function _haversineKm(){}` no topo vira window._haversineKm e sobrescrevia o canônico
+// (store.js) por um delegate que chamava a si mesmo → RangeError: Maximum call stack
+// (Sentry, 7 usuários). Os call sites usam window._haversineKm diretamente.
 
 window._checkNearbyTournaments = async function() {
     if (!window.AppStore || !window.AppStore.currentUser || !window.FirestoreDB) return;
@@ -550,7 +550,7 @@ window._checkNearbyTournaments = async function() {
             var tLng = parseFloat(t.venueLon);
             if (!isNaN(tLat) && !isNaN(tLng)) {
                 matched = userLocs.some(function(loc) {
-                    return _haversineKm(loc.lat, loc.lng, tLat, tLng) <= NEARBY_RADIUS_KM;
+                    return window._haversineKm(loc.lat, loc.lng, tLat, tLng) <= NEARBY_RADIUS_KM;
                 });
             }
         }

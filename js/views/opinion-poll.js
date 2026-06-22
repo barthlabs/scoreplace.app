@@ -99,11 +99,13 @@
 
   window._opOpenCreate = function (tId) {
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
+    // v2.8.69: usa o toggle-switch padrão do app (não checkbox). O <input> mantém o id
+    // pra _opCreate ler .checked.
     var _tg = function (id, on, label, desc) {
-      return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:12px;cursor:pointer;margin-bottom:8px;">' +
-        '<input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + ' style="margin-top:2px;width:18px;height:18px;accent-color:#8b5cf6;flex-shrink:0;">' +
-        '<div><div style="font-weight:700;color:var(--text-bright);font-size:0.86rem;">' + label + '</div><div style="font-size:0.74rem;color:var(--text-muted);margin-top:2px;">' + desc + '</div></div>' +
-      '</label>';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:12px;margin-bottom:8px;">' +
+        '<div style="min-width:0;"><div style="font-weight:700;color:var(--text-bright);font-size:0.86rem;">' + label + '</div><div style="font-size:0.74rem;color:var(--text-muted);margin-top:2px;">' + desc + '</div></div>' +
+        '<label class="toggle-switch" style="--toggle-on-bg:#8b5cf6;--toggle-on-glow:rgba(139,92,246,0.3);--toggle-on-border:#8b5cf6;flex-shrink:0;"><input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + '><span class="toggle-slider"></span></label>' +
+      '</div>';
     };
     var html =
       '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#4338ca,#6d28d9);border-radius:16px 16px 0 0;">' +
