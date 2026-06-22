@@ -684,7 +684,7 @@
   // quadras" inline quando o venue não tem capacidade real cadastrada. Sem opts
   // (legacy callers), só não renderiza a CTA — comportamento anterior preservado.
   // v2.8.73: regra ÚNICA de visibilidade temporal pra presença/plano vindo de
-  // TORNEIO — só "vale" a partir de 2 dias antes do evento (usa a data ATUAL do
+  // TORNEIO — só "vale" a partir de 24h antes do evento (usa a data ATUAL do
   // torneio, não o startsAt defasado do doc). Plano/presença MANUAL (sem torneio)
   // é sempre visível. Usada no auto-focus (card PLANO ATIVO), no gráfico de
   // movimento e na detecção de plano ativo dos botões inline. Assim um torneio a
@@ -696,7 +696,7 @@
   }
   function _tournVisibleNow(liveT) {
     var s = _tournamentStartMs(liveT);
-    return !s || s <= (Date.now() + 2 * 24 * 3600000);
+    return !s || s <= (Date.now() + 24 * 3600000);
   }
   function _presenceVisibleNow(p) {
     if (!p) return false;
@@ -705,7 +705,7 @@
     var liveT = (p.tournamentId && typeof window._findTournamentById === 'function') ? window._findTournamentById(p.tournamentId) : null;
     if (liveT) return _tournVisibleNow(liveT);
     var s = p.startsAt || 0;
-    return !s || s <= (Date.now() + 2 * 24 * 3600000);
+    return !s || s <= (Date.now() + 24 * 3600000);
   }
 
   function _renderPreferredChart(boxId, presences, tournaments, dayKeyStr, venueCapacity, opts) {
@@ -1037,7 +1037,7 @@
     // dias antes do evento — antes um torneio a 9 dias já poluía como "8h". Usa a data
     // ATUAL do torneio (não o startsAt do doc, que pode estar defasado). Presença manual
     // (sem torneio) continua aparecendo normal.
-    var _soonCut = now + 2 * 24 * 3600000;
+    var _soonCut = now + 24 * 3600000;
     function _tournTooFar(liveT) {
       if (!liveT) return false;
       var w = (typeof window._computeTournamentPlanWindow === 'function') ? window._computeTournamentPlanWindow(liveT) : null;
@@ -1410,6 +1410,28 @@
       }
     }
     return null;
+  }
+
+  // v2.8.76: adiciona o local aos preferidos do perfil SILENCIOSAMENTE (sem toast)
+  // e persiste — usado quando o usuário planeja uma ida (intenção de frequentar).
+  // Retorna true se adicionou agora, false se já era preferido / não pôde.
+  function _autoAddPreferredSilent(v) {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid || !v || v.lat == null || v.lon == null) return false;
+    if (_findPreferredByPid(v)) return false;          // já é preferido
+    var arr = Array.isArray(cu.preferredLocations) ? cu.preferredLocations.slice() : [];
+    if (arr.length >= 5) return false;                 // limite de 5
+    var entry = { lat: Number(v.lat), lng: Number(v.lon), label: v.name || (Number(v.lat).toFixed(4) + ', ' + Number(v.lon).toFixed(4)) };
+    if (v.placeId) entry.placeId = v.placeId;
+    arr.push(entry);
+    cu.preferredLocations = arr;
+    if (Array.isArray(window._profileLocations)) window._profileLocations = arr.slice();
+    try {
+      if (window.FirestoreDB && window.FirestoreDB.db) {
+        window.FirestoreDB.db.collection('users').doc(cu.uid).set({ preferredLocations: arr }, { merge: true }).catch(function() {});
+      }
+    } catch (e) {}
+    return true;
   }
 
   // Escape hatch: usuário pode clicar "Ver outros preferidos" pra sair do
@@ -2494,10 +2516,31 @@
       '<div id="venue-chart-slot"></div>' +
       '<div id="venue-now-slot"></div>' +
       '<div id="venue-upcoming-slot"></div>';
-    var dayKey = window.PresenceDB.dayKey(new Date());
     var cu = window.AppStore && window.AppStore.currentUser;
     var myUid = cu && cu.uid;
     var friends = (cu && Array.isArray(cu.friends)) ? cu.friends : [];
+    var _todayKey = window.PresenceDB.dayKey(new Date());
+    var dayKey = _todayKey;
+    var _moveDayLabel = ''; // '' = hoje (rótulo padrão do gráfico)
+    // v2.8.78: se o usuário tem ida(s) futura(s) neste local, o movimento mostra o
+    // dia da ida MAIS PRÓXIMA (é quando ele vai estar lá). Sem ida → hoje.
+    try {
+      if (myUid) {
+        var _myA = await window.PresenceDB.loadMyActive(myUid);
+        var _mine = (_myA || []).filter(function(p) { return p && p.placeId === venue.placeId && p.type === 'planned' && p.startsAt > Date.now() && _presenceVisibleNow(p); });
+        _mine.sort(function(a, b) { return a.startsAt - b.startsAt; });
+        if (_mine.length) {
+          var _near = new Date(_mine[0].startsAt);
+          dayKey = window.PresenceDB.dayKey(_near);
+          if (dayKey !== _todayKey) {
+            var _tm = new Date(); _tm.setHours(0, 0, 0, 0);
+            var _nm = new Date(_near); _nm.setHours(0, 0, 0, 0);
+            var _dd = Math.round((_nm.getTime() - _tm.getTime()) / 86400000);
+            _moveDayLabel = _dd === 1 ? 'amanhã' : ('em ' + _dd + ' dias');
+          }
+        }
+      }
+    } catch (e) {}
     var presences = [];
     try { presences = await window.PresenceDB.loadForVenueDay(venue.placeId, dayKey); } catch (e) {}
     presences = (presences || []).filter(function(p) {
@@ -2518,14 +2561,14 @@
       return !isNaN(d.getTime()) && window.PresenceDB.dayKey(d) === dayKey;
     });
     var capacity = _calcVenueCapacity(venue);
-    try { _renderPreferredChart('venue-chart-slot', presences, tHere, dayKey, capacity, { venueName: venue.name, realPid: venue.placeId, lat: venue.lat != null ? Number(venue.lat) : null, lon: venue.lon != null ? Number(venue.lon) : null }); } catch (e) {}
+    try { _renderPreferredChart('venue-chart-slot', presences, tHere, dayKey, capacity, { venueName: venue.name, realPid: venue.placeId, lat: venue.lat != null ? Number(venue.lat) : null, lon: venue.lon != null ? Number(venue.lon) : null, dayLabel: _moveDayLabel }); } catch (e) {}
     try { _renderNowAtVenueBox('venue-now-slot', presences, venue.placeId); } catch (e) {}
     try { _renderUpcomingBox('venue-upcoming-slot', presences, tHere, dayKey, venue.placeId); } catch (e) {}
     var anyContent = ['venue-chart-slot', 'venue-now-slot', 'venue-upcoming-slot'].some(function(id) {
       var e = document.getElementById(id); return e && e.innerHTML.trim() !== '';
     });
     if (!anyContent) {
-      slot.innerHTML = '<div style="background:var(--bg-darker);border:1px solid var(--border-color);border-radius:10px;padding:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">Ninguém registrou presença ou torneio hoje neste local.</div>';
+      slot.innerHTML = '<div style="background:var(--bg-darker);border:1px solid var(--border-color);border-radius:10px;padding:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">Ninguém registrou presença ou torneio ' + (_moveDayLabel || 'hoje') + ' neste local.</div>';
     }
   }
 
@@ -2927,21 +2970,46 @@
     try { myActive = await window.PresenceDB.loadMyActive(cu.uid); } catch (e) {}
     var now = Date.now();
     var hereCheckin = null;
-    var herePlan = null;
+    // v2.8.76: coleta TODAS as idas MANUAIS deste local (múltiplas idas). A ida
+    // vinda de TORNEIO NÃO entra aqui — é gerida pelo torneio e não ocupa o card
+    // (antes virava "Editar/Cancelar" e escondia o "Planejar ida").
+    var manualPlans = [];
     (myActive || []).forEach(function(p) {
       if (!p || p.placeId !== v.placeId) return;
       if (p.type === 'checkin' && p.startsAt <= now && p.endsAt > now && !hereCheckin) hereCheckin = p;
-      if (p.type === 'planned' && !herePlan && _presenceVisibleNow(p)) herePlan = p; // v1.9.86 + v2.8.73: plano de torneio distante (>2d) não conta como ativo aqui
+      if (p.type === 'planned' && !p.tournamentId && p.source !== 'tournament' && p.startsAt > now) manualPlans.push(p);
     });
+    manualPlans.sort(function(a, b) { return a.startsAt - b.startsAt; });
+    // ter ida(s) manual(is) aqui = intenção de frequentar → vira preferido (silencioso).
+    if (manualPlans.length) { try { _autoAddPreferredSilent(v); } catch (e) {} }
     var safePid = _safe(v.placeId);
     var checkinBtn = hereCheckin
       ? '<button id="venue-quickcheckin-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesCancelMyPresenceHere("' + String(hereCheckin._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","checkin")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:8px 14px;" title="Você está registrado aqui agora · clique pra sair">✕ Cancelar presença</button>'
       : '<button id="venue-quickcheckin-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesQuickCheckIn("' + safePid + '")\' style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:700;padding:8px 14px;">📍 Estou aqui agora</button>';
-    var planBtn = herePlan
-      ? ('<button id="venue-quickplan-edit-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesEditPlanPreferred("' + safePid + '","' + String(herePlan._id || '').replace(/"/g,'&quot;') + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:8px 12px;" title="Editar horário/modalidade do plano">✏️ Editar</button>'
-        + '<button id="venue-quickplan-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesCancelMyPresenceHere("' + String(herePlan._id || '').replace(/"/g,'&quot;') + '","' + safePid + '","planned")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:8px 12px;" title="Você tem plano ativo aqui · clique pra remover">✕ Cancelar</button>')
-      : '<button id="venue-quickplan-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesQuickPlan("' + safePid + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:8px 14px;">🗓️ Planejar ida</button>';
-    slot.innerHTML = checkinBtn + planBtn;
+    // v2.8.76: "Planejar ida" SEMPRE disponível (permite múltiplas idas).
+    var planBtn = '<button id="venue-quickplan-btn" class="btn btn-sm hover-lift" onclick=\'window._venuesQuickPlan("' + safePid + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:8px 14px;">🗓️ Planejar ida</button>';
+    // Lista das idas manuais já planejadas — cada uma com editar/cancelar.
+    var plansList = '';
+    if (manualPlans.length) {
+      var hm = window._formatHHMM;
+      var todayMid = new Date(); todayMid.setHours(0, 0, 0, 0);
+      plansList = '<div style="display:flex;flex-direction:column;gap:5px;width:100%;margin-top:8px;">' +
+        manualPlans.map(function(p) {
+          var d1 = new Date(p.startsAt), d2 = new Date(p.endsAt);
+          var pmid = new Date(p.startsAt); pmid.setHours(0, 0, 0, 0);
+          var dd = Math.round((pmid.getTime() - todayMid.getTime()) / 86400000);
+          var dayLbl = dd <= 0 ? 'hoje' : (dd === 1 ? 'amanhã' : ('em ' + dd + 'd'));
+          var timeLbl = dayLbl + ' · ' + hm(d1) + (p.openEnded ? '' : '–' + hm(d2));
+          var pid = String(p._id || '').replace(/"/g, '&quot;');
+          return '<div style="display:flex;align-items:center;gap:8px;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:10px;padding:6px 10px;box-sizing:border-box;">' +
+              '<span style="flex:1;min-width:0;font-size:0.8rem;color:var(--text-bright);font-weight:600;">🗓️ ' + timeLbl + '</span>' +
+              '<button class="btn btn-sm" onclick=\'window._venuesEditPlanPreferred("' + safePid + '","' + pid + '")\' style="background:#6366f1;color:#fff;border:none;font-weight:700;padding:4px 10px;font-size:0.72rem;" title="Editar esta ida">✏️</button>' +
+              '<button class="btn btn-sm" onclick=\'window._venuesCancelMyPresenceHere("' + pid + '","' + safePid + '","planned")\' style="background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;font-weight:700;padding:4px 10px;font-size:0.72rem;" title="Cancelar esta ida">✕</button>' +
+            '</div>';
+        }).join('') +
+      '</div>';
+    }
+    slot.innerHTML = checkinBtn + planBtn + plansList;
   }
 
   // Cancela presença/plano ativo no venue e re-hidrata:
@@ -3849,11 +3917,15 @@
       var hm = window._formatHHMM;
       var dayLabel = (selectedDay === 'tomorrow') ? 'amanhã' : 'hoje';
       var timeLabel = dayLabel + ' · ' + hm(d1) + (openEnded ? '' : ' – ' + hm(d2));
+      // v2.8.76: planejar uma ida = o local vira preferido automaticamente
+      // (intenção de frequentar). Silencioso + nota no próprio toast do plano.
+      var _newlyPreferred = false;
+      try { _newlyPreferred = _autoAddPreferredSilent(v); } catch (e) {}
       // v0.16.26: toast leve em vez de overlay bloqueante. O foco visual fica
       // no card colapsado + gráfico de barras logo abaixo (via focusedPreferred
       // abaixo), com o botão "Cancelar plano" já inline no próprio card.
       if (window.showNotification) {
-        window.showNotification('🗓️ Ida planejada', timeLabel, 'success');
+        window.showNotification('🗓️ Ida planejada', timeLabel + (_newlyPreferred ? ' · ⭐ salvo nos preferidos' : ''), 'success');
       }
       // Re-hidrata o bloco "Movimento no local" pra refletir a nova presença
       // sem precisar fechar e reabrir a modal do venue.

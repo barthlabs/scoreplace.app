@@ -9,7 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.74-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.78-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🗓️ Planejar ida vira preferido:</b> ao planejar uma ida, o local entra automaticamente nos seus <b>preferidos</b>. Agora dá pra planejar <b>várias idas</b> no mesmo local (cada uma com editar/cancelar) — o "Planejar ida" fica sempre disponível.</li>' +
+        '<li><b>⏱️ Ida de torneio só na véspera:</b> a ida criada por estar inscrito num torneio só aparece a partir de <b>24h antes</b> — antes ocupava o local e escondia o "Planejar ida".</li>' +
+        '<li><b>📊 Gráfico do dia certo:</b> a tabela hora-a-hora do local mostra o movimento do dia da sua <b>ida mais próxima</b> (não sempre hoje).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.74-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🗓️ Planejar ida com a movimentação do local:</b> ao planejar, aparece a <b>tabela hora-a-hora</b> (você + amigos) cobrindo a <b>hora atual e o horário de funcionamento</b> do local, com <b>rolagem lateral</b> — ajuda a escolher a melhor hora. Atualiza ao trocar Hoje/Amanhã.</li>' +
         '<li><b>📍 Locais mais limpos:</b> um torneio só aparece no <b>movimento</b> e como <b>plano ativo</b> dos seus locais <b>a partir de 2 dias antes</b> — antes um torneio distante poluía o gráfico e o card.</li>' +

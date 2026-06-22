@@ -3523,13 +3523,13 @@ function _hydrateFriendsPresenceWidget() {
     // (check-in) ou índigo (plano) com horário, esporte, e botão Cancelar
     // logo no topo da seção.
     var nowMs = Date.now();
-    // v2.8.58: plano de presença vindo de TORNEIO (source:'tournament') só aparece a
-    // partir de 2 dias antes do evento — antes mostrava "ida planejada" assim que a
-    // pessoa se inscrevia (ex.: torneio dia 1/jul aparecia 9 dias antes). Pra valer "pra
+    // v2.8.58/2.8.76: plano de presença vindo de TORNEIO (source:'tournament') só
+    // aparece a partir de 24h antes do evento — antes mostrava "ida planejada" assim que
+    // a pessoa se inscrevia (ex.: torneio dia 1/jul aparecia 9 dias antes). Pra valer "pra
     // todos" mesmo que a data mude, usa a data ATUAL do torneio (não o startsAt do doc,
     // que pode estar defasado): re-computa a janela pelo torneio vivo. Planos manuais
     // continuam aparecendo sempre que futuros.
-    var TWO_DAYS_MS = 2 * 24 * 3600000;
+    var ONE_DAY_MS = 24 * 3600000;
     var ownActive = ownList.filter(function(p) { return p && !p.cancelled; });
     var ownCheckins = ownActive.filter(function(p) { return p.type === 'checkin' && p.startsAt <= nowMs && p.endsAt > nowMs; });
     var ownPlans = ownActive.filter(function(p) {
@@ -3541,7 +3541,7 @@ function _hydrateFriendsPresenceWidget() {
         p.startsAt = w.startsAt; p.endsAt = w.endsAt; p.venueName = w.venueName || p.venueName; // mostra a data viva
         p._tournName = (liveT && liveT.name) || ''; // v2.8.59: nome do torneio no plano de ida
         if (p.startsAt <= nowMs) return false;
-        return (p.startsAt - nowMs) <= TWO_DAYS_MS; // só ≤2 dias antes
+        return (p.startsAt - nowMs) <= ONE_DAY_MS; // só ≤24h antes
       }
       return p.startsAt > nowMs;
     });
