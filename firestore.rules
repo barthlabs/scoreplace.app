@@ -22,6 +22,10 @@ service cloud.firestore {
       return request.auth != null && (
         // Caminho uid: creatorUid (mais confiável, imutável)
         (data.creatorUid is string && data.creatorUid == request.auth.uid)
+        // v2.8.79: Caminho adminUids — co-hosts ativos por UID (cobre co-host
+        // com email '' / conta por telefone). UID é a identidade primária.
+        || (data.adminUids is list && data.adminUids.size() > 0
+            && request.auth.uid in data.adminUids)
         // Caminho adminEmails: backward compat + co-hosts com email
         || (authEmail() != '' && data.adminEmails is list
             && data.adminEmails.size() > 0 && authEmail() in data.adminEmails)
@@ -153,10 +157,15 @@ service cloud.firestore {
       allow read: if (resource.data.isPublic == true) || (request.auth != null);
 
       // Create: the caller must be the declared creator. Prevents forging
-      // tournaments on someone else's behalf.
+      // tournaments on someone else's behalf. v2.8.79: aceita uid (creatorUid)
+      // como caminho primário — criador com conta por telefone tem email ''.
       allow create: if request.auth != null
-        && request.resource.data.creatorEmail is string
-        && request.resource.data.creatorEmail.lower() == authEmail();
+        && (
+          (request.resource.data.creatorUid is string
+            && request.resource.data.creatorUid == request.auth.uid)
+          || (authEmail() != '' && request.resource.data.creatorEmail is string
+            && request.resource.data.creatorEmail.lower() == authEmail())
+        );
 
       // Update permitido em 3 caminhos:
       //   1. Admin (creator/organizer/co-host) — qualquer mudança.

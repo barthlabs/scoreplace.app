@@ -320,7 +320,8 @@
         _markInviteNotifsRead(user.uid, tId, ['host_transfer_invite']);
       } else if (inviteType === 'cohost') {
         if (Array.isArray(t.coHosts)) {
-          t.coHosts = t.coHosts.filter(function(ch) { return !(ch.email === user.email && ch.status === 'pending'); });
+          // v2.8.79: casa o convite pendente por UID (primário) OU email.
+          t.coHosts = t.coHosts.filter(function(ch) { return !(ch.status === 'pending' && ((user.uid && ch.uid && ch.uid === user.uid) || (user.email && ch.email && ch.email === user.email))); });
           window.FirestoreDB.saveTournament(t);
           // Notify organizer that cohost was rejected
           var orgUid = t.creatorUid || '';
@@ -378,21 +379,24 @@
   };
 
   // ─── Remove co-host (creator only) ───────────────────────────────────────
-  window._removeCoHost = function(tId, coHostEmail) {
+  window._removeCoHost = function(tId, coHostKey) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     if (!t || !window.AppStore.isCreator(t)) return;
     if (!Array.isArray(t.coHosts)) return;
-    var removed = t.coHosts.find(function(ch) { return ch.email === coHostEmail; });
-    t.coHosts = t.coHosts.filter(function(ch) { return ch.email !== coHostEmail; });
+    // v2.8.79: casa por UID (primário) OU email — co-host com email '' (conta por
+    // telefone) era impossível de remover. Remove por REFERÊNCIA do objeto achado.
+    var removed = t.coHosts.find(function(ch) { return ch && ((ch.uid && ch.uid === coHostKey) || (ch.email && ch.email === coHostKey)); });
+    if (!removed) return;
+    t.coHosts = t.coHosts.filter(function(ch) { return ch !== removed; });
     window.FirestoreDB.saveTournament(t);
     if (removed && typeof window._sendUserNotification === 'function') {
-      _notifyByEmail(removed.uid || coHostEmail, {
+      _notifyByEmail(removed.uid || removed.email || coHostKey, {
         type: 'cohost_removed', tournamentId: String(t.id), tournamentName: t.name,
         message: _tH('org.youWereRemoved') + ' "' + t.name + '".',
         level: 'important'
       });
     }
-    if (typeof showNotification === 'function') showNotification(_tH('org.removed'), (removed ? removed.displayName : coHostEmail) + ' ' + _tH('org.removedFromOrg'), 'info');
+    if (typeof showNotification === 'function') showNotification(_tH('org.removed'), (removed ? removed.displayName : coHostKey) + ' ' + _tH('org.removedFromOrg'), 'info');
     var container = document.getElementById('view-container');
     if (container && typeof renderTournaments === 'function') renderTournaments(container, String(tId));
   };

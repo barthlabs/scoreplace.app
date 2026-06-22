@@ -3229,12 +3229,8 @@ window._checkLigaAutoDraws = async function() {
 
     // Only the organizer (or an active co-host) fires the draw — avoids
     // multiple participant browsers racing on the same tournament.
-    // Check directly against the user's email so we don't mutate viewMode mid-flight.
-    var _myEmail = store.currentUser.email;
-    var _isOrg = (t.organizerEmail === _myEmail) || (t.creatorEmail === _myEmail);
-    if (!_isOrg && Array.isArray(t.coHosts)) {
-      _isOrg = t.coHosts.some(function(ch) { return ch.email === _myEmail && ch.status === 'active'; });
-    }
+    // v2.8.79: uid-primário via helper canônico (cobre co-host com email '').
+    var _isOrg = window.AppStore.isOrganizer(t);
     if (!_isOrg) continue;
 
     // Must be auto-scheduled with a first date

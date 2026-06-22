@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.8.78-beta';
+window.SCOREPLACE_VERSION = '2.8.79-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -2700,7 +2700,9 @@ window._canCreateTournament = function() {
   var user = window.AppStore && window.AppStore.currentUser;
   if (!user) return false;
   var active = window.AppStore.tournaments.filter(function(t) {
-    return t.organizerEmail === user.email && t.status !== 'finished' && t.status !== 'cancelled';
+    // v2.8.79: uid-primário (criador por uid; organizerEmail como fallback)
+    var mine = (user.uid && t.creatorUid === user.uid) || (user.email && t.organizerEmail === user.email);
+    return mine && t.status !== 'finished' && t.status !== 'cancelled';
   });
   return active.length < window.PLAN_LIMITS.FREE_MAX_TOURNAMENTS;
 };
@@ -3122,7 +3124,7 @@ window._autoCloseExpiredEnrollments = function() {
       // Só o organizador persiste — salva objeto completo para não limpar
       // adminEmails/memberEmails (bug v1.6.66 corrigido em v1.6.67).
       var cu = window.AppStore.currentUser;
-      if (cu && (t.organizerEmail === cu.email || (Array.isArray(t.coHosts) && t.coHosts.some(function(ch) { return ch.email === cu.email && ch.status === 'active'; })))) {
+      if (cu && window.AppStore.isOrganizer(t)) { // v2.8.79: uid-primário (co-host com email '')
         if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
           window.FirestoreDB.saveTournament(t).catch(function() {});
         }
@@ -3435,8 +3437,7 @@ window.AppStore = {
     var store = this;
     if (!window.FirestoreDB || !window.FirestoreDB.db || !store.currentUser) return;
     store.tournaments.forEach(function(t) {
-      if (t.organizerEmail === store.currentUser.email ||
-          (Array.isArray(t.coHosts) && t.coHosts.some(function(ch) { return ch.email === store.currentUser.email && ch.status === 'active'; }))) {
+      if (store.isOrganizer(t)) { // v2.8.79: uid-primário (co-host com email '')
         window.FirestoreDB.saveTournament(t, { skipParticipants: true }).catch(function(err) {
           window._warn('Sync error:', err);
         });
@@ -4422,17 +4423,30 @@ window.AppStore = {
   isOrganizer(tournament) {
     if (!this.currentUser) return false;
     var email = this.currentUser.email;
-    if (tournament.organizerEmail === email) return true;
+    var uid = this.currentUser.uid;
+    // v2.8.79: uid é identidade primária. Criador por uid OU organizerEmail.
+    if (uid && tournament.creatorUid && tournament.creatorUid === uid) return true;
+    if (email && tournament.organizerEmail === email) return true;
     if (Array.isArray(tournament.coHosts)) {
-      return tournament.coHosts.some(function(ch) { return ch.email === email && ch.status === 'active'; });
+      return tournament.coHosts.some(function(ch) {
+        if (!ch || ch.status !== 'active') return false;
+        // Co-host casa por UID (primário) OU email (fallback, ambos não-vazios).
+        // ANTES casava só `ch.email === email`: co-host com email '' (ex.: conta
+        // por telefone) nunca virava organizador — sumiam Análise/Enquete/etc.
+        if (uid && ch.uid && ch.uid === uid) return true;
+        if (email && ch.email && ch.email === email) return true;
+        return false;
+      });
     }
     return false;
   },
 
   isCreator(tournament) {
     if (!this.currentUser) return false;
+    // v2.8.79: uid primeiro (robusto pra criador com conta por telefone/sem email).
+    if (this.currentUser.uid && tournament.creatorUid && tournament.creatorUid === this.currentUser.uid) return true;
     var creator = tournament.creatorEmail || tournament.organizerEmail;
-    return creator === this.currentUser.email;
+    return !!(creator && this.currentUser.email && creator === this.currentUser.email);
   },
 
   getVisibleTournaments() {
@@ -4566,7 +4580,11 @@ window.AppStore = {
   hasOrganizedTournaments() {
     if (!this.currentUser) return false;
     var email = this.currentUser.email;
-    return this.tournaments.some(function(t) { return t.organizerEmail === email; });
+    var uid = this.currentUser.uid;
+    // v2.8.79: uid-primário (criador por uid; organizerEmail como fallback)
+    return this.tournaments.some(function(t) {
+      return (uid && t.creatorUid === uid) || (email && t.organizerEmail === email);
+    });
   }
 };
 

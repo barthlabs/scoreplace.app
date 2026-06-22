@@ -130,6 +130,22 @@ window.FirestoreDB = {
     return Object.keys(set);
   },
 
+  // v2.8.79: adminUids[] — UIDs dos principais de nível organizador (criador +
+  // co-hosts ativos). Espelho uid de adminEmails. Necessário porque co-host
+  // pode ter email '' (conta por telefone) → as regras precisam autorizar
+  // edição/escrita por UID, não por email. Recomputa a cada save (encolhe
+  // quando um co-host é removido — diferente de memberUids que nunca encolhe).
+  _computeAdminUids(data) {
+    if (!data) return [];
+    var set = {};
+    var push = function(u) { if (u && typeof u === 'string' && u.length >= 4) set[u] = true; };
+    push(data.creatorUid);
+    if (Array.isArray(data.coHosts)) {
+      data.coHosts.forEach(function(ch) { if (ch && ch.status === 'active') push(ch.uid); });
+    }
+    return Object.keys(set);
+  },
+
   // v1.8.62: memberUids[] — UIDs de todos os participantes + organizador.
   // Permite que usuários phone-only (sem email) sejam identificados nas
   // regras do Firestore, onde authEmail() retorna '' para esses usuários.
@@ -173,6 +189,7 @@ window.FirestoreDB = {
       // stale local cache.
       delete cleanData.memberEmails;
       delete cleanData.adminEmails;
+      delete cleanData.adminUids; // v2.8.79: idem — merge:true preserva o do banco
       // v1.9.84: idem memberUids — não tocar nesse path (merge:true preserva
       // o valor do banco). Sem o delete, um memberUids stale em memória poderia
       // ENCOLHER a lista e fazer participantes sumirem do listener deles.
@@ -186,6 +203,7 @@ window.FirestoreDB = {
       var _mergedEmails = Array.from(new Set(_prevEmails.concat(_newEmails)));
       cleanData.memberEmails = _mergedEmails;
       cleanData.adminEmails  = this._computeAdminEmails(cleanData);
+      cleanData.adminUids    = this._computeAdminUids(cleanData); // v2.8.79: co-host por uid
       // v1.9.84: memberUids TAMBÉM nunca encolhe — mesma lógica do memberEmails.
       // BUG reportado: depois do sorteio o torneio sumia para os participantes
       // (só aparecia pro organizador). Causa: o sorteio reconstrói

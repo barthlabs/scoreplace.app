@@ -2481,11 +2481,11 @@ function renderTournaments(container, tournamentId = null) {
             if (ch.status === 'active') {
               var _chGender = ch.gender || _resolveOrgGender(ch.email, ch.uid);
               var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
-              _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.email);
+              _orgCards += _buildOrgCard(ch.displayName || ch.email, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || ch.email);
             } else if (ch.status === 'pending') {
               // v2.8.48: convidado pendente aparece AQUI (box âmbar pontilhado, ao
               // lado do organizador), não mais só na lista de inscritos.
-              _orgCards += _buildPendingOrgCard(ch.displayName || ch.email, ch.email || ch.uid || '', _isCreatorNow);
+              _orgCards += _buildPendingOrgCard(ch.displayName || ch.email, ch.uid || ch.email || '', _isCreatorNow);
             }
           });
         }
