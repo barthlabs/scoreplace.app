@@ -2110,7 +2110,7 @@ function renderDashboard(container) {
       const _sectionHtml = function(title, items, marginTop) {
         return '<div style="' + (marginTop ? 'margin-top:1.25rem;' : 'margin-bottom:1.25rem;') + '">' +
             '<div style="font-weight:800;font-size:0.95rem;color:#10b981;margin-bottom:0.6rem;border-left:3px solid #10b981;padding-left:10px;">' + title + ' <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + items.length + ')</span></div>' +
-            '<div class="cards-grid">' + items.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>' +
+            _renderTGroup(items) +
           '</div>';
       };
       if (_top.length) runningBandHtml = _sectionHtml('🟢 Em andamento (esta semana)', _top, false);
@@ -2142,7 +2142,7 @@ function renderDashboard(container) {
       awaitingStartHtml =
         '<div style="margin-bottom:1.25rem;">' +
           '<div style="font-weight:800;font-size:0.95rem;color:#f59e0b;margin-bottom:0.6rem;border-left:3px solid #f59e0b;padding-left:10px;">⏳ Sorteados — aguardando início <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + _awaitList.length + ')</span></div>' +
-          '<div class="cards-grid">' + _awaitList.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>' +
+          _renderTGroup(_awaitList) +
         '</div>';
     }
   }
@@ -2162,7 +2162,7 @@ function renderDashboard(container) {
         favoritesBandHtml =
           '<div style="margin-bottom:1.25rem;">' +
             '<div style="font-weight:800;font-size:0.95rem;color:#fb7185;margin-bottom:0.6rem;border-left:3px solid #fb7185;padding-left:10px;">❤️ Favoritos <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + _favList.length + ')</span></div>' +
-            '<div class="cards-grid">' + _favList.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>' +
+            _renderTGroup(_favList) +
           '</div>';
       }
     }
@@ -2216,11 +2216,11 @@ function renderDashboard(container) {
       var finishedCards = '';
       if (myFinished.length > 0) {
         finishedCards += '<div style="font-size:0.78rem;font-weight:700;color:var(--text-bright);margin-bottom:8px;opacity:0.85;">🏆 ' + _t('dashboard.yourFinished', {count: myFinished.length}) + '</div>';
-        finishedCards += '<div class="cards-grid" style="margin-bottom:1rem;">' + myFinished.map(t => renderTournamentCard(t, '')).join('') + '</div>';
+        finishedCards += '<div style="margin-bottom:1rem;">' + _renderTGroup(myFinished) + '</div>';
       }
       if (otherFinished.length > 0) {
         if (myFinished.length > 0) finishedCards += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);margin-bottom:8px;opacity:0.7;">' + _t('dashboard.otherFinished', {count: otherFinished.length}) + '</div>';
-        finishedCards += '<div class="cards-grid">' + otherFinished.map(t => renderTournamentCard(t, '')).join('') + '</div>';
+        finishedCards += _renderTGroup(otherFinished);
       }
       filteredHtml += '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
     }
@@ -2253,7 +2253,7 @@ function renderDashboard(container) {
       var _finishedItems = _sortedFiltered.filter(function(t) { return t.status === 'finished'; });
       if (_finishedItems.length > 0) {
         _sortedFiltered = _activeItems;
-        _finishedSubSection = '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: _finishedItems.length}) + '</summary><div style="margin-top:0.75rem;"><div class="cards-grid">' + _finishedItems.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div></div></details></div>';
+        _finishedSubSection = '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: _finishedItems.length}) + '</summary><div style="margin-top:0.75rem;">' + _renderTGroup(_finishedItems) + '</div></details></div>';
       }
     }
     const visibleItems = _sortedFiltered.slice(0, pageNum * PAGE_SIZE);
@@ -2314,7 +2314,10 @@ function renderDashboard(container) {
   const filterBarHtml = '';
 
   // Build compact list view
-  const _buildCompactList = function(items) {
+  // v2.8.81: function declaration (hoisted) pra que as BANDAS (Em andamento,
+  // Favoritos, Aguardando, Encerrados — definidas acima) também possam renderizar
+  // em lista quando o toggle "Lista" está ativo, via _renderTGroup.
+  function _buildCompactList(items) {
     if (!items || items.length === 0) return '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
     return '<div class="compact-list-container" style="display:flex;flex-direction:column;gap:2px;">' + items.map(function(t) {
       var isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
@@ -2368,7 +2371,15 @@ function renderDashboard(container) {
         '</div>' +
       '</a>';
     }).join('') + '</div>';
-  };
+  }
+
+  // v2.8.81: renderiza um GRUPO de torneios respeitando o toggle Lista/Cards —
+  // lista compacta quando _dashView==='compact', senão grid de cards. Usado por
+  // TODAS as bandas (Em andamento/Favoritos/Aguardando/Encerrados) + lista principal.
+  function _renderTGroup(items) {
+    if (window._dashView === 'compact') return '<div class="compact-list">' + _buildCompactList(items) + '</div>';
+    return '<div class="cards-grid">' + (items || []).map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>';
+  }
 
   // Main filter card styles
   // v1.0.44-beta: pill mais compacto pra dar lugar a 3 novos stat pills
@@ -2777,7 +2788,7 @@ function renderDashboard(container) {
         : '';
       var _section = function(title, items, color, collapsed) {
         if (!items || items.length === 0) return '';
-        var _cards = '<div class="cards-grid">' + items.map(function(t) { return renderTournamentCard(t, ''); }).join('') + '</div>';
+        var _cards = _renderTGroup(items);
         if (collapsed) {
           return '<details style="margin-top:1rem;"' + _dashDetailsAttr('scoreplace_dash_sec_' + title.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 24), false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.92rem;color:' + color + ';padding:8px 0;user-select:none;">' + title + ' (' + items.length + ')</summary><div style="margin-top:0.75rem;">' + _cards + '</div></details>';
         }
@@ -2793,7 +2804,7 @@ function renderDashboard(container) {
     ${(function(){
       // v2.8.40: seção dos torneios que o usuário ocultou — colapsável, no fim de tudo.
       if (!hiddenTournaments || !hiddenTournaments.length) return '';
-      return '<div style="margin-top:1.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_hidden_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;"><div class="cards-grid">' + hiddenTournaments.map(function(t){ return renderTournamentCard(t, ''); }).join('') + '</div></div></details></div>';
+      return '<div style="margin-top:1.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_hidden_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;">' + _renderTGroup(hiddenTournaments) + '</div></details></div>';
     })()}
   `;
   container.innerHTML = html;
