@@ -2018,6 +2018,8 @@ function renderTournaments(container, tournamentId = null) {
               ${tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" title="${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}" style="font-size:1.5rem;cursor:pointer;flex-shrink:0;align-self:flex-start;margin-top:6px;color:${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:all 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '❤️' : '♡'}</span>` : ''}
               ${!tournamentId ? `<span data-fav-id="${t.id}" onclick="event.stopPropagation(); window._toggleFavorite('${t.id}', event)" style="font-size:1.8rem;cursor:pointer;flex-shrink:0;align-self:flex-start;color:${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:all 0.2s;line-height:1;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${(typeof window._isFavorite === 'function' && window._isFavorite(t.id)) ? '❤️' : '♡'}</span>` : ''}
             </div>
+            ${/* v2.8.67: enquete ativa → botão brilhante logo abaixo do nome */ ''}
+            ${(tournamentId && typeof window._opButtonHtml === 'function') ? window._opButtonHtml(t) : ''}
             ${/* v2.3.85: linha direta com o desenvolvedor — logo abaixo do nome,
                   só pro organizador na página de detalhe do torneio. */ ''}
             ${(tournamentId && isOrg && typeof window._devWhatsAppBtnHtml === 'function') ? '<div style="margin:2px 0 12px;">' + window._devWhatsAppBtnHtml({ extra: 'height:38px;padding:0 16px;font-size:0.82rem;' }) + '</div>' : ''}
@@ -2243,6 +2245,7 @@ function renderTournaments(container, tournamentId = null) {
                 ${isOrg ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window._saveAsTemplate('${t.id}')">💾 ${window._t ? window._t('btn.saveTemplate') : 'Salvar como Template'}</button>` : ''}
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
+                ${isOrg ? `<button class="btn btn-tool-indigo hover-lift" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
                 ${_arbitrosBtn}
                 ${toggleRegBtn}
                 ${sortearBtn}
@@ -2315,6 +2318,9 @@ function renderTournaments(container, tournamentId = null) {
     var _checksRan = _checksKey && window[_checksKey];
     if (tournamentId && visible.length === 1 && !_checksRan) {
         if (_checksKey) window[_checksKey] = true;
+
+        // v2.8.67: pop-up da enquete pro inscrito que ainda não votou (1x/sessão).
+        if (typeof window._opMaybePopup === 'function') window._opMaybePopup(visible[0]);
 
         // Fix orphaned match names
         if (typeof window._fixOrphanedMatchNames === 'function') {
@@ -3086,10 +3092,11 @@ function renderTournaments(container, tournamentId = null) {
                   var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                   var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
                   var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
-                  // v2.8.66: nome em 1 linha (nowrap + ellipsis) pra NÃO quebrar à toa e o
-                  // avatar SEMPRE acompanhar o nome (align-items:center, grudados). title = nome
-                  // completo no hover. min-width:0 deixa o ellipsis funcionar dentro do flex.
-                  var _nmSpan = '<span title="' + window._safeHtml(n) + '" style="font-weight:700;font-size:0.86rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.2;">' + window._safeHtml(n) + '</span>';
+                  // v2.8.68: nome NÃO trunca — quebra em até 2 linhas e a fonte ENCOLHE
+                  // (auto-fit JS _fitTwoLineNames) até caber na altura do avatar (28px).
+                  // class sp-fit-name + data-fit-h/max alimentam o medidor; avatar acompanha
+                  // (align-items:center). title = nome completo no hover.
+                  var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="28" data-fit-max="13.5" style="font-weight:700;font-size:13.5px;color:var(--text-bright);line-height:1.1;max-height:28px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
                   var _av = right
                     ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _img + _nmSpan + '</div>'
                     : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';

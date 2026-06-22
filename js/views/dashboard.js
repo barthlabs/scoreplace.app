@@ -731,6 +731,8 @@ function renderDashboard(container) {
                   <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.4rem;cursor:pointer;flex-shrink:0;color:${_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;margin-top:2px;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '❤️' : '♡'}</span>
                 </div>
                 ${_finDurStr ? `<div style="font-size:0.78rem;color:#fbbf24;font-weight:600;margin-top:4px;">⏱️ durou ${_finDurStr}</div>` : ''}
+                ${/* v2.8.67: enquete ativa → botão brilhante abaixo do nome */ ''}
+                ${(typeof window._opButtonHtml === 'function') ? window._opButtonHtml(t) : ''}
               </div>
             </div>
 

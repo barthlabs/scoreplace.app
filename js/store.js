@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.8.66-beta';
+window.SCOREPLACE_VERSION = '2.8.68-beta';
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
 // (compat de dados + lógica que compara t.format === 'Liga' etc.). Só muda o texto
@@ -3039,6 +3039,45 @@ window._patchProfileMetaSlots = function(container, t) {
     try { window._partApplyFilter(); } catch (e) {}
   }
 };
+
+// v2.8.68: auto-fit de nomes que devem caber em até 2 linhas dentro de uma altura fixa
+// (ex.: nome do jogador no card de dupla, limitado à altura do avatar). Em vez de
+// truncar com "…", REDUZ a fonte até o texto caber (scrollHeight <= max-height). Cada
+// elemento `.sp-fit-name` traz data-fit-h (altura px, default 28) e data-fit-max (fonte
+// px inicial, default 13.5). Marca data-fit-done pra não reprocessar.
+window._fitTwoLineNames = function(root) {
+  try {
+    var scope = (root && root.querySelectorAll) ? root : document;
+    var els = scope.querySelectorAll('.sp-fit-name:not([data-fit-done])');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      el.setAttribute('data-fit-done', '1');
+      var maxH = parseFloat(el.getAttribute('data-fit-h') || '28');
+      var fs = parseFloat(el.getAttribute('data-fit-max') || '13.5');
+      var minFs = 9, guard = 0;
+      el.style.fontSize = fs + 'px';
+      while (el.scrollHeight > maxH + 0.5 && fs > minFs && guard < 40) { fs -= 0.5; el.style.fontSize = fs + 'px'; guard++; }
+    }
+  } catch (e) {}
+};
+// Observer único: ao mudar o DOM, agenda um fit (debounce via rAF). O filtro
+// :not([data-fit-done]) torna o passo barato quando não há nomes novos.
+(function() {
+  if (window._fitNamesObserverInstalled || typeof MutationObserver === 'undefined') return;
+  window._fitNamesObserverInstalled = true;
+  var pending = false;
+  function _run() { pending = false; if (typeof window._fitTwoLineNames === 'function') window._fitTwoLineNames(document); }
+  function _schedule() { if (pending) return; pending = true; (window.requestAnimationFrame || function(f){ setTimeout(f, 16); })(_run); }
+  try {
+    var start = function() {
+      var target = document.getElementById('view-container') || document.body;
+      if (!target) { setTimeout(start, 300); return; }
+      new MutationObserver(_schedule).observe(target, { childList: true, subtree: true });
+      _schedule();
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  } catch (e) {}
+})();
 
 // Replace button content with a spinner to indicate command received (enroll/unenroll etc).
 // Caller passes `this` from the onclick. Normally the view re-renders and the button is replaced;
