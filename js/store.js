@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.8.82-beta';
+window.SCOREPLACE_VERSION = '2.8.83-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3714,10 +3714,20 @@ window.AppStore = {
           if (!store.currentUser) return;
           store.loadPublicDiscovery().then(function() {
             var h = window.location.hash || '';
-            if (h === '' || h === '#' || h.indexOf('#dashboard') === 0) {
-              var c = document.getElementById('view-container');
-              if (c && typeof renderDashboard === 'function') renderDashboard(c);
-            }
+            if (!(h === '' || h === '#' || h.indexOf('#dashboard') === 0)) return;
+            // v2.8.83: só re-renderiza se o SET de discovery mudou de fato — evita
+            // o flash da seção "Movimento" (e o pulo do que está abaixo) a cada
+            // update irrelevante de outros torneios públicos. E usa _dashRerender
+            // (preserva scroll) em vez de renderDashboard cru.
+            try {
+              var _pd = store.publicDiscovery || [];
+              var _sig = _pd.length + '|' + _pd.map(function(t) { return t && (t.id || t._id); }).join(',');
+              if (_sig === window._dashDiscoverySig) return;
+              window._dashDiscoverySig = _sig;
+            } catch (e) {}
+            if (typeof window._dashRerender === 'function') { window._dashRerender(); return; }
+            var c = document.getElementById('view-container');
+            if (c && typeof renderDashboard === 'function') renderDashboard(c);
           }).catch(function() {});
         }, function(err) {
           window._warn('discoveryFeed listener error (fallback p/ polling 25s):', err);

@@ -3311,6 +3311,21 @@ function _hydrateFriendsPresenceWidget() {
   // Muted = don't fetch anyone's presences, consistent with Perfil → Presença.
   var muteUntil = Number(cu.presenceMuteUntil || 0);
   if (muteUntil > Date.now()) return;
+  // v2.8.83: GUARDA anti-flash. listenMyActive/listenForFriends chamam isto a
+  // cada snapshot de presença — muitos redundantes (mesmo estado). Reconstruir o
+  // widget toda vez fazia a seção "Movimento" sumir/aparecer e empurrar o que
+  // está abaixo. Se os dados de presença (cache dos listeners) + amigos não
+  // mudaram E o box já está renderizado, NÃO reconstrói (o gráfico tem auto-tick
+  // próprio pra deslizar a janela). Após um re-render da dashboard o box fica
+  // vazio → reconstrói normalmente.
+  try {
+    var _pc = window._dashPresenceCache || { own: [], friends: [] };
+    var _allP = (_pc.own || []).concat(_pc.friends || []);
+    var _msig = _allP.map(function(p) { return p && (p.placeId + '|' + p.uid + '|' + p.type + '|' + p.startsAt + '|' + p.endsAt + '|' + (p.cancelled ? 1 : 0) + '|' + (Array.isArray(p.sports) ? p.sports.join(',') : '')); }).sort().join(';')
+      + '|f:' + (Array.isArray(cu.friends) ? cu.friends.length : 0);
+    if (_msig === window._dashMovementSig && box.innerHTML) return;
+    window._dashMovementSig = _msig;
+  } catch (e) {}
   // Filtra o próprio uid do array de amigos como defesa contra auto-amizade
   // (dado corrompido via migração ou bug). Sem isso, o usuário veria a
   // própria presença APARECER TANTO no widget "Sua presença ativa" quanto

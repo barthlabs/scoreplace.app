@@ -9,9 +9,10 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.82-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.83-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🧭 Sem pulo de tela:</b> ações dentro de um torneio (inscrever, sair da lista, marcar presença, editar inscrito, etc.) agora <b>mantêm você no mesmo ponto da rolagem</b> em vez de jogar pro topo. Só muda de posição quando você realmente troca de página.</li>' +
+        '<li><b>📍 Dashboard mais estável:</b> a seção <b>"Movimento nos seus locais"</b> não fica mais <b>sumindo e reaparecendo</b> (nem empurrando o que está abaixo) a cada atualização — só re-renderiza quando algo realmente muda.</li>' +
         '<li><b>📋 Modo Lista para tudo:</b> o botão <b>Lista</b> da dashboard agora deixa <b>todos</b> os torneios em lista compacta — incluindo Favoritos, Em andamento e Encerrados (antes alguns continuavam como card).</li>' +
         '<li><b>🤝 Co-organizadores com acesso completo:</b> <b>todas as ferramentas do organizador</b> (incluindo a <b>Enquete</b>) agora aparecem e funcionam pra co-organizadores — inclusive quem entrou <b>por telefone</b> (sem e-mail). A identificação passou a ser sempre pelo seu cadastro, não pelo e-mail.</li>' +
         '<li><b>📊 Estatísticas mais precisas:</b> torneios em comum, confrontos e parcerias agora reconhecem corretamente quem entrou <b>por telefone</b> (identificação por cadastro, não por e-mail/nome).</li>' +
