@@ -689,11 +689,18 @@ window._confirmSendComm = async function(tId) {
     // acontecia") e TRUNCAVA se a página fosse fechada antes do fim (inscritos
     // do fim da lista não recebiam). Agora 1 chamada e o servidor entrega a
     // todos (plataforma + e-mail digest + WhatsApp), independente da página.
+    // v3.0.x: TODO comunicado leva o LINK do torneio no fim da mensagem (WhatsApp/e-mail/
+    // plataforma) — pedido do organizador. Não duplica se o texto já tiver o link.
+    var _commUrl = (typeof window._tournamentUrl === 'function')
+        ? window._tournamentUrl(t.id)
+        : ((window.SCOREPLACE_URL || 'https://scoreplace.app') + '/#tournaments/' + t.id);
+    var _msgWithLink = (message.indexOf(_commUrl) !== -1) ? message : (message + '\n\n🔗 Acesse o torneio: ' + _commUrl);
+
     var result = null;
     try {
         var _resp = await firebase.functions().httpsCallable('sendOrgCommunication')({
             tournamentId: String(t.id),
-            message: message,
+            message: _msgWithLink,
             level: level
         });
         result = _resp && _resp.data ? _resp.data : null;

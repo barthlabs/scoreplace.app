@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.44-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.46-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📲 Notificações mais limpas:</b> no <b>WhatsApp</b> some o cartão de preview vazio que aparecia em cima; <b>todo comunicado do organizador</b> leva o link do torneio; e o <b>e-mail</b> ganha um botão <b>"👉 Ver no scoreplace.app"</b>. Tudo sempre com um caminho claro pra abrir o torneio.</li>' +
+        '<li><b>🖼️ Cartão bonito ao compartilhar o link:</b> ao colar o link do scoreplace.app fora do app (iMessage, redes, etc.), aparece um <b>cartão com o pódio e a marca</b> em vez de nada.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.44-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🧩 Fase de Grupos muito melhor:</b> a divisão dos grupos agora é por um <b>slider</b> (← mais grupos menores · menos grupos maiores →) com sugestão pelo nº de inscritos, opção <b>"apenas grupos de mesmo tamanho"</b> (o excedente vira <b>lista de espera</b>, ninguém fica de fora à toa) e a <b>contagem de jogos</b> da fase. Na passagem de grupos pra eliminatória, a <b>repescagem (play-in)</b> é automática pra fechar a potência de 2.</li>' +
         '<li><b>🏆 Chaves da fase final reorganizadas:</b> as <b>grandes semifinais e a grande final</b> aparecem logo após a 1ª linha, a <b>disputa de 3º/4º</b> fica abaixo da final, e a <b>classificação geral é única</b> (não mais uma por linha).</li>' +

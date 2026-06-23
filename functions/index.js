@@ -2312,7 +2312,10 @@ async function _sendWhatsAppText(apiUrl, apiKey, instance, phone, text) {
     text: text,
     // Evolution-specific options:
     delay: 1200, // ms entre msgs (parece + humano, evita ban)
-    linkPreview: true,
+    // v3.0.x: SEM preview de link — o card de pré-visualização do scoreplace.app vinha
+    // como um BOX VAZIO grande e feio em cima da mensagem (sem og:image). Desligar deixa
+    // a notificação enxuta; o link continua clicável no texto ("👉 Ver torneio: …").
+    linkPreview: false,
   };
   let resp;
   try {

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a3e"/>
+      <stop offset="100%" stop-color="#0f0f23"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g transform="translate(-78,-6) scale(1.25)">
+    <rect x="117" y="267" width="85" height="139" rx="13" fill="#CBD5E1"/>
+    <rect x="213" y="181" width="86" height="225" rx="13" fill="#F59E0B"/>
+    <rect x="310" y="315" width="85" height="91" rx="13" fill="#FB923C"/>
+    <path d="M 256 107 L 267 139 L 299 139 L 272 159 L 283 192 L 256 171 L 229 192 L 240 159 L 213 139 L 245 139 Z" fill="#F59E0B"/>
+  </g>
+  <text x="468" y="298" font-family="Helvetica,Arial,sans-serif" font-size="78" font-weight="bold" fill="#ffffff">scoreplace<tspan fill="#F59E0B">.app</tspan></text>
+  <text x="471" y="360" font-family="Helvetica,Arial,sans-serif" font-size="44" fill="#cbd5e1">Jogue em outro nível</text>
+  <text x="471" y="414" font-family="Helvetica,Arial,sans-serif" font-size="28" fill="#94a3b8">Torneios · Partidas casuais · Presença · Locais</text>
+</svg>
