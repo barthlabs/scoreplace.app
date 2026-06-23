@@ -22,6 +22,20 @@ window.FirestoreDB = {
         return;
       }
       this.db = firebase.firestore();
+      // v3.0.x: PERSISTÊNCIA OFFLINE = "shoot and forget". A escrita vai pra uma fila
+      // DURÁVEL em IndexedDB e sincroniza sozinha — sobrevive a fechar o app / perder a
+      // rede no meio de um save (era exatamente o que se perdia: clicou salvar e saiu).
+      // Tem que ser chamado ANTES de qualquer leitura/escrita (init roda cedo, antes de
+      // tudo). synchronizeTabs cobre múltiplas abas. .catch degrada gracioso: navegador
+      // sem suporte / aba privada / persistência já ativa → app segue sem a fila durável.
+      try {
+        this.db.enablePersistence({ synchronizeTabs: true }).then(function () {
+          if (window._log) window._log('[FirestoreDB] persistência offline ATIVA — saves sobrevivem a fechar o app');
+        }).catch(function (err) {
+          var _c = (err && err.code) || String(err);
+          if (window._warn) window._warn('[FirestoreDB] persistência offline indisponível (' + _c + ') — app segue sem fila durável');
+        });
+      } catch (_pErr) { /* enablePersistence pode lançar síncrono em ambiente sem IndexedDB */ }
       this.lastInitError = null;
     } catch (e) {
       this.lastInitError = (e && e.message) || String(e);
