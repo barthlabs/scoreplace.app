@@ -192,23 +192,43 @@ window._updateStatBoxes = function(t) {
 
 // v2.1.16: Pódio do torneio encerrado — 1º lugar em cima (mais alto), 2º e 3º
 // dividindo a linha de baixo ao meio (quase um pódio). Usado no topo do card.
-window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3) {
+window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
   var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
   if (!p1) return '';
+  opts = opts || {};
+  var title = opts.title || '🏆 Torneio Encerrado';
   sub1 = sub1 || 'Campeão';
   sub2 = sub2 || '2º Lugar';
   sub3 = sub3 || '3º Lugar';
+  // v2.8.100: foto/ícone ao lado do nome — time "A / B" mostra as 2 fotos; solo 1.
+  function _av(name, size) {
+    var ms = String(name == null ? '' : name).split(' / ').map(function(s){ return s.trim(); }).filter(Boolean);
+    if (!ms.length) return '';
+    var imgs = ms.map(function(n) {
+      var lc = n.toLowerCase();
+      var cached = (window._playerPhotoCache && window._playerPhotoCache[lc] && window._playerPhotoCache[lc].indexOf('dicebear') === -1) ? window._playerPhotoCache[lc] : '';
+      var src = cached || (typeof window._profileAvatarUrl === 'function' ? window._profileAvatarUrl(n, '', size) : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf'));
+      return '<img src="' + _sh(src) + '" title="' + _sh(n) + '" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.25);margin-left:-5px;box-sizing:border-box;flex-shrink:0;">';
+    }).join('');
+    return '<span style="display:inline-flex;align-items:center;padding-left:5px;flex-shrink:0;">' + imgs + '</span>';
+  }
+  function _nameRow(name, color, fs, fw, size) {
+    return '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:4px;">' +
+      _av(name, size) +
+      '<span style="font-weight:' + fw + ';color:' + color + ';font-size:' + fs + ';word-break:break-word;">' + _sh(name) + '</span>' +
+    '</div>';
+  }
   var second = p2 ? (
     '<div style="flex:1;text-align:center;min-width:0;">' +
       '<div style="font-size:2rem;line-height:1;">🥈</div>' +
-      '<div style="font-weight:700;color:#cbd5e1;font-size:1rem;margin-top:3px;word-break:break-word;">' + _sh(p2) + '</div>' +
+      _nameRow(p2, '#cbd5e1', '1rem', '700', 24) +
       '<div style="font-size:0.72rem;color:var(--text-muted);">' + _sh(sub2) + '</div>' +
     '</div>'
   ) : '';
   var third = p3 ? (
     '<div style="flex:1;text-align:center;min-width:0;">' +
       '<div style="font-size:1.7rem;line-height:1;">🥉</div>' +
-      '<div style="font-weight:700;color:#cd7f32;font-size:0.95rem;margin-top:3px;word-break:break-word;">' + _sh(p3) + '</div>' +
+      _nameRow(p3, '#cd7f32', '0.95rem', '700', 24) +
       '<div style="font-size:0.72rem;color:var(--text-muted);">' + _sh(sub3) + '</div>' +
     '</div>'
   ) : '';
@@ -216,10 +236,10 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3) {
     ? ('<div style="display:flex;gap:1rem;justify-content:center;align-items:flex-start;">' + second + third + '</div>')
     : '';
   return '<div style="text-align:center;margin:0 0 1.25rem 0;padding:1.5rem 1.25rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:16px;">' +
-    '<div style="font-size:1.35rem;font-weight:700;margin-bottom:1.1rem;color:#fff;">🏆 Torneio Encerrado</div>' +
+    '<div style="font-size:1.35rem;font-weight:700;margin-bottom:1.1rem;color:#fff;">' + _sh(title) + '</div>' +
     '<div style="text-align:center;margin-bottom:1.1rem;">' +
       '<div style="font-size:3rem;line-height:1;">🥇</div>' +
-      '<div style="font-weight:800;color:#fbbf24;font-size:1.3rem;margin-top:5px;word-break:break-word;">' + _sh(p1) + '</div>' +
+      _nameRow(p1, '#fbbf24', '1.3rem', '800', 32) +
       '<div style="font-size:0.8rem;color:#fbbf24;font-weight:600;">' + _sh(sub1) + '</div>' +
     '</div>' +
     bottomRow +
@@ -1910,6 +1930,38 @@ function renderTournaments(container, tournamentId = null) {
                 if (isFinished) {
                     // Torneio encerrado — mostrar pódio + Ver Chaves
                     podiumHtml = '';
+                    // v2.8.100: Confra/multi-linha — quando a fase atual tem 2+ chaves
+                    // (Ouro/Prata/…) e NÃO há grande final cruzando as linhas, mostra um
+                    // pódio POR linha. Com grande final, segue 1 pódio (campeão geral).
+                    (function _maybeMultiTierPodium() {
+                        var _curPh = t.currentPhaseIndex || 0;
+                        var _pm = (t.matches || []).filter(function(m){ return (m.phaseIndex || 0) === _curPh; });
+                        var _tiers = [];
+                        ['gold','silver','line3','line4'].forEach(function(bk){ if (_pm.some(function(m){ return m.bracket === bk; })) _tiers.push(bk); });
+                        if (_tiers.length < 2) return;
+                        var _hasGF = _pm.some(function(m){ return m.bracket === 'grandfinal' && m.winner && !m.isBye; });
+                        if (_hasGF) return;
+                        var _lbl = { gold:'🥇 Série Ouro', silver:'🥈 Série Prata', line3:'Série 3', line4:'Série 4' };
+                        var _out = '';
+                        _tiers.forEach(function(bk){
+                            var _tm = _pm.filter(function(m){ return m.bracket === bk; });
+                            if (!_tm.length) return;
+                            var _title = (_tm[0] && _tm[0].tierLabel) ? _tm[0].tierLabel : _lbl[bk];
+                            var _nonThird = _tm.filter(function(m){ return !m.isThirdPlace; });
+                            var _rs = _nonThird.map(function(m){ return m.round == null ? 1 : m.round; });
+                            if (!_rs.length) return;
+                            var _maxR = Math.max.apply(null, _rs);
+                            var _fin = _nonThird.filter(function(m){ return (m.round == null ? 1 : m.round) === _maxR && m.winner && !m.isBye; })[0];
+                            if (!_fin) return;
+                            var _p1 = _fin.winner;
+                            var _p2 = (_fin.winner === _fin.p1) ? _fin.p2 : _fin.p1;
+                            if (_p2 === 'TBD' || _p2 === 'BYE') _p2 = null;
+                            var _tp = _tm.filter(function(m){ return m.isThirdPlace && m.winner; })[0];
+                            var _p3 = _tp ? _tp.winner : null;
+                            _out += window._buildPodiumHtml(_p1, _p2, _p3, null, null, null, { title: _title });
+                        });
+                        if (_out) podiumHtml = _out;
+                    })();
                     // Prefer canonical adapter: look for the last elim/grand column
                     // with a decided winner; fall back to legacy t.matches scan.
                     let _finalMatch = null;
@@ -1946,7 +1998,7 @@ function renderTournaments(container, tournamentId = null) {
                     if (!_thirdPlace && t.thirdPlaceMatch && t.thirdPlaceMatch.winner) {
                         _thirdPlace = t.thirdPlaceMatch.winner;
                     }
-                    if (_finalMatch) {
+                    if (!podiumHtml && _finalMatch) {
                         const _1st = _finalMatch.winner;
                         const _2nd = _finalMatch.winner === _finalMatch.p1 ? _finalMatch.p2 : _finalMatch.p1;
                         const _3rd = _thirdPlace;
