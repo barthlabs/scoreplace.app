@@ -240,10 +240,14 @@ window.FirestoreDB = {
     // allowSelfDeactivation no DEFAULT e, via merge, ZERAVA o construtor de fases do torneio
     // (Confra: 2 fases + Rei/Rainha + "deixar de fora" sumiam horas depois, SEM auto-draw).
     // Regra: se o save de entrada NÃO é multi-fase mas o doc no BANCO é, preserva a config
-    // do banco (fonte da verdade). Pra reduzir de propósito, passe options._allowConfigReset.
+    // do banco (fonte da verdade). EXCEÇÃO: quando o organizador remove/reduz fases DE
+    // PROPÓSITO no construtor, o save chega com _allowConfigReset=true (ou options) e a
+    // redução é permitida — o guard só barra o que NÃO pretendia tocar (stale/bug).
+    var _allowReset = (options && options._allowConfigReset) || cleanData._allowConfigReset === true;
+    delete cleanData._allowConfigReset; // flag transiente — nunca persistir no doc
     try {
       var _incMulti = Array.isArray(cleanData.phases) && cleanData.phases.length > 1;
-      if (!_incMulti && !(options && options._allowConfigReset)) {
+      if (!_incMulti && !_allowReset) {
         var _exSnap = await this.db.collection('tournaments').doc(docId).get();
         if (_exSnap.exists) {
           var _ex = _exSnap.data() || {};

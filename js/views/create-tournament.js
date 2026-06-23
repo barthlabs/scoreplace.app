@@ -5992,6 +5992,11 @@ function setupCreateTournamentModal() {
             tourData.phases = null; // fase única (criação OU remoção intencional de todas as fases extras)
           }
         }
+        // v3.0.x: autoriza o guard de saveTournament a REDUZIR/remover fases SÓ quando o
+        // organizador mexeu nas fases de propósito (add/remove no construtor). Sem isso, o
+        // guard blinda contra qualquer save sem fases derrubando um torneio multi-fase.
+        // Flag transiente — saveTournament lê e REMOVE antes de gravar no Firestore.
+        tourData._allowConfigReset = !!window._phasesUserTouched;
         // v2.6.49: nome custom da Fase 1 persiste SEMPRE (inclusive fase única, onde
         // phases fica null). Antes só era gravado dentro de phases[0] quando havia
         // fase extra — por isso o nome "não gravava" em torneio de fase única.
