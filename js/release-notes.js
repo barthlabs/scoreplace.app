@@ -9,8 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.98-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.99-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📊 Quem já respondeu a enquete:</b> na tela da enquete, logo abaixo das opções, aparecem as <b>fotos de quem já votou</b> ("Já responderam") — mostra a participação sem revelar o voto de cada um.</li>' +
         '<li><b>🗑️ Remover inscrito em torneio de duplas:</b> o organizador agora tem o botão de <b>remover</b> também nos cards de <b>sem dupla</b> e de <b>dupla formada</b> (antes só no modo individual).</li>' +
         '<li><b>🔢 Número de inscrição padronizado:</b> o número aparece grande (60% da altura) e igual em <b>todos</b> os cards — individual, dupla e sorteado.</li>' +
         '<li><b>🕐 "Ainda aqui":</b> quem passou do horário previsto de saída mas continua no local aparece com <b>"ainda aqui"</b> (mais limpo).</li>' +

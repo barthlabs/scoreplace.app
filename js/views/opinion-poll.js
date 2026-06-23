@@ -37,6 +37,34 @@
     return n;
   }
   function _totalVoters(poll) { return (poll && poll.votes) ? Object.keys(poll.votes).filter(function (u) { return (poll.votes[u] || []).length > 0; }).length : 0; }
+  // v2.8.99: fotos/ícones de quem JÁ respondeu — mostra participação (não o voto),
+  // então não revela o resultado. Resolve nome+foto por UID dos inscritos (e do organizador).
+  function _voterAvatarsHtml(t, poll) {
+    if (!poll || !poll.votes) return '';
+    var uids = Object.keys(poll.votes).filter(function (u) { return (poll.votes[u] || []).length > 0; });
+    if (!uids.length) return '';
+    var info = {};
+    var parts = (t && Array.isArray(t.participants)) ? t.participants : [];
+    parts.forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      if (p.uid && !info[p.uid]) info[p.uid] = { name: p.displayName || p.name || '', photo: p.photoURL || '' };
+      if (p.p1Uid && !info[p.p1Uid]) info[p.p1Uid] = { name: p.p1Name || '', photo: p.p1PhotoURL || '' };
+      if (p.p2Uid && !info[p.p2Uid]) info[p.p2Uid] = { name: p.p2Name || '', photo: p.p2PhotoURL || '' };
+    });
+    if (t && t.creatorUid && !info[t.creatorUid]) info[t.creatorUid] = { name: t.organizerName || 'Organizador', photo: '' };
+    var av = uids.map(function (u) {
+      var i = info[u] || { name: '', photo: '' };
+      var nm = i.name || 'Inscrito';
+      var lc = nm.toLowerCase();
+      var cached = (window._playerPhotoCache && window._playerPhotoCache[lc] && window._playerPhotoCache[lc].indexOf('dicebear') === -1) ? window._playerPhotoCache[lc] : '';
+      var src = cached || (typeof window._profileAvatarUrl === 'function' ? window._profileAvatarUrl(nm, i.photo, 32) : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf'));
+      return '<img src="' + _esc(src) + '" title="' + _esc(nm) + '" alt="' + _esc(nm) + '" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card,#0f172a);margin-left:-7px;box-sizing:border-box;flex-shrink:0;">';
+    }).join('');
+    return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color);">' +
+      '<div style="font-size:0.74rem;color:var(--text-muted);font-weight:600;margin-bottom:8px;">✅ Já responderam (' + uids.length + ')</div>' +
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;padding-left:7px;row-gap:8px;">' + av + '</div>' +
+      '</div>';
+  }
   function _canVote(t) {
     var cu = _cu(); if (!cu || !cu.uid) return false;
     if (_isOrg(t)) return true;
@@ -230,7 +258,7 @@
       '<div style="padding:1rem 1.1rem;">' +
         '<div style="font-weight:800;font-size:1.05rem;color:var(--text-bright);margin-bottom:4px;">' + _esc(poll.question) + '</div>' +
         '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:14px;">' + (poll.multiSelect ? 'Pode escolher mais de uma' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>' +
-        body + footer +
+        body + _voterAvatarsHtml(t, poll) + footer +
       '</div>';
     _overlay('op-vote-overlay', html);
   }
