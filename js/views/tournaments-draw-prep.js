@@ -199,133 +199,142 @@ window._showGroupsConfigPanel = function(tId) {
         return '~' + h + 'h' + (m < 10 ? '0' + m : m);
     }
 
-    function renderPanel(classPerGroup) {
-        var configs = generateConfigs(N, classPerGroup);
-
-        // v0.17.75: ranking refinado — antes era "pow2 → mais even → menos grupos"
-        // o que recomendava N=2 com grupos lopsided (11+10 com 21 times: cada
-        // jogador joga 10 jogos só na fase de grupos). Agora considera também
-        // o TAMANHO dos grupos: 4-5 times é o sweet-spot (round-robin razoável).
-        // 2-3 times = jogos muito poucos. 7+ = round-robin gigante. Resultado:
-        // recomendação prioriza balance entre pow2 + tamanho razoável.
-        function configScore(c) {
-            var score = 0;
-            // Pow2 advancing: bônus dominante (cobre o caso ≠ pot.2 sempre perder)
-            if (c.isPow2) score += 1000;
-            // Grupos balanceados (sem sobra): bônus
-            if (c.remainder === 0) score += 80;
-            // Tamanho médio do grupo: 4-5 ideal (round-robin de 6-10 jogos),
-            // 3 ou 6 OK, 2 ruim (poucos jogos), 7+ ruim (round-robin gigante)
-            var avgSize = c.remainder === 0 ? c.base : (c.base + 0.5);
-            if (avgSize >= 4 && avgSize <= 5) score += 60;
-            else if (avgSize === 3 || avgSize === 6) score += 30;
-            else if (avgSize <= 2) score -= 30;
-            else if (avgSize >= 7) score -= 10 * (avgSize - 6);
-            // Penalizar muito poucos grupos (N=2 com grupos enormes)
-            if (c.groups <= 2 && avgSize >= 7) score -= 40;
-            // Tie-breaker: menor número de grupos é mais simples logística
-            score -= c.groups * 0.1;
-            return score;
+    // v3.0.x: painel redesenhado pra girar em torno da config do torneio —
+    // SLIDER de grupos (centrado no nº escolhido na criação) + AVANÇAM em
+    // potência de 2 (padrão = potência de 2 abaixo do nº de times; +/- pra 16/8).
+    function _grpGenCands(n) {
+        var out = [];
+        for (var g = Math.floor(n / 3); g >= 2; g--) {
+            var base = Math.floor(n / g), rem = n % g;
+            if (base < 3 || base > 6) continue;
+            out.push({ g: g, base: base, rem: rem, bigGroups: rem, smallGroups: g - rem, bigSize: base + 1, smallSize: base });
         }
-        configs.sort(function(a, b) {
-            return configScore(b) - configScore(a);
-        });
+        return out; // muitos grupos (esq) → poucos (dir)
+    }
+    function _grpAdvList(n) {
+        var out = [], p = 4;
+        while (p <= n) { out.push(p); p *= 2; }
+        if (!out.length) out.push(Math.max(2, n));
+        return out; // [4,8,16,32,...] ≤ n
+    }
+    var _grpCands = _grpGenCands(N);
+    var _grpAdv = _grpAdvList(N);
+    var _grpEqualOnly = t.gruposEqualOnly === true;
+    var _grpCfgCount = parseInt(t.gruposCount) || 0;
+    var _grpIdx = 0;
+    (function(){ var bd = Infinity; _grpCands.forEach(function(c, i){ var d = Math.abs(c.g - _grpCfgCount); if (d < bd) { bd = d; _grpIdx = i; } }); })();
+    var _advIdx = _grpAdv.length - 1; // padrão: maior potência de 2 ≤ N
 
-        // Header
-        var html = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:800px;border-radius:32px;margin:auto 0;border:1px solid rgba(59,130,246,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;animation:modalFadeIn 0.3s cubic-bezier(0.16,1,0.3,1);display:flex;flex-direction:column;max-height:90vh;">' +
-            '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 50%,#3b82f6 100%);padding:12px 1.5rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
-                '<div style="display:flex;align-items:center;gap:12px;">' +
-                    '<span style="font-size:1.5rem;">🏟️</span>' +
-                    '<div>' +
-                        '<h3 style="margin:0;color:#dbeafe;font-size:1.1rem;font-weight:900;">' + _t('predraw.groupsTitle') + '</h3>' +
-                        '<p style="margin:2px 0 0;color:#93c5fd;font-size:0.75rem;opacity:0.9;">' + N + ' ' + unitLabel + ' — ' + _t('predraw.chooseDistribution') + '</p>' +
-                    '</div>' +
-                '</div>' +
-                '<button onclick="window._cancelGroupsConfig(\'' + tIdSafe + '\')" style="background:rgba(0,0,0,0.25);color:#dbeafe;border:2px solid rgba(219,234,254,0.3);padding:8px 20px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\'">' + _t('predraw.cancelBtn') + '</button>' +
+    function _grpSizesLabel(c) {
+        if (_grpEqualOnly || c.rem === 0) return c.g + ' grupos de ' + c.base;
+        return c.bigGroups + ' de ' + c.bigSize + ' + ' + c.smallGroups + ' de ' + c.smallSize;
+    }
+    function _grpSuplentes(c) { return _grpEqualOnly ? c.rem : 0; }
+    function _grpMatches(c) {
+        var gm = 0;
+        if (_grpEqualOnly) { gm = c.g * (c.base * (c.base - 1) / 2); }
+        else {
+            if (c.bigGroups > 0) gm += c.bigGroups * (c.bigSize * (c.bigSize - 1) / 2);
+            gm += c.smallGroups * (c.smallSize * (c.smallSize - 1) / 2);
+        }
+        var adv = _grpAdv[_advIdx] || 2;
+        var elim = Math.max(adv - 1, 0); if (adv >= 4) elim += 1;
+        return Math.round(gm + elim);
+    }
+    function _grpDuration(c) {
+        var maxSize = _grpEqualOnly ? c.base : Math.max(c.bigSize, c.smallSize);
+        var rounds = maxSize - 1, tot = 0;
+        for (var r = 0; r < rounds; r++) {
+            var m = 0;
+            if (!_grpEqualOnly && c.bigGroups > 0 && c.bigSize > r + 1) m += c.bigGroups * Math.floor(c.bigSize / 2);
+            var sCount = _grpEqualOnly ? c.g : c.smallGroups, sSize = _grpEqualOnly ? c.base : c.smallSize;
+            if (sSize > r + 1) m += sCount * Math.floor(sSize / 2);
+            if (m > 0) tot += Math.ceil(m / _courts) * _slotMin;
+        }
+        var adv = _grpAdv[_advIdx] || 2, er = Math.ceil(Math.log2(Math.max(adv, 2)));
+        for (var e = 0; e < er; e++) tot += Math.ceil(Math.ceil(adv / Math.pow(2, e + 1)) / _courts) * _slotMin;
+        if (adv >= 4) tot += _slotMin;
+        return tot + 15;
+    }
+
+    function renderPanel() {
+        var html = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:32px;margin:auto 0;border:1px solid rgba(59,130,246,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">' +
+            '<div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 50%,#3b82f6 100%);padding:12px 1.5rem;display:flex;align-items:center;gap:12px;flex-shrink:0;">' +
+                '<span style="font-size:1.5rem;">🏟️</span>' +
+                '<div><h3 style="margin:0;color:#dbeafe;font-size:1.1rem;font-weight:900;">' + _t('predraw.groupsTitle') + '</h3>' +
+                '<p style="margin:2px 0 0;color:#93c5fd;font-size:0.75rem;">' + N + ' ' + unitLabel + ' — ' + _t('predraw.chooseDistribution') + '</p></div>' +
+            '</div>' +
+            // v3.0.x: barra de botões FIXA (flex-shrink:0 → nunca é cortada por scroll),
+            // Cancelar + Sortear (verde) lado a lado, logo após o box do título.
+            '<div style="flex-shrink:0;display:flex;gap:10px;padding:12px 1.5rem;background:var(--bg-card,#1e293b);border-bottom:1px solid rgba(255,255,255,0.08);">' +
+                '<button onclick="window._cancelGroupsConfig(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-muted,#cbd5e1);font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
+                '<button id="grp-panel-confirm-btn" onclick="window._grpPanelConfirm(\'' + tIdSafe + '\')" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">🎲 Sortear grupos</button>' +
             '</div>' +
             '<div style="overflow-y:auto;flex:1;padding:1.5rem;">';
 
-        // Classified per group selector
-        html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;flex-wrap:wrap;">' +
-            '<span style="font-size:0.8rem;font-weight:700;color:var(--text-bright);">' + _t('predraw.classifiedPerGroup') + '</span>';
-        for (var cp = 1; cp <= 4; cp++) {
-            var isActive = cp === classPerGroup;
-            html += '<button onclick="window._groupsRerenderPanel(' + cp + ')" style="padding:6px 16px;border-radius:10px;font-size:0.85rem;font-weight:700;cursor:pointer;transition:all 0.15s;border:2px solid ' + (isActive ? '#3b82f6' : 'rgba(255,255,255,0.15)') + ';background:' + (isActive ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.05)') + ';color:' + (isActive ? '#93c5fd' : 'var(--text-muted)') + ';">' + cp + '</button>';
+        if (!_grpCands.length) {
+            html += '<div style="text-align:center;padding:2rem;color:var(--text-muted);">' + N + ' ' + unitLabel + ' — sem divisão em grupos de 3 a 6.</div></div></div>';
+            return html;
         }
+
+        var c = _grpCands[_grpIdx], adv = _grpAdv[_advIdx] || 2;
+        var sizeLbl = (_grpEqualOnly || c.rem === 0) ? String(c.base) : (c.base + '–' + c.bigSize);
+
+        // Slider de grupos (mesma ideia da config do torneio)
+        html += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">Divisão dos grupos <span style="opacity:0.8;">(← mais grupos menores · menos grupos maiores →)</span>:</div>';
+        html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">';
+        html += '<div style="text-align:center;min-width:64px;"><div style="font-size:1.8rem;font-weight:900;color:#fff;line-height:1;">' + c.g + '</div><div style="font-size:0.68rem;color:var(--text-muted);">grupos</div></div>';
+        html += '<div style="text-align:center;min-width:64px;"><div style="font-size:1.8rem;font-weight:900;color:#fff;line-height:1;">' + sizeLbl + '</div><div style="font-size:0.68rem;color:var(--text-muted);">por grupo</div></div>';
         html += '</div>';
+        html += '<input type="range" min="0" max="' + (_grpCands.length - 1) + '" step="1" value="' + _grpIdx + '" oninput="window._grpPanelSetGroup(this.value)" style="width:100%;accent-color:#3b82f6;margin:2px 0;">';
+        var sup = _grpSuplentes(c);
+        html += '<div style="text-align:center;font-size:0.74rem;color:var(--text-muted);margin-top:4px;">' + _grpSizesLabel(c) + (sup > 0 ? ' · <span style="color:#f59e0b;">' + sup + ' suplente' + (sup > 1 ? 's' : '') + '</span>' : '') + '</div>';
+        html += '<div style="text-align:center;font-size:0.72rem;color:#cbd5e1;margin-top:4px;font-weight:600;">⚔️ ' + _grpMatches(c) + ' partidas · ⏱️ ' + _formatDuration(_grpDuration(c)) + '</div>';
 
-        if (configs.length === 0) {
-            html += '<div style="text-align:center;padding:2rem;color:var(--text-muted);">' + _t('predraw.noValidConfig', {n: N, unit: unitLabel}) + '</div>';
-        } else {
-            // Grid of configs
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">';
-            configs.forEach(function(c, idx) {
-                var isEven = c.remainder === 0;
-                var borderColor = c.isPow2 ? 'rgba(34,197,94,0.5)' : (isEven ? 'rgba(59,130,246,0.35)' : 'rgba(251,191,36,0.35)');
-                var bgColor = c.isPow2 ? 'rgba(34,197,94,0.08)' : (isEven ? 'rgba(59,130,246,0.06)' : 'rgba(251,191,36,0.06)');
-                var glowColor = c.isPow2 ? '0 0 16px rgba(34,197,94,0.15)' : 'none';
+        // Toggle "grupos de mesmo tamanho" — mesma opção da config do torneio.
+        html += '<div style="display:flex;align-items:center;justify-content:center;gap:9px;margin-top:14px;">' +
+          '<label class="toggle-switch" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;flex-shrink:0;"><input type="checkbox"' + (_grpEqualOnly ? ' checked' : '') + ' onchange="window._grpPanelToggleEqual()"><span class="toggle-slider"></span></label>' +
+          '<span style="font-size:0.82rem;color:var(--text-bright,#f1f5f9);">Apenas grupos de mesmo tamanho</span>' +
+        '</div>';
 
-                // Distribution text
-                var distText = '';
-                if (isEven) {
-                    distText = _t('predraw.groupsOf', {g: c.groups, s: c.base});
-                } else {
-                    distText = _t('predraw.groupsMixed', {g1: c.bigGroups, s1: (c.bigGroups > 1 ? 's' : ''), z1: c.bigSize, g2: c.smallGroups, s2: (c.smallGroups > 1 ? 's' : ''), z2: c.smallSize});
-                }
-
-                // Advance info
-                var advanceText = _t('predraw.advanceLabel', {n: c.totalAdvance});
-                var pow2Badge = c.isPow2
-                    ? '<span style="font-size:0.6rem;font-weight:800;color:#4ade80;background:rgba(34,197,94,0.15);padding:2px 6px;border-radius:4px;">' + _t('predraw.badgePow2') + '</span>'
-                    : '<span style="font-size:0.6rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);padding:2px 6px;border-radius:4px;">' + _t('predraw.badgeNotPow2') + '</span>';
-
-                // Recommended badge
-                var recommendBadge = (idx === 0) ? '<div style="margin-bottom:4px;"><span style="background:rgba(34,197,94,0.2);color:#4ade80;padding:2px 8px;border-radius:6px;font-size:0.6rem;font-weight:800;text-transform:uppercase;">' + _t('predraw.nashRecommended') + '</span></div>' : '';
-
-                // v1.1.1-beta: matches + duração estimada por card
-                var _matches = _matchesForConfig(c);
-                var _durMin = _durationForConfig(c);
-                var _durText = _formatDuration(_durMin);
-                var statsHtml = '<div style="display:flex;align-items:center;gap:10px;margin-top:6px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);font-size:0.68rem;color:var(--text-muted);font-weight:600;">' +
-                    '<span style="color:#cbd5e1;">⚔️ ' + _matches + ' partidas</span>' +
-                    (_durText ? '<span style="color:#cbd5e1;">⏱️ ' + _durText + '</span>' : '') +
-                '</div>';
-
-                html += '<button onclick="window._selectGroupsConfig(\'' + tIdSafe + '\',' + c.groups + ',' + c.classPerGroup + ')" style="background:' + bgColor + ';border:2px solid ' + borderColor + ';box-shadow:' + glowColor + ';border-radius:16px;padding:14px 16px;cursor:pointer;transition:all 0.25s;text-align:center;color:#e2e8f0;display:flex;flex-direction:column;gap:6px;align-items:center;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.filter=\'brightness(1.12)\'" onmouseout="this.style.transform=\'\';this.style.filter=\'\'">' +
-                    recommendBadge +
-                    '<div style="font-size:2rem;font-weight:950;color:#fff;line-height:1;">' + c.groups + '</div>' +
-                    '<div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">' + _t('predraw.groupsUnit') + '</div>' +
-                    '<div style="font-size:0.78rem;font-weight:600;color:var(--text-bright);line-height:1.3;margin-top:2px;">' + distText + '</div>' +
-                    '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;">' +
-                        '<span style="font-size:0.7rem;color:#93c5fd;font-weight:600;">' + advanceText + '</span>' +
-                        pow2Badge +
-                    '</div>' +
-                    statsHtml +
-                '</button>';
-            });
-            html += '</div>';
-        }
-
-        // Legend
-        html += '<div style="margin-top:1rem;display:flex;gap:16px;flex-wrap:wrap;justify-content:center;">' +
-            '<span style="font-size:0.65rem;color:var(--text-muted);">' + _t('predraw.legendPow2') + '</span>' +
-            '<span style="font-size:0.65rem;color:var(--text-muted);">' + _t('predraw.legendEven') + '</span>' +
-            '<span style="font-size:0.65rem;color:var(--text-muted);">' + _t('predraw.legendMixed') + '</span>' +
-            '</div>';
+        // Avançam (potência de 2) com +/-
+        var advNote = (adv % c.g === 0) ? ('≈ ' + (adv / c.g) + ' por grupo') : ('os melhores ' + Math.max(1, Math.floor(adv / c.g)) + '/grupo + repescagem até ' + adv);
+        html += '<div style="margin-top:1.4rem;padding-top:1.2rem;border-top:1px solid rgba(255,255,255,0.1);">';
+        html += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;text-align:center;">Quantos avançam para a eliminatória (potência de 2):</div>';
+        html += '<div style="display:flex;align-items:center;justify-content:center;gap:18px;">';
+        html += '<button onclick="window._grpPanelStepAdv(-1)"' + (_advIdx <= 0 ? ' disabled' : '') + ' style="width:42px;height:42px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:#fff;font-size:1.4rem;font-weight:800;cursor:pointer;' + (_advIdx <= 0 ? 'opacity:0.3;' : '') + '">−</button>';
+        html += '<div style="text-align:center;min-width:80px;"><div style="font-size:2.2rem;font-weight:950;color:#4ade80;line-height:1;">' + adv + '</div><div style="font-size:0.66rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">avançam</div></div>';
+        html += '<button onclick="window._grpPanelStepAdv(1)"' + (_advIdx >= _grpAdv.length - 1 ? ' disabled' : '') + ' style="width:42px;height:42px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:#fff;font-size:1.4rem;font-weight:800;cursor:pointer;' + (_advIdx >= _grpAdv.length - 1 ? 'opacity:0.3;' : '') + '">+</button>';
+        html += '</div>';
+        html += '<div style="text-align:center;font-size:0.72rem;color:#93c5fd;margin-top:8px;">' + advNote + '</div>';
+        html += '</div>';
 
         html += '</div></div>';
         return html;
     }
 
-    window._groupsRerenderPanel = function(classPerGroup) {
-        overlay.innerHTML = renderPanel(classPerGroup);
+    window._grpPanelSetGroup = function(v) { _grpIdx = parseInt(v, 10) || 0; overlay.innerHTML = renderPanel(); };
+    window._grpPanelStepAdv = function(dir) { _advIdx = Math.max(0, Math.min(_grpAdv.length - 1, _advIdx + (dir > 0 ? 1 : -1))); overlay.innerHTML = renderPanel(); };
+    window._grpPanelToggleEqual = function() { _grpEqualOnly = !_grpEqualOnly; overlay.innerHTML = renderPanel(); };
+    window._grpPanelConfirm = function(tId) {
+        var c = _grpCands[_grpIdx]; if (!c) return;
+        var adv = _grpAdv[_advIdx] || 2;
+        var perGroup = Math.max(1, Math.round(adv / c.g));
+        // v3.0.x: o sorteio (formar duplas + montar todas as chaves dos grupos) é
+        // pesado e síncrono — mostra "Processando…" no botão antes de começar.
+        var _btn = document.getElementById('grp-panel-confirm-btn');
+        if (_btn) { _btn.disabled = true; _btn.style.opacity = '0.75'; _btn.style.cursor = 'default'; _btn.innerHTML = '⏳ Processando o sorteio…'; }
+        // defer pra o browser PINTAR o estado "processando" antes do trabalho pesado
+        setTimeout(function() { window._selectGroupsConfig(tId, c.g, perGroup, adv, _grpEqualOnly); }, 30);
     };
 
-    window._selectGroupsConfig = function(tId, numGroups, classPerGroup) {
+    window._selectGroupsConfig = function(tId, numGroups, classPerGroup, advanceTotal, equalOnly) {
         var t = window._findTournamentById(tId);
         if (!t) return;
         t.gruposCount = numGroups;
         t.gruposClassified = classPerGroup;
+        if (advanceTotal) t.gruposAdvanceTotal = advanceTotal;
+        if (typeof equalOnly === 'boolean') t.gruposEqualOnly = equalOnly;
         // Ensure enrollment is closed
         if (t.status !== 'closed') {
             t.status = 'closed';
@@ -334,11 +343,9 @@ window._showGroupsConfigPanel = function(tId) {
         delete t._suspendedByPanel;
         delete t._previousStatus;
         window.FirestoreDB.saveTournament(t).then(function() {
-            // Close panel
             var panel = document.getElementById('groups-config-panel');
             if (panel) panel.remove();
             document.body.style.overflow = '';
-            // Go directly to draw generation (skip final review to avoid re-triggering groups panel)
             if (typeof window.generateDrawFunction === 'function') {
                 window.generateDrawFunction(tId);
             }
@@ -365,7 +372,7 @@ window._showGroupsConfigPanel = function(tId) {
         document.body.style.overflow = '';
     };
 
-    overlay.innerHTML = renderPanel(currentClassified);
+    overlay.innerHTML = renderPanel();
     document.body.appendChild(overlay);
 };
 
@@ -649,8 +656,11 @@ window.showUnifiedResolutionPanel = function(tId) {
     var _isGruposFmt = t.format === 'Fase de Grupos + Eliminatórias' || t.format === 'Grupos + Eliminatória' || t.format === 'Grupos + Mata-Mata' || (t.format || '').indexOf('Grupo') !== -1;
     if (_isGruposFmt && typeof window._showGroupsConfigPanel === 'function') {
         var _diagG = window._diagnoseAll(t);
-        // Only fall through to standard panel for incomplete teams/remainder
-        if (_diagG.incompleteTeams.length === 0 && _diagG.remainder === 0) {
+        // v3.0.x: a Fase de Grupos NÃO usa potência de 2. A sobra ímpar (quem não
+        // forma dupla) vai pra lista de espera no sorteio — não deve cair no painel
+        // de "resto/potência de 2" da eliminatória. Só caímos no painel padrão se
+        // houver TIMES INCOMPLETOS de verdade (duplas pré-formadas faltando membro).
+        if (_diagG.incompleteTeams.length === 0) {
             window._showGroupsConfigPanel(tId);
             return;
         }
@@ -2637,10 +2647,11 @@ window.toggleRegistrationStatus = function (tId) {
                     }
                 });
             }
-            _promoteList(t.standbyParticipants);
-            _promoteList(t.waitlist);
-            t.standbyParticipants = [];
-            t.waitlist = [];
+            // CANÔNICO: promove a espera dos TRÊS storages e zera os 3.
+            var _wlAll = (typeof window._clearAllWaitlists === 'function')
+              ? window._clearAllWaitlists(t)
+              : (function () { var p = (t.standbyParticipants || []).concat(t.waitlist || []); t.standbyParticipants = []; t.waitlist = []; t.monarchWaitlist = {}; return p; })();
+            _promoteList(_wlAll);
             if (_promoted > 0) window.AppStore.logAction(tId, _promoted + ' participante(s) promovido(s) da lista de espera ao reabrir inscrições');
             window.AppStore.logAction(tId, 'Inscrições Reabertas');
             // Notify participants about reopened enrollments

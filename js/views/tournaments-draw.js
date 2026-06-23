@@ -7,6 +7,50 @@ var _t = window._t || function(k) { return k; };
 // (t.phases, t.scoring, categorias, tiebreakers…). Base do re-sorteio e do reset.
 window._clearTournamentDraw = function (t) {
   if (!t) return;
+  // v3.0.x: o reset volta ao estado de INSCRIÇÕES — então desmonta as duplas
+  // FORMADAS PELO SORTEIO (teamOrigins[...] === 'sorteada') de volta pros
+  // indivíduos, devolve os suplentes da lista de espera pros inscritos e dedup.
+  // Duplas pré-formadas / inscritas como time (origin manual) são PRESERVADAS.
+  try {
+    var _origins = t.teamOrigins || {};
+    var _arr = Array.isArray(t.participants) ? t.participants.slice() : (t.participants ? Object.values(t.participants) : []);
+    // CANÔNICO: pega a espera dos TRÊS storages (via _getWaitlist) pra devolver TODOS
+    // ao pool — não só waitlist + standbyParticipants (monarchWaitlist ficava de fora).
+    var _wait = (typeof window._getWaitlist === 'function')
+      ? window._getWaitlist(t)
+      : (Array.isArray(t.waitlist) ? t.waitlist : []).concat(Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []);
+    if (_wait.length) _arr = _arr.concat(_wait);
+    var _out = [];
+    _arr.forEach(function (p) {
+      var nm = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || '');
+      var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && p.p1Name && p.p2Name) || (nm.indexOf(' / ') !== -1);
+      if (nm && _origins[nm] === 'sorteada' && isTeam) {
+        if (Array.isArray(p.participants) && p.participants.length) {
+          p.participants.forEach(function (s) { _out.push(s); });
+        } else if (p.p1Name && p.p2Name) {
+          _out.push({ name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo });
+          _out.push({ name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo });
+        } else {
+          nm.split('/').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (x) { _out.push({ name: x, displayName: x }); });
+        }
+      } else {
+        _out.push(p);
+      }
+    });
+    var _seen = {}, _final = [];
+    _out.forEach(function (p) {
+      var k;
+      if (p && typeof p === 'object' && (p.uid || p.email)) k = 'id:' + String(p.uid || p.email).toLowerCase();
+      else { var s = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || ''); k = 'n:' + s.trim().toLowerCase(); }
+      if (k === 'n:') { _final.push(p); return; }
+      if (!_seen[k]) { _seen[k] = 1; _final.push(p); }
+    });
+    t.participants = _final;
+    t.waitlist = [];
+    t.standbyParticipants = [];
+    t.monarchWaitlist = {}; // CANÔNICO: limpa também a 3ª fonte (Rei/Rainha por categoria)
+    if (t.teamOrigins) Object.keys(t.teamOrigins).forEach(function (k) { if (t.teamOrigins[k] === 'sorteada') delete t.teamOrigins[k]; });
+  } catch (e) { if (window._error) window._error('[clearDraw dismantle]', e); }
   t.matches = [];
   t.rounds = [];
   t.groups = [];
@@ -495,11 +539,21 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
   var _pName = function(p){ return (typeof p === 'string') ? p : (p.displayName || p.name || p.email || '?'); };
   var _hasGender = function(p){ return typeof p === 'object' && p.gender && String(p.gender).trim(); };
-  var noGender = individuals.filter(function(p){ return !_hasGender(p); });
+  // v3.0.x: o gênero AUTORITATIVO é o do PERFIL. Carrega os perfis dos
+  // participantes e (a) enriquece o snapshot com o gênero do perfil, (b) a lista
+  // "sem gênero" passa a refletir o PERFIL — quem já tem gênero no perfil NÃO
+  // aparece aqui (antes aparecia porque o objeto-participante vinha sem gender).
+  var _build = function() {
+    individuals.forEach(function(p) {
+      if (typeof p !== 'object' || _hasGender(p)) return;
+      var _prof = window._partProfileByName && window._partProfileByName[String(_pName(p)).toLowerCase()];
+      if (_prof && _prof.gender && String(_prof.gender).trim()) p.gender = String(_prof.gender).trim();
+    });
+    var noGender = individuals.filter(function(p){ return !_hasGender(p); });
 
-  // Estado do diálogo
-  window._gdCtx = { tId: tId, onProceed: onProceed, mode: 'livre',
-    rows: noGender.map(function(p){ return { name: _pName(p), uid: (typeof p === 'object' && p.uid) || '', gender: '' }; }) };
+    // Estado do diálogo
+    window._gdCtx = { tId: tId, onProceed: onProceed, mode: 'livre',
+      rows: noGender.map(function(p){ return { name: _pName(p), uid: (typeof p === 'object' && p.uid) || '', gender: '' }; }) };
 
   var old = document.getElementById('gender-draw-overlay'); if (old) old.remove();
   var ov = document.createElement('div');
@@ -519,12 +573,12 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
       '<div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.08);">' +
         '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#f1f5f9);">⚖️ Sorteio de duplas</div>' +
         '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:3px;">Defina o gênero de quem está sem, e escolha como formar as duplas.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:12px;">' +
+          '<button onclick="document.getElementById(\'gender-draw-overlay\').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:none;color:var(--text-muted,#94a3b8);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+          '<button onclick="window._gdConfirm()" style="flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.88rem;cursor:pointer;">✓ Confirmar</button>' +
+        '</div>' +
       '</div>' +
       '<div style="padding:16px 18px;">' +
-        (window._gdCtx.rows.length > 0
-          ? '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Inscritos sem gênero (' + window._gdCtx.rows.length + ')</div>' +
-            '<div style="display:flex;flex-direction:column;gap:6px;max-height:34vh;overflow-y:auto;margin-bottom:16px;">' + rowsHtml + '</div>'
-          : '<div style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">Todos os inscritos já têm gênero definido. ✓</div>') +
         '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Modo de sorteio</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">' +
           '<button id="gd-mode-livre" onclick="window._gdSetMode(\'livre\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid #6366f1;background:rgba(99,102,241,0.15);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
@@ -532,13 +586,18 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
           '<button id="gd-mode-equilibrado" onclick="window._gdSetMode(\'equilibrado\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
             '<div style="font-weight:700;font-size:0.9rem;">⚖️ Equilibrado</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Evita duplas 100% masculinas (distribui as mulheres). Se faltarem, faz o melhor possível.</div></button>' +
         '</div>' +
-        '<div style="display:flex;gap:8px;">' +
-          '<button onclick="document.getElementById(\'gender-draw-overlay\').remove()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:none;color:var(--text-muted,#94a3b8);cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
-          '<button onclick="window._gdConfirm()" style="flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.88rem;cursor:pointer;">🎲 Sortear</button>' +
-        '</div>' +
+        (window._gdCtx.rows.length > 0
+          ? '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Inscritos sem gênero (' + window._gdCtx.rows.length + ')</div>' +
+            '<div style="display:flex;flex-direction:column;gap:6px;max-height:34vh;overflow-y:auto;">' + rowsHtml + '</div>'
+          : '<div style="font-size:0.8rem;color:var(--text-muted,#94a3b8);">Todos os inscritos já têm gênero definido. ✓</div>') +
       '</div>' +
     '</div>';
-  document.body.appendChild(ov);
+    document.body.appendChild(ov);
+  }; // fim _build
+  // Carrega os perfis (gênero) antes de montar — fallback síncrono se indisponível.
+  if (typeof window._loadParticipantProfilesByName === 'function') {
+    try { window._loadParticipantProfilesByName(individuals).then(_build).catch(_build); } catch (e) { _build(); }
+  } else { _build(); }
   return true;
 };
 
@@ -950,6 +1009,33 @@ window.generateDrawFunction = function (tId) {
         let participants = Array.isArray(t.participants) ? [...t.participants] : Object.values(t.participants || {});
         const getName = (p) => typeof p === 'string' ? p : (p.displayName || p.name || '');
 
+        // v3.0.x: DEFENSIVO contra ACÚMULO de suplentes em re-sorteios. A lista de
+        // espera é SEMPRE derivada (o excedente DESTE sorteio) — então zera aqui antes
+        // de montar. Quem está na espera e ainda NÃO está representado no pool (por
+        // uid/email/nome, inclusive como integrante de dupla) volta pro pool; quem já
+        // está (ex.: integrante da dupla excedente) é ignorado pra não duplicar. Sem
+        // isto, mudar a config e re-sortear somava 3 + 3 = 5/7 na espera (bug 103→5).
+        (function () {
+            var seen = {};
+            var mark = function (p) {
+                if (!p) return;
+                if (typeof p === 'object') {
+                    ['uid', 'email', 'p1Uid', 'p2Uid', 'p1Email', 'p2Email'].forEach(function (k) { if (p[k]) seen['id:' + String(p[k]).toLowerCase()] = 1; });
+                    if (Array.isArray(p.participants)) p.participants.forEach(mark);
+                }
+                var nm = getName(p);
+                if (nm) { if (nm.indexOf('/') !== -1) nm.split('/').forEach(function (x) { x = x.trim(); if (x) seen['n:' + x.toLowerCase()] = 1; }); else seen['n:' + nm.toLowerCase()] = 1; }
+            };
+            participants.forEach(mark);
+            var keyOf = function (p) { if (p && typeof p === 'object' && (p.uid || p.email)) return 'id:' + String(p.uid || p.email).toLowerCase(); var s = getName(p); return s ? 'n:' + s.trim().toLowerCase() : ''; };
+            // CANÔNICO: devolve ao pool quem está na espera dos TRÊS storages e zera os 3.
+            var prev = (typeof window._clearAllWaitlists === 'function')
+              ? window._clearAllWaitlists(t)
+              : (function () { var p = (Array.isArray(t.waitlist) ? t.waitlist : []).concat(Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []); t.waitlist = []; t.standbyParticipants = []; t.monarchWaitlist = {}; return p; })();
+            prev.forEach(function (p) { var k = keyOf(p); if (k && !seen[k]) { seen[k] = 1; participants.push(p); } });
+        })();
+        t.participants = participants;
+
         // --- Team formation (when teamSize > 1) ---
         let _grpTeamSize = parseInt(t.teamSize) || 1;
         const _grpEnrMode = t.enrollmentMode || t.enrollment || 'individual';
@@ -965,10 +1051,23 @@ window.generateDrawFunction = function (tId) {
             if (_grpFormed.newTeamsCount > 0) {
                 window.AppStore.logAction(tId, `Sorteio de times: ${_grpFormed.newTeamsCount} time(s) de ${_grpTeamSize} formado(s)`);
             }
+            // v3.0.x: a sobra ímpar (quem não formou dupla) NÃO entra num grupo como
+            // "time de 1" — vai pra lista de espera (suplente). Continua inscrita.
+            if (_grpFormed.leftoverCount > 0) {
+                const _grpSolos = participants.filter(p => getName(p).indexOf(' / ') === -1);
+                if (_grpSolos.length) {
+                    if (!Array.isArray(t.waitlist)) t.waitlist = [];
+                    _grpSolos.forEach(s => t.waitlist.push(s));
+                    window.AppStore.logAction(tId, `${_grpSolos.length} inscrito(s) sem dupla → lista de espera`);
+                }
+            }
         }
 
-        // Convert participants to name strings
-        let _grpNames = participants.map(p => getName(p));
+        // Convert participants to name strings — duplas: só os TIMES (a sobra ímpar
+        // já foi pra lista de espera); individual: todos.
+        let _grpNames = participants
+            .filter(p => _grpTeamSize <= 1 || getName(p).indexOf(' / ') !== -1)
+            .map(p => getName(p));
 
         // Shuffle
         for (let i = _grpNames.length - 1; i > 0; i--) {
@@ -978,6 +1077,7 @@ window.generateDrawFunction = function (tId) {
 
         const numGroups = t.gruposCount || 4;
         const classifiedPerGroup = t.gruposClassified || 2;
+        const _grpEqualOnly = t.gruposEqualOnly === true;
 
         // Distribute participants into groups (snake draft)
         const groups = Array.from({ length: numGroups }, (_, i) => ({
@@ -987,59 +1087,53 @@ window.generateDrawFunction = function (tId) {
             rounds: []
         }));
 
-        _grpNames.forEach((name, idx) => {
-            groups[idx % numGroups].participants.push(name);
-        });
+        // v3.0.x: "Apenas grupos de mesmo tamanho" → todos os grupos com o MESMO
+        // tamanho (floor de unidades/grupos); o excedente vira SUPLENTE (lista de
+        // espera), ninguém é desativado. Sem o toggle, distribuição balanceada
+        // (modulo: alguns grupos com 1 a mais) — comportamento padrão intocado.
+        let _grpWaitNames = [];
+        if (_grpEqualOnly && numGroups > 0) {
+            const _equalSize = Math.floor(_grpNames.length / numGroups);
+            if (_equalSize >= 1) {
+                const _placed = _equalSize * numGroups;
+                for (let idx = 0; idx < _placed; idx++) {
+                    groups[idx % numGroups].participants.push(_grpNames[idx]);
+                }
+                _grpWaitNames = _grpNames.slice(_placed); // excedente → suplentes
+            } else {
+                _grpNames.forEach((name, idx) => { groups[idx % numGroups].participants.push(name); });
+            }
+        } else {
+            _grpNames.forEach((name, idx) => { groups[idx % numGroups].participants.push(name); });
+        }
 
-        // Generate round-robin matches within each group
+        // Generate round-robin matches within each group — MÉTODO DO CÍRCULO, pra
+        // rodadas BALANCEADAS: antes do 2º jogo de qualquer um, TODOS jogam o 1º;
+        // antes do 3º, todos jogam o 2º — o quanto for possível. Grupo ímpar → 1
+        // jogador FOLGA por rodada (rodízio da folga). Antes era um split guloso que
+        // deixava rodadas desbalanceadas e uma rodada-resto no fim.
         groups.forEach((g, gi) => {
             const players = g.participants;
-            const n = players.length;
-            // Round-robin: each pair plays once
-            const matchesForGroup = [];
-            for (let i = 0; i < n; i++) {
-                for (let j = i + 1; j < n; j++) {
-                    matchesForGroup.push({
-                        id: `grp${gi}-m${i}v${j}-${Date.now()}`,
-                        p1: players[i],
-                        p2: players[j],
-                        winner: null,
-                        group: gi,
-                        label: `${window._safeHtml(g.name)} • ${window._safeHtml(players[i])} vs ${window._safeHtml(players[j])}`
+            var arr = players.slice();
+            if (arr.length % 2 === 1) arr.push(null); // jogador fantasma = folga da rodada
+            var m2 = arr.length, half = m2 / 2;
+            var fixed = arr[0], rest = arr.slice(1), mi = 0;
+            for (var r = 0; r < m2 - 1; r++) {
+                var lineup = [fixed].concat(rest);
+                var roundMatches = [];
+                for (var k = 0; k < half; k++) {
+                    var a = lineup[k], b = lineup[m2 - 1 - k];
+                    if (a === null || b === null) continue; // quem cai com o fantasma folga
+                    roundMatches.push({
+                        id: 'grp' + gi + '-r' + r + '-m' + (mi++) + '-' + Date.now(),
+                        p1: a, p2: b, winner: null, group: gi, roundIndex: r,
+                        label: window._safeHtml(g.name) + ' • ' + window._safeHtml(a) + ' vs ' + window._safeHtml(b)
                     });
                 }
-            }
-            // Split into rounds (n-1 rounds for even, n rounds for odd)
-            const roundCount = n % 2 === 0 ? n - 1 : n;
-            const matchesPerRound = Math.floor(n / 2);
-            const assigned = new Set();
-            for (let r = 0; r < roundCount; r++) {
-                const roundMatches = [];
-                matchesForGroup.forEach(m => {
-                    if (assigned.has(m.id)) return;
-                    if (roundMatches.length >= matchesPerRound) return;
-                    const playersInRound = roundMatches.flatMap(rm => [rm.p1, rm.p2]);
-                    if (playersInRound.includes(m.p1) || playersInRound.includes(m.p2)) return;
-                    m.roundIndex = g.rounds.length + r;
-                    roundMatches.push(m);
-                    assigned.add(m.id);
-                });
                 if (roundMatches.length > 0) {
-                    g.rounds.push({
-                        round: r + 1,
-                        status: r === 0 ? 'active' : 'pending',
-                        matches: roundMatches
-                    });
+                    g.rounds.push({ round: r + 1, status: r === 0 ? 'active' : 'pending', matches: roundMatches });
                 }
-            }
-            // Any remaining unassigned matches go into extra rounds
-            const remaining = matchesForGroup.filter(m => !assigned.has(m.id));
-            if (remaining.length > 0) {
-                g.rounds.push({
-                    round: g.rounds.length + 1,
-                    status: 'pending',
-                    matches: remaining
-                });
+                rest.unshift(rest.pop()); // rotaciona (mantém o fixo, gira o resto)
             }
 
             // Initialize standings
@@ -1052,6 +1146,50 @@ window.generateDrawFunction = function (tId) {
         t.gruposClassified = classifiedPerGroup;
         t.currentStage = 'groups';
         t.status = 'active';
+
+        // v3.0.x: excedente dos grupos iguais entra como SUPLENTE na lista de espera —
+        // SEMPRE por INDIVÍDUOS (a dupla excedente é desmembrada nos 2 integrantes).
+        // "As pessoas na espera devem ser consideradas individualmente." Continuam
+        // inscritas; entram por substituição ou por "Novos Confrontos".
+        if (_grpWaitNames.length) {
+            const _grpObjByName = {};
+            participants.forEach(p => { const nm = getName(p); if (nm && !(nm in _grpObjByName)) _grpObjByName[nm] = p; });
+            if (!Array.isArray(t.waitlist)) t.waitlist = [];
+            const _splitToIndividuals = (p) => {
+                if (!p || typeof p !== 'object') { const s = String(p || ''); return [{ name: s, displayName: s }]; }
+                if (Array.isArray(p.participants) && p.participants.length) return p.participants.slice();
+                if (p.p1Name && p.p2Name) return [
+                    { name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo },
+                    { name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo }
+                ];
+                const nm = p.displayName || p.name || '';
+                if (nm.indexOf(' / ') !== -1) return nm.split(' / ').map(x => { x = x.trim(); return { name: x, displayName: x }; });
+                return [p];
+            };
+            // Desmembra cada dupla excedente UMA vez nos mesmos objetos-indivíduo que
+            // vão (a) pra lista de espera E (b) substituir a dupla em t.participants —
+            // assim a pessoa aparece UMA vez só (indivíduo na espera), nunca como dupla
+            // sorteada E indivíduo ao mesmo tempo.
+            const _waitSet = {}, _indsByTeam = {};
+            let _waitPeople = 0;
+            _grpWaitNames.forEach(nm => {
+                _waitSet[nm] = 1;
+                const _inds = _splitToIndividuals(_grpObjByName[nm] || { name: nm, displayName: nm });
+                _indsByTeam[nm] = _inds;
+                _inds.forEach(ind => { t.waitlist.push(ind); _waitPeople++; });
+            });
+            // Remove a dupla excedente de t.participants e coloca os 2 integrantes como
+            // INDIVÍDUOS (não estão em grupo nenhum — eram o excedente).
+            const _newParts = [];
+            (Array.isArray(t.participants) ? t.participants : []).forEach(p => {
+                const _pn = getName(p);
+                if (_waitSet[_pn] && _indsByTeam[_pn]) _indsByTeam[_pn].forEach(ind => _newParts.push(ind));
+                else _newParts.push(p);
+            });
+            t.participants = _newParts;
+            participants = _newParts;
+            window.AppStore.logAction(tId, `${_waitPeople} suplente(s) na lista de espera (grupos de mesmo tamanho)`);
+        }
 
         window.AppStore.logAction(tId, `Sorteio Realizado — ${numGroups} grupos criados com rodízio interno`);
 

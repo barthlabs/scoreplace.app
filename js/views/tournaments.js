@@ -115,10 +115,11 @@ window._drainWaitlistsIfOpen = function(t, opts) {
             if (!already) { t.participants.push(sp); promoted++; }
         });
     }
-    promote(t.standbyParticipants);
-    promote(t.waitlist);
-    t.standbyParticipants = [];
-    t.waitlist = [];
+    // CANÔNICO: promove quem está na espera dos TRÊS storages e zera os 3.
+    var _wlAll = (typeof window._clearAllWaitlists === 'function')
+      ? window._clearAllWaitlists(t)
+      : (function () { var p = (t.standbyParticipants || []).concat(t.waitlist || []); t.standbyParticipants = []; t.waitlist = []; t.monarchWaitlist = {}; return p; })();
+    promote(_wlAll);
     if (opts && opts.save && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
         window.FirestoreDB.saveTournament(t).catch(function() {});
     }
@@ -127,36 +128,82 @@ window._drainWaitlistsIfOpen = function(t, opts) {
     }
     return promoted;
 };
+// v3.0.x: contagem CANÔNICA de inscritos/equipes — pessoas e equipes DISTINTAS,
+// deduplicadas entre participantes + lista de espera (um suplente que esteja nas
+// duas listas conta 1x; uma equipe na espera conta como equipe, não como "1
+// pessoa"). Mantém INSCRITOS/EQUIPES estáveis antes E depois do sorteio.
+window._countCompetitors = function(t) {
+    var seenPpl = {}, seenTeam = {}, people = 0, teams = 0;
+    var pKey = function(o, nm) {
+        if (o && typeof o === 'object' && (o.uid || o.email)) return 'id:' + String(o.uid || o.email).toLowerCase();
+        return 'n:' + String(nm == null ? '' : nm).trim().toLowerCase();
+    };
+    var addP = function(o, nm) { var k = pKey(o, nm); if (k !== 'n:' && !seenPpl[k]) { seenPpl[k] = 1; people++; } };
+    var addTeam = function(label) { var k = String(label == null ? '' : label).trim().toLowerCase(); if (k && !seenTeam[k]) { seenTeam[k] = 1; teams++; return true; } return false; };
+    var tally = function(arr) {
+        (Array.isArray(arr) ? arr : (arr ? Object.values(arr) : [])).forEach(function(p) {
+            if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
+                if (addTeam(p.displayName || p.name)) p.participants.forEach(function(s) { addP(s, s && (s.displayName || s.name)); });
+            } else if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
+                if (addTeam(p.displayName || (p.p1Name + ' / ' + p.p2Name))) { addP({ uid: p.p1Uid, email: p.p1Email }, p.p1Name); addP({ uid: p.p2Uid, email: p.p2Email }, p.p2Name); }
+            } else {
+                var s = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '');
+                if (s && s.indexOf('/') !== -1) {
+                    if (addTeam(s)) s.split('/').map(function(n) { return n.trim(); }).filter(Boolean).forEach(function(nm) { addP(null, nm); });
+                } else {
+                    addP(p, s);
+                }
+            }
+        });
+    };
+    var activeArr = (typeof window._getCompetitors === 'function') ? window._getCompetitors(t) : (t && (Array.isArray(t.participants) ? t.participants : (t && t.participants ? Object.values(t.participants) : [])));
+    tally(activeArr);
+    tally(t && t.waitlist);
+    tally(t && t.standbyParticipants);
+    return { people: people, teams: teams };
+};
+
+// v3.0.x: ESPERA conta PESSOAS distintas na lista de espera (waitlist + standby),
+// expandindo duplas — uma dupla na espera = 2 pessoas. Antes contava ENTRADAS
+// (a dupla valia 1). "As pessoas na espera devem ser consideradas individualmente."
+window._waitlistPeopleCount = function(t) {
+    if (!t) return 0;
+    var seen = {}, n = 0;
+    var pKey = function(o, nm) {
+        if (o && typeof o === 'object' && (o.uid || o.email)) return 'id:' + String(o.uid || o.email).toLowerCase();
+        return 'n:' + String(nm == null ? '' : nm).trim().toLowerCase();
+    };
+    var addP = function(o, nm) { var k = pKey(o, nm); if (k !== 'n:' && !seen[k]) { seen[k] = 1; n++; } };
+    var tally = function(arr) {
+        (Array.isArray(arr) ? arr : []).forEach(function(p) {
+            if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
+                p.participants.forEach(function(s) { addP(s, s && (s.displayName || s.name)); });
+            } else if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
+                addP({ uid: p.p1Uid, email: p.p1Email }, p.p1Name); addP({ uid: p.p2Uid, email: p.p2Email }, p.p2Name);
+            } else {
+                var s = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '');
+                if (s && s.indexOf('/') !== -1) s.split('/').map(function(x){ return x.trim(); }).filter(Boolean).forEach(function(nm){ addP(null, nm); });
+                else addP(p, s);
+            }
+        });
+    };
+    // CANÔNICO: conta pelo mesmo merge que o painel usa (_getWaitlist = waitlist +
+    // standbyParticipants + monarchWaitlist). Antes contava só 2 das 3 fontes → o
+    // painel mostrava 5 e a stat 3 (monarchWaitlist resíduo de Rei/Rainha de fora).
+    if (typeof window._getWaitlist === 'function') tally(window._getWaitlist(t));
+    else { tally(t.waitlist); tally(t.standbyParticipants); }
+    return n;
+};
+
 window._updateStatBoxes = function(t) {
     var row = document.getElementById('stat-boxes-row');
     if (!row || !t) return;
 
-    // Recount individuals — usa _getCompetitors (mesma lista do render inicial,
-    // exclui org/cohost phantom solo mas mantém times) e conta MEMBROS:
-    // 1 dupla = 1 equipe = 2 inscritos. Antes contava dupla-objeto como 1.
-    var parts = (typeof window._getCompetitors === 'function')
-        ? window._getCompetitors(t)
-        : (Array.isArray(t.participants) ? t.participants : []);
-    var indivCount = 0;
-    var teamCount = 0;
-    parts.forEach(function(p) {
-        if (typeof p === 'object' && p !== null && Array.isArray(p.participants) && p.participants.length > 0) {
-            teamCount++;
-            indivCount += p.participants.length;
-        } else {
-            var nm = (typeof window._pName === 'function') ? window._pName(p) : (typeof p === 'string' ? p : ((p && (p.displayName || p.name)) || ''));
-            if (nm && nm.indexOf('/') !== -1) {
-                teamCount++;
-                indivCount += nm.split('/').filter(function(n) { return n.trim().length > 0; }).length;
-            } else if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
-                teamCount++;
-                indivCount += 2;
-            } else {
-                indivCount++;
-            }
-        }
-    });
-    if (Array.isArray(t.waitlist)) indivCount += t.waitlist.length;
+    // v3.0.x: usa a contagem canônica (deduplicada, equipe-aware) — antes contava
+    // equipe da espera como "1 pessoa" e somava waitlist.length duas vezes.
+    var _cc = window._countCompetitors(t);
+    var indivCount = _cc.people;
+    var teamCount = _cc.teams;
 
     // Update inscritos count
     var inscBox = row.querySelector('[data-stat="inscritos"] .stat-value');
@@ -167,8 +214,9 @@ window._updateStatBoxes = function(t) {
     if (eqBox) eqBox.textContent = teamCount;
 
     // Waitlist count
-    var wlCount = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0)
-        + (Array.isArray(t.waitlist) ? t.waitlist.length : 0);
+    var wlCount = (typeof window._waitlistPeopleCount === 'function')
+        ? window._waitlistPeopleCount(t)
+        : ((Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0) + (Array.isArray(t.waitlist) ? t.waitlist.length : 0));
 
     var wlBox = row.querySelector('[data-stat="waitlist"]');
     if (wlCount > 0 && !wlBox) {
@@ -917,33 +965,60 @@ function renderTournaments(container, tournamentId = null) {
         var dialog = document.createElement('div');
         dialog.id = 'presence-draw-choice';
         dialog.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:100010;';
+        // v3.0.x: o modo vira SELEÇÃO (não dispara no clique); só o botão "Sortear"
+        // (verde, no topo, ao lado de Cancelar) confirma. Antes "Sortear com todos"
+        // executava direto no clique — pedido: ter Cancelar/Confirmar explícito.
+        var _optBase = 'text-align:left;width:100%;padding:13px 16px;font-size:0.92rem;border-radius:12px;cursor:pointer;line-height:1.4;transition:all .12s;';
+        var _optStyle = function(sel) {
+            return _optBase + (sel
+                ? 'background:rgba(34,197,94,0.14);border:2px solid #22c55e;color:var(--text-bright,#f1f5f9);font-weight:700;'
+                : 'background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.12);color:var(--text-main);font-weight:600;');
+        };
+        var _radio = function(sel) {
+            return '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid ' + (sel ? '#22c55e' : 'var(--text-muted)') + ';background:' + (sel ? '#22c55e' : 'transparent') + ';margin-right:8px;vertical-align:-2px;box-shadow:' + (sel ? 'inset 0 0 0 2px var(--surface-color)' : 'none') + ';"></span>';
+        };
         dialog.innerHTML =
-            '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:16px;max-width:440px;width:90%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
-              '<div style="background:rgba(59,130,246,0.1);border-bottom:1px solid var(--border-color);padding:1.25rem;display:flex;align-items:center;gap:12px;">' +
-                '<span style="font-size:2rem;">🎲</span>' +
+            '<div style="background:var(--surface-color);border:1px solid var(--border-color);border-radius:16px;max-width:460px;width:90%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+              '<div style="background:rgba(59,130,246,0.1);border-bottom:1px solid var(--border-color);padding:1rem 1.25rem;display:flex;align-items:center;gap:12px;">' +
+                '<span style="font-size:1.8rem;">🎲</span>' +
                 '<div style="font-size:1.1rem;font-weight:700;color:var(--text-color);">Como deseja sortear?</div>' +
               '</div>' +
-              '<div style="padding:1.1rem 1.25rem 0.5rem;color:var(--text-muted);font-size:0.92rem;line-height:1.55;">' +
-                'As inscrições continuarão <b>abertas</b> após o sorteio. Escolha como montar a chave:' +
+              // Cancelar / Sortear NO TOPO (padrão dos outros diálogos)
+              '<div style="display:flex;gap:10px;padding:1rem 1.25rem 0.5rem;">' +
+                '<button id="pdc-cancel" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--border-color);background:transparent;color:var(--text-muted);font-weight:700;font-size:0.92rem;cursor:pointer;">Cancelar</button>' +
+                '<button id="pdc-confirm" style="flex:2;padding:12px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">✓ Confirmar</button>' +
               '</div>' +
-              '<div style="padding:0.75rem 1.25rem 1.25rem;display:flex;flex-direction:column;gap:10px;">' +
-                '<button id="pdc-all" style="text-align:left;background:rgba(255,255,255,0.06);color:var(--text-main);border:1px solid rgba(255,255,255,0.15);padding:13px 16px;font-weight:600;font-size:0.92rem;border-radius:12px;cursor:pointer;line-height:1.4;">' +
-                  '🎲 Sortear com todos<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Inclui todos os inscritos, presentes ou não (antes da chamada).</span>' +
+              '<div style="padding:0.25rem 1.25rem 0.5rem;color:var(--text-muted);font-size:0.88rem;line-height:1.5;">As inscrições continuarão <b>abertas</b> após o sorteio. Escolha como montar a chave:</div>' +
+              '<div style="padding:0.25rem 1.25rem 1.25rem;display:flex;flex-direction:column;gap:10px;">' +
+                '<button id="pdc-opt-all" data-mode="all" style="' + _optStyle(true) + '">' +
+                  _radio(true) + '🎲 Sortear com todos<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Inclui todos os inscritos, presentes ou não (antes da chamada).</span>' +
                 '</button>' +
-                '<button id="pdc-present" style="text-align:left;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:13px 16px;font-weight:700;font-size:0.92rem;border-radius:12px;cursor:pointer;line-height:1.4;">' +
-                  '✅ Só entre os presentes<br><span style="font-weight:400;font-size:0.82rem;color:rgba(255,255,255,0.85);">Ausentes vão para a lista de espera; entram depois quando 4 presentes se acumularem.</span>' +
+                '<button id="pdc-opt-present" data-mode="present" style="' + _optStyle(false) + '">' +
+                  _radio(false) + '✅ Só entre os presentes<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Ausentes vão para a lista de espera; entram depois quando 4 presentes se acumularem.</span>' +
                 '</button>' +
-                '<button id="pdc-cancel" style="background:transparent;color:var(--text-muted);border:none;padding:8px;font-weight:600;font-size:0.88rem;cursor:pointer;">Cancelar</button>' +
               '</div>' +
             '</div>';
         document.body.appendChild(dialog);
         var close = function() { dialog.remove(); };
+        var _pdcMode = 'all';
+        var _optAll = dialog.querySelector('#pdc-opt-all');
+        var _optPresent = dialog.querySelector('#pdc-opt-present');
+        var _paintOpts = function() {
+            _optAll.setAttribute('style', _optStyle(_pdcMode === 'all'));
+            _optAll.innerHTML = _radio(_pdcMode === 'all') + '🎲 Sortear com todos<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Inclui todos os inscritos, presentes ou não (antes da chamada).</span>';
+            _optPresent.setAttribute('style', _optStyle(_pdcMode === 'present'));
+            _optPresent.innerHTML = _radio(_pdcMode === 'present') + '✅ Só entre os presentes<br><span style="font-weight:400;font-size:0.82rem;color:var(--text-muted);">Ausentes vão para a lista de espera; entram depois quando 4 presentes se acumularem.</span>';
+        };
+        _optAll.addEventListener('click', function() { _pdcMode = 'all'; _paintOpts(); });
+        _optPresent.addEventListener('click', function() { _pdcMode = 'present'; _paintOpts(); });
         dialog.querySelector('#pdc-cancel').addEventListener('click', close);
-        dialog.querySelector('#pdc-all').addEventListener('click', function() {
-            close();
-            startDraw();
-        });
-        dialog.querySelector('#pdc-present').addEventListener('click', function() {
+        dialog.querySelector('#pdc-confirm').addEventListener('click', function() {
+            if (_pdcMode === 'all') {
+                close();
+                startDraw();
+                return;
+            }
+            // modo "só entre os presentes"
             var tt = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
             if (!tt) { close(); return; }
             var _nm = function(p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
@@ -953,8 +1028,7 @@ function renderTournaments(container, tournamentId = null) {
                 if (typeof showNotification !== 'undefined') {
                     showNotification('⚠️ Poucos presentes', 'Marque pelo menos 2 participantes presentes (check-in) antes de sortear só entre os presentes.', 'warning');
                 }
-                close();
-                return;
+                return; // mantém o diálogo aberto pra ajustar a escolha
             }
             var moved = window._moveAbsentToWaitlistForPresentDraw(tt);
             close();
@@ -1583,36 +1657,14 @@ function renderTournaments(container, tournamentId = null) {
             venuePhotoBg = 'background-image: ' + overlayGradient + ', url(' + t.venuePhotoUrl + '); background-size: cover; background-position: center;';
         }
 
-        let individualCount = 0;
-        let teamCount = 0;
-        if (t.participants) {
-            const arr = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (Array.isArray(t.participants) ? t.participants : Object.values(t.participants));
-            arr.forEach(p => {
-                if (typeof p === 'object' && p !== null && Array.isArray(p.participants)) {
-                    teamCount++;
-                    individualCount += p.participants.length;
-                } else if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
-                    // v2.7.99: dupla ESTRUTURAL (p1Name/p2Name, displayName pode não ter "/")
-                    // conta como 2 pessoas e 1 equipe. Antes contava 1 ("12 em vez de 13").
-                    teamCount++;
-                    individualCount += 2;
-                } else {
-                    const pStr = window._pName(p);
-                    if (pStr.includes('/')) {
-                        teamCount++;
-                        individualCount += pStr.split('/').filter(n => n.trim().length > 0).length;
-                    } else {
-                        individualCount++;
-                    }
-                }
-            });
-        }
-        // Include waitlist in total individual count
-        if (Array.isArray(t.waitlist)) {
-            individualCount += t.waitlist.length;
-        }
-        const standbyCount = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0)
-            + (Array.isArray(t.waitlist) ? t.waitlist.length : 0);
+        // v3.0.x: contagem canônica (deduplicada, equipe-aware) — estável antes E
+        // depois do sorteio. Ver window._countCompetitors.
+        const _ccDetail = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t) : { people: 0, teams: 0 };
+        let individualCount = _ccDetail.people;
+        let teamCount = _ccDetail.teams;
+        const standbyCount = (typeof window._waitlistPeopleCount === 'function')
+            ? window._waitlistPeopleCount(t)
+            : ((Array.isArray(t.standbyParticipants) ? t.standbyParticipants.length : 0) + (Array.isArray(t.waitlist) ? t.waitlist.length : 0));
 
         const expectedTeammates = Math.max(0, parseInt(t.teamSize || 2) - 1);
         // Para duplas (teamSize===2) usa o fluxo individual + partner picker.
@@ -2237,7 +2289,7 @@ function renderTournaments(container, tournamentId = null) {
             ${/* v2.3.96: rede de segurança — sorteio em revisão (só organizador) */ ''}
             ${(typeof window._renderPendingDrawBanner === 'function') ? window._renderPendingDrawBanner(t) : ''}
             ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
-            ${(tournamentId && isFinished) ? podiumHtml : ''}
+            ${(tournamentId && isFinished) ? (podiumHtml + (typeof window._collapsedClassifHtml === 'function' ? window._collapsedClassifHtml(t) : '')) : ''}
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
@@ -2780,6 +2832,8 @@ function renderTournaments(container, tournamentId = null) {
             var _tIsLiga = !!(window._isLigaFormat && window._isLigaFormat(t));
             var _tCurUser = window.AppStore && window.AppStore.currentUser;
             var _tIsActive = function(p) {
+              // v3.0.x: "Deixar inscritos de fora" desativado → TODOS ativos (ignora ligaActive).
+              if (t.allowSelfDeactivation === false) return true;
               if (typeof p !== 'object' || !p) return true;
               return p.ligaActive !== false;
             };
@@ -3117,7 +3171,10 @@ function renderTournaments(container, tournamentId = null) {
                     // Positioned top-right aligned with the name — toggle is fixed, state label
                     // sits to the left of the toggle and its width varies with text ("ativado" / "desativado").
                     var ligaCardToggle = '';
-                    if (_tIsLiga) {
+                    // v3.0.x: quando "Deixar inscritos ficarem de fora" está DESATIVADO
+                    // (allowSelfDeactivation === false), o controle some dos cards e todos
+                    // ficam ativos (o motor de sorteio já ignora desativações nesse modo).
+                    if (_tIsLiga && t.allowSelfDeactivation !== false) {
                         var _lgActive = _tIsActive(p);
                         var _lgSelf = !!(_tCurUser && window._userMatchesParticipant && typeof p === 'object' && window._userMatchesParticipant(_tCurUser, p));
                         var _lgSafeTid = String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -3481,7 +3538,7 @@ function renderTournaments(container, tournamentId = null) {
         const _cuUser = window.AppStore && window.AppStore.currentUser;
         const _myToggleHtml = _cuUser && _hasDrawContent ? `
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;" class="no-print">
-            <span style="font-size:0.72rem;font-weight:600;color:var(--text-muted);white-space:nowrap;">Só meus jogos</span>
+            <span style="font-size:0.68rem;font-weight:600;color:var(--text-muted);line-height:1.05;text-align:right;">Só<br>meus<br>jogos</span>
             <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;">
               <input type="checkbox" id="my-matches-toggle" onchange="window._toggleMyMatches(this.checked)">
               <span class="toggle-slider"></span>

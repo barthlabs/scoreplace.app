@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.0-beta';
+window.SCOREPLACE_VERSION = '3.0.44-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -1990,6 +1990,20 @@ window._getWaitlist = function(t) {
     });
   }
   return out;
+};
+
+// CANÔNICO: a lista de espera vive em 3 storages (waitlist + standbyParticipants +
+// monarchWaitlist por categoria). Toda vez que se RE-DERIVA a espera (reset, re-sorteio)
+// tem que limpar OS TRÊS — senão um deles vira resíduo e o painel (que lê os 3 via
+// _getWaitlist) mostra gente fantasma. Retorna TODAS as pessoas que estavam na espera
+// (deduplicadas, via _getWaitlist) pra quem precisar devolvê-las ao pool.
+window._clearAllWaitlists = function(t) {
+  if (!t) return [];
+  var collected = window._getWaitlist(t);
+  t.waitlist = [];
+  t.standbyParticipants = [];
+  t.monarchWaitlist = {};
+  return collected;
 };
 
 // Conjunto de nomes (lowercase) na espera — inclui membros de duplas "A / B".
@@ -4680,6 +4694,40 @@ window._isOrgParticipant = function (t, p) {
   return false;
 };
 
+// v3.0.x: org de UM jogador específico — NÃO contamina o parceiro. _isOrgParticipant
+// olha p1Uid/p2Uid do TIME, então uma dupla SORTEADA com o organizador (ou co-host)
+// marcava o parceiro como organizador (⭐). Aqui resolvemos o uid/email DAQUELE jogador
+// (casando o nome com p1Name/p2Name) e só comparamos esse. Bug: Cocozza/Thereza viraram
+// "organizadoras" por estarem na dupla do org/co-host.
+window._isOrgPlayer = function (t, playerName, pObj) {
+  if (!t) return false;
+  var nm = String(playerName == null ? '' : playerName).trim();
+  var uid = '', email = '';
+  if (pObj && typeof pObj === 'object') {
+    if (pObj.p1Name && String(pObj.p1Name).trim() === nm) { uid = pObj.p1Uid || ''; email = pObj.p1Email || ''; }
+    else if (pObj.p2Name && String(pObj.p2Name).trim() === nm) { uid = pObj.p2Uid || ''; email = pObj.p2Email || ''; }
+    else if (Array.isArray(pObj.participants)) {
+      var _m = pObj.participants.filter(function (s) { return s && String(s.displayName || s.name || '').trim() === nm; })[0];
+      if (_m) { uid = _m.uid || ''; email = _m.email || ''; }
+    } else { uid = pObj.uid || ''; email = pObj.email || ''; }
+  }
+  email = String(email || '').toLowerCase();
+  if (uid && t.creatorUid && uid === t.creatorUid) return true;
+  var cE = String(t.creatorEmail || '').toLowerCase(), oE = String(t.organizerEmail || '').toLowerCase();
+  if (email && (email === cE || email === oE)) return true;
+  if (Array.isArray(t.coHosts)) {
+    for (var j = 0; j < t.coHosts.length; j++) {
+      var c = t.coHosts[j];
+      if (!c || c.status !== 'active') continue;
+      if (c.uid && uid && c.uid === uid) return true;
+      if (c.email && email && String(c.email).toLowerCase() === email) return true;
+    }
+  }
+  // fallback por NOME (org/co-host sem uid resolvido neste objeto)
+  if (typeof window._isOrgName === 'function' && window._isOrgName(nm, t)) return true;
+  return false;
+};
+
 window._saveTemplate = async function(template) {
   var u = window.AppStore && window.AppStore.currentUser;
   if (!u || !u.uid) return 'error';
@@ -4744,6 +4792,16 @@ window._nameWithCrown = function(name, tournament) {
     return safe + ' ' + window._CROWN_MINI;
   }
   return safe;
+};
+
+// v3.0.x: nome de EQUIPE nas tabelas (standings). Quando é dupla "A / B", quebra
+// após o " / " — 1º jogador (com a barra) na 1ª linha, 2º embaixo, alinhado à
+// esquerda. Para solo, retorna igual ao _nameWithCrown.
+window._teamNameBreakHtml = function(name, tournament) {
+  var base = (typeof window._nameWithCrown === 'function')
+    ? window._nameWithCrown(name, tournament)
+    : (window._safeHtml ? window._safeHtml(name) : String(name == null ? '' : name));
+  return String(base).replace(/ \/ /g, ' /<br>');
 };
 
 // ─── Enrollment lookup: matches user against a participant (incl. team members) ─
@@ -4874,11 +4932,61 @@ window._enrollNumberBadge = function(num, side) {
   if (num === '' || num == null) return '';
   side = (side === 'left') ? 'left' : 'right';
   var n = String(num);
-  var vbW = n.length * 82 + 8;            // viewBox cresce com o nº de dígitos
-  return '<svg aria-hidden="true" style="position:absolute;top:20%;' + side + ':8px;height:60%;width:auto;pointer-events:none;user-select:none;z-index:0;" ' +
-    'viewBox="0 0 ' + vbW + ' 100" preserveAspectRatio="xMidYMid meet">' +
-    '<text x="' + (vbW / 2) + '" y="50" text-anchor="middle" dominant-baseline="central" font-size="140" font-weight="900" ' +
+  // v3.0.x: número GRANDE (≈76% da altura do card) e SEM corte. A causa do corte era o
+  // glifo VAZANDO os limites: largura por dígito curta demais pro peso 900 → o número
+  // transbordava o próprio box e a borda do card (overflow:hidden) cortava. Fix: `textLength`
+  // = largura da viewBox (lengthAdjust ajusta espaçamento/glifo) trava a largura, e a viewBox
+  // tem largura por dígito generosa (60) — o número nunca vaza, nem na direita nem na esquerda.
+  // height 52% + folga vertical (medido: ~12px topo/base, livre dos cantos arredondados).
+  var vbH = 76;                            // glifo (fonte 100) preenche a viewBox → número cheio
+  var vbW = n.length * 60;
+  return '<svg aria-hidden="true" style="position:absolute;top:50%;transform:translateY(-50%);' + side + ':14px;height:52%;max-height:54px;width:auto;pointer-events:none;user-select:none;z-index:0;overflow:visible;" ' +
+    'viewBox="0 0 ' + vbW + ' ' + vbH + '" preserveAspectRatio="xMidYMid meet">' +
+    '<text x="' + (vbW / 2) + '" y="' + (vbH / 2) + '" textLength="' + vbW + '" lengthAdjust="spacingAndGlyphs" text-anchor="middle" dominant-baseline="central" font-size="100" font-weight="900" ' +
     'fill="rgba(255,255,255,0.10)" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif">' + window._safeHtml(n) + '</text></svg>';
+};
+
+// v3.0.x: classificação GERAL COLAPSADA pra ficar SEMPRE abaixo do pódio no torneio
+// encerrado. Liga/Suíço → standings; eliminatória/multi-fase → classificação progressiva
+// (faux sobre os jogos da fase final, 3º/4º como thirdPlaceMatch). Retorna '' se não há
+// dados (não polui). Colapsada por padrão (<details> sem open).
+window._collapsedClassifHtml = function (t) {
+  if (!t) return '';
+  var rows = [];
+  var isLiga = (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) ||
+    (Array.isArray(t.rounds) && t.rounds.length && (!Array.isArray(t.matches) || !t.matches.length));
+  if (isLiga && typeof window._computeStandings === 'function') {
+    try {
+      var st = window._computeStandings(t);
+      if (Array.isArray(st) && st.length) rows = st.map(function (s, i) { return { pos: i + 1, name: (s && (s.name || s.player)) || '' }; });
+    } catch (e) {}
+  }
+  if (!rows.length && Array.isArray(t.matches) && t.matches.length && typeof window._updateProgressiveClassification === 'function') {
+    try {
+      var ph = t.matches;
+      if (typeof t.currentPhaseIndex === 'number' && Array.isArray(t.phases) && t.phases.length > 1) {
+        var fp = t.matches.filter(function (m) { return (m.phaseIndex || 0) === t.currentPhaseIndex; });
+        if (fp.length) ph = fp;
+      }
+      var third = ph.filter(function (m) { return m.isThirdPlace || (m.bracket || '') === 'thirdplace'; })[0] || null;
+      var rest = ph.filter(function (m) { return m !== third; });
+      var faux = { matches: rest, format: 'Eliminatórias Simples', thirdPlaceMatch: third, tiebreakers: t.tiebreakers };
+      window._updateProgressiveClassification(faux);
+      var cl = faux.classification || {}, keys = Object.keys(cl);
+      if (keys.length) rows = keys.map(function (k) { return { pos: cl[k], name: k }; }).sort(function (a, b) { return a.pos - b.pos; });
+    } catch (e) {}
+  }
+  if (!rows.length) return '';
+  var medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  var body = rows.map(function (r) {
+    var c = r.pos === 1 ? '#fbbf24' : r.pos === 2 ? '#94a3b8' : r.pos === 3 ? '#cd7f32' : 'var(--text-muted)';
+    var nm = (typeof window._nameWithCrown === 'function') ? window._nameWithCrown(r.name, t) : window._safeHtml(r.name);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 14px;">' +
+      '<span style="min-width:30px;text-align:center;font-weight:800;color:' + c + ';">' + r.pos + 'º</span>' +
+      '<span style="flex:1;min-width:0;font-weight:600;color:' + c + ';">' + nm + '</span>' +
+      (r.pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;">' + medals[r.pos] + '</span>' : '') + '</div>';
+  }).join('');
+  return '<details style="margin-top:1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.82rem;color:var(--text-bright,#f1f5f9);padding:9px 14px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">📊 Classificação geral (' + rows.length + ')</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:6px 0;">' + body + '</div></details>';
 };
 
 // ─── Competitors helper: filter out non-competing organizers from participants ─

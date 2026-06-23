@@ -633,38 +633,16 @@ function renderDashboard(container) {
       _cardTextColor = 'white'; // Overlay sempre escuro, texto branco
     }
 
-    let individualCount = 0;
-    let teamCount = 0;
-    // Count waitlisted participants to subtract from active count
-    const _waitlistArr = Array.isArray(t.waitlist) ? t.waitlist : [];
-    const _waitlistNames = new Set();
-    _waitlistArr.forEach(function(w) {
-      var wName = typeof w === 'string' ? w : (w.displayName || w.name || '');
-      if (wName) _waitlistNames.add(wName);
-    });
-    const _standbyCount = _waitlistArr.length;
-
-    if (t.participants) {
-      const arr = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (Array.isArray(t.participants) ? t.participants : Object.values(t.participants));
-      arr.forEach(p => {
-        // Skip waitlisted participants from the active count
-        var _pN = window._pName(p);
-        if (_waitlistNames.has(_pN)) return;
-
-        if (typeof p === 'object' && p !== null && Array.isArray(p.participants)) {
-          teamCount++;
-          individualCount += p.participants.length;
-        } else {
-          const pStr = _pN;
-          if (pStr.includes('/')) {
-            teamCount++;
-            individualCount += pStr.split('/').filter(n => n.trim().length > 0).length;
-          } else {
-            individualCount++;
-          }
-        }
-      });
-    }
+    // v3.0.x: usa a contagem CANÔNICA (mesma do detalhe) — antes a dashboard tinha
+    // a própria lógica que EXCLUÍA os da lista de espera, dando números diferentes
+    // do detalhe (100/50 vs 103/51). Agora INSCRITOS/EQUIPES batem em todo lugar, e
+    // ESPERA conta PESSOAS (dupla na espera = 2).
+    const _ccDash = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t) : { people: 0, teams: 0 };
+    let individualCount = _ccDash.people;
+    let teamCount = _ccDash.teams;
+    const _standbyCount = (typeof window._waitlistPeopleCount === 'function')
+      ? window._waitlistPeopleCount(t)
+      : (Array.isArray(t.waitlist) ? t.waitlist.length : 0);
 
     // Enroll/unenroll button: only when inscriptions are truly open
     // hasDraw = tournament already has matches/rounds/groups drawn

@@ -302,28 +302,28 @@ function setupCreateTournamentModal() {
               </div>
 
               <!-- Datas da fase (logo abaixo do Formato) — v2.6.46 -->
-              <div style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.75rem; margin-bottom:1rem;">
-                <div style="font-size:0.72rem; color:#a5b4fc; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem;">📅 ${_t('create.phaseDatesTitle')}</div>
-                <div class="dates-row" style="display:flex; gap:10px; align-items:stretch; flex-wrap:wrap;">
-                  <div id="reg-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
+              <div style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.4rem; margin-bottom:1rem;">
+                <div style="font-size:0.72rem; color:#a5b4fc; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem; padding-left:0.35rem;">📅 ${_t('create.phaseDatesTitle')}</div>
+                <div class="dates-row" style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
+                  <div id="reg-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnrollDeadline')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-reg-date" aria-label="Data limite das inscrições da fase" style="padding:4px 6px; font-size:0.82rem; flex:1 1 120px; min-width:120px;" oninput="window._recalcDuration()">
-                      <input type="time" class="form-control" id="tourn-reg-time" aria-label="Hora limite das inscrições da fase" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration()">
+                      <input type="date" class="form-control" id="tourn-reg-date" aria-label="Data limite das inscrições da fase" style="padding:4px 4px; font-size:0.74rem; flex:1 1 0; min-width:0; white-space:nowrap;" oninput="window._recalcDuration()">
+                      <input type="time" class="form-control" id="tourn-reg-time" aria-label="Hora limite das inscrições da fase" style="padding:4px 4px; font-size:0.78rem; width:74px; flex-shrink:0;" oninput="window._recalcDuration()">
                     </div>
                   </div>
-                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseStart')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:4px 6px; font-size:0.82rem; flex:1 1 120px; min-width:120px;" required oninput="window._recalcDuration(); window._checkWeather(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:4px 4px; font-size:0.74rem; flex:1 1 0; min-width:0; white-space:nowrap;" required oninput="window._recalcDuration(); window._checkWeather(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:4px 4px; font-size:0.78rem; width:74px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                     </div>
                   </div>
-                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;">
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnd')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:4px 6px; font-size:0.82rem; flex:1 1 120px; min-width:120px;" required oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                      <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término da fase" style="padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:4px 4px; font-size:0.74rem; flex:1 1 0; min-width:0; white-space:nowrap;" required oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término da fase" style="padding:4px 4px; font-size:0.78rem; width:74px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                     </div>
                   </div>
                 </div>
@@ -466,20 +466,18 @@ function setupCreateTournamentModal() {
               <!-- Campos específicos: Fase de Grupos -->
               <div id="grupos-fields" style="display:none; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.gruposConfig')}</p>
-                <div class="d-flex gap-2">
-                  <div class="form-group full-width">
-                    <label class="form-label">${_t('create.gruposCount')}</label>
-                    <input type="number" class="form-control" id="grupos-count" min="2" max="16" value="4" placeholder="Ex: 4" oninput="window._renderGruposSuggestions && window._renderGruposSuggestions()">
-                    <small class="text-muted" style="display:block;margin-top:4px;">${_t('create.gruposDistDesc')}</small>
-                  </div>
-                  <div class="form-group full-width">
-                    <label class="form-label">${_t('create.gruposClassified')}</label>
-                    <input type="number" class="form-control" id="grupos-classified" min="1" max="4" value="2" placeholder="Ex: 2" oninput="window._renderGruposSuggestions && window._renderGruposSuggestions()">
-                    <small class="text-muted" style="display:block;margin-top:4px;">${_t('create.gruposClassifiedDesc')}</small>
-                  </div>
+                <!-- v3.0.x: divisão por SLIDER (nº de grupos × tamanho), sugerida a
+                     partir do nº de inscritos. O nº de classificados foi pra transição
+                     entre fases (respeitando potência de 2), não fica mais aqui.
+                     grupos-count / grupos-classified ficam ocultos só pra compat de save. -->
+                <input type="hidden" id="grupos-count" value="4">
+                <input type="hidden" id="grupos-classified" value="2">
+                <div id="grupos-suggestions" style="margin-top:4px;"></div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+                  <label class="toggle-switch" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;flex-shrink:0;"><input type="checkbox" id="grupos-equal-only" onchange="window._renderGruposSuggestions && window._renderGruposSuggestions(); window._syncLateEnrollment && window._syncLateEnrollment()"><span class="toggle-slider"></span></label>
+                  <span style="font-size:0.84rem;color:var(--text-main);">Apenas grupos de mesmo tamanho</span>
                 </div>
-                <!-- v2.6.89: sugestões dinâmicas de divisão de grupos a partir do nº de inscritos -->
-                <div id="grupos-suggestions" style="margin-top:10px;"></div>
+                <small id="grupos-equal-helper" class="text-muted" style="display:none;margin-top:6px;"></small>
               </div>
 
               <!-- Campos específicos: Suíço -->
@@ -1429,7 +1427,7 @@ function setupCreateTournamentModal() {
   // Datas da fase canônicas (mesmo visual da Fase 1: labels no topo, campos na linha mais baixa).
   window._phaseDatesHtml = function(i, ph) {
     var T = window._t || function(k){ return k; };
-    var col = 'flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 10px;';
+    var col = 'flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;';
     var lbl = 'font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;';
     var rowS = 'display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;';
     var dInp = 'padding:4px 6px; font-size:0.82rem; flex:1 1 120px; min-width:120px;';
@@ -1643,12 +1641,13 @@ function setupCreateTournamentModal() {
     return [ { key: 'main', icon: '🏆', defaultLabel: 'Classificados que avançam' } ];
   }
   window._addPhase = function() {
+    window._phasesUserTouched = true; // v3.0.x: o usuário mexeu nas fases de propósito
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
     var n = window._extraPhases.length + 2;
     window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: 2, scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
     window._renderPhases();
   };
-  window._removePhase = function(i) { if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
+  window._removePhase = function(i) { window._phasesUserTouched = true; if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
   window._setPhaseField = function(i, field, value) {
     var ph = window._extraPhases[i]; if (!ph) return;
     if (['rounds', 'gruposCount', 'gruposClassified', 'monarchClassified'].indexOf(field) !== -1) value = Math.max(1, parseInt(value) || 1);
@@ -1806,6 +1805,12 @@ function setupCreateTournamentModal() {
     h += _phBtn(i, 'scope', 'per_group', 'Por grupo', _basis === 'per_group');
     h += _phBtn(i, 'scope', 'overall', 'Geral', _basis === 'overall');
     h += '</div>';
+    // v3.0.x: fase eliminatória + "Os melhores X" → o chaveamento se completa SEMPRE
+    // por repescagem das melhores não classificadas (pela tabela) até a potência de 2
+    // superior. Não há tela de resolução de potência de 2 aqui.
+    if (_isElim && _qty === 'top') {
+      h += '<div style="margin-bottom:10px;font-size:0.7rem;color:#fbbf24;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:7px 10px;line-height:1.4;">↳ <b>Repescagem automática:</b> como esta fase é eliminatória, se o nº de classificados não fechar uma potência de 2, o chaveamento é completado com a <b>repescagem das melhores duplas não classificadas</b> (pela tabela) até a potência de 2 superior — sem tela de resolução.</div>';
+    }
     // Linhas (só Eliminatórias) — apenas o NOME de cada chave. Quem ocupa cada linha é
     // decidido pelo critério "Como avançam" (Sorteio / Performance / Equilíbrio) abaixo.
     if (_isElim) {
@@ -1820,7 +1825,7 @@ function setupCreateTournamentModal() {
         h += '<button type="button" onclick="window._setPhaseLineCount(' + i + ',' + n + ')" style="padding:5px 13px;border-radius:9px;font-size:0.8rem;font-weight:700;cursor:pointer;' + (_nLines === n ? _lon : _loff) + '">' + n + '</button>';
       });
       h += '</div>';
-      h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:5px;">Nomeie cada linha (quem entra em cada chave vem do critério Sorteio / Performance / Equilíbrio abaixo):</div>';
+      h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:5px;">' + ((teamSize >= 2 && ph.fixedPairs !== false) ? 'Nomeie cada linha (as duplas entram em cada chave pela colocação na fase anterior):' : 'Nomeie cada linha (quem entra em cada chave vem do critério Sorteio / Performance / Equilíbrio abaixo):') + '</div>';
       (ph.mapping || []).forEach(function(mp, mi){
         h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">';
         h += '<span style="flex-shrink:0;font-size:0.9rem;">🔹</span>';
@@ -1849,19 +1854,40 @@ function setupCreateTournamentModal() {
       h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">Duplas fixas</span>';
       h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_fixed ? 'pares travados para toda a fase' : 'classificados entram individualmente') + '</span>';
       h += '</div>';
-      h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-      [['draw_among', '🎲 Sorteio'], ['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.'], ['seed', '🎯 Cabeças de chave']].forEach(function(p){
-        var act = _ps === p[0];
-        h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
-      });
-      h += '</div>';
+      if (_fixed) {
+        // v3.0.x: pares já formados (vêm travados da fase anterior) → as estratégias
+        // que (re)formam/distribuem pares (Sorteio/Performance/Equilíbrio) não se
+        // aplicam. Resta só "Cabeças de chave" (semear os melhores), como toggle
+        // ligado por padrão. Normaliza estratégia herdada (top/balanced → seed).
+        if (_ps !== 'seed' && _ps !== 'draw_among') {
+          _ps = 'seed'; ph.pairingStrategy = 'seed'; ph.scope = 'overall';
+          ph.qualifyMode = (ph.qualifyQuantity === 'all') ? 'all' : 'overall';
+        }
+        var _seedOn = _ps === 'seed';
+        h += '<div style="display:flex;align-items:center;gap:10px;">';
+        h += '<label class="toggle-switch" style="--toggle-on-bg:#818cf8;--toggle-on-glow:rgba(129,140,248,0.3);--toggle-on-border:#818cf8;flex-shrink:0;"><input type="checkbox"' + (_seedOn ? ' checked' : '') + ' onchange="window._setPhasePairing(' + i + ', this.checked ? \'seed\' : \'draw_among\')"><span class="toggle-slider"></span></label>';
+        h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">🎯 Cabeças de chave</span>';
+        h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_seedOn ? 'os melhores são espalhados pra se cruzarem só no fim' : 'chaveamento sorteado dentro de cada linha') + '</span>';
+        h += '</div>';
+      } else {
+        h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+        [['draw_among', '🎲 Sorteio'], ['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.'], ['seed', '🎯 Cabeças de chave']].forEach(function(p){
+          var act = _ps === p[0];
+          h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
+        });
+        h += '</div>';
+      }
       // v2.7.15: explicação DINÂMICA de quem vai pra qual linha (resolve "o seletor
       // não diz quem vai pra Ouro/Prata"). Atualiza ao trocar estratégia/linhas.
       var _nLx = (ph.mapping && ph.mapping.length) || 1;
       if (_nLx >= 2) {
         var _Lx = ph.mapping.map(function(mp, k){ return (mp.label || '').trim() || ('Linha ' + (k + 1)); });
         var _expl;
-        if (_ps === 'seed') _expl = 'Os <b>' + _nLx + ' melhores</b> (ranking geral) viram <b>cabeças de chave</b> — 1 por linha, espalhados pra só se cruzarem no fim; as demais vagas são <b>sorteadas</b> entre as linhas. <span style="opacity:0.8;">(usa escopo Geral)</span>';
+        if (_fixed) {
+          if (_ps === 'seed') _expl = 'As duplas vão pra cada linha pela <b>colocação</b> (definida acima); dentro da linha, as melhores viram <b>cabeças de chave</b> — espalhadas pra só se cruzarem no fim.';
+          else _expl = 'As duplas vão pra cada linha pela <b>colocação</b> (definida acima); o chaveamento dentro de cada linha é <b>sorteado</b>.';
+        }
+        else if (_ps === 'seed') _expl = 'Os <b>' + _nLx + ' melhores</b> (ranking geral) viram <b>cabeças de chave</b> — 1 por linha, espalhados pra só se cruzarem no fim; as demais vagas são <b>sorteadas</b> entre as linhas. <span style="opacity:0.8;">(usa escopo Geral)</span>';
         else if (_ps === 'balanced') _expl = '<b>' + esc(_Lx[0]) + '</b> recebe a dupla 1º+4º (forte+fraco); <b>' + esc(_Lx[1]) + '</b> recebe 2º+3º — linhas equilibradas.';
         else if (_ps === 'draw_among') _expl = 'As duplas de cada grupo são <b>sorteadas</b> e distribuídas igualmente entre as ' + _nLx + ' linhas.';
         else _expl = '<b>' + esc(_Lx[0]) + '</b> recebe os <b>vencedores</b> (1º+2º de cada grupo); <b>' + esc(_Lx[1]) + '</b> recebe os <b>derrotados</b> (3º+4º)' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
@@ -2193,10 +2219,25 @@ function setupCreateTournamentModal() {
     if (closedDesc) closedDesc.textContent = _t(closed.checked ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc');
     var expandDesc = document.getElementById('late-expand-desc');
     if (expandDesc) {
-      var key;
-      if (closed.checked) key = 'create.lateEnrollExpandDisabledDesc';
-      else key = expand.checked ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc';
-      expandDesc.textContent = _t(key);
+      // v3.0.x: na Fase de Grupos o "Novos Confrontos" tem comportamento próprio
+      // (dupla da espera é sorteada pro grupo com menos gente e as chaves daquele
+      // grupo são refeitas). E se "grupos de mesmo tamanho" estiver ligado, esta
+      // opção PREVALECE e flexibiliza aquela — deixamos isso explícito.
+      var _isGrupos = ((document.getElementById('select-formato') || {}).value === 'grupos_mata');
+      var _eqOnly = !!(document.getElementById('grupos-equal-only') || {}).checked;
+      if (closed.checked) {
+        expandDesc.innerHTML = _t('create.lateEnrollExpandDisabledDesc');
+      } else if (expand.checked) {
+        if (_isGrupos) {
+          var _txt = _t('create.lateEnrollExpandGruposOnDesc');
+          if (_eqOnly) _txt += '<div style="margin-top:5px;color:#f59e0b;font-weight:600;">' + _t('create.lateEnrollGruposOverride') + '</div>';
+          expandDesc.innerHTML = _txt;
+        } else {
+          expandDesc.innerHTML = _t('create.lateEnrollExpandOnDesc');
+        }
+      } else {
+        expandDesc.innerHTML = _t(_isGrupos ? 'create.lateEnrollExpandGruposOffDesc' : 'create.lateEnrollExpandOffDesc');
+      }
     }
     // v2.6.52: Fechadas ON → mostra prazo de encerramento das inscrições (DATAS DA FASE);
     // Aberta → esconde o prazo (inscrição segue durante a fase, sem corte fixo).
@@ -2206,6 +2247,9 @@ function setupCreateTournamentModal() {
     // fase (há novos inscritos pra pontuar). Fechadas → esconde.
     var npsBox = document.getElementById('liga-nps-container');
     if (npsBox) npsBox.style.display = closed.checked ? 'none' : '';
+    // v3.0.x: o texto sob "grupos de mesmo tamanho" depende deste estado (expand)
+    // — re-sincroniza pra mostrar/ocultar o aviso de override.
+    if (typeof window._updateGruposEqualHelper === 'function') { try { window._updateGruposEqualHelper(); } catch (e) {} }
   };
 
   // Sorteio de Vagas: alterna entre o modelo "corrida" (cap, atual) e "vagas
@@ -2783,6 +2827,9 @@ function setupCreateTournamentModal() {
     document.getElementById('elim-settings').style.display = (isElim || isGrupos) ? 'block' : 'none';
     document.getElementById('grupos-fields').style.display = isGrupos ? 'block' : 'none';
     if (isGrupos && typeof window._renderGruposSuggestions === 'function') { try { window._renderGruposSuggestions(); } catch (e) {} }
+    // v3.0.x: o texto de "Novos Confrontos" muda conforme o formato (grupos tem
+    // comportamento próprio) — re-sincroniza ao trocar o formato.
+    if (typeof window._syncLateEnrollment === 'function') { try { window._syncLateEnrollment(); } catch (e) {} }
     // Rei/Rainha classified config: hide for Liga (pontos corridos, sem fase eliminatória)
     document.getElementById('rei-rainha-fields').style.display = (isMonarch && !isLiga) ? 'block' : 'none';
 
@@ -4186,12 +4233,30 @@ function setupCreateTournamentModal() {
     });
   };
 
-  // v2.6.89: sugestões dinâmicas de divisão da Fase de Grupos a partir do nº de
-  // inscritos (real ao editar, ou planejado: máx/vagas). Lista opções de nº de grupos
-  // × tamanho do grupo (mantendo 3–6 por grupo) com estimativa de tempo + quantos
-  // avançam; clicar aplica o nº de grupos. Grupos de 4 ganham dica de Rei/Rainha.
-  window._renderGruposSuggestions = function () {
-    var box = document.getElementById('grupos-suggestions'); if (!box) return;
+  // v3.0.x: divisão da Fase de Grupos por SLIDER. Esquerda = mais grupos menores,
+  // direita = menos grupos maiores. Sugerido a partir do nº de inscritos (real ao
+  // editar, ou planejado: máx/vagas). Toggle "apenas grupos de mesmo tamanho" força
+  // grupos iguais excluindo o resto (lista de espera). O nº de classificados NÃO fica
+  // mais aqui — vai pra transição entre fases (respeitando potência de 2).
+  window._gruposFmtMin = function (m) { var h = Math.floor(m / 60), mm = Math.round(m % 60); if (h > 0 && mm > 0) return h + 'h' + (mm < 10 ? '0' : '') + mm; if (h > 0) return h + 'h'; return mm + 'min'; };
+  window._gruposEstLine = function (c) {
+    var gi = function (id, d) { var e = document.getElementById(id); var v = e ? parseInt(e.value, 10) : NaN; return isNaN(v) ? d : v; };
+    var slot = gi('tourn-call-time', 5) + gi('tourn-warmup-time', 5) + gi('tourn-game-duration', 30);
+    var courts = Math.max(gi('tourn-court-count', 1), 1);
+    var teamSize = gi('tourn-team-size', 1);
+    var comb = function (n) { return n * (n - 1) / 2; }; // round-robin: jogos = C(n,2)
+    var large = c.large || 0; // grupos com 1 a mais (maxS); resto tem minS
+    var games = large > 0 ? (large * comb(c.maxS) + (c.g - large) * comb(c.minS)) : (c.g * comb(c.minS));
+    var p = c.maxS, rounds = Math.max(p - 1, 1), perRound = Math.max(Math.floor(p / 2) * c.g, 1);
+    var mins = rounds * Math.ceil(perRound / courts) * slot;
+    var parts = ['<strong style="color:var(--text-main);">' + games + ' jogos</strong>', '~' + window._gruposFmtMin(mins)];
+    // Rei/Rainha só faz sentido com inscrição individual (grupos de 4 que rodam
+    // parceiros). Em duplas/equipes o sorteio já forma os pares — sem Rei/Rainha.
+    if (teamSize < 2 && c.minS <= 4 && c.maxS >= 4) parts.push('👑 pode ser Rei/Rainha');
+    if (c.excl > 0) parts.push('<span style="color:#f59e0b;">' + c.excl + ' suplente' + (c.excl > 1 ? 's' : '') + '</span>');
+    return parts.join(' · ');
+  };
+  window._gruposComputeCands = function () {
     var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
     var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
     var N = 0;
@@ -4203,45 +4268,73 @@ function setupCreateTournamentModal() {
     if (!N) { var elm = gv('enrollment-limit-mode') || 'cap'; if (elm === 'draw') N = iv('tourn-target-slots', 0); if (!N) N = iv('tourn-max-participants', 0); }
     var teamSize = iv('tourn-team-size', 1);
     var units = (teamSize >= 2) ? Math.floor(N / 2) : N; // duplas → nº de times
-    if (!units || units < 4) {
-      box.innerHTML = '<div style="font-size:0.72rem;color:var(--text-muted);">Defina o <strong>Máx. Participantes</strong> pra ver opções de divisão (nº de grupos × tamanho × tempo).</div>';
+    var unitLbl = (teamSize >= 2) ? 'duplas' : 'jogadores';
+    var equalOnly = !!(document.getElementById('grupos-equal-only') || {}).checked;
+    var out = { units: units, unitLbl: unitLbl, equalOnly: equalOnly, cands: [] };
+    if (!units || units < 4) return out;
+    // g de muitos→poucos (esquerda→direita); tamanho-base 3 a 6 por grupo.
+    for (var g = Math.floor(units / 3); g >= 2; g--) {
+      var base = Math.floor(units / g), rem = units % g;
+      if (base < 3 || base > 6) continue;
+      if (equalOnly) out.cands.push({ g: g, minS: base, maxS: base, excl: rem, large: 0 });
+      else out.cands.push({ g: g, minS: base, maxS: (rem > 0 ? base + 1 : base), excl: 0, large: rem });
+    }
+    return out;
+  };
+  // v3.0.x: texto sob o toggle "grupos de mesmo tamanho". Só aparece com o toggle
+  // LIGADO; e quando "Novos Confrontos" (inscrição aberta + expand) também está
+  // ligado, mostra o aviso de que esta opção PREVALECE sobre os grupos iguais.
+  window._updateGruposEqualHelper = function () {
+    var helper = document.getElementById('grupos-equal-helper'); if (!helper) return;
+    var isGrupos = ((document.getElementById('select-formato') || {}).value === 'grupos_mata');
+    var eqOnly = !!(document.getElementById('grupos-equal-only') || {}).checked;
+    if (!isGrupos || !eqOnly) { helper.innerHTML = ''; helper.style.display = 'none'; return; }
+    var lateVal = (document.getElementById('late-enrollment') || {}).value || 'closed';
+    helper.style.display = 'block';
+    if (lateVal === 'expand') {
+      helper.innerHTML = '<span style="color:#f59e0b;font-weight:600;">' + _t('create.lateEnrollGruposOverride') + '</span>';
+    } else {
+      helper.innerHTML = 'Ninguém é desativado — todos entram no sorteio. Os que sobram pra igualar os grupos ficam como <strong>suplentes</strong> (lista de espera) e entram por substituição.';
+    }
+  };
+  window._renderGruposSuggestions = function () {
+    if (window._updateGruposEqualHelper) window._updateGruposEqualHelper();
+    var box = document.getElementById('grupos-suggestions'); if (!box) return;
+    var info = window._gruposComputeCands();
+    window._gruposCands = info.cands;
+    if (!info.units || info.units < 4) {
+      box.innerHTML = '<div style="font-size:0.74rem;color:var(--text-muted);">Defina o <strong>Máx. Participantes</strong> (ou aguarde inscritos) pra dividir os grupos.</div>';
       return;
     }
-    var slot = iv('tourn-call-time', 5) + iv('tourn-warmup-time', 5) + iv('tourn-game-duration', 30);
-    var courts = Math.max(iv('tourn-court-count', 1), 1);
-    var classif = Math.max(iv('grupos-classified', 2), 1);
-    var curG = iv('grupos-count', 4);
-    function fmtMin(m) { var h = Math.floor(m / 60), mm = Math.round(m % 60); if (h > 0 && mm > 0) return h + 'h' + (mm < 10 ? '0' : '') + mm; if (h > 0) return h + 'h'; return mm + 'min'; }
-    var cands = [];
-    for (var g = 2; g <= Math.floor(units / 2); g++) {
-      var p = Math.round(units / g);
-      if (p < 3 || p > 6) continue;
-      var rounds = Math.max(p - 1, 1);
-      var perRound = Math.max(Math.floor(p / 2) * g, 1);
-      cands.push({ g: g, p: p, mins: rounds * Math.ceil(perRound / courts) * slot });
+    if (!info.cands.length) {
+      box.innerHTML = '<div style="font-size:0.74rem;color:var(--text-muted);">' + info.units + ' ' + info.unitLbl + ' — sem divisão em grupos de 3 a 6. Ajuste o nº de inscritos.</div>';
+      return;
     }
-    if (!cands.length) { box.innerHTML = '<div style="font-size:0.72rem;color:var(--text-muted);">' + units + ' ' + (teamSize >= 2 ? 'duplas' : 'jogadores') + ' — ajuste o nº de grupos manualmente.</div>'; return; }
-    cands.sort(function (a, b) { return b.p - a.p; });
-    cands = cands.slice(0, 4);
-    var unitLbl = (teamSize >= 2) ? 'duplas' : 'jogadores';
-    var h = '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">' + units + ' ' + unitLbl + ' — opções de divisão (clique pra aplicar):</div>';
-    h += '<div style="display:flex;flex-direction:column;gap:6px;">';
-    cands.forEach(function (c) {
-      var act = c.g === curG;
-      var rr = (c.p === 4) ? ' · 👑 pode ser Rei/Rainha' : '';
-      h += '<button type="button" onclick="window._applyGruposSuggestion(' + c.g + ')" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;text-align:left;flex-wrap:wrap;' + (act ? 'border:2px solid #f59e0b;background:rgba(245,158,11,0.15);color:#fbbf24;' : 'border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:var(--text-main);') + '">';
-      h += '<span style="font-weight:700;font-size:0.82rem;min-width:128px;">' + c.g + ' grupos · ~' + c.p + '/grupo</span>';
-      h += '<span style="font-size:0.72rem;color:var(--text-muted);">~' + fmtMin(c.mins) + rr + '</span>';
-      h += '<span style="font-size:0.72rem;margin-left:auto;color:' + (act ? '#fbbf24' : 'var(--text-muted)') + ';">→ ' + (c.g * classif) + ' avançam</span>';
-      h += '</button>';
-    });
+    var gc = document.getElementById('grupos-count');
+    var curG = gc ? parseInt(gc.value, 10) : NaN;
+    var exact = -1;
+    info.cands.forEach(function (c, i) { if (c.g === curG) exact = i; });
+    var idx = exact >= 0 ? exact : Math.floor(info.cands.length / 2);
+    var c = info.cands[idx];
+    if (gc) gc.value = c.g;
+    var sizeLbl = (c.minS === c.maxS) ? String(c.minS) : (c.minS + '–' + c.maxS);
+    var h = '';
+    h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px;">' + info.units + ' ' + info.unitLbl + ' — arraste pra dividir <span style="opacity:0.8;">(← mais grupos menores · menos grupos maiores →)</span>:</div>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">';
+    h += '<div style="text-align:center;min-width:64px;"><div id="grupos-lbl-g" style="font-size:1.6rem;font-weight:800;color:#fbbf24;line-height:1;">' + c.g + '</div><div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">grupos</div></div>';
+    h += '<div style="text-align:center;min-width:64px;"><div id="grupos-lbl-p" style="font-size:1.6rem;font-weight:800;color:#fbbf24;line-height:1;">' + sizeLbl + '</div><div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">por grupo</div></div>';
     h += '</div>';
+    h += '<input type="range" id="grupos-slider" min="0" max="' + (info.cands.length - 1) + '" step="1" value="' + idx + '" oninput="window._onGruposSlider(this.value)" style="width:100%;accent-color:#f59e0b;margin:2px 0;">';
+    h += '<div id="grupos-lbl-est" style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;text-align:center;">' + window._gruposEstLine(c) + '</div>';
     box.innerHTML = h;
   };
-  window._applyGruposSuggestion = function (g) {
-    var el = document.getElementById('grupos-count'); if (el) el.value = g;
-    if (window._renderGruposSuggestions) window._renderGruposSuggestions();
-    if (window._recalcDuration) window._recalcDuration();
+  window._onGruposSlider = function (val) {
+    var c = (window._gruposCands || [])[parseInt(val, 10)]; if (!c) return;
+    var gc = document.getElementById('grupos-count'); if (gc) gc.value = c.g;
+    var lg = document.getElementById('grupos-lbl-g'); if (lg) lg.textContent = c.g;
+    var lp = document.getElementById('grupos-lbl-p'); if (lp) lp.textContent = (c.minS === c.maxS) ? String(c.minS) : (c.minS + '–' + c.maxS);
+    var le = document.getElementById('grupos-lbl-est'); if (le) le.innerHTML = window._gruposEstLine(c);
+    if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
   };
   window._recalcDuration = function () {
     if (window._renderGruposSuggestions) { try { window._renderGruposSuggestions(); } catch (e) {} }
@@ -5085,8 +5178,10 @@ function setupCreateTournamentModal() {
     // Grupos
     if (t.gruposCount) document.getElementById('grupos-count').value = t.gruposCount;
     if (t.gruposClassified) document.getElementById('grupos-classified').value = t.gruposClassified;
+    var _eqEl = document.getElementById('grupos-equal-only'); if (_eqEl) _eqEl.checked = !!t.gruposEqualOnly;
 
     // Construtor de Fases — restaura fases extras (t.phases[0] = fase 1, do topo)
+    window._phasesUserTouched = false; // v3.0.x: edição começa "limpa" — só vira true se add/remove
     if (Array.isArray(t.phases) && t.phases.length > 1) {
       var _p1 = t.phases[0] || {};
       window._phase1Name = _p1.name || t.phase1Name || '';
@@ -5693,8 +5788,20 @@ function setupCreateTournamentModal() {
           tourData.ligaInactivity = document.getElementById('liga-inactivity').value;
           tourData.ligaInactivityX = parseInt(document.getElementById('liga-inactivity-x').value) || 3;
           // v2.7.38: permitir auto-desativação (default true). Off → controle some + todos ativos.
+          // v3.0.x: se o toggle NÃO está no DOM (save de um contexto que não renderizou a
+          // config), PRESERVA o valor já gravado em vez de resetar pra true — senão a
+          // config "se perdia" num save parcial. Só usa o default true se for criação nova.
           var _adEl = document.getElementById('liga-allow-self-deactivation');
-          tourData.allowSelfDeactivation = _adEl ? !!_adEl.checked : true;
+          if (_adEl) {
+            tourData.allowSelfDeactivation = !!_adEl.checked;
+          } else {
+            var _adPrev = true;
+            if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+              var _adT = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
+              if (_adT && _adT.allowSelfDeactivation === false) _adPrev = false;
+            }
+            tourData.allowSelfDeactivation = _adPrev;
+          }
           // v2.6.56: derivado de "Inscrições durante a fase" (Fechadas → inscrição fechada;
           // Aberta → aberta). O toggle dedicado foi removido por ser redundante.
           var _lateForLiga = (document.getElementById('late-enrollment') || {}).value || 'closed';
@@ -5785,6 +5892,7 @@ function setupCreateTournamentModal() {
         if (formatValue === 'grupos_mata') {
           tourData.gruposCount = parseInt(document.getElementById('grupos-count').value) || 4;
           tourData.gruposClassified = parseInt(document.getElementById('grupos-classified').value) || 2;
+          tourData.gruposEqualOnly = !!(document.getElementById('grupos-equal-only') || {}).checked;
         }
 
         if (drawModeValue === 'rei_rainha' || drawModeValue === 'round_robin') {
@@ -5868,7 +5976,21 @@ function setupCreateTournamentModal() {
           });
           tourData.phases = [_phase1].concat(_rest);
         } else {
-          tourData.phases = null; // fase única (comportamento legado)
+          // v3.0.x: NÃO apagar fases silenciosamente. Se está editando um torneio
+          // multi-fase e o usuário NÃO removeu fases de propósito (_phasesUserTouched),
+          // o construtor pode ter vindo vazio por um glitch de load/render — então
+          // PRESERVA as fases já gravadas em vez de colapsar 2 fases em 1.
+          var _existingPhases = null;
+          if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+            var _epT = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
+            if (_epT && Array.isArray(_epT.phases) && _epT.phases.length > 1) _existingPhases = _epT.phases;
+          }
+          if (_existingPhases && !window._phasesUserTouched) {
+            tourData.phases = _existingPhases; // preserva — não foi remoção intencional
+            if (window._warn) window._warn('[save] construtor de fases veio vazio mas torneio é multi-fase e usuário não removeu — preservando t.phases (' + _existingPhases.length + ')');
+          } else {
+            tourData.phases = null; // fase única (criação OU remoção intencional de todas as fases extras)
+          }
         }
         // v2.6.49: nome custom da Fase 1 persiste SEMPRE (inclusive fase única, onde
         // phases fica null). Antes só era gravado dentro de phases[0] quando havia

@@ -167,7 +167,7 @@ function renderBracket(container, tournamentId, isInline) {
   const _cu = window.AppStore && window.AppStore.currentUser;
   const _myMatchesToggleHtml = _cu && hasContent ? `
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;" class="no-print">
-        <span style="font-size:0.72rem;font-weight:600;color:var(--text-muted);white-space:nowrap;">Só meus jogos</span>
+        <span style="font-size:0.68rem;font-weight:600;color:var(--text-muted);line-height:1.05;text-align:right;">Só<br>meus<br>jogos</span>
         <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;">
           <input type="checkbox" id="my-matches-toggle" onchange="window._toggleMyMatches(this.checked)">
           <span class="toggle-slider"></span>
@@ -180,7 +180,7 @@ function renderBracket(container, tournamentId, isInline) {
   const _showGroupNav = _hasGroupStage && !_inElimination;
   const _groupNavHtml = _showGroupNav ? (() => {
     const colors = ['#f59e0b', '#8b5cf6', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#14b8a6', '#f97316'];
-    return '<div id="group-nav-btns" style="display:flex;gap:5px;flex-wrap:nowrap;align-items:center;">' +
+    return '<div id="group-nav-btns" style="display:flex;gap:5px;flex-wrap:wrap;row-gap:5px;align-items:center;">' +
       t.groups.map((g, i) => {
         const c = colors[i % colors.length];
         const letter = window._groupLetter(i);
@@ -193,7 +193,7 @@ function renderBracket(container, tournamentId, isInline) {
     ${(typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
           href: '#tournaments/' + _tIdSafe,
-          middleHtml: _groupNavHtml ? ('<div style="flex:1;min-width:0;overflow-x:auto;">' + _groupNavHtml + '</div>') : '<div style="flex:1;"></div>',
+          middleHtml: _groupNavHtml ? ('<div style="flex:1;min-width:0;">' + _groupNavHtml + '</div>') : '<div style="flex:1;"></div>',
           rightHtml: _myMatchesToggleHtml
         })
       : ''}
@@ -587,7 +587,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;">
         <span style="font-size:1.3rem;">📋</span>
         <h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Lista de Espera</h3>
-        <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${sorted.length}</span>
+        <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && p.p1Name && p.p2Name) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
       </div>
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
       <div style="display:flex;flex-direction:column;gap:6px;">
@@ -1380,13 +1380,12 @@ function _renderPhaseBracket(t, canEnterResult) {
   // Só atribui posição a quem JÁ foi eliminado (não pode mais melhorar) — semifinalistas
   // vivos não aparecem; 1º-4º só quando final/3º forem jogados. v2.8.21: ordem CAMPEÃO
   // no topo → último embaixo (1º → último).
-  function _tierClassifHtml(bracketKey, color) {
+  // Bloco de classificação reusável (por linha OU geral). matchesArr = jogos que contam
+  // pra posição; third = jogo de 3º/4º (vai como thirdPlaceMatch no faux).
+  function _classifBlock(matchesArr, third, color, label, openByDefault) {
     if (typeof _updateProgressiveClassification !== 'function') return '';
-    var lm = pm.filter(function (m) { return m.bracket === bracketKey; });
-    if (!lm.length) return '';
-    var third = lm.filter(function (m) { return m.isThirdPlace; })[0] || null;
-    var rest = lm.filter(function (m) { return !m.isThirdPlace; });
-    var faux = { matches: rest, format: 'Eliminatórias Simples', thirdPlaceMatch: third, tiebreakers: t.tiebreakers };
+    if (!matchesArr || !matchesArr.length) return '';
+    var faux = { matches: matchesArr, format: 'Eliminatórias Simples', thirdPlaceMatch: third, tiebreakers: t.tiebreakers };
     try { _updateProgressiveClassification(faux); } catch (e) { return ''; }
     var cl = faux.classification || {};
     var keys = Object.keys(cl);
@@ -1403,10 +1402,25 @@ function _renderPhaseBracket(t, canEnterResult) {
         (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
         '</div>';
     }).join('');
-    return '<details style="margin-bottom:1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">📊 Classificação parcial — ' + entries.length + ' definidos</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + rows + '</div></details>';
+    return '<details' + (openByDefault ? ' open' : '') + ' style="margin-bottom:1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + entries.length + ' definidos</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + rows + '</div></details>';
+  }
+  function _tierClassifHtml(bracketKey, color) {
+    var lm = pm.filter(function (m) { return m.bracket === bracketKey; });
+    if (!lm.length) return '';
+    var third = lm.filter(function (m) { return m.isThirdPlace; })[0] || null;
+    var rest = lm.filter(function (m) { return !m.isThirdPlace; });
+    return _classifBlock(rest, third, color, '📊 Classificação parcial', false);
+  }
+  // v3.0.x: classificação GERAL ÚNICA (não por linha) — usada quando há GRANDE FINAL.
+  // Conta TODOS os jogos da fase (linhas → semis → final, ligados por nextMatchId) com
+  // o 3º/4º geral como thirdPlaceMatch. Aberta por padrão.
+  function _unifiedClassifHtml() {
+    var third = pm.filter(function (m) { return (m.bracket || '') === 'thirdplace' || m.isThirdPlace; })[0] || null;
+    var rest = pm.filter(function (m) { return m !== third; });
+    return _classifBlock(rest, third, '#fbbf24', '📊 Classificação geral', true);
   }
 
-  function renderTier(bracketKey, title, color) {
+  function renderTier(bracketKey, title, color, showClassif) {
     var cols = colsFor(bracketKey);
     if (!cols.length) return '';
     // v2.8.15: 3º lugar (1 jogo) — numerado ANTES da final (final-1, número menor), mas
@@ -1455,7 +1469,7 @@ function _renderPhaseBracket(t, canEnterResult) {
       : '';
     return '<div style="margin-bottom:2rem;">' +
       '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + color + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' +
-      _tierClassifHtml(bracketKey, color) +
+      (showClassif === false ? '' : _tierClassifHtml(bracketKey, color)) +
       '<div style="display:flex;align-items:flex-start;gap:10px;">' +
         showHiddenBtn +
         '<div class="bracket-scroll-container" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
@@ -1479,11 +1493,24 @@ function _renderPhaseBracket(t, canEnterResult) {
     var lbl = (ms[0] && ms[0].tierLabel) ? String(ms[0].tierLabel).trim() : '';
     return lbl ? window._safeHtml(lbl) : fallback;
   }
-  var goldHtml = renderTier('gold', tierTitle('gold', '🥇 Chave Ouro'), '#fbbf24');
-  var silverHtml = renderTier('silver', tierTitle('silver', '🥈 Chave Prata'), '#cbd5e1');
-  var mainHtml = renderTier('main', tierTitle('main', _t('bracket.knockout') || 'Eliminatória'), '#10b981');
-  var gfHtml = renderFinalBox('grandfinal', '🏆 Grande Final', '#fbbf24');
-  var thirdHtml = renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32');
+  // v3.0.x: renderiza TODAS as trilhas (tiers) presentes nos jogos — não só
+  // Ouro/Prata. line3/line4 (e quaisquer outras) também viram chaves, com o nome
+  // que o organizador deu (m.tierLabel). Antes só gold/silver/main eram exibidos.
+  var _tierColors = { gold: '#fbbf24', silver: '#cbd5e1', main: '#10b981', line3: '#cd7f32', line4: '#3b82f6' };
+  // v3.0.x: fallback GENÉRICO (sem Ouro/Prata hardcoded) — só usado quando a linha não tem
+  // nome (m.tierLabel). O nome real vem do que o organizador digitou (ex.: "Linha 1").
+  var _tierDefault = { gold: 'Chave 1', silver: 'Chave 2', main: (_t('bracket.knockout') || 'Eliminatória'), line3: 'Chave 3', line4: 'Chave 4' };
+  var _tierOrder = ['gold', 'silver', 'main', 'line3', 'line4'];
+  var _present = {};
+  pm.forEach(function (m) { var bk = m.bracket || 'main'; if (bk !== 'grandfinal' && bk !== 'thirdplace') _present[bk] = 1; });
+  var _tierKeys = _tierOrder.filter(function (k) { return _present[k]; });
+  Object.keys(_present).forEach(function (k) { if (_tierKeys.indexOf(k) === -1) _tierKeys.push(k); });
+  var _palette = ['#fbbf24', '#cbd5e1', '#10b981', '#cd7f32', '#3b82f6', '#ec4899', '#14b8a6', '#f97316'];
+  var _hasGF = pm.some(function (m) { return (m.bracket || '') === 'grandfinal'; });
+  function _tierHtmlAt(bk, idx, showClassif) {
+    var color = _tierColors[bk] || _palette[idx % _palette.length];
+    return renderTier(bk, tierTitle(bk, _tierDefault[bk] || ('Chave ' + (idx + 1))), color, showClassif);
+  }
 
   var phaseTitle = window._safeHtml(phaseCfg.name || ('Fase ' + (curPhase + 1)));
   var header = '<div style="margin-bottom:1rem;padding:10px 14px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);border-radius:12px;">' +
@@ -1491,7 +1518,23 @@ function _renderPhaseBracket(t, canEnterResult) {
     '<span style="font-weight:700;color:var(--text-bright);margin-left:8px;">' + phaseTitle + '</span>' +
     '</div>';
 
-  return '<div>' + header + goldHtml + silverHtml + mainHtml + gfHtml + thirdHtml + '</div>';
+  var body;
+  if (_hasGF && _tierKeys.length) {
+    // v3.0.x: COM grande final → primeira linha, depois GRANDES SEMIS + GRANDE FINAL,
+    // depois 3º/4º GERAL (abaixo da final), depois as demais linhas. Classificação
+    // GERAL ÚNICA (não por linha) no topo. Computa em ordem de exibição p/ a numeração
+    // dos jogos seguir o layout (globalNum).
+    var _firstHtml = _tierHtmlAt(_tierKeys[0], 0, false);
+    var _gfHtml = renderFinalBox('grandfinal', '🏆 Grandes Semifinais & Final', '#fbbf24');
+    var _thirdHtml = renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32');
+    var _restHtml = _tierKeys.slice(1).map(function (bk, i) { return _tierHtmlAt(bk, i + 1, false); }).join('');
+    var _unified = _unifiedClassifHtml();
+    body = _unified + _firstHtml + _gfHtml + _thirdHtml + _restHtml;
+  } else {
+    var tiersHtml = _tierKeys.map(function (bk, idx) { return _tierHtmlAt(bk, idx, true); }).join('');
+    body = tiersHtml + renderFinalBox('grandfinal', '🏆 Grande Final', '#fbbf24') + renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32');
+  }
+  return '<div>' + header + body + '</div>';
 }
 window._renderPhaseBracket = _renderPhaseBracket;
 
@@ -2294,7 +2337,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult) {
       var clr = i < classified ? '#fbbf24' : 'var(--text-muted)';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(s.name, window._currentBracketTournament) : window._safeHtml(s.name)) + (i < classified ? ' <span style="font-size:0.6rem;color:#fbbf24;font-weight:800;">CLASSIF.</span>' : '') + '</td>' +
+        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(s.name, window._currentBracketTournament) : window._safeHtml(s.name))) + (i < classified ? ' <span style="font-size:0.6rem;color:#fbbf24;font-weight:800;">CLASSIF.</span>' : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:600;" title="Pontos pró (somados em todos os jogos)">' + s.pointsFor + '</td>' +
@@ -2441,6 +2484,21 @@ function renderGroupStage(t, isOrg, canEnterResult) {
   const sortedSubgroups = subgroups.map((sg, originalIdx) => ({ sg: sg, originalIdx: originalIdx }))
     .sort((a, b) => (_subgroupHasMe(a.sg) ? 0 : 1) - (_subgroupHasMe(b.sg) ? 0 : 1));
 
+  // v3.0.x: numeração GLOBAL e ESTÁVEL dos jogos — Jogo 1 = 1º jogo da R1 do
+  // grupo A, sequencial pela ORDEM ORIGINAL dos grupos (não pela ordem de
+  // exibição que põe o "seu grupo" primeiro). Assim o nº é o mesmo pra todos e
+  // o grupo C nunca volta a ter "Jogo 1".
+  const _gMatchNum = {};
+  let _gMatchCounter = 0;
+  subgroups.forEach(function(sg, gi) {
+    const rds = sg.rounds || (groups[gi] ? (groups[gi].rounds || []) : []);
+    rds.forEach(function(r) {
+      (r.matches || []).forEach(function(m) {
+        _gMatchCounter++;
+        if (m && m.id != null) _gMatchNum[m.id] = _gMatchCounter;
+      });
+    });
+  });
   let groupGlobalMatchNum = 0;
   const groupsHtml = sortedSubgroups.map(({ sg, originalIdx: gi }) => {
     // Compute group standings. Players list comes from the subgroup (falls
@@ -2485,7 +2543,7 @@ function renderGroupStage(t, isOrg, canEnterResult) {
     const rows = sorted.map((s, i) => `
       <tr style="border-bottom:1px solid var(--border-color);${i < classified ? 'background:rgba(34,197,94,0.08);' : ''}">
         <td style="padding:8px 12px;font-weight:700;color:${i < classified ? '#4ade80' : 'var(--text-muted)'};">${medal(i)}</td>
-        <td style="padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name)} ${i < classified ? '<span style="font-size:0.65rem;color:#4ade80;font-weight:800;">CLASSIF.</span>' : ''}</td>
+        <td style="padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))} ${i < classified ? '<span style="font-size:0.65rem;color:#4ade80;font-weight:800;">CLASSIF.</span>' : ''}</td>
         <td style="padding:8px 12px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>
         <td style="padding:8px 12px;text-align:center;color:#4ade80;">${s.wins}</td>
         ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>` : ''}
@@ -2501,8 +2559,8 @@ function renderGroupStage(t, isOrg, canEnterResult) {
       const roundLabel = _t('bracket.round', {n: ri + 1}) + (r.status === 'complete' ? ' — ' + _t('bracket.complete') + ' ✓' : r.status === 'active' ? ' — ' + _t('bracket.ongoing') : '');
       const roundLabelColor = r.status === 'complete' ? '#4ade80' : r.status === 'active' ? '#fbbf24' : 'var(--text-muted)';
       const matchesInRound = (r.matches || []).map(m => {
-        groupGlobalMatchNum++;
-        return `<div>${renderMatchCard(m, canEnterResult, t.id, groupGlobalMatchNum)}</div>`;
+        const _num = (m && m.id != null && _gMatchNum[m.id]) ? _gMatchNum[m.id] : (++groupGlobalMatchNum);
+        return `<div>${renderMatchCard(m, canEnterResult, t.id, _num)}</div>`;
       }).join('');
       return `
         <div style="margin-bottom:0.75rem;">
@@ -2732,7 +2790,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       return `
     <tr style="border-bottom:1px solid var(--border-color);${i < 3 ? 'background:rgba(251,191,36,0.03)' : ''}">
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
-      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name)}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
       ${_scoreCell}
       ${_pctCell}
       <td style="padding:11px 14px;text-align:center;color:#4ade80;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>

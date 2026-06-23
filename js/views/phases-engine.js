@@ -192,7 +192,15 @@
     // (>=999 ou ausente = todos). O destino (linha) vem da ESTRATÉGIA, não da faixa.
     var destKeys = mapping.map(function (mp) { return mp.dest; });
     var maxRankTo = mapping.reduce(function (mx, mp) { return Math.max(mx, parseInt(mp.rankTo, 10) || 0); }, 0);
-    if (scope === 'overall') {
+    // v3.0.x: escopo Geral com MÚLTIPLAS linhas vindas de MÚLTIPLOS grupos DEGENERA —
+    // o ranking geral tem 1 time por colocação, então cada linha receberia só 1 time
+    // (nenhuma chave, só a grande final). Nesse caso usa POR GRUPO: cada linha vira
+    // uma faixa de colocação (Linha 1 = 1º de cada grupo, Linha 2 = 2º, …) — chaves
+    // de verdade. Geral só vale com 1 linha OU 1 grupo (pool único de verdade).
+    var _nLines = destKeys.length;
+    var _multiGroup = (prevGroups || []).length >= 2;
+    var _useOverall = (scope === 'overall') && !(_nLines >= 2 && _multiGroup);
+    if (_useOverall) {
       // Pool agregado (ranking geral) — usado por Cabeças de chave e por qualquer
       // estratégia em escopo Geral.
       var global = _globalStandings(prevGroups, computeStandings);
@@ -757,10 +765,21 @@
       var _byDest = buildEntrantsByDest(_curG, _mp, _nextCfg.fixedPairs !== false, (_cur === 0 ? cs : function (g) { return g.standings || []; }), _nextCfg.pairingStrategy || 'top', { scope: _src.scope || 'per_group', rankingBasis: _src.rankingBasis || 'individual' });
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
-      if (_anyNonPow2 && typeof window._showPhaseResolutionPanel === 'function') {
-        t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
-        window._showPhaseResolutionPanel(tId);
-        return;
+      if (_anyNonPow2) {
+        // v3.0.x: na transição FASE DE GRUPOS (ou Rei/Rainha) → eliminatória, a
+        // solução é SEMPRE play-in (repescagem): todos jogam a 1ª rodada e os
+        // melhores perdedores são repescados pra fechar a potência de 2. Não cabe
+        // escolha — aplica direto, SEM painel. Outras origens (Pontos Corridos/Liga)
+        // mantêm o painel de escolha como já estava configurado.
+        var _prevFmt = (t.phases && t.phases[_cur] && t.phases[_cur].format) || t.format || '';
+        var _prevIsGroups = _isMonarchPrev || /grupo/i.test(_prevFmt);
+        if (_prevIsGroups) {
+          _nextCfg.bracketResolution = 'playin';
+        } else if (typeof window._showPhaseResolutionPanel === 'function') {
+          t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
+          window._showPhaseResolutionPanel(tId);
+          return;
+        }
       }
     }
     var res = materializeNextPhase(t, cs, 'ph-' + tId + '-' + ((t.currentPhaseIndex || 0) + 1));

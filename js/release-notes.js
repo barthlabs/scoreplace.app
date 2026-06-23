@@ -9,7 +9,22 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.44-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🧩 Fase de Grupos muito melhor:</b> a divisão dos grupos agora é por um <b>slider</b> (← mais grupos menores · menos grupos maiores →) com sugestão pelo nº de inscritos, opção <b>"apenas grupos de mesmo tamanho"</b> (o excedente vira <b>lista de espera</b>, ninguém fica de fora à toa) e a <b>contagem de jogos</b> da fase. Na passagem de grupos pra eliminatória, a <b>repescagem (play-in)</b> é automática pra fechar a potência de 2.</li>' +
+        '<li><b>🏆 Chaves da fase final reorganizadas:</b> as <b>grandes semifinais e a grande final</b> aparecem logo após a 1ª linha, a <b>disputa de 3º/4º</b> fica abaixo da final, e a <b>classificação geral é única</b> (não mais uma por linha).</li>' +
+        '<li><b>🎯 Card já mostra o jogo:</b> assim que o sorteio sai, cada card mostra o <b>1º jogo (parceiro + adversários)</b>, não só "equipe sorteada".</li>' +
+        '<li><b>🎲 "Como deseja sortear?" com Confirmar:</b> você <b>escolhe o modo</b> (todos / só presentes) e só o botão <b>Sortear</b> final dispara — com Cancelar ao lado.</li>' +
+        '<li><b>🔢 Contagens certas e consistentes:</b> <b>inscritos, equipes e lista de espera</b> batem na dashboard e no detalhe; quem está na espera conta <b>por pessoa</b> (dupla = 2) e aparece <b>individualmente</b>.</li>' +
+        '<li><b>🛡️ Fases não somem mais sozinhas:</b> editar e salvar um torneio <b>multi-fase</b> não colapsa as fases por engano — as fases gravadas são preservadas (só some se você remover de propósito).</li>' +
+        '<li><b>📊 Classificação geral sempre abaixo do pódio:</b> no torneio encerrado, um bloco <b>colapsável</b> com a classificação completa logo abaixo do pódio.</li>' +
+        '<li><b>⚙️ Ninguém fica de fora quando você não quer:</b> com o <b>"Deixar inscritos ficarem de fora" desativado</b>, o controle some dos cards e <b>todos ficam ativos</b>.</li>' +
+        '<li><b>🗑️ Remover inscrito junto das categorias:</b> o botão de remover foi pra <b>linha das categorias</b> do card.</li>' +
+        '<li><b>✨ Vários acertos visuais:</b> número de inscrição <b>não corta</b> mais (nem em card baixo); <b>datas da fase</b> cabem numa linha; listas de presença em <b>ordem alfabética</b>; e a <b>estrela de organizador</b> volta a aparecer só pra quem é organizador (não no parceiro sorteado).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🏆 Pódio mais bonito e legível:</b> cada nome fica num <b>retângulo do mesmo tamanho</b>, com a <b>foto/ícone dos integrantes alinhada com a medalha</b>. A fonte se <b>ajusta sozinha pra preencher o espaço</b> — nomes curtos ficam grandes, nomes longos encolhem e quebram em 2 linhas — e os <b>dois integrantes da dupla quebram do mesmo jeito</b> (sem ficar um em 1 linha e o outro em 2). O 2º sobe e o 3º desce, em escada.</li>' +
       '</ul>' +

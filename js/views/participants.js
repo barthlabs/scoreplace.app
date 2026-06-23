@@ -750,7 +750,7 @@ window._partApplyFilter = function () {
   var inp = document.getElementById('part-search');
   if (inp) window._partSearch = inp.value;
   var q = (window._partSearch || '').trim().toLowerCase();
-  var sort = (document.getElementById('part-sort') || {}).value || 'order-asc';
+  var sort = (document.getElementById('part-sort') || {}).value || 'name-asc';
   var gf = (document.getElementById('part-gender') || {}).value || 'all';
   var sk = (document.getElementById('part-skill') || {}).value || 'all';
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-part-card]'));
@@ -1556,21 +1556,26 @@ function renderParticipants(container, tournamentId) {
   let totalIndividuals = 0;
   let checkedCount = 0;
   let absentConfirmedCount = 0;
+  // v3.0.x: conta PESSOAS distintas (dedup por nome) — solo que está nos inscritos E na
+  // lista de espera conta 1×. E conta a espera SEMPRE que há sorteio (a grade pós-sorteio
+  // é por indivíduo): antes só em canCheckIn, deixando o total por ENTRADA (53 duplas+solos)
+  // em vez de por PESSOA (103). Mantém 103 consistente com os cards.
+  const _countedNames = {};
   const countIndividuals = (arr) => {
     arr.forEach(p => {
       const pName = window._pName(p);
-      if (pName.includes('/')) {
-        pName.split('/').forEach(n => {
-          const nm = n.trim();
-          if (nm) { totalIndividuals++; if (checkedIn[nm]) checkedCount++; else if (absent[nm]) absentConfirmedCount++; }
-        });
-      } else {
-        if (pName) { totalIndividuals++; if (checkedIn[pName]) checkedCount++; else if (absent[pName]) absentConfirmedCount++; }
-      }
+      const names = pName && pName.includes('/') ? pName.split('/').map(n => n.trim()).filter(Boolean) : (pName ? [pName] : []);
+      names.forEach(nm => {
+        const k = nm.toLowerCase();
+        if (_countedNames[k]) return;
+        _countedNames[k] = 1;
+        totalIndividuals++;
+        if (checkedIn[nm]) checkedCount++; else if (absent[nm]) absentConfirmedCount++;
+      });
     });
   };
   countIndividuals(parts);
-  if (canCheckIn) countIndividuals(standbyParts);
+  if (drawDone) countIndividuals(standbyParts);
 
   // ── Contagem da CHAMADA (por entry: time/individual) — pré e pós sorteio ──
   let rcTotal = 0, rcPresent = 0, rcAbsent = 0;
@@ -1606,7 +1611,11 @@ function renderParticipants(container, tournamentId) {
     }
   });
 
-  if (canCheckIn) {
+  if (drawDone) {
+    // v3.0.x: SEMPRE que há sorteio (jogos criados) mostra a grade RICA canônica —
+    // cada jogador com seu PRIMEIRO JOGO (parceiro + adversários + Jogo N) — mesmo
+    // antes de "Iniciar Torneio". Antes exigia tournamentStarted (canCheckIn), então
+    // sorteado-mas-não-iniciado caía na grade simples "Equipe Sorteada" sem o jogo.
     // ── Check-in mode: individual list with checkboxes ──
     // v2.7.28: card ÚNICO — pós-sorteio usa a MESMA grade rica do pré-sorteio.
     // v2.7.39: o card pós-sorteio é mais largo (jogo/parceiro/adversários) → grade
@@ -1653,6 +1662,7 @@ function renderParticipants(container, tournamentId) {
     });
 
     const allIndividuals = [];
+    const _indivByName = {}; // v3.0.x: dedup — nome → objeto já adicionado
     // v0.17.35: jogadores em t.woHistory são pulados aqui — eles aparecem
     // só via card solo de orphan (loop abaixo). Evita aparecer 2x.
     const _woHist = (t.woHistory && typeof t.woHistory === 'object') ? t.woHistory : {};
@@ -1662,6 +1672,7 @@ function renderParticipants(container, tournamentId) {
       const namesToProcess = isTeam ? pName.split('/').map(n => n.trim()).filter(n => n) : [pName];
       namesToProcess.forEach(n => {
         if (_woHist[n]) return; // skip W.O.'d member — solo card via woHistory loop
+        if (_indivByName[n.toLowerCase()]) return; // já adicionado
         // v0.17.36: lookup por nome do membro (source of truth: match atual).
         // memberToTeam dá o team string da match — pode diferir de pName se
         // t.participants estiver stale após substituição.
@@ -1669,20 +1680,24 @@ function renderParticipants(container, tournamentId) {
         const matchDecided = !!memberToMatchDecided[n];
         const opponent = memberToOpponent[n] || null;
         const currentTeam = memberToTeam[n] || (isTeam ? pName : null);
-        allIndividuals.push({ name: n, teamName: currentTeam, teamIdx: idx, matchNum, matchDecided, opponent });
+        const _obj = { name: n, teamName: currentTeam, teamIdx: idx, matchNum, matchDecided, opponent };
+        allIndividuals.push(_obj);
+        _indivByName[n.toLowerCase()] = _obj;
       });
     });
 
-    // Add standby participants
+    // Add standby participants — v3.0.x: DEDUP. Quem já está nos inscritos (ex.: solo que
+    // não fechou dupla e foi pra espera) NÃO vira card novo; só ganha a marca de espera.
     standbyParts.forEach((p, idx) => {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || 'Espera ' + (idx + 1));
-      if (pName.includes('/')) {
-        pName.split('/').map(n => n.trim()).filter(n => n).forEach(n => {
-          allIndividuals.push({ name: n, teamName: pName, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true });
-        });
-      } else {
-        allIndividuals.push({ name: pName, teamName: null, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true });
-      }
+      const names = pName.includes('/') ? pName.split('/').map(n => n.trim()).filter(n => n) : (pName ? [pName] : []);
+      names.forEach(n => {
+        const ex = _indivByName[n.toLowerCase()];
+        if (ex) { ex.isStandby = true; return; }
+        const _obj = { name: n, teamName: pName.includes('/') ? pName : null, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true };
+        allIndividuals.push(_obj);
+        _indivByName[n.toLowerCase()] = _obj;
+      });
     });
 
     // v0.17.34: Add W.O.'d orphan players (out of team, displayed solo with
@@ -1846,7 +1861,7 @@ function renderParticipants(container, tournamentId) {
 
       const safeName = ind.name.replace(/'/g, "\\'");
       // v2.7.37: estrela do organizador (sempre) + pin no topo (data-part-org).
-      const _isOrgPC = (typeof window._isOrgParticipant === 'function') && window._isOrgParticipant(t, _nameToParticipant[ind.name]);
+      const _isOrgPC = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, ind.name, _nameToParticipant[ind.name]);
       const _orgStarC = _isOrgPC ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.9rem;line-height:1;">⭐</span>' : '';
 
       // Build sub-info with presence dots (3 states: green=presente, red=ausente, gray=aguardando)
@@ -2066,7 +2081,7 @@ function renderParticipants(container, tournamentId) {
       }
 
       const _ciPart = _nameToParticipant[ind.name];
-      const _ciInactive = (_ciPart && _ciPart.ligaActive === false) ? '1' : '0';
+      const _ciInactive = (t.allowSelfDeactivation !== false && _ciPart && _ciPart.ligaActive === false) ? '1' : '0';
       const _ciGender = (typeof window._canonGender === 'function') ? window._canonGender(_ciPart && _ciPart.gender) : 'none';
       const _ciSkillVal = _ciCurrentSkill || 'none';
       const _ciEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _ciPart || (ind && ind.name) || '') : '';
@@ -2109,12 +2124,11 @@ function renderParticipants(container, tournamentId) {
                 </div>
                 <!-- LINHA COMBINADA (v2.7.42/43): VIP + categorias (esquerda, alinhadas no topo) | Ausente/Presente + toggle + W.O. (direita) -->
                 <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">${_vipBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false, {inline:true})}${_ciSkillHtml}</div>
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false, {inline:true})}${_ciSkillHtml}${_delBtnC}</div>
                     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;">
                         ${_presenceWord}
                         ${isAbsent ? _riWoBadge : _toggleSwitch}
                         ${woBtn}
-                        ${_delBtnC}
                     </div>
                 </div>
                 ${_matchStrip}
@@ -2146,7 +2160,7 @@ function renderParticipants(container, tournamentId) {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
       const isTeam = pName.includes('/');
       // v2.7.37: estrela do organizador (sempre visível) + pin no topo (data-part-org).
-      const _isOrgP = (typeof window._isOrgParticipant === 'function') && window._isOrgParticipant(t, p);
+      const _isOrgP = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, pName, p);
       const _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.95rem;line-height:1;">⭐</span>' : '';
 
       // v2.1.86/v2.2.40: estado da CHAMADA (por entry) + filtro presente/ausente/aguardando.
@@ -2273,31 +2287,33 @@ function renderParticipants(container, tournamentId) {
       // Reusa _toggleCheckIn / _markAbsent, que já gravam em t.checkedIn / t.absent
       // pela chave do entry (time "A / B" ou individual). Pré-sorteio não há matches,
       // então _processWoSubstitutions é no-op e _markAbsent só alterna o flag.
-      let rollCallRow = '';
+      // v3.0.x: chamada CANÔNICA no card individual — na MESMA linha do tipo de
+      // inscrição ("Inscrição Individual"), alinhada à DIREITA: PALAVRA + toggle +
+      // W.O. + remover. Economiza uma linha por jogador. Estado binário: Presente
+      // (toggle ligado) ou Ausente (desligado).
+      let _presenceGroup = '';
       if (canRollCall) {
         const _rcEntry = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        const _rcLabel = rcMc ? 'Presente' : rcAbs ? 'Ausente' : 'Aguardando';
-        const _rcColor = rcMc ? '#4ade80' : rcAbs ? '#f87171' : '#cbd5e1';
+        const _rcLabel = rcMc ? 'Presente' : 'Ausente';
+        const _rcColor = rcMc ? '#4ade80' : '#f87171';
         const _rcWoBtn = (!rcMc && isOrg)
-          ? window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');`, !rcAbs, { label: rcAbs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem' })
+          ? window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');`, !rcAbs, { label: rcAbs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
           : '';
-        rollCallRow = `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.14);" onclick="event.stopPropagation();">
-          <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>
-          <span style="flex:1;font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span>
-          ${_rcWoBtn}
-        </div>`;
+        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>${_rcWoBtn}`;
       } else if (postDrawPresence) {
-        // v2.2.40: pós-sorteio (antes de iniciar) — presença da chamada em
-        // modo somente leitura. Confirma ao organizador que os presentes
-        // continuam presentes após o sorteio.
-        const _rcLabel = rcMc ? 'Presente' : rcAbs ? 'Ausente' : 'Aguardando';
-        const _rcColor = rcMc ? '#4ade80' : rcAbs ? '#f87171' : '#cbd5e1';
-        const _rcIcon = rcMc ? '✅' : rcAbs ? '🚫' : '⏳';
-        rollCallRow = `<div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.14);">
-          <span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcIcon} ${_rcLabel}</span>
-        </div>`;
+        // v2.2.40: pós-sorteio (antes de iniciar) — presença em modo somente leitura.
+        const _rcLabel = rcMc ? 'Presente' : 'Ausente';
+        const _rcColor = rcMc ? '#4ade80' : '#f87171';
+        const _rcIcon = rcMc ? '✅' : '🚫';
+        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcIcon} ${_rcLabel}</span>`;
       }
-      const _rcCardExtra = (canRollCall || postDrawPresence) ? (rcMc ? 'box-shadow:0 0 0 2px rgba(16,185,129,0.55),0 4px 10px rgba(0,0,0,0.1);' : rcAbs ? 'opacity:0.55;' : '') : '';
+      // v3.0.x: card INTEIRO verde quando Presente, vermelho quando W.O./Ausente
+      // (não só a borda). Append no fim do style → sobrepõe o background do cardStyle.
+      const _rcCardExtra = (canRollCall || postDrawPresence)
+        ? (rcMc ? 'background:linear-gradient(135deg,rgba(16,185,129,0.5),rgba(5,150,105,0.6)) !important;border:2px solid rgba(16,185,129,0.85) !important;box-shadow:0 0 0 1px rgba(16,185,129,0.4),0 4px 12px rgba(0,0,0,0.14);'
+          : rcAbs ? 'background:linear-gradient(135deg,rgba(239,68,68,0.45),rgba(220,38,38,0.58)) !important;border:2px solid rgba(239,68,68,0.8) !important;box-shadow:0 0 0 1px rgba(239,68,68,0.35),0 4px 12px rgba(0,0,0,0.14);'
+          : '')
+        : '';
 
       const bgNum = isVip ? '⭐' : idx + 1;
       // v2.7.27: data-attrs canônicos p/ a barra de filtro/sort (_inscritosFilterBar
@@ -2321,12 +2337,17 @@ function renderParticipants(container, tournamentId) {
                 ${pNameHtml}
                 <!-- LINHA COMBINADA (canônica): VIP + meta + nível (esquerda) | split/desfazer/excluir (direita) -->
                 <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">${_vipBtn}${_metaSlotsFor(p, pName, isTeam, { inline: true })}${_nmSkillHtml}</div>
-                    ${(_splitBtn || undoMergeBtn || _delBtn) ? `<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:auto;">${_splitBtn}${undoMergeBtn}${_delBtn}</div>` : ''}
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtn}${_metaSlotsFor(p, pName, isTeam, { inline: true })}${_nmSkillHtml}${_delBtn}</div>
+                    ${(_splitBtn || undoMergeBtn) ? `<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">${_splitBtn}${undoMergeBtn}</div>` : ''}
                 </div>
-                <!-- tipo de inscrição onde no pós-sorteio fica o jogo (sem parceiro/adversários aqui) -->
-                <div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;margin-top:6px;">${typeText}</div>
-                ${rollCallRow}
+                <!-- v3.0.x: tipo de inscrição + CHAMADA na MESMA linha (canônico): tipo à
+                     esquerda; à direita PALAVRA + toggle + W.O. + remover. -->
+                ${_presenceGroup
+                  ? `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                       <span style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;min-width:0;">${typeText}</span>
+                       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">${_presenceGroup}</div>
+                     </div>`
+                  : `<div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;margin-top:6px;">${typeText}</div>`}
             </div>
         </div>`;
     }).join('');
@@ -2356,7 +2377,12 @@ function renderParticipants(container, tournamentId) {
     + '</div>';
   }
   const checkInControls = canCheckIn ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, pendingCount) : '';
-  const rollCallControls = (canRollCall || postDrawPresence) ? _rollCallBar(rcTotal, rcPresent, rcAbsent, rcPending) : '';
+  // v3.0.x: pré-sorteio (roll-call) conta por ENTRADA (rcTotal — a unidade que entra no
+  // sorteio); pós-sorteio (postDrawPresence, grade por indivíduo) conta por PESSOA
+  // (totalIndividuals=103), consistente com os cards e com INSCRITOS.
+  const rollCallControls = canRollCall
+    ? _rollCallBar(rcTotal, rcPresent, rcAbsent, rcPending)
+    : (postDrawPresence ? _rollCallBar(totalIndividuals, checkedCount, absentConfirmedCount, totalIndividuals - checkedCount - absentConfirmedCount) : '');
 
   // ── Banner da CHAMADA pré-sorteio: instrução + "Sortear entre os presentes" ──
   const rollCallBanner = (canRollCall && parts.length > 0) ? `
@@ -2400,6 +2426,9 @@ function renderParticipants(container, tournamentId) {
   const _filterBarCtrls = (parts.length > 6 && typeof window._inscritosFilterBar === 'function')
     ? window._inscritosFilterBar({
         stateKey: 'inscritos',
+        // v3.0.x: lista de inscritos/presença vem em ordem ALFABÉTICA crescente por
+        // padrão (mais fácil de achar na chamada) — não mais ordem de inscrição.
+        sort: 'name-asc',
         searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
         onChange: 'window._partApplyFilter()',
         skillCategories: (t.skillCategories || [])
