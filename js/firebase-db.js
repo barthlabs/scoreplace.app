@@ -233,6 +233,31 @@ window.FirestoreDB = {
         }
       }
     } catch (_ndErr) { /* nextDrawAt é otimização; nunca derruba o save */ }
+    // v3.0.x: BLINDAGEM CONTRA PERDA DE CONFIG MULTI-FASE. Mesma filosofia do
+    // memberEmails/memberUids acima (um cache velho NUNCA encolhe a config). Bug grave:
+    // um save stale/parcial (outra aba/sessão que carregou ANTES da config, ou edição que
+    // não renderizou o construtor de fases) chegava com phases=null + reiRainha/
+    // allowSelfDeactivation no DEFAULT e, via merge, ZERAVA o construtor de fases do torneio
+    // (Confra: 2 fases + Rei/Rainha + "deixar de fora" sumiam horas depois, SEM auto-draw).
+    // Regra: se o save de entrada NÃO é multi-fase mas o doc no BANCO é, preserva a config
+    // do banco (fonte da verdade). Pra reduzir de propósito, passe options._allowConfigReset.
+    try {
+      var _incMulti = Array.isArray(cleanData.phases) && cleanData.phases.length > 1;
+      if (!_incMulti && !(options && options._allowConfigReset)) {
+        var _exSnap = await this.db.collection('tournaments').doc(docId).get();
+        if (_exSnap.exists) {
+          var _ex = _exSnap.data() || {};
+          if (Array.isArray(_ex.phases) && _ex.phases.length > 1) {
+            cleanData.phases = _ex.phases;
+            if (_ex.reiRainha != null) cleanData.reiRainha = _ex.reiRainha;
+            if (_ex.currentPhaseIndex != null) cleanData.currentPhaseIndex = _ex.currentPhaseIndex;
+            if (_ex.drawMode != null) cleanData.drawMode = _ex.drawMode;
+            if (_ex.allowSelfDeactivation != null) cleanData.allowSelfDeactivation = _ex.allowSelfDeactivation;
+            if (window._warn) window._warn('[saveTournament] BLOQUEADO: save sem fases ia zerar torneio multi-fase ' + docId + ' — config do banco preservada (phases=' + _ex.phases.length + ')');
+          }
+        }
+      }
+    } catch (_cfgErr) { /* blindagem best-effort; nunca derruba o save */ }
     await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
   },
 
