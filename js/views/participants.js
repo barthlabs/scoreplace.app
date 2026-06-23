@@ -2337,7 +2337,7 @@ function renderParticipants(container, tournamentId) {
                 ${pNameHtml}
                 <!-- LINHA COMBINADA (canônica): VIP + meta + nível (esquerda) | split/desfazer/excluir (direita) -->
                 <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtn}${_metaSlotsFor(p, pName, isTeam, { inline: true })}${_nmSkillHtml}${_delBtn}</div>
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtn}${_metaSlotsFor(p, pName, isTeam, { inline: true })}${_nmSkillHtml}</div>
                     ${(_splitBtn || undoMergeBtn) ? `<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">${_splitBtn}${undoMergeBtn}</div>` : ''}
                 </div>
                 <!-- v3.0.x: tipo de inscrição + CHAMADA na MESMA linha (canônico): tipo à
@@ -2345,9 +2345,12 @@ function renderParticipants(container, tournamentId) {
                 ${_presenceGroup
                   ? `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
                        <span style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;min-width:0;">${typeText}</span>
-                       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">${_presenceGroup}</div>
+                       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">${_presenceGroup}${_delBtn}</div>
                      </div>`
-                  : `<div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;margin-top:6px;">${typeText}</div>`}
+                  : `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                       <span style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;min-width:0;">${typeText}</span>
+                       ${_delBtn ? `<div style="margin-left:auto;flex-shrink:0;" onclick="event.stopPropagation();">${_delBtn}</div>` : ''}
+                     </div>`}
             </div>
         </div>`;
     }).join('');
