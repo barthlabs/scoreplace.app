@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.48-beta';
+window.SCOREPLACE_VERSION = '3.0.49-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -4564,31 +4564,45 @@ window.AppStore = {
 
   addTournament(data) {
     var id = data.id || ('tour_' + Date.now());
-    var tourData = Object.assign({
-      id: id,
-      createdAt: new Date().toISOString(),
-      // Default status='open' pra que torneios novos apareçam no feed
-      // público de discovery. A query `loadPublicOpenTournaments` filtra
-      // por `where('status', '==', 'open')` — sem este default, o campo
-      // ficava undefined em novos torneios criados pelo fluxo avançado
-      // e o count "Abertos para você" na dashboard vinha zerado. Fica
-      // aqui como defensive default; se o caller passar status explícito
-      // (ex: draft), o Object.assign preserva via spread logic abaixo.
-      status: 'open',
-      participants: [],
-      standbyParticipants: [],
-      history: [{
-        date: new Date().toISOString(),
-        message: 'Torneio Criado'
-      }]
-    }, data);
-    // Ensure id is set
-    tourData.id = id;
-    this.tournaments.push(tourData);
-    // Save to Firestore immediately
+    // v3.0.x: EDIÇÃO vs CRIAÇÃO. Antes, TODO save do editor fazia `push` cego — mesmo
+    // editando um torneio que já existia em memória. Resultado: DUAS cópias do mesmo
+    // torneio em store.tournaments (uma podia ser stale, ex.: cache reidratado), e um
+    // sync/save posterior persistia a cópia velha POR CIMA da config (Confra perdia
+    // fases/Rei-Rainha/"deixar de fora"). Além disso o `Object.assign({defaults}, data)`
+    // re-aplicava defaults de criação numa edição. Agora: se o id já existe, MESCLA as
+    // mudanças sobre o objeto vivo NO LUGAR (sem duplicar, sem default); só criação nova
+    // aplica os defaults e dá push.
+    var _idx = -1;
+    for (var _i = 0; _i < this.tournaments.length; _i++) {
+      if (String(this.tournaments[_i].id) === String(id)) { _idx = _i; break; }
+    }
+    var tourData;
+    if (_idx !== -1) {
+      Object.assign(this.tournaments[_idx], data);
+      this.tournaments[_idx].id = id;
+      tourData = this.tournaments[_idx];
+    } else {
+      tourData = Object.assign({
+        id: id,
+        createdAt: new Date().toISOString(),
+        // Default status='open' pra que torneios novos apareçam no feed público de
+        // discovery (a query filtra por status=='open'). Só pra CRIAÇÃO.
+        status: 'open',
+        participants: [],
+        standbyParticipants: [],
+        history: [{
+          date: new Date().toISOString(),
+          message: 'Torneio Criado'
+        }]
+      }, data);
+      tourData.id = id;
+      this.tournaments.push(tourData);
+    }
+    // Save to Firestore immediately (saveTournament captura o _allowConfigReset de forma
+    // SÍNCRONA no cleanData antes de qualquer await, então pode remover da memória logo após).
     if (window.FirestoreDB && window.FirestoreDB.db) {
       window.FirestoreDB.saveTournament(tourData).catch(function(err) {
-        window._error('Erro ao salvar novo torneio:', err);
+        window._error('Erro ao salvar torneio:', err);
         // permission-denied = token expirado ou regra de auth — não é bug de código
         if (err && err.code === 'permission-denied') {
           if (typeof showNotification === 'function') {
@@ -4601,6 +4615,12 @@ window.AppStore = {
         }
       });
     }
+    // Flag transiente: NUNCA pode sobrar na memória/cache, senão um sync futuro
+    // "autorizaria" um reset de config sem o organizador ter pedido.
+    delete tourData._allowConfigReset;
+    // Cache fresco NA HORA — não espera o echo do listener (que pode demorar ou nem vir se
+    // o app fecha logo após salvar). Mata a janela "config salva mas cache velho na reabertura".
+    this._saveToCache();
     return id;
   },
 
