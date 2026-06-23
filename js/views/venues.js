@@ -969,8 +969,8 @@
         var name = klass === 'me' ? 'Você' : (p.displayName || 'Amigo');
         var mins = Math.max(0, Math.round((now - p.startsAt) / 60000));
         var subtitle = 'há ' + mins + ' min';
-        // v2.8.95: passou do horário previsto de saída → estada "alongada"
-        if (p.endsAt && p.endsAt < now) { subtitle = '⏱️ alongado · passou das ' + _hhmm(p.endsAt); }
+        // v2.8.95/98: passou do horário previsto de saída → só "🕐 ainda aqui".
+        if (p.endsAt && p.endsAt < now) { subtitle = '🕐 ainda aqui'; }
         // v2.8.95: fez check-in ANTES do horário que tinha planejado chegar
         else if (p.uid && _planStartByUid[p.uid] != null && _planStartByUid[p.uid] > p.startsAt) { subtitle = '✅ chegou antes · planejou ' + _hhmm(_planStartByUid[p.uid]); }
         var borderColor = klass === 'me' ? '#10b981' : '#fbbf24';

@@ -3035,7 +3035,7 @@ function renderTournaments(container, tournamentId = null) {
 
                     return `
                       <div class="participant-card" data-participant-name="${window._safeHtml(pName)}" data-merge-name="${window._safeHtml(pName)}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
-                          <div style="position:absolute;right:8px;bottom:6px;font-size:${String(bgNum).length > 2 ? '1.6rem' : '2rem'};font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">${bgNum}</div>
+                          ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(bgNum) : ('<div style="position:absolute;right:8px;bottom:6px;font-size:' + (String(bgNum).length > 2 ? '1.6rem' : '2rem') + ';font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">' + bgNum + '</div>')}
                           <div style="position:relative;z-index:1;">
                               <!-- HEADER: avatar + nome + coroa (igual ao card #participants) | toggle ativado/desativado da Liga -->
                               <div style="display:flex;align-items:center;gap:8px;">
@@ -3182,6 +3182,11 @@ function renderTournaments(container, tournamentId = null) {
               var desfazerBtn = (!draggable && isOrg)
                 ? '<button type="button" class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" title="Desfazer dupla" style="min-height:0;height:28px;line-height:1;padding:0 12px;font-size:0.72rem;font-weight:800;white-space:nowrap;flex-shrink:0;margin-left:6px;">↩️ Desfazer</button>'
                 : '';
+              // v2.8.97: botão REMOVER inscrito (organizador) — solo E dupla. Antes o card
+              // do modo duplas não tinha o 🗑️ que o card individual normal tem.
+              var _delBtnDupla = (isOrg && !drawDone)
+                ? '<button type="button" class="btn btn-micro" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(nm) + '\')" style="min-height:0;height:28px;line-height:1;padding:0 11px;font-size:0.72rem;font-weight:800;flex-shrink:0;background:rgba(239,68,68,0.12);color:#f87171;border:1px dashed rgba(239,68,68,0.5);border-radius:8px;">🗑️</button>'
+                : '';
               // v2.7.87: DUPLA FORMADA em 2 colunas — cada pessoa com as categorias DELA
               // logo abaixo do nome; 1ª à esquerda, 2ª à direita (mesma linha quando couber).
               // v2.7.99: número de inscrição POR PESSOA, VISÍVEL (não marca-d'água atrás
@@ -3227,9 +3232,9 @@ function renderTournaments(container, tournamentId = null) {
                 _enrollBadge + _wmL + _wmR +
                 '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' +
                   _body +
-                  '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+                  '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
                     labelHtml +
-                    desfazerBtn +
+                    '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' + desfazerBtn + _delBtnDupla + '</div>' +
                   '</div>' +
                 '</div></div>';
             }
