@@ -190,6 +190,36 @@ window._updateStatBoxes = function(t) {
     }
 };
 
+// v3.0.1: ajusta a fonte de cada nome do pódio pra PREENCHER seu retângulo —
+// começa no tamanho máximo e encolhe só o necessário pra caber (largura+altura
+// do box). Nomes do mesmo comprimento, em boxes iguais → mesma fonte. Nomes
+// curtos ficam grandes; nomes longos (Rodrigo) encolhem e quebram em 2 linhas.
+window._fitPodiumNames = function(retry) {
+  try {
+    var els = document.querySelectorAll('.sp-podium-name:not([data-fitted])');
+    var pending = false;
+    els.forEach(function(el) {
+      var box = el.parentElement;
+      if (!box) return;
+      var bw = box.clientWidth, bh = box.clientHeight;
+      if (!bw || !bh) { pending = true; return; }
+      var maxFs = parseFloat(el.getAttribute('data-maxfs')) || 18;
+      var minFs = parseFloat(el.getAttribute('data-minfs')) || 9;
+      var fs = maxFs;
+      el.style.fontSize = fs + 'px';
+      var guard = 0;
+      while (guard++ < 80 && (el.scrollWidth > bw + 1 || el.scrollHeight > bh + 1) && fs > minFs) {
+        fs -= 0.5;
+        el.style.fontSize = fs + 'px';
+      }
+      el.setAttribute('data-fitted', '1');
+    });
+    if (pending && (retry || 0) < 12) {
+      setTimeout(function(){ window._fitPodiumNames((retry || 0) + 1); }, 60);
+    }
+  } catch (e) {}
+};
+
 // v2.1.16: Pódio do torneio encerrado — 1º lugar em cima (mais alto), 2º e 3º
 // dividindo a linha de baixo ao meio (quase um pódio). Usado no topo do card.
 window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
@@ -200,7 +230,9 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
   sub1 = sub1 || 'Campeão';
   sub2 = sub2 || '2º Lugar';
   sub3 = sub3 || '3º Lugar';
-  // v2.8.100: foto/ícone ao lado do nome — time "A / B" mostra as 2 fotos; solo 1.
+  // v3.0.0: barra de fotos numa linha própria, centralizada (alinhada com a
+  // medalha). Nomes da dupla divididos em duas metades — cada integrante quebra
+  // linha na sua metade; nome grande (ex.: Rodrigo) reduz a fonte pra caber.
   function _av(name, size) {
     var ms = String(name == null ? '' : name).split(' / ').map(function(s){ return s.trim(); }).filter(Boolean);
     if (!ms.length) return '';
@@ -210,40 +242,67 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
       var src = cached || (typeof window._profileAvatarUrl === 'function' ? window._profileAvatarUrl(n, '', size) : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf'));
       return '<img src="' + _sh(src) + '" title="' + _sh(n) + '" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.25);margin-left:-5px;box-sizing:border-box;flex-shrink:0;">';
     }).join('');
-    return '<span style="display:inline-flex;align-items:center;padding-left:5px;flex-shrink:0;">' + imgs + '</span>';
+    return '<div style="display:flex;align-items:center;justify-content:center;padding-left:5px;margin-top:4px;">' + imgs + '</div>';
   }
-  function _nameRow(name, color, fs, fw, size) {
-    return '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:4px;">' +
-      _av(name, size) +
-      '<span style="font-weight:' + fw + ';color:' + color + ';font-size:' + fs + ';word-break:break-word;">' + _sh(name) + '</span>' +
+  // Cada nome num retângulo de tamanho fixo; sem "/" separando. A fonte é
+  // ajustada por _fitPodiumNames pra preencher o box ao máximo.
+  // v3.0.2: empilha o nome (1º nome em cima, sobrenome embaixo) pra os dois
+  // integrantes da dupla quebrarem do MESMO jeito — não fica um em 1 linha e o
+  // outro em 2.
+  function _stack(n) {
+    n = String(n == null ? '' : n).trim();
+    var i = n.indexOf(' ');
+    if (i < 0) return _sh(n);
+    return _sh(n.slice(0, i)) + '<br>' + _sh(n.slice(i + 1));
+  }
+  function _half(name, color, fw, maxFs, minFs, boxH) {
+    return '<div class="sp-podium-box" style="flex:1;min-width:0;height:' + boxH + 'px;display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
+      '<div class="sp-podium-name" data-maxfs="' + maxFs + '" data-minfs="' + minFs + '" style="font-weight:' + fw + ';color:' + color + ';font-size:' + maxFs + 'px;line-height:1.15;text-align:center;overflow-wrap:break-word;">' + _stack(name) + '</div>' +
     '</div>';
   }
+  function _names(name, color, fw, maxFs, minFs, boxH) {
+    var ms = String(name == null ? '' : name).split(' / ').map(function(s){ return s.trim(); }).filter(Boolean);
+    if (ms.length <= 1) {
+      var only = ms[0] || String(name == null ? '' : name);
+      return '<div style="display:flex;justify-content:center;margin-top:3px;">' + _half(only, color, fw, maxFs, minFs, boxH) + '</div>';
+    }
+    var left = ms[0], right = ms.slice(1).join(' / ');
+    return '<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:3px;">' +
+      _half(left, color, fw, maxFs, minFs, boxH) +
+      _half(right, color, fw, maxFs, minFs, boxH) +
+    '</div>';
+  }
+  function _block(name, color, fw, avSize, maxFs, minFs, boxH) {
+    return _av(name, avSize) + _names(name, color, fw, maxFs, minFs, boxH);
+  }
   var second = p2 ? (
-    '<div style="flex:1;text-align:center;min-width:0;">' +
+    '<div style="flex:1;text-align:center;min-width:0;margin-top:-4px;">' +
       '<div style="font-size:2rem;line-height:1;">🥈</div>' +
-      _nameRow(p2, '#cbd5e1', '1rem', '700', 24) +
-      '<div style="font-size:0.72rem;color:var(--text-muted);">' + _sh(sub2) + '</div>' +
+      _block(p2, '#cbd5e1', '700', 24, 17, 9, 52) +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">' + _sh(sub2) + '</div>' +
     '</div>'
   ) : '';
   var third = p3 ? (
-    '<div style="flex:1;text-align:center;min-width:0;">' +
+    '<div style="flex:1;text-align:center;min-width:0;margin-top:18px;">' +
       '<div style="font-size:1.7rem;line-height:1;">🥉</div>' +
-      _nameRow(p3, '#cd7f32', '0.95rem', '700', 24) +
-      '<div style="font-size:0.72rem;color:var(--text-muted);">' + _sh(sub3) + '</div>' +
+      _block(p3, '#cd7f32', '700', 24, 16, 9, 50) +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">' + _sh(sub3) + '</div>' +
     '</div>'
   ) : '';
   var bottomRow = (second || third)
     ? ('<div style="display:flex;gap:1rem;justify-content:center;align-items:flex-start;">' + second + third + '</div>')
     : '';
-  return '<div style="text-align:center;margin:0 0 1.25rem 0;padding:1.5rem 1.25rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:16px;">' +
+  var html = '<div style="text-align:center;margin:0 0 1.25rem 0;padding:1.5rem 1.25rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:16px;">' +
     '<div style="font-size:1.35rem;font-weight:700;margin-bottom:1.1rem;color:#fff;">' + _sh(title) + '</div>' +
     '<div style="text-align:center;margin-bottom:1.1rem;">' +
       '<div style="font-size:3rem;line-height:1;">🥇</div>' +
-      _nameRow(p1, '#fbbf24', '1.3rem', '800', 32) +
-      '<div style="font-size:0.8rem;color:#fbbf24;font-weight:600;">' + _sh(sub1) + '</div>' +
+      _block(p1, '#fbbf24', '800', 32, 23, 11, 64) +
+      '<div style="font-size:0.8rem;color:#fbbf24;font-weight:600;margin-top:3px;">' + _sh(sub1) + '</div>' +
     '</div>' +
     bottomRow +
   '</div>';
+  setTimeout(function(){ window._fitPodiumNames(); }, 0);
+  return html;
 };
 
 // v1.9.97: "Ver Chaves" NÃO navega mais pra tela restrita (#bracket/:id) —

@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.100-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.0-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏆 Pódio mais bonito e legível:</b> cada nome fica num <b>retângulo do mesmo tamanho</b>, com a <b>foto/ícone dos integrantes alinhada com a medalha</b>. A fonte se <b>ajusta sozinha pra preencher o espaço</b> — nomes curtos ficam grandes, nomes longos encolhem e quebram em 2 linhas — e os <b>dois integrantes da dupla quebram do mesmo jeito</b> (sem ficar um em 1 linha e o outro em 2). O 2º sobe e o 3º desce, em escada.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v2.8.100-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(22 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🏆 Pódio por série + fotos:</b> em torneios com <b>mais de uma chave</b> (ex.: Ouro e Prata) sem grande final, o "Torneio Encerrado" mostra <b>um pódio por série</b>. E agora cada nome no pódio aparece com a <b>foto dos integrantes</b> ao lado.</li>' +
         '<li><b>📊 Quem já respondeu a enquete:</b> na tela da enquete, logo abaixo das opções, aparecem as <b>fotos de quem já votou</b> ("Já responderam") — mostra a participação sem revelar o voto de cada um.</li>' +
