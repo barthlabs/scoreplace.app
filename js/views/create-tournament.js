@@ -7212,6 +7212,35 @@ window._prefillFromTemplate = function(tpl) {
     // Recalcula o preview com tudo restaurado
     if (typeof window._updateCategoryPreview === 'function') { try { window._updateCategoryPreview(); } catch (e) {} }
   }
+
+  // v3.0.x: CONFIG MULTI-FASE — restaura o construtor de fases inteiro + Fase 1 + toggles
+  // relacionados (grupos, monarca, "deixar de fora"). O save lê window._extraPhases pra montar
+  // t.phases, então restaurar o estado cru round-trips a config multifase 100%. Vem por último
+  // (depois do formato já aplicado, que mostra a seção de fases).
+  if (Array.isArray(tpl.extraPhases)) {
+    try { window._extraPhases = JSON.parse(JSON.stringify(tpl.extraPhases)); }
+    catch (e) { window._extraPhases = tpl.extraPhases.slice(); }
+  }
+  if (tpl.phase1Rounds != null) window._phase1Rounds = parseInt(tpl.phase1Rounds) || 1;
+  if (tpl.phase1Name != null) {
+    window._phase1Name = tpl.phase1Name;
+    var _p1nEl = document.getElementById('phase1-name');
+    if (_p1nEl) _p1nEl.value = tpl.phase1Name;
+  }
+  if (tpl.monarchClassified != null) _setV('monarch-classified', tpl.monarchClassified);
+  if (tpl.gruposCount != null) _setV('grupos-count', tpl.gruposCount);
+  if (tpl.gruposClassified != null) _setV('grupos-classified', tpl.gruposClassified);
+  if (tpl.gruposEqualOnly !== undefined) _setC('grupos-equal-only', tpl.gruposEqualOnly);
+  if (tpl.allowSelfDeactivation !== undefined) _setC('liga-allow-self-deactivation', tpl.allowSelfDeactivation);
+  if (tpl.reiRainhaGroupsBy) _setV('reirainha-groups-by', tpl.reiRainhaGroupsBy);
+  // re-renderiza o construtor com as fases restauradas. Mesmo que a seção esteja oculta pelo
+  // formato, o save lê window._extraPhases — então a config é gravada de qualquer jeito.
+  if (Array.isArray(tpl.extraPhases) && tpl.extraPhases.length) {
+    var _psEl = document.getElementById('phases-section');
+    if (_psEl && _psEl.style.display === 'none') _psEl.style.display = '';
+  }
+  if (typeof window._renderPhases === 'function') { try { window._renderPhases(); } catch (e) {} }
+  if (typeof window._renderGruposSuggestions === 'function') { try { window._renderGruposSuggestions(); } catch (e) {} }
 };
 
 // ─── Discard create/edit tournament ───────────────────────────────────────
@@ -7533,7 +7562,21 @@ window._saveCurrentFormAsTemplate = function() {
       ligaRoundFormat: get('liga-round-format') || '',
       ligaSeasonMonths: get('liga-season-months') || '',
       drawIntervalDays: get('liga-draw-interval') || get('suico-draw-interval') || '',
-      drawManual: getChecked('liga-draw-manual') || getChecked('suico-draw-manual')
+      drawManual: getChecked('liga-draw-manual') || getChecked('suico-draw-manual'),
+      // v3.0.x: CONFIG MULTI-FASE COMPLETA. Antes o template NÃO gravava NADA disso — toda
+      // a config do construtor de fases se perdia ao reaplicar. window._extraPhases é o estado
+      // cru do construtor (cada fase: formato, Rei/Rainha, grupos, mapping/linhas, datas,
+      // pontuação, W.O., lançamento…) — é a MESMA fonte que o save lê pra montar t.phases,
+      // então guardar o estado cru round-trips 100%. Fase 1 (nome/rodadas) + toggles top-level.
+      extraPhases: (function () { try { return JSON.parse(JSON.stringify(window._extraPhases || [])); } catch (e) { return []; } })(),
+      phase1Name: (function () { var el = document.getElementById('phase1-name'); return el ? el.value.trim() : ''; })(),
+      phase1Rounds: parseInt(window._phase1Rounds) || 1,
+      allowSelfDeactivation: (function () { var el = document.getElementById('liga-allow-self-deactivation'); return el ? !!el.checked : true; })(),
+      monarchClassified: parseInt(get('monarch-classified')) || 1,
+      gruposCount: parseInt(get('grupos-count')) || 4,
+      gruposClassified: parseInt(get('grupos-classified')) || 2,
+      gruposEqualOnly: getChecked('grupos-equal-only'),
+      reiRainhaGroupsBy: get('reirainha-groups-by') || ''
     };
     if (typeof window._saveTemplate !== 'function') return;
     var _doSave = function() {
