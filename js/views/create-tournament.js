@@ -308,22 +308,22 @@ function setupCreateTournamentModal() {
                   <div id="reg-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnrollDeadline')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-reg-date" aria-label="Data limite das inscrições da fase" style="padding:4px 4px; font-size:0.74rem; flex:1 1 0; min-width:0; white-space:nowrap;" oninput="window._recalcDuration()">
-                      <input type="time" class="form-control" id="tourn-reg-time" aria-label="Hora limite das inscrições da fase" style="padding:4px 4px; font-size:0.78rem; width:74px; flex-shrink:0;" oninput="window._recalcDuration()">
+                      <input type="date" class="form-control" id="tourn-reg-date" aria-label="Data limite das inscrições da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" oninput="window._recalcDuration()">
+                      <input type="time" class="form-control" id="tourn-reg-time" aria-label="Hora limite das inscrições da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration()">
                     </div>
                   </div>
                   <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseStart')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:4px 4px; font-size:0.74rem; flex:1 1 0; min-width:0; white-space:nowrap;" required oninput="window._recalcDuration(); window._checkWeather(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:4px 4px; font-size:0.78rem; width:74px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._checkWeather(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                     </div>
                   </div>
                   <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnd')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:4px 4px; font-size:0.74rem; flex:1 1 0; min-width:0; white-space:nowrap;" required oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
-                      <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término da fase" style="padding:4px 4px; font-size:0.78rem; width:74px; flex-shrink:0;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
+                      <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._updateLigaRoundsTag && window._updateLigaRoundsTag()">
                     </div>
                   </div>
                 </div>
@@ -1430,8 +1430,8 @@ function setupCreateTournamentModal() {
     var col = 'flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;';
     var lbl = 'font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;';
     var rowS = 'display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;';
-    var dInp = 'padding:4px 6px; font-size:0.82rem; flex:1 1 120px; min-width:120px;';
-    var tInp = 'padding:4px 6px; font-size:0.82rem; width:100px; flex-shrink:0;';
+    var dInp = 'padding:5px 4px; font-size:0.7rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;';
+    var tInp = 'padding:5px 3px; font-size:0.74rem; width:60px; flex-shrink:0; box-sizing:border-box;';
     function cell(label, dKey, tKey) {
       // oninput de Início/Término também recalcula as Rodadas do Agendamento (forward).
       var extra = (dKey === 'startDate' || dKey === 'endDate' || dKey === 'startTime' || dKey === 'endTime') ? '; window._recalcPhaseRounds && window._recalcPhaseRounds(' + i + ')' : '';
