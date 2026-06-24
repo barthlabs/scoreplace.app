@@ -9,7 +9,17 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.60-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.61-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🤝 Duplas reconhecidas certo em todo lugar:</b> a dupla é identificada pela conta (uid) dos dois jogadores — contagens, "já em dupla" e listas não confundem mais com nomes parecidos, e duplas não vão mais pra lista de espera por engano.</li>' +
+        '<li><b>🏅 Troféu de vitória pro parceiro também:</b> ao vencer um torneio em dupla, os dois jogadores recebem a vitória (antes só um).</li>' +
+        '<li><b>📊 Classificação da Liga Rei/Rainha conta sets:</b> a coluna de sets e o desempate por set voltam a funcionar nos torneios com pontuação por sets.</li>' +
+        '<li><b>🔎 "Torneios em comum" mais preciso no Explorar:</b> não infla mais por nomes parecidos.</li>' +
+        '<li><b>🧹 Limpeza interna:</b> remoção de código sem uso e mais consistência nos bastidores.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.60-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🛡️ Suas fases não somem mais:</b> corrigido em definitivo o caso em que a configuração de fases de um torneio sumia horas depois.</li>' +
         '<li><b>👥 "Meus Resultados" mais preciso:</b> não confunde mais pessoas com nomes parecidos (ex.: "Ana" e "Ana Paula") — cada um vê só os próprios jogos.</li>' +

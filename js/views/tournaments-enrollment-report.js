@@ -784,78 +784,6 @@
     return html;
   }
 
-  function _renderIncomplete(rows, t) {
-    if (rows.length === 0) {
-      return '<div style="background:rgba(148,163,184,0.06); border:1px solid rgba(148,163,184,0.20); border-radius:12px; padding:14px 16px;">' +
-        '<p style="margin:0;font-size:0.78rem;color:var(--text-muted);">📭 Sem inscritos ainda. As estatísticas acima vão aparecer assim que alguém se inscrever ou for adicionado pelo organizador.</p>' +
-        '</div>';
-    }
-    var incompleteRows = rows.filter(function (r) { return r.missing.length > 0; });
-    if (incompleteRows.length === 0) {
-      return '<div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.20); border-radius:12px; padding:14px 16px;">' +
-        '<p style="margin:0;font-size:0.78rem;color:#10b981;font-weight:600;">✅ Todos os ' + rows.length + ' inscrito' + (rows.length === 1 ? '' : 's') + ' tem perfil completo o suficiente pra serem categorizados.</p>' +
-        '</div>';
-    }
-
-    // v2.1.46: o organizador atribui gênero + categoria por inscrito — grava no
-    // PERFIL global do jogador (via Cloud Function), que ele pode reajustar depois.
-    var _sport = (t && t.sport) ? String(t.sport).trim() : '';
-    var _tIdSafe = String((t && t.id) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var _sportSafe = _sport.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var SKILLS = ['A', 'B', 'C', 'D', 'FUN'];
-    var GENDERS = [{ v: 'feminino', l: 'Feminino' }, { v: 'masculino', l: 'Masculino' }, { v: 'outro', l: 'Outro' }];
-    var _selStyle = 'background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:7px;padding:4px 6px;font-size:0.74rem;flex:0 0 auto;';
-
-    var html = '<div style="background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.18); border-radius:12px; padding:14px 16px;">';
-    html += '<p style="margin:0 0 8px;font-size:0.74rem;color:#f87171;font-weight:700;text-transform:uppercase;letter-spacing:1px;">⚠️ Perfis Incompletos (' + incompleteRows.length + ')</p>';
-    html += '<p style="font-size:0.7rem;color:var(--text-muted);margin:0 0 10px;">Atribua <b>gênero</b> e <b>categoria</b> — isso atualiza o <b>perfil do jogador</b> (ele pode mudar depois no próprio perfil).</p>';
-    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
-    var anyUid = false;
-    incompleteRows.forEach(function (r) {
-      html += '<div style="padding:7px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
-      html += '<span style="font-weight:600;color:var(--text-bright);font-size:0.82rem;flex:0 0 auto;">' + _esc(r.name) + '</span>';
-      if (r.hasUid && r.uid) {
-        anyUid = true;
-        var uidA = _esc(r.uid);
-        var gSel = '<select data-assign-uid="' + uidA + '" data-assign-field="gender" style="' + _selStyle + '"><option value="">gênero…</option>';
-        GENDERS.forEach(function (g) { gSel += '<option value="' + g.v + '"' + (r.gender === g.v ? ' selected' : '') + '>' + g.l + '</option>'; });
-        gSel += '</select>';
-        var cSel = '<select data-assign-uid="' + uidA + '" data-assign-field="category" style="' + _selStyle + '"><option value="">categoria…</option>';
-        SKILLS.forEach(function (s) { cSel += '<option value="' + s + '"' + (r.profileSkill === s ? ' selected' : '') + '>' + s + '</option>'; });
-        cSel += '</select>';
-        html += gSel + cSel;
-      } else {
-        html += '<span style="font-size:0.7rem;color:#f87171;flex:1;min-width:140px;">sem perfil vinculado — não dá pra atribuir</span>';
-      }
-      html += '<span style="font-size:0.68rem;color:var(--text-muted);flex:0 0 100%;">falta: ' + r.missing.map(_esc).join(', ') + '</span>';
-      if (r.categoryCommAt) {
-        var _cd = new Date(r.categoryCommAt);
-        var _cdLabel = isNaN(_cd.getTime()) ? String(r.categoryCommAt)
-          : (_cd.toLocaleDateString('pt-BR') + ' ' + _cd.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-        html += '<span style="font-size:0.66rem;color:#fbbf24;flex:0 0 100%;">📨 cobrança de perfil enviada em ' + _esc(_cdLabel) + '</span>';
-      }
-      html += '</div>';
-    });
-    html += '</div>';
-    if (anyUid) {
-      html += '<button id="save-assignments-btn" onclick="window._saveParticipantAssignments(\'' + _tIdSafe + '\',\'' + _sportSafe + '\')" class="btn btn-success hover-lift" style="margin-top:10px;">💾 Salvar atribuições no perfil</button>';
-    }
-    // v1.3.24-beta: três grupos — uid direto (gaps de perfil), uid resgatado
-    // via lookup (gaps de perfil também) e uid não vinculado (bug de
-    // enrollment ou manual-add real). Mensagens diferentes pra cada caso.
-    var hasNoUid = incompleteRows.some(function (r) { return !r.hasUid; });
-    var hasUidGapsOnly = incompleteRows.some(function (r) { return r.hasUid; });
-    html += '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:10px;display:flex;flex-direction:column;gap:6px;">';
-    if (hasUidGapsOnly) {
-      html += '<p style="margin:0;font-style:italic;">💡 <b>Inscritos com perfil:</b> peça que completem em scoreplace.app/#dashboard → 👤 perfil (gênero, data de nascimento e habilidade por modalidade).</p>';
-    }
-    if (hasNoUid) {
-      html += '<p style="margin:0;font-style:italic;">⚠️ <b>Inscritos sem uid vinculado:</b> a inscrição existe mas não conseguimos amarrar a um perfil scoreplace nem por email nem por nome. Possíveis causas: (1) bug de enrollment que perdeu o uid no momento da inscrição; (2) participante adicionado manualmente sem login. Abra o "🔧 Diagnóstico" abaixo pra ver o nome/email crus do participantObj — se a pessoa tem perfil no app, dá pra rastrear pelo email exato.</p>';
-    }
-    html += '</div>';
-    html += '</div>';
-    return html;
-  }
 
   // v1.3.9-beta: Análise de Inscritos é page-route (#analise/<tId>) — não
   // mais modal-overlay full-screen. Topbar fica visível (logo + nav +
@@ -1258,7 +1186,8 @@
       // v2.4.33: seção "Perfis Incompletos" editável removida — a edição de
       // gênero E categoria agora vive na própria lista filtrável de Inscritos
       // (acima). Pra achar quem falta dado, use os filtros "? Sem gênero" /
-      // "Sem habilidade". _renderIncomplete continua definida (não chamada).
+      // "Sem habilidade". (v3.0.x: _renderIncomplete + _saveParticipantAssignments
+      // removidas — eram dead code, zero callers.)
       _renderDiagnostic(t, rows, profileMap || {}, parts || [], resolvedFor || {}) +
       '</div>';
 
@@ -1334,45 +1263,5 @@
     window.location.hash = '#analise/' + tId;
   };
 
-  // v2.1.46: coleta as atribuições de gênero/categoria por inscrito e grava no
-  // PERFIL global via Cloud Function (org-auth). Depois re-renderiza o relatório.
-  window._saveParticipantAssignments = function (tId, sport) {
-    var byUid = {};
-    var sels = document.querySelectorAll('[data-assign-uid]');
-    Array.prototype.forEach.call(sels, function (el) {
-      var uid = el.getAttribute('data-assign-uid');
-      var field = el.getAttribute('data-assign-field');
-      var val = el.value;
-      if (!uid || !field || !val) return;
-      if (!byUid[uid]) byUid[uid] = { uid: uid };
-      byUid[uid][field] = val;
-    });
-    var assignments = Object.keys(byUid).map(function (u) { return byUid[u]; });
-    if (assignments.length === 0) {
-      if (typeof showNotification === 'function') showNotification('Nada a salvar', 'Escolha gênero e/ou categoria para ao menos um inscrito.', 'info');
-      return;
-    }
-    var btn = document.getElementById('save-assignments-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
-    if (!window.firebase || !firebase.functions) {
-      if (typeof showNotification === 'function') showNotification('Erro', 'Funções indisponíveis. Tente recarregar.', 'error');
-      if (btn) { btn.disabled = false; btn.textContent = '💾 Salvar atribuições no perfil'; }
-      return;
-    }
-    firebase.functions().httpsCallable('setParticipantsProfile')({ tournamentId: String(tId), sport: String(sport || ''), assignments: assignments })
-      .then(function (res) {
-        var r = (res && res.data) || {};
-        if (typeof showNotification === 'function') showNotification('✅ Perfis atualizados', (r.written || 0) + ' atribuição(ões) gravada(s) no perfil.', 'success');
-        // re-render o relatório (reflete os perfis atualizados)
-        var vc = document.getElementById('view-container');
-        if (vc && window.location.hash === '#analise/' + tId && typeof window.renderEnrollmentReportPage === 'function') {
-          window.renderEnrollmentReportPage(vc, tId);
-        }
-      })
-      .catch(function (err) {
-        if (typeof showNotification === 'function') showNotification('Erro ao salvar', (err && err.message) || 'Tente novamente.', 'error');
-        if (btn) { btn.disabled = false; btn.textContent = '💾 Salvar atribuições no perfil'; }
-      });
-  };
 
 })();

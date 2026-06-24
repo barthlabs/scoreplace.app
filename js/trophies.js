@@ -336,7 +336,13 @@
               ? window._isTournamentQualifiedForTrophy(t)
               : (t.status === 'finished');
             if (qualifiedT) {
-              if (t.winner && (t.winner === (cu.displayName || '') || t.winner === cu.email)) wins++;
+              // v3.0.x: vitória de torneio por UID (resolve t.winner ao participante e
+              // checa p1Uid/p2Uid — em duplas o parceiro também recebe). Nome só como
+              // fallback quando não há uid (dados antigos); email exato. Antes era só
+              // displayName/email exato → parceiro de dupla perdia a vitória e homônimos
+              // recebiam errado.
+              var _wParts = Array.isArray(t.participants) ? t.participants : [];
+              if (t.winner && (_sideNameBelongsToUid(_wParts, t.winner, uid) || t.winner === cu.email || (!uid && t.winner === (cu.displayName || '')))) wins++;
               // v3.0.x: vitórias em partidas + pódios computados de verdade (por UID)
               matchesWon += _countUserMatchWinsInTournament(t, uid);
               if (_userPodiumedInTournament(t, uid)) podiums++;

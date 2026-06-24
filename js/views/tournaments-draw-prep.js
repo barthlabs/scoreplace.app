@@ -3030,30 +3030,6 @@ window._runVagasDraw = function (tId) {
     }
 };
 
-window._handleClosureOption = function (tId, option) {
-    var t = window._findTournamentById(tId);
-    if (!t) return;
-
-    if (option === 'just_close') {
-        t.status = 'closed';
-        window.AppStore.logAction(tId, 'Inscrições Encerradas manualmente');
-        // Notify participants about closed enrollments
-        if (typeof window._notifyTournamentParticipants === 'function') {
-            window._notifyTournamentParticipants(t, {
-                type: 'enrollments_closed',
-                message: _t('notif.enrollmentsClosed').replace('{name}', t.name || 'Torneio'),
-                level: 'important'
-            }, window.AppStore.currentUser ? window.AppStore.currentUser.email : null);
-        }
-        if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-            window.FirestoreDB.saveTournament(t).then(function() {
-                var container = document.getElementById('view-container');
-                if (container) renderTournaments(container, String(tId));
-                if (document.getElementById('closure-panel')) document.getElementById('closure-panel').remove();
-            }).catch(function(err) { window._error('_handleClosureOption error:', err); });
-        }
-    }
-};
 // ─── Anonymous Simulation Previews ───
 window.showResolutionSimulationPanel = function (tId, option) {
     const t = window._findTournamentById(tId);

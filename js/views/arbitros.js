@@ -239,8 +239,6 @@
           if (el) el.innerHTML = html;
 
           // Expose tId for action handlers
-          window._arbitrosCurrentTId = tId;
-          window._arbitrosTournament  = t;
         });
       })
       .catch(function(err) {

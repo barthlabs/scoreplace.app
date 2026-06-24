@@ -678,7 +678,6 @@
     });
     return totalCourts * 4; // 4 jogadores por quadra (default razoável pra todas as modalidades suportadas)
   }
-  window._venuesCalcCapacity = _calcVenueCapacity;
 
   // v1.0.9-beta: opts.venueName/opts.realPid permitem renderizar CTA "Cadastrar
   // quadras" inline quando o venue não tem capacidade real cadastrada. Sem opts
@@ -1817,7 +1816,6 @@
   }
   // Exposto globalmente pra que os handlers de mutação (check-in, plano,
   // cancelamento) possam re-hidratar os cards preferidos sem re-render total.
-  window._venuesHydratePreferredPresenceSlots = _hydratePreferredPresenceSlots;
 
   window._venuesShowAllSP = function() { state.showAllSP = true; renderResults(); };
 
@@ -3514,7 +3512,6 @@
       });
     }).catch(function() {});
   }
-  window._venuesRenderPlanMovement = _renderPlanMovementChart;
 
   function _openInlinePlanOverlay(v, sports, editData) {
     // v2.1.8: contexto de edição vem SEMPRE explícito por parâmetro — fresh

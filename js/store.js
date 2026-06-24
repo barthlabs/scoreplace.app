@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.60-beta';
+window.SCOREPLACE_VERSION = '3.0.61-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -2055,13 +2055,6 @@ window._waitlistNameSet = function(t) {
   return s;
 };
 
-// Comportamento canônico da espera: 'expand' = forma NOVOS confrontos conforme
-// a fila enche; 'substitute' = só REPÕE jogadores faltantes (W.O.). Dirigido pelo
-// campo legado t.lateEnrollment ('expand' | 'standby'). Default = 'substitute'.
-window._waitlistMode = function(t) {
-  if (t && t.lateEnrollment === 'expand') return 'expand';
-  return 'substitute';
-};
 
 // Formas do nome de um participante/entrada (cru displayName/name/email + formatado
 // via _pName), em lowercase. Usado pra casar nomes que aparecem em formas diferentes
@@ -3434,23 +3427,23 @@ window._toggleHidden = function(tId, event) {
 // usuário E no feed de descoberta pública — sem isso, ações em torneio DESCOBERTO (não
 // inscrito), como "Falar com o organizador", davam "Torneio não encontrado" (só olhavam
 // AppStore.tournaments). Comparação por String (ids podem vir number/string).
-// v3.0.x: detecção CANÔNICA de dupla/time. Retorna a lista de membros (nomes) se p é
-// dupla/time — por ESTRUTURA (p.participants[] OU p.p1Name && p.p2Name), com fallback pro
-// formato legado de string "A / B". Retorna null se é individual. Vários pontos do
-// diagnóstico de sorteio detectavam dupla SÓ por '/' no nome → duplas do aceite (que
-// gravam displayName só do p1, sem barra) eram contadas como individuais, distorcendo
-// resto/potência-de-2/ímpar e abrindo o painel de resolução com números errados.
-// Identidade estrutural tem PRIORIDADE sobre o nome.
+// v3.0.x: detecção CANÔNICA de dupla/time. Retorna a lista de membros (nomes, só p/
+// exibição/contagem) quando p é uma ENTRADA DE TIME; null se é individual.
+//
+// PRINCÍPIO (regra do dono, gravada): uma DUPLA é definida pelos DOIS SLOTS (p1 e p2)
+// ocupados — slot ocupado = uid (identidade real) OU, só pra jogador INFORMAL sem conta,
+// o nome do slot. A identidade interna é SEMPRE o uid quando existe; o nome é só exibição.
+// O '/' num displayName é PURAMENTE exibição ("Kelly / Rodrigo") e NUNCA define dupla.
+// Uma string solta também nunca é dupla. (lista participants[] cobre o formato de array.)
 window._entryTeamMembers = function (p) {
-  if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
+  if (!p || typeof p !== 'object') return null; // string/individual — '/' é só exibição
+  if (Array.isArray(p.participants) && p.participants.length) {
     return p.participants.map(function (s) { return (s && (s.displayName || s.name)) || String(s || ''); }).filter(Boolean);
   }
-  if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
-    return [p.p1Name, p.p2Name];
-  }
-  var nm = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || '');
-  if (nm.indexOf('/') !== -1) {
-    return nm.split('/').map(function (m) { return m.trim(); }).filter(function (m) { return m.length > 0; });
+  var hasP1 = !!(p.p1Uid || p.p1Name); // slot 1 ocupado: uid (real) ou nome (informal)
+  var hasP2 = !!(p.p2Uid || p.p2Name); // slot 2 ocupado
+  if (hasP1 && hasP2) {
+    return [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''];
   }
   return null;
 };

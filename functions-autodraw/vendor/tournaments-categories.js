@@ -936,7 +936,7 @@ window.renderCategoryManagerPage = function(container, tId) {
             var uncatCards = uncategorized.map(function(u) {
                 return '<div class="cat-mgr-participant" draggable="true" data-pidx="' + u.idx + '" ' +
                     'style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);cursor:grab;font-size:0.85rem;font-weight:500;color:#fca5a5;touch-action:none;">' +
-                    '<span style="font-size:0.7rem;">👤</span> ' + (u.name || 'Sem nome') +
+                    '<span style="font-size:0.7rem;">👤</span> ' + window._safeHtml(u.name || 'Sem nome') +
                     '</div>';
             }).join('');
             // Build diagnostic rows: show what data each participant has
@@ -948,9 +948,9 @@ window.renderCategoryManagerPage = function(container, tId) {
                 var bd = p.birthDate || '—';
                 var uid = p.uid ? p.uid.substring(0, 6) + '…' : '(sem uid)';
                 return '<tr style="font-size:0.72rem;border-bottom:1px solid rgba(255,255,255,0.06);">' +
-                    '<td style="padding:3px 6px;color:var(--text-bright);">' + (u.name || '?') + '</td>' +
-                    '<td style="padding:3px 6px;color:' + (g === '—' ? '#f87171' : '#86efac') + ';">' + g + '</td>' +
-                    '<td style="padding:3px 6px;color:' + (skill === '—' ? '#f87171' : '#86efac') + ';">' + skill + '</td>' +
+                    '<td style="padding:3px 6px;color:var(--text-bright);">' + window._safeHtml(u.name || '?') + '</td>' +
+                    '<td style="padding:3px 6px;color:' + (g === '—' ? '#f87171' : '#86efac') + ';">' + window._safeHtml(g) + '</td>' +
+                    '<td style="padding:3px 6px;color:' + (skill === '—' ? '#f87171' : '#86efac') + ';">' + window._safeHtml(skill) + '</td>' +
                     '<td style="padding:3px 6px;color:' + (bd === '—' ? '#fca5a5' : '#86efac') + ';">' + (bd !== '—' ? '✓' : '—') + '</td>' +
                     '<td style="padding:3px 6px;color:var(--text-muted);">' + uid + '</td>' +
                     '</tr>';
@@ -1235,7 +1235,7 @@ window._buildInlineCatMgrHTML = function(tId) {
     var uncatHtml = '';
     if (uncategorized.length > 0) {
         var uncatCards = uncategorized.map(function(u) {
-            return '<div class="cat-mgr-participant" draggable="true" data-pidx="' + u.idx + '" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);cursor:grab;font-size:0.85rem;font-weight:500;color:#fca5a5;touch-action:none;"><span style="font-size:0.7rem;">👤</span> ' + (u.name || 'Sem nome') + '</div>';
+            return '<div class="cat-mgr-participant" draggable="true" data-pidx="' + u.idx + '" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);cursor:grab;font-size:0.85rem;font-weight:500;color:#fca5a5;touch-action:none;"><span style="font-size:0.7rem;">👤</span> ' + window._safeHtml(u.name || 'Sem nome') + '</div>';
         }).join('');
         uncatHtml = '<div class="cat-mgr-uncat-zone" style="margin-top:0.75rem;padding:0.75rem 1rem;background:rgba(239,68,68,0.06);border:1px dashed rgba(239,68,68,0.3);border-radius:12px;">' +
             '<div style="font-weight:700;color:#fca5a5;font-size:0.82rem;margin-bottom:6px;">' + uncategorized.length + ' sem categoria — arraste para uma categoria</div>' +

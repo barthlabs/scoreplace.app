@@ -95,18 +95,28 @@ function _participantMatchesUser(p, email, displayName, uid) {
     if (p.uid === uid || p.p1Uid === uid || p.p2Uid === uid) return true;
   }
   if (typeof p === 'string') {
-    // Post-draw: participant is a team string like "Rodrigo Barth / Eduardo Mange"
+    // Post-draw: participant is a team string like "Rodrigo Barth / Eduardo Mange".
+    // v3.0.x: match EXATO por membro (split por " / ") — antes o substring fazia
+    // "Ana" casar "Ana Paula" e inflar torneios-em-comum / confrontos no Explorar.
     if (email && p === email) return true;
-    if (displayName && p.toLowerCase().indexOf(displayName.toLowerCase()) !== -1) return true;
+    if (displayName) {
+      var _dl = displayName.toLowerCase();
+      var _mem = p.split(/\s*\/\s*/).map(function (s) { return s.trim().toLowerCase(); });
+      if (_mem.indexOf(_dl) !== -1) return true;
+    }
     return false;
   }
   // Object with email/displayName/name fields
   var pEmail = p.email || '';
   var pName = p.displayName || p.name || '';
   if (email && pEmail === email) return true;
-  if (displayName && pName && pName.toLowerCase().indexOf(displayName.toLowerCase()) !== -1) return true;
-  // Also check if the whole string representation contains the displayName (for team names stored in name)
-  if (displayName && pEmail && pEmail.toLowerCase().indexOf(displayName.toLowerCase()) !== -1) return true;
+  // v3.0.x: match EXATO por membro (não substring), e removido o match do NOME
+  // dentro do campo EMAIL (heurística que dava falso-positivo).
+  if (displayName && pName) {
+    var _dl2 = displayName.toLowerCase();
+    var _mem2 = pName.split(/\s*\/\s*/).map(function (s) { return s.trim().toLowerCase(); });
+    if (_mem2.indexOf(_dl2) !== -1) return true;
+  }
   return false;
 }
 

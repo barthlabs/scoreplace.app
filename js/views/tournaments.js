@@ -853,14 +853,14 @@ function renderTournaments(container, tournamentId = null) {
         var parts = Array.isArray(t.participants) ? t.participants : [];
         var solo = parts.filter(function(p) {
             var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return n && !n.includes('/');
+            return n && !window._entryTeamMembers(p); // v3.0.x: dupla por estrutura (p1Name/p2Name), não por '/' no nome
         });
         if (solo.length === 0) return 0;
 
         // Remove solos dos participants e adiciona à waitlist
         t.participants = parts.filter(function(p) {
             var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return !n || n.includes('/');
+            return !n || window._entryTeamMembers(p); // v3.0.x: mantém duplas (estrutura) + entradas sem-nome
         });
         if (!Array.isArray(t.waitlist)) t.waitlist = [];
         solo.forEach(function(p) {

@@ -471,9 +471,20 @@ function _computeStandings(t, category) {
         // v2.3.15: acumula GAMES p/ a coluna "% games". O bloco monarch não chama
         // _accumulateGSM, então some aqui: usa m.sets quando houver (soma games de
         // todos os sets), senão usa scoreP1/scoreP2 (ex.: 6×2).
-        var _g1 = 0, _g2 = 0;
+        // v3.0.x: além de games, acumula SETS e TIEBREAKS (igual _computeMonarchStandings).
+        // Antes só games eram somados aqui → coluna ±S zerava e o desempate por set
+        // (saldo_sets/sets_vencidos, que lideram os tiebreakers GSM) não fazia nada.
+        var _g1 = 0, _g2 = 0, _sw1 = 0, _sw2 = 0, _tb1 = 0, _tb2 = 0;
         if (Array.isArray(m.sets) && m.sets.length) {
-          m.sets.forEach(function(st){ _g1 += parseInt(st.gamesP1) || 0; _g2 += parseInt(st.gamesP2) || 0; });
+          m.sets.forEach(function(st){
+            var sg1 = parseInt(st.gamesP1) || 0, sg2 = parseInt(st.gamesP2) || 0;
+            _g1 += sg1; _g2 += sg2;
+            if (sg1 > sg2) _sw1++; else if (sg2 > sg1) _sw2++;
+            if (st.tiebreak) {
+              var _tp1 = parseInt(st.tiebreak.pointsP1) || 0, _tp2 = parseInt(st.tiebreak.pointsP2) || 0;
+              if (_tp1 > _tp2) _tb1++; else if (_tp2 > _tp1) _tb2++;
+            }
+          });
         } else { _g1 = ms1; _g2 = ms2; }
         m.team1.forEach(function(name) {
           if (_isGhost(name)) return; // Jogador X joga mas não pontua
@@ -481,6 +492,7 @@ function _computeStandings(t, category) {
           scoreMap[name].played++;
           scoreMap[name].pointsDiff += (ms1 - ms2);
           scoreMap[name].gamesWon += _g1; scoreMap[name].gamesLost += _g2;
+          scoreMap[name].setsWon += _sw1; scoreMap[name].setsLost += _sw2; scoreMap[name].tiebreaksWon += _tb1;
           if (isDraw) { scoreMap[name].draws = (scoreMap[name].draws || 0) + 1; scoreMap[name].points += 1; }
           else if (team1Won) { scoreMap[name].wins++; scoreMap[name].points += 3; }
           else { scoreMap[name].losses++; }
@@ -491,6 +503,7 @@ function _computeStandings(t, category) {
           scoreMap[name].played++;
           scoreMap[name].pointsDiff += (ms2 - ms1);
           scoreMap[name].gamesWon += _g2; scoreMap[name].gamesLost += _g1;
+          scoreMap[name].setsWon += _sw2; scoreMap[name].setsLost += _sw1; scoreMap[name].tiebreaksWon += _tb2;
           if (isDraw) { scoreMap[name].draws = (scoreMap[name].draws || 0) + 1; scoreMap[name].points += 1; }
           else if (team2Won) { scoreMap[name].wins++; scoreMap[name].points += 3; }
           else { scoreMap[name].losses++; }

@@ -1977,7 +1977,7 @@ window.handleDropTeam = function (e, targetIdx) {
         const name2 = typeof p2snap === 'string' ? p2snap : (p2snap.displayName || p2snap.name || p2snap.email || '');
 
         if (!name1 || !name2 || name1 === name2) return;
-        if (name1.includes('/') || name2.includes('/')) {
+        if (window._entryTeamMembers(p1snap) || window._entryTeamMembers(p2snap)) { // v3.0.x: "já em dupla" por estrutura, não por '/' no nome
             showAlertDialog('Já em dupla', 'Um dos participantes já está em dupla. Desfaça a dupla existente antes.', null, { type: 'warning' });
             return;
         }

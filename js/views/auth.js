@@ -1411,40 +1411,6 @@ window._loginMutualExclude = function() {
   }
 };
 
-// Valida o bloco "E-mail e Senha": atualiza o label dinâmico da senha
-// (mostra o e-mail digitado como identificador) e torna o botão verde
-// quando ambos os campos têm valores válidos.
-window._updateEmailSenhaValidity = function() {
-  var emailEl = document.getElementById('login-email');
-  var passEl = document.getElementById('login-password');
-  var passLabelEl = document.getElementById('login-senha-label');
-  var entrarBtn = document.getElementById('btn-email-entrar');
-  var email = emailEl ? emailEl.value.trim() : '';
-  var pass = passEl ? passEl.value : '';
-  var emailValid = email.indexOf('@') !== -1 && email.length > 4;
-  var passValid = pass.length >= 6;
-  // Label dinâmico: mostra o e-mail digitado pra o usuário saber de qual conta é a senha
-  if (passLabelEl) {
-    if (emailValid) {
-      passLabelEl.textContent = email;
-      passLabelEl.style.color = 'var(--text-bright)';
-      passLabelEl.style.fontWeight = '700';
-    } else {
-      // v1.9.73: preserva a dica "(mín. 6 caracteres)" ao lado de "Senha".
-      passLabelEl.innerHTML = 'Senha <span style="font-style:italic;font-size:0.72rem;">(mín. 6 caracteres)</span>';
-      passLabelEl.style.color = 'var(--text-muted)';
-      passLabelEl.style.fontWeight = '400';
-    }
-  }
-  // Botão Entrar: sempre verde, só opacidade varia (campos válidos = cheio, inválidos = dimmed)
-  if (entrarBtn) {
-    entrarBtn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
-    entrarBtn.style.border = 'none';
-    entrarBtn.style.color = '#fff';
-    entrarBtn.style.opacity = (emailValid && passValid) ? '1' : '0.45';
-  }
-  if (typeof window._loginMutualExclude === 'function') window._loginMutualExclude();
-};
 
 window.handleUnifiedLogin = function() {
   var unifiedEl = document.getElementById('login-unified');

@@ -51,7 +51,6 @@ function _canManageGroup(t, group) {
     return false;
   });
 }
-window._ligaCanManageGroup = _canManageGroup;
 
 // Localiza um grupo monarch pelo nome dentro de t.rounds[roundIndex].
 function _getGroup(t, roundIndex, groupName) {
