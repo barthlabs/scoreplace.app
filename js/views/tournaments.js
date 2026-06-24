@@ -1677,7 +1677,7 @@ function renderTournaments(container, tournamentId = null) {
             var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
             var cu = window.AppStore && window.AppStore.currentUser;
             if (cu && (n === cu.displayName || (typeof p === 'object' && p.uid === cu.uid))) return false;
-            return !n.includes(' / '); // sem dupla formada
+            return !window._entryTeamMembers(p); // só solos — entrada de time excluída por ESTRUTURA (uid/slots), não por '/'
           })
           .map(function(p) {
             return typeof p === 'string'

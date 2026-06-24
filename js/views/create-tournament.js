@@ -2059,11 +2059,9 @@ function setupCreateTournamentModal() {
     var arr = t ? (Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : [])) : [];
     var equipes = 0, semEquipe = 0, pessoas = 0;
     arr.forEach(function(p) {
-      var nm = typeof p === 'string' ? p : (p.displayName || p.name || '');
-      if (String(nm).indexOf('/') !== -1) {
-        var members = String(nm).split('/').map(function(m) { return m.trim(); }).filter(function(m) { return m.length > 0; });
-        equipes++; pessoas += members.length;
-      } else { semEquipe++; pessoas++; }
+      var members = window._entryTeamMembers(p); // v3.0.x: time por ESTRUTURA (uid/slots), não por '/'
+      if (members) { equipes++; pessoas += members.length; }
+      else { semEquipe++; pessoas++; }
     });
     var _pill = function(label, n, color) {
       return '<div style="flex:1;min-width:86px;background:rgba(255,255,255,0.04);border:1px solid ' + color + '55;border-radius:10px;padding:8px 6px;text-align:center;">' +

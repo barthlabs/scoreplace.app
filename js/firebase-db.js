@@ -347,6 +347,15 @@ window.FirestoreDB = {
         }
         if (_memberMatches(p)) return true;
         if (Array.isArray(p.participants) && p.participants.some(_memberMatches)) return true;
+        // v3.0.x: IDENTIDADE POR SLOT (uid > nome > email). A dupla formada por aceite grava
+        // p1Uid/p2Uid/p1Name/p2Name com displayName = só o p1 (ex.: "Kelly Barth", sem "/").
+        // Sem checar os slots aqui (dentro da TRANSAÇÃO atômica), o p2 (ex.: Rodrigo) era visto
+        // como NÃO-inscrito → inscrição em DOBRO no banco. Espelha store.js _userMatchesParticipant.
+        if (pUid && ((p.p1Uid && p.p1Uid === pUid) || (p.p2Uid && p.p2Uid === pUid))) return true;
+        if (pName && ((p.p1Name && p.p1Name === pName) || (p.p2Name && p.p2Name === pName))) return true;
+        if (pEmail && ((p.p1Email && p.p1Email.toLowerCase() === pEmail.toLowerCase()) || (p.p2Email && p.p2Email.toLowerCase() === pEmail.toLowerCase()))) return true;
+        // Fallback SÓ pra time em forma de STRING legada "A / B" (sem campos de slot) — '/' nunca
+        // define dupla, mas pra string legada é a única forma de checar pertencimento.
         var label = p.displayName || p.name || '';
         if (label && label.indexOf(' / ') !== -1) {
           return label.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean).some(_memberMatches);

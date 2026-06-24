@@ -390,7 +390,7 @@ window._showRemainderPanel = function(tId, info, t) {
     var _tObj = t || (window.AppStore && window.AppStore.tournaments.find(function(x) { return x.id.toString() === tId.toString(); }));
     var _ts = info.teamSize || 1;
     var _arr = (_tObj && Array.isArray(_tObj.participants)) ? _tObj.participants : [];
-    var _playersOf = function(p) { var nm = typeof p === 'string' ? p : (p.displayName || p.name || ''); return nm.indexOf(' / ') !== -1 ? _ts : 1; };
+    var _playersOf = function(p) { return window._entryTeamMembers(p) ? _ts : 1; }; // v3.0.x: time por estrutura, não por '/'
     var _totalPlayers = _arr.reduce(function(s, p) { return s + _playersOf(p); }, 0) || (info.effectiveTeams * _ts + info.remainder);
     var _maxTeams = Math.floor(_totalPlayers / _ts);
     var _targetTeams = _maxTeams >= 1 ? 1 : 0; while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
@@ -577,7 +577,7 @@ window._executeRemoval = function(tId, mode, method) {
     var _ts = parseInt(t.teamSize) || 1;
     var _enr = t.enrollmentMode || t.enrollment || 'individual';
     if ((_enr === 'time' || _enr === 'misto') && _ts < 2) _ts = 2;
-    var _playersOf = function(p) { var nm = typeof p === 'string' ? p : (p.displayName || p.name || ''); return nm.indexOf(' / ') !== -1 ? _ts : 1; };
+    var _playersOf = function(p) { return window._entryTeamMembers(p) ? _ts : 1; }; // v3.0.x: time por estrutura, não por '/'
     var _totalPlayers = arr.reduce(function(s, p) { return s + _playersOf(p); }, 0);
     var _maxTeams = Math.floor(_totalPlayers / _ts);
     var _targetTeams = _maxTeams >= 1 ? 1 : 0;
@@ -2981,7 +2981,7 @@ window._runVagasDraw = function (tId) {
     // Corte em jogadores (indivíduo=1, time pré-formado=teamSize) → mantém times
     // completos sem BYE. Igual à contabilidade do ramo standby existente.
     var _ts = info.teamSize || 1;
-    var _playersOf = function(e) { var nm = typeof e === 'string' ? e : (e.displayName || e.name || ''); return nm.indexOf(' / ') !== -1 ? _ts : 1; };
+    var _playersOf = function(e) { return window._entryTeamMembers(e) ? _ts : 1; }; // v3.0.x: time por estrutura, não por '/'
     var _targetPlayers = slots * _ts;
     var _used = vipEntries.reduce(function(s, e) { return s + _playersOf(e); }, 0);
     var kept = [];
@@ -3951,7 +3951,7 @@ window._confirmP2Resolution = function (tId, option) {
         // v2.1.29: conta em PLAYERS (indivíduo=1, time pré-formado=teamSize) e mantém
         // exatamente info.lo*teamSize jogadores → info.lo times completos, sem BYE.
         const _ts = info.teamSize || 1;
-        const _playersOf = (e) => { const nm = typeof e === 'string' ? e : (e.displayName || e.name || ''); return nm.indexOf(' / ') !== -1 ? _ts : 1; };
+        const _playersOf = (e) => window._entryTeamMembers(e) ? _ts : 1; // v3.0.x: time por estrutura, não por '/'
         const _targetPlayers = info.lo * _ts;
         let _used = vipEntries.reduce((s, e) => s + _playersOf(e), 0);
         const kept = [];
