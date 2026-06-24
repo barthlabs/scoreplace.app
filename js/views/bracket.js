@@ -2103,23 +2103,29 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     }
     // Se é o proponente atual (mesmo sendo org): aguardando — sem botões
   }
-  const _isMyMatch = !!(_cu && !isByeMatch && (function() {
-    var sides = [m.p1 || '', m.p2 || ''];
-    for (var si = 0; si < sides.length; si++) {
-      var s = sides[si];
-      if (!s || s === 'TBD' || s === 'BYE') continue;
-      if (_cuName && (s === _cuName || s.indexOf(_cuName) !== -1)) return true;
-      if (_cuEmail && s === _cuEmail) return true;
-      if (s.indexOf('/') !== -1) {
-        var members = s.split('/').map(function(n) { return n.trim(); });
-        for (var mi = 0; mi < members.length; mi++) {
-          if (_cuName && members[mi] === _cuName) return true;
-          if (_cuEmail && members[mi] === _cuEmail) return true;
+  // v3.0.77 (Parte 8 uid): uid-first via _userTeamInMatch (resolve o objeto do
+  // participante e checa uid/p1Uid/p2Uid) — pega o p2 de dupla cujo displayName
+  // é só o nome do p1. Fallback nome/email mantido pra legado/informal.
+  const _isMyMatch = !!(_cu && !isByeMatch && (
+    (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0) ||
+    (function() {
+      var sides = [m.p1 || '', m.p2 || ''];
+      for (var si = 0; si < sides.length; si++) {
+        var s = sides[si];
+        if (!s || s === 'TBD' || s === 'BYE') continue;
+        if (_cuName && (s === _cuName || s.indexOf(_cuName) !== -1)) return true;
+        if (_cuEmail && s === _cuEmail) return true;
+        if (s.indexOf('/') !== -1) {
+          var members = s.split('/').map(function(n) { return n.trim(); });
+          for (var mi = 0; mi < members.length; mi++) {
+            if (_cuName && members[mi] === _cuName) return true;
+            if (_cuEmail && members[mi] === _cuEmail) return true;
+          }
         }
       }
-    }
-    return false;
-  })());
+      return false;
+    })()
+  ));
 
   // Card border color based on check-in readiness
   let cardBorder = isDecided ? 'rgba(16,185,129,0.2)' : hasTBD ? 'rgba(255,255,255,0.05)' : 'var(--border-color)';
@@ -2469,9 +2475,13 @@ function renderGroupStage(t, isOrg, canEnterResult) {
     const players = (sg.players && sg.players.length) ? sg.players : ((sg.participants) || []);
     return players.some(function(n) {
       if (!n) return false;
+      // v3.0.77 (Parte 8 uid): uid-first via _sideBelongsToUser (resolve o
+      // participante pela string e checa uid); fallback nome/email abaixo.
+      if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, (typeof n === 'string' ? n : (n.displayName || n.name || '')), _cuGS)) return true;
+      if (typeof n !== 'string') return false;
       if (_cuGSName && (n === _cuGSName || n.indexOf(_cuGSName) !== -1)) return true;
       if (_cuGSEmail && n === _cuGSEmail) return true;
-      if (typeof n === 'string' && n.indexOf('/') !== -1) {
+      if (n.indexOf('/') !== -1) {
         return n.split('/').map(s => s.trim()).some(m => (_cuGSName && m === _cuGSName) || (_cuGSEmail && m === _cuGSEmail));
       }
       return false;
@@ -2861,6 +2871,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   var _curUserEmail = _curUser ? (_curUser.email || '') : '';
   var _nameMatchesCurUser = function(n) {
     if (!_curUser || !n) return false;
+    // v3.0.77 (Parte 8 uid): uid-first via _sideBelongsToUser; fallback nome/email.
+    if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, (typeof n === 'string' ? n : (n.displayName || n.name || '')), _curUser)) return true;
+    if (typeof n !== 'string') return false;
     if (_curUserName && (n === _curUserName || n.indexOf(_curUserName) !== -1)) return true;
     if (_curUserEmail && n === _curUserEmail) return true;
     if (n.indexOf('/') !== -1) {
@@ -3051,6 +3064,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           if (!_cuRR || !g || !Array.isArray(g.players)) return false;
           return g.players.some(function(n) {
             if (!n) return false;
+            // v3.0.77 (Parte 8 uid): uid-first via _sideBelongsToUser; fallback nome/email.
+            if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, (typeof n === 'string' ? n : (n.displayName || n.name || '')), _cuRR)) return true;
+            if (typeof n !== 'string') return false;
             if (_cuRRName && (n === _cuRRName || n.indexOf(_cuRRName) !== -1)) return true;
             if (_cuRREmail && n === _cuRREmail) return true;
             if (n.indexOf('/') !== -1) {
@@ -3264,6 +3280,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         const _cuEmail = _cu ? (_cu.email || '') : '';
         const _matchHasMe = (m) => {
           if (!_cu) return false;
+          // v3.0.77 (Parte 8 uid): uid-first via _userTeamInMatch; fallback nome/email.
+          if (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cu) > 0) return true;
           const sides = [m.p1 || '', m.p2 || ''];
           for (let si = 0; si < sides.length; si++) {
             const s = sides[si];

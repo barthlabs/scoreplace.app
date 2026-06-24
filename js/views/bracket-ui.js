@@ -534,6 +534,53 @@ window._userTeamInMatch = _userTeamInMatch;
 window._isUserOrgOrCoHost = _isUserOrgOrCoHost;
 window._resultNeedsApproval = _resultNeedsApproval;
 
+// v3.0.77 (Parte 8 uid): "este lado/nome (string de slot da chave) pertence ao
+// `user`?" — UID-FIRST. O render-layer (bracket.js) só tem a STRING do lado
+// (m.p1/m.p2, ou um nome dentro de um grupo). Resolvemos o objeto do
+// participante pela string e checamos o uid (top-level + p1Uid/p2Uid + sub-
+// participants[] via _participantUids). Nome/email são SÓ fallback (conta
+// legada sem uid, ou jogador informal). Sem isso, o p2 de uma dupla — cujo
+// displayName é só o nome do p1 (ex.: "Kelly Barth") — nunca casava por nome e
+// ficava invisível em "seu jogo"/lançar placar/destaque de grupo. Espelha o
+// checkSide interno de _userTeamInMatch, mas standalone (não toca o caminho
+// crítico de aprovação).
+function _sideBelongsToUser(t, sideStr, user) {
+  if (!t || !sideStr || !user) return false;
+  if (typeof sideStr !== 'string' || sideStr === 'TBD' || sideStr === 'BYE') return false;
+  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  var pp = null;
+  for (var j = 0; j < parts.length; j++) {
+    var p = parts[j];
+    var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
+    if (pName === sideStr) { pp = p; break; }
+  }
+  if (pp && typeof pp === 'object') {
+    if (user.uid) {
+      var _uids = (typeof window._participantUids === 'function')
+        ? window._participantUids(pp)
+        : [pp.uid, pp.p1Uid, pp.p2Uid].filter(Boolean);
+      if (_uids.indexOf(user.uid) !== -1) return true;
+    }
+    if (user.email && pp.email && pp.email === user.email) return true;
+    if (user.email && pp.email_lower && pp.email_lower === (user.email || '').toLowerCase()) return true;
+  }
+  // Fallback nome/email (legado / informal): nome do usuário aparece no nome do
+  // lado, incluindo dupla "A / B".
+  var dn = user.displayName || '';
+  var em = user.email || '';
+  if (dn && (sideStr === dn || sideStr.indexOf(dn) !== -1)) return true;
+  if (em && sideStr === em) return true;
+  if (sideStr.indexOf('/') !== -1) {
+    var members = sideStr.split('/').map(function(n) { return n.trim(); });
+    for (var mi = 0; mi < members.length; mi++) {
+      if (dn && members[mi] === dn) return true;
+      if (em && members[mi] === em) return true;
+    }
+  }
+  return false;
+}
+window._sideBelongsToUser = _sideBelongsToUser;
+
 // Helper: org, co-host OR confirmed arbiter — these users confirm results directly
 // without requiring approval from the opposing side.
 function _isUserAuthority(t, user) {
