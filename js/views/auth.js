@@ -1337,6 +1337,19 @@ function _detectInputModeRaw(value) {
   return null;
 }
 
+// v3.0.x: domínios que NOTORIAMENTE filtram/descartam e-mail transacional no destino
+// (Microsoft: Hotmail/Outlook/Live/MSN + UOL/BOL/Terra). Mesmo com Brevo (DKIM/SPF/DMARC
+// corretos), a confirmação frequentemente NÃO chega — o provedor dropa, às vezes sem nem
+// virar bounce. Usado pra AVISAR proativamente e empurrar Google/celular (sempre funcionam).
+window._isUnreliableEmailDomain = function(email) {
+  var at = String(email || '').toLowerCase().indexOf('@');
+  if (at < 0) return false;
+  var d = String(email).toLowerCase().slice(at + 1).trim();
+  if (/^(hotmail|outlook|live|msn|windowslive|passport)\./.test(d)) return true; // Microsoft (qualquer TLD: .com, .com.br…)
+  if (/^(uol|bol|terra)\.com(\.br)?$/.test(d)) return true;                       // UOL / BOL / Terra
+  return false;
+};
+
 window._detectLoginInputMode = function() {
   var unifiedEl = document.getElementById('login-unified');
   var countryEl = document.getElementById('login-unified-country');
@@ -1549,9 +1562,15 @@ window._entrarExpandRegister = function(mode, raw) {
   window._entrarRegisterMode = true;
   if (btn) btn.textContent = 'Criar conta e entrar';
   if (hint) {
-    hint.innerHTML = (mode === 'phone')
-      ? '✨ Número novo por aqui — vamos criar sua conta. Você vai receber um <b>código por SMS</b> e um <b>link no WhatsApp</b> pra confirmar o número.'
-      : '✨ E-mail novo por aqui — vamos criar sua conta. Confirme abaixo.';
+    if (mode === 'phone') {
+      hint.innerHTML = '✨ Número novo por aqui — vamos criar sua conta. Você vai receber um <b>código por SMS</b> e um <b>link no WhatsApp</b> pra confirmar o número.';
+    } else if (typeof window._isUnreliableEmailDomain === 'function' && window._isUnreliableEmailDomain(raw)) {
+      // v3.0.x: nota GENTIL (sem alarme, sem Google). Esses provedores às vezes seguram a
+      // confirmação; o caminho pelo celular fica oferecido com calma na tela seguinte.
+      hint.innerHTML = '✨ E-mail novo por aqui — vamos criar sua conta. <span style="opacity:0.85;">Se a confirmação não chegar, você confirma rapidinho pelo <b>celular</b> (SMS + WhatsApp) na próxima tela.</span>';
+    } else {
+      hint.innerHTML = '✨ E-mail novo por aqui — vamos criar sua conta. Confirme abaixo.';
+    }
   }
   window._entrarStatus('');
   var nameEl = document.getElementById('reg-displayname');
@@ -3392,19 +3411,39 @@ window._showEmailVerificationGate = function(email, name) {
   var ov = document.createElement('div');
   ov.id = 'email-verify-gate';
   ov.style.cssText = 'position:fixed;inset:0;z-index:100050;background:var(--bg-darker,#0a0e1a);display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto;box-sizing:border-box;';
-  ov.innerHTML =
-    '<div style="max-width:420px;width:100%;text-align:center;background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:28px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
-      '<div style="font-size:2.6rem;margin-bottom:8px;">📬</div>' +
-      '<div style="font-size:1.2rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">Confirme seu e-mail</div>' +
-      '<div style="font-size:0.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:6px;">Enviamos um link de confirmação para</div>' +
-      '<div style="font-size:0.95rem;font-weight:700;color:#fbbf24;margin-bottom:14px;word-break:break-all;">' + window._safeHtml(email || '') + '</div>' +
+  // v3.0.x: provedor que costuma DROPAR a confirmação (Microsoft/UOL) → o e-mail
+  // provavelmente não vai chegar. Lidera com aviso forte + celular como ação PRIMÁRIA.
+  var _bad = (typeof window._isUnreliableEmailDomain === 'function') && window._isUnreliableEmailDomain(email);
+  var _safeEm = window._safeHtml(email || '');
+  var _phoneBtn =
+    '<button onclick="window._gatePhoneStart()" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-size:' + (_bad ? '1rem' : '0.92rem') + ';font-weight:800;padding:' + (_bad ? '14px' : '12px') + ';margin-bottom:12px;">📱 Autenticar por celular' + (_bad ? ' (recomendado)' : '') + '</button>';
+  var _logoutBtn =
+    '<button onclick="window.handleLogout && window.handleLogout()" style="background:none;border:none;color:var(--text-muted);font-size:0.8rem;cursor:pointer;text-decoration:underline;">Sair</button>';
+  var _middle;
+  if (_bad) {
+    _middle =
+      '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:14px;">Não encontrou o e-mail? Confirme pelo <b>celular</b> — você recebe um <b>código por SMS</b> e um <b>botão de autenticar no WhatsApp</b>. Rápido e sem depender do e-mail.</div>' +
+      _phoneBtn +
+      '<div style="display:flex;align-items:center;gap:10px;margin:8px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou, se o e-mail chegar</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
+      '<button onclick="window._checkEmailVerified()" class="btn btn-success btn-block" style="font-size:0.9rem;font-weight:700;padding:11px;margin-bottom:8px;">✅ Já confirmei pelo e-mail</button>' +
+      '<button onclick="window._resendVerifyEmail()" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.82rem;font-weight:700;padding:9px;margin-bottom:12px;">📨 Reenviar e-mail mesmo assim</button>';
+  } else {
+    _middle =
       '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:18px;">Abra seu e-mail e clique em <b>Confirmar minha conta</b>. Enquanto não confirmar, você não pode usar o scoreplace.app. <span style="opacity:0.8;">(confira também a caixa de spam)</span></div>' +
       '<button onclick="window._checkEmailVerified()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:10px;">✅ Já confirmei</button>' +
       '<button onclick="window._resendVerifyEmail()" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.88rem;font-weight:700;padding:11px;margin-bottom:10px;">📨 Reenviar e-mail</button>' +
       '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
       '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Confirme pelo seu celular — recebe um código por SMS e WhatsApp.</div>' +
-      '<button onclick="window._gatePhoneStart()" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-size:0.92rem;font-weight:800;padding:12px;margin-bottom:12px;">📱 Autenticar por celular</button>' +
-      '<button onclick="window.handleLogout && window.handleLogout()" style="background:none;border:none;color:var(--text-muted);font-size:0.8rem;cursor:pointer;text-decoration:underline;">Sair</button>' +
+      _phoneBtn;
+  }
+  ov.innerHTML =
+    '<div style="max-width:420px;width:100%;text-align:center;background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:28px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+      '<div style="font-size:2.6rem;margin-bottom:8px;">📬</div>' +
+      '<div style="font-size:1.2rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">Confirme seu e-mail</div>' +
+      '<div style="font-size:0.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:6px;">' + (_bad ? 'Tentamos enviar um link de confirmação para' : 'Enviamos um link de confirmação para') + '</div>' +
+      '<div style="font-size:0.95rem;font-weight:700;color:#fbbf24;margin-bottom:14px;word-break:break-all;">' + _safeEm + '</div>' +
+      _middle +
+      _logoutBtn +
     '</div>';
   document.body.appendChild(ov);
 };
