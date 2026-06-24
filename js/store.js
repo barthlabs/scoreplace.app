@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.77-beta';
+window.SCOREPLACE_VERSION = '3.0.78-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -1559,6 +1559,54 @@ window._entryHasVip = function(t, entry) {
     if (vips[members[j]]) return true; // fallback nome legado
   }
   return false;
+};
+
+// ─── woHistory uid-keyed (Parte 9 da varredura, v3.0.78-beta) ────────────────
+// t.woHistory é o registro de W.O. (key = pessoa ausente; value = meta
+// {originalTeam, partner, matchNum, replacedBy, timestamp}). Antes era chaveado
+// por NOME → dois jogadores de mesmo nome colidiam (um W.O.'d sumia o outro).
+// Agora a CHAVE é o uid da pessoa (nome só fallback legado/informal), exatamente
+// como checkedIn/absent/vips (v3.0.74). Os VALORES (originalTeam/partner/
+// replacedBy) seguem sendo NOMES — cruzam com os slots da chave (m.p1/m.p2 =
+// nomes, camada do bracket, Parte 8). Os helpers espelham _idMap*.
+//
+// IMPORTANTE: o card "órfão" do jogador W.O.'d EXIBE a pessoa que levou W.O. —
+// e ela pode já ter saído de todas as estruturas (substituída na dupla). Por
+// isso _woHistSet GRAVA `meta.name` (o displayName no momento do W.O.) e o
+// display usa _woHistDisplayName → nunca mostra um uid cru. Doc legado (key=nome,
+// sem meta.name) cai no fallback: traduz uid→nome, senão a própria chave (= nome).
+window._woHistGet = function(t, who) {
+  if (!t || !t.woHistory || who == null) return undefined;
+  var k = window._idMapKey(t, who);
+  if (k.uid && t.woHistory[k.uid] != null) return t.woHistory[k.uid];
+  return k.name ? t.woHistory[k.name] : undefined;
+};
+window._woHistHas = function(t, who) { return !!window._woHistGet(t, who); };
+window._woHistSet = function(t, who, meta) {
+  if (!t || who == null) return;
+  if (!t.woHistory) t.woHistory = {};
+  var k = window._idMapKey(t, who);
+  // Garante display robusto: grava o nome da pessoa no próprio meta.
+  if (meta && typeof meta === 'object' && !meta.name) meta.name = k.name || '';
+  if (k.uid) {
+    t.woHistory[k.uid] = meta;
+    if (k.name && k.name !== k.uid && t.woHistory[k.name] != null) delete t.woHistory[k.name];
+  } else if (k.name) {
+    t.woHistory[k.name] = meta;
+  }
+};
+window._woHistDel = function(t, who) {
+  if (!t || !t.woHistory || who == null) return;
+  var k = window._idMapKey(t, who);
+  if (k.uid && t.woHistory[k.uid] != null) delete t.woHistory[k.uid];
+  if (k.name && t.woHistory[k.name] != null) delete t.woHistory[k.name];
+};
+// Display name pra um entry de woHistory (card órfão). meta.name é canônico
+// (gravado na escrita); fallback traduz a chave uid→nome, senão usa a própria
+// chave (key = nome em docs legados).
+window._woHistDisplayName = function(t, key, meta) {
+  if (meta && meta.name) return meta.name;
+  return window._memberNameByUid(t, key) || key;
 };
 
 // v2.4.72-beta: pontuação de "interação" entre o usuário logado e um amigo

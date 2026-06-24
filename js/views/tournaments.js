@@ -2912,19 +2912,21 @@ function renderTournaments(container, tournamentId = null) {
                     if (pName.includes('/')) {
                         // Find which team this person belongs to
                         pName.split('/').map(n => n.trim()).filter(n => n).forEach(n => {
-                            if (_woHistCI[n]) return; // skip W.O.'d member
+                            if (window._woHistHas(t, n)) return; // skip W.O.'d member (uid-first)
                             allIndividuals.push({ name: n, teamName: pName, teamIdx: idx });
                         });
                     } else {
-                        if (_woHistCI[pName]) return;
+                        if (window._woHistHas(t, pName)) return;
                         allIndividuals.push({ name: pName, teamName: null, teamIdx: idx });
                     }
                 });
                 // v0.17.34: W.O.'d orphans (out of team, displayed solo with note)
-                Object.keys(_woHistCI).forEach(woName => {
-                    if (!woName) return;
-                    const meta = _woHistCI[woName];
+                // v3.0.78: woHistory é uid-keyed → traduz a chave (uid) pro nome de exibição.
+                Object.keys(_woHistCI).forEach(woKey => {
+                    if (!woKey) return;
+                    const meta = _woHistCI[woKey];
                     if (!meta || typeof meta !== 'object') return;
+                    const woName = window._woHistDisplayName(t, woKey, meta);
                     // Skip se o nome já existe na lista (foi re-adicionado de algum jeito)
                     const _exists = allIndividuals.some(ai => ai.name === woName);
                     if (_exists) return;
@@ -2955,7 +2957,7 @@ function renderTournaments(container, tournamentId = null) {
                     // poluir o time do parceiro.
                     let teamLabel = '';
                     if (ind.teamName) {
-                      const _membersTL = ind.teamName.split('/').map(n => n.trim()).filter(n => n).filter(n => !_woHistCI[n]);
+                      const _membersTL = ind.teamName.split('/').map(n => n.trim()).filter(n => n).filter(n => !window._woHistHas(t, n));
                       teamLabel = _membersTL.join(' / ');
                     }
                     const isVipCI = window._entryHasVip(t, ind.teamName || ind.name);

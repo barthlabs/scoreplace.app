@@ -196,15 +196,14 @@ window._processWoSubstitutions = function(tId) {
     // uid-first via o objeto do substituto (sub.p tem uid).
     window._idMapSet(t, t.checkedIn, (sub && typeof sub.p === 'object') ? sub.p : subName, Date.now());
 
-    // Record woHistory
-    if (!t.woHistory) t.woHistory = {};
-    t.woHistory[absentName] = {
+    // Record woHistory (uid-keyed; _woHistSet grava meta.name pro display robusto)
+    window._woHistSet(t, absentName, {
       originalTeam: oldEntry,
       partner: partner,
       matchNum: foundIdx + 1,
       replacedBy: subName,
       timestamp: Date.now()
-    };
+    });
 
     subCount++;
     subDetails.push({ absent: absentName, sub: subName, oldEntry, newEntry, matchNum: foundIdx + 1 });
@@ -347,7 +346,7 @@ window._markAbsent = function (tId, playerName) {
   // v1.0.79-beta: revert completo. Detecta orphan (W.O.'d via woHistory) e,
   // se há replacedBy, desfaz substituição: restaura time original, remove
   // substituto da chave, devolve ele à waitlist se aplicável.
-  const _woMeta = t.woHistory && t.woHistory[playerName];
+  const _woMeta = window._woHistGet(t, playerName); // uid-first, nome fallback
   if (window._idMapHas(t, t.absent, playerName) || _woMeta) {
     // Trava: se o jogo do W.O. já foi jogado de verdade (placar lançado / placar
     // ao vivo iniciado), não dá pra reverter — reverter zeraria um resultado real.
@@ -417,8 +416,8 @@ window._markAbsent = function (tId, playerName) {
           }
         } catch (_e) { window._warn('[markAbsent revert] failed:', _e); }
       }
-      // Sempre limpa woHistory após revert
-      delete t.woHistory[playerName];
+      // Sempre limpa woHistory após revert (uid-key + nome legado)
+      window._woHistDel(t, playerName);
     }
   } else {
     // Marcar ausente → limpa presença se existia
@@ -964,13 +963,12 @@ window._declareAbsent = function (tId, playerName) {
       const _sepEarly = teamName.includes(' / ') ? ' / ' : '/';
       const _membersEarly = teamName.split(_sepEarly).map(n => n.trim());
       const _partnerEarly = _membersEarly.find(n => n !== playerName) || '';
-      if (!t.woHistory) t.woHistory = {};
-      t.woHistory[playerName] = {
+      window._woHistSet(t, playerName, {
         originalTeam: teamName,
         partner: _partnerEarly,
         matchNum: friendlyNum,
         timestamp: Date.now()
-      };
+      });
     }
 
     // v1.0.87-beta: refator agressivo. Antes a confirm callback tinha 3
@@ -1314,14 +1312,13 @@ window._declareAbsent = function (tId, playerName) {
       // Pedido do usuário: "ele não tem a dupla formada no sorteio ao
       // ser decretado W.O. (apenas menciona no card dele que estava no
       // jogo n com o parceiro x)."
-      if (!t.woHistory) t.woHistory = {};
-      t.woHistory[playerName] = {
+      window._woHistSet(t, playerName, {
         originalTeam: teamName,
         partner: partnerName,
         matchNum: friendlyNum,
         replacedBy: nextName,
         timestamp: Date.now()
-      };
+      });
 
       // v1.0.85-beta: snapshot pós-sub pra diagnóstico (acumula sobre o
       // snapshot pré-sub gravado mais cedo).
@@ -1683,14 +1680,14 @@ function renderParticipants(container, tournamentId) {
     const allIndividuals = [];
     const _indivByName = {}; // v3.0.x: dedup — nome → objeto já adicionado
     // v0.17.35: jogadores em t.woHistory são pulados aqui — eles aparecem
-    // só via card solo de orphan (loop abaixo). Evita aparecer 2x.
-    const _woHist = (t.woHistory && typeof t.woHistory === 'object') ? t.woHistory : {};
+    // só via card solo de orphan (loop abaixo). Evita aparecer 2x. O skip usa
+    // window._woHistHas (uid-first) — woHistory é chaveado por uid (v3.0.78).
     parts.forEach((p, idx) => {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
       const isTeam = !!window._entryTeamMembers(p); // v3.0.x: time por estrutura (slots), não por '/'
       const namesToProcess = isTeam ? pName.split('/').map(n => n.trim()).filter(n => n) : [pName];
       namesToProcess.forEach(n => {
-        if (_woHist[n]) return; // skip W.O.'d member — solo card via woHistory loop
+        if (window._woHistHas(t, n)) return; // skip W.O.'d member (uid-first) — solo card via woHistory loop
         if (_indivByName[n.toLowerCase()]) return; // já adicionado
         // v0.17.36: lookup por nome do membro (source of truth: match atual).
         // memberToTeam dá o team string da match — pode diferir de pName se
@@ -1724,10 +1721,13 @@ function renderParticipants(container, tournamentId) {
     // que teve W.O. decretado deve sair do time e ter card solo mencionando
     // o jogo e parceiro original.
     if (t.woHistory && typeof t.woHistory === 'object') {
-      Object.keys(t.woHistory).forEach(woName => {
-        if (!woName) return;
-        const meta = t.woHistory[woName];
+      Object.keys(t.woHistory).forEach(woKey => {
+        if (!woKey) return;
+        const meta = t.woHistory[woKey];
         if (!meta || typeof meta !== 'object') return;
+        // woKey agora é o uid da pessoa W.O.'d → traduz pro nome de exibição
+        // (meta.name é canônico; fallback uid→nome, senão a própria chave legada).
+        const woName = window._woHistDisplayName(t, woKey, meta);
         allIndividuals.push({
           name: woName,
           teamName: null,
@@ -1855,7 +1855,8 @@ function renderParticipants(container, tournamentId) {
         standbyCount: standbyParts.length,
         standbyNames: standbyParts.map(p => window._pName(p, '?')),
         woHistory: t.woHistory ? Object.keys(t.woHistory).map(k => ({
-          woName: k,
+          woKey: k, // uid (ou nome legado)
+          woName: window._woHistDisplayName(t, k, t.woHistory[k]),
           replacedBy: t.woHistory[k] && t.woHistory[k].replacedBy,
           partner: t.woHistory[k] && t.woHistory[k].partner,
           matchNum: t.woHistory[k] && t.woHistory[k].matchNum
@@ -1915,7 +1916,7 @@ function renderParticipants(container, tournamentId) {
       // aparecem como cards solo separados, não devem poluir time do parceiro.
       const _renderTeamDots = (teamStr) => {
         if (!teamStr) return '';
-        const members = teamStr.includes('/') ? teamStr.split('/').map(n => n.trim()).filter(n => n).filter(n => !_woHist[n]) : [teamStr];
+        const members = teamStr.includes('/') ? teamStr.split('/').map(n => n.trim()).filter(n => n).filter(n => !window._woHistHas(t, n)) : [teamStr];
         return members.map(n => dotHtml(n)).join('<span style="color:rgba(255,255,255,0.15);margin:0 2px;">/</span>');
       };
 
@@ -2014,9 +2015,11 @@ function renderParticipants(container, tournamentId) {
         ? (mc ? 'rgba(251,191,36,0.3)' : isAbsent ? 'rgba(239,68,68,0.25)' : 'rgba(251,191,36,0.15)')
         : (mc ? 'rgba(16,185,129,0.3)' : isAbsent ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)');
 
-      // VIP check (by individual name or team name)
-      const vipMap = t.vips || {};
-      const isVipPlayer = !!vipMap[ind.name] || (ind.teamName && !!vipMap[ind.teamName]);
+      // VIP check — uid-aware (v3.0.78: t.vips é uid-keyed desde v3.0.74; ler
+      // direto por nome (vipMap[ind.name]) MISSAVA a chave-uid → tag VIP sumia).
+      // _idMapHas resolve o uid do indivíduo; _entryHasVip cobre a dupla (string).
+      const isVipPlayer = window._idMapHas(t, t.vips || {}, ind.name) ||
+        (ind.teamName ? window._entryHasVip(t, ind.teamName) : false);
       const vipTag = isVipPlayer ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.55rem;font-weight:900;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;flex-shrink:0;">💎 VIP</span>' : '';
       // v2.7.40: botão VIP ao lado do W.O. — SÓ pro organizador (toggle marca/desmarca).
       const _vipBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}','${safeName}')" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)'};color:${isVipPlayer ? '#fbbf24' : '#d4a72a'};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';

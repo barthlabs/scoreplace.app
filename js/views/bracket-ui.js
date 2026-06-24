@@ -1243,14 +1243,14 @@ window._autoSubstituteWO = function(tId, overrideReplacementName) {
           var idx = allMatches.indexOf(woMatch);
           return idx >= 0 ? (idx + 1) : '?';
         })();
-        if (!t.woHistory) t.woHistory = {};
-        t.woHistory[absentMemberName] = {
+        // v3.0.78: woHistory uid-keyed (_woHistSet grava meta.name pro display robusto)
+        window._woHistSet(t, absentMemberName, {
           originalTeam: oldEntry,
           partner: partnerName,
           matchNum: _friendlyNumWO,
           replacedBy: replacementName,
           timestamp: Date.now()
-        };
+        });
 
         window.AppStore.logAction(tId, 'Substituição W.O.: ' + absentMemberName + ' → ' + replacementName + ' (parceiro: ' + partnerName + ')');
         window.AppStore.syncImmediate(tId);
@@ -2488,7 +2488,7 @@ window._revertWO = function(tId, matchId) {
           var nm = (n || '').trim();
           if (!nm) return;
           window._idMapDel(t, t.absent, nm);
-          if (t.woHistory) delete t.woHistory[nm];
+          window._woHistDel(t, nm); // uid-key + nome legado
         });
       };
       _clearAbsenceFor(m.p1);
