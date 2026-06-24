@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.71-beta';
+window.SCOREPLACE_VERSION = '3.0.72-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -1578,16 +1578,33 @@ window._participantGenderByName = function(tournament, name) {
 
 // v3.0.x: coroas da honraria "invicto" do REI/RAINHA DA PRAIA.
 //   Coroa A = feminino (Rainha) · Coroa B = masculino (Rei). Ouro chapado, tom do app.
-window._CROWN_A_FEM = '<svg width="15" height="15" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;vertical-align:middle;margin-left:3px;" role="img" aria-label="Rainha invicta"><title>Rainha invicta</title><path d="M4 17 L2.4 6.6 L8.4 11 L12 4.4 L15.6 11 L21.6 6.6 L20 17 Z"/><rect x="4.4" y="18.1" width="15.2" height="2.7" rx="1"/></svg>';
-window._CROWN_B_MASC = '<svg width="15" height="15" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;vertical-align:middle;margin-left:3px;" role="img" aria-label="Rei invicto"><title>Rei invicto</title><path d="M4.2 17.4 L5 9.4 L9 13 L12 6 L15 13 L19 9.4 L19.8 17.4 Z"/><circle cx="4.6" cy="8.2" r="1.5"/><circle cx="12" cy="5" r="1.6"/><circle cx="19.4" cy="8.2" r="1.5"/><rect x="4.4" y="18.4" width="15.2" height="2.6" rx="1.3"/></svg>';
+//   Construtor com tamanho parametrizável (inline na chave = 15px; pódio casual = maior).
+window._reiRainhaCrownSvg = function(which, size) {
+  size = size || 15;
+  var base = 'width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;vertical-align:middle;margin-left:3px;" role="img"';
+  if (which === 'B' || which === 'masc' || which === 'masculino' || which === 'm') {
+    return '<svg ' + base + ' aria-label="Rei invicto"><title>Rei invicto</title><path d="M4.2 17.4 L5 9.4 L9 13 L12 6 L15 13 L19 9.4 L19.8 17.4 Z"/><circle cx="4.6" cy="8.2" r="1.5"/><circle cx="12" cy="5" r="1.6"/><circle cx="19.4" cy="8.2" r="1.5"/><rect x="4.4" y="18.4" width="15.2" height="2.6" rx="1.3"/></svg>';
+  }
+  return '<svg ' + base + ' aria-label="Rainha invicta"><title>Rainha invicta</title><path d="M4 17 L2.4 6.6 L8.4 11 L12 4.4 L15.6 11 L21.6 6.6 L20 17 Z"/><rect x="4.4" y="18.1" width="15.2" height="2.7" rx="1"/></svg>';
+};
+// Coroa por gênero: feminino/desconhecido → A (Rainha); masculino → B (Rei).
+window._reiRainhaCrownByGender = function(gender, size) {
+  var g = String(gender == null ? '' : gender).toLowerCase().trim();
+  var masc = (g === 'masculino' || g === 'm');
+  return window._reiRainhaCrownSvg(masc ? 'B' : 'A', size);
+};
+window._CROWN_A_FEM = window._reiRainhaCrownSvg('A');
+window._CROWN_B_MASC = window._reiRainhaCrownSvg('B');
 
-// v3.0.x — REI/RAINHA DA PRAIA (CONCEITO CANÔNICO): numa série de 3 jogos entre 4
-// pessoas, cada uma joga UMA vez com cada um dos outros 3 como parceiro
-// (AB×CD, AC×BD, AD×BC). O REI/RAINHA é quem VENCEU OS 3 JOGOS — é o ÚNICO que ganha
-// todos; matematicamente os outros 3 vencem exatamente 1 cada (o jogo em que foram
-// parceiros do rei). A honraria (coroa por gênero) só aparece com o grupo COMPLETO e
-// para o jogador invicto que disputou a rodada inteira (maxPlayed do grupo) — evita
-// "rei falso" por BYE/sit-out. fem/desconhecido → coroa A; masculino → coroa B.
+// v3.0.x — REI/RAINHA DA PRAIA (CONCEITO CANÔNICO, vale p/ TORNEIO **e** PARTIDA CASUAL):
+// numa SÉRIE DE 3 JOGOS entre 4 pessoas, cada uma joga UMA vez com cada um dos outros 3
+// como parceiro (AB×CD, AC×BD, AD×BC). O REI/RAINHA é quem VENCEU OS 3 JOGOS — é o ÚNICO
+// que ganha todos; matematicamente os outros 3 vencem exatamente 1 cada (o jogo em que
+// foram parceiros do rei). A honraria (coroa por gênero) é conferida ao vencedor da série,
+// no torneio (classificação do grupo) e na partida casual (pódio Rei/Rainha).
+//
+// _reiRainhaInvictoCrown: variante TORNEIO — só com o grupo COMPLETO e para o invicto que
+// disputou a rodada inteira (maxPlayed do grupo) — evita "rei falso" por BYE/sit-out.
 window._reiRainhaInvictoCrown = function(tournament, standings, s, opts) {
   if (!s || !opts || !opts.groupDone) return '';
   if (!(s.played > 0) || s.losses !== 0) return '';
@@ -1598,8 +1615,7 @@ window._reiRainhaInvictoCrown = function(tournament, standings, s, opts) {
   if (s.played !== maxPlayed) return '';
   var g = (typeof window._participantGenderByName === 'function')
     ? window._participantGenderByName(tournament, s.name) : '';
-  var masc = (g === 'masculino' || g === 'm');
-  return masc ? window._CROWN_B_MASC : window._CROWN_A_FEM;
+  return window._reiRainhaCrownByGender(g);
 };
 
 window._isUnfriendlyName = function(name) {

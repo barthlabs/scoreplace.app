@@ -8042,9 +8042,22 @@ window._openLiveScoring = function(tId, matchId, opts) {
       return { title: 'Plebeu', icon: '🫠', color: '#6b7280', bg: 'rgba(107,114,128,0.07)', border: 'rgba(107,114,128,0.2)' };
     }
 
+    // v3.0.x: gênero por nome (vem do perfil em opts.players) p/ a coroa do invicto.
+    var _rrGmap = (typeof _genderByNameLS === 'function') ? _genderByNameLS() : {};
     var cardsHtml = playerResults.map(function(p, rank) {
       var cls = _rrClassify(p.wins);
       var rankEmoji = rank === 0 ? '🥇' : rank === 1 ? '🥈' : rank === 2 ? '🥉' : '4️⃣';
+      // v3.0.x: vencedor da SÉRIE de 3 jogos (invicto, 3V) ganha a COROA por gênero
+      // (A=Rainha/fem, B=Rei/masc) — mesma honraria do torneio Rei/Rainha. Os demais
+      // mantêm o ícone/título de colocação (Vice/Peão/Plebeu).
+      var _isKing = p.wins === 3;
+      var _kGender = _rrGmap[p.name] || '';
+      var _iconHtml = (_isKing && typeof window._reiRainhaCrownByGender === 'function')
+        ? window._reiRainhaCrownByGender(_kGender, 28)
+        : '<span style="font-size:1.3rem;">' + cls.icon + '</span>';
+      var _titleTxt = (_isKing && typeof window._genderWord === 'function')
+        ? window._genderWord(_kGender, 'Rei', 'Rainha')
+        : cls.title;
       return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:' + cls.bg + ';border:1px solid ' + cls.border + ';width:100%;box-sizing:border-box;">' +
         '<span style="font-size:1.5rem;flex-shrink:0;">' + rankEmoji + '</span>' +
         '<div style="flex:1;min-width:0;">' +
@@ -8052,8 +8065,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">' + p.wins + 'V · ' + p.losses + 'D</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;">' +
-          '<span style="font-size:1.3rem;">' + cls.icon + '</span>' +
-          '<span style="font-size:0.65rem;font-weight:700;color:' + cls.color + ';text-transform:uppercase;letter-spacing:0.04em;">' + cls.title + '</span>' +
+          _iconHtml +
+          '<span style="font-size:0.65rem;font-weight:700;color:' + cls.color + ';text-transform:uppercase;letter-spacing:0.04em;">' + _titleTxt + '</span>' +
         '</div>' +
       '</div>';
     }).join('');
