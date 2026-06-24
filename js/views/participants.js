@@ -1754,10 +1754,10 @@ function renderParticipants(container, tournamentId) {
     (function () {
       var _sbSet = {};
       standbyParts.forEach(function (p) {
-        var n = (typeof p === 'string') ? p : (p && (p.displayName || p.name || p.email)) || '';
-        n = String(n);
-        if (n.indexOf('/') !== -1) { n.split('/').forEach(function (x) { var k = x.trim().toLowerCase(); if (k) _sbSet[k] = 1; }); }
-        else { var k = n.trim().toLowerCase(); if (k) _sbSet[k] = 1; }
+        var _m = window._entryTeamMembers(p); // v3.0.x: membros da dupla por estrutura, não por '/'
+        if (_m) { _m.forEach(function (x) { var k = String(x).trim().toLowerCase(); if (k) _sbSet[k] = 1; }); return; }
+        var n = String((typeof p === 'string') ? p : (p && (p.displayName || p.name || p.email)) || '');
+        var k = n.trim().toLowerCase(); if (k) _sbSet[k] = 1;
       });
       _dedupedIndividuals.forEach(function (ind) {
         if (!ind.isStandby && !ind.matchNum && _sbSet[(ind.name || '').toLowerCase().trim()]) ind.isStandby = true;
@@ -2168,8 +2168,8 @@ function renderParticipants(container, tournamentId) {
       // v2.1.86/v2.2.40: estado da CHAMADA (por entry) + filtro presente/ausente/aguardando.
       // Vale na chamada pré-sorteio (interativa) e pós-sorteio antes de iniciar (leitura).
       const _showPres = canRollCall || postDrawPresence;
-      const rcMc = _showPres && _entryPresent(pName);
-      const rcAbs = _showPres && !rcMc && _entryAbsent(pName);
+      const rcMc = _showPres && _entryPresent(window._pName(p)); // v3.0.x: nome canônico (dupla="A / B") pro check de presença
+      const rcAbs = _showPres && !rcMc && _entryAbsent(window._pName(p));
       const rcPend = _showPres && !rcMc && !rcAbs;
       if (_showPres) {
         if (currentFilter === 'present' && !rcMc) return '';
