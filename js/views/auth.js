@@ -4208,6 +4208,25 @@ async function simulateLoginSuccess(user) {
       basicData.createdAt = new Date().toISOString();
       needsSave = true;
     }
+    // v3.0.82: NOME ÚNICO ENTRE UIDS no PRIMEIRO login. Se o nome derivado do
+    // provedor (Google/Apple) colide com OUTRA conta, adota uma variante
+    // automaticamente — dois uids de pessoas diferentes nunca podem ter o mesmo
+    // nome. NÃO bloqueia a entrada (política "deixa entrar e edita depois"); a
+    // pessoa refina no perfil, onde o gate também garante unicidade. Só vale pra
+    // PRIMEIRA atribuição de nome (conta sem displayName ainda) — jamais renomeia
+    // um usuário estabelecido em re-login (ex.: backfill de displayName_lower).
+    // Email/telefone como nome passam direto (são únicos por natureza).
+    var _firstNameAssign = !(existingProfile && existingProfile.displayName);
+    if (needsSave && _firstNameAssign && basicData.displayName
+        && typeof window.FirestoreDB.resolveUniqueDisplayName === 'function') {
+      try {
+        var _uniqueDN = await window.FirestoreDB.resolveUniqueDisplayName(basicData.displayName, uid);
+        if (_uniqueDN && _uniqueDN !== basicData.displayName) {
+          basicData.displayName = _uniqueDN;
+          if (window.AppStore.currentUser) window.AppStore.currentUser.displayName = _uniqueDN;
+        }
+      } catch (e) { window._warn('[firstLogin] resolveUniqueDisplayName falhou (fail-open):', e); }
+    }
     if (needsSave) {
       basicData.updatedAt = new Date().toISOString();
       window.FirestoreDB.saveUserProfile(uid, basicData).catch(function(err) {

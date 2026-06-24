@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.81-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.82-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🆔 Nome único entre contas:</b> duas pessoas diferentes não podem usar exatamente o mesmo nome no app. Ao editar o perfil, se o nome já é de outra conta, o app pede uma variante (ex.: incluir o sobrenome ou uma inicial). E agora, no primeiro acesso, se o nome vindo do Google/Apple já existir, o app já adota uma variante automaticamente — sem travar a sua entrada. Nomes de jogadores avulsos (sem conta) podem se repetir normalmente.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.81-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🆔 Troféus e W.O. da Liga reconhecem cada jogador da dupla:</b> seus troféus e estatísticas (torneios disputados, vitórias, pódios) agora contam também os torneios em que você foi o segundo jogador da dupla — antes só o capitão recebia o crédito. E nos grupos da Liga, qualquer jogador do grupo (inclusive o parceiro de dupla) pode declarar falta e chamar substituto. Tudo identificado pela sua conta (uid).</li>' +
       '</ul>' +

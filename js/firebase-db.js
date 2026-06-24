@@ -796,6 +796,36 @@ window.FirestoreDB = {
     }
   },
 
+  // v3.0.82: garante displayName ÚNICO entre UIDs. Dado um nome-base e o meu uid,
+  // devolve o próprio nome se livre, ou uma variante ("Nome 2", "Nome 3"…) quando
+  // já há OUTRA conta (uid) usando — a regra do dono: dois uids de pessoas
+  // diferentes NUNCA podem ter o mesmo nome. Nomes "não-amigáveis"
+  // (email/telefone/placeholder) passam intactos: não são nomes de pessoa e não
+  // disputam unicidade. Homônimos VIRTUAIS sem uid (Jogador X, informais, ghosts)
+  // não estão em `users` → nunca colidem aqui (são permitidos). Usado no PRIMEIRO
+  // login pra auto-adotar variante sem bloquear a entrada (o gate do perfil
+  // continua pedindo a variante explicitamente quando a pessoa edita o nome).
+  // Fail-open: erro de consulta devolve o nome-base.
+  async resolveUniqueDisplayName(baseName, myUid) {
+    var nm = String(baseName == null ? '' : baseName).trim();
+    if (!nm || !this.db) return nm;
+    if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(nm)) return nm;
+    try {
+      var taken = await this.isDisplayNameTaken(nm, myUid);
+      if (!taken) return nm;
+      for (var k = 2; k <= 9; k++) {
+        var cand = nm + ' ' + k;
+        var t2 = await this.isDisplayNameTaken(cand, myUid);
+        if (!t2) return cand;
+      }
+      // Fallback extremo (9 variantes ocupadas): sufixo curto do uid — sempre único.
+      return nm + ' ' + String(myUid || '').slice(-4);
+    } catch (e) {
+      if (window._warn) window._warn('[resolveUniqueDisplayName] fail-open:', e);
+      return nm;
+    }
+  },
+
   // Search users by name or email prefix. Server-side range queries on the
   // denormalized `displayName_lower` / `email_lower` fields — bounded by
   // the per-query `limit`, not the total user count. Empty query returns
