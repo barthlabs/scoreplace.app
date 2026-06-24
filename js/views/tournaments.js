@@ -3438,10 +3438,13 @@ function renderTournaments(container, tournamentId = null) {
                 _enrollBadge + _wmL + _wmR +
                 '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' +
                   _body +
-                  '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
-                    labelHtml +
-                    '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' + desfazerBtn + _delBtnDupla + '</div>' +
-                  '</div>' +
+                  // CANÔNICO: status (Dupla formada / Arraste para formar dupla) na
+                  // linha de cima; ação (Desfazer + 🗑️) numa linha ABAIXO à direita,
+                  // 🗑️ sempre por último. Ver [[project_inscrito_card_canonical]].
+                  labelHtml +
+                  ((desfazerBtn || _delBtnDupla)
+                    ? '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">' + desfazerBtn + _delBtnDupla + '</div>'
+                    : '') +
                 '</div></div>';
             }
             function _safeAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
@@ -3496,10 +3499,10 @@ function renderTournaments(container, tournamentId = null) {
                   _pwmL + _pwmR +
                   '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:8px;">' +
                     _body +
-                    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
-                      '<span style="font-size:0.72rem;color:#fbbf24;font-weight:600;min-width:0;flex:1 1 auto;">' + _status + '</span>' +
-                      (_btns ? '<span style="display:flex;justify-content:flex-end;gap:6px;flex-shrink:0;white-space:nowrap;margin-left:auto;">' + _btns + '</span>' : '') +
-                    '</div>' +
+                    // CANÔNICO: status na linha de cima; botões (Confirmar/Cancelar)
+                    // numa linha ABAIXO à direita. Ver [[project_inscrito_card_canonical]].
+                    '<div style="font-size:0.72rem;color:#fbbf24;font-weight:600;">' + _status + '</div>' +
+                    (_btns ? '<div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;">' + _btns + '</div>' : '') +
                   '</div></div>';
               };
               var _pendingCardsHtml = _reqs.length ? ('<div style="display:flex;flex-direction:column;gap:6px;' + (_soloAvailable.length ? 'margin-top:6px;' : '') + '">' + _reqs.map(_pendingCard).join('') + '</div>') : '';
