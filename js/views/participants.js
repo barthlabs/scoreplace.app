@@ -2321,7 +2321,12 @@ function renderParticipants(container, tournamentId) {
         const _rcWoBtn = (!rcMc && isOrg)
           ? window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');`, !rcAbs, { label: rcAbs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
           : '';
-        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>${_rcWoBtn}`;
+        // v3.0.86: W.O. ANTES do toggle (não entre toggle e 🗑️). Assim o toggle
+        // fica SEMPRE colado ao 🗑️ e o 🗑️ sempre na borda direita — posições
+        // idênticas em Presente e Ausente. O W.O. some/aparece à esquerda do
+        // toggle sem empurrar toggle nem 🗑️. (Bug: ao ativar Presente, o W.O.
+        // sumia do meio e o toggle/🗑️ pulavam de lugar.)
+        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span>${_rcWoBtn}<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>`;
       } else if (postDrawPresence) {
         // v2.2.40: pós-sorteio (antes de iniciar) — presença em modo somente leitura.
         const _rcLabel = rcMc ? 'Presente' : 'Ausente';
