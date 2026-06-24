@@ -1,6 +1,36 @@
 // ── Bracket Logic & Computation ──
 var _t = window._t || function(k) { return k; };
 
+// ── Nome de grupo por índice (canônico) ──
+// 0→A … 25→Z, 26→A2, 27→B2 … 51→Z2, 52→A3 … Acima de 26 grupos cicla a letra e
+// soma um número (A2, B2…), em vez de estourar pra '[', '\', ']' como fazia o
+// String.fromCharCode(65+i) cru. Único ponto de verdade — todo nome de grupo
+// (criação e fallback de render) usa este helper. Roda no cliente e no servidor
+// (vendor) porque bracket-logic.js é o arquivo sincronizado pro autoDraw.
+window._groupLetter = window._groupLetter || function (i) {
+  i = (typeof i === 'number' && i >= 0) ? Math.floor(i) : 0;
+  var tier = Math.floor(i / 26);
+  return String.fromCharCode(65 + (i % 26)) + (tier === 0 ? '' : (tier + 1));
+};
+
+// Nome COMPLETO do grupo a partir do índice: "Grupo A2" (prefixo via i18n
+// label.group). Único ponto que monta "Grupo " + letra — usar na CRIAÇÃO do
+// grupo (onde o name é gravado).
+window._groupName = window._groupName || function (i) {
+  var lbl = (typeof _t === 'function') ? _t('label.group') : 'Grupo';
+  return lbl + ' ' + window._groupLetter(i);
+};
+
+// Nome de EXIBIÇÃO de um grupo/subgrupo já existente: usa o `.name` gravado
+// (que já é canônico, ex.: "Grupo A" ou "R1 Grupo A") TAL QUAL — NÃO re-prefixa
+// "Grupo" (era isso que gerava "Grupo Grupo A" / "Grupo R1 Grupo A" nos renders).
+// Cai pro _groupName(i) só quando não há name. Aceita objeto {name} ou string.
+window._groupDisplayName = window._groupDisplayName || function (grp, i) {
+  var nm = (grp == null) ? '' : (typeof grp === 'string' ? grp : (grp.name || ''));
+  nm = (nm == null) ? '' : String(nm).trim();
+  return nm ? nm : window._groupName(i);
+};
+
 // ── Monarch (Rei/Rainha) individual standings per group ──
 window._computeMonarchStandings = function(group) {
   var stats = {};
@@ -862,6 +892,14 @@ function _advanceWinner(t, completedMatch) {
   if (completedMatch.isRepechageR1 && t.repechageConfig) {
     _assignRepechageLosers(t);
   }
+  // v2.7.69: REPESCAGEM DO CONSTRUTOR DE FASES (diferente da repescagem de
+  // eliminatória acima). Quando uma partida isPhaseRepR1 fecha, resolve os melhores
+  // perdedores da R1 daquela chave → preenche os slots de repescagem + o jogo de
+  // repescagem. _resolveRepechage é idempotente (só age quando todos os R1 da chave
+  // têm vencedor e ainda há slot pendente).
+  if (completedMatch.isPhaseRepR1 && typeof window !== 'undefined' && typeof window._resolveRepechage === 'function') {
+    try { window._resolveRepechage(t, completedMatch.bracket); } catch (e) {}
+  }
   // Repechage: when repechage match completes, check if ALL done → advance best loser
   if (completedMatch.isRepechage && t.repechageConfig && t.repechageConfig.bestLoserCount > 0) {
     _advanceBestLoser(t);
@@ -1280,6 +1318,25 @@ function _updateProgressiveClassification(t) {
   var totalRounds = rounds.length;
   if (totalRounds < 1) return;
 
+  // v2.8.22: round MÁXIMO em que cada equipe aparece. Com REPESCAGEM, um perdedor do
+  // round R pode reaparecer em rounds > R (foi repescado) — ainda vivo ou eliminado
+  // depois. A classificação só pode tratar um perdedor do round R como ELIMINADO ali
+  // se R for a última aparição dele (maxRound==R). Sem isso, um repescado AINDA VIVO
+  // (perdeu o round 0 mas está nas semis) ganhava posição no bloco do round 0 →
+  // estourava o total (25º numa linha de 24) e dava posição a quem não foi eliminado.
+  var maxRoundByName = {};
+  allMatches.forEach(function(m) {
+    if (!m || m.bracket === 'lower' || m.bracket === 'grand') return;
+    if (m.round === undefined || m.round === null) return;
+    [m.p1, m.p2].forEach(function(nm) {
+      if (!nm || nm === 'TBD' || nm === 'BYE') return;
+      if (maxRoundByName[nm] === undefined || m.round > maxRoundByName[nm]) maxRoundByName[nm] = m.round;
+    });
+  });
+  function _advancedPast(name, roundNum) {
+    return maxRoundByName[name] !== undefined && maxRoundByName[name] > roundNum;
+  }
+
   // Helper: get loser's score and winner's score from a match
   function _getLoserStats(m) {
     var loser = m.winner === m.p1 ? m.p2 : m.p1;
@@ -1362,15 +1419,21 @@ function _updateProgressiveClassification(t) {
         placed[loser] = true;
       });
     } else if (roundFromEnd === 1) {
-      // Semi: if 3rd place match exists, positions 3 & 4 are handled below.
-      // If not, rank semi-losers individually as 3rd/4th using tiebreakers.
-      if (!t.thirdPlaceMatch || !t.thirdPlaceMatch.winner) {
+      // Semi: se EXISTE jogo de 3º lugar, as posições 3 e 4 saem SÓ dele (abaixo),
+      // mesmo que ainda não tenha sido disputado — enquanto não houver vencedor, os
+      // dois perdedores de semi NÃO recebem 3º/4º (não dá pra saber quem é quem).
+      // v2.8.89: antes a condição tinha `|| !t.thirdPlaceMatch.winner`, então quando o
+      // jogo de 3º existia mas estava SEM resultado os perdedores de semi eram ranqueados
+      // 3º/4º por desempate — exatamente o que o organizador apontou que está errado.
+      // Só ranqueia por desempate quando NÃO há jogo de 3º lugar (formatos legados).
+      if (!t.thirdPlaceMatch) {
         var semiLosers = [];
         matchesInRound.forEach(function(m) {
           if (!m.winner || m.winner === 'draw' || m.isBye) return;
           var stats = _getLoserStats(m);
           if (!stats.loser || stats.loser === 'TBD' || stats.loser === 'BYE') return;
           if (placed[stats.loser]) return;
+          if (_advancedPast(stats.loser, roundNum)) return; // repescado: ainda em jogo OU já classificado por uma derrota posterior
           var history = _getPlayerHistory(stats.loser);
           semiLosers.push({ name: stats.loser, stats: stats, history: history });
         });
@@ -1388,6 +1451,7 @@ function _updateProgressiveClassification(t) {
         var stats = _getLoserStats(m);
         if (!stats.loser || stats.loser === 'TBD' || stats.loser === 'BYE') return;
         if (placed[stats.loser]) return;
+        if (_advancedPast(stats.loser, roundNum)) return; // repescado: avançou além deste round → não é eliminado aqui
         var history = _getPlayerHistory(stats.loser);
         losers.push({ name: stats.loser, stats: stats, history: history });
       });
@@ -1698,8 +1762,65 @@ function _updateProgressiveClassification(t) {
 }
 
 // ─── Auto-finish elimination tournament ──────────────────────────────────────
+// v2.6.97 — encerramento do CONSTRUTOR DE FASES. O torneio multi-fase encerra
+// quando a ÚLTIMA fase termina (todas as partidas dela decididas, incluindo a
+// grande final). Em fases anteriores NÃO encerra — o avanço é manual (botão).
+// Campeão = vencedor da grande final da última fase; em chave única, o vencedor
+// da final; em linhas independentes (sem grande final), fica sem nome único.
+function _maybeFinishMultiPhase(t) {
+  if (!t || t.status === 'finished') return false;
+  if (!(window._isMultiPhase && window._isMultiPhase(t))) return false;
+  var cur = t.currentPhaseIndex || 0;
+  var last = t.phases.length - 1;
+  if (cur < 1 || cur < last) return false; // ainda em fase classificatória ou há fases por vir
+  var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; });
+  if (!pm.length) return false;
+  var pending = pm.filter(function (m) { return !m.isBye && m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD' && !m.winner; });
+  if (pending.length) return false;
+  var tbd = pm.filter(function (m) { return !m.isBye && (!m.p1 || m.p1 === 'TBD' || !m.p2 || m.p2 === 'TBD'); });
+  if (tbd.length) return false;
+
+  // Campeão: grande final > final de chave única > (linhas independentes: sem nome).
+  var champion = null;
+  var gf = pm.filter(function (m) { return m.bracket === 'grandfinal'; })[0];
+  if (gf && gf.winner) champion = gf.winner;
+  if (!champion) {
+    var tierMs = pm.filter(function (m) { return (m.round || 1) < 99 && !m.isBye; });
+    var brackets = {};
+    tierMs.forEach(function (m) { (brackets[m.bracket] = brackets[m.bracket] || []).push(m); });
+    var bk = Object.keys(brackets);
+    if (bk.length === 1) {
+      var ms = brackets[bk[0]];
+      var lr = Math.max.apply(null, ms.map(function (m) { return m.round || 1; }));
+      var fin = ms.filter(function (m) { return (m.round || 1) === lr; });
+      if (fin.length === 1 && fin[0].winner) champion = fin[0].winner;
+    }
+  }
+
+  t.status = 'finished';
+  if (!t.finishedAt) t.finishedAt = new Date().toISOString();
+  var _startMs = (typeof t.tournamentStarted === 'number' && t.tournamentStarted > 0) ? t.tournamentStarted : null;
+  if (_startMs && (t.durationMs == null)) t.durationMs = Math.max(0, Date.now() - _startMs);
+  if (typeof showNotification === 'function') {
+    showNotification(_t('bui.tournamentFinished'), champion ? _t('bui.tournamentFinishedChamp', { name: champion }) : _t('bui.tournamentFinishedMsg'), 'success');
+  }
+  if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
+    t.finishNotifiedAt = new Date().toISOString();
+    var _finMsg = _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio');
+    if (champion) _finMsg += ' ' + champion + ' ' + _t('notif.isChampion');
+    window._notifyTournamentParticipants(t, { type: 'tournament_finished', message: _finMsg, level: 'important' });
+  }
+  setTimeout(function () {
+    try { if (typeof window._trophyOnTournamentFinished === 'function') window._trophyOnTournamentFinished(t, champion); } catch (_te) {}
+  }, 500);
+  return true;
+}
+window._maybeFinishMultiPhase = _maybeFinishMultiPhase;
+
 function _maybeFinishElimination(t) {
   if (t.status === 'finished') return;
+  // v2.6.97: construtor de fases tem encerramento próprio (última fase concluída).
+  if (window._isMultiPhase && window._isMultiPhase(t)) { _maybeFinishMultiPhase(t); return; }
   // v2.4.20: inscrição TARDIA ('standby'/'expand') mantém a Eliminatória ABERTA —
   // completar os jogos atuais NÃO encerra o torneio. Novos confrontos da lista de
   // espera (a cada 4), repescagem e a próxima rodada ainda podem entrar. Só encerra
@@ -1926,7 +2047,7 @@ window._autoApprovePendingResults = function(t) {
 // _rerenderBracket fazia fallback pra "primeiro card visível" → scroll
 // jumpava após aprovações.
 window._closeRound = function (tId, roundIdx, anchorMatchId) {
-  const t = window.AppStore.tournaments.find(tour => tour.id.toString() === tId.toString());
+  const t = window._findTournamentById(tId);
   if (!t) return;
   const round = (t.rounds || [])[roundIdx];
   if (!round) return;
@@ -2045,7 +2166,7 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId) {
     // ANTES da hora — e inflando o "X/Y partidas" (o progresso soma TODAS as
     // rodadas existentes). Liga manual e Suíço seguem gerando na conclusão,
     // pois têm gatilho próprio (botão / fluxo contínuo do Suíço).
-    var _ligaScheduled = (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) && t.drawManual !== true && !!t.drawFirstDate;
+    var _ligaScheduled = window._isLigaAutoDraw(t); // v2.7.6: canônico
     if (_ligaScheduled) {
       showNotification(
         _t('bui.roundClosedTitle') || 'Rodada encerrada',
@@ -2206,28 +2327,9 @@ window._drawFromRoundRobinSchedule = function(t, category, _rn) {
   var monarchGroups = [];
 
   nextRound.groups.forEach(function(grp, gi) {
-    var A = grp[0], B = grp[1], C = grp[2], D = grp[3];
-    var groupName = 'R' + roundNum + ' Grupo ' + String.fromCharCode(65 + gi) + turnoLabel;
-    var pairings = [
-      { t1: [A, B], t2: [C, D] },
-      { t1: [A, C], t2: [B, D] },
-      { t1: [A, D], t2: [B, C] }
-    ];
-    var matches = pairings.map(function(pair, mi) {
-      var mObj = {
-        id: 'match-rr-r' + roundNum + '-g' + gi + '-' + mi + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
-        team1: pair.t1, team2: pair.t2,
-        winner: null, scoreP1: null, scoreP2: null,
-        isMonarch: true, monarchGroup: gi,
-        label: groupName + ' • Jogo ' + (mi + 1) + catLabel
-      };
-      if (category) mObj.category = category;
-      return mObj;
-    });
-    allMatches = allMatches.concat(matches);
-    monarchGroups.push({ name: groupName, players: grp, matches: matches });
+    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: grp, category: category, ts: ts, nameSuffix: turnoLabel });
+    allMatches = allMatches.concat(g.matches);
+    monarchGroups.push(g);
   });
 
   // Sit-outs for players not in any group this round
@@ -2237,16 +2339,7 @@ window._drawFromRoundRobinSchedule = function(t, category, _rn) {
   allActive.forEach(function(name, si) {
     if (allPlaying.indexOf(name) === -1) {
       var avgPts = _sitOutComp(t, name, category); // PA quando o torneio usa Pontos Avançados; senão pontos simples
-      var soObj = {
-        id: 'sitout-rr-r' + roundNum + '-' + si + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        // v2.3.9: folga (sit-out) NÃO tem vencedor — não é um jogo disputado.
-        // O jogador recebe sitOutPoints na classificação (sem contar vitória).
-        p1: name, p2: 'FOLGA',
-        isSitOut: true, sitOutPoints: avgPts, sitOutReason: 'remainder',
-        label: 'R' + roundNum + ' • Folga' + catLabel
-      };
-      if (category) soObj.category = category;
+      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: 'remainder', points: avgPts });
       allMatches.push(soObj);
       _recordSitOut(t, [name], category);
     }
@@ -2273,6 +2366,13 @@ function _generateNextRound(t) {
     try { window._assignUncategorizedToWeakest(t); }
     catch (_e) { if (window._warn) window._warn('[draw] weakest-assign falhou', _e); }
   }
+
+  // v2.7.5: Pontos Corridos com sorteio AUTOMÁTICO (drawManual !== true) NÃO tem
+  // passo "Iniciar Torneio" — SORTEAR É INICIAR. Marcado AQUI no gerador (roda no
+  // cliente, no poller _fireLigaAutoDraw, no "Realizar Sorteio" e na Cloud Function
+  // autoDraw via vendor — 100% sozinho, sem depender de ninguém abrir nada). Manual
+  // (drawManual===true) mantém o passo explícito (rede de segurança do banner).
+  if (t.drawManual !== true && !t.tournamentStarted) t.tournamentStarted = Date.now();
 
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
 
@@ -2319,9 +2419,11 @@ window._generateNextRound = _generateNextRound;
 // Helper: get active players for Liga (filters out ligaActive === false)
 function _getActiveLigaPlayers(t) {
   var allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  // v2.7.38: organizador desligou a auto-desativação → TODOS contam como ativos.
+  var _selfDeactOff = (t && t.allowSelfDeactivation === false);
   var activeNames = {};
   allP.forEach(function(p) {
-    if (typeof p === 'object' && p.ligaActive === false) return; // explicitly inactive
+    if (!_selfDeactOff && typeof p === 'object' && p.ligaActive === false) return; // explicitly inactive
     var name = typeof p === 'string' ? p : (p.displayName || p.name || '');
     if (name) activeNames[name] = true;
   });
@@ -2330,6 +2432,8 @@ function _getActiveLigaPlayers(t) {
 
 // Helper: get inactive players for this round (ligaActive === false)
 function _getInactiveLigaPlayers(t) {
+  // v2.7.38: auto-desativação desligada → ninguém inativo.
+  if (t && t.allowSelfDeactivation === false) return [];
   var allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   var names = [];
   allP.forEach(function(p) {
@@ -2533,6 +2637,211 @@ function _computeAvgPointsPerRound(t, playerName, category) {
   return roundsPlayed > 0 ? Math.round(totalPoints / roundsPlayed) : 0;
 }
 
+// ─── Lista de espera Rei/Rainha (v2.6.99) ──────────────────────────────────────
+// A SOBRA da divisão por 4 numa rodada Rei/Rainha não é mais "folga com média":
+// vira LISTA DE ESPERA. Ela carrega entre rodadas (com prioridade pra entrar nos
+// grupos na próxima) e, quando junta 4 (sobra + novos inscritos via +participante),
+// forma AUTOMATICAMENTE um novo grupo na rodada corrente. Decisão do dono (18-jun):
+// auto-formar ao juntar 4; quem fica esperando segue pra próxima rodada (sem média).
+// ─── Canônico: construção de um grupo Rei/Rainha ─────────────────────────────
+// v2.7.2: ÚNICA fonte da estrutura de um grupo Rei/Rainha (4 jogadores → 3 jogos
+// com parceiros rotativos AB/CD, AC/BD, AD/BC). Usado pelos TRÊS caminhos que
+// criam grupo — sorteio standard (_generateReiRainhaRoundForPlayers), agendado
+// round-robin (_drawFromRoundRobinSchedule) e formação por lista de espera
+// (_tryFormMonarchWaitlistGroups). Mudou aqui, muda em todos: fim do drift que
+// deixava uma rotina com folga 'remainder' e outra com lista de espera.
+// opts: { roundNum, roundIndex, gi, players:[A,B,C,D], category, ts, idTag, idExtra, nameSuffix }
+function _buildMonarchGroup(opts) {
+  var roundNum = opts.roundNum;
+  var P = opts.players, category = opts.category || null, gi = opts.gi;
+  var ts = (opts.ts != null) ? opts.ts : Date.now();
+  var idTag = opts.idTag || 'g';
+  var idExtra = (opts.idExtra != null) ? opts.idExtra : '';
+  var nameSuffix = opts.nameSuffix || '';
+  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
+  var catLabel = category && window._displayCategoryName
+    ? ' (' + window._displayCategoryName(category) + ')'
+    : (category ? ' (' + category + ')' : '');
+  var groupName = 'R' + roundNum + ' ' + window._groupName(gi) + nameSuffix;
+  var A = P[0], B = P[1], C = P[2], D = P[3];
+  var pairings = [{ t1: [A, B], t2: [C, D] }, { t1: [A, C], t2: [B, D] }, { t1: [A, D], t2: [B, C] }];
+  var matches = pairings.map(function (pair, mi) {
+    var m = {
+      id: 'match-rr-r' + roundNum + '-' + idTag + gi + '-' + mi + catSuffix + '-' + ts + idExtra,
+      round: roundNum, roundIndex: opts.roundIndex,
+      p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
+      team1: pair.t1, team2: pair.t2,
+      winner: null, scoreP1: null, scoreP2: null,
+      isMonarch: true, monarchGroup: gi,
+      label: groupName + ' • Jogo ' + (mi + 1) + catLabel
+    };
+    if (category) m.category = category;
+    return m;
+  });
+  return { name: groupName, players: P.slice(), matches: matches };
+}
+window._buildMonarchGroup = _buildMonarchGroup;
+
+// v2.7.3: ÚNICA fonte da partida de FOLGA (sit-out). Antes construída à mão em 3
+// lugares (round-robin, Rei/Rainha, Suíço) — drift de label/reason/pontos.
+// opts: { player, roundNum, roundIndex, category, ts, idPrefix, idIndex, reason, points }
+function _buildSitOut(opts) {
+  var category = opts.category || null;
+  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
+  var catLabel = category && window._displayCategoryName
+    ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
+  var reason = opts.reason || 'remainder';
+  var isInactive = reason === 'inactive';
+  var o = {
+    id: opts.idPrefix + opts.roundNum + '-' + opts.idIndex + catSuffix + '-' + opts.ts,
+    round: opts.roundNum, roundIndex: opts.roundIndex,
+    // folga NÃO tem vencedor — recebe sitOutPoints na classificação, sem vitória.
+    p1: opts.player, p2: 'FOLGA',
+    isSitOut: true, sitOutPoints: opts.points, sitOutReason: reason,
+    label: 'R' + opts.roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
+  };
+  if (category) o.category = category;
+  return o;
+}
+window._buildSitOut = _buildSitOut;
+
+// v2.7.3: ÚNICA fonte da partida BYE. Antes em 3 lugares.
+// opts: { player, roundNum, roundIndex, category, ts, idPrefix }
+function _buildBye(opts) {
+  var category = opts.category || null;
+  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
+  var catLabel = category && window._displayCategoryName
+    ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
+  var o = {
+    id: opts.idPrefix + opts.roundNum + catSuffix + '-' + opts.ts,
+    round: opts.roundNum, roundIndex: opts.roundIndex,
+    p1: opts.player, p2: 'BYE', winner: opts.player, isBye: true,
+    label: 'R' + opts.roundNum + ' • BYE' + catLabel
+  };
+  if (category) o.category = category;
+  return o;
+}
+window._buildBye = _buildBye;
+
+function _monarchWaitKey(category) { return (category || '_default_').replace(/\s+/g, '_'); }
+window._getMonarchWaitlist = function (t, category) {
+  var k = _monarchWaitKey(category);
+  return (t && t.monarchWaitlist && Array.isArray(t.monarchWaitlist[k])) ? t.monarchWaitlist[k].slice() : [];
+};
+function _setMonarchWaitlist(t, category, names) {
+  if (!t.monarchWaitlist) t.monarchWaitlist = {};
+  t.monarchWaitlist[_monarchWaitKey(category)] = (names || []).slice();
+}
+// Forma grupos de 4 a partir da lista de espera e anexa à COLUNA da rodada corrente.
+// Retorna quantos grupos formou. Chamado após o sorteio e após +participante.
+window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
+  var wl = window._getMonarchWaitlist(t, category);
+  if (wl.length < 4) return 0;
+  var rounds = t.rounds || [];
+  var colIdx = -1;
+  for (var ci = rounds.length - 1; ci >= 0; ci--) {
+    var r = rounds[ci];
+    if (!r || r.round !== roundNum || !Array.isArray(r.monarchGroups)) continue;
+    var sample = (r.matches || [])[0];
+    var rcat = sample ? (sample.category || null) : null;
+    if ((category || null) !== (rcat || null)) continue;
+    colIdx = ci; break;
+  }
+  if (colIdx === -1) return 0;
+  var col = rounds[colIdx];
+  var ts = Date.now();
+  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
+  var catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
+  var formed = 0;
+  while (wl.length >= 4) {
+    var grp = wl.splice(0, 4);
+    var gi = (col.monarchGroups || []).length;
+    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed });
+    col.monarchGroups.push(g);
+    col.matches = (col.matches || []).concat(g.matches);
+    formed++;
+  }
+  _setMonarchWaitlist(t, category, wl);
+  if (formed > 0 && typeof _recordOpponentHistory === 'function') {
+    try { _recordOpponentHistory(t, col.monarchGroups.slice(-formed), category); } catch (e) {}
+  }
+  return formed;
+};
+// Chamado quando um +participante entra num torneio Rei/Rainha com rodada em
+// andamento (fase 0): joga o novo na lista de espera da rodada corrente e tenta
+// formar grupo. Retorna {added, formed}. Caller salva se added.
+window._onParticipantAddedToMonarchRound = function (t, playerName, category) {
+  var res = { added: false, formed: 0 };
+  if (!t || !playerName) return res;
+  if ((t.currentPhaseIndex || 0) !== 0) return res; // já avançou de fase
+  var isLiga = window._isLigaFormat && window._isLigaFormat(t);
+  if (!isLiga || t.ligaRoundFormat !== 'rei_rainha') return res;
+  var rounds = t.rounds || [];
+  var target = null;
+  for (var i = rounds.length - 1; i >= 0; i--) {
+    var r = rounds[i];
+    if (!r || !Array.isArray(r.monarchGroups) || !r.monarchGroups.length) continue;
+    var sample = (r.matches || [])[0];
+    var rcat = sample ? (sample.category || null) : null;
+    if ((category || null) !== (rcat || null)) continue;
+    target = r; break;
+  }
+  if (!target) return res;
+  var inGroup = (target.monarchGroups || []).some(function (g) { return (g.players || []).indexOf(playerName) !== -1; });
+  var wl = window._getMonarchWaitlist(t, category);
+  if (inGroup || wl.indexOf(playerName) !== -1) return res;
+  wl.push(playerName);
+  _setMonarchWaitlist(t, category, wl);
+  res.added = true;
+  res.formed = window._tryFormMonarchWaitlistGroups(t, category, target.round);
+  return res;
+};
+
+// v2.7.1: auto-cura — em Rei/Rainha NINGUÉM fica "Sem grupo (recebe média)". Quem
+// sobrou do agrupamento por 4 É a lista de espera (entrou primeiro). Converte
+// qualquer folga 'remainder' (de sorteios feitos antes da lista de espera existir,
+// ou copiados de outro ambiente) em lista de espera no TOPO, remove a partida de
+// folga e tenta formar grupo ao juntar 4. Idempotente: sem 'remainder' → no-op.
+// Guarda: NÃO mexe no modo "Todos contra todos" (round_robin), onde a folga é
+// rodízio agendado legítimo (o jogador joga em outras rodadas), não fila.
+window._healMonarchRemainderToWaitlist = function (t) {
+  if (!t || !Array.isArray(t.rounds)) return false;
+  if (!(window._isLigaFormat && window._isLigaFormat(t)) || t.ligaRoundFormat !== 'rei_rainha') return false;
+  if (t.ligaDrawMode === 'round_robin') return false; // rodízio agendado, não fila
+  if ((t.currentPhaseIndex || 0) !== 0) return false; // só na fase de grupos
+  var changed = false;
+  var touchedCats = {};
+  var _isRem = function (m) { return m && m.isSitOut && m.sitOutReason !== 'inactive' && m.sitOutReason !== 'wo'; };
+  t.rounds.forEach(function (col) {
+    if (!col || col.format !== 'rei_rainha' || !Array.isArray(col.matches)) return;
+    var rem = col.matches.filter(_isRem);
+    if (!rem.length) return;
+    var byCat = {};
+    rem.forEach(function (m) {
+      var ck = _monarchWaitKey(m.category || null);
+      (byCat[ck] = byCat[ck] || { cat: (m.category || null), names: [] }).names.push(m.p1);
+    });
+    Object.keys(byCat).forEach(function (ck) {
+      var cat = byCat[ck].cat;
+      var names = byCat[ck].names.filter(Boolean);
+      var wl = window._getMonarchWaitlist(t, cat);
+      // remainder entrou primeiro → vai pra frente da fila (dedup)
+      var merged = names.concat(wl.filter(function (n) { return names.indexOf(n) === -1; }));
+      _setMonarchWaitlist(t, cat, merged);
+      touchedCats[ck] = { cat: cat, round: col.round };
+    });
+    col.matches = col.matches.filter(function (m) { return !_isRem(m); });
+    changed = true;
+  });
+  if (changed) {
+    Object.keys(touchedCats).forEach(function (ck) {
+      var tc = touchedCats[ck];
+      try { window._tryFormMonarchWaitlistGroups(t, tc.cat, tc.round); } catch (e) {}
+    });
+  }
+  return changed;
+};
+
 window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category, _rn) {
   var standings = _computeStandings(t, category);
   var allPlayers = standings.map(function(s) { return s.name; });
@@ -2567,16 +2876,23 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
   var catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
 
-  // Liga: determine sit-outs fairly instead of BYE/extra matches
+  // v2.6.99: a SOBRA da divisão por 4 NÃO é mais folga-com-média — vira LISTA DE
+  // ESPERA. Quem já estava na espera entra nos grupos primeiro (prioridade), e a
+  // nova sobra é a lista de espera desta rodada (carrega pra próxima, sem média).
   var remainder = players.length % 4;
   var playingPlayers = players;
-  var sitOutPlayers = [];
+  var sitOutPlayers = []; // só INATIVOS viram folga agora (a sobra vira espera)
 
-  if (remainder > 0 && isLiga) {
-    var result = _chooseSitOutPlayers(t, players, remainder, category);
-    playingPlayers = result.playing;
-    sitOutPlayers = result.sitOut;
-    _recordSitOut(t, sitOutPlayers, category);
+  if (isLiga) {
+    if (remainder > 0) {
+      var _prevWl = window._getMonarchWaitlist(t, category).filter(function (n) { return players.indexOf(n) !== -1; });
+      var _rest = players.filter(function (n) { return _prevWl.indexOf(n) === -1; });
+      var _ordered = _prevWl.concat(_rest);
+      playingPlayers = _ordered.slice(0, _ordered.length - remainder);
+      _setMonarchWaitlist(t, category, _ordered.slice(_ordered.length - remainder));
+    } else {
+      _setMonarchWaitlist(t, category, []); // sem sobra → ninguém esperando
+    }
   }
 
   // Formação dos grupos de 4 (groupsBy):
@@ -2604,31 +2920,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
 
   for (var gi = 0; gi < numGroups; gi++) {
     var gPlayers = playingPlayers.slice(gi * 4, gi * 4 + 4);
-    var A = gPlayers[0], B = gPlayers[1], C = gPlayers[2], D = gPlayers[3];
-    var groupName = 'R' + roundNum + ' ' + (typeof _t === 'function' ? _t('label.group') : 'Grupo') + ' ' + String.fromCharCode(65 + gi);
-
-    // 3 matches with rotating partners: AB vs CD, AC vs BD, AD vs BC
-    var pairings = [
-      { t1: [A, B], t2: [C, D] },
-      { t1: [A, C], t2: [B, D] },
-      { t1: [A, D], t2: [B, C] }
-    ];
-
-    var matches = pairings.map(function(pair, mi) {
-      var mObj = {
-        id: 'match-rr-r' + roundNum + '-g' + gi + '-' + mi + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
-        team1: pair.t1, team2: pair.t2,
-        winner: null, scoreP1: null, scoreP2: null,
-        isMonarch: true, monarchGroup: gi,
-        label: groupName + ' • Jogo ' + (mi + 1) + catLabel
-      };
-      if (category) mObj.category = category;
-      return mObj;
-    });
-
-    groups.push({ name: groupName, players: gPlayers, matches: matches });
+    groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts }));
   }
 
   // Record opponent pairings for anti-repeat logic in future rounds
@@ -2643,17 +2935,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     allSitOuts.forEach(function(name, si) {
       var isInactive = inactiveSitOuts.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
-      var soObj = {
-        id: 'sitout-rr-r' + roundNum + '-' + si + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        // v2.3.9: folga (sit-out) NÃO tem vencedor — não é um jogo disputado.
-        // O jogador recebe sitOutPoints na classificação (sem contar vitória).
-        p1: name, p2: 'FOLGA',
-        isSitOut: true, sitOutPoints: avgPts,
-        sitOutReason: isInactive ? 'inactive' : 'remainder',
-        label: 'R' + roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
-      };
-      if (category) soObj.category = category;
+      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
       sitOutMatches.push(soObj);
     });
   }
@@ -2675,24 +2957,12 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
           if (category) rObj.category = category;
           remainderMatches.push(rObj);
         } else {
-          var byeObj = {
-            id: 'bye-rr-r' + roundNum + catSuffix + '-' + ts,
-            round: roundNum, roundIndex: (t.rounds || []).length,
-            p1: remPlayers[ri], p2: 'BYE', winner: remPlayers[ri], isBye: true,
-            label: 'R' + roundNum + ' • BYE' + catLabel
-          };
-          if (category) byeObj.category = category;
+          var byeObj = _buildBye({ player: remPlayers[ri], roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
           remainderMatches.push(byeObj);
         }
       }
     } else if (remRemainder === 1) {
-      var byeObj2 = {
-        id: 'bye-rr-r' + roundNum + catSuffix + '-' + ts,
-        round: roundNum, roundIndex: (t.rounds || []).length,
-        p1: players[players.length - 1], p2: 'BYE', winner: players[players.length - 1], isBye: true,
-        label: 'R' + roundNum + ' • BYE' + catLabel
-      };
-      if (category) byeObj2.category = category;
+      var byeObj2 = _buildBye({ player: players[players.length - 1], roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'bye-rr-r' });
       remainderMatches.push(byeObj2);
     }
   }
@@ -2707,6 +2977,11 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     phase: 'monarch', round: roundNum, status: 'active',
     format: 'rei_rainha', matches: allMatches, monarchGroups: groups
   });
+
+  // v2.6.99: se a lista de espera já tiver 4+ (ex.: sobra acumulada), forma grupo
+  // na hora. Normalmente a sobra desta rodada é < 4, então isso é no-op aqui — o
+  // gatilho real é o +participante (que empurra pra ≥4).
+  if (isLiga) window._tryFormMonarchWaitlistGroups(t, category, roundNum);
 };
 
 function _generateNextRoundForPlayers(t, category, _rn) {
@@ -2799,17 +3074,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
     allSitOuts.forEach(function(name, idx) {
       var isInactive = inactiveSitOutsSwiss.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
-      var soObj = {
-        id: 'sitout-r' + roundNum + '-' + idx + catSuffix + '-' + timestamp,
-        round: roundNum, roundIndex: roundIdx,
-        // v2.3.9: folga (sit-out) NÃO tem vencedor — não é um jogo disputado.
-        // O jogador recebe sitOutPoints na classificação (sem contar vitória).
-        p1: name, p2: 'FOLGA',
-        isSitOut: true, sitOutPoints: avgPts,
-        sitOutReason: isInactive ? 'inactive' : 'remainder',
-        label: 'R' + roundNum + ' • Folga' + (isInactive ? ' (inativo)' : '') + catLabel
-      };
-      if (category) soObj.category = category;
+      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'sitout-r', idIndex: idx, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });
       newMatches.push(soObj);
     });
 
@@ -2876,13 +3141,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
 
   // Remainder: BYE for non-Liga
   players.filter(p => !matched.has(p)).forEach(p => {
-    var byeObj = {
-      id: `bye-r${roundNum}${catSuffix}-${timestamp}`,
-      round: roundNum, roundIndex: roundIdx,
-      p1: p, p2: 'BYE', winner: p, isBye: true,
-      label: `R${roundNum} • BYE` + catLabel
-    };
-    if (category) byeObj.category = category;
+    var byeObj = _buildBye({ player: p, roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'bye-r' });
     newMatches.push(byeObj);
   });
 
@@ -2975,12 +3234,8 @@ window._checkLigaAutoDraws = async function() {
 
     // Only the organizer (or an active co-host) fires the draw — avoids
     // multiple participant browsers racing on the same tournament.
-    // Check directly against the user's email so we don't mutate viewMode mid-flight.
-    var _myEmail = store.currentUser.email;
-    var _isOrg = (t.organizerEmail === _myEmail) || (t.creatorEmail === _myEmail);
-    if (!_isOrg && Array.isArray(t.coHosts)) {
-      _isOrg = t.coHosts.some(function(ch) { return ch.email === _myEmail && ch.status === 'active'; });
-    }
+    // v2.8.79: uid-primário via helper canônico (cobre co-host com email '').
+    var _isOrg = window.AppStore.isOrganizer(t);
     if (!_isOrg) continue;
 
     // Must be auto-scheduled with a first date
@@ -3099,8 +3354,8 @@ window._renderPendingDrawBanner = function (t) {
       '<div style="margin-top:8px;max-height:380px;overflow:auto;">' + preview + '</div>' +
     '</details>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-      '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
       '<button class="btn btn-outline" style="color:#f87171;border-color:rgba(248,113,113,0.5);" onclick="event.stopPropagation(); window._annulPendingDraw(\'' + esc(t.id) + '\')">✕ Anular</button>' +
+      '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
     '</div>' +
   '</div>';
 };
@@ -3116,8 +3371,22 @@ window._publishPendingDraw = async function (tId) {
   if (pd.standings) t.standings = pd.standings;
   if (pd.sitOutHistory) t.sitOutHistory = pd.sitOutHistory;
   if (pd.opponentHistory) t.opponentHistory = pd.opponentHistory;
+  // v2.7.9: a lista de espera do Rei/Rainha mora em t.monarchWaitlist (sobra da
+  // divisão por 4). O staged draw a calcula no servidor mas o publish não a
+  // carregava → após Publicar a espera sumia. Carrega aqui.
+  if (pd.monarchWaitlist) t.monarchWaitlist = pd.monarchWaitlist;
   t.status = pd.status || 'active';
   t.drawVisibility = t.drawVisibility || 'public';
+  // v2.7.8: PUBLICAR um sorteio automático É INICIAR o torneio — mesma regra
+  // canônica de _generateNextRound (SORTEAR É INICIAR). O staged draw nasce no
+  // servidor em t.pendingDraw e NUNCA passa pelo gerador no cliente (o poller
+  // pula torneios staged), então tournamentStarted nunca era marcado e o banner
+  // "Iniciar Torneio" reaparecia depois de Publicar. Marca aqui, no momento em
+  // que o sorteio vai a público. Manual (drawManual===true) mantém o passo.
+  if (t.drawManual !== true && !t.tournamentStarted) {
+    var _genMs = pd.generatedAt ? new Date(pd.generatedAt).getTime() : NaN;
+    t.tournamentStarted = (!isNaN(_genMs) && _genMs > 0) ? _genMs : Date.now();
+  }
   t.lastAutoDrawAt = pd.generatedAt || t.lastAutoDrawAt || new Date().toISOString();
   t.pendingDraw = null;
   t.updatedAt = new Date().toISOString();
@@ -3151,6 +3420,16 @@ window._annulPendingDraw = function (tId) {
   if (typeof window.showConfirmDialog === 'function') {
     window.showConfirmDialog('Anular sorteio?', 'O sorteio em revisão será descartado (nada foi publicado). Um novo será gerado automaticamente no próximo ciclo.', go, null, { confirmText: 'Anular', cancelText: 'Cancelar', danger: true });
   } else { go(); }
+};
+
+// v2.7.6: ÚNICA fonte de "Pontos Corridos com sorteio AUTOMÁTICO agendado" — Liga
+// (ou Ranking) + sorteio não-manual + data agendada. Definido AQUI (e não em store.js)
+// de propósito: bracket-logic.js é vendored pra Cloud Function autoDraw, que não
+// carrega store.js — assim cliente e CF compartilham a MESMA regra. Sem drawFirstDate
+// é auto mal-configurado e cai no fallback manual (v0.16.56). Usado por tournaments.js,
+// participants.js e _ligaScheduled abaixo.
+window._isLigaAutoDraw = function (t) {
+  return !!(t && (window._isLigaFormat && window._isLigaFormat(t)) && t.drawManual !== true && t.drawFirstDate);
 };
 
 async function _fireLigaAutoDraw(t, scheduledTime) {

@@ -431,7 +431,12 @@ async function _scanAndMergeByField(db, field) {
 exports.purgePerfilFotoTrophies = onRequest(
   { region: "us-central1", timeoutSeconds: 540, memory: "512MiB" },
   async (req, res) => {
-    const SECRET = "SCOREPLACE_TROPHY_PURGE_20260515";
+    // v3.0.x: endpoint admin one-shot (mai/2026, já executado) DESATIVADO. O "segredo"
+    // ficava hardcoded num repo PÚBLICO → qualquer um podia disparar um purge em massa.
+    // Sempre responde 410; o corpo abaixo ficou inalcançável.
+    res.status(410).json({ error: "gone — endpoint admin desativado" });
+    return;
+    const SECRET = null; // (inalcançável) mantido só pra referência abaixo não quebrar parse
     if (req.query.secret !== SECRET) {
       res.status(403).json({ error: "forbidden" });
       return;
@@ -491,7 +496,11 @@ exports.purgePerfilFotoTrophies = onRequest(
 exports.recoverAdminEmails = onRequest(
   { region: "us-central1", timeoutSeconds: 540, memory: "512MiB" },
   async (req, res) => {
-    const SECRET = "SCOREPLACE_ADMINEMAILS_RECOVERY_20260516";
+    // v3.0.x: endpoint admin one-shot (mai/2026, já executado) DESATIVADO. Segredo
+    // hardcoded em repo PÚBLICO → exposição. Sempre 410; corpo abaixo inalcançável.
+    res.status(410).json({ error: "gone — endpoint admin desativado" });
+    return;
+    const SECRET = null; // (inalcançável)
     if (req.query.secret !== SECRET) {
       res.status(403).json({ error: "forbidden" });
       return;
@@ -5020,7 +5029,11 @@ exports.mergePhoneAccount = onCall(
 exports.fixMergedParticipants = onRequest(
   { region: "us-central1", timeoutSeconds: 540, memory: "512MiB" },
   async (req, res) => {
-    const SECRET = "SCOREPLACE_FIX_MERGED_20260516";
+    // v3.0.x: endpoint admin one-shot (mai/2026, já executado) DESATIVADO. Segredo
+    // hardcoded em repo PÚBLICO → qualquer um podia reescrever participantes em massa.
+    res.status(410).json({ error: "gone — endpoint admin desativado" });
+    return;
+    const SECRET = null; // (inalcançável)
     if (req.query.secret !== SECRET) { res.status(403).json({ error: "forbidden" }); return; }
 
     const db = admin.firestore();

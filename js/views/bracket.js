@@ -412,7 +412,7 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
       const isAbs = !!absentMap[n];
       const dotColor = present ? '#10b981' : isAbs ? '#ef4444' : '#64748b';
       const textColor = present ? '#4ade80' : isAbs ? '#f87171' : '#94a3b8';
-      return `<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block;"></span><span style="font-size:0.78rem;color:${textColor};">${n}</span></span>`;
+      return `<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block;"></span><span style="font-size:0.78rem;color:${textColor};">${_sh(n)}</span></span>`;
     }).join('<span style="font-size:0.65rem;color:rgba(255,255,255,0.15);margin:0 2px;">/</span>');
     return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${dots}</div>`;
   };
@@ -3423,11 +3423,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         else if (isDraw && !hasScore) footer = '<div style="font-size:0.65rem;color:#94a3b8;text-align:center;margin-top:3px;">' + _t('bracket.draw') + '</div>';
         prevRoundsInner += '<div style="min-width: 200px; flex: 1; max-width: 280px; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem;">' +
           '<div style="' + rowS + '">' +
-            '<span style="' + nameS + p1Style + '">' + (m.p1 || 'TBD') + '</span>' +
+            '<span style="' + nameS + p1Style + '">' + window._safeHtml(m.p1 || 'TBD') + '</span>' +
             '<span style="' + numS + (p1Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP1 : '') + '</span>' +
           '</div>' +
           '<div style="' + rowS + 'margin-top:3px;">' +
-            '<span style="' + nameS + p2Style + '">' + (m.p2 || 'TBD') + '</span>' +
+            '<span style="' + nameS + p2Style + '">' + window._safeHtml(m.p2 || 'TBD') + '</span>' +
             '<span style="' + numS + (p2Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP2 : '') + '</span>' +
           '</div>' +
           footer +
@@ -3487,13 +3487,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         statItems.push('<div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(251,191,36,0.08); border-radius: 10px; border-left: 3px solid #fbbf24;">' +
           '<span style="font-size: 1.1rem;">⚡</span>' +
           '<div><div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">' + _t('bracket.statMostWins') + '</div>' +
-          '<div style="font-weight: 700; color: var(--text-bright);">' + byWins[0].name + ' <span style="color: #4ade80;">(' + byWins[0].wins + 'V)</span></div></div></div>');
+          '<div style="font-weight: 700; color: var(--text-bright);">' + window._safeHtml(byWins[0].name) + ' <span style="color: #4ade80;">(' + byWins[0].wins + 'V)</span></div></div></div>');
       }
       if (byStreak[0] && byStreak[0].streak >= 2) {
         statItems.push('<div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(16,185,129,0.08); border-radius: 10px; border-left: 3px solid #10b981;">' +
           '<span style="font-size: 1.1rem;">🔥</span>' +
           '<div><div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">' + _t('bracket.statStreak') + '</div>' +
-          '<div style="font-weight: 700; color: var(--text-bright);">' + byStreak[0].name + ' <span style="color: #10b981;">(' + byStreak[0].streak + ' seguidas)</span></div></div></div>');
+          '<div style="font-weight: 700; color: var(--text-bright);">' + window._safeHtml(byStreak[0].name) + ' <span style="color: #10b981;">(' + byStreak[0].streak + ' seguidas)</span></div></div></div>');
       }
       // v2.3.8: exclui sit-outs (jogador que folga na rodada) — não são partidas
       // disputadas. Antes contava 25 (24 jogos reais + 1 folga com "vencedor").

@@ -150,7 +150,7 @@ window._sendTournamentInviteEmail = function(tournamentId) {
 
 // Copy tournament link to clipboard (with native share fallback on mobile)
 window._shareTournament = function(tournamentId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
+    var t = window._findTournamentById(tournamentId);
     if (!t) return;
     var url = window._tournamentUrl(t.id);
     // Append ref=UID so the recipient auto-friends the sharer
@@ -250,7 +250,7 @@ window._downloadAppInviteQR = function() {
 
 // Show QR Code modal for a tournament link
 window._showQRCode = function(tournamentId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
+    var t = window._findTournamentById(tournamentId);
     if (!t) return;
     var url = window._tournamentUrl(t.id);
     // Append ref=UID so the recipient auto-friends the sharer
@@ -306,7 +306,7 @@ window._showQRCode = function(tournamentId) {
 window._downloadQRCode = function(tournamentId) {
     var img = document.getElementById('qr-code-img');
     if (!img) return;
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
+    var t = window._findTournamentById(tournamentId);
     var name = t ? (t.name || 'torneio').replace(/[^a-zA-Z0-9À-ü\s-]/g, '').replace(/\s+/g, '_') : 'torneio';
     // Fetch the image and download it
     fetch(img.src).then(function(resp) { return resp.blob(); }).then(function(blob) {
@@ -981,7 +981,7 @@ function _resolveStandingsRows(t) {
 // que não fosse o bracket. Agora gera HTML auto-contido com header do
 // torneio + inscritos + matches + standings, em paisagem retrato A4.
 window._printTournament = function(tournamentId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
+  var t = window._findTournamentById(tournamentId);
   if (!t) {
     if (typeof showNotification === 'function') showNotification('Erro', 'Torneio não encontrado.', 'error');
     return;
@@ -1137,7 +1137,7 @@ window._printBracket = function() {
 // Estrutura: bloco Torneio (header + dados) + bloco Inscritos +
 // bloco Partidas (se houver) + bloco Classificação (Liga/Suíço).
 window._exportTournamentCSV = function(tournamentId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
+    var t = window._findTournamentById(tournamentId);
     if (!t) return;
 
     var rows = [];
@@ -1351,12 +1351,7 @@ function _icsDownload(payload, filename) {
 
 // Picker overlay — 3 opções. Se o torneio não tem startDate, avisa e sai.
 window._tournamentAddToCalendar = function(tournamentId) {
-  var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
-  if (!t) {
-    if (Array.isArray(window.AppStore.publicDiscovery)) {
-      t = window.AppStore.publicDiscovery.find(function(tour) { return String(tour.id) === String(tournamentId); });
-    }
-  }
+  var t = window._findTournamentById(tournamentId); // já cobre tournaments + publicDiscovery
   if (!t) return;
   var payload = _tournamentCalendarPayload(t);
   if (!payload) {

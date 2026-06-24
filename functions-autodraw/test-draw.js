@@ -39,7 +39,11 @@ function validateRound(round, n, label) {
   const expectedGroups = Math.floor((n - (n % 4)) / 4);
   assert(groups.length === expectedGroups, 'grupos = ' + expectedGroups + ' (got ' + groups.length + ')');
   assert(real.length === expectedGroups * 3, 'jogos reais = grupos×3 = ' + (expectedGroups * 3) + ' (got ' + real.length + ')');
-  assert(sitouts.length === (n % 4), 'folgas = n%4 = ' + (n % 4) + ' (got ' + sitouts.length + ')');
+  // Desde v2.6.99: a sobra do agrupamento por 4 NÃO vira folga — vira lista de
+  // espera (t.monarchWaitlist por categoria). Logo, zero folgas e n%4 na fila.
+  assert(sitouts.length === 0, 'sem folgas — sobra vai pra lista de espera (got ' + sitouts.length + ')');
+  const wl = (round.monarchWaitlist && round.monarchWaitlist['_default_']) || [];
+  assert(wl.length === (n % 4), 'lista de espera = n%4 = ' + (n % 4) + ' (got ' + wl.length + ')');
 
   // Toda partida real precisa ser 2×2 com 4 jogadores distintos (NUNCA 1×1).
   let bad = 0, oneVone = 0;
@@ -142,8 +146,13 @@ const drawn = new Set();
   (m.team1 || []).forEach(x => drawn.add(x));
   (m.team2 || []).forEach(x => drawn.add(x));
 }));
-const missing = tc.participants.map(p => p.name).filter(n => !drawn.has(n));
-assert(missing.length === 0, 'TODOS os ' + totalParts + ' inscritos entraram no sorteio (faltaram: ' + missing.length + (missing.length ? ' → ' + missing.join(',') : '') + ')');
+// Quem sobrou do agrupamento por 4 NÃO fica de fora — vai pra lista de espera
+// (t.monarchWaitlist por categoria). "Contemplado" = sorteado em grupo OU na fila.
+const waitlisted = new Set();
+Object.keys(tc.monarchWaitlist || {}).forEach(k => (tc.monarchWaitlist[k] || []).forEach(nm => waitlisted.add(nm)));
+const missing = tc.participants.map(p => p.name).filter(n => !drawn.has(n) && !waitlisted.has(n));
+assert(missing.length === 0, 'TODOS os ' + totalParts + ' inscritos contemplados — sorteio(' + drawn.size + ') + lista de espera(' + waitlisted.size + ') (de fora: ' + missing.length + (missing.length ? ' → ' + missing.join(',') : '') + ')');
+assert(drawn.size + waitlisted.size === totalParts, 'sorteados + lista de espera = total (' + drawn.size + ' + ' + waitlisted.size + ' = ' + (drawn.size + waitlisted.size) + ' / ' + totalParts + ')');
 
 // Os sem-categoria-válida foram pra D (mais fraca), exceto o de perfil C.
 function catOf(name) {

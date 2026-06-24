@@ -229,6 +229,8 @@ window.TROPHY_CATALOG = [
     desc: 'Vença sua primeira partida em um torneio.',
     icon: '🎯',
     tier: null,
+    // v3.0.x: stats.tournamentMatchesWon agora é computado de verdade (trophies.js,
+    // resolução por UID em torneios qualificados) → troféu reativado.
     trigger: 'tournament_match_result',
     check: function(ctx) { return (ctx.stats.tournamentMatchesWon || 0) >= 1; }
   },
@@ -249,6 +251,8 @@ window.TROPHY_CATALOG = [
     desc: 'Termine em 1º, 2º ou 3º lugar em um torneio.',
     icon: '🥈',
     tier: null,
+    // v3.0.x: stats.tournamentPodiums agora computado de verdade (colocação final
+    // por formato: campeão/vice/3º na eliminatória; top-3 na Liga) → troféu reativado.
     trigger: 'tournament_finished',
     check: function(ctx) { return (ctx.stats.tournamentPodiums || 0) >= 1; }
   },
@@ -650,6 +654,7 @@ window.MILESTONE_CATALOG = [
     id: 'milestone_partidas_torneio_vitorias',
     category: 'torneio',
     metric: 'tournamentMatchesWon',
+    // v3.0.x: métrica tournamentMatchesWon agora computada de verdade → reativado.
     step: 25,
     startAt: 25,
     icon: '🎯',

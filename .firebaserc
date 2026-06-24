@@ -6,7 +6,7 @@
   "etags": {
     "scoreplace-app": {
       "extensionInstances": {
-        "firestore-send-email": "38fce770ac544e4ced7eefbfbc7d12e39f6a05bed6803241328613f99075a819"
+        "firestore-send-email": "8aa4cd0ccb7d528b96ddb49a3fa72eb7baff3a74de891e1f613bf66101752327"
       }
     },
     "scoreplace-staging": {

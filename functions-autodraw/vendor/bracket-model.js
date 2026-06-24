@@ -333,7 +333,7 @@
         gRounds.forEach(function (r) { gMatches = gMatches.concat(r.matches); });
       }
       return {
-        name: g.name || ('Grupo ' + String.fromCharCode(65 + gi)),
+        name: window._groupDisplayName(g, gi),
         players: (g.players || g.participants || []).slice(),
         matches: gMatches,
         rounds: gRounds

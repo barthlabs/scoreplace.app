@@ -96,6 +96,9 @@ window._executeMerge = function(sourceName, targetName, tId) {
 // o soltar pra abrir o convite de co-organização.
 window._setOrgDropActive = function(on) {
   try {
+    // v2.8.52: a VAGA de co-organização (.sp-org-dropzone) só aparece DURANTE o
+    // arraste — body.sp-org-dragging controla a visibilidade via CSS.
+    if (document.body) document.body.classList.toggle('sp-org-dragging', !!on);
     document.querySelectorAll('.sp-org-droptarget').forEach(function(el) {
       el.classList.toggle('sp-org-drag-active', !!on);
       if (!on) el.classList.remove('sp-org-drop-hover');
@@ -130,6 +133,10 @@ window._mergeDragStart = function(e, name, tId) {
     window._mergeDragData = { name: name, tId: tId };
     e.dataTransfer.effectAllowed = 'move';
     try { e.dataTransfer.setData('text/plain', name); } catch(ex) {}
+    // v2.7.89: guarda onde o card foi pego (centra a seção compacta nesse ponto).
+    window._spDragPickY = (typeof e.clientY === 'number' && e.clientY > 0) ? e.clientY : (window.innerHeight / 2);
+    // v2.7.86/87: esconde o card arrastado + compacta os outros (drop mais perto).
+    setTimeout(function () { if (window._markDragSource) window._markDragSource(e.target); if (window._setDragCompact) window._setDragCompact(true); }, 0);
     // v2.3.79: revela a estrela de co-organização (#crown-org-btn) e popula
     // window._participantDragData — assim arrastar um inscrito pós-sorteio
     // (caminho merge, ex.: Liga já sorteada) também permite soltar na estrela
@@ -370,34 +377,28 @@ window._deduplicateParticipants = function(t) {
         }
     });
 
-    // Pass 2: deduplicate by uid/email AND by name-in-team
-    t.participants.forEach(function(p) {
+    // v2.6.107: dedup SÓ por uid (mesma conta = mesma inscrição). Identidade = uid,
+    // que é autoridade pra quem se inscreveu com a própria conta (self-enrolled).
+    // NÃO mescla por e-mail/telefone/nome CACHEADO no entry: o v2.6.102 fazia isso e
+    // fundia CONTAS DIFERENTES por dado velho (caso Confra: removeu a "Camila Calia"
+    // achando que era o mesmo que uma conta-telefone, por e-mail cacheado errado).
+    // Pessoa com 2 CONTAS de verdade é tarefa da mesclagem de CONTA (Cloud Function,
+    // por e-mail/telefone REAL do perfil) — não de adivinhar aqui na lista do torneio.
+    t.participants.forEach(function (p) {
         if (!p) return;
         if (typeof p === 'string') {
-            // Check if this individual name is already part of a team entry
-            if (p.indexOf(' / ') === -1 && teamMembers[p.trim().toLowerCase()]) {
-                removedCount++;
-                return; // skip — already represented inside a team
-            }
+            if (p.indexOf(' / ') === -1 && teamMembers[p.trim().toLowerCase()]) { removedCount++; return; }
             deduped.push(p);
             return;
         }
         if (typeof p !== 'object') return;
         var pName = (p.displayName || p.name || '').trim();
-
-        // Check if this individual is already inside a team string
-        if (pName && pName.indexOf(' / ') === -1 && teamMembers[pName.toLowerCase()]) {
-            removedCount++;
-            return; // skip — already represented inside a team
-        }
-
-        // Deduplicate by uid/email
-        var key = p.uid ? ('uid:' + p.uid) : (p.email ? ('email:' + p.email) : null);
+        if (pName && pName.indexOf(' / ') === -1 && teamMembers[pName.toLowerCase()]) { removedCount++; return; }
+        if (pName.indexOf(' / ') !== -1) { deduped.push(p); return; } // entrada de TIME
+        // dedup só por uid (mesma conta). Sem uid → mantém (não inventa identidade).
+        var key = p.uid ? ('uid:' + p.uid) : null;
         if (key && seen[key]) {
-            removedCount++;
-            var prevIdx = deduped.indexOf(seen[key]);
-            if (prevIdx !== -1) deduped[prevIdx] = p;
-            seen[key] = p;
+            removedCount++; // mesma conta inscrita 2x → descarta a repetida (mantém a 1ª)
         } else {
             if (key) seen[key] = p;
             deduped.push(p);
@@ -656,16 +657,6 @@ window._tProgParseMs = function(s) {
   var ms = d.getTime();
   return isNaN(ms) ? null : ms;
 };
-window._tProgFmtClock = function(ms) {
-  if (ms == null) return '—';
-  var d = new Date(ms);
-  var hh = String(d.getHours()).padStart(2, '0');
-  var mm = String(d.getMinutes()).padStart(2, '0');
-  var today = new Date();
-  var sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
-  if (sameDay) return hh + ':' + mm;
-  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + hh + ':' + mm;
-};
 window._tProgFmtDur = function(ms) {
   if (ms == null || ms < 0) ms = 0;
   var s = Math.floor(ms / 1000);
@@ -726,6 +717,113 @@ window._ligaTournamentProgress = function(t) {
   return { perRound: perRound, completedAll: completedAll, roundsPlanned: roundsPlanned,
            totalPlanned: totalPlanned, pct: pct, currentRoundNum: t.rounds.length };
 };
+
+// ─── v2.7.13: PLANO DE JOGOS DO TORNEIO INTEIRO (todas as fases) ──────────────
+// Construtor de fases: total previsto = SOMA de todas as fases. Fase materializada
+// conta jogos REAIS; próxima fase é contada RODANDO O MOTOR (não fórmula). Canônico.
+window._isMultiPhase = function (t) { return !!(t && Array.isArray(t.phases) && t.phases.length > 1); };
+
+// Jogos reais já materializados de uma fase (i=0 → t.rounds; i>0 → t.matches[phaseIndex]).
+function _materializedPhaseGames(t, phaseIdx) {
+  function real(m) {
+    if (!m || m.isBye || m.isSitOut) return false;
+    var p1 = m.p1 || '', p2 = m.p2 || '';
+    if (!p1 || !p2 || p1 === 'BYE' || p2 === 'BYE' || p1 === 'TBD' || p2 === 'TBD') return false;
+    return true;
+  }
+  if (phaseIdx === 0) {
+    var c = 0;
+    (t.rounds || []).forEach(function (r) { (r.matches || []).forEach(function (m) { if (real(m)) c++; }); });
+    return c;
+  }
+  return (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && real(m); }).length;
+}
+
+// Conta os jogos PREVISTOS de uma fase de chave RODANDO O MOTOR REAL
+// (window._phasesEngine.buildPhaseBrackets) sobre os grupos da fase anterior.
+// Conta jogáveis = não-BYE (inclui rodadas futuras TBD + convergência se houver).
+// Como usa os grupos ATUAIS da fase anterior, grupos tardios (lista de espera)
+// que aparecem na fase 0 refletem AUTOMATICAMENTE no total da fase seguinte.
+function _simulatePhaseGames(t, phaseIdx) {
+  var eng = window._phasesEngine;
+  if (!eng || typeof eng.buildPhaseBrackets !== 'function') return null;
+  var cur = t.currentPhaseIndex || 0;
+  if (phaseIdx !== cur + 1) return null; // só a PRÓXIMA fase é simulável sem resultados
+  var prevGroups = null;
+  if (cur === 0 && typeof eng.prevPhaseGroups === 'function') prevGroups = eng.prevPhaseGroups(t);
+  else if (typeof eng.bracketPhaseGroups === 'function') prevGroups = eng.bracketPhaseGroups(t, cur);
+  if (!prevGroups || !prevGroups.length) return null;
+  // computeStandings só precisa devolver os participantes do grupo (a CONTAGEM da
+  // chave depende de quantos entram por linha, não de QUEM). Ordem não importa.
+  var cs = function (g) {
+    var ps = (g && (g.players || g.participants || g.standings)) || [];
+    return ps.map(function (p) {
+      var nm = (typeof p === 'string') ? p : (p && (p.displayName || p.name)) || '';
+      return { name: nm, displayName: nm };
+    });
+  };
+  try {
+    var built = eng.buildPhaseBrackets(prevGroups, t.phases[phaseIdx], cs, 'plan-' + phaseIdx);
+    return (built.matches || []).filter(function (m) {
+      return m && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE';
+    }).length;
+  } catch (e) { if (window._warn) window._warn('[plan] sim falhou', e); return null; }
+}
+
+// PLANO canônico: total de jogos previstos somando TODAS as fases.
+// Fase materializada = jogos reais (fase 0 inclui grupos tardios da lista de espera).
+// Próxima fase = simulada pelo MOTOR real (single-elim por linha + convergência).
+window._tournamentGamesPlan = function (t) {
+  var prog = window._getTournamentProgress(t);
+  var done = prog.completed != null ? prog.completed : (prog.completedAll || 0);
+  if (!window._isMultiPhase(t)) {
+    var lp = window._ligaTournamentProgress(t);
+    var totalSingle = lp ? lp.totalPlanned : prog.total;
+    return { multiPhase: false, totalPlanned: totalSingle, totalDone: done,
+             pct: totalSingle > 0 ? Math.round(done / totalSingle * 100) : 0, phasesCount: 1 };
+  }
+  var phases = t.phases;
+  var curIdx = t.currentPhaseIndex || 0;
+  var totalP = 0, simComplete = true;
+  for (var i = 0; i < phases.length; i++) {
+    if (i <= curIdx) {
+      totalP += _materializedPhaseGames(t, i);            // fase já sorteada → jogos reais
+    } else if (i === curIdx + 1) {
+      var sim = _simulatePhaseGames(t, i);                // próxima fase → motor real
+      if (sim == null) simComplete = false; else totalP += sim;
+    } else {
+      simComplete = false;                                // fases 3+ só entram ao materializar a anterior
+    }
+  }
+  if (totalP < done) totalP = done;
+  return { multiPhase: true, totalPlanned: totalP, totalDone: done,
+           pct: totalP > 0 ? Math.round(done / totalP * 100) : 0,
+           phasesCount: phases.length, currentPhaseIndex: curIdx, partial: !simComplete };
+};
+
+// Janela PROGRAMADA do TORNEIO INTEIRO: início = MENOR data de início entre todas
+// as fases (e top-level); fim = MAIOR data de fim entre todas as fases. No multi-
+// fase o fim do torneio é o fim da ÚLTIMA fase (ex.: Confra = 12/11), não o fim da
+// fase atual (19/06). Datas por fase: phase.startDate/startTime, phase.endDate/endTime.
+window._tournamentScheduledWindow = function (t) {
+  var starts = [], ends = [];
+  function add(arr, dateStr, timeStr) {
+    if (!dateStr) return;
+    var s = String(dateStr).indexOf('T') > -1 ? dateStr : (dateStr + (timeStr ? ('T' + timeStr) : ''));
+    var ms = window._tProgParseMs(s); if (ms != null) arr.push(ms);
+  }
+  add(starts, t.startDate, t.startTime);
+  add(ends, t.endDate, t.endTime);
+  if (Array.isArray(t.phases)) t.phases.forEach(function (ph) {
+    add(starts, ph.startDate, ph.startTime);
+    add(ends, ph.endDate, ph.endTime);
+  });
+  return {
+    startMs: starts.length ? Math.min.apply(null, starts) : null,
+    endMs: ends.length ? Math.max.apply(null, ends) : null
+  };
+};
+
 // HTML interno (recomputado a cada tick).
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
@@ -751,6 +849,7 @@ window._buildProgressInner = function(t) {
   // desta rodada até o PRÓXIMO sorteio); início real = 1º ponto da rodada;
   // final real = último ponto (round.completedAt).
   var _isLiga = !!(window._isLigaFormat && window._isLigaFormat(t)) && Array.isArray(t.rounds) && t.rounds.length > 0;
+  var _mp = !!(window._isMultiPhase && window._isMultiPhase(t));
   var _roundComplete = false, _roundCompletedMs = null, _roundNum = 0;
   var _labelSchedStart = 'início programado', _labelSchedEnd = 'final programado', _labelHead = 'Progresso do Torneio';
   if (_isLiga) {
@@ -787,13 +886,46 @@ window._buildProgressInner = function(t) {
     _labelSchedStart = 'sorteio da rodada';
     _labelSchedEnd = 'próximo sorteio';
     _labelHead = 'Rodada ' + _roundNum;
+    // v2.7.12: MULTI-FASE — a fase atual NÃO tem intervalo de sorteio (ex.: Fase 0
+    // Rei/Rainha de 1 rodada). O "programado" usa as DATAS CONFIGURADAS (fase ou
+    // torneio), nunca 1ºsorteio+intervalo (era de onde saía o 25/06). Sem data
+    // configurada → estima pelo tempo de quadra desta rodada. Rótulos viram
+    // "início/final programado" (não há "próximo sorteio" em rodada única).
+    if (_mp) {
+      var _ph = (t.phases && t.phases[t.currentPhaseIndex || 0]) || {};
+      var _cfgStartMs = window._tProgParseMs(_ph.startDate ? (_ph.startDate + (_ph.startTime ? ('T' + _ph.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
+      var _cfgEndMs = window._tProgParseMs(_ph.endDate ? (_ph.endDate + (_ph.endTime ? ('T' + _ph.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
+      if (_cfgStartMs) schedStart = _cfgStartMs;
+      if (_cfgEndMs) { plannedEnd = _cfgEndMs; }
+      else {
+        var _gdMp = parseInt(t.gameDuration) || 30, _ctMp = parseInt(t.callTime) || 0, _wuMp = parseInt(t.warmupTime) || 0;
+        var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = _gdMp + _ctMp + _wuMp + 5;
+        plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_rTotal / _crtMp) * _slotMp * 60000;
+      }
+      // v2.8.8: multi-fase — "início real" é SÓ o 1º ponto da rodada (_roundStart).
+      // Não herdar tournamentStarted (linha ~840) nem o fallback _thisDraw (linha ~890):
+      // no multi-fase _thisDraw vem de drawFirstDate+intervalo (que NÃO se aplica) e
+      // gerava "INÍCIO REAL 21/06 (futuro/passado) + DECORRIDO 0/21h". Sem ponto jogado
+      // → actualStart null → _notStarted true → selo "⏳ Aguardando início".
+      actualStart = _roundStart || null;
+      _labelSchedStart = 'início programado';
+      _labelSchedEnd = 'final programado';
+    }
   }
 
   // v2.3.8/2.3.18: barra do TORNEIO inteiro (Liga multi-rodada) com data/hora
   // do 1º ponto e do limite do último ponto.
   var _ligaBarHtml = '';
   var _lp = window._ligaTournamentProgress(t);
-  if (_lp && _lp.roundsPlanned > 1) {
+  var _gp = (window._tournamentGamesPlan ? window._tournamentGamesPlan(t) : null);
+  // v2.7.12: a barra "Torneio completo" aparece na Liga multi-rodada E no
+  // construtor de fases (soma TODAS as fases via _tournamentGamesPlan).
+  var _useGp = _mp && _gp && _gp.totalPlanned > 0;
+  if ((_lp && _lp.roundsPlanned > 1) || _useGp) {
+    var _barDone = _useGp ? _gp.totalDone : _lp.completedAll;
+    var _barTotal = _useGp ? _gp.totalPlanned : _lp.totalPlanned;
+    var _barPct = _useGp ? _gp.pct : _lp.pct;
+    var _barSuffix = _useGp ? (' · fase ' + (((_gp.currentPhaseIndex) || 0) + 1) + ' de ' + _gp.phasesCount) : (' · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned);
     // v2.4.78: duração REAL do torneio inteiro — do 1º placar lançado (primeiro
     // m.startedAt de todas as rodadas) ao último (maior m.resultAt). Espelha o
     // painel da rodada (INÍCIO REAL / DUROU / FINAL REAL), mas cobrindo a Liga
@@ -807,17 +939,27 @@ window._buildProgressInner = function(t) {
       });
       if (r && r.completedAt) _endsFallback.push(+r.completedAt);
     });
+    // v2.7.12: fases de chave (1+) vivem em t.matches → cobrem o fim REAL do torneio.
+    if (_mp) (t.matches || []).forEach(function(m){
+      if (!m || m.isSitOut) return;
+      if (m.startedAt) _allStarts.push(+m.startedAt);
+      if (m.resultAt) _allEnds.push(+m.resultAt);
+    });
     var _firstPointMs = _allStarts.length ? Math.min.apply(null, _allStarts) : (t.tournamentStarted ? (+t.tournamentStarted) : null);
     var _lastPointMs = _allEnds.length ? Math.max.apply(null, _allEnds) : (_endsFallback.length ? Math.max.apply(null, _endsFallback) : null);
-    var _deadlineMs = window._tProgParseMs(t.endDate);
-    var _tournDone = _lp.pct >= 100;
+    // v2.7.14: fim do torneio inteiro = fim da ÚLTIMA fase (janela programada),
+    // não t.endDate (que no multi-fase é a fase ATUAL, ex.: 19/06). O fim real é
+    // o da última fase (ex.: Confra 12/11). Janela também dá o início do todo.
+    var _win = (_mp && window._tournamentScheduledWindow) ? window._tournamentScheduledWindow(t) : null;
+    var _deadlineMs = (_win && _win.endMs) ? _win.endMs : window._tProgParseMs(t.endDate);
+    var _tournDone = _barPct >= 100;
 
     // Linha INÍCIO REAL / DUROU / FINAL REAL (só quando há 1º e último placar).
     var _durRow = '';
     if (_firstPointMs && _lastPointMs && _lastPointMs >= _firstPointMs) {
       var _tDurMs = _lastPointMs - _firstPointMs;
       var _tColor = _tournDone ? '#10b981' : 'var(--text-bright)';
-      var _tEndLabel = _tournDone ? 'final real' : 'último placar';
+      var _tEndLabel = _tournDone ? 'final real' : 'último placar lançado';
       var _tDurLabel = _tournDone ? 'durou' : 'decorrido';
       var _tTimeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
       var _tLblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
@@ -849,14 +991,34 @@ window._buildProgressInner = function(t) {
             '</div>'
           : '');
 
+    // v2.7.14: linha PROGRAMADO do TORNEIO INTEIRO (início da 1ª fase → fim da
+    // última fase). Responde "cadê o início do torneio todo" e mostra o fim real
+    // (12/11) em vez do fim da fase atual. Só multi-fase com janela definida; nesse
+    // caso substitui o "🏁 limite" (que vira redundante com o "fim programado").
+    var _schedRow = '';
+    if (_win && _win.startMs && _win.endMs) {
+      var _spLblS = 'font-size:0.6rem;color:#60a5fa;text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
+      var _spCol = function(ms, label, align) {
+        return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
+          '<span style="font-size:1rem;font-weight:800;color:#93c5fd;line-height:1.1;">' + _time(ms) + '</span>' +
+          '<span style="font-size:0.72rem;color:#60a5fa;font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
+          '<span style="' + _spLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+        '</div>';
+      };
+      _schedRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:9px;gap:8px;">' +
+        _spCol(_win.startMs, 'início programado', 'flex-start') +
+        _spCol(_win.endMs, 'fim programado', 'flex-end') +
+      '</div>';
+    }
+
     _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
         '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
-        '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _lp.completedAll + '/' + _lp.totalPlanned + ' jogos (' + _lp.pct + '%) · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned + '</span>' +
+        '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _barDone + '/' + _barTotal + ' jogos (' + _barPct + '%)' + _barSuffix + '</span>' +
       '</div>' +
       '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">' +
-        '<div style="width:' + _lp.pct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
-      '</div>' + _durRow + _limiteLine +
+        '<div style="width:' + _barPct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
+      '</div>' + _durRow + (_schedRow || _limiteLine) +
     '</div>';
   }
 
@@ -865,14 +1027,33 @@ window._buildProgressInner = function(t) {
     '<span style="font-size:0.92rem;font-weight:800;">' + prog.completed + '/' + prog.total + (_isLiga ? ' jogos' : ' partidas') + ' (' + prog.pct + '%)</span>' +
   '</div>';
 
-  // Sem timeline confiável → barra simples (comportamento antigo).
-  if (!actualStart || !schedStart || !plannedEnd || plannedEnd <= schedStart) {
+  // v2.7.79: barra simples ("pobre") SÓ quando não há janela programada (sem
+  // início/fim confiável). Antes exigia também actualStart → torneio sorteado mas
+  // ainda não iniciado caía na pobre mesmo tendo datas. Agora, havendo janela, usa
+  // a barra RICA em modo "aguardando início" (sem a linha de tempo real ainda).
+  if (!schedStart || !plannedEnd || plannedEnd <= schedStart) {
+    // v2.7.79: sem âncora de tempo (torneio sem data E sem 1º jogo lançado) não dá
+    // pra desenhar a janela programada. Mesmo assim NUNCA mostra a barra pelada:
+    // estado "⏳ Aguardando início" + DURAÇÃO ESTIMADA (defaults quando faltam os
+    // campos). Quando o 1º placar é lançado (grava tournamentStarted) ou há data,
+    // sobe pra barra rica completa (dupla verde+azul + horários).
     var c = prog.pct === 100 ? '#10b981' : (prog.pct > 50 ? '#3b82f6' : '#f59e0b');
-    return head +
+    var _pending = !isFinished && prog.pct < 100 && !actualStart;
+    var _waitTop2 = _pending
+      ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:#93c5fd;">⏳ Aguardando início</div>'
+      : '';
+    var _estMin2 = Math.round(window._estimateTournamentMinutes ? (window._estimateTournamentMinutes(t) || 0) : 0);
+    var _estH = Math.floor(_estMin2 / 60), _estM = _estMin2 % 60;
+    var _estStr2 = _estH > 0 ? (_estH + 'h' + (_estM ? (' ' + _estM + 'min') : '')) : (_estM + 'min');
+    var _estLine2 = (_pending && _estMin2 > 0)
+      ? '<div style="margin-top:7px;font-size:0.72rem;color:#93c5fd;font-weight:600;text-align:center;">⏱️ Duração estimada: ~' + _estStr2 + '</div>'
+      : '';
+    return head + _waitTop2 +
       '<div style="width:100%;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">' +
         '<div style="width:' + prog.pct + '%;height:100%;background:' + c + ';border-radius:4px;transition:width 0.5s ease;"></div>' +
       '</div>' +
       (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ ' + (_isLiga ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
+      _estLine2 +
       _ligaBarHtml;
   }
 
@@ -881,7 +1062,10 @@ window._buildProgressInner = function(t) {
   // fim "real" da rodada (Liga) quando completa → congela o cronômetro
   var _roundEndReal = (_isLiga && _roundComplete && _roundCompletedMs) ? _roundCompletedMs : null;
   var endForElapsed = _roundEndReal ? _roundEndReal : ((isFinished && finishedMs != null) ? finishedMs : now);
-  var elapsedMs = endForElapsed - actualStart;
+  // v2.7.79: não iniciado (sorteado, sem 1º ponto) → modo "aguardando início":
+  // não há "início real / decorrido"; usamos só a janela programada + barras.
+  var _notStarted = !actualStart;
+  var elapsedMs = _notStarted ? 0 : (endForElapsed - actualStart);
   var expectedFrac = (now - schedStart) / (plannedEnd - schedStart);
   if (expectedFrac < 0) expectedFrac = 0;
   if (expectedFrac > 1) expectedFrac = 1;
@@ -899,13 +1083,13 @@ window._buildProgressInner = function(t) {
   var estEndMs;
   if (_roundEndReal) estEndMs = _roundEndReal;
   else if (isFinished) estEndMs = (finishedMs != null ? finishedMs : now);
-  else if (progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
+  else if (!_notStarted && progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
   else estEndMs = plannedEnd;
 
   var _endLabel = _roundEndReal ? 'final real' : (isFinished ? 'final real' : 'final estimado');
   var _elapsedLabel = (_roundEndReal || isFinished) ? 'durou' : 'decorrido';
   // mostra DATA quando início e fim caem em dias diferentes
-  var _multiDay = _date(actualStart) !== _date(estEndMs);
+  var _multiDay = !_notStarted && (_date(actualStart) !== _date(estEndMs));
 
   var _timeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
   var _lblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
@@ -926,14 +1110,18 @@ window._buildProgressInner = function(t) {
     '</div>';
   };
 
-  var topRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
-    _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
-    '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
-      '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
-      '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
-    '</div>' +
-    _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
-  '</div>';
+  // v2.7.79: antes de iniciar não há "início real / decorrido" — mostra só um
+  // selo "⏳ Aguardando início" (a janela programada vem na linha de baixo).
+  var topRow = _notStarted
+    ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:#93c5fd;">⏳ Aguardando início</div>'
+    : '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
+        _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
+          '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
+          '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
+        '</div>' +
+        _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
+      '</div>';
   var realBar = '<div style="width:100%;height:11px;background:rgba(255,255,255,0.1);border-radius:6px 6px 0 0;overflow:hidden;">' +
     '<div style="width:' + Math.round(progFrac * 100) + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' +
   '</div>';
@@ -1375,7 +1563,14 @@ window._buildTournamentConfigBox = function (t, opts) {
     // (escuro→box claro/texto escuro; claro→box escuro/texto claro).
     var _rbC = (opts.bg && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
     var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';') : '';
-    var openAttr = opts.open ? ' open' : '';
+    // v2.7.47: persiste colapsado/expandido POR TORNEIO. Uma vez colapsado, fica
+    // colapsado (mesmo após re-render / mudança de versão); só expande se o usuário
+    // expandir. Sem estado salvo → usa o default (opts.open).
+    var _cfgKey = 'scoreplace_cfgbox_' + String((t && t.id) || '');
+    var _cfgSaved = null; try { _cfgSaved = localStorage.getItem(_cfgKey); } catch (e) {}
+    var _cfgOpen = (_cfgSaved === '1') ? true : (_cfgSaved === '0') ? false : !!(opts && opts.open);
+    var _cfgKeyJs = _cfgKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var openAttr = _cfgOpen ? ' open' : '';
     var summary = esc(fmt) + ' · ' + fmtGameType().replace(' — 2 categorias', ' (2 cat.)');
 
     // v2.6.29: hardening contra overflow lateral. Como esta caixa é um flex item
@@ -1385,6 +1580,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     // label "configuração ▾" do fim é cortada. O <span> do meio elipsa o texto
     // longo; o do fim nunca encolhe (flex-shrink:0 + nowrap) — fica sempre legível.
     return '<details class="info-box tourn-config-box"' + openAttr +
+        ' ontoggle="try{localStorage.setItem(\'' + _cfgKeyJs + '\', this.open?\'1\':\'0\')}catch(e){}"' +
         ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;' + bgStyle + '">' +
         '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;">' +
         '<span style="flex-shrink:0;">⚙️</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + summary + '</span>' +

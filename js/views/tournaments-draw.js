@@ -2124,9 +2124,10 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         if (typeof showNotification === 'function') showNotification('👫 Dupla formada!', newName, 'success');
     };
     if (opts && opts.skipConfirm) { _doForm(); return; }
+    var _eNew = window._safeHtml(newName), _e1 = window._safeHtml(name1), _e2 = window._safeHtml(name2); // v3.0.x: escapa nomes (showConfirmDialog renderiza message como HTML)
     var _msg = _changeRule
-        ? ('Este torneio é individual. Formar a dupla "' + newName + '" vai <b>passar a permitir times pra todos</b> (a regra do torneio muda). Confirmar?')
-        : (name1 + ' e ' + name2 + ' formarão a dupla "' + newName + '". Confirmar?');
+        ? ('Este torneio é individual. Formar a dupla "' + _eNew + '" vai <b>passar a permitir times pra todos</b> (a regra do torneio muda). Confirmar?')
+        : (_e1 + ' e ' + _e2 + ' formarão a dupla "' + _eNew + '". Confirmar?');
     showConfirmDialog(
         _changeRule ? 'Formar dupla (muda a regra)' : 'Formar dupla',
         _msg,
@@ -2393,7 +2394,7 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
         });
     };
-    if (typeof showConfirmDialog === 'function') showConfirmDialog('🤝 Convidar para dupla?', 'Enviar convite para "' + name2 + '" formar dupla com você?', _send, null, { type: 'info', confirmText: 'Enviar convite', cancelText: 'Cancelar' });
+    if (typeof showConfirmDialog === 'function') showConfirmDialog('🤝 Convidar para dupla?', 'Enviar convite para "' + window._safeHtml(name2) + '" formar dupla com você?', _send, null, { type: 'info', confirmText: 'Enviar convite', cancelText: 'Cancelar' });
     else _send();
 };
 
@@ -2423,7 +2424,7 @@ window._undoMergeParticipant = function(tId, ref) {
     var placeholderName = undo.placeholder.displayName || undo.placeholder.name;
     showConfirmDialog(
         'Desfazer mesclagem',
-        '“' + personName + '” voltará a ser avulso e a vaga “' + placeholderName + '” será restaurada na chave. Confirmar?',
+        '“' + window._safeHtml(personName) + '” voltará a ser avulso e a vaga “' + window._safeHtml(placeholderName) + '” será restaurada na chave. Confirmar?',
         function() {
             var arr2 = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
             var mi = arr2.findIndex(function(p) { return p && typeof p === 'object' && p._mergedFrom && (p.displayName || p.name) === personName; });

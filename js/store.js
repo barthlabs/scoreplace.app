@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.59-beta';
+window.SCOREPLACE_VERSION = '3.0.60-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -567,7 +567,11 @@ window._softRefreshView = function() {
   var openModal = document.querySelector('.modal-overlay.active') ||
                   document.getElementById('qr-modal-overlay') ||
                   document.getElementById('player-stats-overlay') ||
-                  document.querySelector('.tv-overlay') ||
+                  // v3.0.x: era querySelector('.tv-overlay') — classe que NÃO existe;
+                  // o elemento é id="tv-mode-overlay". Sem isto, um snapshot do Firestore
+                  // disparava _softRefreshView → initRouter → _dismissAllOverlays e fechava
+                  // o Modo TV sozinho (resultado lançado em outro device, poller da Liga).
+                  document.getElementById('tv-mode-overlay') ||
                   document.getElementById('live-scoring-overlay') ||
                   document.getElementById('casual-match-overlay') ||
                   document.getElementById('unified-resolution-panel') ||
@@ -3430,6 +3434,27 @@ window._toggleHidden = function(tId, event) {
 // usuário E no feed de descoberta pública — sem isso, ações em torneio DESCOBERTO (não
 // inscrito), como "Falar com o organizador", davam "Torneio não encontrado" (só olhavam
 // AppStore.tournaments). Comparação por String (ids podem vir number/string).
+// v3.0.x: detecção CANÔNICA de dupla/time. Retorna a lista de membros (nomes) se p é
+// dupla/time — por ESTRUTURA (p.participants[] OU p.p1Name && p.p2Name), com fallback pro
+// formato legado de string "A / B". Retorna null se é individual. Vários pontos do
+// diagnóstico de sorteio detectavam dupla SÓ por '/' no nome → duplas do aceite (que
+// gravam displayName só do p1, sem barra) eram contadas como individuais, distorcendo
+// resto/potência-de-2/ímpar e abrindo o painel de resolução com números errados.
+// Identidade estrutural tem PRIORIDADE sobre o nome.
+window._entryTeamMembers = function (p) {
+  if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
+    return p.participants.map(function (s) { return (s && (s.displayName || s.name)) || String(s || ''); }).filter(Boolean);
+  }
+  if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
+    return [p.p1Name, p.p2Name];
+  }
+  var nm = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || '');
+  if (nm.indexOf('/') !== -1) {
+    return nm.split('/').map(function (m) { return m.trim(); }).filter(function (m) { return m.length > 0; });
+  }
+  return null;
+};
+
 window._findTournamentById = function (tId) {
   if (tId == null) return null;
   var s = String(tId);
@@ -3466,7 +3491,22 @@ window.AppStore = {
   // --- Local Cache ---
   _saveToCache() {
     try {
-      var data = { ts: Date.now(), tournaments: this.tournaments };
+      // v3.0.x: NUNCA persistir a flag transiente _allowConfigReset no cache local.
+      // Ela autoriza o guard anti-wipe de saveTournament por UM save (quando o
+      // organizador reduz fases de propósito). Se vazar pro localStorage (o caminho de
+      // EDIÇÃO grava ela em t e nunca a remove), volta no boot via _loadFromCache e
+      // DESARMA a blindagem multi-fase daquele torneio — vetor confirmado do "Confra
+      // perdeu as fases horas depois". Strip numa cópia rasa: não muta o objeto vivo
+      // (a flag em memória se auto-limpa no próximo echo do onSnapshot).
+      var clean = this.tournaments.map(function(t) {
+        if (t && t._allowConfigReset !== undefined) {
+          var c = Object.assign({}, t);
+          delete c._allowConfigReset;
+          return c;
+        }
+        return t;
+      });
+      var data = { ts: Date.now(), tournaments: clean };
       localStorage.setItem(this._cacheKey, JSON.stringify(data));
     } catch(e) { /* quota exceeded or private browsing */ }
   },

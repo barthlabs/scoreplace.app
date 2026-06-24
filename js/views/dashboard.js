@@ -1327,7 +1327,11 @@ function renderDashboard(container) {
       var l = label.toLowerCase();
       if (uid && l === uid) return true;
       if (email && l === email) return true;
-      if (dName && (l === dName || l.indexOf(dName) !== -1 || dName.indexOf(l) !== -1)) return true;
+      // v3.0.x: match EXATO de nome. O substring bidirecional anterior fazia "Ana"
+      // casar "Ana Paula" → partidas de outra pessoa apareciam em "Meus Resultados"
+      // com botões de aprovação pendente. A pertinência a duplas já é coberta por
+      // p1Names.some(_isMe) (nome individual, exato) + _isMeByUid (dupla por uid).
+      if (dName && l === dName) return true;
       return false;
     }
     // Verifica se um nome individual é membro de uma dupla do usuário corrente,

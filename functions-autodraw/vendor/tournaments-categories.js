@@ -266,7 +266,7 @@ window._askBirthDateForEnroll = function(t, cb) {
 // Resolve enrollment category for a participant.
 // Shows a modal if multiple eligible categories. Auto-picks if only one.
 window._resolveEnrollmentCategory = function(tId, callback) {
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (!t) { if (callback) callback(null); return; }
     // Use _getTournamentCategories so genderCategories/skillCategories work as
     // fallback when combinedCategories is missing (e.g. older tournament saves).
@@ -406,7 +406,7 @@ window._resolveEnrollmentCategory = function(tId, callback) {
 
 // Apply gender categories and update UI
 window._applyGenderCatUI = function(tId, selected) {
-    var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === tId.toString(); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
     var checkboxes = {
         'fem': document.getElementById('cat-gender-fem'),
@@ -814,7 +814,7 @@ window.renderCategoryManagerPage = function(container, tId) {
     // ---- Main view: category overview ----
     var _renderModal = function() {
         // Always re-read fresh data from AppStore (fixes stale closure after sync)
-        var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+        var t = window._findTournamentById(tId);
         if (!t) return;
         var categories = window._sortCategoriesBySkillOrder((t.combinedCategories || []).slice(), t.skillCategories);
         var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
@@ -1027,7 +1027,7 @@ window.renderCategoryManagerPage = function(container, tId) {
 
     // ---- Detail view: participants in a specific category ----
     var _renderCategoryDetail = function(catName) {
-        var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+        var t = window._findTournamentById(tId);
         if (!t) return;
         var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
 
@@ -1111,7 +1111,7 @@ window.renderCategoryManagerPage = function(container, tId) {
     // (ex.: "Fem TOP 500" num torneio C/D) ANTES de renderizar, pra a tela já
     // mostrar quem ficou sem categoria. Salva se mudou algo.
     try {
-        var _tPurge = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+        var _tPurge = window._findTournamentById(tId);
         if (_tPurge && typeof window._purgeInvalidParticipantCategories === 'function') {
             var _purged = window._purgeInvalidParticipantCategories(_tPurge);
             if (_purged > 0 && window.FirestoreDB && window.FirestoreDB.saveTournament) {
@@ -1156,10 +1156,13 @@ window._refreshCatMgr = function(tId) {
 
 // Build the HTML string for the inline category section (embeds inside tournament detail)
 window._buildInlineCatMgrHTML = function(tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return '';
     var categories = window._sortCategoriesBySkillOrder((t.combinedCategories || []).slice(), t.skillCategories);
-    if (!categories || categories.length === 0) return '';
+    // v2.8.55: torneio de CATEGORIA ÚNICA (ou sem categorias) não mostra a seção de
+    // gerenciar categorias — não há "entre categorias" pra arrastar nem "sem categoria"
+    // a distinguir (todo mundo pertence à única categoria, e o sorteio já encaixa).
+    if (!categories || categories.length <= 1) return '';
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
 
     var catCounts = {};
@@ -1252,7 +1255,7 @@ window._hydrateInlineCatMgr = function(tId) {
     // Safety net: if the tournament was saved with singleton skill categories
     // (e.g. only "Fem C" and no other Fem category), rename them to bare gender labels
     // ("Fem") so the manager and participant cards show the correct name.
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (t) {
         var _prevCombined = JSON.stringify(t.combinedCategories);
         _simplifySingletonCategories(t);
@@ -1446,6 +1449,8 @@ function _attachCatManagerDragDrop(tId) {
         // Create visual clone
         var rect = target.getBoundingClientRect();
         _touchClone = target.cloneNode(true);
+        _touchClone.id = 'cat-mgr-touch-clone'; // v2.8.26: id pra varredura de órfão na navegação
+        _touchClone.removeAttribute('data-pidx'); // evita colidir com seletores do manager
         _touchClone.style.position = 'fixed';
         _touchClone.style.left = rect.left + 'px';
         _touchClone.style.top = rect.top + 'px';
@@ -1554,6 +1559,20 @@ function _attachCatManagerDragDrop(tId) {
         if (typeof window._dragAutoScrollStop === 'function') window._dragAutoScrollStop();
     }
 
+    // v2.8.26: toque INTERROMPIDO (re-render mid-drag, cancelamento do SO) dispara
+    // touchcancel, NÃO touchend → sem isto o clone ficava órfão no <body> (fantasma que
+    // sobrevivia até à dashboard). Limpa igual ao caminho "não-arraste" do touchend.
+    function _onTouchCancel() {
+        if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+        _lpPending = null;
+        var orphan = document.getElementById('cat-mgr-touch-clone');
+        if (orphan && orphan.parentElement) orphan.remove();
+        if (_touchClone && _touchClone.parentElement) _touchClone.remove();
+        if (_touchDragEl) _touchDragEl.style.opacity = '1';
+        _touchClone = null; _touchDragEl = null; _dragData = null; _lpArmed = false;
+        if (typeof window._dragAutoScrollStop === 'function') window._dragAutoScrollStop();
+    }
+
     // Bind touch events: works for the modal overlay AND for the inline manager
     // (inline manager uses a different container ID, so bind to whichever exists)
     var touchRoot = document.getElementById('cat-manager-modal') ||
@@ -1562,6 +1581,16 @@ function _attachCatManagerDragDrop(tId) {
         touchRoot.addEventListener('touchstart', _onTouchStart, { passive: true });
         touchRoot.addEventListener('touchmove', _onTouchMove, { passive: false });
         touchRoot.addEventListener('touchend', _onTouchEnd, { passive: true });
+        touchRoot.addEventListener('touchcancel', _onTouchCancel, { passive: true });
+    }
+    // v2.8.26: rede de segurança GLOBAL — qualquer clone de toque órfão é varrido em
+    // toda troca de hash (navegação). Registrado uma única vez.
+    if (!window._catCloneSweepBound) {
+        window._catCloneSweepBound = true;
+        window.addEventListener('hashchange', function () {
+            var orphan = document.getElementById('cat-mgr-touch-clone');
+            if (orphan && orphan.parentElement) orphan.remove();
+        });
     }
 }
 
@@ -1575,7 +1604,7 @@ function _sortSkillParts(parts) {
 
 // Confirm and execute category merge
 function _confirmMergeCategories(tId, sourceCat, targetCat) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     var skillCats = (t && t.skillCategories) ? t.skillCategories : [];
 
     // Build merged name with skill suffixes sorted by strength (A before B before C...)
@@ -1648,7 +1677,7 @@ function _confirmMergeCategories(tId, sourceCat, targetCat) {
 
 // Execute the actual merge
 function _executeMerge(tId, sourceCat, targetCat, mergedName) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
 
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
@@ -1751,7 +1780,7 @@ function _executeMerge(tId, sourceCat, targetCat, mergedName) {
 
 // Remove a participant from a specific category (set as uncategorized)
 function _removeParticipantFromCategory(tId, pIdx, category) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.participants) return;
 
     var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
@@ -1772,7 +1801,7 @@ function _removeParticipantFromCategory(tId, pIdx, category) {
 }
 
 function _executeRemoveFromCategory(tId, pIdx, category) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.participants) return;
 
     var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
@@ -1819,7 +1848,7 @@ function _executeRemoveFromCategory(tId, pIdx, category) {
 
 // Move a participant from one category to another (organizer drag-and-drop)
 window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.participants) return;
     var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
     if (pIdx < 0 || pIdx >= parts.length) return;
@@ -2010,7 +2039,7 @@ function _autoReconcileParticipantCategories(t) {
 
 // Delete an empty category from the tournament's combinedCategories
 window._deleteEmptyCategory = function(tId, cat) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
 
     // Safety check: refuse to delete if participants are still assigned
@@ -2088,7 +2117,7 @@ window._deleteEmptyCategory = function(tId, cat) {
 
 // Unmerge a previously merged category
 function _unmergeCategoryAction(tId, catName) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
 
     // Find the most recent merge that produced this category in mergeHistory
@@ -2159,7 +2188,7 @@ function _unmergeCategoryAction(tId, catName) {
 }
 
 function _executeUnmerge(tId, mergeIdx) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.mergeHistory || !t.mergeHistory[mergeIdx]) return;
 
     var record = t.mergeHistory[mergeIdx];
@@ -2247,7 +2276,7 @@ function _executeUnmerge(tId, mergeIdx) {
 
 // Unmerge without mergeHistory — infer from name pattern
 function _executeInferredUnmerge(tId, mergedName, inferredCats) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t) return;
 
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
@@ -2313,7 +2342,7 @@ function _executeInferredUnmerge(tId, mergedName, inferredCats) {
 
 // Assign an uncategorized participant to a category (manual by organizer)
 function _assignParticipantCategory(tId, pIdx, category) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !t.participants) return;
 
     // Work directly on the tournament's participants array
@@ -2456,7 +2485,7 @@ function _eligibleCatsForParticipant(p, allCats, tSport) {
 }
 
 window._autoAssignCategories = function(tId, _preloadedT) {
-    var t = _preloadedT || window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = _preloadedT || window._findTournamentById(tId);
     if (!t) return 0;
 
     var allCats = window._getTournamentCategories ? window._getTournamentCategories(t) : (t.combinedCategories || []);
@@ -2530,7 +2559,7 @@ window._autoAssignCategories = function(tId, _preloadedT) {
 // Async version: loads Firestore profiles for participants missing profile data,
 // then runs the sync auto-assign. Caller should fire-and-forget.
 window._autoAssignCategoriesAsync = async function(tId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+    var t = window._findTournamentById(tId);
     if (!t || !window.FirestoreDB) return 0;
 
     var allCats = window._getTournamentCategories ? window._getTournamentCategories(t) : (t.combinedCategories || []);
@@ -2603,7 +2632,7 @@ window._autoAssignCategoriesAsync = async function(tId) {
     // If onSnapshot replaced AppStore during our awaits, the enriched `t` is now orphaned.
     // Sync category assignments back to the current AppStore reference so _renderModal sees them.
     if (n > 0) {
-        var currentT = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tId); });
+        var currentT = window._findTournamentById(tId);
         if (currentT && currentT !== t) {
             var eParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
             var cParts = Array.isArray(currentT.participants) ? currentT.participants : Object.values(currentT.participants || {});

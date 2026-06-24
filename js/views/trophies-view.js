@@ -462,6 +462,8 @@
         '<p style="font-size:0.82rem;color:var(--text-muted);margin:0 0 12px;">Progressão aritmética — cada passo tem o mesmo esforço.</p>';
 
       (window.MILESTONE_CATALOG || []).forEach(function(milestone) {
+        // v3.0.x: milestones marcados hidden (métrica ainda não calculada) não aparecem.
+        if (milestone.hidden) return;
         var currentValue = stats[milestone.metric] || 0;
         var currentLevel = window._milestoneCurrentLevel
           ? window._milestoneCurrentLevel(milestone, currentValue)

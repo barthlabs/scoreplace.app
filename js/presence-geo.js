@@ -96,7 +96,13 @@
       venueName: location.name || '',
       venueLat: Number(location.lat) || null,
       venueLon: (location.lng != null ? Number(location.lng) : (location.lon != null ? Number(location.lon) : null)),
-      sport: sport,
+      sport: sport, // mantido p/ fallback de leitura/dedup (savePresence lê d.sport)
+      // v3.0.x: o check-in automático gravava SÓ `sport` (string) e nunca o array
+      // `sports[]`. A query de exibição (PresenceDB.loadForVenueSportDay) usa
+      // `.where('sports','array-contains', normalizeSport(sport))` → o check-in por GPS
+      // ficava INVISÍVEL em "Agora no local"/gráfico. Grava normalizado, igual aos
+      // writers canônicos (presence.js:1005, venues.js:3896).
+      sports: sport ? [window.PresenceDB.normalizeSport(sport)].filter(Boolean) : [],
       type: 'checkin',
       startsAt: now,
       endsAt: now + window.PresenceDB.CHECKIN_WINDOW_MS,

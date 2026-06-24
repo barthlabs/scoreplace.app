@@ -121,6 +121,106 @@
     return null;
   }
 
+  // ─── Resolução de identidade por UID em partidas/colocação ────────────────
+  // v3.0.x: cálculo real de tournamentMatchesWon e tournamentPodiums. CRÍTICO:
+  // identidade SEMPRE por UID (nome do lado → participante → _participantUids →
+  // uid). NUNCA casar por substring de displayName — esse foi o bug crítico já
+  // corrigido no dashboard (nomes parciais davam falso-positivo).
+
+  function _allUidsOf(p) {
+    return (typeof window._participantUids === 'function')
+      ? window._participantUids(p)
+      : ((p && p.uid) ? [p.uid] : []);
+  }
+
+  // Resolve um nome de lado/jogador para o participante e checa se o uid pertence
+  // a ele (inclui p1Uid/p2Uid de duplas via _participantUids).
+  function _sideNameBelongsToUid(parts, sideName, uid) {
+    if (!sideName || sideName === 'TBD' || sideName === 'BYE') return false;
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (typeof p !== 'object' || !p) continue;
+      var pName = p.displayName || p.name || '';
+      if (pName === sideName) {
+        return _allUidsOf(p).indexOf(uid) !== -1;
+      }
+    }
+    return false;
+  }
+
+  // Conta partidas em que o time do usuário venceu, resolvendo identidade por UID.
+  function _countUserMatchWinsInTournament(t, uid) {
+    if (!t || !uid) return 0;
+    var parts = Array.isArray(t.participants) ? t.participants : [];
+    if (!parts.length) return 0;
+    var allMatches = (typeof window._collectAllMatches === 'function')
+      ? window._collectAllMatches(t)
+      : (Array.isArray(t.matches) ? t.matches : []);
+    var wins = 0;
+    allMatches.forEach(function(m) {
+      if (!m || m.isBye || m.isSitOut) return;
+      if (!m.winner || m.winner === 'draw' || m.draw) return;
+      if (m.p1 === 'BYE' || m.p2 === 'BYE') return;
+      var winSide = m.winner; // === m.p1 ou m.p2 (label do lado vencedor)
+      var won = false;
+      if (m.isMonarch && (Array.isArray(m.team1) || Array.isArray(m.team2))) {
+        // Rei/Rainha: o lado vencedor é uma lista de nomes individuais.
+        var winTeam = (winSide === m.p1) ? m.team1 : (winSide === m.p2) ? m.team2 : null;
+        if (Array.isArray(winTeam)) {
+          won = winTeam.some(function(nm) { return _sideNameBelongsToUid(parts, nm, uid); });
+        }
+      } else {
+        won = _sideNameBelongsToUid(parts, winSide, uid);
+      }
+      if (won) wins++;
+    });
+    return wins;
+  }
+
+  // Conjunto de nomes do usuário neste torneio (resolvidos por UID).
+  function _userNamesInTournament(t, uid) {
+    var parts = Array.isArray(t.participants) ? t.participants : [];
+    var names = {};
+    parts.forEach(function(p) {
+      if (typeof p !== 'object' || !p) return;
+      if (_allUidsOf(p).indexOf(uid) === -1) return;
+      var nm = p.displayName || p.name || '';
+      if (nm) names[nm] = true;
+    });
+    return names;
+  }
+
+  // Decide se o usuário terminou em 1º/2º/3º (pódio) neste torneio.
+  //   • Liga / Pontos Corridos → top-3 da classificação (_computeStandings).
+  //   • Eliminatória / Grupos+Elim / Dupla Elim → mapa t.classification (pos 1-3).
+  function _userPodiumedInTournament(t, uid) {
+    if (!t || !uid) return false;
+    var myNames = _userNamesInTournament(t, uid);
+    if (!Object.keys(myNames).length) return false;
+
+    var isLiga = (typeof window._isLigaFormat === 'function') && window._isLigaFormat(t);
+    if (isLiga && typeof window._computeStandings === 'function') {
+      try {
+        var st = window._computeStandings(t) || [];
+        for (var i = 0; i < Math.min(3, st.length); i++) {
+          if (st[i] && myNames[st[i].name]) return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    // Eliminatória e afins: mapa name → posição final (1=campeão, 2=vice, 3=3º).
+    if (t.classification && typeof t.classification === 'object') {
+      for (var nm in myNames) {
+        var pos = t.classification[nm];
+        if (typeof pos === 'number' && pos >= 1 && pos <= 3) return true;
+      }
+    }
+    // Fallback: campeão via t.winner (caso classification ainda não populado).
+    if (t.winner && myNames[t.winner]) return true;
+    return false;
+  }
+
   // ─── Agregador de estatísticas do usuário ─────────────────────────────────
   // Constrói um objeto `stats` com todas as métricas necessárias para o engine.
   // Usa AppStore.currentUser (memória) + conta documentos no Firestore quando
@@ -226,7 +326,7 @@
         .where('memberEmails', 'array-contains', (cu.email || ''))
         .get()
         .then(function(snap) {
-          var enrolled = 0, wins = 0, podiums = 0, ligaPart = 0, withTenPlus = 0;
+          var enrolled = 0, wins = 0, podiums = 0, ligaPart = 0, withTenPlus = 0, matchesWon = 0;
           snap.forEach(function(doc) {
             var t = doc.data();
             enrolled++;
@@ -237,6 +337,9 @@
               : (t.status === 'finished');
             if (qualifiedT) {
               if (t.winner && (t.winner === (cu.displayName || '') || t.winner === cu.email)) wins++;
+              // v3.0.x: vitórias em partidas + pódios computados de verdade (por UID)
+              matchesWon += _countUserMatchWinsInTournament(t, uid);
+              if (_userPodiumedInTournament(t, uid)) podiums++;
             }
             // Torneios com ≥10 inscritos que o user organizou
             if (t.organizerEmail === cu.email || t.organizerEmail === uid) {
@@ -246,10 +349,14 @@
           });
           stats.tournamentsEnrolled    = enrolled;
           stats.tournamentWins         = wins;
+          // v3.0.x: tournamentMatchesWon e tournamentPodiums agora calculados de
+          // verdade (resolução por UID em torneios qualificados). Troféus
+          // torneio_primeira_vitoria, torneio_podio e o milestone
+          // milestone_partidas_torneio_vitorias reativados (hidden removido).
           stats.tournamentPodiums      = podiums;
           stats.ligaParticipations     = ligaPart;
           stats.tournamentsWithTenPlus = withTenPlus;
-          stats.tournamentMatchesWon   = 0;
+          stats.tournamentMatchesWon   = matchesWon;
         })
         .catch(function() {}),
 

@@ -225,6 +225,11 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         if (t.opponentHistory) payload.opponentHistory = t.opponentHistory; // anti-repeat de duplas
         if (t.monarchWaitlist) payload.monarchWaitlist = t.monarchWaitlist; // v2.7.9: espera Rei/Rainha
         if (t.drawVisibility) payload.drawVisibility = t.drawVisibility;
+        // v3.0.x: PARIDADE — _generateNextRound seta t.tournamentStarted (Pontos Corridos
+        // não-manual). Sem incluir no payload seletivo, o sorteio do SERVIDOR perdia esse
+        // campo (só o cliente persistia) → banner "Iniciar Torneio" reaparecia e a duração
+        // do torneio quebrava (NaN). Mesma classe dos incidentes monarchWaitlist/tournamentStarted.
+        if (t.tournamentStarted) payload.tournamentStarted = t.tournamentStarted;
         await db.collection('tournaments').doc(tId).update(payload);
 
         console.log(`Auto-draw: round ${res.roundNumber} created with ${res.matchCount} match(es)` +

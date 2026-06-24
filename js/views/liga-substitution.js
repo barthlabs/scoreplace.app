@@ -23,7 +23,7 @@
 
 function _esc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 function _safe(s) { return (window._safeHtml ? window._safeHtml(s) : String(s == null ? '' : s)); }
-function _findT(tId) { return window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); }); }
+function _findT(tId) { return (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); }); } // v3.0.x: cobre torneio descoberto (publicDiscovery), p/ convidado de folga que veio pela descoberta
 function _save(t) { try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t); else if (window.AppStore.sync) window.AppStore.sync(); } catch (e) {} }
 function _rerender(tId) {
   try {

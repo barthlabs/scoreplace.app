@@ -951,7 +951,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
 
 // Build Activity Log for a tournament (derived from tournament data, no extra DB)
 window._buildActivityLog = function(tournamentId) {
-    var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
+    var t = window._findTournamentById(tournamentId); // tournaments + publicDiscovery (torneio descoberto)
     if (!t) return;
     var container = document.getElementById('activity-log-section');
     if (!container) return;

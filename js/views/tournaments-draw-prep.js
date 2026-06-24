@@ -20,14 +20,14 @@ window._diagnoseAll = function(t) {
 
     arr.forEach(function(p, idx) {
         const pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        if (pName.includes(' / ') || pName.includes('/')) {
-            const members = pName.split('/').map(m => m.trim()).filter(m => m.length > 0);
+        // v3.0.x: detecção canônica (estrutura > nome) — duplas do aceite sem '/' no
+        // nome eram contadas como individuais e distorciam todo o diagnóstico.
+        const members = window._entryTeamMembers(p);
+        if (members) {
             if (members.length < teamSize) {
                 incompleteTeams.push({ index: idx, name: pName, members: members, missing: teamSize - members.length });
-                preFormedTeams++;
-            } else {
-                preFormedTeams++;
             }
+            preFormedTeams++;
         } else {
             individuals++;
         }
@@ -1058,8 +1058,8 @@ window.checkIncompleteTeams = function (t) {
 
     participants.forEach((p, idx) => {
         const pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        if (pName.includes('/')) {
-            const members = pName.split('/').map(m => m.trim()).filter(m => m.length > 0);
+        const members = window._entryTeamMembers(p); // v3.0.x: estrutura > nome
+        if (members) {
             if (members.length < teamSize) {
                 incomplete.push({ index: idx, name: pName, members: members, missing: teamSize - members.length });
             }
@@ -1160,7 +1160,10 @@ window.showDissolveTeamsPanel = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
 
-    const incomplete = window.checkIncompleteTeams(t);
+    // v3.0.x: checkIncompleteTeams retorna um OBJETO {incompleteTeams,...} — o código
+    // antigo fazia `incomplete.map` direto nele → TypeError ao abrir o painel.
+    const _incDiag = window.checkIncompleteTeams(t);
+    const incomplete = (_incDiag && Array.isArray(_incDiag.incompleteTeams)) ? _incDiag.incompleteTeams : [];
     const teamSize = t.teamSize || 1;
 
     // Interface de Drag & Drop
@@ -1196,7 +1199,7 @@ window.showDissolveTeamsPanel = function (tId) {
             </div>
 
             <div style="padding:1.5rem 2rem;background:rgba(255,255,255,0.03);border-top:1px solid rgba(255,255,255,0.05);display:flex;justify-content:flex-end;gap:15px;">
-                <button onclick="window._saveDissolveResolution('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:#2563eb;color:white;border:none;padding:12px 25px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:0 10px 20px rgba(37,99,235,0.3);">${_t('predraw.saveChanges')}</button>
+                <button onclick="window._saveDissolveResolution('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:#2563eb;color:white;border:none;padding:12px 25px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:0 10px 20px rgba(37,99,235,0.3);">🧩 Dissolver times incompletos</button>
             </div>
         </div>
     `;
@@ -1224,7 +1227,7 @@ window.showDissolveTeamsPanel = function (tId) {
         fullList.innerHTML = participants.map((p, idx) => {
             const name = typeof p === 'string' ? p : (p.displayName || p.name || '');
             return `
-                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);padding:10px 15px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;cursor:move;">
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);padding:10px 15px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
                     <span style="font-size:0.9rem;color:#e2e8f0;">${window._safeHtml(name)}</span>
                     <span style="color:#94a3b8;font-size:0.75rem;">ID: ${idx}</span>
                 </div>
@@ -1235,13 +1238,72 @@ window.showDissolveTeamsPanel = function (tId) {
     renderLists();
 };
 
+// v3.0.x: implementação REAL. Antes era no-op (logAction + toast "salvo"), mentindo
+// sucesso enquanto o sorteio seguia com os times incompletos. Agora dissolve cada time
+// incompleto (membros < teamSize) em jogadores INDIVIDUAIS — preservando uid/email/foto
+// quando a identidade é estrutural (participants[]/p1Name/p2Name) — persiste e re-diagnostica.
 window._saveDissolveResolution = function (tId) {
-    // Em um sistema real, aqui consolidaríamos as mudanças no state do torneio
-    window.AppStore.logAction(tId, 'Times dissolvidos/realocados manualmente');
-    showNotification(_t('draw.changesSaved'), _t('draw.changesSavedMsg'), 'success');
-    document.getElementById('dissolve-panel').remove();
-    if (document.getElementById('incomplete-teams-panel')) document.getElementById('incomplete-teams-panel').remove();
-    window.showPowerOf2Panel(tId);
+    var t = window._findTournamentById(tId);
+    if (!t) { showNotification(window._t ? window._t('auth.error') : 'Erro', 'Torneio não encontrado.', 'error'); return; }
+
+    var enrMode = t.enrollmentMode || t.enrollment || 'individual';
+    var teamSize = parseInt(t.teamSize) || 1;
+    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+
+    var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
+    var newParts = [];
+    var dissolved = 0;
+
+    parts.forEach(function (p) {
+        var members = window._entryTeamMembers(p);
+        if (members && members.length < teamSize) {
+            // Time incompleto → quebra em individuais, mantendo identidade quando possível.
+            dissolved++;
+            if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
+                p.participants.forEach(function (s) {
+                    newParts.push((s && typeof s === 'object') ? Object.assign({}, s)
+                                                              : { name: String(s || ''), displayName: String(s || '') });
+                });
+            } else if (p && typeof p === 'object' && p.p1Name) {
+                newParts.push({ name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid || '', email: p.p1Email || '', photoURL: p.p1Photo || '' });
+                if (p.p2Name) newParts.push({ name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid || '', email: p.p2Email || '', photoURL: p.p2Photo || '' });
+            } else {
+                members.forEach(function (m) { newParts.push({ name: m, displayName: m }); });
+            }
+        } else {
+            newParts.push(p); // time completo ou individual: intocado
+        }
+    });
+
+    var _closePanels = function () {
+        var d = document.getElementById('dissolve-panel'); if (d) d.remove();
+        var i = document.getElementById('incomplete-teams-panel'); if (i) i.remove();
+    };
+
+    if (dissolved === 0) {
+        showNotification('Nada a dissolver', 'Não há times incompletos para desfazer.', 'info');
+        _closePanels();
+        if (typeof window.showUnifiedResolutionPanel === 'function') window.showUnifiedResolutionPanel(tId);
+        return;
+    }
+
+    t.participants = newParts;
+    try { window.AppStore.logAction(tId, dissolved + ' time(s) incompleto(s) dissolvido(s) em jogadores individuais'); } catch (_e) {}
+
+    // Persistência real (não mente mais sucesso).
+    try {
+        if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+            window.FirestoreDB.saveTournament(t).catch(function () {});
+        } else if (window.AppStore && typeof window.AppStore.sync === 'function') {
+            window.AppStore.sync();
+        }
+    } catch (_se) {}
+
+    showNotification('Times dissolvidos', dissolved + ' time(s) incompleto(s) viraram jogadores individuais. Eles voltam ao sorteio.', 'success');
+    _closePanels();
+    // Re-diagnostica com a base já dissolvida (remainder/potência-de-2 recomputados).
+    if (typeof window.showUnifiedResolutionPanel === 'function') window.showUnifiedResolutionPanel(tId);
+    else if (typeof window.showPowerOf2Panel === 'function') window.showPowerOf2Panel(tId);
 };
 
 // ─── VERIFICAÇÃO 2: NÚMERO ÍMPAR DE TIMES/INSCRITOS ───
@@ -1253,8 +1315,7 @@ window.checkOddEntries = function (t) {
 
     var preFormedTeams = 0, individuals = 0;
     arr.forEach(function(p) {
-        var name = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        if (name.includes(' / ')) preFormedTeams++;
+        if (window._entryTeamMembers(p)) preFormedTeams++; // v3.0.x: estrutura > nome
         else individuals++;
     });
     var teamsFromIndividuals = teamSize > 1 ? Math.floor(individuals / teamSize) : individuals;
@@ -1338,8 +1399,7 @@ window.checkPowerOf2 = function (t) {
     let preFormedTeams = 0;
     let individuals = 0;
     arr.forEach(function(p) {
-        const name = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        if (name.includes(' / ')) preFormedTeams++;
+        if (window._entryTeamMembers(p)) preFormedTeams++; // v3.0.x: estrutura > nome
         else individuals++;
     });
     const teamsFromIndividuals = teamSize > 1 ? Math.floor(individuals / teamSize) : individuals;

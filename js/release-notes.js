@@ -9,7 +9,21 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.46-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.60-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Suas fases não somem mais:</b> corrigido em definitivo o caso em que a configuração de fases de um torneio sumia horas depois.</li>' +
+        '<li><b>👥 "Meus Resultados" mais preciso:</b> não confunde mais pessoas com nomes parecidos (ex.: "Ana" e "Ana Paula") — cada um vê só os próprios jogos.</li>' +
+        '<li><b>📺 Modo TV estável:</b> não fecha mais sozinho quando chega um resultado novo de outro aparelho.</li>' +
+        '<li><b>🔗 Compartilhar funciona em torneios públicos:</b> compartilhar, QR, imprimir e exportar agora funcionam também nos torneios que você descobre no app.</li>' +
+        '<li><b>📡 Check-in automático visível:</b> ao chegar num local preferido, o check-in por GPS volta a aparecer pra você e seus amigos.</li>' +
+        '<li><b>📊 Enquete chega pra todos:</b> a notificação de enquete volta a alcançar todo mundo, inclusive quem recebe só as mais importantes.</li>' +
+        '<li><b>🎲 Sorteio conta duplas certo:</b> duplas formadas por convite são contadas como times no diagnóstico do sorteio, e a opção <b>"Dissolver times incompletos"</b> agora funciona de verdade.</li>' +
+        '<li><b>🏅 Troféus de torneio voltam:</b> vitórias em partidas e pódios voltam a desbloquear troféus.</li>' +
+        '<li><b>🔒 Segurança e estabilidade:</b> reforços de segurança nos bastidores e nomes exibidos com proteção contra caracteres especiais.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.46-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(23 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📲 Notificações mais limpas:</b> no <b>WhatsApp</b> some o cartão de preview vazio que aparecia em cima; <b>todo comunicado do organizador</b> leva o link do torneio; e o <b>e-mail</b> ganha um botão <b>"👉 Ver no scoreplace.app"</b>. Tudo sempre com um caminho claro pra abrir o torneio.</li>' +
         '<li><b>🖼️ Cartão bonito ao compartilhar o link:</b> ao colar o link do scoreplace.app fora do app (iMessage, redes, etc.), aparece um <b>cartão com o pódio e a marca</b> em vez de nada.</li>' +

@@ -74,8 +74,9 @@ window.NOTIF_CATALOG = {
   friend_request:              { level: 'all',         icon: '👋', color: '#f59e0b' },
   friend_accepted:             { level: 'all',         icon: '🤝', color: 'var(--success-color)' },
 
-  // Polls
-  poll:                        { level: 'important',   icon: '🗳️', color: 'var(--primary-color)' },
+  // (v3.0.x) chave 'poll' duplicada REMOVIDA daqui — ela sobrescrevia a definição
+  // canônica lá em cima (level:'fundamental', 📊) fazendo a enquete virar 'important',
+  // e quem filtra "só fundamentais" deixava de receber. Ver bloco "Enquete do organizador".
 
   // Category
   category_assignment:         { level: 'all',         icon: '🏷️', color: 'var(--primary-color)' },

@@ -1512,6 +1512,11 @@ window.renderHelpPage = function (container) {
     // elimThirdPlace is always true — no toggle needed
     // Construtor de fases: torneio novo começa com fase única (sem fases extras)
     window._extraPhases = [];
+    // v3.0.x: resetar também a flag "usuário mexeu nas fases". Sem isto, se o organizador
+    // editou um torneio multi-fase (touched=true) e, na mesma sessão, abre "Detalhes
+    // Avançados" pra um torneio NOVO, a flag fica stale e o save grava _allowConfigReset=true
+    // num torneio recém-criado — autoriza reset de config sem o usuário ter tocado nas fases.
+    window._phasesUserTouched = false;
     window._phase1Name = '';
     window._phase1Rounds = 1;
 

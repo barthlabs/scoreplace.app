@@ -1859,7 +1859,9 @@ function renderParticipants(container, tournamentId) {
       if (currentFilter === 'absent' && !isAbsent) return '';
       if (currentFilter === 'pending' && !isPending) return '';
 
-      const safeName = ind.name.replace(/'/g, "\\'");
+      // v3.0.x: escape robusto — antes só `'`. Em onclick="...('${safeName}')" um `"`
+      // no nome fechava o atributo (XSS/quebra). `\`→`\\` e `'`→`\'` (string JS), `"`→&quot; (atributo).
+      const safeName = ind.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
       // v2.7.37: estrela do organizador (sempre) + pin no topo (data-part-org).
       const _isOrgPC = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, ind.name, _nameToParticipant[ind.name]);
       const _orgStarC = _isOrgPC ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.9rem;line-height:1;">⭐</span>' : '';
