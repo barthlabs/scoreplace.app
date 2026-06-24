@@ -7646,13 +7646,26 @@ window._showTemplatePickerInCreate = function() {
   html += '<h3 style="margin:0 0 8px;font-size:1rem;color:var(--text-bright);">Carregar Template</h3>';
   templates.forEach(function(tpl, i) {
     var sportIcon = tpl.sport ? tpl.sport.split(' ')[0] : '🏆';
+    // v3.0.54: subtítulo reflete MULTIFASE. Antes mostrava só o formato da Fase 1
+    // (ex.: "Liga") mesmo num torneio multifase. Agora, se há fases extras, lista
+    // TODAS as fases pelo nome de exibição (Liga→Pontos Corridos etc.).
+    var _fmtCodeMap = { liga:'Liga', suico:'Suíço Clássico', elim_simples:'Eliminatórias Simples', elim_dupla:'Dupla Eliminatória', grupos_mata:'Fase de Grupos + Eliminatórias' };
+    var _disp = function(canon){ return (typeof window._formatDisplayName === 'function') ? (window._formatDisplayName(canon) || canon || '') : (canon || ''); };
+    var _fmtLabel;
+    if (Array.isArray(tpl.extraPhases) && tpl.extraPhases.length > 0) {
+      var _phaseParts = [_disp(tpl.format || '')];
+      tpl.extraPhases.forEach(function(ph){ _phaseParts.push(_disp(_fmtCodeMap[ph && ph.format] || (ph && ph.format) || '')); });
+      _fmtLabel = '🧩 Multifase · ' + _phaseParts.filter(Boolean).join(' → ');
+    } else {
+      _fmtLabel = _disp(tpl.format || '');
+    }
     html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:12px;cursor:pointer;transition:background 0.15s;" ' +
       'onmouseenter="this.style.background=\'rgba(99,102,241,0.15)\'" onmouseleave="this.style.background=\'rgba(255,255,255,0.04)\'" ' +
       'onclick="window._applyTemplateInCreate(' + i + ')">' +
       '<span style="font-size:1.4rem;">' + sportIcon + '</span>' +
       '<div style="flex:1;min-width:0;">' +
         '<div style="font-weight:700;font-size:0.9rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(tpl.name) + '</div>' +
-        '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml(tpl.format || '') +
+        '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml(_fmtLabel) +
           (tpl.venue ? ' · ' + window._safeHtml(tpl.venue) : '') + '</div>' +
       '</div>' +
       '<button class="btn btn-micro btn-danger-ghost" onclick="event.stopPropagation();window._deleteTemplateInCreate(\'' + window._safeHtml(tpl._id || String(i)) + '\')" title="Apagar">✕</button>' +
