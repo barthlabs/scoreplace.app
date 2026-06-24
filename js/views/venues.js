@@ -636,19 +636,37 @@
       if (!isNaN(end.getTime()) && end.getTime() > start.getTime()) endMs = end.getTime();
     }
     var parts = Array.isArray(t.participants) ? t.participants : [];
-    var count = Math.max(parts.length, 1);
-    for (var i = 0; i < count; i++) {
-      var p = parts[i] || {};
-      // v2.1.68: carrega displayName + photoURL do participante pra que AMIGOS
-      // apareçam com nome/foto reais (antes vinham só com uid → fallback "Amigo").
+    // v3.0.x (Parte 11 uid sweep): uma presença virtual POR PESSOA (slot-aware).
+    // Numa dupla o p2 (uid em p2Uid, displayName só do p1) também é contado e
+    // reconhecido como "eu"/"amigo" — antes só o capitão (p.uid) entrava e o
+    // parceiro sumia do movimento do local. Mantém o "pelo menos 1" anônimo
+    // quando o torneio não tem participantes carregados.
+    function _vpush(uid, dn, photo) {
+      // v2.1.68: displayName + photoURL reais pra AMIGOS aparecerem com nome/foto.
       out.push({
         _virtual: true,
-        uid: p.uid || null,
-        displayName: p.displayName || p.name || '',
-        photoURL: p.photoURL || p.photo || '',
+        uid: uid || null,
+        displayName: dn || '',
+        photoURL: photo || '',
         startsAt: start.getTime(),
         endsAt: endMs,
         type: 'tournament'
+      });
+    }
+    if (parts.length === 0) {
+      _vpush(null, '', '');
+    } else {
+      parts.forEach(function(p) {
+        p = p || {};
+        var hasDupla = !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+        if (hasDupla) {
+          _vpush(p.p1Uid || p.uid, p.p1Name || p.displayName || p.name, p.p1Photo || p.photoURL || p.photo);
+          _vpush(p.p2Uid, p.p2Name, p.p2Photo);
+        } else if (Array.isArray(p.participants) && p.participants.length) {
+          p.participants.forEach(function(s) { s = s || {}; _vpush(s.uid, s.displayName || s.name, s.photoURL || s.photo); });
+        } else {
+          _vpush(p.uid, p.displayName || p.name, p.photoURL || p.photo);
+        }
       });
     }
     return out;

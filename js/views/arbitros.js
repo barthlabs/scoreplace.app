@@ -167,7 +167,10 @@
         // Check organizer
         var isOrg = typeof window.AppStore.isOrganizer === 'function'
           ? window.AppStore.isOrganizer(t)
-          : (t.organizerEmail === cu.email || t.creatorEmail === cu.email);
+          // Fallback uid-first (criador por uid antes do e-mail) — só usado se
+          // AppStore.isOrganizer não existir; espelha store.js isOrganizer.
+          : ((cu.uid && t.creatorUid && t.creatorUid === cu.uid) ||
+             (cu.email && (t.organizerEmail === cu.email || t.creatorEmail === cu.email)));
         if (!isOrg) {
           document.getElementById('arbitros-content').innerHTML =
             '<div style="color:#f87171;font-size:0.85rem;">Somente o organizador pode gerenciar árbitros.</div>';

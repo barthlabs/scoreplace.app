@@ -452,21 +452,40 @@
       if (!isNaN(end.getTime()) && end.getTime() > start.getTime()) endMs = end.getTime();
     }
     var parts = Array.isArray(t.participants) ? t.participants : [];
-    var count = Math.max(parts.length, 1);
-    for (var i = 0; i < count; i++) {
-      var p = parts[i] || {};
+    // v3.0.x (Parte 11 uid sweep): uma presença virtual POR PESSOA (slot-aware).
+    // Numa dupla o p2 (uid em p2Uid, displayName só do p1) também é contado e
+    // reconhecido como "eu"/"amigo" — antes só o capitão (p.uid) entrava e o
+    // parceiro sumia. Mantém o "pelo menos 1" anônimo quando o torneio não tem
+    // participantes carregados.
+    function _vpush(uid, email, dn, photo) {
       out.push({
         _virtual: true,
         _tournamentId: t.id,
         _tournamentName: t.name || 'Torneio',
-        uid: p.uid || null,
-        email_lower: (p.email || '').toLowerCase(),
-        displayName: p.displayName || p.name || '',
-        photoURL: p.photoURL || '',
+        uid: uid || null,
+        email_lower: (email || '').toLowerCase(),
+        displayName: dn || '',
+        photoURL: photo || '',
         startsAt: start.getTime(),
         endsAt: endMs,
         visibility: 'public',
         type: 'tournament'
+      });
+    }
+    if (parts.length === 0) {
+      _vpush(null, '', '', '');
+    } else {
+      parts.forEach(function(p) {
+        p = p || {};
+        var hasDupla = !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+        if (hasDupla) {
+          _vpush(p.p1Uid || p.uid, p.p1Email || p.email, p.p1Name || p.displayName || p.name, p.p1Photo || p.photoURL);
+          _vpush(p.p2Uid, p.p2Email, p.p2Name, p.p2Photo);
+        } else if (Array.isArray(p.participants) && p.participants.length) {
+          p.participants.forEach(function(s) { s = s || {}; _vpush(s.uid, s.email, s.displayName || s.name, s.photoURL || s.photo); });
+        } else {
+          _vpush(p.uid, p.email, p.displayName || p.name, p.photoURL || p.photo);
+        }
       });
     }
     return out;
