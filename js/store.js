@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.55-beta';
+window.SCOREPLACE_VERSION = '3.0.56-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -1571,7 +1571,12 @@ window._friendlyUserName = function(user) {
   user = user || (window.AppStore && window.AppStore.currentUser) || null;
   if (!user) return null;
   var dn = (user.displayName || '').trim();
-  var looksPhone = /^\+?\d[\d\s().-]{5,}$/.test(dn);
+  // v3.0.56: detecta também telefone mascarado SEM DDI ("(11) 91693-6454") —
+  // o regex antigo só pegava se começasse com +/dígito. Assim displayName que é
+  // só telefone (em qualquer forma) cai no fallback que reaplica o +55.
+  var _dnDigits = dn.replace(/\D/g, '');
+  var looksPhone = /^\+?\d[\d\s().-]{5,}$/.test(dn)
+    || (_dnDigits.length >= 10 && _dnDigits.length <= 13 && !/[a-zA-Z@]/.test(dn));
   var unfriendly = (typeof window._isUnfriendlyName === 'function') && window._isUnfriendlyName(dn);
   if (dn && !looksPhone && !unfriendly) return dn;
   // displayName ausente/genérico/telefone → prefixo do email (igual topbar)
@@ -1579,14 +1584,18 @@ window._friendlyUserName = function(user) {
     var pref = String(user.email).split('@')[0];
     if (pref) return pref;
   }
-  // telefone formatado como último recurso (usuário phone-only sem nome)
+  // telefone formatado como último recurso (usuário phone-only sem nome).
+  // v3.0.56: SEMPRE com o DDI (+55) — a identificação única de um telefone é
+  // DDI+DDD+número. Consistente com _friendlyDisplayName (cards). Antes o greeting
+  // e a topbar mostravam "(11) 91693-6454" sem o +55.
   var ph = user.phone || user.phoneNumber;
   if (ph) {
+    var cc = user.phoneCountry || '55';
     var local = (typeof window._phoneLocalDigits === 'function')
-      ? window._phoneLocalDigits(ph, user.phoneCountry || '55')
+      ? window._phoneLocalDigits(ph, cc)
       : String(ph).replace(/\D/g, '');
     if (local && local.length >= 8 && typeof window._formatPhoneDisplay === 'function') {
-      return window._formatPhoneDisplay(local, user.phoneCountry || '55');
+      return '+' + cc + ' ' + window._formatPhoneDisplay(local, cc);
     }
     return String(ph);
   }
@@ -1703,6 +1712,12 @@ function _pNameDisplay(raw) {
   if (/^\d{10,11}$/.test(s)) {
     if (s.length === 11) return '+55 (' + s.substring(0,2) + ') ' + s.substring(2,7) + '-' + s.substring(7);
     return '+55 (' + s.substring(0,2) + ') ' + s.substring(2,6) + '-' + s.substring(6);
+  }
+  // v3.0.56: mascarado SEM DDI (legado): "(11) 91693-6454" → prepend +55
+  if (/^\(\d{2}\)\s?\d{4,5}-?\d{4}$/.test(s)) {
+    var dd = s.replace(/\D/g, '');
+    if (dd.length === 11) return '+55 (' + dd.substring(0,2) + ') ' + dd.substring(2,7) + '-' + dd.substring(7);
+    if (dd.length === 10) return '+55 (' + dd.substring(0,2) + ') ' + dd.substring(2,6) + '-' + dd.substring(6);
   }
   return s;
 }
