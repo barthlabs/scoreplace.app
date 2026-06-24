@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.57-beta';
+window.SCOREPLACE_VERSION = '3.0.58-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -1561,6 +1561,14 @@ window._isUnfriendlyName = function(name) {
   return BAD.indexOf(n) !== -1;
 };
 
+// v3.0.58: e-mail SINTÉTICO de conta phone-only (phone_<dígitos>@phone.scoreplace.app,
+// ver _entrarSyntheticEmail em auth.js) NUNCA pode ser exibido como nome/identidade —
+// é detalhe interno de auth. Qualquer resolvedor de nome trata isso como "sem e-mail"
+// e cai no fallback de telefone (+55 (DDD)...).
+window._isSyntheticEmail = function(email) {
+  return /@phone\.scoreplace\.app$/i.test(String(email || ''));
+};
+
 // Nome amigável canônico para exibir um usuário logado. Mesma cadeia de
 // fallback da topbar (displayName real → prefixo do email → telefone) para
 // que a saudação NUNCA mostre "Visitante" pra um usuário de fato logado.
@@ -1579,8 +1587,10 @@ window._friendlyUserName = function(user) {
     || (_dnDigits.length >= 10 && _dnDigits.length <= 13 && !/[a-zA-Z@]/.test(dn));
   var unfriendly = (typeof window._isUnfriendlyName === 'function') && window._isUnfriendlyName(dn);
   if (dn && !looksPhone && !unfriendly) return dn;
-  // displayName ausente/genérico/telefone → prefixo do email (igual topbar)
-  if (user.email) {
+  // displayName ausente/genérico/telefone → prefixo do email (igual topbar).
+  // v3.0.58: e-mail sintético (phone_...@phone.scoreplace.app) NÃO conta como e-mail —
+  // senão a topbar mostrava "phone_5511916936454". Cai no telefone (+55) logo abaixo.
+  if (user.email && !(typeof window._isSyntheticEmail === 'function' && window._isSyntheticEmail(user.email))) {
     var pref = String(user.email).split('@')[0];
     if (pref) return pref;
   }
@@ -1663,11 +1673,17 @@ window._phoneLocalDigits = function(phone, cc) {
 window._friendlyDisplayName = function(u) {
   if (!u) return 'Usuário';
   var name = String(u.displayName || '').trim();
-  if (name && !window._isUnfriendlyName(name)) return name;
+  // v3.0.58: nome real vence — mas displayName que é só TELEFONE (em qualquer forma,
+  // ex. "+5511916936454" cru ou "(11) 91693-6454") NÃO é retornado cru: cai no
+  // formatador de telefone abaixo pra virar canônico "+55 (DDD)...".
+  var _nd = name.replace(/\D/g, '');
+  var nameLooksPhone = name && (/^\+?\d[\d\s().-]{5,}$/.test(name)
+    || (_nd.length >= 10 && _nd.length <= 13 && !/[a-zA-Z@]/.test(name)));
+  if (name && !nameLooksPhone && !window._isUnfriendlyName(name)) return name;
   // v2.4.3: privacidade — quando o usuário ocultou o e-mail/telefone, ele NÃO é
   // usado como nome público (fallback). Só afeta quem não tem nome amigável.
-  // Full email is the clearest identifier for email-link users
-  if (u.email && u.omitEmail !== true) return u.email;
+  // v3.0.58: e-mail sintético (phone_...@phone.scoreplace.app) nunca é nome.
+  if (u.email && u.omitEmail !== true && !(typeof window._isSyntheticEmail === 'function' && window._isSyntheticEmail(u.email))) return u.email;
   // Phone — strip country code before formatting for display
   if (u.phone && u.omitPhone !== true) {
     var cc = u.phoneCountry || '55';
@@ -1683,6 +1699,8 @@ window._friendlyDisplayName = function(u) {
   }
   // E.164 from Firebase Auth (SMS users who never loaded their profile)
   if (u.phoneNumber && u.omitPhone !== true) return u.phoneNumber;
+  // displayName ERA um telefone (sem u.phone separado) → formata canônico.
+  if (nameLooksPhone && typeof window._pNameDisplay === 'function') return window._pNameDisplay(name);
   return name || 'Usuário';
 };
 

@@ -1425,38 +1425,11 @@ window.handleUnifiedLogin = function() {
   }
 };
 
-// ─── Cadastro/login só com celular (v2.4.98) ─────────────────────────────────
-// O bloco "📱 Entrar ou cadastrar com celular" do modal de login chama estes
-// helpers. _maskPhoneInput aplica a máscara BR enquanto digita; _phoneSignupStart
-// copia os dígitos + DDI pros inputs ocultos e dispara o motor handlePhoneLogin
-// (SMS Firebase + link WhatsApp), que cria conta phone-only do zero ou loga.
-window._maskPhoneInput = function(el) {
-  if (!el) return;
-  var country = document.getElementById('login-unified-country');
-  var digits = el.value.replace(/\D/g, '');
-  if (!country || country.value === '55') {
-    el.value = (typeof window._maskBRPhone === 'function') ? window._maskBRPhone(digits) : digits;
-  } else {
-    el.value = digits;
-  }
-  if (typeof window._loginMutualExclude === 'function') window._loginMutualExclude();
-};
-
-window._phoneSignupStart = function() {
-  var inp = document.getElementById('login-unified');
-  var countrySel = document.getElementById('login-unified-country');
-  var digits = inp ? inp.value.replace(/\D/g, '') : '';
-  if (digits.length < 8) {
-    showNotification('Número incompleto', 'Digite o DDD + número do celular (ex: 11 99999-8888).', 'warning');
-    if (inp) inp.focus();
-    return;
-  }
-  var hiddenPhone = document.getElementById('login-phone');
-  var hiddenCountry = document.getElementById('login-phone-country');
-  if (hiddenPhone) hiddenPhone.value = digits;
-  if (hiddenCountry && countrySel) hiddenCountry.value = countrySel.value;
-  if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
-};
+// v3.0.58: REMOVIDO o bloco "Cadastro/login só com celular (v2.4.98)"
+// (_maskPhoneInput + _phoneSignupStart) — era um caminho de cadastro SÓ por código
+// SMS, sem nome nem senha, que criava contas phone-only nameless. Estava morto (sem
+// callers na UI) e contradizia a canonização: o ÚNICO cadastro é o fluxo unificado
+// _handleEntrar (nome + senha + confirmação + verificação por código). Não recriar.
 
 // ─── Login unificado (v2.5.x): _handleEntrar e helpers ───────────────────────
 // Um único campo aceita e-mail OU celular (peso igual). Detecta o tipo, mostra o
