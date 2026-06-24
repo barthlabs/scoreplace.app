@@ -261,6 +261,57 @@
   }
 })();
 
+// v3.0.59: União de contas por e-mail — ?mh=TOKEN gerado por requestEmailMerge.
+// Clicar no link (que só chegou no e-mail da conta B) PROVA a posse dessa conta.
+// Chama confirmEmailMerge → funde A+B mantendo a conta MAIS ANTIGA. Depois desloga
+// e manda entrar de novo: a credencial fica na conta sobrevivente e o login (celular
+// OU e-mail) cai nela via resolveMergedLogin. Sem precisar logar na outra conta.
+(function _handleEmailMergeLink() {
+  try {
+    var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
+    var token = qs && qs.get('mh');
+    if (!token) return;
+    var bg = '#0f172a', fg = '#10b981';
+    document.documentElement.style.background = bg;
+    var showStatus = function(emoji, title, subtitle, isError, extraHtml) {
+      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + bg + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
+        '<div style="font-size:2.4rem;line-height:1;">' + emoji + '</div>' +
+        '<div style="font-size:1.05rem;font-weight:700;color:' + (isError ? '#ef4444' : fg) + ';">' + title + '</div>' +
+        (subtitle ? '<div style="font-size:0.85rem;color:#94a3b8;max-width:360px;line-height:1.5;">' + subtitle + '</div>' : '') +
+        (extraHtml || '') +
+        '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Ir pro app</a>' +
+        '</div>';
+    };
+    showStatus('🔗', 'Unindo suas contas...', 'Confirmando e juntando seus dados numa conta só');
+    var tries = 0;
+    var run = function() {
+      var _appReady = window.firebase && window.firebase.apps && window.firebase.apps.length;
+      var fns = (_appReady && window.firebase.functions) ? window.firebase.functions() : null;
+      if (!fns) {
+        if (tries++ < 80) return setTimeout(run, 100); // até 8s
+        showStatus('⚠️', 'Não foi possível carregar', 'Verifique a conexão e abra o link de novo.', true);
+        return;
+      }
+      fns.httpsCallable('confirmEmailMerge')({ token: token }).then(function(res) {
+        var d = (res && res.data) || {};
+        if (!d.ok) { showStatus('⚠️', 'Não deu pra unir', 'O link pode ter expirado ou já foi usado. Peça de novo no perfil.', true); return; }
+        var auth = (window.firebase && window.firebase.auth) ? window.firebase.auth() : null;
+        var finish = function() {
+          showStatus('✅', 'Contas unidas!', 'Pronto — tudo numa conta só (a mais antiga). Entre de novo com seu <b>e-mail</b> OU <b>celular</b> pra continuar.', false);
+          setTimeout(function() { window.location.replace('/#dashboard'); }, 2200);
+        };
+        // Desloga a sessão atual (pode ser a conta absorvida) e manda reentrar.
+        if (auth && auth.signOut) { auth.signOut().then(finish).catch(finish); } else { finish(); }
+      }).catch(function(err) {
+        var msg = (err && (err.message || err.code)) || 'falha';
+        if (typeof window._captureException === 'function') { try { window._captureException(err, { area: 'mhMerge' }); } catch (_e) {} }
+        showStatus('⚠️', 'Não deu pra unir', window._safeHtml ? window._safeHtml(String(msg)) : String(msg), true);
+      });
+    };
+    run();
+  } catch (e) { if (window._error) window._error('[mhMerge] handler crashed:', e); }
+})();
+
 // ── Autenticação por celular pelo botão do WhatsApp (?gv=TOKEN) ──────────────
 // v2.4.24: alternativa ao link do e-mail quando o e-mail de confirmação não
 // chega (ex.: UOL filtra). A pessoa toca no botão que mandamos no WhatsApp →
@@ -7545,8 +7596,25 @@ function setupProfileModal() {
       }).then(function(r) { return r.json(); }).then(function(j) {
         var info = j && j.result;
         if (info && info.exists) {
-          if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Esse e-mail já pertence a uma conta. Por enquanto, pra <b>unir contas</b> entre na conta que quer manter e use o <b>celular</b> (📱 Verificar e vincular). A união por e-mail chega em breve.</span>';
-          return;
+          // v3.0.59: e-mail é de OUTRA conta sua → une as duas SOZINHO. Manda um link
+          // de confirmação pro e-mail (prova de posse); ao clicar, funde mantendo a
+          // conta mais antiga. Sem "entre na outra conta" — o cara nem lembra dela.
+          if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">Enviando link de confirmação…</span>';
+          return firebase.functions().httpsCallable('requestEmailMerge')({ email: email }).then(function(r) {
+            var rd = (r && r.data) || {};
+            if (rd.ok && rd.sent) {
+              if (statusEl) statusEl.innerHTML = '<span style="color:#6ee7b7;">✅ Enviamos um link para <b>' + window._safeHtml(email) + '</b>. Abra e toque em <b>Unir minhas contas</b> — suas duas contas viram uma só (mantendo a mais antiga). Você <b>não</b> precisa entrar na outra conta; depois é só entrar com e-mail OU celular.</span>';
+            } else if (rd.reason === 'same-account') {
+              if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">Esse e-mail já é desta conta.</span>';
+            } else if (rd.reason === 'no-account') {
+              // Não existe conta com esse e-mail → só vincula como login novo.
+              return fu.verifyBeforeUpdateEmail(email).then(function() {
+                if (statusEl) statusEl.innerHTML = '<span style="color:#6ee7b7;">✅ Enviamos um link de confirmação para <b>' + window._safeHtml(email) + '</b>. Abra e confirme — ele vira seu login.</span>';
+              });
+            } else {
+              if (statusEl) statusEl.innerHTML = '<span style="color:#fca5a5;">Não foi possível enviar o link agora. Tente de novo.</span>';
+            }
+          });
         }
         return fu.verifyBeforeUpdateEmail(email).then(function() {
           if (statusEl) statusEl.innerHTML = '<span style="color:#6ee7b7;">✅ Enviamos um link de confirmação para <b>' + window._safeHtml(email) + '</b>. Abra e confirme — ele vira seu login. Até lá, seu e-mail atual continua valendo.</span>';

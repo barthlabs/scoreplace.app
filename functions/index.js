@@ -103,6 +103,29 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
       changed = true;
     }
 
+    // memberUids[] — array das QUERIES (array-contains em getVisibleTournaments).
+    // v3.0.59: sem repontar isto, o torneio sumia pro sobrevivente após o merge
+    // (bug pego no teste E2E — memberUids continuava no uid apagado).
+    const memberUids = Array.isArray(t.memberUids) ? [...t.memberUids] : [];
+    const uidIdx = dropUid ? memberUids.indexOf(dropUid) : -1;
+    if (uidIdx !== -1) {
+      if (keepUid && !memberUids.includes(keepUid)) memberUids.splice(uidIdx, 1, keepUid);
+      else memberUids.splice(uidIdx, 1);
+      update.memberUids = memberUids;
+      changed = true;
+    }
+
+    // Propriedade por uid: creatorUid / organizerUid → conta sobrevivente.
+    if (dropUid && keepUid) {
+      if (t.creatorUid === dropUid)   { update.creatorUid = keepUid;   changed = true; }
+      if (t.organizerUid === dropUid) { update.organizerUid = keepUid; changed = true; }
+    }
+    // Propriedade por e-mail (legado): creatorEmail / organizerEmail.
+    if (dropEmail && keepEmail) {
+      if (String(t.creatorEmail || "").toLowerCase() === dropEmail.toLowerCase())   { update.creatorEmail = keepEmail;   changed = true; }
+      if (String(t.organizerEmail || "").toLowerCase() === dropEmail.toLowerCase()) { update.organizerEmail = keepEmail; changed = true; }
+    }
+
     // participants[]
     if (Array.isArray(t.participants)) {
       const parts = t.participants.map(p => {
@@ -270,6 +293,80 @@ async function _executeMerge(db, keepDoc, dropDoc) {
 
   console.log(`[_executeMerge] Done: tourFixed=${tourFixed} casualFixed=${casualFixed}`);
   return { tourFixed, casualFixed };
+}
+
+// E-mail sintético de conta phone-only — nunca é credencial "de verdade" a preservar.
+function _isSyntheticAuthEmail(email) {
+  return /@phone\.scoreplace\.app$/i.test(String(email || ""));
+}
+
+/**
+ * v3.0.59: MOTOR ÚNICO de fusão bidirecional, mantendo a conta MAIS ANTIGA.
+ * Recebe dois uids JÁ PROVADOS como sendo da mesma pessoa (um pela sessão, o outro
+ * por verificação de e-mail/celular). Determina o mais antigo pela data de criação
+ * no Firebase Auth (metadata.creationTime), mantém ele (uid + displayName dele),
+ * move os dados do mais novo pra ele (_executeMerge), TRANSFERE a credencial que
+ * faltava (celular↔e-mail real) e APAGA o usuário Auth mais novo. Idempotente-ish:
+ * se um já está mergedInto, não faz nada. Retorna { survivorUid, droppedUid }.
+ * Direção-agnóstico: serve e-mail→celular E celular→e-mail.
+ */
+async function _mergeAccountsKeepOlder(db, uidA, uidB) {
+  if (!uidA || !uidB || uidA === uidB) throw new HttpsError("invalid-argument", "uids inválidos pra merge");
+  let ua, ub;
+  try { ua = await admin.auth().getUser(uidA); } catch (e) { ua = null; }
+  try { ub = await admin.auth().getUser(uidB); } catch (e) { ub = null; }
+  if (!ua || !ub) throw new HttpsError("not-found", "uma das contas não existe mais (já fundida?)");
+
+  // Já fundidas? (tombstone no Firestore)
+  const [da, dbb] = await Promise.all([
+    db.collection("users").doc(uidA).get(),
+    db.collection("users").doc(uidB).get(),
+  ]);
+  if ((da.exists && da.data().mergedInto) || (dbb.exists && dbb.data().mergedInto)) {
+    return { survivorUid: (da.data() && da.data().mergedInto) || (dbb.data() && dbb.data().mergedInto) || uidA, droppedUid: null, already: true };
+  }
+
+  const tA = new Date(ua.metadata.creationTime || 0).getTime();
+  const tB = new Date(ub.metadata.creationTime || 0).getTime();
+  const keepU = (tA <= tB) ? ua : ub;   // mais antigo (createdAt menor) sobrevive
+  const dropU = (tA <= tB) ? ub : ua;
+  const keepDoc = (keepU.uid === uidA) ? da : dbb;
+  const dropDoc = (dropU.uid === uidA) ? da : dbb;
+
+  console.log(`[mergeKeepOlder] keep=${keepU.uid} (criado ${keepU.metadata.creationTime}) ← drop=${dropU.uid} (criado ${dropU.metadata.creationTime})`);
+
+  // Credenciais do drop a mover pro keep (antes de apagar o drop).
+  const dropEmail = (dropU.email && !_isSyntheticAuthEmail(dropU.email)) ? dropU.email : null;
+  const dropPhone = dropU.phoneNumber || null;
+
+  // 1) Move TODOS os dados (torneios, matchHistory, casuais) + tombstone do dropDoc.
+  if (keepDoc.exists && dropDoc.exists) {
+    await _executeMerge(db, keepDoc, dropDoc);
+  } else if (dropDoc.exists) {
+    // keep sem doc Firestore (raro) — só marca tombstone apontando pro keep.
+    await db.collection("users").doc(dropU.uid).set(
+      { mergedInto: keepU.uid, mergedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  }
+
+  // 2) Apaga o usuário Auth mais novo — libera e-mail/celular dele.
+  try { await admin.auth().deleteUser(dropU.uid); }
+  catch (e) { console.error("[mergeKeepOlder] deleteUser(drop) falhou:", e.code || e.message); }
+
+  // 3) Move a credencial que faltava pro keep (agora livre).
+  const upd = {};
+  if (dropEmail && (!keepU.email || _isSyntheticAuthEmail(keepU.email))) { upd.email = dropEmail; upd.emailVerified = true; }
+  if (dropPhone && !keepU.phoneNumber) { upd.phoneNumber = dropPhone; }
+  if (Object.keys(upd).length) {
+    try { await admin.auth().updateUser(keepU.uid, upd); }
+    catch (e) { console.error("[mergeKeepOlder] updateUser(keep) falhou:", e.code || e.message); }
+  }
+  // 4) Reflete os identificadores ganhos no perfil Firestore do keep.
+  const profUpd = { updatedAt: new Date().toISOString() };
+  if (upd.email) profUpd.email = upd.email;
+  if (upd.phoneNumber) { profUpd.phone = upd.phoneNumber; profUpd.phoneCountry = profUpd.phoneCountry || "55"; }
+  await db.collection("users").doc(keepU.uid).set(profUpd, { merge: true }).catch(() => {});
+
+  return { survivorUid: keepU.uid, droppedUid: dropU.uid, already: false };
 }
 
 /**
@@ -4398,6 +4495,79 @@ exports.scheduledTrophyCheck = onSchedule(
     }
 
     console.log(`[scheduledTrophyCheck] DONE: processed=${processed} trophiesAwarded=${trophiesAwarded} milestonesAwarded=${milestonesAwarded} pushSent=${pushSent} errors=${errors}`);
+  }
+);
+
+// ─── União de contas por E-MAIL (v3.0.59) ──────────────────────────────────────
+// Bidirecional + mantém a conta MAIS ANTIGA. O usuário (logado na conta A — tipicamente
+// criada por celular) adiciona no perfil um e-mail que pertence a outra conta B dele.
+// Em vez de mandar "entre na outra conta" (o cara nem lembra da outra conta), enviamos
+// um link de confirmação PRO E-MAIL (prova de posse de B). Ao clicar, confirmEmailMerge
+// funde A+B via _mergeAccountsKeepOlder — sem fricção, sem precisar logar na outra conta.
+// Deploy: firebase deploy --only functions:requestEmailMerge,functions:confirmEmailMerge
+exports.requestEmailMerge = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const email = String((request.data && request.data.email) || "").trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError("invalid-argument", "e-mail inválido");
+    if (_isSyntheticAuthEmail(email)) throw new HttpsError("invalid-argument", "e-mail interno");
+
+    const db = admin.firestore();
+    // Acha a conta B dona desse e-mail (Auth primeiro, depois Firestore).
+    let targetUid = null;
+    try { const tu = await admin.auth().getUserByEmail(email); targetUid = tu && tu.uid; } catch (e) { /* not-found */ }
+    if (!targetUid) {
+      const s = await db.collection("users").where("email", "==", email).limit(1).get();
+      if (!s.empty) targetUid = s.docs[0].id;
+    }
+    if (!targetUid) return { ok: false, reason: "no-account" };   // não existe → caller só vincula o e-mail (verifyBeforeUpdateEmail no cliente)
+    if (targetUid === callerUid) return { ok: false, reason: "same-account" };
+
+    const crypto = require("crypto");
+    const token = crypto.randomBytes(24).toString("base64url");
+    await db.collection("mergeTokens").doc(token).set({
+      requesterUid: callerUid, targetUid: targetUid, email: email,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      used: false,
+    });
+    const link = "https://scoreplace.app/?mh=" + encodeURIComponent(token);
+    const html =
+      '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;">' +
+      '<h2 style="color:#0f172a;">Unir suas contas</h2>' +
+      '<p style="color:#1f2937;font-size:15px;line-height:1.5;">Você pediu pra unir esta conta de e-mail à sua outra conta no scoreplace.app. Clique pra confirmar — seus torneios, partidas e histórico ficam todos numa conta só. Você poderá entrar pelo e-mail OU pelo celular.</p>' +
+      '<p style="text-align:center;margin:28px 0;"><a href="' + link + '" style="background:#10b981;color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;font-size:16px;display:inline-block;">Unir minhas contas</a></p>' +
+      '<p style="color:#64748b;font-size:13px;">O link expira em 1 hora. Se não foi você, ignore este e-mail.</p>' +
+      '</div>';
+    const text = "Una suas contas no scoreplace.app: " + link + " (expira em 1h; se não foi você, ignore).";
+    await _enqueueMail(db, { to: [email], message: { subject: "Una suas contas no scoreplace.app", html, text } });
+    console.log("[requestEmailMerge] token p/", email, "req=", callerUid, "target=", targetUid);
+    return { ok: true, sent: true };
+  }
+);
+
+// Confirma a união ao clicar no link do e-mail. SEM exigir login (o token, enviado só
+// pro e-mail da conta B, é a prova de posse). Funde mantendo a conta mais antiga.
+exports.confirmEmailMerge = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 300, cors: APP_ORIGINS },
+  async (request) => {
+    const token = String((request.data && request.data.token) || "").trim();
+    if (!token) throw new HttpsError("invalid-argument", "token ausente");
+    const db = admin.firestore();
+    const ref = db.collection("mergeTokens").doc(token);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "link inválido ou já usado");
+    const t = snap.data();
+    if (t.used) throw new HttpsError("failed-precondition", "este link já foi usado");
+    const exp = (t.expiresAt && t.expiresAt.toMillis) ? t.expiresAt.toMillis() : Number(t.expiresAt || 0);
+    if (exp && exp < Date.now()) throw new HttpsError("deadline-exceeded", "link expirado — peça de novo no perfil");
+
+    const res = await _mergeAccountsKeepOlder(db, t.requesterUid, t.targetUid);
+    await ref.set({ used: true, usedAt: admin.firestore.FieldValue.serverTimestamp(), survivorUid: res.survivorUid }, { merge: true });
+    console.log("[confirmEmailMerge] survivor=", res.survivorUid, "dropped=", res.droppedUid, "already=", res.already);
+    return { ok: true, survivorUid: res.survivorUid, dropped: res.droppedUid, already: res.already };
   }
 );
 
