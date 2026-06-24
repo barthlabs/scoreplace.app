@@ -1790,14 +1790,16 @@ window._showPollCreationDialog = function(tId, context, pollOptions) {
         if (!t.pollNotifications) t.pollNotifications = [];
         parts.forEach(function(p) {
             if (typeof p !== 'object') return;
-            var pEmail = p.email || '';
-            if (!pEmail) return;
-            t.pollNotifications.push({
-                targetEmail: pEmail,
-                pollId: pollData.id,
-                timestamp: Date.now(),
-                read: false
-            });
+            // uid-first: marca TODOS os uids do participante (dupla = p1Uid+p2Uid);
+            // jogador informal (sem uid) cai no e-mail (fallback legado).
+            var _uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p.uid ? [p.uid] : []);
+            if (_uids.length) {
+                _uids.forEach(function(u) {
+                    t.pollNotifications.push({ targetUid: u, pollId: pollData.id, timestamp: Date.now(), read: false });
+                });
+            } else if (p.email) {
+                t.pollNotifications.push({ targetEmail: p.email, pollId: pollData.id, timestamp: Date.now(), read: false });
+            }
         });
 
         window.AppStore.logAction(tId, 'Enquete criada: ' + selectedOptions.length + ' opções, prazo de ' + hours + 'h');
@@ -1844,7 +1846,9 @@ window._showPollVotingDialog = function(tId, pollId) {
 
     var user = window.AppStore.currentUser;
     var userEmail = (user && user.email) ? user.email : '';
-    var userVote = poll.votes[userEmail] || null;
+    // uid-first: voto chaveado pelo uid; e-mail só fallback legado.
+    var _voteKey = (user && user.uid) ? user.uid : userEmail;
+    var userVote = (poll.votes && (poll.votes[_voteKey] != null ? poll.votes[_voteKey] : poll.votes[userEmail])) || null;
     var hasVoted = !!userVote;
 
     // Calculate time remaining
@@ -2028,8 +2032,11 @@ window._castPollVote = function(tId, pollId, optionKey) {
         return;
     }
 
-    var previousVote = poll.votes[userEmail] || null;
-    poll.votes[userEmail] = optionKey;
+    // uid-first: voto chaveado pelo uid; migra chave-e-mail legada.
+    var _voteKey = (user && user.uid) ? user.uid : userEmail;
+    var previousVote = (poll.votes[_voteKey] != null ? poll.votes[_voteKey] : poll.votes[userEmail]) || null;
+    poll.votes[_voteKey] = optionKey;
+    if (_voteKey !== userEmail && poll.votes[userEmail] != null) delete poll.votes[userEmail];
 
     // Persist
     if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
@@ -2057,13 +2064,14 @@ window._castPollVote = function(tId, pollId, optionKey) {
 window._checkPollNotifications = function(t) {
     if (!t || !t.pollNotifications || !t.polls) return;
     var user = window.AppStore.currentUser;
-    if (!user || !user.email) return;
+    if (!user || (!user.email && !user.uid)) return;
 
     var unreadNotifs = [];
     t.pollNotifications.forEach(function(n) {
-        if (n.targetEmail === user.email && !n.read) {
-            unreadNotifs.push(n);
-        }
+        // uid-first: casa pelo targetUid; targetEmail só fallback legado.
+        var _hit = (n.targetUid && user.uid && n.targetUid === user.uid) ||
+                   (n.targetEmail && user.email && n.targetEmail === user.email);
+        if (_hit && !n.read) unreadNotifs.push(n);
     });
 
     if (unreadNotifs.length === 0) return;
@@ -2147,7 +2155,8 @@ window._renderPollBanner = function(t) {
 
     var user = window.AppStore.currentUser;
     var userEmail = (user && user.email) ? user.email : '';
-    var hasVoted = !!activePoll.votes[userEmail];
+    var _vkBanner = (user && user.uid) ? user.uid : userEmail;
+    var hasVoted = !!(activePoll.votes[_vkBanner] || activePoll.votes[userEmail]); // uid-first
     var isOrganizer = window.AppStore.isOrganizer(t); // v2.8.79: uid-primário
 
     var btnText = hasVoted ? _t('predraw.pollViewChange') : _t('predraw.pollVoteNow');
@@ -2915,9 +2924,7 @@ window._showVagasDrawPanel = function (tId) {
     var pArr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     var vipCount = 0;
     pArr.forEach(function(entry) {
-        var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
-        var members = window._entryTeamMembers(entry) || [nm]; // v3.0.x: membros por estrutura (pega p1 E p2), não por '/'
-        if (members.some(function(m){ return !!_vips[m]; }) || _vips[nm]) vipCount++;
+        if (window._entryHasVip(t, entry)) vipCount++; // uid-first (entrada solo ou dupla)
     });
     var waitlistPreview = Math.max(0, entities - slots);
     var allFit = entities <= slots;
@@ -2973,10 +2980,7 @@ window._runVagasDraw = function (tId) {
     var vipEntries = [];
     var nonVipEntries = [];
     p.forEach(function(entry) {
-        var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
-        var members = window._entryTeamMembers(entry) || [nm]; // v3.0.x: membros por estrutura (pega p1 E p2), não por '/'
-        var isVip = members.some(function(m){ return !!_vips[m]; }) || !!_vips[nm];
-        if (isVip) vipEntries.push(entry); else nonVipEntries.push(entry);
+        if (window._entryHasVip(t, entry)) vipEntries.push(entry); else nonVipEntries.push(entry);
     });
 
     // Embaralha SEMPRE (este modo é sempre sorteio aleatório) — Fisher-Yates.
@@ -3932,16 +3936,11 @@ window._confirmP2Resolution = function (tId, option) {
         t.p2Resolution = 'standby';
         t.p2TargetCount = info.lo;
         const p = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-        const _vips = t.vips || {};
-        // Separar VIPs (protegidos) dos demais
+        // Separar VIPs (protegidos) dos demais — uid-first (entrada solo ou dupla)
         const vipEntries = [];
         const nonVipEntries = [];
         p.forEach(entry => {
-            const nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
-            // VIP se o nome ou qualquer membro do time é VIP
-            const members = window._entryTeamMembers(entry) || [nm]; // v3.0.x: membros por estrutura (pega p1 E p2), não por '/'
-            const isVip = members.some(m => !!_vips[m]) || !!_vips[nm];
-            if (isVip) vipEntries.push(entry);
+            if (window._entryHasVip(t, entry)) vipEntries.push(entry);
             else nonVipEntries.push(entry);
         });
         // v2.1.27: QUEM espera — 'last' (últimos a se inscrever, padrão) ou 'random'

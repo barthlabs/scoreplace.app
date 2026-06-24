@@ -987,15 +987,15 @@ window._autoSubstituteWO = function(tId, overrideReplacementName) {
   var nextPresent = null;
   if (overrideReplacementName) {
     nextPresent = standby.find(function(p) { return getName(p) === overrideReplacementName; });
-    if (nextPresent && !ci[getName(nextPresent)]) {
+    if (nextPresent && !window._idMapHas(t, ci, nextPresent)) {
       if (typeof showNotification === 'function') showNotification(_t('sub.noSubPresent'), _t('sub.noSubPresentMsg'), 'warning');
       return;
     }
   }
   if (!nextPresent) {
-    var presentInStandby = standby.filter(function(p) { return !!ci[getName(p)]; });
+    var presentInStandby = standby.filter(function(p) { return window._idMapHas(t, ci, p); });
     presentInStandby.sort(function(a, b) {
-      return (ci[getName(a)] || 0) - (ci[getName(b)] || 0);
+      return (window._idMapGet(t, ci, a) || 0) - (window._idMapGet(t, ci, b) || 0);
     });
     nextPresent = presentInStandby[0];
   }
@@ -1020,7 +1020,7 @@ window._autoSubstituteWO = function(tId, overrideReplacementName) {
       var name = m[slot];
       if (!name || name === 'TBD' || name === 'BYE') continue;
       var members = name.includes(' / ') ? name.split(' / ').map(function(n) { return n.trim(); }) : [name];
-      var found = members.find(function(n) { return !!ab[n]; });
+      var found = members.find(function(n) { return window._idMapHas(t, ab, n); });
       if (found) { woMatch = m; woSlot = slot; absentMemberName = found; break; }
     }
     if (woMatch) break;
@@ -1185,9 +1185,9 @@ window._autoSubstituteWO = function(tId, overrideReplacementName) {
         t.standbyParticipants = standby.filter(function(p) { return getName(p) !== replacementName; });
         t.waitlist = _wl.filter(function(w) { return getName(w) !== replacementName; });
         // Clear W.O. from absent, mark replacement as checked in
-        delete ab[absentMemberName];
+        window._idMapDel(t, ab, absentMemberName);
         t.absent = ab;
-        ci[replacementName] = true;
+        window._idMapSet(t, ci, (typeof nextPresent === 'object' && nextPresent) ? nextPresent : replacementName, true);
         t.checkedIn = ci;
 
         // v0.17.34: track W.O. history pra mostrar o jogador W.O.'d como
@@ -1273,9 +1273,9 @@ window._autoSubstituteWO = function(tId, overrideReplacementName) {
         t.standbyParticipants = standby.filter(function(p) { return getName(p) !== replacementName; });
         t.waitlist = _wl.filter(function(w) { return getName(w) !== replacementName; });
         // Clear W.O., mark replacement present
-        delete ab[absentMemberName];
+        window._idMapDel(t, ab, absentMemberName);
         t.absent = ab;
-        ci[replacementName] = true;
+        window._idMapSet(t, ci, (typeof nextPresent === 'object' && nextPresent) ? nextPresent : replacementName, true);
         t.checkedIn = ci;
 
         window.AppStore.logAction(tId, 'Substituição W.O.: ' + absentMemberName + ' → ' + replacementName);
@@ -1699,12 +1699,12 @@ window._saveSetResult = function(tId, matchId) {
   if (!t.absent) t.absent = {};
   [m.p1, m.p2].forEach(side => {
     if (!side || side === 'TBD' || side === 'BYE') return;
-    if (side.includes(' / ')) {
-      side.split(' / ').forEach(n => { const nm = n.trim(); if (nm) { t.checkedIn[nm] = t.checkedIn[nm] || Date.now(); delete t.absent[nm]; } });
-    } else {
-      t.checkedIn[side] = t.checkedIn[side] || Date.now();
-      delete t.absent[side];
-    }
+    const _names = side.includes(' / ') ? side.split(' / ').map(n => n.trim()).filter(Boolean) : [side];
+    _names.forEach(nm => {
+      // uid-first: resolve o nome do membro pro uid; nome só fallback.
+      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
+      window._idMapDel(t, t.absent, nm);
+    });
   });
   if (!t.tournamentStarted) t.tournamentStarted = Date.now();
 
@@ -1985,12 +1985,12 @@ window._saveResultInline = function (tId, matchId) {
   if (!t.absent) t.absent = {};
   [m.p1, m.p2].forEach(side => {
     if (!side || side === 'TBD' || side === 'BYE') return;
-    if (side.includes(' / ')) {
-      side.split(' / ').forEach(n => { const nm = n.trim(); if (nm) { t.checkedIn[nm] = t.checkedIn[nm] || Date.now(); delete t.absent[nm]; } });
-    } else {
-      t.checkedIn[side] = t.checkedIn[side] || Date.now();
-      delete t.absent[side];
-    }
+    const _names = side.includes(' / ') ? side.split(' / ').map(n => n.trim()).filter(Boolean) : [side];
+    _names.forEach(nm => {
+      // uid-first: resolve o nome do membro pro uid; nome só fallback.
+      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
+      window._idMapDel(t, t.absent, nm);
+    });
   });
   if (!t.tournamentStarted) t.tournamentStarted = Date.now();
 
@@ -2131,12 +2131,11 @@ window._approveResult = function(tId, matchId) {
   if (!t.absent) t.absent = {};
   [m.p1, m.p2].forEach(function(side) {
     if (!side || side === 'TBD' || side === 'BYE') return;
-    if (side.indexOf(' / ') !== -1) {
-      side.split(' / ').forEach(function(n) { var nm = n.trim(); if (nm) { t.checkedIn[nm] = t.checkedIn[nm] || Date.now(); delete t.absent[nm]; } });
-    } else {
-      t.checkedIn[side] = t.checkedIn[side] || Date.now();
-      delete t.absent[side];
-    }
+    var _names = side.indexOf(' / ') !== -1 ? side.split(' / ').map(function(n){ return n.trim(); }).filter(Boolean) : [side];
+    _names.forEach(function(nm) {
+      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
+      window._idMapDel(t, t.absent, nm);
+    });
   });
   if (!t.tournamentStarted) t.tournamentStarted = Date.now();
 
@@ -2441,7 +2440,7 @@ window._revertWO = function(tId, matchId) {
         members.forEach(function(n) {
           var nm = (n || '').trim();
           if (!nm) return;
-          if (t.absent) delete t.absent[nm];
+          window._idMapDel(t, t.absent, nm);
           if (t.woHistory) delete t.woHistory[nm];
         });
       };
@@ -5027,8 +5026,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       for (var _ni = 0; _ni < _names.length; _ni++) {
         var _nm = _names[_ni].trim();
         if (!_nm) continue;
-        t.checkedIn[_nm] = t.checkedIn[_nm] || Date.now();
-        delete t.absent[_nm];
+        if (!window._idMapHas(t, t.checkedIn, _nm)) window._idMapSet(t, t.checkedIn, _nm, Date.now());
+        window._idMapDel(t, t.absent, _nm);
       }
     }
     if (!t.tournamentStarted) t.tournamentStarted = Date.now();

@@ -381,7 +381,8 @@ window._createExtraGamesFromWaitlist = function(t) {
   var _ci = t.checkedIn || {}, _ab = t.absent || {};
   pool = pool.filter(function(p){
     var n = _name(p);
-    return n.indexOf(' / ') === -1 && !!_ci[n] && !_ab[n]; // só indivíduos presentes
+    // só indivíduos presentes — uid-first (objeto p tem uid)
+    return n.indexOf(' / ') === -1 && window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p);
   });
   if (pool.length < 4) return 0;
 
@@ -1360,11 +1361,10 @@ window.generateDrawFunction = function (tId) {
                 if (Object.keys(_vips).length > 0) {
                     // Find VIPs in real match group and swap with non-VIPs in bye group
                     for (var _vi2 = 0; _vi2 < _rmGroup.length; _vi2++) {
-                        var _vn = _gn(_rmGroup[_vi2]);
-                        if (_vips[_vn]) {
+                        if (window._entryHasVip(t, _rmGroup[_vi2])) {
                             // Find a non-VIP in bye group to swap with
                             for (var _bj = 0; _bj < _byGroup.length; _bj++) {
-                                if (!_vips[_gn(_byGroup[_bj])]) {
+                                if (!window._entryHasVip(t, _byGroup[_bj])) {
                                     var _swpTmp = _rmGroup[_vi2];
                                     _rmGroup[_vi2] = _byGroup[_bj];
                                     _byGroup[_bj] = _swpTmp;

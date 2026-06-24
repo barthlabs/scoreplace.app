@@ -408,8 +408,8 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
     if (!name || name === 'TBD' || name === 'BYE') return '';
     const members = name.includes(' / ') ? name.split(' / ').map(n => n.trim()).filter(n => n) : [name];
     const dots = members.map(n => {
-      const present = !!ci[n];
-      const isAbs = !!absentMap[n];
+      const present = window._idMapHas(t, ci, n);
+      const isAbs = window._idMapHas(t, absentMap, n);
       const dotColor = present ? '#10b981' : isAbs ? '#ef4444' : '#64748b';
       const textColor = present ? '#4ade80' : isAbs ? '#f87171' : '#94a3b8';
       return `<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block;"></span><span style="font-size:0.78rem;color:${textColor};">${_sh(n)}</span></span>`;
@@ -542,8 +542,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   } else {
     // checked-in first (by check-in timestamp ascending = first arrived), then unchecked
     sorted = _merged.slice().sort((a, b) => {
-      const na = getName(a), nb = getName(b);
-      const tsa = ci[na], tsb = ci[nb];
+      const tsa = window._idMapGet(t, ci, a), tsb = window._idMapGet(t, ci, b);
       if (tsa && tsb) return tsa - tsb; // both checked-in: earlier timestamp first
       if (tsa) return -1;               // a checked in, b didn't → a first
       if (tsb) return 1;                // b checked in, a didn't → b first
@@ -557,16 +556,15 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   if (_policy === 'locked') {
     nextIdx = -1;
     for (let _k = 0; _k < sorted.length; _k++) {
-      const _nm = getName(sorted[_k]);
-      if (ci[_nm] && !ab[_nm]) { nextIdx = _k; break; }
+      if (window._idMapHas(t, ci, sorted[_k]) && !window._idMapHas(t, ab, sorted[_k])) { nextIdx = _k; break; }
     }
   }
 
   const listItems = sorted.map((p, i) => {
     const name = getName(p);
     const safeName = name.replace(/'/g, "\\'");
-    const mc = !!ci[name];
-    const isAb = !!ab[name];
+    const mc = window._idMapHas(t, ci, p);
+    const isAb = window._idMapHas(t, ab, p);
     const statusLabel = mc ? _t('bracket.checkedIn') : _t('bracket.notCheckedIn');
     const statusColor = mc ? '#4ade80' : '#64748b';
     const isNext = (i === nextIdx);
@@ -1567,12 +1565,12 @@ function _getCheckInStatus(tId, teamName) {
   const ci = t.checkedIn;
   if (teamName.includes(' / ')) {
     const members = teamName.split(' / ').map(n => n.trim()).filter(n => n);
-    const checked = members.filter(n => !!ci[n]).length;
+    const checked = members.filter(n => window._idMapHas(t, ci, n)).length;
     if (checked === members.length) return 'full';
     if (checked > 0) return 'partial';
     return 'none';
   }
-  return ci[teamName] ? 'full' : 'none';
+  return window._idMapHas(t, ci, teamName) ? 'full' : 'none';
 }
 
 // ─── Player photo cache (loaded from Firestore) ─────────────────────────────
@@ -2161,7 +2159,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   let _presenceTag = '';  // TAG "PRESENTE" (vai EMPILHADA abaixo do PARCIAL)
   if (typeof window._participantsSelfPresence === 'function' && window._participantsSelfPresence(t) &&
       _isMyMatch && !isDecided && !isByeMatch && !hasTBD && _cuName) {
-    const _meHere = !!(t && t.checkedIn && t.checkedIn[_cuName]);
+    const _meHere = window._idMapHas(t, t.checkedIn, _cuName);
     // v2.7.59: PRESENTE é TAG (mesmo tamanho/forma do PARCIAL) e fica empilhada
     // abaixo dele. Antes de chegar, BOTÃO padrão "Cheguei" (cyan) na linha dos botões.
     if (_meHere) {

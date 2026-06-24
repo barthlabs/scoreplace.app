@@ -883,8 +883,7 @@ function renderTournaments(container, tournamentId = null) {
         var absentMap = t.absent;
         var parts = Array.isArray(t.participants) ? t.participants : [];
         var toMove = parts.filter(function(p) {
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            return n && absentMap.hasOwnProperty(n);
+            return window._idMapHas(t, absentMap, p); // uid-first (objeto p)
         });
         if (toMove.length === 0) return 0;
         var moveSet = {};
@@ -918,11 +917,11 @@ function renderTournaments(container, tournamentId = null) {
     window._isParticipantPresent = function(t, name) {
         if (!t || !name) return false;
         var ci = t.checkedIn || {}, ab = t.absent || {};
-        if (ab[name]) return false;
-        if (ci[name]) return true;
+        if (window._idMapHas(t, ab, name)) return false;
+        if (window._idMapHas(t, ci, name)) return true;
         if (name.indexOf('/') !== -1) {
             var members = name.split('/').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
-            if (members.length >= 2 && members.every(function(m) { return !!ci[m]; })) return true;
+            if (members.length >= 2 && members.every(function(m) { return window._idMapHas(t, ci, m); })) return true;
         }
         return false;
     };
@@ -2876,10 +2875,10 @@ function renderTournaments(container, tournamentId = null) {
                 if (pName.includes('/')) {
                     pName.split('/').forEach(n => {
                         const nm = n.trim();
-                        if (nm) { totalIndividuals++; if (checkedIn[nm]) checkedCount++; }
+                        if (nm) { totalIndividuals++; if (window._idMapHas(t, checkedIn, nm)) checkedCount++; }
                     });
                 } else {
-                    if (pName) { totalIndividuals++; if (checkedIn[pName]) checkedCount++; }
+                    if (pName) { totalIndividuals++; if (window._idMapHas(t, checkedIn, pName)) checkedCount++; }
                 }
             });
 
@@ -2934,7 +2933,7 @@ function renderTournaments(container, tournamentId = null) {
 
                 // Sort: apply user preference, then unchecked first
                 allIndividuals.sort((a, b) => {
-                    const ac = !!checkedIn[a.name], bc = !!checkedIn[b.name];
+                    const ac = window._idMapHas(t, checkedIn, a.name), bc = window._idMapHas(t, checkedIn, b.name);
                     if (ac !== bc) return ac ? 1 : -1; // unchecked first
                     if (_enrollSort === 'alpha_asc') return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
                     if (_enrollSort === 'alpha_desc') return b.name.localeCompare(a.name, 'pt-BR', { sensitivity: 'base' });
@@ -2942,9 +2941,8 @@ function renderTournaments(container, tournamentId = null) {
                     return 0; // chrono = original order
                 });
 
-                const _vipMapCI = t.vips || {};
                 cardsStr = allIndividuals.map((ind, i) => {
-                    const mc = !!checkedIn[ind.name];
+                    const mc = window._idMapHas(t, checkedIn, ind.name);
 
                     // Filter
                     if (currentFilter === 'present' && !mc) return '';
@@ -2960,7 +2958,7 @@ function renderTournaments(container, tournamentId = null) {
                       const _membersTL = ind.teamName.split('/').map(n => n.trim()).filter(n => n).filter(n => !_woHistCI[n]);
                       teamLabel = _membersTL.join(' / ');
                     }
-                    const isVipCI = !!_vipMapCI[ind.name] || (ind.teamName && !!_vipMapCI[ind.teamName]);
+                    const isVipCI = window._entryHasVip(t, ind.teamName || ind.name);
                     const vipTagCI = isVipCI ? ' <span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.55rem;font-weight:900;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;">💎 VIP</span>' : '';
 
                     const _ciSeed = encodeURIComponent(ind.name);
@@ -3049,7 +3047,7 @@ function renderTournaments(container, tournamentId = null) {
                     if (idx === -1) idx = sortedIdx;
                     const pName = typeof p === 'string' ? p : (window._pName(p) || 'Participante ' + (sortedIdx + 1));
                     const isTeam = pName.includes('/');
-                    const isVip = !!_vipMap[pName];
+                    const isVip = window._entryHasVip(t, p); // uid-first (objeto: solo ou dupla)
                     const safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
                     let cardStyle = '';

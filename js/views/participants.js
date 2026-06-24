@@ -72,11 +72,12 @@ window._processWoSubstitutions = function(tId) {
   const presentList = standbyPool
     .map(p => {
       const name = _getName(p);
-      const ci = t.checkedIn[name];
+      // uid-first: lê pelo uid da pessoa (objeto p tem uid), nome só fallback legado.
+      const ci = window._idMapGet(t, t.checkedIn, p);
       const ts = typeof ci === 'number' ? ci : (ci ? 1 : 0);
       return { p, name, ts };
     })
-    .filter(o => o.ts > 0 && !(_policy === 'locked' && t.absent && t.absent[o.name]));
+    .filter(o => o.ts > 0 && !(_policy === 'locked' && window._idMapHas(t, t.absent, o.p)));
   if (_policy === 'locked') {
     const _ordOf = (o) => {
       if (_ord[o.name] !== undefined) return _ord[o.name];
@@ -110,7 +111,10 @@ window._processWoSubstitutions = function(tId) {
   const subDetails = [];
 
   // Iterate absents — try to substitute each. Pode ter múltiplos absents pendentes.
-  const absentNames = Object.keys(t.absent);
+  // t.absent agora é chaveado por uid (uid-first); traduz cada chave de volta pro
+  // NOME pra cruzar com os slots da chave (m.p1/m.p2 são nomes). Chave legada que
+  // já é nome (sem uid correspondente) resolve pra '' → cai no próprio k.
+  const absentNames = Object.keys(t.absent).map(function(k){ return window._memberNameByUid(t, k) || k; });
   for (const absentName of absentNames) {
     if (presentList.length === 0) break;
 
@@ -188,8 +192,9 @@ window._processWoSubstitutions = function(tId) {
       t.waitlist = t.waitlist.filter(p => _getName(p) !== subName);
     }
 
-    // Mark sub as Presente (use timestamp pra preservar FIFO em subs subsequentes)
-    t.checkedIn[subName] = Date.now();
+    // Mark sub as Presente (use timestamp pra preservar FIFO em subs subsequentes).
+    // uid-first via o objeto do substituto (sub.p tem uid).
+    window._idMapSet(t, t.checkedIn, (sub && typeof sub.p === 'object') ? sub.p : subName, Date.now());
 
     // Record woHistory
     if (!t.woHistory) t.woHistory = {};
@@ -253,7 +258,7 @@ window._toggleCheckIn = function (tId, playerName) {
     }
     return;
   }
-  const _wasIn = !!(t.checkedIn && t.checkedIn[playerName]);
+  const _wasIn = window._idMapHas(t, t.checkedIn, playerName);
   if (_wasIn) {
     // Retirar a própria presença é livre (você pode dizer que saiu).
     return window._applyCheckInToggle(tId, playerName);
@@ -278,11 +283,11 @@ window._applyCheckInToggle = function (tId, playerName) {
   if (!t) return;
   if (!t.checkedIn) t.checkedIn = {};
   if (!t.absent) t.absent = {};
-  const wasCheckedIn = !!t.checkedIn[playerName];
+  const wasCheckedIn = window._idMapHas(t, t.checkedIn, playerName);
 
   // Guard v2.2.8: jogadores na lista de espera por ausência devem ser reativados
   // via botão "Reverter" — toggle fica desabilitado na UI, isso é um safety net.
-  if (!wasCheckedIn && t.absent && t.absent[playerName]) {
+  if (!wasCheckedIn && window._idMapHas(t, t.absent, playerName)) {
     const _pnFor = p => (typeof p === 'string' ? p : (p && (p.displayName || p.name || p.email || '')));
     const _inStandby = (Array.isArray(t.standbyParticipants) &&
       t.standbyParticipants.some(p => _pnFor(p) === playerName)) ||
@@ -298,11 +303,11 @@ window._applyCheckInToggle = function (tId, playerName) {
 
   if (wasCheckedIn) {
     // Desmarcar presença → volta ao estado "sem confirmação"
-    delete t.checkedIn[playerName];
+    window._idMapDel(t, t.checkedIn, playerName);
   } else {
     // Marcar presente → limpa ausência se existia
-    t.checkedIn[playerName] = Date.now();
-    delete t.absent[playerName];
+    window._idMapSet(t, t.checkedIn, playerName, Date.now());
+    window._idMapDel(t, t.absent, playerName);
   }
   window.FirestoreDB.saveTournament(t);
 
@@ -343,7 +348,7 @@ window._markAbsent = function (tId, playerName) {
   // se há replacedBy, desfaz substituição: restaura time original, remove
   // substituto da chave, devolve ele à waitlist se aplicável.
   const _woMeta = t.woHistory && t.woHistory[playerName];
-  if (t.absent[playerName] || _woMeta) {
+  if (window._idMapHas(t, t.absent, playerName) || _woMeta) {
     // Trava: se o jogo do W.O. já foi jogado de verdade (placar lançado / placar
     // ao vivo iniciado), não dá pra reverter — reverter zeraria um resultado real.
     if (_woMeta && _woMeta.matchNum && typeof window._matchHasRealPlay === 'function') {
@@ -359,7 +364,7 @@ window._markAbsent = function (tId, playerName) {
       }
     }
     // Desmarcar ausência → volta ao estado "sem confirmação"
-    delete t.absent[playerName];
+    window._idMapDel(t, t.absent, playerName);
     if (_woMeta) {
       const _replacedBy = _woMeta.replacedBy;
       const _origTeam = _woMeta.originalTeam;
@@ -392,7 +397,7 @@ window._markAbsent = function (tId, playerName) {
                 }
               });
               // Substituto sai do checkedIn (já que volta ao standby)
-              delete t.checkedIn[_replacedBy];
+              window._idMapDel(t, t.checkedIn, _replacedBy);
               // Devolve substituto à waitlist se ele veio de lá
               const partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
               const _subIdx = partsArr.findIndex(function(p) {
@@ -417,8 +422,8 @@ window._markAbsent = function (tId, playerName) {
     }
   } else {
     // Marcar ausente → limpa presença se existia
-    t.absent[playerName] = Date.now();
-    delete t.checkedIn[playerName];
+    window._idMapSet(t, t.absent, playerName, Date.now());
+    window._idMapDel(t, t.checkedIn, playerName);
   }
   window.FirestoreDB.saveTournament(t);
   _reRenderParticipants();
@@ -450,7 +455,7 @@ window._drawPresentOnly = function (tId) {
   const absentees = [];
   parts.forEach(function (p) {
     const en = window._pName(p);
-    if (en && t.checkedIn[en]) present.push(p);
+    if (window._idMapHas(t, t.checkedIn, p)) present.push(p);
     else absentees.push(p);
   });
 
@@ -539,7 +544,7 @@ window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
   const absentees = [];
   parts.forEach(function (p) {
     const en = window._pName(p);
-    if (en && t.checkedIn[en]) present.push(p);
+    if (window._idMapHas(t, t.checkedIn, p)) present.push(p);
     else absentees.push(p);
   });
 
@@ -550,8 +555,8 @@ window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
       const exists = t.waitlist.some(function (w) { return window._pName(w) === en; });
       if (!exists) t.waitlist.push(p);
       // Estado neutro na lista de espera (pode ser chamado depois p/ substituir W.O.)
-      delete t.checkedIn[en];
-      delete t.absent[en];
+      window._idMapDel(t, t.checkedIn, p);
+      window._idMapDel(t, t.absent, p);
     });
   } else { // disqualify
     if (!Array.isArray(t.disqualified)) t.disqualified = [];
@@ -559,8 +564,8 @@ window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
       const en = window._pName(p);
       const exists = t.disqualified.some(function (w) { return window._pName(w) === en; });
       if (!exists) t.disqualified.push(p);
-      delete t.checkedIn[en];
-      delete t.absent[en];
+      window._idMapDel(t, t.checkedIn, p);
+      window._idMapDel(t, t.absent, p);
     });
   }
 
@@ -799,8 +804,22 @@ window._toggleVip = function (tId, participantName) {
   const t = window._findTournamentById(tId);
   if (!t) return;
   if (!t.vips) t.vips = {};
-  if (t.vips[participantName]) {
-    delete t.vips[participantName];
+  // uid-first: resolve a ENTRADA pra pegar todos os uids (solo = 1; dupla =
+  // p1Uid+p2Uid). VIP fica marcado em cada uid → os readers que fazem
+  // members.some(m => _vips[m]) acham, e dois jogadores de mesmo nome não
+  // colidem. Jogador informal (sem uid) continua pelo nome (fallback).
+  const partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  const entry = partsArr.find(p => window._pName(p) === participantName);
+  const uids = (entry && typeof window._participantUids === 'function') ? window._participantUids(entry) : [];
+  let isVip = false;
+  uids.forEach(u => { if (t.vips[u]) isVip = true; });
+  if (!uids.length && t.vips[participantName]) isVip = true;
+  if (isVip) {
+    uids.forEach(u => { delete t.vips[u]; });
+    delete t.vips[participantName]; // limpa chave-nome legada
+  } else if (uids.length) {
+    uids.forEach(u => { t.vips[u] = Date.now(); });
+    delete t.vips[participantName]; // migra: sai do nome, entra no uid
   } else {
     t.vips[participantName] = Date.now();
   }
@@ -931,11 +950,11 @@ window._declareAbsent = function (tId, playerName) {
     opponentSide = matchSide === 'p1' ? 'p2' : 'p1';
     opponent = matchEntry ? matchEntry[opponentSide] : null;
 
-    // Marcar o jogador como ausente confirmado
+    // Marcar o jogador como ausente confirmado (uid-first)
     if (!t.checkedIn) t.checkedIn = {};
     if (!t.absent) t.absent = {};
-    delete t.checkedIn[playerName];
-    t.absent[playerName] = Date.now();
+    window._idMapDel(t, t.checkedIn, playerName);
+    window._idMapSet(t, t.absent, playerName, Date.now());
 
     // v0.17.35: rastreia woHistory IMEDIATAMENTE quando W.O. é decretado
     // (mesmo sem substituto). Pedido do usuário: card do W.O.'d aparece com
@@ -1097,7 +1116,7 @@ window._declareAbsent = function (tId, playerName) {
       const _presentSorted = standby
         .map((p, idx) => {
           const _name = window._pName(p);
-          const _ci = t.checkedIn[_name];
+          const _ci = window._idMapGet(t, t.checkedIn, p);
           // ts numérico pra ordenar; truthy não-numérico (true) vira 1.
           const ts = typeof _ci === 'number' ? _ci : (_ci ? 1 : 0);
           return { p, idx, name: _name, ts, ciRaw: _ci };
@@ -1123,7 +1142,7 @@ window._declareAbsent = function (tId, playerName) {
           standbyCount: standby.length,
           standbyDetail: standby.map(p => {
             const _n = window._pName(p);
-            return { name: _n, ci: t.checkedIn[_n] };
+            return { name: _n, ci: window._idMapGet(t, t.checkedIn, p) };
           }),
           presentSortedCount: _presentSorted.length,
           presentSortedNames: _presentSorted.map(o => o.name + ' (ts=' + o.ts + ', ciRaw=' + JSON.stringify(o.ciRaw) + ')'),
@@ -1288,7 +1307,7 @@ window._declareAbsent = function (tId, playerName) {
       }
       t.participants = partsArr;
       _removeFromWaitlists(nextName);
-      t.checkedIn[nextName] = true;
+      window._idMapSet(t, t.checkedIn, (typeof nextStandby === 'object' && nextStandby) ? nextStandby : nextName, true);
 
       // v0.17.34: track W.O. history pra mostrar o jogador W.O.'d como
       // entrada solo nos inscritos com nota "Estava no Jogo N com X".
@@ -1341,12 +1360,12 @@ window._declareAbsent = function (tId, playerName) {
         .map((p, idx) => {
           const sName = window._pName(p);
           const sMembers = sName.includes('/') ? sName.split('/').map(n => n.trim()).filter(n => n) : [sName];
-          const allPresent = sMembers.every(m => !!t.checkedIn[m]);
+          const allPresent = sMembers.every(m => window._idMapHas(t, t.checkedIn, m));
           if (!allPresent) return null;
           // Timestamp da equipe = MAIOR ts dos membros (último a chegar
           // completou a equipe). Equipes que completaram mais cedo entram
           // primeiro.
-          const teamTs = sMembers.reduce((max, m) => Math.max(max, t.checkedIn[m] || 0), 0);
+          const teamTs = sMembers.reduce((max, m) => Math.max(max, (window._idMapGet(t, t.checkedIn, m) || 0)), 0);
           return { p, idx, ts: teamTs };
         })
         .filter(o => o !== null)
@@ -1520,20 +1539,20 @@ function renderParticipants(container, tournamentId) {
   // indivíduos (o check-in foi feito nos nomes individuais).
   const _entryPresent = (name) => {
     if (!name) return false;
-    if (absent[name]) return false;
-    if (checkedIn[name]) return true;
+    if (window._idMapHas(t, absent, name)) return false;
+    if (window._idMapHas(t, checkedIn, name)) return true;
     if (name.indexOf('/') !== -1) {
       const ms = name.split('/').map(s => s.trim()).filter(Boolean);
-      if (ms.length >= 2 && ms.every(m => !!checkedIn[m])) return true;
+      if (ms.length >= 2 && ms.every(m => window._idMapHas(t, checkedIn, m))) return true;
     }
     return false;
   };
   const _entryAbsent = (name) => {
     if (!name) return false;
-    if (absent[name]) return true;
+    if (window._idMapHas(t, absent, name)) return true;
     if (name.indexOf('/') !== -1) {
       const ms = name.split('/').map(s => s.trim()).filter(Boolean);
-      if (ms.length >= 2 && ms.some(m => !!absent[m])) return true;
+      if (ms.length >= 2 && ms.some(m => window._idMapHas(t, absent, m))) return true;
     }
     return false;
   };
@@ -1570,7 +1589,7 @@ function renderParticipants(container, tournamentId) {
         if (_countedNames[k]) return;
         _countedNames[k] = 1;
         totalIndividuals++;
-        if (checkedIn[nm]) checkedCount++; else if (absent[nm]) absentConfirmedCount++;
+        if (window._idMapHas(t, checkedIn, nm)) checkedCount++; else if (window._idMapHas(t, absent, nm)) absentConfirmedCount++;
       });
     });
   };
@@ -1849,11 +1868,11 @@ function renderParticipants(container, tournamentId) {
 
     // v2.1.3: _nameToParticipant agora é definido no escopo da função (acima).
     cardsStr = _dedupedIndividuals.map((ind) => {
-      const mc = !!checkedIn[ind.name];
+      const mc = window._idMapHas(t, checkedIn, ind.name);
       // v0.17.34: W.O. orphan = jogador que teve W.O. decretado e foi
       // substituído. Foi removido do time, agora é solo com nota.
       const isWOOrphan = !!ind.isWOOrphan;
-      const isAbsent = isWOOrphan ? true : !!absent[ind.name];
+      const isAbsent = isWOOrphan ? true : window._idMapHas(t, absent, ind.name);
       const isPending = !mc && !isAbsent;
       if (currentFilter === 'present' && !mc) return '';
       if (currentFilter === 'absent' && !isAbsent) return '';
@@ -1868,8 +1887,8 @@ function renderParticipants(container, tournamentId) {
 
       // Build sub-info with presence dots (3 states: green=presente, red=ausente, gray=aguardando)
       const dotHtml = (name) => {
-        const p = !!checkedIn[name];
-        const a = !!absent[name];
+        const p = window._idMapHas(t, checkedIn, name);
+        const a = window._idMapHas(t, absent, name);
         const dotColor = p ? '#10b981' : a ? '#ef4444' : '#64748b';
         const textColor = p ? '#4ade80' : a ? '#f87171' : '#94a3b8';
         return `<span style="display:inline-flex;align-items:center;gap:2px;"><span style="width:5px;height:5px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span><span style="font-size:0.66rem;color:${textColor};">${name}</span></span>`;
@@ -2024,7 +2043,7 @@ function renderParticipants(container, tournamentId) {
         if (ind.opponent) ind.opponent.split(/\s*\/\s*/).forEach(n => { if (n && n.trim()) _mm.push(n.trim()); });
         const _uniq = Array.from(new Set(_mm));
         if (_uniq.length > 0) {
-          const _presentCount = _uniq.filter(n => !!checkedIn[n]).length;
+          const _presentCount = _uniq.filter(n => window._idMapHas(t, checkedIn, n)).length;
           if (_presentCount === _uniq.length) { _jogoColor = '#4ade80'; _jogoOpacity = '0.95'; _jogoWeight = '800'; }
           else if (_presentCount > 0) { _jogoColor = '#fbbf24'; _jogoOpacity = '0.95'; _jogoWeight = '800'; }
         }
@@ -2177,9 +2196,8 @@ function renderParticipants(container, tournamentId) {
         if (currentFilter === 'pending' && !rcPend) return '';
       }
 
-      const vipsMap = t.vips || {};
       const _isStandbyEntry = !!(p && typeof p === 'object' && p._isStandbyEntry) || !!_gridWaitSet[(pName || '').toLowerCase().trim()];
-      const isVipEarly = !!vipsMap[pName];
+      const isVipEarly = window._entryHasVip(t, p || pName);
       let cardStyle = '';
       if (isVipEarly) {
         cardStyle = 'background: linear-gradient(135deg, rgba(161,98,7,0.5) 0%, rgba(234,179,8,0.35) 100%); border: 2px solid rgba(251,191,36,0.7); box-shadow: 0 0 12px rgba(251,191,36,0.15);';
@@ -2223,9 +2241,8 @@ function renderParticipants(container, tournamentId) {
         pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="${_pPhotoN}" ${_pErrN} data-player-name="${_pNameH}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span ${_editAttrN}>${_pNameH}</span>${_orgStar}</div>`;
       }
 
-      const vips = t.vips || {};
       const safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      const isVip = !!vips[pName];
+      const isVip = window._entryHasVip(t, p || pName);
       const vipBadge = isVip ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;margin-left:4px;">💎 VIP</span>' : '';
 
       // Label de tipo: origem da equipe
