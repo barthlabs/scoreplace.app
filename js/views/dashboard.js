@@ -238,6 +238,26 @@ function renderDashboard(container) {
   const _allVisibleRaw = window.AppStore.getVisibleTournaments();
   const visible = _hidIds.length ? _allVisibleRaw.filter(function(t){ return !_hidSet[String(t.id)]; }) : _allVisibleRaw;
 
+  // v3.0.55: PRÉ-CARREGA as fotos de venue (Google Maps) e MANTÉM a referência —
+  // assim, nos vários re-renders do boot (router + auth + listener), o
+  // background-image do card é servido do cache em vez de re-baixar, acabando com
+  // o "pisca várias vezes" do card com foto. Idempotente (só carrega URLs novas).
+  try {
+    window._dashPhotoCache = window._dashPhotoCache || {};
+    var _photoSrcs = _allVisibleRaw.concat((window.AppStore && window.AppStore.publicDiscovery) || []);
+    for (var _pi = 0; _pi < _photoSrcs.length; _pi++) {
+      var _pu = _photoSrcs[_pi] && _photoSrcs[_pi].venuePhotoUrl;
+      if (_pu && !window._dashPhotoCache[_pu]) { var _im = new Image(); _im.src = _pu; window._dashPhotoCache[_pu] = _im; }
+    }
+  } catch (e) {}
+  // v3.0.55: registra a assinatura dos dados RENDERIZADOS — o _softRefreshView
+  // compara com isto e NÃO re-renderiza (nem re-pisca a foto) quando o snapshot
+  // (cache→servidor no boot) traz os mesmos torneios.
+  try {
+    var _dtsR = (window.AppStore && window.AppStore.tournaments) || [];
+    window._dashDataSig = _dtsR.length + '|' + _dtsR.map(function(t){ return t && t.id; }).join(',');
+  } catch (e) {}
+
   // Filtros Básicos
   const torneiosCount = visible.length;
   const torneiosPublicos = visible.filter(t => t.isPublic).length;
