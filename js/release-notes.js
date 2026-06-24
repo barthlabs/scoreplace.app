@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.88-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📋 Cartões de inscrito na chamada mais organizados:</b> o tipo de inscrição fica numa linha e os controles (Presente/Ausente, o botão de presença, W.O. e a lixeira) ficam logo abaixo, sempre na mesma ordem e no mesmo lugar — sem pular de posição ao marcar presença e sem cobrir o número de inscrição. Vale para inscrições individuais, duplas e jogos sorteados.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.85-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📱 Convidar agora cria a amizade de verdade:</b> quando alguém entra no app pelo seu QR Code ou link de convite (botão Convidar), vocês viram amigos automaticamente — antes isso só funcionava no convite de torneio.</li>' +
         '<li><b>🖨️ Convite para imprimir mais caprichado:</b> o convite do app ganhou os mesmos ajustes de tamanho do convite de torneio — dá pra regular logo, QR Code e textos com pré-visualização na hora, além de escolher papel (A4/A5/A6/Carta), cor e orientação. Personalize o impresso do jeito que quiser.</li>' +
