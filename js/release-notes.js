@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.88-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👥 Tela Pessoas mais limpa e segura:</b> o cartão de perfil e o de convite de uma pessoa agora têm um único botão <b>Voltar</b> (saiu o ✕ repetido), e a tela ganhou reforços de segurança e estabilidade nos bastidores.</li>' +
+        '<li><b>📋 Cartões de dupla na chamada padronizados:</b> dupla já formada, dupla pendente e o atalho de "formar dupla" do jogador sozinho seguem agora o mesmo layout dos demais cartões de inscrito.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.88-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📋 Cartões de inscrito na chamada mais organizados:</b> o tipo de inscrição fica numa linha e os controles (Presente/Ausente, o botão de presença, W.O. e a lixeira) ficam logo abaixo, sempre na mesma ordem e no mesmo lugar — sem pular de posição ao marcar presença e sem cobrir o número de inscrição. Vale para inscrições individuais, duplas e jogos sorteados.</li>' +
       '</ul>' +

@@ -242,7 +242,7 @@ function _userCardHtml(u, uid, actionHtml, variant, onClickFn) {
     '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';flex-shrink:0;">' +
     '<div style="flex:1;min-width:0;">' +
       _nameHtml(_nl.line1, _nl.line2) +
-      (infoChips.length > 0 ? '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + infoChips.join(' · ') + '</div>' : '') +
+      (infoChips.length > 0 ? '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(infoChips.join(' · ')) + '</div>' : '') +
     '</div>' +
     '<div style="flex-shrink:0;">' + actionHtml + '</div>' +
   '</div>';
@@ -1029,6 +1029,9 @@ window._sendFriendRequest = function(toUid) {
       if (cu.friends.indexOf(toUid) === -1) cu.friends.push(toUid);
       cu.friendRequestsSent = (cu.friendRequestsSent || []).filter(function(id) { return id !== toUid; });
       cu.friendRequestsReceived = (cu.friendRequestsReceived || []).filter(function(id) { return id !== toUid; });
+      // v3.0.x: convite mútuo auto-aceito É uma amizade formada — conta no GA4
+      // igual ao caminho de _acceptFriend (antes só o aceite manual era contado).
+      try { if (typeof window._trackFriendAdded === 'function') window._trackFriendAdded(); } catch (_e) {}
       if (typeof showNotification !== 'undefined') {
         showNotification((window._t||function(k){return k;})('explore.notifFriendshipFormed'), (window._t||function(k){return k;})('explore.notifFriendshipFormedMsg'), 'success');
       }
@@ -1164,29 +1167,6 @@ window._openPendingInviteDetail = function (uid) {
 };
 
 // ── Profile sheet helpers ─────────────────────────────────────────────────
-
-// Returns true if the player identified by email/name appears in a match slot
-// string (simple name, "A / B" doubles, or email).
-function _playerInSlot(slot, email, name) {
-  if (!slot) return false;
-  var s = String(slot).toLowerCase();
-  if (email && s.indexOf(email.toLowerCase()) !== -1) return true;
-  if (name) {
-    var n = name.toLowerCase().trim();
-    if (!n || n.length < 2) return false;
-    if (s === n) return true;
-    if (s.indexOf(n) !== -1) return true;
-    // First-name match for doubles "Ana / Paulo" — only if >= 3 chars
-    var firstName = n.split(/\s+/)[0];
-    if (firstName.length >= 3) {
-      var parts = s.split(/[\s\/]+/);
-      for (var _i = 0; _i < parts.length; _i++) {
-        if (parts[_i] === firstName) return true;
-      }
-    }
-  }
-  return false;
-}
 
 // Async: loads matchHistory from Firestore, renders dual-bar comparison layout
 // (same visual language as end-of-casual-match stats screen).
@@ -1429,73 +1409,6 @@ function _loadAndRenderFriendStats(friendUid, hr) {
     });
 }
 
-// Fallback sync stats from AppStore.tournaments (used when matchHistory is unavailable)
-// Computes confrontos/parcerias/torneios stats between currentUser and friend u
-function _computeFriendStats(u) {
-  var cu = window.AppStore ? (window.AppStore.currentUser || {}) : {};
-  var myEmail = cu.email || '';
-  var myName  = cu.displayName || '';
-  var myUid   = cu.uid || ''; // v2.8.80
-  var frEmail = u.email || '';
-  var frName  = u.displayName || '';
-  var frUid   = u.uid || u._docId || ''; // v2.8.80
-  var stats = {
-    tournaments: 0, tournamentNames: [],
-    confrontos: { total: 0, myWins: 0, frWins: 0 },
-    parcerias:  { total: 0, wins: 0, losses: 0 }
-  };
-  if (!frEmail && !frName && !frUid) return stats;
-  var allT = window.AppStore ? (window.AppStore.tournaments || []) : [];
-  allT.forEach(function(t) {
-    var pList = Array.isArray(t.participants) ? t.participants : [];
-    var meIn = (myUid && t.creatorUid === myUid) || (myEmail && t.organizerEmail === myEmail) || pList.some(function(pp) {
-      return _participantMatchesUser(pp, myEmail, myName, myUid);
-    });
-    var frIn = pList.some(function(pp) {
-      return _participantMatchesUser(pp, frEmail, frName, frUid);
-    });
-    if (!meIn || !frIn) return;
-    stats.tournaments++;
-    if (stats.tournamentNames.length < 3 && t.name) stats.tournamentNames.push(window._safeHtml(t.name));
-    var matches = (typeof window._collectAllMatches === 'function')
-      ? window._collectAllMatches(t)
-      : (Array.isArray(t.matches) ? t.matches : []);
-    matches.forEach(function(m) {
-      if (!m) return;
-      var meP1 = _playerInSlot(m.p1, myEmail, myName);
-      var meP2 = _playerInSlot(m.p2, myEmail, myName);
-      var frP1 = _playerInSlot(m.p1, frEmail, frName);
-      var frP2 = _playerInSlot(m.p2, frEmail, frName);
-      // Monarch format: team arrays
-      if (Array.isArray(m.team1)) {
-        if (!meP1) meP1 = m.team1.some(function(id){ return _playerInSlot(id, myEmail, myName); });
-        if (!frP1) frP1 = m.team1.some(function(id){ return _playerInSlot(id, frEmail, frName); });
-      }
-      if (Array.isArray(m.team2)) {
-        if (!meP2) meP2 = m.team2.some(function(id){ return _playerInSlot(id, myEmail, myName); });
-        if (!frP2) frP2 = m.team2.some(function(id){ return _playerInSlot(id, frEmail, frName); });
-      }
-      var sameTeam  = (meP1 && frP1) || (meP2 && frP2);
-      var opponents = (meP1 && frP2) || (meP2 && frP1);
-      if (sameTeam) {
-        stats.parcerias.total++;
-        if (m.winner) {
-          var mySideSlot = meP1 ? m.p1 : m.p2;
-          var won = (m.winner === mySideSlot) || _playerInSlot(m.winner, myEmail, myName);
-          if (won) stats.parcerias.wins++; else stats.parcerias.losses++;
-        }
-      } else if (opponents) {
-        stats.confrontos.total++;
-        if (m.winner) {
-          if (_playerInSlot(m.winner, myEmail, myName))       stats.confrontos.myWins++;
-          else if (_playerInSlot(m.winner, frEmail, frName))  stats.confrontos.frWins++;
-        }
-      }
-    });
-  });
-  return stats;
-}
-
 function _profileSheetAvatarHtml(u, uid, size, borderColor) {
   var nl = _nameLines((window._friendlyDisplayName ? window._friendlyDisplayName(u) : (u.displayName || u.email || 'Usuário')));
   var seed = encodeURIComponent((nl.line1 + (nl.line2 ? ' ' + nl.line2 : '')) || uid || 'User');
@@ -1576,7 +1489,7 @@ function _renderUserProfileSheet(u) {
   if (u.birthDate) {
     try {
       var bdParts = String(u.birthDate).split('/');
-      if (bdParts.length >= 2) birthdayLabel = '🎂 ' + bdParts[0] + '/' + bdParts[1];
+      if (bdParts.length >= 2) birthdayLabel = '🎂 ' + window._safeHtml(bdParts[0] + '/' + bdParts[1]);
     } catch(e) {}
   }
 
@@ -1684,10 +1597,9 @@ function _renderInviteDetailSheet(u) {
     } catch (e) {}
   }
 
+  // Sem ✕ próprio: _mountProfileSheet já prepende o "← Voltar" canônico
+  // (mesmo padrão do sheet de perfil) — antes havia dois controles de fechar.
   _mountProfileSheet(
-    '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
-      '<button onclick="window._closeUserProfileSheet()" style="background:transparent;border:none;color:var(--text-muted);font-size:1.3rem;cursor:pointer;line-height:1;padding:4px 8px;">✕</button>' +
-    '</div>' +
     '<div style="text-align:center;">' +
       _profileSheetAvatarHtml(u, uid, 64, 'rgba(245,158,11,0.7)') +
       '<div style="font-size:1.1rem;font-weight:700;color:var(--text-bright);">' + fullName + '</div>' +
