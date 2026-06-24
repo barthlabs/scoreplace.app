@@ -1,7 +1,7 @@
 {
   "name": "scoreplace-functions",
   "description": "Cloud Functions for scoreplace.app",
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "main": "index.js",
   "dependencies": {
     "firebase-admin": "^12.0.0",
