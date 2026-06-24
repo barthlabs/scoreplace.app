@@ -5520,16 +5520,33 @@ window._executeDeleteAccount = async function() {
       if (tCount > 0) await tBatch.commit();
     } catch (e) { window._warn('Erro ao remover inscrições:', e); }
 
-    // 2c. Delete tournaments organized by this user
+    // 2c. Delete tournaments organized by this user.
+    // v3.0.69: dono canônico é creatorUid (uid), não organizerEmail. Antes a query
+    // só achava por organizerEmail — torneio com creatorUid===uid mas organizerEmail
+    // diferente/ausente (e-mail trocado, organizador só-celular com e-mail sintético)
+    // ficava órfão de uma conta já excluída. Agora busca por uid (primário) E por
+    // e-mail (fallback legado), deduplicando por id.
     try {
-      var myTournsSnap = await db.collection('tournaments').where('organizerEmail', '==', email).get();
-      var dBatch = db.batch();
-      var dCount = 0;
-      myTournsSnap.forEach(function(doc) {
-        dBatch.delete(doc.ref);
-        dCount++;
-      });
-      if (dCount > 0) await dBatch.commit();
+      var _delRefs = {};
+      if (uid) {
+        var byUidSnap = await db.collection('tournaments').where('creatorUid', '==', uid).get();
+        byUidSnap.forEach(function(doc) { _delRefs[doc.id] = doc.ref; });
+      }
+      if (email) {
+        var byEmailSnap = await db.collection('tournaments').where('organizerEmail', '==', email).get();
+        byEmailSnap.forEach(function(doc) { _delRefs[doc.id] = doc.ref; });
+      }
+      var _delIds = Object.keys(_delRefs);
+      if (_delIds.length > 0) {
+        var dBatch = db.batch();
+        var dCount = 0;
+        _delIds.forEach(function(id) {
+          dBatch.delete(_delRefs[id]);
+          dCount++;
+          if (dCount >= 450) { dBatch.commit(); dBatch = db.batch(); dCount = 0; }
+        });
+        if (dCount > 0) await dBatch.commit();
+      }
     } catch (e) { window._warn('Erro ao excluir torneios:', e); }
 
     // 2c2. v1.9.90: remove este uid das listas de amizade de quem é amigo dele.

@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.68-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.69-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🗑️ Excluir conta apaga todos os seus torneios:</b> ao excluir a conta, agora todos os torneios que você organizou são removidos pela sua conta (uid) — antes, torneios de quem entrou só com celular podiam ficar para trás.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.68-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>↩️ Cancelar inscrição funciona pra dupla:</b> quem entrou em dupla agora consegue cancelar a própria inscrição — antes, o segundo jogador da dupla clicava em "Desinscrever-se" e nada acontecia. A dupla é reconhecida pela conta (uid) dos dois.</li>' +
       '</ul>' +
