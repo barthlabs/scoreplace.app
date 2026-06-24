@@ -2969,7 +2969,13 @@ function renderTournaments(container, tournamentId = null) {
 
                     const _ciSafeName = ind.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                     const _ciSafeNameHtml = window._safeHtml(_ciSafeName);
-                    const _ciIsOrg = typeof window._isOrgName === 'function' && window._isOrgName(ind.name, t);
+                    // v3.0.x (Parte 4 — varredura uid): coroa por uid-first. ind.teamIdx
+                    // aponta pro objeto ORIGINAL em parts[] (-1 só pra W.O. órfão), então
+                    // _isOrgPlayer resolve o uid via p1Name/p2Name/participants[]; _isOrgName
+                    // (name-only) fica só como fallback se o helper uid não estiver carregado.
+                    const _ciIsOrg = (typeof window._isOrgPlayer === 'function')
+                        ? window._isOrgPlayer(t, ind.name, parts[ind.teamIdx])
+                        : (typeof window._isOrgName === 'function' && window._isOrgName(ind.name, t));
                     const _ciCrownInline = _ciIsOrg ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;vertical-align:middle;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
                     const _ciPendBadge = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, ind.name)) ? window._pendingCoHostBadgeHtml() : '';
                     var _ciMergeDrag = (isOrg && !_isWOOrphanCI) ? 'draggable="true" ondragstart="window._mergeDragStart(event, \'' + _ciSafeName + '\', \'' + t.id + '\')" ondragend="window._mergeDragEnd(event)" ondragover="event.preventDefault();event.dataTransfer.dropEffect=\'move\';" ondragenter="window._mergeDragEnter(event)" ondragleave="window._mergeDragLeave(event)" ondrop="event.stopPropagation();window._mergeDrop(event, \'' + _ciSafeName + '\', \'' + t.id + '\')"' : '';
@@ -3062,7 +3068,12 @@ function renderTournaments(container, tournamentId = null) {
                             const _mSeed = encodeURIComponent(n);
                             const _mPhoto = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : 'https://api.dicebear.com/9.x/initials/svg?seed=' + _mSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                             const _mFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _mSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-                            const _mIsOrg = typeof window._isOrgName === 'function' && window._isOrgName(n, t);
+                            // v3.0.x (Parte 4 — varredura uid): coroa por uid-first. `p` é o
+                            // objeto de TIME em mãos → _isOrgPlayer resolve o uid do membro `n`
+                            // via p1Name/p2Name/participants[]; _isOrgName fica só de fallback.
+                            const _mIsOrg = (typeof window._isOrgPlayer === 'function')
+                                ? window._isOrgPlayer(t, n, p)
+                                : (typeof window._isOrgName === 'function' && window._isOrgName(n, t));
                             const _mCrown = _mIsOrg ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
                             const _mPend = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, n)) ? window._pendingCoHostBadgeHtml() : '';
                             const _mNSafe = n.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
