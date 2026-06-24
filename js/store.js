@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.70-beta';
+window.SCOREPLACE_VERSION = '3.0.71-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -1552,6 +1552,54 @@ window._monarchGroupTitle = function(playerNames, tournament) {
   if (hasMale && !hasFemale) return 'Rei';
   if (hasFemale && !hasMale) return 'Rainha';
   return 'Rei/Rainha';
+};
+
+// v3.0.x: gênero de exibição de um jogador por NOME (Rei/Rainha é individual).
+// Fonte primária: t.participants[].gender (gravado na inscrição). Fallback: cache
+// de perfil _partProfileByName. Retorna 'feminino' | 'masculino' | '' (desconhecido).
+window._participantGenderByName = function(tournament, name) {
+  var nm = String(name == null ? '' : name).toLowerCase().trim();
+  if (!nm) return '';
+  var parr = tournament && (Array.isArray(tournament.participants)
+    ? tournament.participants
+    : (tournament.participants ? Object.values(tournament.participants) : [])) || [];
+  for (var i = 0; i < parr.length; i++) {
+    var p = parr[i];
+    if (p && typeof p === 'object' && p.gender) {
+      var k1 = String(p.displayName || '').toLowerCase().trim();
+      var k2 = String(p.name || '').toLowerCase().trim();
+      if (k1 === nm || k2 === nm) return String(p.gender).toLowerCase().trim();
+    }
+  }
+  var prof = window._partProfileByName && window._partProfileByName[nm];
+  if (prof && prof.gender) return String(prof.gender).toLowerCase().trim();
+  return '';
+};
+
+// v3.0.x: coroas da honraria "invicto" do REI/RAINHA DA PRAIA.
+//   Coroa A = feminino (Rainha) · Coroa B = masculino (Rei). Ouro chapado, tom do app.
+window._CROWN_A_FEM = '<svg width="15" height="15" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;vertical-align:middle;margin-left:3px;" role="img" aria-label="Rainha invicta"><title>Rainha invicta</title><path d="M4 17 L2.4 6.6 L8.4 11 L12 4.4 L15.6 11 L21.6 6.6 L20 17 Z"/><rect x="4.4" y="18.1" width="15.2" height="2.7" rx="1"/></svg>';
+window._CROWN_B_MASC = '<svg width="15" height="15" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;vertical-align:middle;margin-left:3px;" role="img" aria-label="Rei invicto"><title>Rei invicto</title><path d="M4.2 17.4 L5 9.4 L9 13 L12 6 L15 13 L19 9.4 L19.8 17.4 Z"/><circle cx="4.6" cy="8.2" r="1.5"/><circle cx="12" cy="5" r="1.6"/><circle cx="19.4" cy="8.2" r="1.5"/><rect x="4.4" y="18.4" width="15.2" height="2.6" rx="1.3"/></svg>';
+
+// v3.0.x — REI/RAINHA DA PRAIA (CONCEITO CANÔNICO): numa série de 3 jogos entre 4
+// pessoas, cada uma joga UMA vez com cada um dos outros 3 como parceiro
+// (AB×CD, AC×BD, AD×BC). O REI/RAINHA é quem VENCEU OS 3 JOGOS — é o ÚNICO que ganha
+// todos; matematicamente os outros 3 vencem exatamente 1 cada (o jogo em que foram
+// parceiros do rei). A honraria (coroa por gênero) só aparece com o grupo COMPLETO e
+// para o jogador invicto que disputou a rodada inteira (maxPlayed do grupo) — evita
+// "rei falso" por BYE/sit-out. fem/desconhecido → coroa A; masculino → coroa B.
+window._reiRainhaInvictoCrown = function(tournament, standings, s, opts) {
+  if (!s || !opts || !opts.groupDone) return '';
+  if (!(s.played > 0) || s.losses !== 0) return '';
+  var maxPlayed = 0;
+  (Array.isArray(standings) ? standings : []).forEach(function(x) {
+    if (x && x.played > maxPlayed) maxPlayed = x.played;
+  });
+  if (s.played !== maxPlayed) return '';
+  var g = (typeof window._participantGenderByName === 'function')
+    ? window._participantGenderByName(tournament, s.name) : '';
+  var masc = (g === 'masculino' || g === 'm');
+  return masc ? window._CROWN_B_MASC : window._CROWN_A_FEM;
 };
 
 window._isUnfriendlyName = function(name) {

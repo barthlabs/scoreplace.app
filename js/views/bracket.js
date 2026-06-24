@@ -2337,7 +2337,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult) {
       var clr = i < classified ? '#fbbf24' : 'var(--text-muted)';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(s.name, window._currentBracketTournament) : window._safeHtml(s.name))) + (i < classified ? ' <span style="font-size:0.6rem;color:#fbbf24;font-weight:800;">CLASSIF.</span>' : '') + '</td>' +
+        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(s.name, window._currentBracketTournament) : window._safeHtml(s.name))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + (i < classified ? ' <span style="font-size:0.6rem;color:#fbbf24;font-weight:800;">CLASSIF.</span>' : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:600;" title="Pontos pró (somados em todos os jogos)">' + s.pointsFor + '</td>' +
@@ -3145,7 +3145,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _sld = (s.pointsFor || 0) - (s.pointsAgainst || 0);
                 return '<tr style="border-top:1px solid rgba(255,255,255,0.06);">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
-                  '<td style="padding:3px 6px;color:var(--text-bright);">' + (_md ? _md + ' ' : '') + window._safeHtml(s.name) + '</td>' +
+                  '<td style="padding:3px 6px;color:var(--text-bright);">' + (_md ? _md + ' ' : '') + window._safeHtml(s.name) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + '</td>' +
                   '<td style="padding:3px 6px;text-align:center;color:#4ade80;font-weight:700;">' + (s.wins || 0) + '</td>' +
                   '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (_sld >= 0 ? '+' : '') + _sld + '</td>' +
                 '</tr>';
