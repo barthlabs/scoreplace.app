@@ -2574,6 +2574,10 @@ function renderTournaments(container, tournamentId = null) {
 
     let participantsHtml = '';
     var _organizersHtml = '';
+    // v3.0.x: barra de filtro/busca CANÔNICA dos inscritos (mesma de #participants).
+    // Montada dentro do ramo de grade individual e injetada no back-header (belowHtml)
+    // pra ficar sempre visível e ser empurrada pelo hambúrguer.
+    var _inscritosFilterBarHtml = '';
 
     // ── One-time checks per tournament view (run once, not on every re-render from sort/scroll) ──
     var _checksKey = tournamentId ? ('_tournChecks_' + tournamentId) : null;
@@ -3207,13 +3211,36 @@ function renderTournaments(container, tournamentId = null) {
                         '</div>';
                     }
 
-                    // v2.7.74: grupo de ações à direita da linha combinada (split/desfazer/excluir).
-                    var _orgActions2 = (_splitBtn2 || undoMergeBtn || _delBtn2)
-                        ? '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:auto;">' + _splitBtn2 + undoMergeBtn + _delBtn2 + '</div>'
+                    // v3.0.x: CANÔNICO (igual #participants) — split/desfazer ficam na LINHA
+                    // COMBINADA; o REMOVER (🗑️) desce pra linha do tipo de inscrição, no
+                    // canto inferior direito (margin-left:auto).
+                    var _orgActions2 = (_splitBtn2 || undoMergeBtn)
+                        ? '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:auto;">' + _splitBtn2 + undoMergeBtn + '</div>'
+                        : '';
+
+                    // v3.0.x: data-part-* canônicos pra barra de filtro/sort/busca
+                    // (window._inscritosFilterBar + _partApplyFilter) operar TAMBÉM nos
+                    // cards da detail page — espelha a lógica de participants.js.
+                    var _pCardUids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+                    var _pCardOrg = _pCardUids.some(function(u){ return _orgUidsShared[u]; });
+                    if (!_pCardOrg && typeof p === 'object' && p && p.email && _orgEmailsShared[p.email]) _pCardOrg = true;
+                    var _pCardGender = (typeof window._canonGender === 'function') ? window._canonGender(typeof p === 'object' && p ? p.gender : '') : 'none';
+                    var _pCardSkill = 'none';
+                    var _pCardSkillCats = t.skillCategories || [];
+                    var _pCardCatStr = (typeof p === 'object' && p) ? (p.category || '') : '';
+                    for (var _pcsi = 0; _pcsi < _pCardSkillCats.length; _pcsi++) { if (_pCardCatStr === _pCardSkillCats[_pcsi] || _pCardCatStr.endsWith(' ' + _pCardSkillCats[_pcsi])) { _pCardSkill = _pCardSkillCats[_pcsi]; break; } }
+                    var _pCardOrder = (typeof bgNum === 'number' || /^[0-9]+$/.test(String(bgNum))) ? (parseInt(bgNum, 10) - 1) : idx;
+                    var _pCardNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
+                    // Linha inferior CANÔNICA: tipo de inscrição (esquerda) + 🗑️ remover (direita).
+                    var _typeAndDelRow = (typeLabel || _delBtn2)
+                        ? '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">' +
+                            (typeLabel ? '<span style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;min-width:0;">' + typeLabel + '</span>' : '') +
+                            (_delBtn2 ? '<div style="margin-left:auto;flex-shrink:0;" onclick="event.stopPropagation();">' + _delBtn2 + '</div>' : '') +
+                          '</div>'
                         : '';
 
                     return `
-                      <div class="participant-card" data-participant-name="${window._safeHtml(pName)}" data-merge-name="${window._safeHtml(pName)}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+                      <div class="participant-card" data-part-card="1" data-part-org="${_pCardOrg ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="0" data-part-name="${_pCardNameAttr}" data-part-gender="${_pCardGender}" data-part-skill="${String(_pCardSkill).replace(/"/g, '&quot;')}" data-part-order="${_pCardOrder}" data-participant-name="${window._safeHtml(pName)}" data-merge-name="${window._safeHtml(pName)}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                           ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(bgNum) : ('<div style="position:absolute;right:8px;bottom:6px;font-size:' + (String(bgNum).length > 2 ? '1.6rem' : '2rem') + ';font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">' + bgNum + '</div>')}
                           <div style="position:relative;z-index:1;">
                               <!-- HEADER: avatar + nome + coroa (igual ao card #participants) | toggle ativado/desativado da Liga -->
@@ -3221,13 +3248,13 @@ function renderTournaments(container, tournamentId = null) {
                                   <div style="flex:1;min-width:0;">${pNameHtml}</div>
                                   ${ligaCardToggle}
                               </div>
-                              <!-- LINHA COMBINADA (canônica): VIP + meta + categoria (esquerda) | split/desfazer/excluir (direita) -->
+                              <!-- LINHA COMBINADA (canônica): VIP + meta + categoria (esquerda) | split/desfazer (direita) -->
                               <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                                   <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">${_vipBtn2}${(typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg, { inline: true }) : ''}${catBadgeRow}</div>
                                   ${_orgActions2}
                               </div>
-                              <!-- tipo de inscrição onde no pós-sorteio fica o jogo -->
-                              ${typeLabel ? '<div style="font-size:0.65rem;color:var(--text-muted);opacity:0.5;margin-top:6px;">' + typeLabel + '</div>' : ''}
+                              <!-- tipo de inscrição (esquerda) + remover no canto inferior direito (canônico) -->
+                              ${_typeAndDelRow}
                           </div>
                       </div>`;
                 }).join('');
@@ -3506,34 +3533,31 @@ function renderTournaments(container, tournamentId = null) {
                 </div>`;
             } else {
               // Modo normal (individual ou duplas pós-sorteio)
-              // v2.8.90: barra de busca dinâmica + filtro cíclico de categoria pra torneios
-              // com muitos inscritos. Reseta o estado a cada render (busca vazia, "Todas").
-              if (window._inscritosCat) window._inscritosCat[t.id] = '';
-              var _inscritosBar = '';
-              if (parts.length >= 8) {
-                var _inscCatBtn = _hasTournCats
-                  ? '<button type="button" id="inscritos-cat-btn-' + t.id + '" onclick="window._inscritosCycleCat(\'' + t.id + '\')" title="Filtrar por categoria — clique pra alternar (Todas no fim)" style="padding:9px 14px;border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;border:1px solid rgba(99,102,241,0.4);background:rgba(99,102,241,0.12);color:#a5b4fc;white-space:nowrap;flex-shrink:0;">🏷️ Todas</button>'
-                  : '';
-                _inscritosBar =
-                  '<div style="display:flex;gap:8px;align-items:center;margin:0 0 12px;flex-wrap:wrap;">' +
-                    '<input type="text" id="inscritos-search-' + t.id + '" placeholder="🔍 Buscar inscrito…" autocomplete="off" oninput="window._inscritosFilter(\'' + t.id + '\')" style="flex:1;min-width:150px;box-sizing:border-box;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:9px 12px;color:var(--text-bright);font-size:0.88rem;">' +
-                    _inscCatBtn +
-                  '</div>';
-              }
+              // v3.0.x: barra de filtro/busca CANÔNICA (a mesma de #participants) —
+              // sort A-Z/🕒 + gênero + habilidade + busca. Montada aqui e injetada no
+              // back-header (belowHtml) lá embaixo → sempre visível e empurrada pelo
+              // hambúrguer. Lê os data-part-* dos cards via window._partApplyFilter
+              // (idêntico ao #participants). Só quando há inscritos suficientes (>6).
+              _inscritosFilterBarHtml = (!drawDone && parts.length > 6 && typeof window._inscritosFilterBar === 'function')
+                ? window._inscritosFilterBar({
+                    stateKey: 'inscritos', sort: 'name-asc',
+                    searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
+                    onChange: 'window._partApplyFilter()',
+                    skillCategories: (t.skillCategories || [])
+                  })
+                : '';
               participantsHtml = `
                 <div class="mt-5 mb-4">
                    <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; flex-wrap:wrap;">
                       👥 Inscritos Confirmados <span style="font-size: 0.8rem; background: rgba(255,255,255,0.1); padding: 3px 10px; border-radius: 12px; font-weight: 600; margin-left: 5px; color: var(--text-muted);">${individualCountParts}</span>
-                      ${_sortBtns}
                    </h3>
-                   ${_inscritosBar}
                    ${checkInControls}
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
                    ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela brilha quando você começa a arrastar. No celular, <b>toque na estrela do organizador</b> e escolha quem promover. Funciona durante o torneio também.</div>' : ''}
+                   ${_inscritosFilterBarHtml ? `<div id="part-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum inscrito encontrado.</div>` : ''}
                    <div data-merge-container="${t.id}" class="sp-dnd-host" style="${gridStyle}">
                       ${cardsStr}
                    </div>
-                   ${parts.length >= 8 ? `<div id="inscritos-empty-${t.id}" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum inscrito encontrado.</div>` : ''}
                    ${(_hasTournCats && isOrg) ? `<div id="inline-cat-mgr-${t.id}"></div>` : ''}
                 </div>
             `;
@@ -3585,7 +3609,10 @@ function renderTournaments(container, tournamentId = null) {
           ? window._renderBackHeader({
               href: '#dashboard',
               middleHtml: _hdrMiddle,
-              rightHtml: _myToggleHtml
+              rightHtml: _myToggleHtml,
+              // v3.0.x: barra de filtro/busca dos inscritos CANÔNICA, dentro do
+              // sticky-back-header → sempre visível ao rolar + empurrada pelo hambúrguer.
+              belowHtml: _inscritosFilterBarHtml ? ('<div style="margin-top:8px;">' + _inscritosFilterBarHtml + '</div>') : ''
             })
           : '');
     }
@@ -3644,6 +3671,13 @@ function renderTournaments(container, tournamentId = null) {
     ${tournamentId ? `<div id="activity-log-section"></div>` : ''}
   `;
     container.innerHTML = html;
+
+    // v3.0.x: aplica a barra de filtro/busca CANÔNICA dos inscritos (sort/gênero/
+    // habilidade/busca) após o render — idêntico ao #participants. Ordena a grade
+    // pela ordem padrão (name-asc) e respeita filtros ativos persistidos.
+    if (_inscritosFilterBarHtml) {
+        setTimeout(function () { try { if (window._partApplyFilter) window._partApplyFilter(); } catch (e) {} }, 0);
+    }
 
     // Hydrate inline category manager (when organizer views tournament detail with categories)
     if (tournamentId && typeof window._hydrateInlineCatMgr === 'function') {
