@@ -215,15 +215,31 @@ function _enrollToStandby(t, tId, participantObj, callback) {
   if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
   var getName = function(p) { return window._pName(p); };
   var newName = getName(participantObj);
+  // v3.0.76: dedup uid-first (nome só fallback). Dois inscritos de mesmo nome
+  // (uids distintos) não colidem mais; dupla casa por QUALQUER uid de slot
+  // (p1Uid/p2Uid). Entrada string ou sem uid cai no fallback por nome.
+  var _uidsOf = function(x) {
+    return (typeof window._participantUids === 'function') ? window._participantUids(x)
+         : (x && typeof x === 'object' && x.uid ? [x.uid] : []);
+  };
+  var newUids = _uidsOf(participantObj);
+  var _sameEntry = function(p) {
+    var pu = _uidsOf(p);
+    // Ambos os lados têm uid → identidade é SÓ por uid: homônimos de uids
+    // distintos NÃO colidem; dupla casa por qualquer slot (p1Uid/p2Uid).
+    if (newUids.length && pu.length) return pu.some(function(u){ return newUids.indexOf(u) !== -1; });
+    // Algum lado sem uid (informal/legado) → fallback por nome.
+    return getName(p) === newName;
+  };
   // Check if already in standby
-  var already = t.standbyParticipants.some(function(sp) { return getName(sp) === newName; });
+  var already = t.standbyParticipants.some(_sameEntry);
   if (already) {
     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyWaitlisted'), _t('enroll.alreadyWaitlistedMsg', { name: newName }), 'info');
     return;
   }
   // Check if already enrolled
   var partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var alreadyEnrolled = partsArr.some(function(p) { return getName(p) === newName; });
+  var alreadyEnrolled = partsArr.some(_sameEntry);
   if (alreadyEnrolled) {
     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledSingle', { name: newName }), 'info');
     return;
@@ -238,8 +254,8 @@ function _enrollToStandby(t, tId, participantObj, callback) {
     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.waitlistedTitle'), _t('enroll.waitlistedMsg', { name: newName, mode: modeLabel }), 'success');
     if (callback) callback();
   }).catch(function(e) {
-    // desfaz o push otimista
-    t.standbyParticipants = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []).filter(function(sp) { return getName(sp) !== newName; });
+    // desfaz o push otimista (referência exata — não derruba homônimo legítimo)
+    t.standbyParticipants = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []).filter(function(sp) { return sp !== participantObj; });
     if (typeof showNotification !== 'undefined') showNotification('Não foi possível entrar na lista de espera', (e && e.message) ? e.message : 'Tente novamente em instantes.', 'error');
     if (typeof window._captureException === 'function') window._captureException(e, { area: '_enrollToStandby', tournamentId: tId });
     if (callback) callback();
@@ -584,9 +600,10 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
         }).catch(function(err) {
             // Rollback: remove from local state and re-render
             window._warn('Enroll transaction error:', err);
-            t.participants = t.participants.filter(function(p) {
-                return !(p.email === user.email && p.uid === user.uid);
-            });
+            // v3.0.76: rollback remove EXATAMENTE o objeto recém-inserido (referência),
+            // não por email+uid — que falhava pra phone-only (email null !== undefined)
+            // e era ambíguo. participantObj está no escopo desta função.
+            t.participants = t.participants.filter(function(p) { return p !== participantObj; });
             if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.errorMsg'), 'error');
             var container = document.getElementById('view-container');
             if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
@@ -775,9 +792,9 @@ window.submitTeamEnroll = function (tId) {
         }).catch(function(err) {
             // Rollback: remove from local state and re-render
             window._warn('Team enroll transaction error:', err);
-            t.participants = t.participants.filter(function(p) {
-                return !(typeof p === 'object' && p.name === teamString && p.email === user.email);
-            });
+            // v3.0.76: rollback por referência exata (não por name+email) — slot-correct
+            // pra dupla cujo displayName é só o nome do p1. participantObj está no escopo.
+            t.participants = t.participants.filter(function(p) { return p !== participantObj; });
             if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.errorMsg'), 'error');
             var container = document.getElementById('view-container');
             if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
@@ -792,8 +809,11 @@ window._leaveStandby = function (tId) {
     var t = window._findTournamentById(tId);
     var user = (typeof window._verifiedCurrentUser === 'function') ? window._verifiedCurrentUser() : window.AppStore.currentUser;
     if (!t || !user) return;
+    // v3.0.76: uid-first + slot-aware (dupla p2 cujo displayName é só o nome do p1
+    // não saía da lista de espera). Helper canônico cobre string/objeto/slots.
     var _matchUser = function(p) {
         if (!p) return false;
+        if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(user, p);
         if (typeof p === 'string') return p === user.email || p === user.displayName;
         return (p.uid && user.uid && p.uid === user.uid) ||
                (p.email && user.email && p.email === user.email) ||
@@ -831,6 +851,10 @@ window.deenrollCurrentUser = function (tId) {
                 var _savedParticipants = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {}).slice();
                 // Remove from local state immediately
                 t.participants = _savedParticipants.filter(function(p) {
+                    // v3.0.76: uid-first + slot-aware — espelha deenrollParticipant (transação).
+                    // Sem isto, a dupla cujo p2 é o usuário (uid em p2Uid, displayName só do p1)
+                    // não saía no re-render otimista; só voltava no onSnapshot.
+                    if (typeof window._userMatchesParticipant === 'function') return !window._userMatchesParticipant(user, p);
                     if (typeof p === 'string') return p !== user.email && p !== user.displayName;
                     var pEmail = p.email || '';
                     var pName = p.displayName || p.name || '';
@@ -1105,6 +1129,9 @@ window._toggleLigaActive = function(tId, isActive) {
   var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
   var found = arr.find(function(p) {
     if (typeof p !== 'object' || !p) return false;
+    // v3.0.76: uid-first + slot-aware — p2 de uma dupla (uid em p2Uid) também
+    // controla a participação da entrada no próximo sorteio.
+    if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(user, p);
     if (p.uid && user.uid && p.uid === user.uid) return true;
     if (p.email && user.email && p.email === user.email) return true;
     return false;
@@ -1198,6 +1225,8 @@ window._buildLigaActiveToggleHtml = function(t) {
   var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   var found = arr.find(function(p) {
     if (typeof p !== 'object' || !p) return false;
+    // v3.0.76: uid-first + slot-aware — o toggle aparece pro p2 da dupla também.
+    if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(cu, p);
     if (p.uid && cu.uid && p.uid === cu.uid) return true;
     if (p.email && cu.email && p.email === cu.email) return true;
     return false;
@@ -1301,7 +1330,14 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
     // Participantes já inscritos (para evitar duplicatas)
     var enrolled = Array.isArray(t && t.participants) ? t.participants : [];
     var enrolledNames = enrolled.map(function(p){ return typeof p==='string' ? p.toLowerCase() : (p.displayName||p.name||'').toLowerCase(); });
-    var enrolledUids  = enrolled.filter(function(p){ return typeof p==='object' && p.uid; }).map(function(p){ return p.uid; });
+    // v3.0.76: inclui TODOS os uids de cada entrada (dupla = p1Uid+p2Uid), não só o
+    // top-level — senão um amigo que é p2 de uma dupla já inscrita aparecia no picker.
+    var enrolledUids = [];
+    enrolled.forEach(function(p){
+      if (typeof p !== 'object' || !p) return;
+      var us = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p.uid ? [p.uid] : []);
+      us.forEach(function(u){ if (u && enrolledUids.indexOf(u) === -1) enrolledUids.push(u); });
+    });
 
     var _isEnrolled = function(uid, name) {
       if (uid && enrolledUids.indexOf(uid) !== -1) return true;
