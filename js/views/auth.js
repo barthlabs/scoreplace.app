@@ -3360,6 +3360,16 @@ function _sendRichVerificationEmail(firebaseUser, name) {
   if (!firebaseUser) return Promise.resolve(false);
   var email = firebaseUser.email || '';
   var nm = name || firebaseUser.displayName || '';
+  // v3.0.x: provedores que descartam HTML+link (Microsoft/UOL/BOL/Terra) recebem um CÓDIGO
+  // de 6 dígitos por e-mail TEXTO PURO (melhor entrega) via sendVerificationCode. Se a função
+  // falhar, degrada pro e-mail rico com link (_callRich). O gate desses domínios mostra o
+  // campo de digitar o código.
+  if (typeof window._isUnreliableEmailDomain === 'function' && window._isUnreliableEmailDomain(email)
+      && firebase && firebase.functions) {
+    return firebase.functions().httpsCallable('sendVerificationCode')({})
+      .then(function() { return 'code'; })
+      .catch(function(e) { window._warn('[verify] código falhou, degradando p/ link:', e && (e.code || e.message)); return _callRich(1); });
+  }
   var _fallback = function(reasonErr) {
     // v2.1.9: o caminho rico (Cloud Function → mail/ via SMTP scoreplace.app)
     // é o ÚNICO confiável. O fallback do Firebase (sendEmailVerification) sai
@@ -3421,12 +3431,17 @@ window._showEmailVerificationGate = function(email, name) {
     '<button onclick="window.handleLogout && window.handleLogout()" style="background:none;border:none;color:var(--text-muted);font-size:0.8rem;cursor:pointer;text-decoration:underline;">Sair</button>';
   var _middle;
   if (_bad) {
+    // v3.0.x: domínios que dropam link → enviamos um CÓDIGO por e-mail texto-puro.
+    // A tela pede o código; o celular fica como rede de segurança (sempre funciona).
     _middle =
-      '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:14px;">Não encontrou o e-mail? Confirme pelo <b>celular</b> — você recebe um <b>código por SMS</b> e um <b>botão de autenticar no WhatsApp</b>. Rápido e sem depender do e-mail.</div>' +
-      _phoneBtn +
-      '<div style="display:flex;align-items:center;gap:10px;margin:8px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou, se o e-mail chegar</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
-      '<button onclick="window._checkEmailVerified()" class="btn btn-success btn-block" style="font-size:0.9rem;font-weight:700;padding:11px;margin-bottom:8px;">✅ Já confirmei pelo e-mail</button>' +
-      '<button onclick="window._resendVerifyEmail()" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.82rem;font-weight:700;padding:9px;margin-bottom:12px;">📨 Reenviar e-mail mesmo assim</button>';
+      '<div style="font-size:0.84rem;color:var(--text-muted);line-height:1.5;margin-bottom:12px;">Digite o <b>código de 6 dígitos</b> que enviamos por e-mail (texto simples — chega melhor no Hotmail/Outlook/UOL).</div>' +
+      '<input id="gate-email-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" oninput="this.value=this.value.replace(/\\D/g,\'\').slice(0,6)" onkeydown="if(event.key===\'Enter\')window._gateVerifyCode()" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:0.35em;font-size:1.5rem;font-weight:800;padding:12px;margin-bottom:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright);">' +
+      '<div id="gate-email-code-status" style="font-size:0.78rem;min-height:1.1em;margin-bottom:8px;"></div>' +
+      '<button onclick="window._gateVerifyCode()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:8px;">✅ Confirmar</button>' +
+      '<button onclick="window._gateResendCode(this)" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.82rem;font-weight:700;padding:9px;margin-bottom:14px;">📨 Reenviar código</button>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">não recebeu o código?</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Confirme pelo <b>celular</b> — código por SMS + botão de autenticar no WhatsApp.</div>' +
+      _phoneBtn;
   } else {
     _middle =
       '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:18px;">Abra seu e-mail e clique em <b>Confirmar minha conta</b>. Enquanto não confirmar, você não pode usar o scoreplace.app. <span style="opacity:0.8;">(confira também a caixa de spam)</span></div>' +
@@ -3440,7 +3455,7 @@ window._showEmailVerificationGate = function(email, name) {
     '<div style="max-width:420px;width:100%;text-align:center;background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:28px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
       '<div style="font-size:2.6rem;margin-bottom:8px;">📬</div>' +
       '<div style="font-size:1.2rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">Confirme seu e-mail</div>' +
-      '<div style="font-size:0.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:6px;">' + (_bad ? 'Tentamos enviar um link de confirmação para' : 'Enviamos um link de confirmação para') + '</div>' +
+      '<div style="font-size:0.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:6px;">' + (_bad ? 'Enviamos um código de confirmação para' : 'Enviamos um link de confirmação para') + '</div>' +
       '<div style="font-size:0.95rem;font-weight:700;color:#fbbf24;margin-bottom:14px;word-break:break-all;">' + _safeEm + '</div>' +
       _middle +
       _logoutBtn +
@@ -3625,6 +3640,15 @@ window._gateEnterApp = function() {
     window._pendingVerifyName = null;
     window._postVerifyGoToProfile = true;
     if (window.showNotification) window.showNotification('✅ Conta confirmada!', 'Telefone autenticado. Vamos completar seu perfil.', 'success');
+    // v3.0.x: avisa por WhatsApp que daqui pra frente entra com CELULAR + SENHA — é o
+    // caminho confiável pra quem tem e-mail (Hotmail/Outlook/UOL) que não recebe a confirmação.
+    try {
+      var _gatePh = window._gatePhonePending || '';
+      if (_gatePh && window.FirestoreDB && typeof window.FirestoreDB.queueWhatsApp === 'function') {
+        window.FirestoreDB.queueWhatsApp([_gatePh],
+          '✅ Sua conta no scoreplace.app está confirmada!\n\nDe agora em diante, entre com o seu *celular + senha* (a mesma senha que você cadastrou) — não precisa do e-mail.\n\n👉 ' + (window.SCOREPLACE_URL || 'https://scoreplace.app') + '\n\nscoreplace.app · Jogue em outro nível');
+      }
+    } catch (_we) {}
     Promise.resolve(simulateLoginSuccess({ uid: u2.uid, email: u2.email, displayName: u2.displayName, photoURL: u2.photoURL }))
       .then(function() {
         window.location.hash = '#profile';
@@ -3645,6 +3669,45 @@ window._resendVerifyEmail = function() {
     .catch(function(e) {
       var tooMany = e && e.code === 'auth/too-many-requests';
       showNotification('Não foi possível reenviar', tooMany ? 'Aguarde alguns minutos antes de reenviar.' : 'Tente novamente em instantes.', 'warning');
+    });
+};
+
+// v3.0.x: confirmação por CÓDIGO (e-mail texto-puro) — pros provedores que dropam link.
+window._gateVerifyCode = function() {
+  var inp = document.getElementById('gate-email-code');
+  var st = document.getElementById('gate-email-code-status');
+  var code = inp ? inp.value.replace(/\D/g, '') : '';
+  var setSt = function(msg, color) { if (st) st.innerHTML = '<span style="color:' + (color || '#fbbf24') + ';">' + msg + '</span>'; };
+  if (code.length !== 6) { setSt('O código tem 6 dígitos.'); if (inp) inp.focus(); return; }
+  if (!firebase.functions) { setSt('Funções indisponíveis. Recarregue a página.', '#ef4444'); return; }
+  setSt('⏳ Confirmando…', 'var(--text-muted)');
+  firebase.functions().httpsCallable('verifyEmailCode')({ code: code })
+    .then(function(r) {
+      var d = (r && r.data) || {};
+      if (d.ok) { window._gateEnterApp(); return; }
+      setSt(d.error || 'Código incorreto. Confira no e-mail.', '#ef4444');
+      if (inp) { inp.focus(); if (inp.select) inp.select(); }
+    })
+    .catch(function(e) {
+      setSt((e && e.message) || 'Não foi possível confirmar. Tente de novo.', '#ef4444');
+      if (inp) inp.focus();
+    });
+};
+
+window._gateResendCode = function(btn) {
+  if (!firebase.functions) return;
+  var u = firebase.auth().currentUser;
+  if (!u) { showNotification('Sessão expirada', 'Entre novamente.', 'warning'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  var st = document.getElementById('gate-email-code-status');
+  firebase.functions().httpsCallable('sendVerificationCode')({})
+    .then(function() {
+      if (btn) { btn.textContent = '📨 Reenviar código'; setTimeout(function(){ if (btn) btn.disabled = false; }, 30000); }
+      if (st) st.innerHTML = '<span style="color:#34d399;">Novo código enviado pro seu e-mail.</span>';
+    })
+    .catch(function(e) {
+      if (btn) { btn.disabled = false; btn.textContent = '📨 Reenviar código'; }
+      if (st) st.innerHTML = '<span style="color:#ef4444;">' + ((e && e.message) || 'Não foi possível reenviar.') + '</span>';
     });
 };
 

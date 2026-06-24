@@ -1401,6 +1401,86 @@ exports.sendVerificationEmail = onCall(
   }
 );
 
+// ─── sendVerificationCode / verifyEmailCode (v3.0.x) ────────────────────────
+// Pra provedores que DROPAM e-mail rico com link (Microsoft/UOL/BOL/Terra), o app chama
+// estas em vez de sendVerificationEmail: enviamos um e-mail TEXTO PURO (sem HTML, sem link)
+// com um código de 6 dígitos — muito mais chance de passar nos filtros. A pessoa digita o
+// código no app e verifyEmailCode marca emailVerified. Segurança: código hasheado (sha256
+// com o uid), expira em 15 min, máx. 5 tentativas, envio rate-limitado (45s). O doc fica em
+// emailVerifyCodes/{uid} — SERVER-ONLY (regras Firestore negam acesso do cliente).
+exports.sendVerificationCode = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "precisa estar autenticado");
+    const db = admin.firestore();
+    let email = "";
+    try { const u = await admin.auth().getUser(uid); email = (u.email || "").toLowerCase(); } catch (e) {}
+    if (!email) throw new HttpsError("failed-precondition", "conta sem e-mail");
+
+    const crypto = require("crypto");
+    const ref = db.collection("emailVerifyCodes").doc(uid);
+    const now = Date.now();
+    const cur = await ref.get();
+    if (cur.exists && cur.data().sentAt && (now - cur.data().sentAt) < 45000) {
+      throw new HttpsError("resource-exhausted", "aguarde alguns segundos pra reenviar o código");
+    }
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+    const codeHash = crypto.createHash("sha256").update(uid + ":" + code).digest("hex");
+    await ref.set({ codeHash, expiresAt: now + 15 * 60 * 1000, attempts: 0, sentAt: now, email });
+
+    const text =
+      "scoreplace.app — confirme seu e-mail\n\n" +
+      "Seu codigo de confirmacao e: " + code + "\n\n" +
+      "Digite esse codigo no app pra ativar sua conta. Ele expira em 15 minutos.\n\n" +
+      "Nao pediu? Pode ignorar este e-mail.\n\n" +
+      "scoreplace.app";
+    try {
+      // SÓ text (sem html) → e-mail text/plain, melhor entrega em Microsoft/UOL.
+      await _enqueueMail(db, {
+        to: [email],
+        replyTo: "scoreplace.app@gmail.com",
+        message: { subject: "Seu codigo scoreplace.app: " + code, text: text },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      throw new HttpsError("internal", "não foi possível enviar o código: " + (err.code || err.message));
+    }
+    console.log("[sendVerificationCode] plain-text code queued for", email);
+    return { ok: true };
+  }
+);
+
+exports.verifyEmailCode = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "precisa estar autenticado");
+    const code = String((request.data && request.data.code) || "").replace(/\D/g, "");
+    if (code.length !== 6) throw new HttpsError("invalid-argument", "código inválido");
+
+    const db = admin.firestore();
+    const crypto = require("crypto");
+    const ref = db.collection("emailVerifyCodes").doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "nenhum código ativo. peça um novo.");
+    const d = snap.data() || {};
+    if (Date.now() > (d.expiresAt || 0)) { await ref.delete().catch(() => {}); throw new HttpsError("deadline-exceeded", "código expirado. peça um novo."); }
+    if ((d.attempts || 0) >= 5) { await ref.delete().catch(() => {}); throw new HttpsError("resource-exhausted", "muitas tentativas. peça um novo código."); }
+
+    const hash = crypto.createHash("sha256").update(uid + ":" + code).digest("hex");
+    if (hash !== d.codeHash) {
+      await ref.update({ attempts: (d.attempts || 0) + 1 }).catch(() => {});
+      return { ok: false, error: "código incorreto" };
+    }
+    try { await admin.auth().updateUser(uid, { emailVerified: true }); }
+    catch (err) { throw new HttpsError("internal", "não foi possível confirmar: " + (err.code || err.message)); }
+    await ref.delete().catch(() => {});
+    console.log("[verifyEmailCode] confirmed", uid);
+    return { ok: true };
+  }
+);
+
 // ─── drainPendingVerifications (v2.1.79) ─────────────────────────────────────
 // Drena a fila pendingEmailVerifications: re-tenta gerar o link de verificação
 // (que falhou na hora por outage transitório do Auth) e enfileira o e-mail rico
