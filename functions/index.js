@@ -534,11 +534,20 @@ function _digestLevelMeta(level) {
   if (level === "important") return { emoji: "🟠", color: "#f59e0b", label: "Importante" };
   return { emoji: "🟢", color: "#10b981", label: "Geral" };
 }
-function _buildDigestHtml(items) {
+// v3.0.56: paleta do e-mail de digest segue o TEMA escolhido pelo destinatário
+// (profile.theme: 'light'|'dark'). Default dark (tema padrão do app).
+function _digestPalette(theme) {
+  if (theme === "light") {
+    return { pageBg: "#eef2f7", cardBg: "#ffffff", text: "#0f172a", text2: "#1f2937", muted: "#64748b", footer: "#94a3b8", divider: "#e2e8f0", heading: "#0f172a" };
+  }
+  return { pageBg: "#0f172a", cardBg: "#111827", text: "#f1f5f9", text2: "#e5e7eb", muted: "#94a3b8", footer: "#64748b", divider: "#1e293b", heading: "#ffffff" };
+}
+function _buildDigestHtml(items, theme) {
+  const P = _digestPalette(theme);
   const rows = items.map((it) => {
     const meta = _digestLevelMeta(it.level);
     const msgHtml = _digestEscape(it.message).replace(/\n/g, "<br>");
-    const tName = it.tournamentName ? ('<div style="font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">🏆 ' + _digestEscape(it.tournamentName) + "</div>") : "";
+    const tName = it.tournamentName ? ('<div style="font-size:0.72rem;font-weight:700;color:' + P.muted + ';text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">🏆 ' + _digestEscape(it.tournamentName) + "</div>") : "";
     // v2.8.51: CTA por tipo (botão âmbar). Usa ctaUrl/ctaLabel quando vierem; senão
     // cai no tournamentUrl genérico. Toda notificação ganha um botão de ação.
     const _ctaUrl = it.ctaUrl || it.tournamentUrl || "";
@@ -546,11 +555,11 @@ function _buildDigestHtml(items) {
     const link = _ctaUrl ? ('<div style="margin-top:10px;"><a href="' + _digestEscape(_ctaUrl) + '" style="display:inline-block;background:#fbbf24;color:#3a2300;font-size:0.82rem;text-decoration:none;font-weight:800;padding:9px 18px;border-radius:9px;">👉 ' + _digestEscape(_ctaLabel) + "</a></div>") : "";
     return (
       '<tr><td style="padding:0 0 14px;">' +
-        '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#111827;border-left:4px solid ' + meta.color + ';border-radius:10px;">' +
-          '<tr><td style="padding:14px 16px;color:#e5e7eb;">' +
+        '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:' + P.cardBg + ";border-left:4px solid " + meta.color + ';border-radius:10px;' + (theme === "light" ? "border:1px solid #e2e8f0;border-left:4px solid " + meta.color + ";" : "") + '">' +
+          '<tr><td style="padding:14px 16px;color:' + P.text2 + ';">' +
             '<div style="font-size:0.68rem;font-weight:800;color:' + meta.color + ';margin-bottom:6px;">' + meta.emoji + " " + meta.label + "</div>" +
             tName +
-            '<div style="font-size:0.92rem;color:#f1f5f9;line-height:1.5;">' + msgHtml + "</div>" +
+            '<div style="font-size:0.92rem;color:' + P.text + ';line-height:1.5;">' + msgHtml + "</div>" +
             link +
           "</td></tr>" +
         "</table>" +
@@ -559,18 +568,18 @@ function _buildDigestHtml(items) {
   }).join("");
   return (
     '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>' +
-    '<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
-      '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:32px 16px;"><tr><td align="center">' +
+    '<body style="margin:0;padding:0;background:' + P.pageBg + ';font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
+      '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:' + P.pageBg + ';padding:32px 16px;"><tr><td align="center">' +
         '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:540px;">' +
           '<tr><td style="padding:0 4px 16px;text-align:center;">' +
             '<div style="font-size:1.3rem;">🔔</div>' +
-            '<div style="font-size:1rem;font-weight:800;color:#fff;margin-top:2px;">' + (items.length === 1 ? "Você tem 1 novidade" : ("Você tem " + items.length + " novidades")) + "</div>" +
-            '<div style="font-size:0.8rem;color:#94a3b8;">scoreplace.app</div>' +
+            '<div style="font-size:1rem;font-weight:800;color:' + P.heading + ';margin-top:2px;">' + (items.length === 1 ? "Você tem 1 novidade" : ("Você tem " + items.length + " novidades")) + "</div>" +
+            '<div style="font-size:0.8rem;color:' + P.muted + ';">scoreplace.app</div>' +
           "</td></tr>" +
           "<tr><td>" + '<table cellspacing="0" cellpadding="0" border="0" width="100%">' + rows + "</table>" + "</td></tr>" +
-          '<tr><td style="padding:8px 4px 0;text-align:center;border-top:1px solid #1e293b;">' +
-            '<p style="margin:14px 0 0;font-size:0.7rem;color:#64748b;">scoreplace.app · Jogue em outro nível</p>' +
-            '<p style="margin:6px 0 0;font-size:0.68rem;color:#64748b;">Pra ajustar a frequência/canais, abra o app → seu perfil → Canais de notificação.</p>' +
+          '<tr><td style="padding:8px 4px 0;text-align:center;border-top:1px solid ' + P.divider + ';">' +
+            '<p style="margin:14px 0 0;font-size:0.7rem;color:' + P.footer + ';">scoreplace.app · Jogue em outro nível</p>' +
+            '<p style="margin:6px 0 0;font-size:0.68rem;color:' + P.footer + ';">Pra ajustar a frequência/canais, abra o app → seu perfil → Canais de notificação.</p>' +
           "</td></tr>" +
         "</table>" +
       "</td></tr></table>" +
@@ -614,6 +623,17 @@ exports.flushNotifEmailDigest = onSchedule(
       allSnap.forEach((d) => items.push(Object.assign({ _id: d.id }, d.data())));
       if (items.length === 0) continue;
       items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      // v3.0.56: tema do destinatário (profile.theme) → e-mail segue claro/escuro
+      // escolhido no app. Default dark (tema padrão). Busca por e-mail (com fallback
+      // lowercase); se não achar, fica no dark — sem regressão.
+      let _theme = "dark";
+      try {
+        let _uSnap = await db.collection("users").where("email", "==", email).limit(1).get();
+        if (_uSnap.empty && email !== email.toLowerCase()) {
+          _uSnap = await db.collection("users").where("email", "==", email.toLowerCase()).limit(1).get();
+        }
+        if (!_uSnap.empty) { const _th = _uSnap.docs[0].data().theme; if (_th === "light") _theme = "light"; }
+      } catch (e) { /* default dark */ }
       try {
         const subject = items.length === 1
           ? ("scoreplace.app — " + (items[0].tournamentName || "Notificação"))
@@ -621,7 +641,7 @@ exports.flushNotifEmailDigest = onSchedule(
         await _enqueueMail(db, {
           to: [email],
           replyTo: "scoreplace.app@gmail.com",
-          message: { subject, html: _buildDigestHtml(items), text: _buildDigestText(items) },
+          message: { subject, html: _buildDigestHtml(items, _theme), text: _buildDigestText(items) },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         // Limpa os itens consolidados.
