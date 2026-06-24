@@ -237,6 +237,28 @@ window._processWoSubstitutions = function(tId) {
 //     presente (retirar a própria presença é livre);
 //   • qualquer outro caso → bloqueado com aviso.
 // O organizador sempre pode dar/retirar (cai no 1º caso).
+
+// ─── Card de inscrito CANÔNICO — linha de ação (v3.0.88) ────────────────────
+// Layout ÚNICO de TODO card de inscrito (individual, dupla, jogo sorteado), em
+// qualquer lugar do programa:
+//   • Linha 1: tipo de inscrição ("Inscrição Individual" / "...em Dupla" / badge
+//     de lista de espera). Sozinha, completa, NÃO truncada por controles.
+//   • Linha 2 (uma ABAIXO, alinhada à DIREITA): Presente/Ausente · toggle · W.O.
+//     · 🗑️ remover — NESSA ORDEM. Sem chamada → só o 🗑️, no mesmo canto direito.
+// Pôr a ação numa linha própria evita cobrir o nº de inscrição (marca d'água) e
+// o texto do tipo. presenceGroupHtml DEVE vir na ordem: palavra + toggle + W.O.
+// (o 🗑️ é passado à parte, em delBtnHtml, e fica sempre por último/à direita).
+window._inscritoActionRow = function (typeText, presenceGroupHtml, delBtnHtml) {
+  var action = (presenceGroupHtml || '') + (delBtnHtml || '');
+  var typeLine = typeText
+    ? '<div style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + typeText + '</div>'
+    : '';
+  var actionLine = action
+    ? '<div style="display:flex;align-items:center;gap:6px;margin-top:5px;justify-content:flex-end;" onclick="event.stopPropagation();">' + action + '</div>'
+    : '';
+  return (typeLine || actionLine) ? '<div style="margin-top:6px;">' + typeLine + actionLine + '</div>' : '';
+};
+
 window._toggleCheckIn = function (tId, playerName) {
   const t = window._findTournamentById(tId);
   if (!t) return;
@@ -2146,15 +2168,11 @@ function renderParticipants(container, tournamentId) {
                     <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
                     <div style="flex:1;min-width:0;">${standbyHeader}${_nameRow}</div>
                 </div>
-                <!-- LINHA COMBINADA (v2.7.42/43): VIP + categorias (esquerda, alinhadas no topo) | Ausente/Presente + toggle + W.O. (direita) -->
-                <div style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false, {inline:true})}${_ciSkillHtml}${_delBtnC}</div>
-                    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;">
-                        ${_presenceWord}
-                        ${isAbsent ? _riWoBadge : _toggleSwitch}
-                        ${woBtn}
-                    </div>
-                </div>
+                <!-- Meta: VIP + categorias + nível (à esquerda). O 🗑️ saiu daqui — -->
+                <!-- vai pra linha de ação canônica abaixo (junto da presença). -->
+                <div style="margin-top:6px;display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false, {inline:true})}${_ciSkillHtml}</div>
+                <!-- CARD CANÔNICO: ação (Presente/Ausente · toggle · W.O. · 🗑️) à direita. -->
+                ${window._inscritoActionRow('', _presenceWord + (isAbsent ? _riWoBadge : _toggleSwitch) + woBtn, _delBtnC)}
                 ${_matchStrip}
             </div>
         </div>`;
@@ -2321,12 +2339,9 @@ function renderParticipants(container, tournamentId) {
         const _rcWoBtn = (!rcMc && isOrg)
           ? window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${t.id}', '${_rcEntry}');`, !rcAbs, { label: rcAbs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
           : '';
-        // v3.0.86: W.O. ANTES do toggle (não entre toggle e 🗑️). Assim o toggle
-        // fica SEMPRE colado ao 🗑️ e o 🗑️ sempre na borda direita — posições
-        // idênticas em Presente e Ausente. O W.O. some/aparece à esquerda do
-        // toggle sem empurrar toggle nem 🗑️. (Bug: ao ativar Presente, o W.O.
-        // sumia do meio e o toggle/🗑️ pulavam de lugar.)
-        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span>${_rcWoBtn}<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>`;
+        // Ordem canônica: palavra (Presente/Ausente) + toggle + W.O. O 🗑️ é
+        // anexado depois (em _inscritoActionRow) → palavra, toggle, W.O., 🗑️.
+        _presenceGroup = `<span style="font-size:0.74rem;font-weight:800;color:${_rcColor};white-space:nowrap;">${_rcLabel}</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ${rcMc ? 'checked' : ''} onclick="event.stopPropagation(); window._toggleCheckIn('${t.id}', '${_rcEntry}');"><span class="toggle-slider"></span></label>${_rcWoBtn}`;
       } else if (postDrawPresence) {
         // v2.2.40: pós-sorteio (antes de iniciar) — presença em modo somente leitura.
         const _rcLabel = rcMc ? 'Presente' : 'Ausente';
@@ -2367,17 +2382,9 @@ function renderParticipants(container, tournamentId) {
                     <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtn}${_metaSlotsFor(p, pName, isTeam, { inline: true })}${_nmSkillHtml}</div>
                     ${(_splitBtn || undoMergeBtn) ? `<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">${_splitBtn}${undoMergeBtn}</div>` : ''}
                 </div>
-                <!-- v3.0.x: tipo de inscrição + CHAMADA na MESMA linha (canônico): tipo à
-                     esquerda; à direita PALAVRA + toggle + W.O. + remover. -->
-                ${_presenceGroup
-                  ? `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-                       <span style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${typeText}</span>
-                       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;" onclick="event.stopPropagation();">${_presenceGroup}${_delBtn}</div>
-                     </div>`
-                  : `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-                       <span style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;min-width:0;">${typeText}</span>
-                       ${_delBtn ? `<div style="margin-left:auto;flex-shrink:0;" onclick="event.stopPropagation();">${_delBtn}</div>` : ''}
-                     </div>`}
+                <!-- CARD CANÔNICO: tipo de inscrição na linha 1; ação (Presente/
+                     Ausente · toggle · W.O. · 🗑️) na linha de baixo, à direita. -->
+                ${window._inscritoActionRow(typeText, _presenceGroup, _delBtn)}
             </div>
         </div>`;
     }).join('');
