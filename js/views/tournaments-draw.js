@@ -236,19 +236,21 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
       if (nm) origByName[nm] = p;
     }
   });
-  function mkTeamObj(memberNames) {
-    var displayName = memberNames.join(' / ');
-    var obj = { displayName: displayName, name: displayName };
-    var subs = [];
-    memberNames.forEach(function(nm, i) {
-      var orig = origByName[nm] || { name: nm, displayName: nm };
-      obj['p' + (i + 1) + 'Name'] = nm;
-      if (orig.uid) obj['p' + (i + 1) + 'Uid'] = orig.uid;
-      if (orig.email) obj['p' + (i + 1) + 'Email'] = orig.email;
-      if (orig.photoURL) obj['p' + (i + 1) + 'Photo'] = orig.photoURL;
-      subs.push(orig);
+  // v3.0.x CANON: recebe os PARTICIPANTES (objetos) — o uid vem DIRETO do objeto, NÃO por
+  // lookup de nome (origByName), que misturava o uid entre homônimos. String só pra membro
+  // placeholder/legado (sem conta). Aceita objeto OU string por compat dos call-sites legados.
+  function mkTeamObj(members) {
+    var subs = (members || []).map(function(m) {
+      return (m && typeof m === 'object') ? m : (origByName[m] || { name: String(m || ''), displayName: String(m || '') });
     });
-    obj.participants = subs;
+    var displayName = subs.map(function(s) { return s.displayName || s.name || ''; }).join(' / ');
+    var obj = { displayName: displayName, name: displayName, participants: subs };
+    subs.forEach(function(s, i) {
+      obj['p' + (i + 1) + 'Name'] = s.displayName || s.name || '';
+      if (s.uid) obj['p' + (i + 1) + 'Uid'] = s.uid;        // uid AUTORITATIVO do objeto
+      if (s.email) obj['p' + (i + 1) + 'Email'] = s.email;
+      if (s.photoURL) obj['p' + (i + 1) + 'Photo'] = s.photoURL;
+    });
     return obj;
   }
   var individuals = [];
@@ -291,7 +293,7 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
     individuals.forEach(function(p) { (_isMale(p) ? men : nonMale).push(p); });
     individuals = [];
     var _pushTeam = function(a, b) {
-      newTeams.push(mkTeamObj([a, b].map(function(g) { return g.displayName || g.name || ''; })));
+      newTeams.push(mkTeamObj([a, b])); // v3.0.x: passa objetos (uid autoritativo)
       if (_isMale(a) && _isMale(b)) allMaleCount++;
     };
     while (nonMale.length && men.length) _pushTeam(nonMale.shift(), men.shift());
@@ -301,8 +303,7 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
   } else {
     while (individuals.length >= teamSize) {
       var group = individuals.splice(0, teamSize);
-      var memberNames = group.map(function(g){ return g.displayName || g.name || ''; });
-      newTeams.push(mkTeamObj(memberNames));
+      newTeams.push(mkTeamObj(group)); // v3.0.x: passa objetos (uid autoritativo, sem lookup por nome)
     }
   }
   if (teamOrigins) newTeams.forEach(function(to){ teamOrigins[to.displayName] = 'sorteada'; });

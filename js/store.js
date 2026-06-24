@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.66-beta';
+window.SCOREPLACE_VERSION = '3.0.67-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -4999,10 +4999,12 @@ window._personCount = function(t) {
   var arr = Array.isArray(t && t.participants) ? t.participants : [];
   var n = 0;
   arr.forEach(function(p){
-    if (typeof p === 'string') { n += (String(p).split(' / ').filter(function(s){ return s.trim(); }).length) || 1; return; }
-    if (p && typeof p === 'object' && p.p1Name && p.p2Name) { n += 2; return; }
-    var nm = (p && typeof p === 'object') ? (p.displayName || p.name || '') : '';
-    if (nm.indexOf(' / ') !== -1) { n += nm.split(' / ').filter(function(s){ return s.trim(); }).length; return; }
+    // v3.0.x CANON: dupla/time por ESTRUTURA (slots p1/p2 ou participants[]) → conta os membros.
+    // Antes ignorava a forma p.participants[] e a contava como 1 pessoa (subcontagem de inscritos).
+    var m = (typeof window._entryTeamMembers === 'function') ? window._entryTeamMembers(p) : null;
+    if (m) { n += m.length; return; }
+    // String legada "A / B" (helper retorna null pra string solta) → conta os membros.
+    if (typeof p === 'string' && p.indexOf(' / ') !== -1) { n += p.split(' / ').filter(function(s){ return s.trim(); }).length; return; }
     n += 1;
   });
   return n;
