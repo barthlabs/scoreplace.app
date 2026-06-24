@@ -427,15 +427,31 @@ window.FirestoreDB = {
       var data = doc.data();
       var participants = Array.isArray(data.participants) ? data.participants : (data.participants ? Object.values(data.participants) : []);
 
+      var _emailLc = userEmail ? String(userEmail).toLowerCase() : '';
       var newParticipants = participants.filter(function(p) {
         if (typeof p === 'string') {
-          if (p.indexOf(' / ') !== -1) return true; // keep teams
+          if (p.indexOf(' / ') !== -1) return true; // keep teams (string legada "A / B")
           return p !== userEmail && p !== userDisplayName;
         }
-        if (userUid && p.uid && p.uid === userUid) return false;
-        if (userEmail && p.email && p.email === userEmail) return false;
-        if (userDisplayName && p.displayName && p.displayName === userDisplayName) return false;
-        if (userDisplayName && p.name && p.name === userDisplayName) return false;
+        // v3.0.x: IDENTIDADE POR SLOT, uid-first — espelha enrollParticipant.
+        // A dupla formada por aceite grava p1Uid/p2Uid/p1Name/p2Name com
+        // displayName = SÓ o p1 (ex.: "Kelly Barth", sem "/"). Sem checar os
+        // slots aqui, o p2 (ex.: Rodrigo) clicava "Desinscrever-se" e NADA
+        // acontecia (filtro nunca casava → notFound). Remove a dupla inteira
+        // quando qualquer slot bate — a dupla não joga com uma pessoa só.
+        if (userUid && ((p.uid && p.uid === userUid) || (p.p1Uid && p.p1Uid === userUid) || (p.p2Uid && p.p2Uid === userUid))) return false;
+        if (_emailLc) {
+          if (p.email && String(p.email).toLowerCase() === _emailLc) return false;
+          if (p.p1Email && String(p.p1Email).toLowerCase() === _emailLc) return false;
+          if (p.p2Email && String(p.p2Email).toLowerCase() === _emailLc) return false;
+        }
+        // Nome como ÚLTIMO fallback (conta legada/sem uid).
+        if (userDisplayName) {
+          if (p.displayName && p.displayName === userDisplayName) return false;
+          if (p.name && p.name === userDisplayName) return false;
+          if (p.p1Name && p.p1Name === userDisplayName) return false;
+          if (p.p2Name && p.p2Name === userDisplayName) return false;
+        }
         return true;
       });
 
