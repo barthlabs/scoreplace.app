@@ -321,14 +321,32 @@
         })
         .catch(function() { _casualGuestDone = true; _processCasualMatchMap(); }),
 
-      // Torneios
-      db.collection('tournaments')
-        .where('memberEmails', 'array-contains', (cu.email || ''))
-        .get()
-        .then(function(snap) {
+      // Torneios — v3.0.81 (Parte 12 varredura uid): identidade = UID. Query
+      // primária por `memberUids` (array-contains uid); `memberEmails` só como
+      // FALLBACK legado (torneio antigo sem memberUids, ou user só em email).
+      // CRÍTICO: o p2 de uma dupla está em memberUids (via p1Uid/p2Uid) mas NÃO
+      // em memberEmails (`_computeMemberEmails` não captura email de slot de
+      // dupla) → a query só-email PERDIA todos os torneios onde o user é
+      // parceiro de dupla, zerando troféus dele. Dedup por doc id.
+      (function() {
+        var _tMap = {};
+        var _norm = (cu.email && typeof cu.email === 'string') ? cu.email.trim().toLowerCase() : '';
+        var _qUid = db.collection('tournaments')
+          .where('memberUids', 'array-contains', uid)
+          .get()
+          .then(function(snap) { snap.forEach(function(doc) { _tMap[doc.id] = doc.data(); }); })
+          .catch(function() {});
+        var _qEmail = _norm
+          ? db.collection('tournaments')
+              .where('memberEmails', 'array-contains', _norm)
+              .get()
+              .then(function(snap) { snap.forEach(function(doc) { if (!_tMap[doc.id]) _tMap[doc.id] = doc.data(); }); })
+              .catch(function() {})
+          : Promise.resolve();
+        return Promise.all([_qUid, _qEmail]).then(function() {
           var enrolled = 0, wins = 0, podiums = 0, ligaPart = 0, withTenPlus = 0, matchesWon = 0;
-          snap.forEach(function(doc) {
-            var t = doc.data();
+          Object.keys(_tMap).forEach(function(_id) {
+            var t = _tMap[_id];
             enrolled++;
             if (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) ligaPart++;
             // Vitória só conta em torneios com >= 4 participantes (anti-fraude)
@@ -347,8 +365,9 @@
               matchesWon += _countUserMatchWinsInTournament(t, uid);
               if (_userPodiumedInTournament(t, uid)) podiums++;
             }
-            // Torneios com ≥10 inscritos que o user organizou
-            if (t.organizerEmail === cu.email || t.organizerEmail === uid) {
+            // Torneios com ≥10 inscritos que o user organizou — uid-first
+            // (creatorUid), organizerEmail/uid só fallback legado.
+            if (t.creatorUid === uid || t.organizerEmail === cu.email || t.organizerEmail === uid) {
               var count = (t.participants && t.participants.length) || 0;
               if (count >= 10) withTenPlus++;
             }
@@ -363,17 +382,30 @@
           stats.ligaParticipations     = ligaPart;
           stats.tournamentsWithTenPlus = withTenPlus;
           stats.tournamentMatchesWon   = matchesWon;
-        })
-        .catch(function() {}),
+        });
+      })(),
 
-      // Torneios criados
-      db.collection('tournaments')
-        .where('organizerEmail', '==', (cu.email || uid))
-        .get()
-        .then(function(snap) {
-          stats.tournamentsCreated = snap.size;
-        })
-        .catch(function() {}),
+      // Torneios criados — v3.0.81: uid-first por `creatorUid`; organizerEmail só
+      // fallback legado (organizador só-celular tem creatorUid mas email sintético
+      // /ausente; e-mail trocado deixa organizerEmail stale). Dedup por id.
+      (function() {
+        var _cMap = {};
+        var _cUid = db.collection('tournaments')
+          .where('creatorUid', '==', uid)
+          .get()
+          .then(function(snap) { snap.forEach(function(doc) { _cMap[doc.id] = true; }); })
+          .catch(function() {});
+        var _cEmail = (cu.email)
+          ? db.collection('tournaments')
+              .where('organizerEmail', '==', cu.email)
+              .get()
+              .then(function(snap) { snap.forEach(function(doc) { _cMap[doc.id] = true; }); })
+              .catch(function() {})
+          : Promise.resolve();
+        return Promise.all([_cUid, _cEmail]).then(function() {
+          stats.tournamentsCreated = Object.keys(_cMap).length;
+        });
+      })(),
 
       // Check-ins e locais únicos
       db.collection('presences')

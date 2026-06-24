@@ -42,13 +42,29 @@ function _meUid() { var u = window.AppStore && window.AppStore.currentUser; retu
 // jogador do próprio grupo ("os demais podem dar WO").
 function _canManageGroup(t, group) {
   if (typeof window._canManagePresence === 'function' && window._canManagePresence(t, window.AppStore.currentUser)) return true;
+  if (!group || !Array.isArray(group.players)) return false;
+  // v3.0.81 (varredura uid): "sou um jogador deste grupo?" por UID primeiro.
+  // group.players guarda NOMES (camada do bracket) — resolve cada nome (e cada
+  // lado de uma dupla "A / B") pro uid via _memberUidByName e compara com o meu
+  // uid. Sem isso, o p2 de uma dupla cujo slot mostra só o nome do p1 (ex.:
+  // "Kelly Barth") não era reconhecido como jogador do grupo. Nome só fallback
+  // (jogador informal sem conta, ou helper indisponível).
+  var myUid = _meUid();
   var me = _meName();
-  if (!me || !group || !Array.isArray(group.players)) return false;
+  var resolve = (typeof window._memberUidByName === 'function')
+    ? function (nm) { return window._memberUidByName(t, nm); } : function () { return ''; };
   return group.players.some(function (n) {
     if (!n) return false;
-    if (n === me) return true;
-    if (n.indexOf('/') !== -1) return n.split('/').map(function (s) { return s.trim(); }).indexOf(me) !== -1;
-    return false;
+    var sides = (n.indexOf('/') !== -1) ? n.split('/').map(function (s) { return s.trim(); }) : [n];
+    return sides.some(function (s) {
+      if (!s) return false;
+      var slotUid = resolve(s);
+      // Ambos com uid ⇒ identidade decidida SÓ por uid (homônimo de uid distinto
+      // NÃO casa). Nome só quando o slot é informal/legado (sem uid). Espelha a
+      // regra cristalizada na Parte 7.
+      if (myUid && slotUid) return slotUid === myUid;
+      return me && s === me;
+    });
   });
 }
 
@@ -63,13 +79,18 @@ function _groupCategory(group) {
   return m ? m.category : null;
 }
 
-// Mapa nome → uid (top-level + sub-participantes de dupla).
+// Mapa nome → uid (top-level + slots de dupla p1Name/p2Name + sub-participantes).
+// v3.0.81: inclui p1Name→p1Uid / p2Name→p2Uid (slot estrutural de dupla) — sem
+// isso, um folga que é membro de dupla não resolvia pro uid e ficava de fora dos
+// convidáveis.
 function _nameUidMap(t) {
   var map = {};
   (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {})).forEach(function (p) {
     if (!p || typeof p !== 'object') return;
     var nm = p.displayName || p.name || '';
     if (nm && p.uid) map[nm] = p.uid;
+    if (p.p1Name && p.p1Uid) map[p.p1Name] = p.p1Uid;
+    if (p.p2Name && p.p2Uid) map[p.p2Name] = p.p2Uid;
     (p.participants || []).forEach(function (sp) { if (sp && (sp.displayName || sp.name) && sp.uid) map[sp.displayName || sp.name] = sp.uid; });
   });
   return map;
