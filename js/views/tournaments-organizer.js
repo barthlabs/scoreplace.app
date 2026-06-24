@@ -452,13 +452,10 @@ window._checkTournamentReminders = async function() {
         if (!t.startDate || t.status === 'finished') continue;
         // Check if user is enrolled
         var parts = Array.isArray(t.participants) ? t.participants : [];
-        var enrolled = parts.some(function(p) {
-            var str = typeof p === 'string' ? p : (p.email || p.displayName || '');
-            var pEmail = typeof p === 'object' ? (p.email || '') : str;
-            var pUid = typeof p === 'object' ? (p.uid || '') : '';
-            var pName = typeof p === 'object' ? (p.displayName || p.name || '') : str;
-            return (cu.email && pEmail === cu.email) || (cu.uid && pUid === cu.uid) || (cu.displayName && pName === cu.displayName);
-        });
+        // v3.0.x (Parte 10 uid sweep): uid-first + slot-aware (p1Uid/p2Uid) via helper
+        // canônico. Antes checava só p.uid top-level → o p2 de uma dupla não recebia
+        // lembrete do próprio torneio.
+        var enrolled = parts.some(function(p) { return typeof window._userMatchesParticipant === 'function' && window._userMatchesParticipant(cu, p); });
         if (!enrolled) continue;
 
         var startStr = t.startDate.split('T')[0];
@@ -575,13 +572,8 @@ window._checkNearbyTournaments = async function() {
         if (matched || sportMatch) {
             // Check if user is already enrolled
             var parts = Array.isArray(t.participants) ? t.participants : [];
-            var enrolled = parts.some(function(p) {
-                var str = typeof p === 'string' ? p : (p.email || '');
-                var pEmail = typeof p === 'object' ? (p.email || '') : str;
-                var pUid = typeof p === 'object' ? (p.uid || '') : '';
-                var pName = typeof p === 'object' ? (p.displayName || p.name || '') : str;
-                return (cu.email && pEmail === cu.email) || (cu.uid && pUid === cu.uid) || (cu.displayName && pName === cu.displayName);
-            });
+            // v3.0.x (Parte 10 uid sweep): uid-first + slot-aware via helper canônico.
+            var enrolled = parts.some(function(p) { return typeof window._userMatchesParticipant === 'function' && window._userMatchesParticipant(cu, p); });
             if (enrolled) continue;
 
             await window._sendUserNotification(uid, {

@@ -2205,14 +2205,11 @@ function renderDashboard(container) {
         if (!_cu) return false;
         if (_cu.uid && t.creatorUid && t.creatorUid === _cu.uid) return true;
         if (t.organizerEmail && t.organizerEmail === _cu.email) return true;
-        var pArr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-        return pArr.some(function(p) {
-          if (typeof p === 'string') return p === _cu.email || p === _cu.displayName;
-          if (p.uid && _cu.uid && p.uid === _cu.uid) return true;
-          if (p.email && p.email === _cu.email) return true;
-          if (p.displayName && p.displayName === _cu.displayName) return true;
-          return false;
-        });
+        // v3.0.x (Parte 10 uid sweep): inscrição via helper canônico uid-first + slot-aware
+        // (p1Uid/p2Uid). Antes checava só p.uid top-level → o p2 de uma dupla (uid em p2Uid,
+        // displayName = só o nome do p1) caía em "outros encerrados" em vez de "seus".
+        if (typeof window._isUserEnrolledInTournament === 'function') return window._isUserEnrolledInTournament(_cu, t);
+        return false;
       });
       var otherFinished = finishedList.filter(function(t) { return myFinished.indexOf(t) === -1; });
       var finishedCards = '';
@@ -2234,14 +2231,9 @@ function renderDashboard(container) {
       var _isMine = function(t) {
         if (_cu2.uid && t.creatorUid && t.creatorUid === _cu2.uid) return true;
         if (t.organizerEmail && t.organizerEmail === _cu2.email) return true;
-        var pArr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-        return pArr.some(function(p) {
-          if (typeof p === 'string') return p === _cu2.email || p === _cu2.displayName;
-          if (p.uid && _cu2.uid && p.uid === _cu2.uid) return true;
-          if (p.email && p.email === _cu2.email) return true;
-          if (p.displayName && p.displayName === _cu2.displayName) return true;
-          return false;
-        });
+        // v3.0.x (Parte 10 uid sweep): uid-first + slot-aware via helper canônico.
+        if (typeof window._isUserEnrolledInTournament === 'function') return window._isUserEnrolledInTournament(_cu2, t);
+        return false;
       };
       var _myEnc = filtered.filter(_isMine);
       var _otherEnc = filtered.filter(function(t) { return !_isMine(t); });
@@ -3473,12 +3465,22 @@ function _hydrateFriendsPresenceWidget() {
           var pid = window.PresenceDB.venueKey(t.venuePlaceId || '', t.venue || '');
           if (!pid) return;
           var parts = Array.isArray(t.participants) ? t.participants : [];
-          var meIn = parts.some(function(p) { return p && p.uid === cu.uid; });
-          var frIn = parts.some(function(p) { return p && p.uid && fSet[p.uid]; });
-          if (!meIn && !frIn) return;
+          // v3.0.x (Parte 10 uid sweep): identidade por uid slot-aware — o p2 de uma
+          // dupla (uid em p2Uid) também conta como "eu"/"amigo" no movimento do local.
+          var _uidsOf = function(p) {
+            if (p && typeof window._participantUids === 'function') { try { return window._participantUids(p) || []; } catch(e){} }
+            return (p && p.uid) ? [p.uid] : [];
+          };
+          var meIn = parts.some(function(p) { return _uidsOf(p).indexOf(cu.uid) !== -1; });
+          var frUid = null;
+          parts.some(function(p) {
+            var hit = _uidsOf(p).filter(function(u){ return u && fSet[u]; })[0];
+            if (hit) { frUid = hit; return true; }
+            return false;
+          });
+          if (!meIn && !frUid) return;
           if (list.some(function(p) { return p && p.placeId === pid; })) return; // já há presença nesse venue
-          var frP = frIn ? parts.find(function(p) { return p && p.uid && fSet[p.uid]; }) : null;
-          list.push({ uid: meIn ? cu.uid : (frP && frP.uid) || null, placeId: pid, venueName: t.venue || 'Local', venueLat: t.venueLat, venueLon: t.venueLon, _fromTournament: true });
+          list.push({ uid: meIn ? cu.uid : frUid, placeId: pid, venueName: t.venue || 'Local', venueLat: t.venueLat, venueLon: t.venueLon, _fromTournament: true });
         });
       } catch (e) {}
     })();

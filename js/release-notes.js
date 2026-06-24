@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.78-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.79-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🆔 Seus torneios e seus lembretes reconhecem cada jogador da dupla:</b> na tela inicial, os torneios encerrados de que você participou aparecem na sua seção mesmo quando você é o segundo jogador da dupla; e os lembretes de início e os avisos de torneios perto de você também chegam pra esse jogador. O movimento dos amigos no local passou a contar cada pessoa da dupla. Tudo identificado pela sua conta (uid).</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.78-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🆔 W.O. e a estrela de VIP reconhecem cada um pela conta:</b> o histórico de W.O. e a marcação de VIP na lista de inscritos passaram a identificar a pessoa pela conta dela (uid) em vez do nome. Dois jogadores de mesmo nome não se confundem mais — quem levou W.O. continua aparecendo com o nome certo, e a estrela de VIP volta a aparecer corretamente. Dados antigos continuam funcionando.</li>' +
       '</ul>' +
