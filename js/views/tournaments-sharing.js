@@ -440,23 +440,34 @@ window._openInvitePrint = function(opts) {
       '</div>'
     : '';
 
-  // Sliders de tamanho — só pro flyer de torneio (logo scoreplace fica fixo;
-  // logo do torneio, fonte do nome, QR e textos são ajustáveis).
+  // Sliders de tamanho — canonizado (v3.0.85): app E torneio têm o mesmo bloco
+  // rico de personalização. Pro app o slider "Logo" controla o logo do
+  // scoreplace; pro torneio há ainda o logo do torneio + o nome.
   var _slider = function(id, label, min, max, val) {
     return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
       '<span style="font-size:0.74rem;color:var(--text-muted,#94a3b8);width:90px;flex-shrink:0;">' + label + '</span>' +
       '<input type="range" id="' + id + '" min="' + min + '" max="' + max + '" value="' + val + '"' + _upd + ' style="flex:1;min-width:0;accent-color:#6366f1;">' +
     '</div>';
   };
-  // Sliders percentuais (100 = padrão). O tamanho do logo NA IMPRESSÃO é
-  // ajustável aqui; a FORMA (quadrado/círculo) é definida só no upload do logo.
-  var sizeBlock = isTourn
+  // Sliders percentuais (100 = padrão). O tamanho NA IMPRESSÃO é ajustável aqui;
+  // a FORMA do logo (quadrado/círculo) é definida só no upload do logo.
+  var sizeSliders = '';
+  if (isTourn) {
+    sizeSliders =
+      _slider('flyer-logosize', 'Logo torneio', 0, 500, 100) +
+      _slider('flyer-namesize', 'Nome', 30, 500, 100) +
+      _slider('flyer-qrsize', 'QR Code', 40, 300, 100) +
+      _slider('flyer-textsize', 'Textos', 50, 500, 100);
+  } else if (isApp) {
+    sizeSliders =
+      _slider('flyer-logosize', 'Logo', 0, 250, 100) +
+      _slider('flyer-qrsize', 'QR Code', 40, 300, 100) +
+      _slider('flyer-textsize', 'Textos', 50, 500, 100);
+  }
+  var sizeBlock = sizeSliders
     ? '<div id="flyer-size-block" style="margin-bottom:14px;padding:12px;border:1px solid var(--border-color,#2a2f45);border-radius:10px;">' +
         '<div style="font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);margin-bottom:10px;">Tamanhos (arraste e veja na hora)</div>' +
-        _slider('flyer-logosize', 'Logo torneio', 0, 500, 100) +
-        _slider('flyer-namesize', 'Nome', 30, 500, 100) +
-        _slider('flyer-qrsize', 'QR Code', 40, 300, 100) +
-        _slider('flyer-textsize', 'Textos', 50, 500, 100) +
+        sizeSliders +
       '</div>'
     : '';
 
@@ -684,12 +695,13 @@ function _buildFlyerPrintHtml(o) {
   var sub = '';
   if (o.kind === 'app') {
     // Frase configurável — cada linha vira um parágrafo com peso decrescente.
+    // Tamanhos vão por CLASSE (app-line0/1/2) no <style> principal e são
+    // escaláveis pelo size-style (slider "Textos") — por isso NÃO usar font-size
+    // inline aqui (inline venceria o stylesheet e o slider não teria efeito).
     var lines = String(o.phrase || window._flyerDefaultAppPhrase()).split('\n').filter(function(l) { return l.trim() !== ''; });
     heading = lines.map(function(l, i) {
-      var size = i === 0 ? cpx(15, 5, 30) : (i === 1 ? cpx(12, 3.6, 22) : cpx(9, 2.4, 15));
-      var weight = i === 0 ? '800' : (i === 1 ? '700' : '500');
-      var col = i === 0 ? '#0f172a' : (i === 1 ? '#4f46e5' : '#475569');
-      return '<div style="font-size:' + size + 'px;font-weight:' + weight + ';color:' + col + ';line-height:1.2;margin:' + mpx + 'px 0;">' + esc(l) + '</div>';
+      var cls = i === 0 ? 'app-line0' : (i === 1 ? 'app-line1' : 'app-line2');
+      return '<div class="app-line ' + cls + '">' + esc(l) + '</div>';
     }).join('');
   } else if (o.kind === 'casual') {
     heading = '<div style="font-size:' + cpx(10, 2.6, 15) + 'px;font-weight:700;color:#0891b2;letter-spacing:1px;text-transform:uppercase;margin-bottom:' + mpx + 'px;">⚡ Partida Casual</div>' +
@@ -785,6 +797,12 @@ function _buildFlyerPrintHtml(o) {
       '.t-name { font-size:' + Math.round(PW * 0.06) + 'px; font-weight:800; color:#0f172a; line-height:1.12; word-break:break-word; flex:1 1 auto; min-width:0; }' +
       '.name-block.has-logo .t-name { text-align:left; }' +
       '.t-sub { font-size:' + cpx(9, 2.4, 13) + 'px; color:#475569; white-space:pre-line; }' +
+      // Linhas da frase do convite do APP (tamanho base; o slider "Textos" escala
+      // via size-style). Peso/cor decrescentes por linha.
+      '.app-line { line-height:1.2; margin:' + mpx + 'px 0; }' +
+      '.app-line0 { font-size:' + cpx(15, 5, 30) + 'px; font-weight:800; color:#0f172a; }' +
+      '.app-line1 { font-size:' + cpx(12, 3.6, 22) + 'px; font-weight:700; color:#4f46e5; }' +
+      '.app-line2 { font-size:' + cpx(9, 2.4, 15) + 'px; font-weight:500; color:#475569; }' +
     '</style>' +
     // size-style: separado pra ser atualizado IN-PLACE pelos sliders sem
     // recarregar o iframe (e portanto sem o QR piscar/desaparecer).
@@ -823,12 +841,37 @@ function _buildFlyerPrintHtml(o) {
 // sem vw/vh, pra que a impressão use exatamente os mesmos tamanhos da tela.
 // QR limitado por largura E altura → nunca corta.
 function _flyerSizeCss(o) {
-  if (o.kind !== 'tournament' || o.content === 'qr') return '';
+  // qrOnly não tem textos/logo ajustáveis (só o QR, em tamanho fixo grande).
+  if (o.content === 'qr') return '';
+  if (o.kind !== 'tournament' && o.kind !== 'app') return '';
   var sz = o.sizes || {};
   var isLandscape = o.orient === 'landscape';
   var pp = _flyerPaperPx(o);
   var PW = pp.pw, PH = pp.ph;
   var cpx = function(minPt, vw, maxPt) { return _flyerClampPx(minPt, vw, maxPt, PW); };
+
+  // ─── App: logo do scoreplace + frase + QR escaláveis ──────────────────────
+  if (o.kind === 'app') {
+    var aScale = (sz.text != null ? Number(sz.text) : 100) / 100;
+    var aPQr = (sz.qr != null ? Number(sz.qr) : 100) / 100;
+    var aPLogo = (sz.logo != null ? Number(sz.logo) : 100) / 100;
+    // Base do QR igual ao main style (full content, não-landscape vs landscape).
+    var aQrBase = isLandscape ? Math.min(PW * 0.40, PH * 0.60) : Math.min(PW * 0.56, PH * 0.42);
+    // Clamp por largura E altura máximas (igual ao torneio) — QR nunca estoura a
+    // página nem força o _flyerFit a encolher o resto demais.
+    var aQrW = Math.round(Math.min(aQrBase * aPQr, 0.90 * PW, 0.86 * PH));
+    // Logo do scoreplace: base = logoWpx do main (full content). Clamp à largura
+    // útil da página pra não transbordar; max-height do main ainda limita.
+    var aLogoBase = PW * (isLandscape ? 0.64 : 0.78);
+    var aLogoW = Math.min(Math.round(aLogoBase * aPLogo), Math.round(PW * 0.92));
+    return '.qr{width:' + aQrW + 'px;}' +
+      '.logo svg{width:' + aLogoW + 'px;}' +
+      '.app-line0{font-size:' + (aScale * cpx(15, 5, 30)).toFixed(1) + 'px;}' +
+      '.app-line1{font-size:' + (aScale * cpx(12, 3.6, 22)).toFixed(1) + 'px;}' +
+      '.app-line2{font-size:' + (aScale * cpx(9, 2.4, 15)).toFixed(1) + 'px;}' +
+      '.caption{font-size:' + (aScale * cpx(8, 2.2, 12)).toFixed(1) + 'px;}' +
+      '.brand{font-size:' + (aScale * cpx(7, 1.8, 9)).toFixed(1) + 'px;}';
+  }
   var pLogo = (sz.logo != null ? Number(sz.logo) : 100) / 100;
   var pName = (sz.name != null ? Number(sz.name) : 100) / 100;
   var pQr = (sz.qr != null ? Number(sz.qr) : 100) / 100;
