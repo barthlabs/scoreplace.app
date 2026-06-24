@@ -181,25 +181,31 @@ function _profileScore(data) {
 
 /**
  * Choose which of two Firestore DocumentSnapshot objects to keep.
- * Higher profile score wins; tie → newer createdAt wins.
+ * v3.0.57: REGRA DO DONO — a conta MAIS ANTIGA prevalece (uid mais antigo),
+ * com o displayName DELA. Pedido explícito: merge bidirecional, sobrevive sempre
+ * a conta mais antiga, não importa se vincula e-mail antigo a celular novo ou o
+ * contrário. createdAt é o critério primário; ausente perde pra quem tem idade
+ * conhecida; empate/ambos sem createdAt → cai no perfil mais completo (legado).
  * Returns { keepDoc, dropDoc }.
  */
 function _determineMergeWinner(docA, docB) {
-  const aScore = _profileScore(docA.data());
-  const bScore = _profileScore(docB.data());
-  if (aScore !== bScore) {
-    return aScore > bScore
-      ? { keepDoc: docA, dropDoc: docB }
-      : { keepDoc: docB, dropDoc: docA };
-  }
-  // Tie: prefer newer account
   const ts = doc => {
     const c = doc.data().createdAt;
-    return c ? (c.toMillis ? c.toMillis() : Number(c)) : 0;
+    if (c == null) return null;
+    return c.toMillis ? c.toMillis() : Number(c);
   };
-  return ts(docB) >= ts(docA)
-    ? { keepDoc: docB, dropDoc: docA }
-    : { keepDoc: docA, dropDoc: docB };
+  const a = ts(docA), b = ts(docB);
+  if (a != null && b != null && a !== b) {
+    return a < b ? { keepDoc: docA, dropDoc: docB } : { keepDoc: docB, dropDoc: docA };
+  }
+  if (a != null && b == null) return { keepDoc: docA, dropDoc: docB };
+  if (b != null && a == null) return { keepDoc: docB, dropDoc: docA };
+  // Sem createdAt confiável (ou exatamente igual) → desempata pelo perfil mais completo.
+  const aScore = _profileScore(docA.data());
+  const bScore = _profileScore(docB.data());
+  return aScore >= bScore
+    ? { keepDoc: docA, dropDoc: docB }
+    : { keepDoc: docB, dropDoc: docA };
 }
 
 /** Normalise a field value to a dedup key (strips spaces/dashes from phones). */

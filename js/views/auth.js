@@ -1825,8 +1825,11 @@ window._handleEntrar = function() {
           }
           // Existe, sem senha.
           if (mode === 'phone') {
-            var e164b = window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55');
-            window._entrarSetupPhonePassword(e164b, pw, '');
+            // v3.0.57: conta de celular sem senha = completar o cadastro. Expande o
+            // form pra coletar NOME + CONFIRMAÇÃO de senha (antes setava a senha com
+            // nome vazio e sem confirmar). _entrarDoRegister → _entrarSetupPhonePassword
+            // com o nome real + senha confirmada; a sessão OTP atualiza o MESMO uid.
+            window._entrarExpandRegister(mode, raw);
           } else {
             window._entrarDispatchRecovery(raw).then(function(res) { window._entrarShowRecovery(res, true); });
           }
