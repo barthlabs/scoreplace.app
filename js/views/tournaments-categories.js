@@ -1687,12 +1687,15 @@ function _executeMerge(tId, sourceCat, targetCat, mergedName) {
     var premergeMap = {};
     parts.forEach(function(p) {
         if (typeof p !== 'object') return;
-        var email = p.email || p.displayName || p.name || '';
-        if (!email) return;
+        // Chave da entrada uid-first (varredura uid, Parte 6): uid/p1Uid evita
+        // colisão entre duas entradas de mesmo nome; email/nome só fallback.
+        // Casa com a mesma fórmula no read de _executeUnmerge.
+        var pKey = p.uid || p.p1Uid || p.email || p.displayName || p.name || '';
+        if (!pKey) return;
         if (window._participantInCategory(p, sourceCat)) {
-            premergeMap[email] = sourceCat;
+            premergeMap[pKey] = sourceCat;
         } else if (window._participantInCategory(p, targetCat)) {
-            premergeMap[email] = targetCat;
+            premergeMap[pKey] = targetCat;
         }
     });
 
@@ -2207,7 +2210,9 @@ function _executeUnmerge(tId, mergeIdx) {
         var idx = pCats.indexOf(mergedName);
         if (idx === -1) return;
 
-        var pKey = p.email || p.displayName || p.name || '';
+        // Mesma chave uid-first do write em _executeMerge (varredura uid, Parte 6).
+        // Docs de merge legados (keyed por e-mail) caem no fallback p.originalCategory.
+        var pKey = p.uid || p.p1Uid || p.email || p.displayName || p.name || '';
         // participantMap has the exact pre-merge category (sourceCat or targetCat)
         var fromMap = participantMap[pKey] || '';
         var fromOrig = p.originalCategory || '';
@@ -2388,13 +2393,19 @@ function _assignParticipantCategory(tId, pIdx, category) {
 // Category assignment notification
 function _addCategoryNotification(t, participant, category) {
     if (!t || !participant) return;
+    // Identidade = uid (varredura uid, Parte 6). targetUid é a chave canônica;
+    // email/nome só fallback (display + match de docs legados). Pega o uid primário
+    // da entrada (solo: uid; dupla: capitão p1Uid). Antes bailava sem email →
+    // participante só-celular (sem e-mail) NUNCA era notificado da categoria.
+    var pUid = participant.uid || participant.p1Uid || '';
     var pEmail = participant.email || '';
-    if (!pEmail) return;
+    if (!pUid && !pEmail) return;
 
     // Initialize notifications array if needed
     if (!t.categoryNotifications) t.categoryNotifications = [];
 
     t.categoryNotifications.push({
+        targetUid: pUid,
         targetEmail: pEmail,
         targetName: participant.displayName || participant.name || '',
         category: category,
@@ -3077,10 +3088,14 @@ window._categoryRequestsBannerHtml = function(t) {
 window._checkCategoryNotifications = function(t) {
     if (!t || !t.categoryNotifications || t.categoryNotifications.length === 0) return;
     var user = window.AppStore.currentUser;
-    if (!user || !user.email) return;
+    if (!user || (!user.uid && !user.email)) return;
 
+    // uid-first (varredura uid, Parte 6): notif com targetUid casa ESTRITO por uid;
+    // docs legados sem targetUid caem no match por e-mail.
     var userNotifs = t.categoryNotifications.filter(function(n) {
-        return n.targetEmail === user.email && !n.read;
+        if (n.read) return false;
+        if (n.targetUid) return !!user.uid && n.targetUid === user.uid;
+        return !!n.targetEmail && n.targetEmail === user.email;
     });
 
     if (userNotifs.length === 0) return;
