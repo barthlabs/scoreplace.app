@@ -227,9 +227,6 @@ window.renderInvitePage = function(container) {
     if (window._coach && typeof window._coach.startInviteTour === 'function') window._coach.startInviteTour();
 };
 
-// Compat: botões antigos que chamam _showAppInviteQR redirecionam para a página
-window._showAppInviteQR = function() { window.location.hash = '#invite'; };
-
 window._downloadAppInviteQR = function() {
     var img = document.getElementById('qr-code-img');
     if (!img) return;

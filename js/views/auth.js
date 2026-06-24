@@ -4932,15 +4932,26 @@ async function simulateLoginSuccess(user) {
     if (!pendingEnrollId) pendingEnrollId = sessionStorage.getItem('_pendingEnrollTournamentId');
   } catch(e) {}
 
-  // Extrair ?ref= do hash (quem convidou)
+  // Extrair ?ref= (quem convidou) — do hash OU da query string. O convite do
+  // app gera `…/?ref=UID` (query, sem hash); o de torneio `#…?ref=UID` (hash).
   var _inviteRefUid = null;
   try {
     var _hashFull = window.location.hash || '';
     var _refMatch = _hashFull.match(/[?&]ref=([^&]+)/);
+    if (!_refMatch && window.location.search) _refMatch = window.location.search.match(/[?&]ref=([^&]+)/);
     if (_refMatch) _inviteRefUid = decodeURIComponent(_refMatch[1]);
     // Também checar sessionStorage (salvo pelo router)
     if (!_inviteRefUid) _inviteRefUid = sessionStorage.getItem('_inviteRefUid');
   } catch(e) {}
+
+  // v3.0.84: a auto-amizade vale pra QUALQUER login com ref (convite do APP ou
+  // de torneio), não só quando há pendingEnrollId. Antes ficava presa dentro do
+  // bloco `if (pendingEnrollId)` (exclusivo de convite de torneio) → o convite
+  // do app, que não tem pendingEnrollId, NUNCA criava amizade.
+  if (_inviteRefUid && typeof _autoFriendOnInvite === 'function' && window.AppStore.currentUser) {
+    try { _autoFriendOnInvite(_inviteRefUid, window.AppStore.currentUser); } catch(e) {}
+    try { sessionStorage.removeItem('_inviteRefUid'); } catch(e) {}
+  }
 
   if (pendingEnrollId) {
     window._pendingEnrollTournamentId = null;
@@ -4953,12 +4964,8 @@ async function simulateLoginSuccess(user) {
     // BUG reportado: algo auto-inscrevia o usuário num torneio que ele NÃO
     // clicou (a conta de teste era re-inscrita todo dia). Aqui só LEVAMOS o
     // usuário à página do torneio — ele decide se entra.
-    // A auto-amizade com quem convidou (ref no link) é mantida: é o propósito
-    // do convite e não significa "entrar no torneio".
-    if (_inviteRefUid && typeof _autoFriendOnInvite === 'function' && window.AppStore.currentUser) {
-      try { _autoFriendOnInvite(_inviteRefUid, window.AppStore.currentUser); } catch(e) {}
-      try { sessionStorage.removeItem('_inviteRefUid'); } catch(e) {}
-    }
+    // A auto-amizade com quem convidou (ref no link) já foi tratada acima, antes
+    // deste bloco — vale pra qualquer login com ref, não só convite de torneio.
     window.location.hash = '#tournaments/' + pendingEnrollId;
     if (typeof initRouter === 'function') initRouter();
     window._simulateLoginInProgress = false;

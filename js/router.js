@@ -42,10 +42,24 @@ function initRouter() {
     const view = parts[0];
     const param = parts[1] || null;
 
-    // --- Preserve ?ref= invite referrer in sessionStorage ---
+    // --- Preserve ?ref= invite referrer (hash OU query string) ---
+    // O convite do APP gera `…/?ref=UID` (ref na query, sem hash); o convite de
+    // TORNEIO gera `#tournaments/id?ref=UID` (ref no hash). Ler os DOIS — antes
+    // só o hash era lido, então o convite do app nunca criava a amizade.
     var _refMatch = hash.match(/[?&]ref=([^&]+)/);
+    if (!_refMatch && window.location.search) _refMatch = window.location.search.match(/[?&]ref=([^&]+)/);
     if (_refMatch) {
-      try { sessionStorage.setItem('_inviteRefUid', decodeURIComponent(_refMatch[1])); } catch(e) {}
+      try {
+        var _refUidVal = decodeURIComponent(_refMatch[1]);
+        var _cuRef = window.AppStore && window.AppStore.currentUser;
+        if (_cuRef && (_cuRef.uid || _cuRef.email) && typeof window._autoFriendOnInvite === 'function') {
+          // já logado: cria a amizade na hora (não passa pelo login pós-convite)
+          try { window._autoFriendOnInvite(_refUidVal, _cuRef); } catch(e) {}
+        } else {
+          // ainda não logado: guarda pro consumo pós-login (auth.js)
+          sessionStorage.setItem('_inviteRefUid', _refUidVal);
+        }
+      } catch(e) {}
     }
     // Clean param from query string if present
     var cleanParam = param ? param.split('?')[0] : null;
