@@ -2015,7 +2015,12 @@ window._castPollVote = function(tId, pollId, optionKey) {
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
     var isParticipant = parts.some(function(p) {
         if (typeof p === 'string') return p === userEmail || p === (user.displayName || '');
-        return (p.email && p.email === userEmail) || (p.uid && user.uid && p.uid === user.uid) || (p.displayName && p.displayName === (user.displayName || ''));
+        // uid-first + slot-aware: pega TODOS os uids do participante (p.uid + p1Uid/p2Uid +
+        // sub-participants[]) — senão o p2 de uma dupla (uid em p2Uid, displayName só do p1)
+        // era barrado de votar na enquete de resolução. Nome/email só fallback.
+        if (user.uid && typeof window._participantUids === 'function' &&
+            window._participantUids(p).indexOf(user.uid) !== -1) return true;
+        return (p.uid && user.uid && p.uid === user.uid) || (p.email && p.email === userEmail) || (p.displayName && p.displayName === (user.displayName || ''));
     });
     var isOrganizer = (userEmail === t.organizerEmail);
     if (!isParticipant && !isOrganizer) {
