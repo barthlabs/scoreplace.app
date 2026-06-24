@@ -11,7 +11,7 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>👑 A coroa do organizador aparece mesmo quando ele joga em dupla:</b> se o organizador também está jogando como parceiro de alguém, a coroinha agora aparece ao lado do nome dele na lista de inscritos — reconhecida pela conta (uid), mesmo que o nome exibido da dupla seja só o do outro jogador.</li>' +
+        '<li><b>⭐ A estrela do organizador aparece mesmo quando ele joga em dupla:</b> se o organizador também está jogando como parceiro de alguém, a estrelinha agora aparece ao lado do nome dele na lista de inscritos — reconhecida pela conta (uid), mesmo que o nome exibido da dupla seja só o do outro jogador.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
