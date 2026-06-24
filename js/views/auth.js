@@ -6298,7 +6298,7 @@ window._propagateNameChange = function _propagateNameChange(oldName, newName, ta
           // v2.8.93: dupla é detectada pela ESTRUTURA (p1Name && p2Name), NÃO só por
           // " / " no displayName — dupla formada por aceite guarda displayName só do p1,
           // então renomear o p2 não atualizava o p2Name. Linkage por UID, não por nome.
-          var _isTeamEntry = !!(p.p1Name && p.p2Name) || _curName.indexOf(' / ') !== -1;
+          var _isTeamEntry = !!window._entryTeamMembers(p); // v3.0.x: dupla por estrutura (slots), não por '/'
           if (_isTeamEntry) {
             // Dupla: atualiza p1Name/p2Name pelo UID (fallback por nome no legado sem uids)
             var _teamChanged = false;

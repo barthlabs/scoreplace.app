@@ -2911,7 +2911,7 @@ window._showVagasDrawPanel = function (tId) {
     var vipCount = 0;
     pArr.forEach(function(entry) {
         var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
-        var members = nm.indexOf('/') !== -1 ? nm.split('/').map(function(n){ return n.trim(); }) : [nm];
+        var members = window._entryTeamMembers(entry) || [nm]; // v3.0.x: membros por estrutura (pega p1 E p2), não por '/'
         if (members.some(function(m){ return !!_vips[m]; }) || _vips[nm]) vipCount++;
     });
     var waitlistPreview = Math.max(0, entities - slots);
@@ -2969,7 +2969,7 @@ window._runVagasDraw = function (tId) {
     var nonVipEntries = [];
     p.forEach(function(entry) {
         var nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
-        var members = nm.indexOf('/') !== -1 ? nm.split('/').map(function(n){ return n.trim(); }) : [nm];
+        var members = window._entryTeamMembers(entry) || [nm]; // v3.0.x: membros por estrutura (pega p1 E p2), não por '/'
         var isVip = members.some(function(m){ return !!_vips[m]; }) || !!_vips[nm];
         if (isVip) vipEntries.push(entry); else nonVipEntries.push(entry);
     });
@@ -3934,7 +3934,7 @@ window._confirmP2Resolution = function (tId, option) {
         p.forEach(entry => {
             const nm = typeof entry === 'string' ? entry : (entry.displayName || entry.name || '');
             // VIP se o nome ou qualquer membro do time é VIP
-            const members = nm.includes('/') ? nm.split('/').map(n => n.trim()) : [nm];
+            const members = window._entryTeamMembers(entry) || [nm]; // v3.0.x: membros por estrutura (pega p1 E p2), não por '/'
             const isVip = members.some(m => !!_vips[m]) || !!_vips[nm];
             if (isVip) vipEntries.push(entry);
             else nonVipEntries.push(entry);

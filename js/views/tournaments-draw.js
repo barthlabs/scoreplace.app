@@ -255,16 +255,17 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
   var preFormed = [];
   origParticipants.forEach(function(p) {
     var name = (typeof p === 'string') ? p : (p.displayName || p.name || '');
-    if (name.indexOf(' / ') !== -1) {
-      // Já é um time pré-formado.
+    // v3.0.x: time/dupla por ESTRUTURA (slots p1/p2 ou participants[]) — preserva intacto
+    // (com uids) mesmo quando o displayName não tem '/'. Antes caía em "individual" e era
+    // RE-SORTEADO, quebrando a dupla. '/' só serve de fallback pra time em STRING legada.
+    var _struct = (p && typeof p === 'object') ? window._entryTeamMembers(p) : null;
+    if (_struct) {
+      preFormed.push(p); // dupla estrutural — mantém uids/slots
+    } else if (name.indexOf(' / ') !== -1) {
+      // Legado: time só em string "A / B" (sem slots) — desmembra pra formar.
       if (p && typeof p === 'object') {
         if (!p.displayName) p.displayName = name;
-        if (!p.p1Uid && !p.p2Uid) {
-          // Objeto sem uids dos membros → enriquece a partir dos nomes.
-          preFormed.push(Object.assign({}, p, mkTeamObj(name.split(' / ').map(function(s){ return s.trim(); }))));
-        } else {
-          preFormed.push(p);
-        }
+        preFormed.push(Object.assign({}, p, mkTeamObj(name.split(' / ').map(function(s){ return s.trim(); }))));
       } else {
         preFormed.push(mkTeamObj(name.split(' / ').map(function(s){ return s.trim(); })));
       }
@@ -331,7 +332,7 @@ window._applyMixedOriginCategories = function(t, participants) {
   participants.forEach(function(p) {
     if (!p || typeof p !== 'object') return;
     var nm = p.displayName || p.name || '';
-    if (nm.indexOf(' / ') === -1) return; // só duplas/times — sobra individual fica de fora
+    if (!window._entryTeamMembers(p)) return; // v3.0.x: só duplas/times (estrutura), não por '/'
     var originLbl = (origins[nm] === 'sorteada') ? window._MIXED_ORIGIN_DRAWN : window._MIXED_ORIGIN_FORMED;
     var existing = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : [];
     // Não cruzar com rótulos de origem já aplicados (idempotência em re-sorteio).
@@ -531,8 +532,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   var parts = Array.isArray(t.participants) ? t.participants : [];
   // indivíduos a parear (sem ' / ' = ainda não estão em dupla)
   var individuals = parts.filter(function(p){
-    var n = (typeof p === 'string') ? p : (p.displayName || p.name || '');
-    return n.indexOf(' / ') === -1;
+    return !window._entryTeamMembers(p); // v3.0.x: ainda-não-em-dupla por estrutura, não por '/'
   });
   if (individuals.length < 2) return false; // nada pra formar dupla por sorteio
 
@@ -1054,7 +1054,7 @@ window.generateDrawFunction = function (tId) {
             // v3.0.x: a sobra ímpar (quem não formou dupla) NÃO entra num grupo como
             // "time de 1" — vai pra lista de espera (suplente). Continua inscrita.
             if (_grpFormed.leftoverCount > 0) {
-                const _grpSolos = participants.filter(p => getName(p).indexOf(' / ') === -1);
+                const _grpSolos = participants.filter(p => !window._entryTeamMembers(p)); // v3.0.x: solo por estrutura, não '/'
                 if (_grpSolos.length) {
                     if (!Array.isArray(t.waitlist)) t.waitlist = [];
                     _grpSolos.forEach(s => t.waitlist.push(s));
@@ -1066,8 +1066,8 @@ window.generateDrawFunction = function (tId) {
         // Convert participants to name strings — duplas: só os TIMES (a sobra ímpar
         // já foi pra lista de espera); individual: todos.
         let _grpNames = participants
-            .filter(p => _grpTeamSize <= 1 || getName(p).indexOf(' / ') !== -1)
-            .map(p => getName(p));
+            .filter(p => _grpTeamSize <= 1 || !!window._entryTeamMembers(p)) // v3.0.x: time por estrutura
+            .map(p => (window._pName ? window._pName(p) : getName(p)));       // canônico "A / B" pra duplas (não perde o p2)
 
         // Shuffle
         for (let i = _grpNames.length - 1; i > 0; i--) {

@@ -9,7 +9,16 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.62-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.63-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎲 Sorteio respeita as duplas já formadas:</b> uma dupla não é mais desfeita e re-sorteada por engano quando o nome exibido é só o de um dos dois jogadores.</li>' +
+        '<li><b>💎 VIP da dupla conta os dois:</b> se qualquer um da dupla é VIP, a dupla é protegida no sorteio.</li>' +
+        '<li><b>🃏 Card da dupla aparece como dupla:</b> na lista de inscritos, a dupla mostra os dois nomes e o botão de dividir (antes podia aparecer como jogador solo).</li>' +
+        '<li><b>🤝 Estatísticas de parceria certas:</b> no perfil de um jogador, o parceiro de dupla aparece como parceiro, não como adversário.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.62-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🛡️ Fim da inscrição em dobro:</b> corrigido na raiz (no banco) o caso em que um jogador de uma dupla aparecia como "não inscrito" e acabava se inscrevendo duas vezes.</li>' +
         '<li><b>🔢 Contagens certas com duplas:</b> "inscritos", "equipes formadas" e a matemática do sorteio (chaves/potência de 2) contam as duplas corretamente, mesmo quando o nome exibido é só o de um dos dois jogadores.</li>' +

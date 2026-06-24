@@ -1668,7 +1668,7 @@ function renderParticipants(container, tournamentId) {
     const _woHist = (t.woHistory && typeof t.woHistory === 'object') ? t.woHistory : {};
     parts.forEach((p, idx) => {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
-      const isTeam = pName.includes('/');
+      const isTeam = !!window._entryTeamMembers(p); // v3.0.x: time por estrutura (slots), não por '/'
       const namesToProcess = isTeam ? pName.split('/').map(n => n.trim()).filter(n => n) : [pName];
       namesToProcess.forEach(n => {
         if (_woHist[n]) return; // skip W.O.'d member — solo card via woHistory loop
@@ -1690,7 +1690,7 @@ function renderParticipants(container, tournamentId) {
     // não fechou dupla e foi pra espera) NÃO vira card novo; só ganha a marca de espera.
     standbyParts.forEach((p, idx) => {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || 'Espera ' + (idx + 1));
-      const names = pName.includes('/') ? pName.split('/').map(n => n.trim()).filter(n => n) : (pName ? [pName] : []);
+      const names = window._entryTeamMembers(p) || (pName ? [pName] : []); // v3.0.x: membros por estrutura, não por '/'
       names.forEach(n => {
         const ex = _indivByName[n.toLowerCase()];
         if (ex) { ex.isStandby = true; return; }
@@ -2160,7 +2160,7 @@ function renderParticipants(container, tournamentId) {
 
     cardsStr = _gridParts.map((p, idx) => {
       const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
-      const isTeam = pName.includes('/');
+      const isTeam = !!window._entryTeamMembers(p); // v3.0.x: time por estrutura (slots), não por '/'
       // v2.7.37: estrela do organizador (sempre visível) + pin no topo (data-part-org).
       const _isOrgP = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, pName, p);
       const _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.95rem;line-height:1;">⭐</span>' : '';
@@ -2279,7 +2279,7 @@ function renderParticipants(container, tournamentId) {
         if (!drawDone) {
           _vipBtn = `<button class="btn btn-micro" title="${isVip ? _t('tourn.removeVip') : _t('tourn.markVip')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ${isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)'}; color: ${isVip ? '#fbbf24' : '#a3842a'}; border: 1px ${isVip ? 'solid' : 'dashed'} ${isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)'};" onclick="event.stopPropagation(); window._toggleVip('${t.id}', '${safeP}');">💎 VIP</button>`;
           _delBtn = `<button class="btn btn-micro" title="${_t('btn.remove')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(239,68,68,0.1); color: #ef4444; border: 1px dashed rgba(239,68,68,0.5);" onclick="event.stopPropagation(); window.removeParticipantFunction('${t.id}', '${safeP}');">🗑️</button>`;
-          if (pName.includes('/')) {
+          if (window._entryTeamMembers(p)) { // v3.0.x: botão dividir só pra dupla (estrutura), não por '/'
             _splitBtn = `<button class="btn btn-micro" title="${_t('participants.splitTeam')}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction('${t.id}', '${safeP}');">✂️</button>`;
           }
         }

@@ -82,9 +82,10 @@ window._openPlayerProfile = function(playerName, opts) {
       var allParts = Array.isArray(t.participants) ? t.participants : [];
       var cuEntry = null, plEntry = null;
       allParts.forEach(function(p) {
-        var n = typeof p === 'string' ? p : (p.displayName||p.name||'');
-        if (_nameIn(n, cuName) || (cu&&cu.uid&&typeof p==='object'&&p.uid===cu.uid)) cuEntry = n;
-        if (_nameIn(n, name) || (playerUid&&typeof p==='object'&&p.uid===playerUid)) plEntry = n;
+        var n = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName||p.name||'')); // v3.0.x: canônico "A / B" pra dupla
+        var _po = (typeof p === 'object' && p) ? p : null;
+        if (_nameIn(n, cuName) || (cu&&cu.uid&&_po&&(_po.uid===cu.uid||_po.p1Uid===cu.uid||_po.p2Uid===cu.uid))) cuEntry = n;
+        if (_nameIn(n, name) || (playerUid&&_po&&(_po.uid===playerUid||_po.p1Uid===playerUid||_po.p2Uid===playerUid))) plEntry = n;
       });
       if (!cuEntry || !plEntry) return;
       // Verificar se são no mesmo time (parceiros) ou times diferentes (adversários)
