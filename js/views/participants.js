@@ -2370,9 +2370,9 @@ function renderParticipants(container, tournamentId) {
                 <!-- v3.0.x: tipo de inscrição + CHAMADA na MESMA linha (canônico): tipo à
                      esquerda; à direita PALAVRA + toggle + W.O. + remover. -->
                 ${_presenceGroup
-                  ? `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
-                       <span style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;min-width:0;">${typeText}</span>
-                       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;flex-wrap:wrap;" onclick="event.stopPropagation();">${_presenceGroup}${_delBtn}</div>
+                  ? `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                       <span style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${typeText}</span>
+                       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;" onclick="event.stopPropagation();">${_presenceGroup}${_delBtn}</div>
                      </div>`
                   : `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
                        <span style="font-size:0.7rem;color:var(--text-muted);opacity:0.6;min-width:0;">${typeText}</span>
