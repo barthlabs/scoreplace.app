@@ -1516,42 +1516,9 @@ function _renderPhaseBracket(t, canEnterResult) {
     '<span style="font-weight:700;color:var(--text-bright);margin-left:8px;">' + phaseTitle + '</span>' +
     '</div>';
 
-  // v3.1: FASE DE GRUPOS posterior (round-robin) — render dedicado (cards por grupo
-  // + tabela de classificação), NÃO o renderer de chave. Cada grupo = um box.
-  function _renderPhaseGroups() {
-    var groupMs = pm.filter(function (m) { return m.bracket === 'group'; });
-    if (!groupMs.length) return '';
-    var byG = {};
-    groupMs.forEach(function (m) {
-      var k = (m.groupIdx != null) ? m.groupIdx : 0;
-      if (!byG[k]) byG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + k)), idx: k, matches: [], objs: {} };
-      byG[k].matches.push(m);
-      if (m.team1Obj && m.team1Obj.displayName) byG[k].objs[m.team1Obj.displayName] = m.team1Obj;
-      if (m.team2Obj && m.team2Obj.displayName) byG[k].objs[m.team2Obj.displayName] = m.team2Obj;
-    });
-    var eng2 = window._phasesEngine;
-    return Object.keys(byG).sort(function (a, b) { return byG[a].idx - byG[b].idx; }).map(function (k) {
-      var g = byG[k];
-      var standHtml = '';
-      if (eng2 && eng2.groupTeamStandings) {
-        var st = [];
-        try { st = eng2.groupTeamStandings({ matches: g.matches, players: Object.keys(g.objs) }, { tiebreakers: t.tiebreakers }); } catch (e) { st = []; }
-        if (st.length) {
-          standHtml = '<table style="width:100%;max-width:340px;border-collapse:collapse;font-size:0.78rem;margin-bottom:10px;">' +
-            '<thead><tr style="color:var(--text-muted);text-align:left;border-bottom:1px solid var(--border-color);"><th style="padding:3px 6px;">#</th><th style="padding:3px 6px;">Jogador</th><th style="padding:3px 6px;text-align:center;">P</th><th style="padding:3px 6px;text-align:center;">V</th><th style="padding:3px 6px;text-align:center;">±</th></tr></thead><tbody>' +
-            st.map(function (s, i) {
-              return '<tr style="' + (i < 2 ? 'color:#34d399;font-weight:700;' : '') + '"><td style="padding:3px 6px;">' + (i + 1) + '</td><td style="padding:3px 6px;">' + window._safeHtml(s.name) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.points || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.wins || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + ((s.pointsDiff || 0) > 0 ? '+' : '') + (s.pointsDiff || 0) + '</td></tr>';
-            }).join('') + '</tbody></table>';
-        }
-      }
-      var cards = g.matches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
-      return '<div style="margin-bottom:1.75rem;">' +
-        '<h4 style="color:#10b981;font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid #10b981;padding-left:10px;margin-bottom:0.75rem;">' + window._safeHtml(g.name) + '</h4>' +
-        standHtml +
-        '<div style="display:flex;flex-direction:column;gap:0.75rem;max-width:340px;">' + cards + '</div>' +
-        '</div>';
-    }).join('');
-  }
+  // v3.1.7: FASE DE GRUPOS posterior agora reusa renderGroupStage (render canônico da
+  // Fase 0) via faux-t — ver dispatch do `body` abaixo. O antigo _renderPhaseGroups
+  // (tabela pobre P/V/±, sem rodadas/medalhas/CLASSIF) foi removido em favor do canônico.
   // v3.1.6: FASE REI/RAINHA posterior agora reusa _renderMonarchStage (render canônico
   // da Fase 0) via faux-t — ver dispatch do `body` abaixo. O antigo _renderPhaseMonarch
   // (tabela pobre #/Jogador/V/± sem coroa invicto) foi removido em favor do canônico.
@@ -1627,7 +1594,42 @@ function _renderPhaseBracket(t, canEnterResult) {
   } else if (_isLeaguePhase) {
     body = _renderPhaseLeague();
   } else if (_isGroupPhase) {
-    body = _renderPhaseGroups();
+    // v3.1.7: Fase N grupos = MESMO renderer canônico da Fase 0 (renderGroupStage),
+    // via faux-t reconstruído das partidas bracket:'group' desta fase (grupos com
+    // {name,players,matches,rounds:[{matches,status}]} agrupados por m.round). Render
+    // mais rico (Pts/V/E/D/Saldo/medalhas/CLASSIF/SEU GRUPO). Match cards usam t.id real
+    // → result-entry intacto. suppressAutoAdvance omite o botão de avanço (renderBracket
+    // já mostra o banner de próxima fase).
+    var _gMs = pm.filter(function (m) { return m.bracket === 'group'; });
+    var _gByG = {};
+    _gMs.forEach(function (m) {
+      var k = (m.groupIdx != null) ? m.groupIdx : 0;
+      if (!_gByG[k]) _gByG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + k)), idx: k, players: {}, byR: {} };
+      if (m.p1) _gByG[k].players[m.p1] = 1;
+      if (m.p2) _gByG[k].players[m.p2] = 1;
+      var r = m.round || 1;
+      (_gByG[k].byR[r] = _gByG[k].byR[r] || []).push(m);
+    });
+    var _gGroups = Object.keys(_gByG).sort(function (a, b) { return _gByG[a].idx - _gByG[b].idx; }).map(function (k) {
+      var g = _gByG[k];
+      var rounds = Object.keys(g.byR).map(Number).sort(function (a, b) { return a - b; }).map(function (rn) {
+        var ms = g.byR[rn];
+        var done = ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
+        return { matches: ms, status: done ? 'complete' : 'active' };
+      });
+      var allMs = rounds.reduce(function (acc, r) { return acc.concat(r.matches); }, []);
+      return { name: g.name, players: Object.keys(g.players), matches: allMs, rounds: rounds };
+    });
+    var _gFaux = {
+      id: t.id, matches: _gMs, groups: _gGroups,
+      gruposClassified: phaseCfg.gruposClassified || t.gruposClassified || 2,
+      scoring: t.scoring, tiebreakers: t.tiebreakers,
+      creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts
+    };
+    var _gIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    body = (typeof window.renderGroupStage === 'function')
+      ? window.renderGroupStage(_gFaux, _gIsOrg, canEnterResult, { suppressAutoAdvance: true })
+      : '';
   } else if (_hasGF && _tierKeys.length) {
     // v3.0.x: COM grande final → primeira linha, depois GRANDES SEMIS + GRANDE FINAL,
     // depois 3º/4º GERAL (abaixo da final), depois as demais linhas. Classificação
@@ -2527,7 +2529,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   return html;
 }
 
-function renderGroupStage(t, isOrg, canEnterResult) {
+function renderGroupStage(t, isOrg, canEnterResult, opts) {
   var _t = window._t || function(k) { return k; };
   const groups = t.groups || [];
   if (!groups.length) return '<p class="text-muted">' + _t('bracket.noGroups') + '</p>';
@@ -2572,7 +2574,10 @@ function renderGroupStage(t, isOrg, canEnterResult) {
   const _gMulti = (typeof window._isMultiPhase === 'function') && window._isMultiPhase(t) && (t.currentPhaseIndex || 0) === 0;
   const _gAdvFn = _gMulti ? 'window._advanceMultiPhase' : 'window._advanceToElimination';
   const _gAdvLbl = _gMulti ? '⏭️ Avançar para a próxima fase' : _t('bracket.advanceToElim');
-  const advanceBtn = (isOrg && allGroupsDone) ? `
+  // v3.1.7: quando reusado por uma FASE POSTERIOR de grupos (opts.suppressAutoAdvance),
+  // o botão de avanço é omitido — o motor de fases (renderBracket) já mostra o banner
+  // "próxima fase" e cuida da transição. Fase 0 / single-phase legado: inalterado.
+  const advanceBtn = (isOrg && allGroupsDone && !(opts && opts.suppressAutoAdvance)) ? `
     <div style="text-align:center;margin:2rem 0;">
       <button class="btn btn-warning btn-lg hover-lift" onclick="${_gAdvFn}('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
         ${_gAdvLbl}
