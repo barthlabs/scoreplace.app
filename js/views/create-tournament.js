@@ -478,6 +478,12 @@ function setupCreateTournamentModal() {
                   <span style="font-size:0.84rem;color:var(--text-main);">Apenas grupos de mesmo tamanho</span>
                 </div>
                 <small id="grupos-equal-helper" class="text-muted" style="display:none;margin-top:6px;"></small>
+                <!-- v3.1.11: 🎯 Cabeças de chave — os jogadores marcados como VIP viram cabeças e
+                     são espalhados 1 por grupo (não se cruzam cedo). Desligado = grupos por sorteio. -->
+                <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+                  <label class="toggle-switch" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;flex-shrink:0;"><input type="checkbox" id="grupos-seed-vip"><span class="toggle-slider"></span></label>
+                  <span style="font-size:0.84rem;color:var(--text-main);">🎯 Cabeças de chave <span style="color:var(--text-muted);font-size:0.78rem;">(VIPs espalhados em grupos diferentes)</span></span>
+                </div>
               </div>
 
               <!-- Campos específicos: Suíço -->
@@ -5188,6 +5194,7 @@ function setupCreateTournamentModal() {
     if (t.gruposCount) document.getElementById('grupos-count').value = t.gruposCount;
     if (t.gruposClassified) document.getElementById('grupos-classified').value = t.gruposClassified;
     var _eqEl = document.getElementById('grupos-equal-only'); if (_eqEl) _eqEl.checked = !!t.gruposEqualOnly;
+    var _svEl = document.getElementById('grupos-seed-vip'); if (_svEl) _svEl.checked = !!t.gruposSeedVip; // v3.1.11
 
     // Construtor de Fases — restaura fases extras (t.phases[0] = fase 1, do topo)
     window._phasesUserTouched = false; // v3.0.x: edição começa "limpa" — só vira true se add/remove
@@ -5902,6 +5909,7 @@ function setupCreateTournamentModal() {
           tourData.gruposCount = parseInt(document.getElementById('grupos-count').value) || 4;
           tourData.gruposClassified = parseInt(document.getElementById('grupos-classified').value) || 2;
           tourData.gruposEqualOnly = !!(document.getElementById('grupos-equal-only') || {}).checked;
+          tourData.gruposSeedVip = !!(document.getElementById('grupos-seed-vip') || {}).checked; // v3.1.11: cabeças de chave por VIP
         }
 
         if (drawModeValue === 'rei_rainha' || drawModeValue === 'round_robin') {
@@ -7240,6 +7248,7 @@ window._prefillFromTemplate = function(tpl) {
   if (tpl.gruposCount != null) _setV('grupos-count', tpl.gruposCount);
   if (tpl.gruposClassified != null) _setV('grupos-classified', tpl.gruposClassified);
   if (tpl.gruposEqualOnly !== undefined) _setC('grupos-equal-only', tpl.gruposEqualOnly);
+  if (tpl.gruposSeedVip !== undefined) _setC('grupos-seed-vip', tpl.gruposSeedVip);
   if (tpl.allowSelfDeactivation !== undefined) _setC('liga-allow-self-deactivation', tpl.allowSelfDeactivation);
   if (tpl.reiRainhaGroupsBy) _setV('reirainha-groups-by', tpl.reiRainhaGroupsBy);
   // re-renderiza o construtor com as fases restauradas. Mesmo que a seção esteja oculta pelo
@@ -7585,6 +7594,7 @@ window._saveCurrentFormAsTemplate = function() {
       gruposCount: parseInt(get('grupos-count')) || 4,
       gruposClassified: parseInt(get('grupos-classified')) || 2,
       gruposEqualOnly: getChecked('grupos-equal-only'),
+      gruposSeedVip: getChecked('grupos-seed-vip'),
       reiRainhaGroupsBy: get('reirainha-groups-by') || ''
     };
     if (typeof window._saveTemplate !== 'function') return;

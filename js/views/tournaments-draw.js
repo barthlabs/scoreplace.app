@@ -1077,6 +1077,17 @@ window.generateDrawFunction = function (tId) {
             [_grpNames[i], _grpNames[j]] = [_grpNames[j], _grpNames[i]];
         }
 
+        // v3.1.11: 🎯 Cabeças de chave (toggle do organizador) — os marcados como VIP
+        // (uid-keyed, _entryHasVip) viram cabeças e são espalhados 1 por grupo. Como a
+        // distribuição abaixo é por módulo (idx % numGroups), basta ORDENAR os VIPs no
+        // INÍCIO (ambos os lados já embaralhados acima) → os primeiros slots caem em
+        // grupos distintos. Desligado = sorteio puro (lista só embaralhada).
+        if (t.gruposSeedVip) {
+            var _vipFirst = _grpNames.filter(function (n) { return window._entryHasVip(t, n); });
+            var _nonVip = _grpNames.filter(function (n) { return !window._entryHasVip(t, n); });
+            _grpNames = _vipFirst.concat(_nonVip);
+        }
+
         const numGroups = t.gruposCount || 4;
         const classifiedPerGroup = t.gruposClassified || 2;
         const _grpEqualOnly = t.gruposEqualOnly === true;
