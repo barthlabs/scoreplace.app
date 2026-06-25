@@ -64,7 +64,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v3.1.3-beta';
+var CACHE_NAME = 'scoreplace-v3.1.4-beta';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -103,6 +103,7 @@ var STATIC_ASSETS = [
   '/js/views/bracket.js',
   '/js/views/bracket-ui.js',
   '/js/views/phases-engine.js',
+  '/js/views/phase-generators.js',
   '/js/views/team-formation.js',
   '/js/views/liga-substitution.js',
   '/js/views/participants.js',

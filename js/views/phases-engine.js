@@ -551,17 +551,25 @@
   }
 
   // Uma config de fase é "Fase de Grupos" (round-robin, sem eliminação embutida)?
-  function _phaseIsGroups(cfg) {
-    if (!cfg) return false;
-    if (_phaseIsMonarch(cfg)) return false; // Rei/Rainha tem gerador próprio
-    var f = String(cfg.format || cfg.formatCode || '').toLowerCase();
-    return cfg.formatCode === 'grupos_mata' || /grupo/.test(f);
-  }
-  // Uma config de fase é Rei/Rainha (grupos de 4, parceiros rotativos)?
-  function _phaseIsMonarch(cfg) {
+  // ── FORMATO CANÔNICO (fonte única) — os 3 formatos da visão do dono. ─────────
+  // Rei/Rainha NÃO é um 4º formato: é um MODO DE SORTEIO (isMonarchDraw), ortogonal.
+  // classifyPhaseFormat devolve o FORMATO; o roteamento do gerador dá precedência ao
+  // modo de sorteio monarca. Os _phaseIs* abaixo são wrappers (compat) sobre estas.
+  function isMonarchDraw(cfg) {
     if (!cfg) return false;
     return cfg.reiRainha === true || cfg.drawMode === 'rei_rainha' || /rei|rainha|monarch/i.test(String(cfg.format || cfg.formatCode || ''));
   }
+  function classifyPhaseFormat(cfg) {
+    if (!cfg) return 'elim';
+    var f = String(cfg.format || cfg.formatCode || '').toLowerCase();
+    if (cfg.formatCode === 'grupos_mata' || /grupo/.test(f)) return 'groups';
+    if (cfg.formatCode === 'liga' || /\bliga\b|pontos corridos|ranking|su[ií]ç?o|swiss/.test(f)) return 'league';
+    return 'elim';
+  }
+  function _phaseIsGroups(cfg) {
+    return !!cfg && !isMonarchDraw(cfg) && classifyPhaseFormat(cfg) === 'groups';
+  }
+  function _phaseIsMonarch(cfg) { return isMonarchDraw(cfg); }
 
   // v3.1: REI/RAINHA como fase posterior. Forma o pool de classificados, distribui
   // em grupos de 4 (serpentina) e gera os 3 jogos de parceiros rotativos por grupo
@@ -616,9 +624,7 @@
 
   // Uma config de fase é Liga / Pontos Corridos (round-robin, tabela única)?
   function _phaseIsLiga(cfg) {
-    if (!cfg) return false;
-    if (_phaseIsMonarch(cfg)) return false; // Liga + reiRainha = Rei/Rainha (gerador próprio)
-    return cfg.formatCode === 'liga' || /\bliga\b|pontos corridos|ranking/i.test(String(cfg.format || ''));
+    return !!cfg && !isMonarchDraw(cfg) && classifyPhaseFormat(cfg) === 'league';
   }
 
   // v3.1: LIGA / PONTOS CORRIDOS como fase posterior. Tabela ÚNICA (não grupos):
@@ -951,15 +957,18 @@
     else { groups = bracketPhaseGroups(t, cur); cs = function (g) { return g.standings || []; }; }
     if (!groups.length) return { ok: false, error: 'no-groups' };
     var cfg = t.phases[nextIdx];
-    // v3.1: HONRA o formato configurado da próxima fase — Fase de Grupos gera
-    // round-robin; demais geram chave (single-elim/convergência), como antes.
-    var built = _phaseIsMonarch(cfg)
-      ? buildPhaseMonarchStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
-      : _phaseIsLiga(cfg)
-        ? buildPhaseLeagueStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
-        : _phaseIsGroups(cfg)
-          ? buildPhaseGroupStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
-          : buildPhaseBrackets(groups, cfg, cs, idPrefix || ('ph' + nextIdx));
+    // v3.1: roteamento canônico — classifyPhaseFormat decide o FORMATO; o modo de
+    // sorteio monarca (isMonarchDraw) tem precedência (grupos de 4 rotativos).
+    // HONRA o formato configurado da próxima fase em vez de virar sempre chave.
+    var _id = idPrefix || ('ph' + nextIdx);
+    var _fmt = classifyPhaseFormat(cfg);
+    var built = isMonarchDraw(cfg)
+      ? buildPhaseMonarchStage(groups, cfg, cs, _id)
+      : _fmt === 'league'
+        ? buildPhaseLeagueStage(groups, cfg, cs, _id)
+        : _fmt === 'groups'
+          ? buildPhaseGroupStage(groups, cfg, cs, _id)
+          : buildPhaseBrackets(groups, cfg, cs, _id);
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
     built.matches.forEach(function (m) { m.phaseIndex = nextIdx; if (m.category === undefined) m.category = null; });
     t.matches = (t.matches || []).concat(built.matches);
@@ -1102,6 +1111,8 @@
     buildPhaseGroupStage: buildPhaseGroupStage,
     buildPhaseMonarchStage: buildPhaseMonarchStage,
     buildPhaseLeagueStage: buildPhaseLeagueStage,
+    classifyPhaseFormat: classifyPhaseFormat,
+    isMonarchDraw: isMonarchDraw,
     phaseIsGroups: _phaseIsGroups,
     phaseIsMonarch: _phaseIsMonarch,
     phaseIsLiga: _phaseIsLiga,

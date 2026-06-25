@@ -25,21 +25,19 @@
     ? window._phasesEngine
     : (typeof require !== 'undefined' ? require('./phases-engine.js') : null);
 
-  // ── classifyPhaseFormat — os 3 formatos canônicos ──────────────────────────
-  // Rei/Rainha NÃO é um 4º formato: é 'groups' + cfg.reiRainha (modo de sorteio).
-  // Suíço é round-based → 'league'. Substitui _phaseIsGroups/_phaseIsMonarch/_phaseIsLiga.
-  function classifyPhaseFormat(cfg) {
+  // ── classifyPhaseFormat / isMonarchDraw — FONTE ÚNICA no phases-engine ──────
+  // (Definidas no motor base; aqui só reexportadas pra não duplicar lógica.)
+  // Rei/Rainha NÃO é um 4º formato: é modo de sorteio, ortogonal ao formato.
+  var classifyPhaseFormat = (E && E.classifyPhaseFormat) || function (cfg) {
     if (!cfg) return 'elim';
     var f = String(cfg.format || cfg.formatCode || '').toLowerCase();
     if (cfg.formatCode === 'grupos_mata' || /grupo/.test(f)) return 'groups';
     if (cfg.formatCode === 'liga' || /\bliga\b|pontos corridos|ranking|su[ií]ç?o|swiss/.test(f)) return 'league';
     return 'elim';
-  }
-  // É um sorteio Rei/Rainha (parceiros rotativos)? Ortogonal ao formato (em tese
-  // qualquer formato, hoje usado em 'league'/'groups'). Também vale p/ casual.
-  function isMonarchDraw(cfg) {
-    return !!(cfg && (cfg.reiRainha === true || cfg.drawMode === 'rei_rainha'));
-  }
+  };
+  var isMonarchDraw = (E && E.isMonarchDraw) || function (cfg) {
+    return !!(cfg && (cfg.reiRainha === true || cfg.drawMode === 'rei_rainha' || /rei|rainha|monarch/i.test(String(cfg.format || cfg.formatCode || ''))));
+  };
 
   // ── normalizePhases — t.phases uniforme em RUNTIME (nunca persiste) ─────────
   // cfg0 = t.phases[0] se existir; senão sintetizado dos campos top-level
