@@ -1787,16 +1787,35 @@ function _maybeFinishMultiPhase(t) {
   var last = t.phases.length - 1;
   if (cur < 1 || cur < last) return false; // ainda em fase classificatória ou há fases por vir
   var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; });
+  // v3.1.16 (inc 8): última fase = Liga incremental (Pontos Corridos rodada a rodada) →
+  // jogos moram em t.phaseRounds[cur].rounds. Só encerra quando TODAS as rodadas da
+  // temporada (phases[cur].rounds) foram geradas (não encerra cedo a cada rodada).
+  var _liSlot = t.phaseRounds && t.phaseRounds[cur];
+  var _liLeague = !!(_liSlot && Array.isArray(_liSlot.rounds));
+  if (_liLeague) {
+    if (!_liSlot.rounds.length) return false;
+    var _liNeed = parseInt((t.phases[cur] || {}).rounds, 10) || 0;
+    if (_liNeed && _liSlot.rounds.length < _liNeed) return false; // temporada ainda em curso
+    _liSlot.rounds.forEach(function (r) { (r && r.matches || []).forEach(function (m) { pm.push(m); }); });
+  }
   if (!pm.length) return false;
-  var pending = pm.filter(function (m) { return !m.isBye && m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD' && !m.winner; });
+  var pending = pm.filter(function (m) { return !m.isBye && !m.isSitOut && m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD' && !m.winner; });
   if (pending.length) return false;
-  var tbd = pm.filter(function (m) { return !m.isBye && (!m.p1 || m.p1 === 'TBD' || !m.p2 || m.p2 === 'TBD'); });
+  var tbd = pm.filter(function (m) { return !m.isBye && !m.isSitOut && (!m.p1 || m.p1 === 'TBD' || !m.p2 || m.p2 === 'TBD'); });
   if (tbd.length) return false;
 
-  // Campeão: grande final > final de chave única > (linhas independentes: sem nome).
+  // Campeão: grande final > líder da Liga incremental > final de chave única > (linhas
+  // independentes: sem nome).
   var champion = null;
   var gf = pm.filter(function (m) { return m.bracket === 'grandfinal'; })[0];
   if (gf && gf.winner) champion = gf.winner;
+  if (!champion && _liLeague && typeof _computeStandings === 'function') {
+    try {
+      var _lf = { participants: (_liSlot.pool || []).slice(), rounds: _liSlot.rounds, matches: [], scoring: t.scoring, tiebreakers: t.tiebreakers };
+      var _lst = _computeStandings(_lf, null);
+      if (_lst && _lst[0]) champion = _lst[0].displayName || _lst[0].name || null;
+    } catch (e) {}
+  }
   if (!champion) {
     var tierMs = pm.filter(function (m) { return (m.round || 1) < 99 && !m.isBye; });
     var brackets = {};
@@ -3174,21 +3193,14 @@ window._generateNextRoundForPlayers = _generateNextRoundForPlayers;
 // a cadência de UI (_phaseCloseLeagueRound) e o avanço por cron (etapa 4) são à parte.
 function _phaseGenNextLeagueRound(t, phaseIdx) {
   if (!t || typeof window._generateNextRoundForPlayers !== 'function') return false;
-  var st = t.phaseLeagueState && t.phaseLeagueState[phaseIdx];
+  var st = t.phaseRounds && t.phaseRounds[phaseIdx];
   if (!st || !Array.isArray(st.pool) || !st.pool.length) return false;
   var cfg = (t.phases && t.phases[phaseIdx]) || {};
-  // Rounds REAIS reconstruídos das partidas bracket:'league' desta fase (não
-  // colapsados) — alimentam _computeStandings (semente do pareamento por ranking)
-  // e o nº da próxima rodada.
-  var lm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && m.bracket === 'league'; });
-  var byR = {};
-  lm.forEach(function (m) { var r = m.round || 1; (byR[r] = byR[r] || []).push(m); });
-  var rkeys = Object.keys(byR).map(Number).sort(function (a, b) { return a - b; });
-  var rounds = rkeys.map(function (rn) {
-    var ms = byR[rn];
-    var done = ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
-    return { round: rn, status: done ? 'complete' : 'active', matches: ms };
-  });
+  // v3.1.16 (inc 8): rodadas REAIS na sub-state (mesma forma de t.rounds) — não há mais
+  // reconstrução a partir de m.round em t.matches. _generateNextRound empilha em
+  // faux.rounds (= st.rounds, mesma referência) e acumula opponentHistory/sitOutHistory
+  // in-place. As standings da fase e o nº da próxima rodada vêm direto de st.rounds.
+  st.rounds = Array.isArray(st.rounds) ? st.rounds : [];
   st.opponentHistory = st.opponentHistory || {};
   st.sitOutHistory = st.sitOutHistory || {};
   // v3.1.15: MODO DE SORTEIO é ortogonal à cadência. ligaRoundFormat='rei_rainha' faz
@@ -3199,7 +3211,7 @@ function _phaseGenNextLeagueRound(t, phaseIdx) {
     id: t.id, format: 'Liga', ligaDrawMode: 'standard',
     ligaRoundFormat: cfg.reiRainha ? 'rei_rainha' : 'standard',
     participants: st.pool.slice(),
-    rounds: rounds, matches: [],
+    rounds: st.rounds, matches: [],
     combinedCategories: [], skillCategories: [],
     scoring: cfg.scoring || t.scoring, tiebreakers: t.tiebreakers,
     equilibrado: cfg.equilibrado, clusterSize: cfg.clusterSize,
@@ -3212,16 +3224,18 @@ function _phaseGenNextLeagueRound(t, phaseIdx) {
   if (faux.rounds.length <= before) return false;
   var newRound = faux.rounds[faux.rounds.length - 1];
   if (!newRound || !Array.isArray(newRound.matches) || !newRound.matches.length) return false;
-  if (!Array.isArray(t.matches)) t.matches = [];
   // bracket='league' = FORMATO (Pontos Corridos). A FORMA da rodada (monarchGroup/
   // isMonarch p/ Rei/Rainha; duplas soltas p/ simples) viaja nos próprios matches e é
   // reconstruída no render — sem virar um "bracket monarch" à parte (que seria tratar
-  // Rei/Rainha como formato).
+  // Rei/Rainha como formato). NÃO vão pra t.matches: moram em st.rounds[last].matches
+  // (mesmo lugar/forma de t.rounds da Fase 0). _collectAllMatches varre phaseRounds.
   newRound.matches.forEach(function (m) {
     m.phaseIndex = phaseIdx; m.bracket = 'league';
     if (m.category === undefined) m.category = null;
-    t.matches.push(m);
   });
+  st.rounds = faux.rounds;
+  st.opponentHistory = faux.opponentHistory;
+  st.sitOutHistory = faux.sitOutHistory;
   return true;
 }
 window._phaseGenNextLeagueRound = _phaseGenNextLeagueRound;
@@ -3238,10 +3252,10 @@ async function _firePhaseLigaAutoDrawIfDue(t, nowMs) {
   var cur = t.currentPhaseIndex || 0;
   var ok = window._phaseGenNextLeagueRound(t, cur);
   if (!ok) return;
-  t.phaseLeagueState[cur].lastAutoDrawAt = owed; // dedup do slot
+  t.phaseRounds[cur].lastAutoDrawAt = owed; // dedup do slot (por fase, mesma ideia do Fase-0 t.lastAutoDrawAt)
   t.updatedAt = new Date().toISOString();
-  var newRound = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur && m.bracket === 'league'; })
-    .reduce(function (mx, m) { return Math.max(mx, m.round || 1); }, 0);
+  var newRound = ((t.phaseRounds[cur] && t.phaseRounds[cur].rounds) || [])
+    .reduce(function (mx, r) { return Math.max(mx, (r && r.round) || 1); }, 0);
   if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(t.id, 'Liga (fase ' + (cur + 1) + '): rodada ' + newRound + ' sorteada automaticamente');
   try { await window.AppStore.syncImmediate(t.id); } catch (e) { window._warn('[auto-draw phase] save failed', e); }
   if (typeof window._notifyDrawPersonalized === 'function') {

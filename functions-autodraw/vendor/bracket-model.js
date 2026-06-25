@@ -481,6 +481,19 @@
         }
       });
     }
+    // v3.1.16 (inc 8): Liga incremental de fase posterior — rodadas em t.phaseRounds[idx]
+    // .rounds[].matches (mesma forma de t.rounds, namespaced por fase). Result-entry/W.O./
+    // share-by-id precisam enxergar esses jogos.
+    if (t.phaseRounds && typeof t.phaseRounds === 'object') {
+      Object.keys(t.phaseRounds).forEach(function (k) {
+        var slot = t.phaseRounds[k];
+        if (slot && Array.isArray(slot.rounds)) {
+          slot.rounds.forEach(function (r) {
+            if (r && Array.isArray(r.matches)) out = out.concat(r.matches);
+          });
+        }
+      });
+    }
     if (t.thirdPlaceMatch) out.push(t.thirdPlaceMatch);
     if (Array.isArray(t.rodadas)) {
       t.rodadas.forEach(function (r) {

@@ -1526,7 +1526,11 @@ function _renderPhaseBracket(t, canEnterResult) {
   // da Fase 0) via faux-t no dispatch do `body` abaixo. Ver comentário lá.
   var _isGroupPhase = pm.some(function (m) { return m.bracket === 'group'; });
   var _isMonarchPhase = pm.some(function (m) { return m.bracket === 'monarch'; });
-  var _isLeaguePhase = pm.some(function (m) { return m.bracket === 'league'; });
+  // v3.1.16 (inc 8): Liga incremental de fase posterior agora mora em t.phaseRounds[cur]
+  // (rodadas reais, mesma forma de t.rounds da Fase 0) — não mais em t.matches. A Liga
+  // ESTÁTICA (todos contra todos) continua materializada em t.matches (bracket:'league').
+  var _lSlot = (t.phaseRounds && t.phaseRounds[curPhase] && Array.isArray(t.phaseRounds[curPhase].rounds)) ? t.phaseRounds[curPhase] : null;
+  var _isLeaguePhase = !!_lSlot || pm.some(function (m) { return m.bracket === 'league'; });
 
   var body;
   if (_isMonarchPhase) {
@@ -1567,25 +1571,29 @@ function _renderPhaseBracket(t, canEnterResult) {
     // (renderBracket já mostra o banner de próxima fase). O antigo _renderPhaseLeague
     // (tabela pobre P/V/E/D/± via groupTeamStandings, sem %G/PA/medalhas/CLASSIF) foi
     // removido em favor do canônico.
-    var _lMs = pm.filter(function (m) { return m.bracket === 'league'; });
     var _lIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
-    var _lRounds, _lOpts;
-    if (phaseCfg.ligaCadence === 'incremental') {
-      // v3.1.13 (brick 4): rodada a rodada — rodadas REAIS por m.round (última
-      // editável, anteriores viram resumo read-only). A cadência "encerrar rodada e
-      // sortear próxima" vai por opts.phaseLeagueCadence (botão chama
-      // _phaseCloseLeagueRound, NÃO _closeRound, que opera em t.rounds da Fase 0).
-      var _lByR = {};
-      _lMs.forEach(function (m) { var r = m.round || 1; (_lByR[r] = _lByR[r] || []).push(m); });
-      _lRounds = Object.keys(_lByR).map(Number).sort(function (a, b) { return a - b; }).map(function (rn) {
-        var ms = _lByR[rn];
+    var _lRounds, _lOpts, _lMs;
+    if (phaseCfg.ligaCadence === 'incremental' && _lSlot) {
+      // v3.1.16 (inc 8): rodada a rodada — rodadas REAIS já moram em t.phaseRounds[cur]
+      // .rounds (mesma forma de t.rounds da Fase 0). Sem reconstrução a partir de m.round
+      // em t.matches: passamos as rodadas diretas pro faux. A última rodada fica editável,
+      // anteriores viram resumo read-only. A cadência "encerrar rodada e sortear próxima"
+      // vai por opts.phaseLeagueCadence (botão chama _phaseCloseLeagueRound).
+      var _src = _lSlot.rounds || [];
+      _lMs = [];
+      _src.forEach(function (r) { if (r && Array.isArray(r.matches)) _lMs = _lMs.concat(r.matches); });
+      _lRounds = _src.map(function (col0) {
+        var ms = (col0 && col0.matches) || [];
         var done = ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
-        var col = { round: rn, status: done ? 'complete' : 'active', matches: ms };
-        // v3.1.15: MODO DE SORTEIO Rei/Rainha → a rodada tem grupos de 4 rotativos. A
-        // FORMA viaja nos matches (monarchGroup/isMonarch); reconstruímos monarchGroups
-        // pra renderStandings renderizar IGUAL à Fase 0 (mesmo renderer, modo de sorteio
-        // é só a forma da rodada — não um formato/render à parte).
-        if (ms.some(function (m) { return m.monarchGroup != null && m.isMonarch; })) {
+        var col = { round: col0 && col0.round, status: done ? 'complete' : 'active', matches: ms };
+        // v3.1.15/16: MODO DE SORTEIO Rei/Rainha → a rodada tem grupos de 4 rotativos. Se
+        // a rodada já carrega monarchGroups (vindas do gerador), reusa; senão reconstrói
+        // a partir da FORMA que viaja nos matches (monarchGroup/isMonarch) — renderStandings
+        // renderiza IGUAL à Fase 0 (modo de sorteio é só a forma da rodada).
+        if (col0 && col0.monarchGroups) {
+          col.format = col0.format || 'rei_rainha';
+          col.monarchGroups = col0.monarchGroups;
+        } else if (ms.some(function (m) { return m.monarchGroup != null && m.isMonarch; })) {
           var _byG = {};
           ms.forEach(function (m) {
             if (m.monarchGroup == null) return;
@@ -1603,15 +1611,21 @@ function _renderPhaseBracket(t, canEnterResult) {
       });
       _lOpts = { phaseLeagueCadence: { tId: t.id, phaseIdx: curPhase } };
     } else {
-      // todos contra todos (round-robin estático): colapsa numa rodada única → todos
-      // editáveis; sem cadência (renderBracket mostra o banner de próxima fase).
+      // todos contra todos (round-robin estático): matches materializados em t.matches.
+      // Colapsa numa rodada única → todos editáveis; sem cadência (renderBracket mostra
+      // o banner de próxima fase).
+      _lMs = pm.filter(function (m) { return m.bracket === 'league'; });
       var _lAllDone = _lMs.length > 0 && _lMs.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
       _lRounds = [{ matches: _lMs, status: _lAllDone ? 'complete' : 'active' }];
       _lOpts = { suppressAutoAdvance: true };
     }
     var _lFaux = {
       id: t.id, format: 'Liga', matches: _lMs, rounds: _lRounds,
-      scoring: t.scoring, tiebreakers: t.tiebreakers, advancedScoring: t.advancedScoring,
+      scoring: t.scoring, tiebreakers: t.tiebreakers,
+      // v3.1.16 (inc 8): Pontos Avançados POR FASE — overlay canônico (phases[cur]
+      // sobrepõe o top-level). Faz "avançados numa fase, simples noutra" calcular nas
+      // standings (renderStandings/_computeStandings leem t.advancedScoring do faux).
+      advancedScoring: (typeof window._effectiveAdvScoring === 'function') ? window._effectiveAdvScoring(t, curPhase) : t.advancedScoring,
       creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts
     };
     body = (typeof window.renderStandings === 'function')
@@ -1680,9 +1694,13 @@ window._renderPhaseBracket = _renderPhaseBracket;
 window._phaseCloseLeagueRound = function (tId, phaseIdx) {
   var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
   if (!t) return;
-  var lm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && m.bracket === 'league'; });
-  var maxR = lm.reduce(function (mx, m) { return Math.max(mx, m.round || 1); }, 0);
-  var cur = lm.filter(function (m) { return (m.round || 1) === maxR; });
+  // v3.1.16 (inc 8): rodadas da Liga incremental moram em t.phaseRounds[idx].rounds.
+  var _slot = (t.phaseRounds && t.phaseRounds[phaseIdx]) || null;
+  var _rounds = (_slot && _slot.rounds) || [];
+  var maxR = _rounds.reduce(function (mx, r) { return Math.max(mx, (r && r.round) || 1); }, 0);
+  var cur = [];
+  _rounds.filter(function (r) { return ((r && r.round) || 1) === maxR; })
+    .forEach(function (r) { (r.matches || []).forEach(function (m) { cur.push(m); }); });
   var unfinished = cur.filter(function (m) { return !m.winner && !m.isBye && !m.isSitOut; });
   var _go = function () {
     if (typeof window._autoApprovePendingResults === 'function') { try { window._autoApprovePendingResults(t); } catch (e) {} }

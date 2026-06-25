@@ -188,17 +188,25 @@ console.log('   colunas geradas: ' + tc.rounds.length + ' · jogadores sorteados
     phases: [{ name: 'F0' }, { name: 'Temporada', formatCode: 'liga', ligaCadence: 'incremental',
       drawFirstDate: '2026-07-01', drawFirstTime: '19:00', drawIntervalDays: 7, rounds: 4 }],
     currentPhaseIndex: 1, matches: [],
-    phaseLeagueState: { 1: { pool: pool, opponentHistory: {}, sitOutHistory: {} } }
+    // v3.1.16 (inc 8): sub-state agora é t.phaseRounds[idx] com rounds[] reais.
+    phaseRounds: { 1: { pool: pool, rounds: [], opponentHistory: {}, sitOutHistory: {} } }
+  };
+  const phaseRoundMatches = (idx, rn) => {
+    const slot = (t.phaseRounds && t.phaseRounds[idx]) || {};
+    const out = [];
+    (slot.rounds || []).filter(r => (r.round || 1) === rn).forEach(r => (r.matches || []).forEach(m => out.push(m)));
+    return out;
   };
   assert(W._phaseGenNextLeagueRound(t, 1), 'round 1 gerada (avanço manual)');
+  assert((t.matches || []).length === 0, 'round NÃO foi pra t.matches (mora em phaseRounds)');
   assert(W._isIncrementalLigaPhase(t) === true, '_isIncrementalLigaPhase = true');
   assert(W._suppressAutoDrawForPhases(t) === false, '_suppressAutoDrawForPhases = false (Liga incremental NÃO suprimida)');
   const owed = W._nextOwedDrawMs(t, nowMs);
   assert(typeof owed === 'number' && owed <= nowMs, 'slot agendado da FASE devido (owed <= now): ' + owed);
   assert(W._phaseGenNextLeagueRound(t, 1), 'round 2 gerada (auto-draw)');
-  const r2 = t.matches.filter(m => m.phaseIndex === 1 && m.bracket === 'league' && (m.round || 1) === 2 && !m.isSitOut);
+  const r2 = phaseRoundMatches(1, 2).filter(m => !m.isSitOut);
   assert(r2.length === 2, 'round 2 com 2 duplas (got ' + r2.length + ')');
-  t.phaseLeagueState[1].lastAutoDrawAt = owed; // dedup do slot
+  t.phaseRounds[1].lastAutoDrawAt = owed; // dedup do slot
   const owed2 = W._nextOwedDrawMs(t, nowMs);
   assert(owed2 == null || owed2 > nowMs, 'após disparar o slot não re-dispara (dedup): ' + owed2);
   W._phaseGenNextLeagueRound(t, 1); // round 3
@@ -206,6 +214,24 @@ console.log('   colunas geradas: ' + tc.rounds.length + ' · jogadores sorteados
   assert(W._nextOwedDrawMs(t, nowMs) == null, 'temporada da fase completa (cap 4 rodadas) → sem próximo slot');
   // sanidade: fase única / Fase 0 não é afetada
   assert(W._isIncrementalLigaPhase({ phases: [{}], currentPhaseIndex: 0 }) === false, 'fase única não é incremental-phase');
+})();
+
+// ─── INC 8: PARIDADE da agenda Fase-0 (single-phase) após unificar a matemática ──
+// _nextOwedDrawMs agora chama o núcleo compartilhado _owedDrawSlotMs nos DOIS ramos
+// (Fase 0 e fase posterior incremental). Trava a saída do ramo Fase-0/PROD — tem que
+// continuar idêntica (regime futuro / devido / já-disparado / único / manual).
+(function testFase0OwedMathUnchanged() {
+  console.log('\n[INC8 PARIDADE] _nextOwedDrawMs Fase-0 (single-phase) — math inalterada');
+  const W = require('./draw-core.js')._window;
+  const first = new Date('2026-08-01T19:00:00-03:00').getTime();
+  const day = 86400000;
+  const base = { format: 'Liga', drawFirstDate: '2026-08-01', drawFirstTime: '19:00', drawIntervalDays: 7 };
+  assert(W._nextOwedDrawMs(Object.assign({}, base), first - day) === first, 'antes do 1º slot → owed=firstDraw (futuro)');
+  assert(W._nextOwedDrawMs(Object.assign({}, base), first + 3600000) === first, 'no 1º slot, não disparado → owed=firstDraw (devido)');
+  assert(W._nextOwedDrawMs(Object.assign({}, base, { lastAutoDrawAt: first }), first + 3600000) === first + 7 * day, 'slot disparado → próximo slot (futuro)');
+  assert(W._nextOwedDrawMs(Object.assign({}, base, { drawIntervalDays: 0, lastAutoDrawAt: first }), first + day) == null, 'sorteio único já feito → null');
+  assert(W._nextOwedDrawMs(Object.assign({}, base, { drawManual: true }), first + day) == null, 'manual → null');
+  assert(W._nextOwedDrawMs(Object.assign({}, base, { status: 'finished' }), first + day) == null, 'finished → null');
 })();
 
 console.log('\n' + (failures === 0 ? '✅ TODOS OS TESTES PASSARAM' : '❌ ' + failures + ' FALHA(S)'));

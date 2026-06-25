@@ -736,6 +736,13 @@ function _materializedPhaseGames(t, phaseIdx) {
     (t.rounds || []).forEach(function (r) { (r.matches || []).forEach(function (m) { if (real(m)) c++; }); });
     return c;
   }
+  // v3.1.16 (inc 8): Liga incremental de fase posterior conta jogos em phaseRounds[idx].
+  var slot = t.phaseRounds && t.phaseRounds[phaseIdx];
+  if (slot && Array.isArray(slot.rounds)) {
+    var lc = 0;
+    slot.rounds.forEach(function (r) { (r && r.matches || []).forEach(function (m) { if (real(m)) lc++; }); });
+    return lc;
+  }
   return (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && real(m); }).length;
 }
 
@@ -1240,72 +1247,58 @@ window._calcNextDrawDate = function(t) {
 // lastAutoDrawAt). Parse em BRT (-03:00) pra o ms bater entre cliente e servidor.
 // Retorna null quando não há sorteio devido/futuro (manual, sem data, encerrado,
 // sorteio único já feito, ou temporada terminada).
+// v3.1.16 (inc 8 — uma fonte só): núcleo COMPARTILHADO do cálculo de "qual slot de
+// sorteio está devido". Recebe os campos de agenda já resolvidos (firstDate/firstTime/
+// intervalo) + o último disparo (cru — number ms ou ISO) + agora; devolve o ms do slot
+// devido, ou null (sorteio único já disparado / data inválida). Sem efeitos colaterais.
+// É EXATAMENTE a matemática que vivia DUPLICADA nos dois ramos de _nextOwedDrawMs
+// (Fase 0 top-level e fase posterior incremental) — agora ambos chamam isto. Parse em
+// BRT (-03:00) pra o ms bater entre cliente e servidor.
+window._owedDrawSlotMs = function(firstDateStr, firstTimeStr, intervalDays, lastFiredRaw, nowMs) {
+    var fd = String(firstDateStr || ''), ft = firstTimeStr || '19:00';
+    if (fd.indexOf('T') !== -1) { var pr = fd.split('T'); fd = pr[0]; if (pr[1]) ft = pr[1].slice(0, 5); }
+    var firstDraw = new Date(fd + 'T' + ft + ':00-03:00').getTime();
+    if (isNaN(firstDraw)) return null;
+    var now = (typeof nowMs === 'number') ? nowMs : Date.now();
+    var interval = parseInt(intervalDays, 10);
+    var noRepeat = !interval || interval < 1;
+    var lastFired = (lastFiredRaw != null) ? new Date(lastFiredRaw).getTime() : null;
+    if (lastFired != null && isNaN(lastFired)) lastFired = null;
+    if (now < firstDraw) return firstDraw;                                   // primeiro sorteio ainda no futuro
+    if (noRepeat) return (lastFired != null && lastFired >= firstDraw) ? null : firstDraw; // sorteio único
+    var intervalMs = interval * 86400000;
+    var intervalsCompleted = Math.floor((now - firstDraw) / intervalMs);
+    var mostRecentScheduled = firstDraw + intervalsCompleted * intervalMs;
+    return (lastFired != null && lastFired >= mostRecentScheduled)
+        ? mostRecentScheduled + intervalMs   // slot atual já sorteado → próximo (futuro)
+        : mostRecentScheduled;               // slot atual pendente (<= now → devido)
+};
+
 window._nextOwedDrawMs = function(t, nowMs) {
     if (!t) return null;
-    // v3.1.14 (brick 4 etapa 4): Liga incremental de FASE POSTERIOR tem agenda PRÓPRIA
-    // (config da fase), não a top-level. Round 1 sai no avanço manual; o schedule da fase
-    // governa as rodadas 2+. Esse `owed` vira nextDrawAt → o autoDraw do servidor o pega.
-    // Espelha EXATAMENTE a matemática top-level abaixo, lendo phaseCfg + a dedup por
-    // phaseLeagueState[cur].lastAutoDrawAt.
+    var _now = (typeof nowMs === 'number') ? nowMs : Date.now();
+    // v3.1.16 (inc 8): Liga incremental de FASE POSTERIOR tem agenda PRÓPRIA (config da
+    // fase) + dedup por phaseRounds[cur].lastAutoDrawAt. Mesma MATEMÁTICA do Fase-0 (via
+    // _owedDrawSlotMs); só muda a FONTE dos campos + o cap por nº de rodadas da fase.
     if (window._isIncrementalLigaPhase && window._isIncrementalLigaPhase(t)) {
         var _cur = t.currentPhaseIndex || 0;
         var _pcfg = (t.phases && t.phases[_cur]) || {};
         if (_pcfg.drawManual === true || !_pcfg.drawFirstDate || t.status === 'finished') return null;
+        var _slot = t.phaseRounds[_cur];
         var _pmax = parseInt(_pcfg.rounds, 10);
         if (_pmax && _pmax >= 1) {
-            var _plm = (Array.isArray(t.matches) ? t.matches : []).filter(function (m) { return (m.phaseIndex || 0) === _cur && m.bracket === 'league'; });
-            var _pdone = _plm.reduce(function (mx, m) { return Math.max(mx, m.round || 1); }, 0);
+            var _pdone = ((_slot && _slot.rounds) || []).reduce(function (mx, r) { return Math.max(mx, (r && r.round) || 0); }, 0);
             if (_pdone >= _pmax) return null; // temporada da fase completa
         }
-        var _pfd = String(_pcfg.drawFirstDate), _pft = _pcfg.drawFirstTime || '19:00';
-        if (_pfd.indexOf('T') !== -1) { var _ppr = _pfd.split('T'); _pfd = _ppr[0]; if (_ppr[1]) _pft = _ppr[1].slice(0, 5); }
-        var _pfirst = new Date(_pfd + 'T' + _pft + ':00-03:00').getTime();
-        if (isNaN(_pfirst)) return null;
-        var _pnow = (typeof nowMs === 'number') ? nowMs : Date.now();
-        var _pint = parseInt(_pcfg.drawIntervalDays, 10);
-        var _pnoRep = !_pint || _pint < 1;
-        var _pst = t.phaseLeagueState[_cur];
-        var _plast = (_pst && _pst.lastAutoDrawAt) ? new Date(_pst.lastAutoDrawAt).getTime() : null;
-        if (_plast != null && isNaN(_plast)) _plast = null;
-        var _powed;
-        if (_pnow < _pfirst) { _powed = _pfirst; }
-        else if (_pnoRep) { if (_plast != null && _plast >= _pfirst) return null; _powed = _pfirst; }
-        else {
-            var _pims = _pint * 86400000;
-            var _pic = Math.floor((_pnow - _pfirst) / _pims);
-            var _pmrs = _pfirst + _pic * _pims;
-            _powed = (_plast != null && _plast >= _pmrs) ? _pmrs + _pims : _pmrs;
-        }
-        return _powed;
+        return window._owedDrawSlotMs(_pcfg.drawFirstDate, _pcfg.drawFirstTime, _pcfg.drawIntervalDays, _slot && _slot.lastAutoDrawAt, _now);
     }
     var isLiga = t.format === 'Liga' || t.format === 'Ranking';
     if (!isLiga || t.drawManual === true || !t.drawFirstDate || t.status === 'finished') return null;
     // v3.x: torneio multifase — o auto-draw para no fim da fase classificatória
     // (avanço pra próxima fase é MANUAL). Single-phase → false (zero efeito).
     if (window._suppressAutoDrawForPhases && window._suppressAutoDrawForPhases(t)) return null;
-    var fd = String(t.drawFirstDate), ft = t.drawFirstTime || '19:00';
-    if (fd.indexOf('T') !== -1) { var pr = fd.split('T'); fd = pr[0]; if (pr[1]) ft = pr[1].slice(0, 5); }
-    var firstDraw = new Date(fd + 'T' + ft + ':00-03:00').getTime();
-    if (isNaN(firstDraw)) return null;
-    var now = (typeof nowMs === 'number') ? nowMs : Date.now();
-    var interval = parseInt(t.drawIntervalDays, 10);
-    var noRepeat = !interval || interval < 1;
-    var lastFired = t.lastAutoDrawAt ? new Date(t.lastAutoDrawAt).getTime() : null;
-    if (lastFired != null && isNaN(lastFired)) lastFired = null;
-    var owed;
-    if (now < firstDraw) {
-        owed = firstDraw; // primeiro sorteio ainda no futuro
-    } else if (noRepeat) {
-        if (lastFired != null && lastFired >= firstDraw) return null; // sorteio único já feito
-        owed = firstDraw;
-    } else {
-        var intervalMs = interval * 86400000;
-        var intervalsCompleted = Math.floor((now - firstDraw) / intervalMs);
-        var mostRecentScheduled = firstDraw + intervalsCompleted * intervalMs;
-        owed = (lastFired != null && lastFired >= mostRecentScheduled)
-            ? mostRecentScheduled + intervalMs // slot atual já sorteado → próximo (futuro)
-            : mostRecentScheduled;             // slot atual pendente (<= now → devido)
-    }
+    var owed = window._owedDrawSlotMs(t.drawFirstDate, t.drawFirstTime, t.drawIntervalDays, t.lastAutoDrawAt, _now);
+    if (owed == null) return null;
     var seasonEnd = (typeof window._ligaSeasonEndMs === 'function') ? window._ligaSeasonEndMs(t) : null;
     if (seasonEnd != null && owed > seasonEnd) return null;
     return owed;
@@ -1322,14 +1315,16 @@ window._nextOwedDrawMs = function(t, nowMs) {
 // v3.1.14 (brick 4 etapa 4): a fase ATUAL é uma Liga "Pontos Corridos rodada a rodada"
 // (ligaCadence='incremental') de uma fase POSTERIOR já materializada? Self-contained
 // (sem phases-engine — não está no vendor do autoDraw): basta o flag de config + a
-// sub-state criada na materialização (t.phaseLeagueState[cur]). É o que destrava o
-// auto-draw AGENDADO de fase posterior (poller cliente + Cloud Function).
+// sub-state criada na materialização (t.phaseRounds[cur]). É o que destrava o auto-draw
+// AGENDADO de fase posterior (poller cliente + Cloud Function).
+// v3.1.16 (inc 8): a sub-state agora é t.phaseRounds[cur] (mesma forma de t.rounds da
+// Fase 0), não mais o antigo t.phaseLeagueState[cur].
 window._isIncrementalLigaPhase = function(t) {
     if (!t || !Array.isArray(t.phases) || t.phases.length <= 1) return false;
     var cur = t.currentPhaseIndex || 0;
     if (cur < 1) return false;
     var cfg = t.phases[cur] || {};
-    return cfg.ligaCadence === 'incremental' && !!(t.phaseLeagueState && t.phaseLeagueState[cur]);
+    return cfg.ligaCadence === 'incremental' && !!(t.phaseRounds && t.phaseRounds[cur]);
 };
 
 window._suppressAutoDrawForPhases = function(t) {

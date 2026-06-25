@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.1.15-beta';
+window.SCOREPLACE_VERSION = '3.1.16-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -2714,6 +2714,19 @@ window._effectiveScoring = function(t, match) {
     if (!t || pi < 1 || !Array.isArray(t.phases) || pi >= t.phases.length) return def;
     var ph = t.phases[pi];
     return (ph && ph.scoring != null && ph.scoring.type) ? ph.scoring : def;
+};
+// v3.1.16 (inc 8) — Pontos Avançados EFETIVO por fase. Overlay canônico ORTOGONAL ao
+// storage: a fase (phases[idx].advancedScoring, shape {enabled,categories,applyLiveScoring})
+// SOBREPÕE o top-level (t.advancedScoring) — inclusive quando a fase o desliga
+// (enabled:false). Fase 0 / single-phase / fase sem config própria → herda o top-level.
+// É o que faz "Pontos Avançados numa fase e simples noutra" CALCULAR de verdade nas
+// standings (renderStandings/_computeStandings leem advancedScoring do faux-t da fase).
+window._effectiveAdvScoring = function(t, phaseIndex) {
+    var def = (t && t.advancedScoring) || null;
+    var pi = phaseIndex || 0;
+    if (!t || pi < 1 || !Array.isArray(t.phases) || pi >= t.phases.length) return def;
+    var ph = t.phases[pi];
+    return (ph && ph.advancedScoring && typeof ph.advancedScoring === 'object') ? ph.advancedScoring : def;
 };
 // v2.6.108: barra CANÔNICA de busca + ordenação + filtros (gênero/habilidade) pra
 // listas de inscritos. UI idêntica à Análise de Inscritos — uma fonte só, reusável.

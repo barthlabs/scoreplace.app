@@ -393,27 +393,28 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
   const cur = t.currentPhaseIndex || 0;
   const ok = drawWindow._phaseGenNextLeagueRound(t, cur);
   if (!ok) { console.log(`Auto-draw phase: skip ${tId} (gen falhou / jogadores insuficientes)`); return; }
-  // dedup do slot + recalcula nextDrawAt (próximo slot futuro)
-  t.phaseLeagueState[cur].lastAutoDrawAt = owed;
+  // v3.1.16 (inc 8): a Liga incremental de fase posterior mora em t.phaseRounds[cur]
+  // (rodadas reais, mesma forma de t.rounds da Fase 0) — não mais em t.matches +
+  // phaseLeagueState. Persiste só phaseRounds; dedup por slot.lastAutoDrawAt.
+  t.phaseRounds[cur].lastAutoDrawAt = owed;
   t.updatedAt = now.toISOString();
   let nextMs = null;
   try { nextMs = drawWindow._nextOwedDrawMs(t, nowMs); } catch (e) { /* best-effort */ }
   const nextField = (typeof nextMs === 'number') ? nextMs : FieldValue.delete();
   await db.collection('tournaments').doc(tId).update({
-    matches: t.matches,
-    phaseLeagueState: t.phaseLeagueState,
+    phaseRounds: t.phaseRounds,
     nextDrawAt: nextField,
     updatedAt: t.updatedAt,
   });
-  const newMax = (t.matches || []).filter(m => (m.phaseIndex || 0) === cur && m.bracket === 'league')
-    .reduce((mx, m) => Math.max(mx, m.round || 1), 0);
-  const roundMatches = (t.matches || []).filter(m => (m.phaseIndex || 0) === cur && m.bracket === 'league' &&
-    (m.round || 1) === newMax && !m.isSitOut && !m.isBye).map(m => ({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '' }));
+  const _slotRounds = (t.phaseRounds[cur] && t.phaseRounds[cur].rounds) || [];
+  const newMax = _slotRounds.reduce((mx, r) => Math.max(mx, (r && r.round) || 1), 0);
+  const roundMatches = ((_slotRounds.find(r => ((r && r.round) || 1) === newMax) || {}).matches || [])
+    .filter(m => !m.isSitOut && !m.isBye).map(m => ({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '' }));
   console.log(`Auto-draw phase: fase ${cur + 1} rodada ${newMax} (${roundMatches.length} jogos) para ${tId}`);
 
   // Notifica o POOL da fase (subconjunto classificado), por uid. Casa nome do TIME
   // ("A / B") ou membro individual ("A") contra o lado da partida.
-  const pool = (t.phaseLeagueState[cur] && Array.isArray(t.phaseLeagueState[cur].pool)) ? t.phaseLeagueState[cur].pool : [];
+  const pool = (t.phaseRounds[cur] && Array.isArray(t.phaseRounds[cur].pool)) ? t.phaseRounds[cur].pool : [];
   const _isInSide = (name, side) => {
     if (!name || !side) return false;
     const n = String(name).trim().toLowerCase(), s = String(side).trim().toLowerCase();

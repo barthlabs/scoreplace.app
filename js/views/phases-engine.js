@@ -864,6 +864,19 @@
         return ms.length > 0 && ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
       });
     }
+    // v3.1.16 (inc 8): fase atual = Liga incremental (Pontos Corridos rodada a rodada) →
+    // jogos moram em t.phaseRounds[cur].rounds (não em t.matches). Completa quando TODAS
+    // as rodadas configuradas da temporada foram geradas E todos os jogos decididos.
+    var _liSlot = t.phaseRounds && t.phaseRounds[cur];
+    if (_liSlot && Array.isArray(_liSlot.rounds)) {
+      if (!_liSlot.rounds.length) return false;
+      var _liNeed = parseInt((t.phases[cur] || {}).rounds, 10) || 0;
+      if (_liNeed && _liSlot.rounds.length < _liNeed) return false; // temporada ainda em curso
+      return _liSlot.rounds.every(function (r) {
+        var ms = (r && r.matches) || [];
+        return ms.length > 0 && ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
+      });
+    }
     // Fases de chave: todas as partidas da fase atual decididas (inclui grande final).
     var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; });
     if (!pm.length) return false;
@@ -910,6 +923,12 @@
   //    um ordenado por profundidade dentro da linha (campeão da linha primeiro).
   function bracketPhaseGroups(t, phaseIdx) {
     var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx; });
+    // v3.1.16 (inc 8): se a fase anterior foi Liga incremental, seus jogos moram em
+    // t.phaseRounds[idx].rounds (não em t.matches) — inclui-os pra derivar as standings.
+    var _slot = t.phaseRounds && t.phaseRounds[phaseIdx];
+    if (_slot && Array.isArray(_slot.rounds)) {
+      _slot.rounds.forEach(function (r) { if (r && Array.isArray(r.matches)) pm = pm.concat(r.matches); });
+    }
     if (!pm.length) return [];
     var nameTeam = _nameToTeamMap(pm);
     function entry(nm) { return nameTeam[nm] || { name: nm, displayName: nm }; }
@@ -1032,10 +1051,13 @@
     } else {
       built = buildPhaseBrackets(groups, cfg, cs, _id);
     }
-    // v3.1.13 (brick 4): Liga rodada a rodada — não mergeia matches aqui. Persiste o
-    // pool (slim: displayName + uid; identidade resolve por nome via t.participants) +
-    // a sub-state da fase (opponentHistory/sitOutHistory acumulam por rodada). O cliente
-    // (advanceMultiPhase → _phaseGenNextLeagueRound) gera a 1ª rodada logo após.
+    // v3.1.16 (inc 8 — unificação de storage): Liga rodada a rodada de fase posterior
+    // adota o MESMO modelo da Fase 0 — as rodadas moram num array `rounds` real (mesma
+    // forma de t.rounds), namespaced por fase em t.phaseRounds[idx]. Não mergeia matches
+    // em t.matches nem reconstrói rodadas a partir de m.round. A sub-state carrega o pool
+    // (slim: displayName + uid) + opponentHistory/sitOutHistory (acumulam por rodada) +
+    // lastAutoDrawAt (dedup do auto-draw, por fase). O cliente (advanceMultiPhase →
+    // _phaseGenNextLeagueRound) gera a 1ª rodada logo após, escrevendo em slot.rounds.
     if (built.incrementalLeague) {
       var _slim = (built.pool || []).map(function (e) {
         var nm = e.displayName || e.name;
@@ -1043,8 +1065,8 @@
         var u = e.p1Uid || e.uid; if (u) o.uid = u;
         return o;
       });
-      t.phaseLeagueState = t.phaseLeagueState || {};
-      t.phaseLeagueState[nextIdx] = { pool: _slim, opponentHistory: {}, sitOutHistory: {} };
+      t.phaseRounds = t.phaseRounds || {};
+      t.phaseRounds[nextIdx] = { rounds: [], opponentHistory: {}, sitOutHistory: {}, pool: _slim };
       t.currentPhaseIndex = nextIdx;
       t.currentStage = 'phase' + nextIdx;
       t._phaseMaterialized = nextIdx;
