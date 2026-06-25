@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.1.18-beta';
+window.SCOREPLACE_VERSION = '3.1.19-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -1321,8 +1321,16 @@ window._reflowChrome = function() {
       bh.style.top = bhOffset + 'px';
       var next = _firstVisibleSibling(bh);
       if (next) {
-        var bhH = Math.ceil(bh.getBoundingClientRect().height);
-        fixedBackHeaderH = bhH;
+        var _bhRectH = bh.getBoundingClientRect().height;
+        // v3.1.19: a barra canônica sticky usa FLOOR da altura do back-header pra
+        // `--backheader-h`, NÃO ceil. Com ceil (54.1→55) o `top` da barra caía ~0.9px
+        // ABAIXO do fundo real do header (121.1) → um vão sub-1px onde o card vazava
+        // (reportado "não encaixa no cabeçalho"). Floor (54.1→54) faz o top da barra
+        // ficar ≤ fundo do header → overlap <1px (invisível, MESMA cor bg-darker, header
+        // por cima) em vez de gap. O espaçamento do conteúdo (margin-top) segue ceil
+        // (folga generosa pra o conteúdo nunca ser coberto pelo header).
+        var bhH = Math.ceil(_bhRectH);
+        fixedBackHeaderH = Math.floor(_bhRectH);
         // Use !important because overlay CSS uses `margin-top: 0 !important`
         // to suppress the default 50px spacer — our dynamic value has to win.
         next.style.setProperty('margin-top', (ddH + bhH + 8) + 'px', 'important');
