@@ -627,6 +627,19 @@
     return !!cfg && !isMonarchDraw(cfg) && classifyPhaseFormat(cfg) === 'league';
   }
 
+  // ── selectQualifiers — a TRANSIÇÃO canônica (quem classifica + como entra) ───
+  // Lê cfg.source e delega em buildEntrantsByDest. Única porta da transição —
+  // o orquestrador e o pré-cheque usam isto em vez de montar mapping/flags à mão.
+  function selectQualifiers(prevGroups, cfg, ctx) {
+    ctx = ctx || {};
+    var src = (cfg && cfg.source) || {};
+    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+    var fixedPairs = cfg ? (cfg.fixedPairs !== false) : true;
+    var pairingStrategy = (cfg && cfg.pairingStrategy) || 'top';
+    return buildEntrantsByDest(prevGroups, mapping, fixedPairs, ctx.computeStandings, pairingStrategy,
+      { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual' });
+  }
+
   // v3.1: LIGA / PONTOS CORRIDOS como fase posterior. Tabela ÚNICA (não grupos):
   // todos os classificados jogam todos (round-robin), repetido por `turnos`. Numa
   // fase posterior o avanço é MANUAL, então materializa TODOS os jogos de uma vez
@@ -1018,7 +1031,7 @@
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _src = _nextCfg.source || {};
       var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
-      var _byDest = buildEntrantsByDest(_curG, _mp, _nextCfg.fixedPairs !== false, (_cur === 0 ? cs : function (g) { return g.standings || []; }), _nextCfg.pairingStrategy || 'top', { scope: _src.scope || 'per_group', rankingBasis: _src.rankingBasis || 'individual' });
+      var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }) });
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
       if (_anyNonPow2) {
@@ -1113,6 +1126,7 @@
     buildPhaseLeagueStage: buildPhaseLeagueStage,
     classifyPhaseFormat: classifyPhaseFormat,
     isMonarchDraw: isMonarchDraw,
+    selectQualifiers: selectQualifiers,
     phaseIsGroups: _phaseIsGroups,
     phaseIsMonarch: _phaseIsMonarch,
     phaseIsLiga: _phaseIsLiga,

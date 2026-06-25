@@ -73,9 +73,8 @@
   }
 
   // ── selectQualifiers — a TRANSIÇÃO (quem classifica + como entra) ───────────
-  // Delegação fina sobre buildEntrantsByDest (já canônica e testada). prevGroups =
-  // grupos/standings da fase anterior; devolve { dest: [teamObjs] }.
-  function selectQualifiers(prevGroups, cfg, ctx) {
+  // FONTE ÚNICA no phases-engine; aqui só reexportada (fallback se ausente).
+  var selectQualifiers = (E && E.selectQualifiers) || function (prevGroups, cfg, ctx) {
     ctx = ctx || {};
     var src = (cfg && cfg.source) || {};
     var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
@@ -83,7 +82,7 @@
     var pairingStrategy = (cfg && cfg.pairingStrategy) || 'top';
     return E.buildEntrantsByDest(prevGroups, mapping, fixedPairs, ctx.computeStandings, pairingStrategy,
       { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual' });
-  }
+  };
 
   // ── Geradores por formato (ANDAIME: delegam nos buildPhase* existentes) ─────
   // Assinatura canônica-alvo: (prevGroups, cfg, ctx{computeStandings, idPrefix}).
