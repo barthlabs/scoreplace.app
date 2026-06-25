@@ -80,6 +80,18 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
     const t = doc.data();
     const tId = doc.id;
 
+    // v3.1.14 (brick 4 etapa 4): Liga incremental "Pontos Corridos rodada a rodada" de
+    // FASE POSTERIOR tem agenda PRÓPRIA por fase. Num multi-fase t.format NÃO é 'Liga' →
+    // o filtro isLiga abaixo pularia; trata ANTES, à parte. nextDrawAt (computado pelo
+    // mesmo _nextOwedDrawMs, agora ciente da fase) já filtrou esses docs na query.
+    if (drawWindow && typeof drawWindow._isIncrementalLigaPhase === 'function' &&
+        drawWindow._isIncrementalLigaPhase(t)) {
+      if (t.pendingDraw || t.stagedDraw) { console.log(`Auto-draw phase: ${tId} em revisão — skip`); continue; }
+      try { t.id = tId; await _autoDrawIncrementalPhaseRound(t, tId, now); }
+      catch (err) { console.error(`Auto-draw phase error for ${tId}:`, err); }
+      continue;
+    }
+
     // Skip if not Liga/Ranking format with auto-draw
     const isLiga = t.format === 'Liga' || t.format === 'Ranking';
     if (!isLiga) continue;
@@ -362,6 +374,78 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
     }
   }
 });
+
+// v3.1.14 (brick 4 etapa 4): gera UMA rodada agendada da Liga incremental (Pontos
+// Corridos rodada a rodada) da FASE POSTERIOR atual, server-side. Espelha o poller do
+// cliente (_firePhaseLigaAutoDrawIfDue): só dispara se o slot da fase está devido; usa
+// o motor canônico _phaseGenNextLeagueRound (vendor) que monta o faux e chama
+// _generateNextRoundForPlayers INTOCADO; persiste só os campos mutados; notifica o POOL
+// da fase (uid). Round 1 sai no avanço manual; aqui só rodadas 2+.
+async function _autoDrawIncrementalPhaseRound(t, tId, now) {
+  if (!drawWindow || typeof drawWindow._nextOwedDrawMs !== 'function' ||
+      typeof drawWindow._phaseGenNextLeagueRound !== 'function') {
+    console.error(`Auto-draw phase: draw-core indisponível — pulando ${tId}`);
+    return;
+  }
+  const nowMs = now.getTime();
+  const owed = drawWindow._nextOwedDrawMs(t, nowMs);
+  if (typeof owed !== 'number' || owed > nowMs) return; // sem slot devido agora
+  const cur = t.currentPhaseIndex || 0;
+  const ok = drawWindow._phaseGenNextLeagueRound(t, cur);
+  if (!ok) { console.log(`Auto-draw phase: skip ${tId} (gen falhou / jogadores insuficientes)`); return; }
+  // dedup do slot + recalcula nextDrawAt (próximo slot futuro)
+  t.phaseLeagueState[cur].lastAutoDrawAt = owed;
+  t.updatedAt = now.toISOString();
+  let nextMs = null;
+  try { nextMs = drawWindow._nextOwedDrawMs(t, nowMs); } catch (e) { /* best-effort */ }
+  const nextField = (typeof nextMs === 'number') ? nextMs : FieldValue.delete();
+  await db.collection('tournaments').doc(tId).update({
+    matches: t.matches,
+    phaseLeagueState: t.phaseLeagueState,
+    nextDrawAt: nextField,
+    updatedAt: t.updatedAt,
+  });
+  const newMax = (t.matches || []).filter(m => (m.phaseIndex || 0) === cur && m.bracket === 'league')
+    .reduce((mx, m) => Math.max(mx, m.round || 1), 0);
+  const roundMatches = (t.matches || []).filter(m => (m.phaseIndex || 0) === cur && m.bracket === 'league' &&
+    (m.round || 1) === newMax && !m.isSitOut && !m.isBye).map(m => ({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '' }));
+  console.log(`Auto-draw phase: fase ${cur + 1} rodada ${newMax} (${roundMatches.length} jogos) para ${tId}`);
+
+  // Notifica o POOL da fase (subconjunto classificado), por uid. Casa nome do TIME
+  // ("A / B") ou membro individual ("A") contra o lado da partida.
+  const pool = (t.phaseLeagueState[cur] && Array.isArray(t.phaseLeagueState[cur].pool)) ? t.phaseLeagueState[cur].pool : [];
+  const _isInSide = (name, side) => {
+    if (!name || !side) return false;
+    const n = String(name).trim().toLowerCase(), s = String(side).trim().toLowerCase();
+    return s === n || s.split(' / ').some(x => x.trim() === n);
+  };
+  const buildMsg = (teamName) => {
+    const mine = roundMatches.filter(m => _isInSide(teamName, m.p1) || _isInSide(teamName, m.p2));
+    if (!mine.length) return null;
+    const gamesText = mine.map((pm, i) => (pm.label || ('Jogo ' + (i + 1))) + ':\n' + (pm.p1 || '?') + '\nvs\n' + (pm.p2 || '?')).join('\n\n');
+    return '🔄 Nova rodada no torneio ' + (t.name || '') + '!\n\n' + gamesText + (t.venue ? '\n\n📍 ' + t.venue : '');
+  };
+  const notified = new Set();
+  for (const p of pool) {
+    const teamName = (p && (p.displayName || p.name)) || '';
+    const message = buildMsg(teamName) || 'Nova rodada sorteada! Confira seus jogos.';
+    const uids = [];
+    [p && p.uid, p && p.p1Uid, p && p.p2Uid].forEach(u => { if (u) uids.push(String(u)); });
+    for (const uid of uids) {
+      if (notified.has(uid)) continue;
+      notified.add(uid);
+      try {
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (!userDoc.exists) continue;
+        if ((userDoc.data() || {}).notifyPlatform === false) continue;
+        await db.collection('users').doc(uid).collection('notifications').add({
+          type: 'draw', fromUid: 'system', fromName: 'scoreplace.app', fromPhoto: '',
+          tournamentId: tId, tournamentName: t.name || '', message, createdAt: now.toISOString(), read: false
+        });
+      } catch (e) { console.warn(`Notif phase error uid ${uid}:`, e.message); }
+    }
+  }
+}
 
 // ─── Reconciliador de nextDrawAt (v2.6.74) ──────────────────────────────────
 // O autoDraw (acima) consulta por `nextDrawAt` pra ser barato + na hora. Mas:

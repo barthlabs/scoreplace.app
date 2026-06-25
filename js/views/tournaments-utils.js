@@ -1242,6 +1242,42 @@ window._calcNextDrawDate = function(t) {
 // sorteio único já feito, ou temporada terminada).
 window._nextOwedDrawMs = function(t, nowMs) {
     if (!t) return null;
+    // v3.1.14 (brick 4 etapa 4): Liga incremental de FASE POSTERIOR tem agenda PRÓPRIA
+    // (config da fase), não a top-level. Round 1 sai no avanço manual; o schedule da fase
+    // governa as rodadas 2+. Esse `owed` vira nextDrawAt → o autoDraw do servidor o pega.
+    // Espelha EXATAMENTE a matemática top-level abaixo, lendo phaseCfg + a dedup por
+    // phaseLeagueState[cur].lastAutoDrawAt.
+    if (window._isIncrementalLigaPhase && window._isIncrementalLigaPhase(t)) {
+        var _cur = t.currentPhaseIndex || 0;
+        var _pcfg = (t.phases && t.phases[_cur]) || {};
+        if (_pcfg.drawManual === true || !_pcfg.drawFirstDate || t.status === 'finished') return null;
+        var _pmax = parseInt(_pcfg.rounds, 10);
+        if (_pmax && _pmax >= 1) {
+            var _plm = (Array.isArray(t.matches) ? t.matches : []).filter(function (m) { return (m.phaseIndex || 0) === _cur && m.bracket === 'league'; });
+            var _pdone = _plm.reduce(function (mx, m) { return Math.max(mx, m.round || 1); }, 0);
+            if (_pdone >= _pmax) return null; // temporada da fase completa
+        }
+        var _pfd = String(_pcfg.drawFirstDate), _pft = _pcfg.drawFirstTime || '19:00';
+        if (_pfd.indexOf('T') !== -1) { var _ppr = _pfd.split('T'); _pfd = _ppr[0]; if (_ppr[1]) _pft = _ppr[1].slice(0, 5); }
+        var _pfirst = new Date(_pfd + 'T' + _pft + ':00-03:00').getTime();
+        if (isNaN(_pfirst)) return null;
+        var _pnow = (typeof nowMs === 'number') ? nowMs : Date.now();
+        var _pint = parseInt(_pcfg.drawIntervalDays, 10);
+        var _pnoRep = !_pint || _pint < 1;
+        var _pst = t.phaseLeagueState[_cur];
+        var _plast = (_pst && _pst.lastAutoDrawAt) ? new Date(_pst.lastAutoDrawAt).getTime() : null;
+        if (_plast != null && isNaN(_plast)) _plast = null;
+        var _powed;
+        if (_pnow < _pfirst) { _powed = _pfirst; }
+        else if (_pnoRep) { if (_plast != null && _plast >= _pfirst) return null; _powed = _pfirst; }
+        else {
+            var _pims = _pint * 86400000;
+            var _pic = Math.floor((_pnow - _pfirst) / _pims);
+            var _pmrs = _pfirst + _pic * _pims;
+            _powed = (_plast != null && _plast >= _pmrs) ? _pmrs + _pims : _pmrs;
+        }
+        return _powed;
+    }
     var isLiga = t.format === 'Liga' || t.format === 'Ranking';
     if (!isLiga || t.drawManual === true || !t.drawFirstDate || t.status === 'finished') return null;
     // v3.x: torneio multifase — o auto-draw para no fim da fase classificatória
@@ -1283,10 +1319,25 @@ window._nextOwedDrawMs = function(t, nowMs) {
 // Single-phase (sem t.phases ≥2) → SEMPRE false: zero mudança de comportamento.
 // Self-contained de propósito — NÃO depende de phases-engine, que não está no
 // vendor do autoDraw (lá window._isMultiPhase é undefined).
+// v3.1.14 (brick 4 etapa 4): a fase ATUAL é uma Liga "Pontos Corridos rodada a rodada"
+// (ligaCadence='incremental') de uma fase POSTERIOR já materializada? Self-contained
+// (sem phases-engine — não está no vendor do autoDraw): basta o flag de config + a
+// sub-state criada na materialização (t.phaseLeagueState[cur]). É o que destrava o
+// auto-draw AGENDADO de fase posterior (poller cliente + Cloud Function).
+window._isIncrementalLigaPhase = function(t) {
+    if (!t || !Array.isArray(t.phases) || t.phases.length <= 1) return false;
+    var cur = t.currentPhaseIndex || 0;
+    if (cur < 1) return false;
+    var cfg = t.phases[cur] || {};
+    return cfg.ligaCadence === 'incremental' && !!(t.phaseLeagueState && t.phaseLeagueState[cur]);
+};
+
 window._suppressAutoDrawForPhases = function(t) {
     if (!t || !Array.isArray(t.phases) || t.phases.length <= 1) return false;
     var cur = t.currentPhaseIndex || 0;
-    if (cur > 0) return true; // fase de chave: materializada no avanço manual, nunca auto-sorteada
+    // v3.1.14 (brick 4): fase posterior é suprimida do auto-draw — EXCETO Liga incremental
+    // (Pontos Corridos rodada a rodada), que tem agenda própria por fase e SIM auto-sorteia.
+    if (cur > 0) return !window._isIncrementalLigaPhase(t);
     var cap = parseInt((t.phases[0] || {}).rounds, 10);
     if (!cap || cap < 1) cap = 1;
     var drawn = (Array.isArray(t.rounds) ? t.rounds : []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0);

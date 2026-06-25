@@ -3165,6 +3165,86 @@ function _generateNextRoundForPlayers(t, category, _rn) {
 // v2.3.91: exposto pro Cloud Function autoDraw (ver _generateNextRound acima).
 window._generateNextRoundForPlayers = _generateNextRoundForPlayers;
 
+// v3.1.13 (brick 4): driver INCREMENTAL da Liga (Pontos Corridos) rodada a rodada
+// como fase POSTERIOR. Monta um faux "Liga isolada" desta fase (participants = pool
+// persistido em t.phaseLeagueState[idx]; rounds reconstruídos das partidas
+// bracket:'league'; opponentHistory/sitOutHistory acumulam na sub-state) e chama o
+// motor canônico _generateNextRoundForPlayers INTOCADO. A nova rodada é taggeada
+// (phaseIndex + bracket:'league') e mergeada em t.matches. PURO (sem DOM/AppStore) —
+// a cadência de UI (_phaseCloseLeagueRound) e o avanço por cron (etapa 4) são à parte.
+function _phaseGenNextLeagueRound(t, phaseIdx) {
+  if (!t || typeof window._generateNextRoundForPlayers !== 'function') return false;
+  var st = t.phaseLeagueState && t.phaseLeagueState[phaseIdx];
+  if (!st || !Array.isArray(st.pool) || !st.pool.length) return false;
+  var cfg = (t.phases && t.phases[phaseIdx]) || {};
+  // Rounds REAIS reconstruídos das partidas bracket:'league' desta fase (não
+  // colapsados) — alimentam _computeStandings (semente do pareamento por ranking)
+  // e o nº da próxima rodada.
+  var lm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && m.bracket === 'league'; });
+  var byR = {};
+  lm.forEach(function (m) { var r = m.round || 1; (byR[r] = byR[r] || []).push(m); });
+  var rkeys = Object.keys(byR).map(Number).sort(function (a, b) { return a - b; });
+  var rounds = rkeys.map(function (rn) {
+    var ms = byR[rn];
+    var done = ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
+    return { round: rn, status: done ? 'complete' : 'active', matches: ms };
+  });
+  st.opponentHistory = st.opponentHistory || {};
+  st.sitOutHistory = st.sitOutHistory || {};
+  var faux = {
+    id: t.id, format: 'Liga', ligaDrawMode: 'standard', ligaRoundFormat: 'standard',
+    participants: st.pool.slice(),
+    rounds: rounds, matches: [],
+    combinedCategories: [], skillCategories: [],
+    scoring: cfg.scoring || t.scoring, tiebreakers: t.tiebreakers,
+    equilibrado: cfg.equilibrado, clusterSize: cfg.clusterSize,
+    allowSelfDeactivation: false,
+    opponentHistory: st.opponentHistory, sitOutHistory: st.sitOutHistory
+  };
+  var before = faux.rounds.length;
+  try { window._generateNextRoundForPlayers(faux, null, before + 1); }
+  catch (e) { if (window._warn) window._warn('[brick4] gen liga round falhou', e); return false; }
+  if (faux.rounds.length <= before) return false;
+  var newRound = faux.rounds[faux.rounds.length - 1];
+  if (!newRound || !Array.isArray(newRound.matches) || !newRound.matches.length) return false;
+  if (!Array.isArray(t.matches)) t.matches = [];
+  newRound.matches.forEach(function (m) {
+    m.phaseIndex = phaseIdx; m.bracket = 'league';
+    if (m.category === undefined) m.category = null;
+    t.matches.push(m);
+  });
+  return true;
+}
+window._phaseGenNextLeagueRound = _phaseGenNextLeagueRound;
+
+// v3.1.14 (brick 4 etapa 4): dispara UMA rodada agendada da Liga incremental da fase
+// atual, SE devida (slot agendado da fase ≤ agora e ainda não sorteado). Usado pelo
+// poller do cliente (_checkLigaAutoDraws). Idempotência via phaseLeagueState[cur].
+// lastAutoDrawAt = o slot disparado (mesma dedup do Fase-0 lastAutoDrawAt). A Cloud
+// Function tem o equivalente server-side em functions-autodraw/index.js.
+async function _firePhaseLigaAutoDrawIfDue(t, nowMs) {
+  if (typeof window._nextOwedDrawMs !== 'function') return;
+  var owed = window._nextOwedDrawMs(t, nowMs);
+  if (typeof owed !== 'number' || owed > nowMs) return; // sem slot devido agora
+  var cur = t.currentPhaseIndex || 0;
+  var ok = window._phaseGenNextLeagueRound(t, cur);
+  if (!ok) return;
+  t.phaseLeagueState[cur].lastAutoDrawAt = owed; // dedup do slot
+  t.updatedAt = new Date().toISOString();
+  var newRound = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur && m.bracket === 'league'; })
+    .reduce(function (mx, m) { return Math.max(mx, m.round || 1); }, 0);
+  if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(t.id, 'Liga (fase ' + (cur + 1) + '): rodada ' + newRound + ' sorteada automaticamente');
+  try { await window.AppStore.syncImmediate(t.id); } catch (e) { window._warn('[auto-draw phase] save failed', e); }
+  if (typeof window._notifyDrawPersonalized === 'function') {
+    try { window._notifyDrawPersonalized(t, t.id, { type: 'new_round', phaseIndex: cur }); } catch (e) {}
+  }
+  try {
+    var _h = (window.location && window.location.hash) || '';
+    if (_h.indexOf('#bracket/' + t.id) === 0 && typeof window._rerenderBracket === 'function') window._rerenderBracket(t.id);
+    else if (_h.indexOf('#tournaments/' + t.id) === 0 && typeof window.renderTournaments === 'function') window.renderTournaments(document.getElementById('view-container'), t.id);
+  } catch (e) {}
+}
+
 // ─── v2.3.8: self-heal de rodadas geradas ANTES da hora ─────────────────────
 // O bug pré-v2.3.7 fazia COMPLETAR a rodada gerar a SEGUINTE imediatamente,
 // antes do sorteio agendado. Esta função remove rodadas extras que (a) ainda
@@ -3241,6 +3321,17 @@ window._checkLigaAutoDraws = async function() {
     // Torneio apagado (ou em processo de apagar) — nunca disparar auto-draw,
     // sob pena de ressuscitar o doc via saveTournament({merge: true}).
     if (_deletedIds.indexOf(String(t.id)) !== -1) continue;
+
+    // v3.1.14 (brick 4 etapa 4): Liga incremental de FASE POSTERIOR tem agenda PRÓPRIA
+    // por fase. Num multi-fase t.format NÃO é 'Liga', então o filtro _isLigaFormat abaixo
+    // pularia — trata ANTES, à parte. Só o organizador dispara (evita corrida entre abas).
+    if (window._isIncrementalLigaPhase && window._isIncrementalLigaPhase(t)) {
+      if (window.AppStore.isOrganizer(t) && !t.stagedDraw) {
+        try { await _firePhaseLigaAutoDrawIfDue(t, now.getTime()); }
+        catch (e) { window._warn('[auto-draw phase] failed ' + t.id, e); }
+      }
+      continue;
+    }
 
     // Only Liga tournaments
     if (!(window._isLigaFormat && window._isLigaFormat(t))) continue;

@@ -173,5 +173,40 @@ const stillHasDead = tc.participants.filter(p =>
 assert(stillHasDead.length === 0, 'categoria morta "Fem TOP 500" removida de todos (ainda em: ' + stillHasDead.length + ')');
 console.log('   colunas geradas: ' + tc.rounds.length + ' · jogadores sorteados: ' + drawn.size + '/' + totalParts);
 
+// ─── BRICK 4 ETAPA 4: auto-draw AGENDADO da Liga incremental de FASE POSTERIOR ───
+// Prova o caminho server-side novo: detecção da fase, due-check via _nextOwedDrawMs
+// (lendo a agenda DA FASE), geração via _phaseGenNextLeagueRound, dedup por slot e
+// cap por nº de rodadas. _suppressAutoDrawForPhases NÃO suprime Liga incremental.
+(function testIncrementalPhaseAutoDraw() {
+  console.log('\n[BRICK4 FASE POSTERIOR] Liga incremental agendada — due-check + geração + dedup + cap');
+  const W = require('./draw-core.js')._window;
+  const nowMs = new Date('2026-07-01T20:00:00-03:00').getTime(); // 1h após o 1º slot
+  const pool = [];
+  for (let i = 1; i <= 8; i++) pool.push({ displayName: 'P' + i, name: 'P' + i, uid: 'u' + i });
+  const t = {
+    id: 'mock-phase-liga', name: 'Temporada Fase 2', format: 'Fase de Grupos + Eliminatórias',
+    phases: [{ name: 'F0' }, { name: 'Temporada', formatCode: 'liga', ligaCadence: 'incremental',
+      drawFirstDate: '2026-07-01', drawFirstTime: '19:00', drawIntervalDays: 7, rounds: 4 }],
+    currentPhaseIndex: 1, matches: [],
+    phaseLeagueState: { 1: { pool: pool, opponentHistory: {}, sitOutHistory: {} } }
+  };
+  assert(W._phaseGenNextLeagueRound(t, 1), 'round 1 gerada (avanço manual)');
+  assert(W._isIncrementalLigaPhase(t) === true, '_isIncrementalLigaPhase = true');
+  assert(W._suppressAutoDrawForPhases(t) === false, '_suppressAutoDrawForPhases = false (Liga incremental NÃO suprimida)');
+  const owed = W._nextOwedDrawMs(t, nowMs);
+  assert(typeof owed === 'number' && owed <= nowMs, 'slot agendado da FASE devido (owed <= now): ' + owed);
+  assert(W._phaseGenNextLeagueRound(t, 1), 'round 2 gerada (auto-draw)');
+  const r2 = t.matches.filter(m => m.phaseIndex === 1 && m.bracket === 'league' && (m.round || 1) === 2 && !m.isSitOut);
+  assert(r2.length === 2, 'round 2 com 2 duplas (got ' + r2.length + ')');
+  t.phaseLeagueState[1].lastAutoDrawAt = owed; // dedup do slot
+  const owed2 = W._nextOwedDrawMs(t, nowMs);
+  assert(owed2 == null || owed2 > nowMs, 'após disparar o slot não re-dispara (dedup): ' + owed2);
+  W._phaseGenNextLeagueRound(t, 1); // round 3
+  W._phaseGenNextLeagueRound(t, 1); // round 4 → atinge o cap rounds=4
+  assert(W._nextOwedDrawMs(t, nowMs) == null, 'temporada da fase completa (cap 4 rodadas) → sem próximo slot');
+  // sanidade: fase única / Fase 0 não é afetada
+  assert(W._isIncrementalLigaPhase({ phases: [{}], currentPhaseIndex: 0 }) === false, 'fase única não é incremental-phase');
+})();
+
 console.log('\n' + (failures === 0 ? '✅ TODOS OS TESTES PASSARAM' : '❌ ' + failures + ' FALHA(S)'));
 process.exit(failures === 0 ? 0 : 1);
