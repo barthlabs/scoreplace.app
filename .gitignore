@@ -19,3 +19,9 @@ functions-autodraw/node_modules/
 
 # Firebase CLI deploy cache
 .firebase/
+firebase-debug.log
+firebase-debug*.log
+
+# Artefatos/documentos locais de trabalho (não fazem parte do app)
+AUDIT-codigo-morto.md
+dicas-coachmarks-scoreplace.pdf
