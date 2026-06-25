@@ -97,6 +97,15 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
     const participants = Array.isArray(t.participants) ? t.participants : [];
     if (participants.length < 2) continue;
 
+    // v3.x: construtor de fases — auto-draw para no fim da Fase 0 classificatória
+    // e NUNCA roda em fase de chave (avanço de fase é manual). Helper self-contained
+    // no vendor tournaments-utils (drawWindow). Single-phase → false (sem efeito).
+    if (drawWindow && typeof drawWindow._suppressAutoDrawForPhases === 'function' &&
+        drawWindow._suppressAutoDrawForPhases(t)) {
+      console.log(`Auto-draw: skip ${tId} — fase classificatória completa ou em fase de chave (avanço manual)`);
+      continue;
+    }
+
     // Calculate next draw date.
     // FIX timezone: o horário agendado (drawFirstDate + drawFirstTime) é hora
     // LOCAL do Brasil (BRT, UTC-3, sem horário de verão desde 2019). O servidor

@@ -773,6 +773,8 @@ window._setCheckInFilter = function (tId, filter) {
 // Ordenar reordena os nós no container. window._partSearch persiste o texto entre renders.
 window._partSearch = window._partSearch || '';
 window._partApplyFilter = function () {
+  var _docEl = document.scrollingElement || document.documentElement;
+  var _keepY = _docEl.scrollTop;
   var inp = document.getElementById('part-search');
   if (inp) window._partSearch = inp.value;
   var q = (window._partSearch || '').trim().toLowerCase();
@@ -819,6 +821,8 @@ window._partApplyFilter = function () {
   }
   var empty = document.getElementById('part-search-empty');
   if (empty) empty.style.display = (shown === 0 && cards.length > 0) ? '' : 'none';
+  // v3.0.97: não pula a tela / a barra sticky não sai do lugar quando o filtro esvazia.
+  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(_keepY); } catch (e) {}
 };
 
 window._toggleVip = function (tId, participantName) {
@@ -2458,14 +2462,17 @@ function renderParticipants(container, tournamentId) {
   // Standby / waitlist panel
   const standbyPanelHtml = (typeof window._renderStandbyPanel === 'function') ? window._renderStandbyPanel(t, isOrg) : '';
 
-  // v2.7.48: barra de busca/sort/filtro vai pro back-header (FIXO) → sempre visível
-  // ao rolar a lista. A mensagem de "nenhum encontrado" fica perto dos cards.
-  const _filterBarCtrls = (parts.length > 6 && typeof window._inscritosFilterBar === 'function')
+  // v3.0.91: barra de busca/sort/filtro CANÔNICA, agora STICKY no fluxo do conteúdo
+  // (rola junto até o cabeçalho e gruda nele) — antes ia fixa no belowHtml do
+  // back-header. Aparece com >1 card (pedido do usuário). A mensagem de "nenhum
+  // encontrado" fica perto dos cards.
+  const _filterBarCtrls = (parts.length > 1 && typeof window._inscritosFilterBar === 'function')
     ? window._inscritosFilterBar({
         stateKey: 'inscritos',
         // v3.0.x: lista de inscritos/presença vem em ordem ALFABÉTICA crescente por
         // padrão (mais fácil de achar na chamada) — não mais ordem de inscrição.
         sort: 'name-asc',
+        sticky: true,
         searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
         onChange: 'window._partApplyFilter()',
         skillCategories: (t.skillCategories || [])
@@ -2486,13 +2493,14 @@ function renderParticipants(container, tournamentId) {
             '<span class="badge badge-info" style="font-size:0.65rem;">' + ((window._formatDisplayName && t.format) ? window._formatDisplayName(t.format) : (t.format || _t('participants.defaultFormat'))) + '</span>' +
             '<span class="badge" style="background:rgba(255,255,255,0.1);color:var(--text-muted);font-size:0.65rem;">' + individualCount + '</span>' +
           '</div>',
-          belowHtml: (checkInControls || rollCallControls) + (_filterBarCtrls ? '<div style="margin-top:8px;">' + _filterBarCtrls + '</div>' : '')
+          belowHtml: (checkInControls || rollCallControls)
         })
       : ''}
     ${rollCallBanner}
     ${startBanner}
     ${startedBadge}
     ${readyBannerHtml}
+    ${_filterBarCtrls}
     ${_filterBarCtrls ? '<div id="part-search-empty" style="display:none;text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;">Nenhum inscrito encontrado.</div>' : ''}
     ${parts.length > 0 ? `
       <div style="${gridStyle}">

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.0.90-beta';
+window.SCOREPLACE_VERSION = '3.0.99-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -1308,6 +1308,13 @@ window._reflowChrome = function() {
     return null;
   }
   var bhOffset = topbarH + ddH - 1;
+  // v3.0.91: expõe a altura do back-header FIXO visível em `--backheader-h`.
+  // Qualquer barra sticky que precise grudar ABAIXO do back-header (ex.: a barra
+  // canônica de filtro/busca de Pessoas/Inscritos) usa
+  // `top: calc(var(--topbar-h) + var(--hamburger-dd-h) + var(--backheader-h))`.
+  // 0 quando não há back-header (ex.: dashboard) → a fórmula colapsa pro caso
+  // sem back-header sozinha.
+  var fixedBackHeaderH = 0;
   backHeaders.forEach(function(bh) {
     var isFixed = window.getComputedStyle(bh).position === 'fixed';
     if (isFixed) {
@@ -1315,6 +1322,7 @@ window._reflowChrome = function() {
       var next = _firstVisibleSibling(bh);
       if (next) {
         var bhH = Math.ceil(bh.getBoundingClientRect().height);
+        fixedBackHeaderH = bhH;
         // Use !important because overlay CSS uses `margin-top: 0 !important`
         // to suppress the default 50px spacer — our dynamic value has to win.
         next.style.setProperty('margin-top', (ddH + bhH + 8) + 'px', 'important');
@@ -1354,6 +1362,7 @@ window._reflowChrome = function() {
   try {
     document.documentElement.style.setProperty('--topbar-h', topbarH + 'px');
     document.documentElement.style.setProperty('--hamburger-dd-h', ((ddOpen ? ddH : 0)) + 'px');
+    document.documentElement.style.setProperty('--backheader-h', fixedBackHeaderH + 'px');
   } catch (e) {}
 };
 window._hamburgerOutsideClick = function(e) {
@@ -2726,7 +2735,7 @@ window._fbAction = function (key, field, val, noRerender) {
     var st = window._filterBarState[key] || (window._filterBarState[key] = {});
     st[field] = val;
     var opts = window._filterBarCfg[key] || {};
-    var idMap = { sort: opts.sortId, gender: opts.genderId, skill: opts.skillId, search: opts.searchId };
+    var idMap = { sort: opts.sortId, gender: opts.genderId, skill: opts.skillId, sport: opts.sportId, search: opts.searchId };
     var el = idMap[field] && document.getElementById(idMap[field]);
     if (el && el.value !== val) el.value = val;
     if (!noRerender) {
@@ -2760,7 +2769,7 @@ window._fbInner = function (key) {
         var bg = active ? c.bg : 'rgba(255,255,255,0.05)';
         var bd = active ? c.bd : 'rgba(255,255,255,0.14)';
         var fg = active ? c.fg : 'var(--text-muted)';
-        return '<button type="button" title="' + title + '" onclick="' + onclick + '" style="display:inline-flex;align-items:center;justify-content:center;gap:3px;height:30px;min-width:30px;padding:0 9px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:800;line-height:1;background:' + bg + ';border:1px solid ' + bd + ';color:' + fg + ';transition:all 0.15s;' + (extra || '') + '">' + inner + '</button>';
+        return '<button type="button" title="' + title + '" onclick="' + onclick + '" style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:3px;height:44px;min-height:44px;min-width:44px;padding:0 10px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:800;line-height:1;background:' + bg + ';border:1px solid ' + bd + ';color:' + fg + ';transition:all 0.15s;box-sizing:border-box;' + (extra || '') + '">' + inner + '</button>';
     }
     var IND = { bg: 'rgba(99,102,241,0.30)', bd: 'rgba(99,102,241,0.85)', fg: '#c7d2fe' };
     var RED = { bg: 'rgba(248,113,113,0.18)', bd: 'rgba(248,113,113,0.6)', fg: '#f87171' };
@@ -2792,31 +2801,64 @@ window._fbInner = function (key) {
     var gNext = gOrder[(gOrder.indexOf(gCur) + 1) % gOrder.length];
     var genderBtn = pill(true, gMap[gCur].c, gMap[gCur].sym, "window._fbAction('" + key + "','gender','" + gNext + "')",
         'Gênero: ' + gMap[gCur].t + ' — clique p/ alternar', 'font-size:' + (gCur === 'none' ? '0.95rem' : '1.02rem') + ';min-width:34px;');
-    // HABILIDADE cíclica: – todas(verde = mostra todas) → categorias(indigo) → 🚫 sem habilidade(vermelho)
-    var skills = (opts.skillCategories && opts.skillCategories.length) ? opts.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
-    var sOrder = ['all'].concat(skills).concat(['none']);
-    var sCur = (sOrder.indexOf(skill) >= 0) ? skill : 'all';
-    var sNext = sOrder[(sOrder.indexOf(sCur) + 1) % sOrder.length];
-    var skillBtn;
-    var sClick = "window._fbAction('" + key + "','skill','" + sNext + "')";
-    if (sCur === 'all') skillBtn = pill(true, GREEN, '–', sClick, 'Habilidade: Todas — clique p/ alternar', 'min-width:32px;');
-    else if (sCur === 'none') skillBtn = pill(true, RED, '🚫', sClick, 'Habilidade: Sem habilidade — clique p/ alternar', 'min-width:32px;font-size:0.95rem;');
-    else skillBtn = pill(true, IND, esc(sCur), sClick, 'Habilidade: ' + sCur + ' — clique p/ alternar', 'min-width:32px;');
+    // TERCEIRO botão: habilidade (cards de PESSOA) OU modalidade (cards de TORNEIO).
+    // v3.0.91: quando opts.mode === 'tournaments', a categoria/habilidade dá lugar a
+    // um filtro CÍCLICO de modalidade (🎯 Todas → BT → Tênis → … → 🎯) — pedido do
+    // usuário: "quando os cards forem de torneios e não de pessoas, modalidades
+    // cíclicas no lugar de categoria".
+    var modeT = opts.mode === 'tournaments';
+    var thirdBtn = '';
+    var sCur = 'all';      // habilidade efetiva (people)
+    var spCur = 'all';     // modalidade efetiva (tournaments)
+    if (modeT) {
+        var sports = (opts.sportList && opts.sportList.length) ? opts.sportList.slice() : [];
+        var spOrder = ['all'].concat(sports);
+        spCur = (spOrder.indexOf(st.sport) >= 0) ? st.sport : 'all';
+        st.sport = spCur;
+        var spNext = spOrder[(spOrder.indexOf(spCur) + 1) % spOrder.length];
+        var spClick = "window._fbAction('" + key + "','sport','" + String(spNext).replace(/'/g, "\\'") + "')";
+        if (spCur === 'all') {
+            thirdBtn = pill(true, GREEN, '🎯', spClick, 'Modalidade: Todas — clique p/ alternar', 'min-width:32px;font-size:0.95rem;');
+        } else {
+            var _ic = (typeof window._sportIcon === 'function') ? window._sportIcon(spCur) : '';
+            thirdBtn = pill(true, IND, _ic + '<span style="margin-left:4px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(spCur) + '</span>', spClick, 'Modalidade: ' + spCur + ' — clique p/ alternar', 'min-width:auto;');
+        }
+    } else {
+        // HABILIDADE cíclica: – todas(verde = mostra todas) → categorias(indigo) → 🚫 sem habilidade(vermelho)
+        var skills = (opts.skillCategories && opts.skillCategories.length) ? opts.skillCategories : ['A', 'B', 'C', 'D', 'FUN'];
+        var sOrder = ['all'].concat(skills).concat(['none']);
+        sCur = (sOrder.indexOf(skill) >= 0) ? skill : 'all';
+        var sNext = sOrder[(sOrder.indexOf(sCur) + 1) % sOrder.length];
+        var sClick = "window._fbAction('" + key + "','skill','" + sNext + "')";
+        if (sCur === 'all') thirdBtn = pill(true, GREEN, '–', sClick, 'Habilidade: Todas — clique p/ alternar', 'min-width:32px;');
+        else if (sCur === 'none') thirdBtn = pill(true, RED, '🚫', sClick, 'Habilidade: Sem habilidade — clique p/ alternar', 'min-width:32px;font-size:0.95rem;');
+        else thirdBtn = pill(true, IND, esc(sCur), sClick, 'Habilidade: ' + sCur + ' — clique p/ alternar', 'min-width:32px;');
+    }
     // inputs ocultos lidos pelos consumidores
     var hidden = '';
     if (opts.sortId) hidden += '<input type="hidden" id="' + opts.sortId + '" value="' + sort + '">';
-    if (opts.genderId) hidden += '<input type="hidden" id="' + opts.genderId + '" value="' + gCur + '">';
+    // v3.0.97: modo TORNEIOS (dashboard) NÃO tem gênero — dá mais espaço pra modalidade
+    // (pedido do dono). Sem botão e sem input oculto de gênero nesse modo.
+    if (opts.genderId && !modeT) hidden += '<input type="hidden" id="' + opts.genderId + '" value="' + gCur + '">';
     if (opts.skillId) hidden += '<input type="hidden" id="' + opts.skillId + '" value="' + sCur + '">';
+    if (opts.sportId) hidden += '<input type="hidden" id="' + opts.sportId + '" value="' + esc(spCur) + '">';
     var searchInp = '';
     if (opts.searchId) {
         var sctrl = 'box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text-bright);';
-        searchInp = '<input id="' + opts.searchId + '" type="text" oninput="window._fbAction(\'' + key + '\',\'search\',this.value,true)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'flex:1 1 130px;min-width:110px;padding:7px 10px;font-size:0.8rem;">';
+        // v3.0.97: MESMA altura dos botões — pedido do dono "a busca precisa ser da mesma
+        // altura que os botões". As pílulas são <button>, e o CSS global força
+        // min-height:44px (alvo de toque iOS) por cima do height inline → renderizam 44px.
+        // Logo a busca também é 44px (height+min-height) p/ casar exatamente.
+        searchInp = '<input id="' + opts.searchId + '" type="text" oninput="window._fbAction(\'' + key + '\',\'search\',this.value,true)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'flex:1 1 64px;min-width:60px;height:44px;min-height:44px;padding:0 10px;font-size:0.8rem;">';
     }
+    // v3.0.91: TUDO numa linha só (pedido do usuário) — flex-wrap:nowrap. A busca
+    // (flex:1, min-width:60) absorve a sobra e encolhe em telas estreitas mantendo
+    // as pílulas na mesma linha.
     return hidden
-        + '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;">'
+        + '<div style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;">'
         + azPill + clockPill
-        + '<span style="width:1px;height:22px;background:rgba(255,255,255,0.12);margin:0 1px;"></span>'
-        + genderBtn + skillBtn + searchInp
+        + '<span style="flex:0 0 auto;width:1px;height:22px;background:rgba(255,255,255,0.12);margin:0 1px;"></span>'
+        + (modeT ? '' : genderBtn) + thirdBtn + searchInp
         + '</div>';
 };
 window._inscritosFilterBar = function (opts) {
@@ -2824,7 +2866,65 @@ window._inscritosFilterBar = function (opts) {
     var key = opts.stateKey || opts.sortId || 'fb';
     window._filterBarCfg[key] = opts;
     if (!window._filterBarState[key]) window._filterBarState[key] = {};
-    return '<div id="fbwrap-' + key + '">' + window._fbInner(key) + '</div>';
+    // STICKY CANÔNICO (v3.0.91): a barra mora no FLUXO do conteúdo (NÃO mais no
+    // belowHtml do back-header) e usa `position:sticky`. Rola junto com a página
+    // até bater no cabeçalho; aí gruda na base dele e fica visível com os cards
+    // rolando por trás. A fórmula soma topbar + dropdown do hamburger + back-header
+    // (vars expostas por _reflowChrome) — em telas sem back-header (dashboard) o
+    // `--backheader-h` é 0 e a fórmula colapsa pro caso da topbar sozinha.
+    // (Antes a barra era fixa no belowHtml; o usuário pediu o comportamento sticky:
+    // "scrolle até o topo e fixe no cabeçalho se scrollar mais".)
+    var wrapStyle = '';
+    if (opts.sticky) {
+        // FULL-BLEED de viewport (margin:calc(50% - 50vw)) → a barra chega às bordas da
+        // tela, independente do padding do .view-container (que varia por breakpoint).
+        // bg = MESMA cor do cabeçalho (--bg-darker) → quando gruda, fica colada sem
+        // "vão" visível. padding horizontal pequeno (10px) reaproxima os controles da
+        // borda. Pedido do dono: "sem vão entre o cabeçalho e a barra" + "chegar ao
+        // limite direito da tela".
+        // v3.0.97: `-1px` no top (mesmo truque do back-header em _reflowChrome, bhOffset
+        // = topbarH+ddH-1) pra ELIMINAR o seam subpixel — a topbar renderiza em e.g.
+        // 60.5px mas --topbar-h é Math.ceil(61), então a barra grudava 0.5–1px ABAIXO,
+        // vazando o fundo entre o cabeçalho e a barra. -1px sobrepõe; como a topbar tem
+        // z-index maior e mesma cor, o overlap é invisível. `padding-top:2px` extra de
+        // folga: a barra cobre qualquer rounding antialiased acima dos controles.
+        wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
+    }
+    return '<div id="fbwrap-' + key + '"' + wrapStyle + '>' + window._fbInner(key) + '</div>';
+};
+// v3.0.97 CANÔNICO: evita que a tela "pule" e a barra sticky saia do lugar quando um
+// filtro/busca esvazia (ou encurta) a lista. Mantém um spacer invisível no FIM do
+// #view-container, dimensionado pra que o documento nunca fique mais curto que
+// (scrollY + viewport) → a barra continua grudada exatamente onde estava. Auto-some
+// (altura 0) quando os resultados voltam e o conteúdo cresce de novo. Pedido do dono:
+// "quando não há nada a mostrar não deve pular a tela e a barra sair de onde estava".
+// TODO consumidor de filtro/busca in-place ou re-render deve chamar isto após aplicar.
+window._stickyFilterKeepRoom = function (keepY) {
+    var doc = document.scrollingElement || document.documentElement;
+    if (keepY == null) keepY = doc.scrollTop;
+    // CRÍTICO: position:sticky só gruda ENQUANTO o bloco-pai (containing block) está na
+    // viewport. Se a lista esvazia, o pai encolhe e a barra "descola" subindo junto. Por
+    // isso o spacer vai como ÚLTIMO FILHO DO PAI DA BARRA (não do #view-container) — mantém
+    // o pai alto o bastante pra barra continuar grudada onde estava.
+    var bar = null;
+    var bars = document.querySelectorAll('[id^="fbwrap-"]');
+    for (var i = 0; i < bars.length; i++) { if (getComputedStyle(bars[i]).position === 'sticky') { bar = bars[i]; break; } }
+    if (!bar || !bar.parentNode) return;
+    var host = bar.parentNode;
+    var spacer = document.getElementById('sp-sticky-spacer');
+    if (!spacer) {
+        spacer = document.createElement('div');
+        spacer.id = 'sp-sticky-spacer';
+        spacer.setAttribute('aria-hidden', 'true');
+        spacer.style.cssText = 'width:1px;flex:none;pointer-events:none;margin:0;padding:0;';
+    }
+    if (spacer.parentNode !== host || host.lastElementChild !== spacer) host.appendChild(spacer);
+    spacer.style.height = '0px';
+    // quanto falta pro fundo do PAI alcançar (keepY + 1 viewport) → barra fica grudada.
+    var hostBottomDoc = host.getBoundingClientRect().bottom + doc.scrollTop;
+    var deficit = (keepY + window.innerHeight) - hostBottomDoc;
+    spacer.style.height = (deficit > 0 ? Math.ceil(deficit) : 0) + 'px';
+    if (Math.abs(doc.scrollTop - keepY) > 1) doc.scrollTop = keepY;
 };
 // v2.6.108: normaliza o gênero do perfil/inscrito pro código canônico do filtro.
 window._canonGender = function (g) {

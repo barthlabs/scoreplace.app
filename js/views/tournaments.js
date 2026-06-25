@@ -3537,13 +3537,13 @@ function renderTournaments(container, tournamentId = null) {
             } else {
               // Modo normal (individual ou duplas pós-sorteio)
               // v3.0.x: barra de filtro/busca CANÔNICA (a mesma de #participants) —
-              // sort A-Z/🕒 + gênero + habilidade + busca. Montada aqui e injetada no
-              // back-header (belowHtml) lá embaixo → sempre visível e empurrada pelo
-              // hambúrguer. Lê os data-part-* dos cards via window._partApplyFilter
-              // (idêntico ao #participants). Só quando há inscritos suficientes (>6).
-              _inscritosFilterBarHtml = (!drawDone && parts.length > 6 && typeof window._inscritosFilterBar === 'function')
+              // v3.0.91: sort A-Z/🕒 + gênero + habilidade + busca. STICKY no fluxo do
+              // conteúdo (logo acima dos cards) — rola junto até o cabeçalho e gruda
+              // nele. Lê os data-part-* dos cards via window._partApplyFilter
+              // (idêntico ao #participants). Aparece com >1 card (pedido do usuário).
+              _inscritosFilterBarHtml = (!drawDone && parts.length > 1 && typeof window._inscritosFilterBar === 'function')
                 ? window._inscritosFilterBar({
-                    stateKey: 'inscritos', sort: 'name-asc',
+                    stateKey: 'inscritos', sort: 'name-asc', sticky: true,
                     searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
                     onChange: 'window._partApplyFilter()',
                     skillCategories: (t.skillCategories || [])
@@ -3557,6 +3557,7 @@ function renderTournaments(container, tournamentId = null) {
                    ${checkInControls}
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
                    ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela brilha quando você começa a arrastar. No celular, <b>toque na estrela do organizador</b> e escolha quem promover. Funciona durante o torneio também.</div>' : ''}
+                   ${_inscritosFilterBarHtml}
                    ${_inscritosFilterBarHtml ? `<div id="part-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum inscrito encontrado.</div>` : ''}
                    <div data-merge-container="${t.id}" class="sp-dnd-host" style="${gridStyle}">
                       ${cardsStr}
@@ -3612,10 +3613,9 @@ function renderTournaments(container, tournamentId = null) {
           ? window._renderBackHeader({
               href: '#dashboard',
               middleHtml: _hdrMiddle,
-              rightHtml: _myToggleHtml,
-              // v3.0.x: barra de filtro/busca dos inscritos CANÔNICA, dentro do
-              // sticky-back-header → sempre visível ao rolar + empurrada pelo hambúrguer.
-              belowHtml: _inscritosFilterBarHtml ? ('<div style="margin-top:8px;">' + _inscritosFilterBarHtml + '</div>') : ''
+              rightHtml: _myToggleHtml
+              // v3.0.91: a barra de filtro/busca dos inscritos saiu do belowHtml — agora
+              // é STICKY no fluxo do conteúdo (dentro de participantsHtml, acima dos cards).
             })
           : '');
     }

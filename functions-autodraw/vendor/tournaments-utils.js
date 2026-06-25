@@ -1244,6 +1244,9 @@ window._nextOwedDrawMs = function(t, nowMs) {
     if (!t) return null;
     var isLiga = t.format === 'Liga' || t.format === 'Ranking';
     if (!isLiga || t.drawManual === true || !t.drawFirstDate || t.status === 'finished') return null;
+    // v3.x: torneio multifase — o auto-draw para no fim da fase classificatória
+    // (avanço pra próxima fase é MANUAL). Single-phase → false (zero efeito).
+    if (window._suppressAutoDrawForPhases && window._suppressAutoDrawForPhases(t)) return null;
     var fd = String(t.drawFirstDate), ft = t.drawFirstTime || '19:00';
     if (fd.indexOf('T') !== -1) { var pr = fd.split('T'); fd = pr[0]; if (pr[1]) ft = pr[1].slice(0, 5); }
     var firstDraw = new Date(fd + 'T' + ft + ':00-03:00').getTime();
@@ -1270,6 +1273,24 @@ window._nextOwedDrawMs = function(t, nowMs) {
     var seasonEnd = (typeof window._ligaSeasonEndMs === 'function') ? window._ligaSeasonEndMs(t) : null;
     if (seasonEnd != null && owed > seasonEnd) return null;
     return owed;
+};
+
+// v3.x: o auto-draw (cron + poller cliente) deve PARAR no construtor de fases —
+// (a) Fase 0 classificatória tem nº FIXO de rodadas (phases[0].rounds); auto-draw
+//     para ao atingir esse limite (avanço pra próxima fase é MANUAL, nunca cron);
+// (b) já em fase de CHAVE (currentPhaseIndex>0): NUNCA auto-sortear (o formato
+//     segue 'Liga', então sem este guard o cron geraria uma rodada Liga espúria).
+// Single-phase (sem t.phases ≥2) → SEMPRE false: zero mudança de comportamento.
+// Self-contained de propósito — NÃO depende de phases-engine, que não está no
+// vendor do autoDraw (lá window._isMultiPhase é undefined).
+window._suppressAutoDrawForPhases = function(t) {
+    if (!t || !Array.isArray(t.phases) || t.phases.length <= 1) return false;
+    var cur = t.currentPhaseIndex || 0;
+    if (cur > 0) return true; // fase de chave: materializada no avanço manual, nunca auto-sorteada
+    var cap = parseInt((t.phases[0] || {}).rounds, 10);
+    if (!cap || cap < 1) cap = 1;
+    var drawn = (Array.isArray(t.rounds) ? t.rounds : []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0);
+    return drawn >= cap;
 };
 
 // Navigate to tournament detail and scroll to highlight the enrolled participant

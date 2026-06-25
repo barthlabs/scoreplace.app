@@ -21,15 +21,29 @@ function renderExplore(container) {
   var mySent = cu.friendRequestsSent || [];
   var myReceived = cu.friendRequestsReceived || [];
 
+  // v3.0.91: a barra de filtro/busca CANÔNICA (window._inscritosFilterBar — a mesma
+  // dos Inscritos: A-Z/🕒 + gênero ⚥ + habilidade + 🔎 Buscar) agora é STICKY no
+  // FLUXO do conteúdo (logo abaixo do título), NÃO mais fixa no belowHtml do
+  // back-header. Rola junto com a página até bater no cabeçalho; aí gruda na base
+  // dele (via --topbar-h/--hamburger-dd-h/--backheader-h). onChange →
+  // _exploreApplyFilter (filtra/ordena TODAS as seções).
+  var _exploreFilterBar = window._inscritosFilterBar({
+    stateKey: 'explorePeople',
+    searchId: 'explore-search-input',
+    sortId: 'explore-sort',
+    genderId: 'explore-gender',
+    skillId: 'explore-skill',
+    sort: 'order-desc',
+    sticky: true,
+    onChange: 'window._exploreApplyFilter()'
+  });
   container.innerHTML =
-    window._renderBackHeader({ href: '#dashboard' }) +
+    window._renderBackHeader({
+      href: '#dashboard'
+    }) +
     '<div style="max-width: 800px; margin: 0 auto;">' +
       '<h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-bright);">' + _t('explore.title') + '</h2>' +
-
-      // Search bar — topo para filtrar dinamicamente
-      '<div style="margin-bottom: 1.25rem;">' +
-        '<input type="text" id="explore-search-input" class="form-control" placeholder="🔍 Procurar por nome, cidade ou esporte..." style="width: 100%; box-sizing: border-box; font-size: 0.92rem; padding: 10px 14px;">' +
-      '</div>' +
+      _exploreFilterBar +
 
       // Received friend requests (need my response)
       '<div id="explore-pending"></div>' +
@@ -49,37 +63,17 @@ function renderExplore(container) {
   _renderMyFriends(myUid, myFriends);
   _renderSentRequests(myUid, mySent);
 
-  // Search handler — live filter as user types (debounced)
-  var searchInput = document.getElementById('explore-search-input');
-  var _searchTimer = null;
+  // v3.0.x: sincroniza estado inicial de sort/busca p/ a detecção de mudança em
+  // _exploreApplyFilter (evita refetch/re-render redundante a cada keystroke). A
+  // barra canônica chama _exploreApplyFilter via onChange; não há listener manual.
+  var _fbSt = (window._filterBarState && window._filterBarState.explorePeople) || {};
+  window._exploreLastSort = _fbSt.sort || 'order-desc';
+  window._exploreLastSearch = _fbSt.search || '';
+  window._otrosSortMode = (window._exploreLastSort.indexOf('name') === 0 ? 'alpha' : 'date') + (window._exploreLastSort.indexOf('-desc') >= 0 ? '-desc' : '-asc');
 
-  function doSearch() {
-    _performUserSearch(searchInput.value.trim(), myUid, myFriends, mySent, myReceived);
-  }
-
-  function scheduleSearch(delayMs) {
-    if (_searchTimer) clearTimeout(_searchTimer);
-    _searchTimer = setTimeout(doSearch, typeof delayMs === 'number' ? delayMs : 250);
-  }
-
-  searchInput.addEventListener('input', function() {
-    // Filtra INSTANTANEAMENTE as seções já visíveis (amigos, convites
-    // pendentes, enviados) — bug reportado: a busca só mexia em
-    // #explore-results (não-amigos), então digitar não filtrava "Meus Amigos".
-    window._filterExploreVisible(searchInput.value);
-    // E busca não-amigos no Firestore (debounced).
-    scheduleSearch(250);
-  });
-  searchInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') {
-      window._filterExploreVisible(searchInput.value);
-      if (_searchTimer) clearTimeout(_searchTimer);
-      doSearch();
-    }
-  });
-
-  // Auto-load non-friend users
-  _performUserSearch('', myUid, myFriends, mySent, myReceived);
+  // Auto-load non-friend users — o filtro (gênero/habilidade/texto) é reaplicado
+  // por _exploreFilterAllSections ao fim de cada render de seção.
+  _performUserSearch(window._exploreLastSearch, myUid, myFriends, mySent, myReceived);
 
   // v2.3.41: tour de coachmarks da tela Pessoas (idle-driven, self-guardado)
   if (window._coach && typeof window._coach.startExploreTour === 'function') window._coach.startExploreTour();
@@ -201,7 +195,7 @@ function _friendCompactCardHtml(u, uid) {
   window._exploreProfileCache = window._exploreProfileCache || {};
   window._exploreProfileCache[uid] = u;
 
-  return '<div class="card hover-lift" onclick="window._openUserProfile(\'' + safeUid + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(34,197,94,0.06);border:1px solid var(--success-color);border-radius:10px;min-width:0;">' +
+  return '<div class="card hover-lift"' + _personFilterAttrs(u) + ' onclick="window._openUserProfile(\'' + safeUid + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(34,197,94,0.06);border:1px solid var(--success-color);border-radius:10px;min-width:0;">' +
     '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid var(--success-color);flex-shrink:0;">' +
     '<div style="flex:1;min-width:0;">' +
       _nameHtml(_nl.line1, _nl.line2) +
@@ -238,7 +232,7 @@ function _userCardHtml(u, uid, actionHtml, variant, onClickFn) {
 
   var _cardClick = onClickFn ? ' onclick="' + onClickFn + '"' : '';
   var _cardCursor = onClickFn ? 'cursor:pointer;' : '';
-  return '<div class="card"' + _cardClick + ' style="' + _cardCursor + 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgTint + ';border:1px solid ' + borderColor + ';border-radius:10px;min-width:0;">' +
+  return '<div class="card"' + _personFilterAttrs(u) + _cardClick + ' style="' + _cardCursor + 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgTint + ';border:1px solid ' + borderColor + ';border-radius:10px;min-width:0;">' +
     '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';flex-shrink:0;">' +
     '<div style="flex:1;min-width:0;">' +
       _nameHtml(_nl.line1, _nl.line2) +
@@ -269,25 +263,6 @@ function _sortOtrosArray(arr, mode) {
     });
   }
 }
-
-window._toggleOtrosSort = function(dimension) {
-  var current = window._otrosSortMode || 'date-desc';
-  var parts = current.split('-');
-  var currentDim = parts[0];
-  var currentDir = parts[1] || 'desc';
-  var newMode;
-  if (currentDim === dimension) {
-    newMode = dimension + '-' + (currentDir === 'asc' ? 'desc' : 'asc');
-  } else {
-    newMode = dimension + '-' + (dimension === 'date' ? 'desc' : 'asc');
-  }
-  window._otrosSortMode = newMode;
-  var users = window._otrosUsers;
-  var resultsDiv = document.getElementById('explore-results');
-  if (!users || !resultsDiv) return;
-  _sortOtrosArray(users, newMode);
-  _renderOtrosCards(resultsDiv, users);
-};
 
 function _computeSharedInfo(user, myEmail, myName, myUid) {
   var email = user.email || '';
@@ -420,39 +395,141 @@ window._exploreExpandRecent = function(days) {
   _performUserSearch(q, myUid, cu.friends || [], cu.friendRequestsSent || [], cu.friendRequestsReceived || []);
 };
 
-// Filtro instantâneo client-side das seções JÁ renderizadas (amigos, convites
-// recebidos, enviados). Casa o termo contra o texto do card (nome/cidade/
-// esporte). Esconde cards que não casam e a seção inteira quando nada casa.
-// Roda a cada tecla, sem debounce (é local, instantâneo).
-window._filterExploreVisible = function(query) {
-  // Injeta 1× a classe de ocultar. Usamos classe com display:none !important
-  // em vez de mexer em card.style.display — setar display='' apagava o
-  // display:flex INLINE dos cards, quebrando o layout (avatar/nome empilhavam
-  // verticalmente, cards ficavam altos). A classe esconde sem tocar no layout
-  // original; remover a classe restaura o flex inline intacto.
-  if (!document.getElementById('_explore-filter-style')) {
-    var st = document.createElement('style');
-    st.id = '_explore-filter-style';
-    st.textContent = '.sp-explore-hidden{display:none !important;}';
-    document.head.appendChild(st);
+// v3.0.x: data-attrs de filtro+sort em cada card de pessoa, lidos por
+// _exploreFilterAllSections (gênero/habilidade) e _exploreSortAllSections
+// (nome/timestamp). skill = união dos níveis declarados em skillBySport (a pessoa
+// "tem" o nível B se jogar B em qualquer modalidade); sem dado → vazio (cai no
+// filtro "🚫 sem habilidade"). data-pname = nome (A-Z); data-pts = encontro mais
+// recente (Outros) ou atividade do perfil (amigos/convites) p/ a ordem cronológica.
+function _personFilterAttrs(u) {
+  var esc = window._safeHtml || function (s) { return s == null ? '' : String(s); };
+  var g = (typeof window._canonGender === 'function') ? window._canonGender(u && u.gender) : 'none';
+  var levels = {};
+  if (u && u.skillBySport && typeof u.skillBySport === 'object') {
+    Object.keys(u.skillBySport).forEach(function (k) {
+      var v = u.skillBySport[k];
+      if (v) levels[String(v).trim().toUpperCase()] = true;
+    });
   }
-  var q = String(query || '').trim().toLowerCase();
-  ['explore-pending', 'explore-friends', 'explore-sent'].forEach(function(secId) {
+  var nm = (window._friendlyDisplayName ? window._friendlyDisplayName(u) : ((u && (u.displayName || u.email)) || ''));
+  var pts = 0;
+  if (u && u._latestTs) pts = u._latestTs;
+  else if (u) {
+    var raw = u.updatedAt || u.createdAt || u.lastSeenAt;
+    if (raw) { var p = new Date(raw).getTime(); if (!isNaN(p)) pts = p; }
+  }
+  return ' data-person-card data-pgender="' + esc(g) + '" data-pskill="' + esc(Object.keys(levels).join(',')) +
+    '" data-pname="' + esc(String(nm).toLowerCase()) + '" data-pts="' + pts + '"';
+}
+
+// v3.0.x: reordena (no DOM, sem refetch) os cards das seções convites/amigos pela
+// ordenação ativa da barra canônica (_otrosSortMode). NÃO toca em #explore-results
+// (Outros) — esse é re-renderizado por _renderOtrosCards com agrupamento por dia.
+// Reordena dentro do parent comum dos cards de cada seção (tolera estruturas
+// diferentes: grid de amigos, lista de convites).
+window._exploreSortAllSections = function () {
+  var mode = window._otrosSortMode || 'date-desc';
+  var dim = mode.indexOf('alpha') === 0 ? 'alpha' : 'date';
+  var dir = mode.indexOf('-desc') >= 0 ? 'desc' : 'asc';
+  ['explore-pending', 'explore-friends', 'explore-sent'].forEach(function (secId) {
     var sec = document.getElementById(secId);
     if (!sec) return;
-    var cards = sec.querySelectorAll('.card');
+    var cards = Array.prototype.slice.call(sec.querySelectorAll('[data-person-card]'));
+    if (cards.length < 2) return;
+    var parent = cards[0].parentNode;
+    cards = cards.filter(function (c) { return c.parentNode === parent; });
+    if (cards.length < 2) return;
+    cards.sort(function (a, b) {
+      if (dim === 'alpha') {
+        var r = (a.getAttribute('data-pname') || '').localeCompare(b.getAttribute('data-pname') || '', 'pt-BR', { sensitivity: 'base' });
+        return dir === 'desc' ? -r : r;
+      }
+      var ta = parseFloat(a.getAttribute('data-pts') || '0') || 0;
+      var tb = parseFloat(b.getAttribute('data-pts') || '0') || 0;
+      return dir === 'desc' ? (tb - ta) : (ta - tb);
+    });
+    cards.forEach(function (c) { parent.appendChild(c); });
+  });
+};
+
+// v3.0.x: filtra/oculta cards em TODAS as seções (convites recebidos, amigos,
+// convites enviados, outros) conforme a barra canônica — texto (nome/cidade/
+// esporte via textContent) + gênero + habilidade. Esconde o cabeçalho da seção
+// quando, com filtro ativo, nada casa. Classe .sp-explore-hidden = display:none.
+window._exploreFilterAllSections = function () {
+  // ordena as seções (amigos/convites) ANTES de filtrar — assim qualquer caller
+  // (render de seção, _renderOtrosCards, _exploreApplyFilter) reflete a ordenação.
+  if (window._exploreSortAllSections) window._exploreSortAllSections();
+  if (!document.getElementById('_explore-filter-style')) {
+    var stEl = document.createElement('style');
+    stEl.id = '_explore-filter-style';
+    stEl.textContent = '.sp-explore-hidden{display:none !important;}';
+    document.head.appendChild(stEl);
+  }
+  var fb = (window._filterBarState && window._filterBarState.explorePeople) || {};
+  var q = String(fb.search || '').trim().toLowerCase();
+  var gender = fb.gender || 'all';
+  var skill = fb.skill || 'all';
+  var anyFilter = !!q || gender !== 'all' || skill !== 'all';
+  ['explore-pending', 'explore-friends', 'explore-sent', 'explore-results'].forEach(function (secId) {
+    var sec = document.getElementById(secId);
+    if (!sec) return;
+    var cards = sec.querySelectorAll('[data-person-card]');
     if (!cards.length) { sec.classList.remove('sp-explore-hidden'); return; }
     var anyVisible = false;
-    cards.forEach(function(card) {
-      var match = !q || ((card.textContent || '').toLowerCase().indexOf(q) !== -1);
-      if (match) { card.classList.remove('sp-explore-hidden'); anyVisible = true; }
-      else { card.classList.add('sp-explore-hidden'); }
+    cards.forEach(function (card) {
+      var okText = !q || ((card.textContent || '').toLowerCase().indexOf(q) !== -1);
+      var cg = card.getAttribute('data-pgender') || 'none';
+      var okGender = (gender === 'all') || (cg === gender);
+      var cs = card.getAttribute('data-pskill') || '';
+      var okSkill;
+      if (skill === 'all') okSkill = true;
+      else if (skill === 'none') okSkill = !cs;
+      else okSkill = (',' + cs + ',').indexOf(',' + skill + ',') !== -1;
+      var vis = okText && okGender && okSkill;
+      if (vis) { card.classList.remove('sp-explore-hidden'); anyVisible = true; }
+      else card.classList.add('sp-explore-hidden');
     });
-    // Sem query → mostra a seção inteira. Com query e nada casando → esconde
-    // (inclui o cabeçalho "MEUS AMIGOS (N)") pra não deixar título órfão.
-    if (q && !anyVisible) sec.classList.add('sp-explore-hidden');
+    // Com filtro ativo e nada casando → esconde a seção inteira (inclui o
+    // cabeçalho "MEUS AMIGOS (N)" etc) pra não deixar título órfão.
+    if (anyFilter && !anyVisible) sec.classList.add('sp-explore-hidden');
     else sec.classList.remove('sp-explore-hidden');
   });
+  // v3.0.97: não pula a tela / a barra sticky não sai do lugar quando o filtro esvazia.
+  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(); } catch (e) {}
+};
+
+// v3.0.x: onChange da barra canônica. Mapeia o sort canônico (name/order × asc/
+// desc) pro _otrosSortMode do explore (alpha/date); re-ordena a lista de Outros
+// SÓ quando o sort muda; refetcha os não-amigos (debounced) SÓ quando o texto
+// muda; e aplica o filtro client-side (gênero/habilidade/texto) em todas as seções.
+window._exploreApplyDebounce = null;
+window._exploreApplyFilter = function () {
+  var fb = (window._filterBarState && window._filterBarState.explorePeople) || {};
+  var sort = fb.sort || 'order-desc';
+  window._otrosSortMode = (sort.indexOf('name') === 0 ? 'alpha' : 'date') + (sort.indexOf('-desc') >= 0 ? '-desc' : '-asc');
+
+  var resultsDiv = document.getElementById('explore-results');
+  var sortChanged = (sort !== window._exploreLastSort);
+  window._exploreLastSort = sort;
+  if (sortChanged && window._otrosUsers && resultsDiv && typeof _sortOtrosArray === 'function') {
+    _sortOtrosArray(window._otrosUsers, window._otrosSortMode);
+    _renderOtrosCards(resultsDiv, window._otrosUsers);
+  }
+
+  var searchVal = String(fb.search || '').trim();
+  var searchChanged = (searchVal !== window._exploreLastSearch);
+  window._exploreLastSearch = searchVal;
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (searchChanged && cu) {
+    var myUid = cu.uid || cu.email;
+    if (window._exploreApplyDebounce) clearTimeout(window._exploreApplyDebounce);
+    window._exploreApplyDebounce = setTimeout(function () {
+      _performUserSearch(searchVal, myUid, cu.friends || [], cu.friendRequestsSent || [], cu.friendRequestsReceived || []);
+    }, 250);
+  }
+
+  window._exploreFilterAllSections();
 };
 
 function _performUserSearch(query, myUid, myFriends, mySent, myReceived) {
@@ -566,27 +643,11 @@ function _renderOtrosCards(resultsDiv, users) {
   var _sortDim = _sortParts[0];
   var _sortDir = _sortParts[1] || 'desc';
 
-  var sortDateLabel = _t('explore.sortDate');
-  if (sortDateLabel === 'explore.sortDate') sortDateLabel = 'Data';
-  var sortAlphaLabel = _t('explore.sortAlpha');
-  if (sortAlphaLabel === 'explore.sortAlpha') sortAlphaLabel = 'A–Z';
-
-  function sortToggleBtn(dimension, label) {
-    var active = _sortDim === dimension;
-    var arrow = active ? (_sortDir === 'asc' ? ' ↑' : ' ↓') : ' ⇅';
-    var style = 'padding:5px 11px;border-radius:14px;font-size:0.72rem;font-weight:600;border:1px solid ' +
-      (active ? 'var(--primary-color, #6366f1)' : 'rgba(148,163,184,0.3)') + ';background:' +
-      (active ? 'rgba(99,102,241,0.2)' : 'transparent') + ';color:' +
-      (active ? 'var(--text-bright, #e2e8f0)' : 'var(--text-muted)') + ';cursor:pointer;display:inline-flex;align-items:center;gap:2px;';
-    return '<button onclick="window._toggleOtrosSort(\'' + dimension + '\')" style="' + style + '" title="' + label + '">' + label + arrow + '</button>';
-  }
-
-  var html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom: 0.75rem;">' +
+  // v3.0.x: os toggles de ordenação (A-Z/🕒) agora vivem na barra canônica do
+  // topo (_inscritosFilterBar) — aqui fica só o rótulo da seção. _sortDim/_sortDir
+  // continuam guiando o agrupamento por dia abaixo.
+  var html = '<div style="margin-bottom: 0.75rem;">' +
     '<div style="font-weight: 600; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">' + _t('explore.otherUsers') + ' (' + users.length + ')</div>' +
-    '<div style="display:flex;gap:6px;">' +
-      sortToggleBtn('date', '📅 ' + sortDateLabel) +
-      sortToggleBtn('alpha', sortAlphaLabel) +
-    '</div>' +
   '</div>';
 
   // Action-button builder reused by both grouping paths
@@ -680,6 +741,8 @@ function _renderOtrosCards(resultsDiv, users) {
   }
 
   resultsDiv.innerHTML = html;
+  // v3.0.x: reaplica gênero/habilidade/texto da barra canônica nos cards recém-renderizados.
+  if (window._exploreFilterAllSections) window._exploreFilterAllSections();
 }
 
 // Renders a user card that shows shared-tournament count + latest encounter date when applicable
@@ -709,7 +772,7 @@ function _userCardWithEncounterHtml(u, uid, actionHtml) {
 
   // Date is shown as a group header above a batch of cards (see _renderOtrosCards),
   // so we don't repeat it on each individual card.
-  return '<div class="card" onclick="window._openUserProfile(\'' + _safeUidEnc + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgTint + ';border:1px solid ' + borderColor + ';border-radius:10px;min-width:0;">' +
+  return '<div class="card"' + _personFilterAttrs(u) + ' onclick="window._openUserProfile(\'' + _safeUidEnc + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgTint + ';border:1px solid ' + borderColor + ';border-radius:10px;min-width:0;">' +
     '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid ' + avatarBorder + ';flex-shrink:0;">' +
     '<div style="flex:1;min-width:0;">' +
       _nameHtml(_nl.line1, _nl.line2) +
@@ -751,7 +814,7 @@ function _renderPendingRequests(myUid, receivedIds) {
       var safeUidPending = (uid || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
       window._exploreProfileCache = window._exploreProfileCache || {};
       if (uid) window._exploreProfileCache[uid] = u;
-      html += '<div class="card" onclick="window._openUserProfile(\'' + safeUidPending + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.45);border-radius:10px;min-width:0;">' +
+      html += '<div class="card"' + _personFilterAttrs(u) + ' onclick="window._openUserProfile(\'' + safeUidPending + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.45);border-radius:10px;min-width:0;">' +
         '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto2 + '\'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid rgba(245,158,11,0.45);flex-shrink:0;">' +
         '<div style="flex:1;min-width:0;">' +
           _nameHtml(_nlP.line1, _nlP.line2) +
@@ -766,6 +829,7 @@ function _renderPendingRequests(myUid, receivedIds) {
 
     html += '</div>';
     div.innerHTML = html;
+    if (window._exploreFilterAllSections) window._exploreFilterAllSections();
   });
 }
 
@@ -863,6 +927,7 @@ function _renderSentRequests(myUid, sentIds) {
 
     html += '</div></div>';
     div.innerHTML = html;
+    if (window._exploreFilterAllSections) window._exploreFilterAllSections();
   });
 }
 
@@ -951,6 +1016,7 @@ function _renderMyFriends(myUid, friendIds) {
 
     html += '</div></div>';
     div.innerHTML = html;
+    if (window._exploreFilterAllSections) window._exploreFilterAllSections();
   });
 }
 

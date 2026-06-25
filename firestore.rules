@@ -115,6 +115,11 @@ service cloud.firestore {
           'ligaActive', 'ligaInactive',
           // Polls: votação de decisão (cada participante vota uma vez)
           'pollNotifications', 'polls', 'activePollId',
+          // Enquete do organizador (📊): inscritos votam gravando opinionPolls[].votes.
+          // BUG (Confra): sem este campo na lista, o voto do PARTICIPANTE era
+          // rejeitado com permission-denied — só o organizador (admin) conseguia
+          // votar. O _save engolia o erro e o toast mentia "voto registrado".
+          'opinionPolls',
           // Categorias notificadas (auto-assign comunica ao participante)
           'categoryNotifications',
           // Flags internas setadas em fim de torneio / transições

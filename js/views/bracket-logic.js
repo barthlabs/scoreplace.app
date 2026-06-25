@@ -3280,6 +3280,11 @@ window._checkLigaAutoDraws = async function() {
       } catch (e) {}
     }
 
+    // v3.x: construtor de fases — não auto-sortear além do fim da fase
+    // classificatória nem em fase de chave (avanço de fase é manual). Single-phase
+    // → false (sem efeito). Helper self-contained em tournaments-utils (vendored).
+    if (window._suppressAutoDrawForPhases && window._suppressAutoDrawForPhases(t)) continue;
+
     // Stop if the league season has ended (endDate ou ligaSeasonMonths).
     // v2.4.75: usa o helper canônico (BRT, respeita hora explícita no endDate).
     // O check antigo `new Date(t.endDate + 'T23:59:59')` quebrava quando endDate

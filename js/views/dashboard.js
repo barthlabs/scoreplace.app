@@ -1080,6 +1080,9 @@ function renderDashboard(container) {
   }
   if (!window._dashLocation) window._dashLocation = '';
   if (!window._dashFormat) window._dashFormat = '';
+  // v3.0.91: estado da barra CANÔNICA (sort A-Z/🕒 + gênero) no dashboard de torneios.
+  if (typeof window._dashGender === 'undefined') window._dashGender = 'all';
+  if (typeof window._dashSort === 'undefined') window._dashSort = 'order-desc';
 
   // v2.8.60: modalidades FAVORITAS do perfil (limpas) — pro filtro "Favoritas".
   function _dashPrefSports() {
@@ -1132,6 +1135,29 @@ function renderDashboard(container) {
     window._dashView = view;
     try { localStorage.setItem('scoreplace_dashView', view); } catch(e) {}
     window._dashRerender();
+  };
+  // v3.0.91: onChange ÚNICO da barra CANÔNICA do dashboard (sort/gênero/modalidade/busca).
+  // Diferencia BUSCA (in-place, sem re-render → não pula a tela nem perde o foco) de
+  // sort/gênero/modalidade (re-render via _dashRerender, que preserva o scroll).
+  window._dashApplyCanonical = function() {
+    var gv = function(id){ var el = document.getElementById(id); return el ? el.value : ''; };
+    var g  = gv('dash-gender')  || 'all';
+    var sp = gv('dash-sport')   || 'all';
+    var so = gv('dash-sort')    || 'order-desc';
+    var q  = gv('dash-search-input') || '';
+    var prev = window._dashCanonLast || {};
+    var nonSearchChanged = (g !== prev.gender) || (sp !== prev.sport) || (so !== prev.sort);
+    window._dashCanonLast = { gender: g, sport: sp, sort: so, search: q };
+    window._dashGender = g;
+    window._dashSort = so;
+    _persistDashSport(sp === 'all' ? '' : sp);   // barra usa 'all'; dashboard usa '' p/ todas
+    window._dashSearch = q;
+    if (nonSearchChanged) {
+      window._dashPage = 1;
+      window._dashRerender();
+    } else if (typeof window._applyDashSearchInPlace === 'function') {
+      window._applyDashSearchInPlace();
+    }
   };
   // v0.16.73: removidos handlers _dashForceFetchDiscovery e
   // _dashDiagnoseTournaments (v0.16.60-61) — eram acionados por botões do
@@ -2022,6 +2048,26 @@ function renderDashboard(container) {
   const curSport = window._dashSport || '';
   const curLocation = window._dashLocation || '';
   const curFormat = window._dashFormat || '';
+  // v3.0.91: estado da barra canônica de torneios.
+  const curGender = window._dashGender || 'all';
+  const curSort = window._dashSort || 'order-desc';
+  const _isDefaultSort = (curSort === 'order-desc');
+  // Curadoria (faixas Em andamento/Aguardando/Favoritos + seções extras de descoberta)
+  // só quando NÃO há filtro secundário ativo (modalidade/local/formato/gênero) E o sort
+  // está no padrão cronológico. Sort/gênero explícitos → grade plana ordenada/filtrada.
+  const _dashCurated = (curGender === 'all') && _isDefaultSort;
+  // Gênero do TORNEIO = suas categorias de gênero (pedido do usuário). 'Masc'/'Fem' →
+  // tem categoria daquele gênero; 'none' → torneio sem categoria de gênero alguma.
+  const _tournGenderMatch = function(t, g) {
+    if (!g || g === 'all') return true;
+    var cats = [];
+    if (Array.isArray(t.genderCategories)) cats = cats.concat(t.genderCategories);
+    if (Array.isArray(t.combinedCategories)) cats = cats.concat(t.combinedCategories);
+    var canon = cats.map(function(c){ return window._canonGender ? window._canonGender(c) : ''; });
+    if (g === 'none') return canon.filter(function(c){ return c === 'Masc' || c === 'Fem' || c === 'Misto'; }).length === 0;
+    return canon.indexOf(g) !== -1;
+  };
+  const _dashDateKey = function(t){ var d = t.startDate || t.registrationLimit || t.endDate; var ms = d ? new Date(d).getTime() : 0; return isNaN(ms) ? 0 : ms; };
 
   // Favorites count
   const favIds = typeof window._getFavorites === 'function' ? window._getFavorites() : [];
@@ -2064,6 +2110,13 @@ function renderDashboard(container) {
   }
   if (curLocation) filtered = filtered.filter(t => t.venueName === curLocation);
   if (curFormat) filtered = filtered.filter(t => t.format === curFormat);
+  // v3.0.91: filtro de gênero (categorias do torneio) + ordenação explícita da barra.
+  if (curGender && curGender !== 'all') filtered = filtered.filter(t => _tournGenderMatch(t, curGender));
+  if (!_isDefaultSort) {
+    if (curSort === 'name-asc') filtered.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
+    else if (curSort === 'name-desc') filtered.sort((a, b) => String(b.name || '').localeCompare(String(a.name || ''), 'pt-BR'));
+    else if (curSort === 'order-asc') filtered.sort((a, b) => _dashDateKey(a) - _dashDateKey(b));
+  }
 
   // v2.1.54: torneios EM ANDAMENTO (seus + públicos de descoberta) saem das suas
   // posições normais e viram duas faixas:
@@ -2075,7 +2128,7 @@ function renderDashboard(container) {
   // da seção de descoberta pra não duplicar.
   let runningBandHtml = '';
   let runningBottomHtml = '';
-  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat) {
+  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat && _dashCurated) {
     const _WK_MS = 7 * 86400000;
     const _nowMsBand = Date.now();
     const _runsThisWeek = function(t) {
@@ -2124,7 +2177,7 @@ function renderDashboard(container) {
   // Aparecem entre "Em andamento (esta semana)" e "Favoritos". Removidos do
   // filtrado principal para não duplicar.
   let awaitingStartHtml = '';
-  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat) {
+  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat && _dashCurated) {
     const _hasDraw2 = function(t) {
       return (Array.isArray(t.matches) && t.matches.length > 0) ||
              (Array.isArray(t.rounds) && t.rounds.length > 0) ||
@@ -2153,7 +2206,7 @@ function renderDashboard(container) {
   // FAVORITOS (coração acionado) que ainda não estão em andamento. Removidos da
   // lista principal pra não duplicar. Só no filtro 'todos' sem filtros secundários.
   let favoritesBandHtml = '';
-  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat) {
+  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat && _dashCurated) {
     const _favIds = (typeof window._getFavorites === 'function') ? window._getFavorites() : [];
     if (_favIds && _favIds.length) {
       const _favSet = new Set(_favIds.map(String));
@@ -2602,6 +2655,24 @@ function renderDashboard(container) {
     })();
   }
 
+  // v3.0.91: barra de filtro/busca CANÔNICA (mesma de Pessoas/Inscritos) em modo
+  // TORNEIOS — A-Z/🕒 + gênero (categorias do torneio) + modalidade cíclica (no lugar
+  // de categoria) + busca. STICKY abaixo da topbar. Estado semeado a partir do estado
+  // aplicado do dashboard pra refletir a seleção atual após cada re-render.
+  const _dashSportList = Array.isArray(window._dashSportsList) ? window._dashSportsList : [];
+  const _dashBarSport = (curSport && curSport !== '__fav__') ? curSport : 'all';
+  window._filterBarState = window._filterBarState || {};
+  window._filterBarState['dashTourn'] = { sort: curSort, gender: curGender, sport: _dashBarSport, search: window._dashSearch || '' };
+  window._dashCanonLast = { sort: curSort, gender: curGender, sport: _dashBarSport, search: window._dashSearch || '' };
+  const _dashFilterBar = (typeof window._inscritosFilterBar === 'function')
+    ? window._inscritosFilterBar({
+        stateKey: 'dashTourn', mode: 'tournaments', sticky: true,
+        sportList: _dashSportList, sort: 'order-desc',
+        searchId: 'dash-search-input', sortId: 'dash-sort', genderId: 'dash-gender', sportId: 'dash-sport',
+        onChange: 'window._dashApplyCanonical()'
+      })
+    : '';
+
   const html = `
     <!-- Header Hero Box -->
     <!-- v0.17.31: cores do hero-box agora vêm de --hero-* tokens (style.css)
@@ -2730,14 +2801,9 @@ function renderDashboard(container) {
       <label class="toggle-switch" style="--toggle-on-bg:#6366f1;" title="Ver em lista (desligado = cards)"><input type="checkbox" ${window._dashView === 'compact' ? 'checked' : ''} onchange="window._setDashView(this.checked ? 'compact' : 'cards')"><span class="toggle-slider"></span></label>
     </div>
     <div class="dashboard-list" style="margin-bottom: 2rem;">
-      <!-- v2.8.41: barra de filtro (modalidade cíclica) + busca, STICKY abaixo da topbar -->
-      <div class="dash-filter-bar" style="position:sticky;top:calc(var(--topbar-h, 60px) + var(--hamburger-dd-h, 0px));z-index:30;display:flex;gap:8px;align-items:center;background:var(--bg-dark,#0f172a);padding:0 0 8px;margin-bottom:6px;">
-        <button onclick="window._cycleDashSport()" title="Filtrar por modalidade — clique para alternar (− = Todas)" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;min-height:44px;box-sizing:border-box;background:${curSport ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.06)'};color:${curSport ? '#a5b4fc' : 'var(--text-muted,#94a3b8)'};border:1px solid ${curSport ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.14)'};border-radius:10px;padding:0 12px;font-size:0.82rem;font-weight:700;cursor:pointer;white-space:nowrap;">
-          <span style="font-size:1rem;line-height:1;">${curSport === '__fav__' ? '⭐' : (curSport ? getSportIcon(curSport) : '🎯')}</span>
-          <span>${curSport === '__fav__' ? 'Favoritas' : (curSport ? window._safeHtml(curSport) : 'Todas')}</span>
-        </button>
-        <input id="dash-search-input" type="search" value="${window._safeHtml(window._dashSearch || '')}" oninput="window._setDashSearch(this.value)" placeholder="🔍 Buscar torneio…" autocomplete="off" style="flex:1;min-width:0;height:44px;min-height:44px;background:var(--bg-card,#1a1a2e);color:var(--text-bright,#f1f5f9);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:0 12px;font-size:0.85rem;box-sizing:border-box;">
-      </div>
+      <!-- v3.0.91: barra CANÔNICA (A-Z/🕒 + gênero + modalidade + busca), STICKY abaixo
+           da topbar. Aparece com >1 torneio visível (pedido do usuário). -->
+      ${allUnique.length > 1 ? _dashFilterBar : ''}
       ${runningBandHtml}
       ${awaitingStartHtml}
       ${favoritesBandHtml}
@@ -2751,7 +2817,7 @@ function renderDashboard(container) {
       // aparece; apenas as 3 seções extras (em andamento, fechadas-sem-início,
       // encerrados) ficam restritas ao filtro 'todos'.
       var _curFilter = window._dashFilter || 'todos';
-      var _showExtraSections = (_curFilter === 'todos' && !curSport && !curLocation && !curFormat);
+      var _showExtraSections = (_curFilter === 'todos' && !curSport && !curLocation && !curFormat && _dashCurated);
       var _cuPref = window.AppStore && window.AppStore.currentUser;
       var _prefSports = (_cuPref && Array.isArray(_cuPref.preferredSports))
         ? _cuPref.preferredSports.map(function(s) { return cleanSportName(s); }).filter(Boolean)
@@ -3034,7 +3100,10 @@ window._dashRerender = function() {
   try { var _mv = document.getElementById('dashboard-presences-widget'); if (_mv && _mv.innerHTML) window._dashMovementCache = _mv.innerHTML; } catch (e) {}
   window.renderDashboard(c);
   try { window.scrollTo(0, y); } catch (e) {}
-  try { requestAnimationFrame(function(){ try { window.scrollTo(0, y); } catch (e2) {} }); } catch (e3) {}
+  // v3.0.97: mantém o documento alto o bastante pra NÃO pular a tela / a barra sticky
+  // sair do lugar quando o filtro/sort encurta (ou zera) a lista.
+  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(y); } catch (e4) {}
+  try { requestAnimationFrame(function(){ try { window.scrollTo(0, y); if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(y); } catch (e2) {} }); } catch (e3) {}
 };
 
 // v2.8.46: busca da dashboard = filtro IN-PLACE (esconde/mostra cards sem re-render)
@@ -3053,6 +3122,8 @@ window._tournamentSearchBlob = function(t) {
   return parts.join(' ').toLowerCase();
 };
 window._applyDashSearchInPlace = function() {
+  var docEl = document.scrollingElement || document.documentElement;
+  var keepY = docEl.scrollTop;
   var q = (window._dashSearch || '').trim().toLowerCase();
   var root = document.getElementById('view-container');
   if (!root) return;
@@ -3066,6 +3137,8 @@ window._applyDashSearchInPlace = function() {
     var any = Array.prototype.some.call(grid.querySelectorAll('[data-search-blob]'), function(c){ return c.style.display !== 'none'; });
     grid.style.display = any ? '' : 'none';
   });
+  // v3.0.97: não deixa a tela pular nem a barra sair do lugar quando a busca esvazia.
+  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(keepY); } catch (e) {}
 };
 
 window._toggleMyResultsCollapse = function() {
