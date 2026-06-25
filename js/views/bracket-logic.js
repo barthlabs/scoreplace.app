@@ -3191,8 +3191,13 @@ function _phaseGenNextLeagueRound(t, phaseIdx) {
   });
   st.opponentHistory = st.opponentHistory || {};
   st.sitOutHistory = st.sitOutHistory || {};
+  // v3.1.15: MODO DE SORTEIO é ortogonal à cadência. ligaRoundFormat='rei_rainha' faz
+  // _generateNextRound formar grupos de 4 rotativos a cada rodada (igual Fase 0); senão
+  // duplas simples. Chamamos o DISPATCHER _generateNextRound (não o gerador simples
+  // direto) pra honrar o modo de sorteio do jeito canônico — o mesmo motor da 1ª fase.
   var faux = {
-    id: t.id, format: 'Liga', ligaDrawMode: 'standard', ligaRoundFormat: 'standard',
+    id: t.id, format: 'Liga', ligaDrawMode: 'standard',
+    ligaRoundFormat: cfg.reiRainha ? 'rei_rainha' : 'standard',
     participants: st.pool.slice(),
     rounds: rounds, matches: [],
     combinedCategories: [], skillCategories: [],
@@ -3202,12 +3207,16 @@ function _phaseGenNextLeagueRound(t, phaseIdx) {
     opponentHistory: st.opponentHistory, sitOutHistory: st.sitOutHistory
   };
   var before = faux.rounds.length;
-  try { window._generateNextRoundForPlayers(faux, null, before + 1); }
+  try { window._generateNextRound(faux); }
   catch (e) { if (window._warn) window._warn('[brick4] gen liga round falhou', e); return false; }
   if (faux.rounds.length <= before) return false;
   var newRound = faux.rounds[faux.rounds.length - 1];
   if (!newRound || !Array.isArray(newRound.matches) || !newRound.matches.length) return false;
   if (!Array.isArray(t.matches)) t.matches = [];
+  // bracket='league' = FORMATO (Pontos Corridos). A FORMA da rodada (monarchGroup/
+  // isMonarch p/ Rei/Rainha; duplas soltas p/ simples) viaja nos próprios matches e é
+  // reconstruída no render — sem virar um "bracket monarch" à parte (que seria tratar
+  // Rei/Rainha como formato).
   newRound.matches.forEach(function (m) {
     m.phaseIndex = phaseIdx; m.bracket = 'league';
     if (m.category === undefined) m.category = null;

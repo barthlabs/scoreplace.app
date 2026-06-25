@@ -1927,18 +1927,17 @@ function setupCreateTournamentModal() {
       h += '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:' + (ph.reiRainha ? '8px' : '0') + ';">';
       h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Rodadas <input type="number" min="1" max="30" value="' + (ph.rounds || 1) + '" oninput="window._setPhaseField(' + i + ', \'rounds\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
       h += '</div>';
-      // v3.1.13 (brick 4): cadência da Liga POSTERIOR — só faz sentido em Pontos
-      // Corridos comum (não Rei/Rainha, que é grupos de 4 rotativos). ON = rodada a
-      // rodada (motor incremental sorteia a próxima quando a atual fecha, estilo
-      // temporada); OFF = todos contra todos (round-robin estático, default atual).
-      if (!ph.reiRainha) {
-        var _ligaIncr = ph.ligaCadence === 'incremental';
-        h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
-        h += '<label class="toggle-switch" style="--toggle-on-bg:#06b6d4;--toggle-on-glow:rgba(6,182,212,0.3);--toggle-on-border:#06b6d4;flex-shrink:0;"><input type="checkbox"' + (_ligaIncr ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'ligaCadence\', this.checked ? \'incremental\' : \'round_robin\')"><span class="toggle-slider"></span></label>';
-        h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">🔁 Rodada a rodada</span>';
-        h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_ligaIncr ? 'sorteia a próxima rodada quando a atual fecha' : 'todos contra todos (sorteio único)') + '</span>';
-        h += '</div>';
-      }
+      // v3.1.15: CADÊNCIA é eixo do formato Pontos Corridos, ORTOGONAL ao modo de
+      // sorteio — vale pra sorteio simples E Rei/Rainha (que é só o modo de sortear as
+      // equipes/confrontos, não um formato). ON = rodada a rodada (o motor incremental
+      // sorteia a próxima quando a atual fecha, estilo temporada — Rei/Rainha forma
+      // grupos de 4 rotativos a cada rodada); OFF = todos contra todos (sorteio único).
+      var _ligaIncr = ph.ligaCadence === 'incremental';
+      h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
+      h += '<label class="toggle-switch" style="--toggle-on-bg:#06b6d4;--toggle-on-glow:rgba(6,182,212,0.3);--toggle-on-border:#06b6d4;flex-shrink:0;"><input type="checkbox"' + (_ligaIncr ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'ligaCadence\', this.checked ? \'incremental\' : \'round_robin\')"><span class="toggle-slider"></span></label>';
+      h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">🔁 Rodada a rodada</span>';
+      h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_ligaIncr ? 'sorteia a próxima rodada quando a atual fecha' : 'todos contra todos (sorteio único)') + '</span>';
+      h += '</div>';
       if (ph.reiRainha) {
         h += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
         h += '<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:3px;">Classificados/grupo</div><div style="display:flex;gap:6px;">' + _phBtn(i, 'monarchClassified', '1', '1', String(ph.monarchClassified || 1) === '1') + _phBtn(i, 'monarchClassified', '2', '2 (Rei+Vice)', String(ph.monarchClassified || 1) === '2') + '</div></div>';

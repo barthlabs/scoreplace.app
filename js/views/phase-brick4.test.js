@@ -101,5 +101,32 @@ var csId = function (gr) { return gr.standings; };
   eq(st.length, 8, 'D: standings lista os 8 jogadores da fase');
 })();
 
+// ── (F) MODO DE SORTEIO ortogonal: incremental REI/RAINHA (grupos de 4 rotativos) ──
+// Prova que a cadência rodada-a-rodada vale também pro modo Rei/Rainha (não é formato).
+(function () {
+  var lcfg = { name: 'Temporada R/R', formatCode: 'liga', ligaCadence: 'incremental', reiRainha: true,
+    monarchClassified: 1, source: srcAll };
+  var t = {
+    id: 'tBrick4RR', phases: [{ name: 'F0' }, lcfg], currentPhaseIndex: 0,
+    groups: [{ name: 'G', players: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'], matches: [] }],
+    matches: []
+  };
+  var cs0 = function (gr) { return (gr.players || []).map(function (n) { return { name: n, displayName: n }; }); };
+  var res = E.materializeNextPhase(t, cs0, 'm');
+  ok(res.ok && res.incrementalLeague === true, 'F: materialize R/R incremental ok (cadência ortogonal ao modo)');
+  ok(g.window._phaseGenNextLeagueRound(t, 1), 'F: round 1 R/R gerada');
+  var r1 = t.matches.filter(function (m) { return m.phaseIndex === 1 && m.bracket === 'league' && (m.round || 1) === 1 && !m.isSitOut; });
+  eq(r1.length, 6, 'F: 8 jogadores → 2 grupos de 4 → 6 jogos (3 por grupo)');
+  ok(r1.every(function (m) { return m.isMonarch && m.monarchGroup != null; }), 'F: jogos carregam a FORMA Rei/Rainha (isMonarch + monarchGroup)');
+  ok(r1.every(function (m) { return m.bracket === 'league'; }), 'F: bracket=league (FORMATO Pontos Corridos, não "monarch")');
+  var groupsSeen = {}; r1.forEach(function (m) { groupsSeen[m.monarchGroup] = 1; });
+  eq(Object.keys(groupsSeen).length, 2, 'F: 2 grupos distintos na rodada');
+  // joga a rodada → gera a 2ª (reshuffle)
+  r1.forEach(function (m) { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = 2; });
+  ok(g.window._phaseGenNextLeagueRound(t, 1), 'F: round 2 R/R gerada (temporada rodada a rodada)');
+  var r2 = t.matches.filter(function (m) { return m.phaseIndex === 1 && m.bracket === 'league' && (m.round || 1) === 2 && m.isMonarch; });
+  eq(r2.length, 6, 'F: round 2 também 6 jogos R/R');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phase-brick4: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

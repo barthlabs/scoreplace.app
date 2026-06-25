@@ -1580,7 +1580,26 @@ function _renderPhaseBracket(t, canEnterResult) {
       _lRounds = Object.keys(_lByR).map(Number).sort(function (a, b) { return a - b; }).map(function (rn) {
         var ms = _lByR[rn];
         var done = ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
-        return { round: rn, status: done ? 'complete' : 'active', matches: ms };
+        var col = { round: rn, status: done ? 'complete' : 'active', matches: ms };
+        // v3.1.15: MODO DE SORTEIO Rei/Rainha → a rodada tem grupos de 4 rotativos. A
+        // FORMA viaja nos matches (monarchGroup/isMonarch); reconstruímos monarchGroups
+        // pra renderStandings renderizar IGUAL à Fase 0 (mesmo renderer, modo de sorteio
+        // é só a forma da rodada — não um formato/render à parte).
+        if (ms.some(function (m) { return m.monarchGroup != null && m.isMonarch; })) {
+          var _byG = {};
+          ms.forEach(function (m) {
+            if (m.monarchGroup == null) return;
+            var k = m.monarchGroup;
+            if (!_byG[k]) _byG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + k)), players: {}, matches: [] };
+            _byG[k].matches.push(m);
+            (m.team1 || []).concat(m.team2 || []).forEach(function (n) { _byG[k].players[n] = 1; });
+          });
+          col.format = 'rei_rainha';
+          col.monarchGroups = Object.keys(_byG).map(Number).sort(function (a, b) { return a - b; }).map(function (k) {
+            return { name: _byG[k].name, players: Object.keys(_byG[k].players), matches: _byG[k].matches };
+          });
+        }
+        return col;
       });
       _lOpts = { phaseLeagueCadence: { tId: t.id, phaseIdx: curPhase } };
     } else {

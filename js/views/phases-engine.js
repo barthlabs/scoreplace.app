@@ -1009,18 +1009,29 @@
     else { groups = bracketPhaseGroups(t, cur); cs = function (g) { return g.standings || []; }; }
     if (!groups.length) return { ok: false, error: 'no-groups' };
     var cfg = t.phases[nextIdx];
-    // v3.1: roteamento canônico — classifyPhaseFormat decide o FORMATO; o modo de
-    // sorteio monarca (isMonarchDraw) tem precedência (grupos de 4 rotativos).
-    // HONRA o formato configurado da próxima fase em vez de virar sempre chave.
+    // v3.1.15: roteamento por FORMATO (classifyPhaseFormat → league/groups/elim). O
+    // modo de sorteio (Rei/Rainha) e a cadência (rodada a rodada / todos contra todos)
+    // são EIXOS ORTOGONAIS dentro do formato Pontos Corridos — NÃO um 4º formato. Por
+    // isso a decisão é FORMATO primeiro; só DENTRO de league o modo de sorteio escolhe
+    // a forma das rodadas:
+    //   • cadência incremental → pool (o cliente/cron geram rodada a rodada, honrando o
+    //     modo de sorteio via _generateNextRound); vale pra simples E Rei/Rainha.
+    //   • todos contra todos (estático) → Rei/Rainha = grupos de 4 rotativos
+    //     (buildPhaseMonarchStage); simples = round-robin (buildPhaseLeagueStage).
     var _id = idPrefix || ('ph' + nextIdx);
     var _fmt = classifyPhaseFormat(cfg);
-    var built = isMonarchDraw(cfg)
-      ? buildPhaseMonarchStage(groups, cfg, cs, _id)
-      : _fmt === 'league'
-        ? buildPhaseLeagueStage(groups, cfg, cs, _id)
-        : _fmt === 'groups'
-          ? buildPhaseGroupStage(groups, cfg, cs, _id)
-          : buildPhaseBrackets(groups, cfg, cs, _id);
+    var built;
+    if (_fmt === 'league') {
+      built = (cfg.ligaCadence === 'incremental')
+        ? buildPhaseLeagueStage(groups, cfg, cs, _id)            // devolve só o pool
+        : (isMonarchDraw(cfg)
+          ? buildPhaseMonarchStage(groups, cfg, cs, _id)
+          : buildPhaseLeagueStage(groups, cfg, cs, _id));
+    } else if (_fmt === 'groups') {
+      built = buildPhaseGroupStage(groups, cfg, cs, _id);
+    } else {
+      built = buildPhaseBrackets(groups, cfg, cs, _id);
+    }
     // v3.1.13 (brick 4): Liga rodada a rodada — não mergeia matches aqui. Persiste o
     // pool (slim: displayName + uid; identidade resolve por nome via t.participants) +
     // a sub-state da fase (opponentHistory/sitOutHistory acumulam por rodada). O cliente
