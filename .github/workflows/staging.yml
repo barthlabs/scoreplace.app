@@ -1,0 +1,32 @@
+# Deploy do STAGING (Firebase Hosting) — mesmo gatilho do prod (push em main),
+# mas rodando nos servidores do GitHub (clona do git, não toca o mount do Google
+# Drive) → rápido e sempre em sincronia com o prod. O prod continua no pages.yml
+# (GitHub Pages); este sobe o mesmo conteúdo pro scoreplace-staging.web.app.
+#
+# Credencial: secret FIREBASE_SERVICE_ACCOUNT_STAGING (service account
+# github-hosting-deploy@scoreplace-staging, roles firebasehosting.admin +
+# firebase.viewer). Gerado via gcloud + gh secret set.
+name: Deploy Staging (Firebase Hosting)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Um deploy por vez; cancela runs antigos se vier push novo.
+concurrency:
+  group: staging-hosting
+  cancel-in-progress: true
+
+jobs:
+  deploy_staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Firebase Hosting (staging, live)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
+          projectId: scoreplace-staging
+          channelId: live
