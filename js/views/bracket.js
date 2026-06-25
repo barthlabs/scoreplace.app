@@ -1516,8 +1516,48 @@ function _renderPhaseBracket(t, canEnterResult) {
     '<span style="font-weight:700;color:var(--text-bright);margin-left:8px;">' + phaseTitle + '</span>' +
     '</div>';
 
+  // v3.1: FASE DE GRUPOS posterior (round-robin) — render dedicado (cards por grupo
+  // + tabela de classificação), NÃO o renderer de chave. Cada grupo = um box.
+  function _renderPhaseGroups() {
+    var groupMs = pm.filter(function (m) { return m.bracket === 'group'; });
+    if (!groupMs.length) return '';
+    var byG = {};
+    groupMs.forEach(function (m) {
+      var k = (m.groupIdx != null) ? m.groupIdx : 0;
+      if (!byG[k]) byG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + k)), idx: k, matches: [], objs: {} };
+      byG[k].matches.push(m);
+      if (m.team1Obj && m.team1Obj.displayName) byG[k].objs[m.team1Obj.displayName] = m.team1Obj;
+      if (m.team2Obj && m.team2Obj.displayName) byG[k].objs[m.team2Obj.displayName] = m.team2Obj;
+    });
+    var eng2 = window._phasesEngine;
+    return Object.keys(byG).sort(function (a, b) { return byG[a].idx - byG[b].idx; }).map(function (k) {
+      var g = byG[k];
+      var standHtml = '';
+      if (eng2 && eng2.groupTeamStandings) {
+        var st = [];
+        try { st = eng2.groupTeamStandings({ matches: g.matches, players: Object.keys(g.objs) }, { tiebreakers: t.tiebreakers }); } catch (e) { st = []; }
+        if (st.length) {
+          standHtml = '<table style="width:100%;max-width:340px;border-collapse:collapse;font-size:0.78rem;margin-bottom:10px;">' +
+            '<thead><tr style="color:var(--text-muted);text-align:left;border-bottom:1px solid var(--border-color);"><th style="padding:3px 6px;">#</th><th style="padding:3px 6px;">Jogador</th><th style="padding:3px 6px;text-align:center;">P</th><th style="padding:3px 6px;text-align:center;">V</th><th style="padding:3px 6px;text-align:center;">±</th></tr></thead><tbody>' +
+            st.map(function (s, i) {
+              return '<tr style="' + (i < 2 ? 'color:#34d399;font-weight:700;' : '') + '"><td style="padding:3px 6px;">' + (i + 1) + '</td><td style="padding:3px 6px;">' + window._safeHtml(s.name) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.points || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.wins || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + ((s.pointsDiff || 0) > 0 ? '+' : '') + (s.pointsDiff || 0) + '</td></tr>';
+            }).join('') + '</tbody></table>';
+        }
+      }
+      var cards = g.matches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
+      return '<div style="margin-bottom:1.75rem;">' +
+        '<h4 style="color:#10b981;font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid #10b981;padding-left:10px;margin-bottom:0.75rem;">' + window._safeHtml(g.name) + '</h4>' +
+        standHtml +
+        '<div style="display:flex;flex-direction:column;gap:0.75rem;max-width:340px;">' + cards + '</div>' +
+        '</div>';
+    }).join('');
+  }
+  var _isGroupPhase = pm.some(function (m) { return m.bracket === 'group'; });
+
   var body;
-  if (_hasGF && _tierKeys.length) {
+  if (_isGroupPhase) {
+    body = _renderPhaseGroups();
+  } else if (_hasGF && _tierKeys.length) {
     // v3.0.x: COM grande final → primeira linha, depois GRANDES SEMIS + GRANDE FINAL,
     // depois 3º/4º GERAL (abaixo da final), depois as demais linhas. Classificação
     // GERAL ÚNICA (não por linha) no topo. Computa em ordem de exibição p/ a numeração

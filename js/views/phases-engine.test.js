@@ -453,5 +453,54 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(oit[6].repDirectP1 != null && oit[6].repDirectP2 != null, 'oitavas[6] preenchida por 2 melhores perdedores');
 })();
 
+// ── v3.1: FASE DE GRUPOS como fase posterior ───────────────────────────────
+(function () {
+  ok(eng.phaseIsGroups({ formatCode: 'grupos_mata' }), 'phaseIsGroups: grupos_mata');
+  ok(eng.phaseIsGroups({ format: 'Fase de Grupos' }), 'phaseIsGroups: label com "grupo"');
+  ok(!eng.phaseIsGroups({ formatCode: 'elim_dupla' }), 'phaseIsGroups: elim_dupla não é grupo');
+
+  // 8 classificados (1 grupo anterior, todos avançam) → 2 grupos de 4 round-robin.
+  var prevG = [{ name: 'Classif', standings: [] }];
+  for (var i = 1; i <= 8; i++) prevG[0].standings.push({ name: 'P' + i, uid: 'u' + i });
+  var csId = function (g) { return g.standings; };
+  var gcfg = { name: 'Grupos', formatCode: 'grupos_mata', gruposCount: 2, fixedPairs: false,
+    source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 999 }] } };
+  var built = eng.buildPhaseGroupStage(prevG, gcfg, csId, 'tg');
+  eq(built.groups.length, 2, 'grupos: 2 grupos gerados');
+  eq(built.groups[0].players.length, 4, 'grupo A: 4 jogadores');
+  eq(built.groups[1].players.length, 4, 'grupo B: 4 jogadores');
+  eq(built.matches.length, 12, 'round-robin: C(4,2)=6 por grupo × 2 = 12 jogos');
+  ok(built.matches.every(function (m) { return m.bracket === 'group'; }), 'todas as partidas bracket=group');
+  ok(built.matches.every(function (m) { return m.p1 !== 'BYE' && m.p2 !== 'BYE' && m.p1 !== 'TBD'; }), 'grupos sem BYE/TBD');
+  // serpentina espalha as cabeças: P1 e P2 em grupos distintos
+  var gOf = {}; built.groups.forEach(function (g) { g.players.forEach(function (p) { gOf[p.displayName] = g.groupIdx; }); });
+  ok(gOf['P1'] !== gOf['P2'], 'serpentina: P1 e P2 (top seeds) em grupos diferentes');
+
+  // feed-forward: simula grupos jogados (menor número vence) → standings ordenado.
+  built.matches.forEach(function (m) {
+    m.phaseIndex = 1;
+    var n1 = parseInt(m.p1.slice(1), 10), n2 = parseInt(m.p2.slice(1), 10);
+    m.winner = (n1 < n2) ? m.p1 : m.p2; m.scoreP1 = (n1 < n2) ? 6 : 3; m.scoreP2 = (n1 < n2) ? 3 : 6;
+  });
+  var t = { phases: [{}, { name: 'Grupos' }], matches: built.matches };
+  var fed = eng.bracketPhaseGroups(t, 1);
+  eq(fed.length, 2, 'feed-forward: 2 grupos com standings');
+  eq(fed[0].standings.length, 4, 'feed: grupo A com 4 colocados');
+  var bestA = built.groups[0].players.map(function (p) { return parseInt(p.displayName.slice(1), 10); }).sort(function (a, b) { return a - b; })[0];
+  eq(fed[0].standings[0].name, 'P' + bestA, 'feed: 1º do grupo A = quem venceu todos');
+
+  // materializeNextPhase HONRA o formato grupos (não vira chave single-elim).
+  var t2 = {
+    phases: [{ name: 'F0' }, gcfg],
+    currentPhaseIndex: 0,
+    groups: [{ name: 'G', players: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'], matches: [] }]
+  };
+  var cs0 = function (g) { return (g.players || []).map(function (n) { return { name: n, displayName: n }; }); };
+  var res = eng.materializeNextPhase(t2, cs0, 'm');
+  ok(res.ok, 'materialize: fase de grupos materializou (ok)');
+  var pm = t2.matches.filter(function (m) { return (m.phaseIndex || 0) === 1; });
+  ok(pm.length === 12 && pm.every(function (m) { return m.bracket === 'group'; }), 'materialize: gerou 12 jogos de GRUPO (não chave)');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

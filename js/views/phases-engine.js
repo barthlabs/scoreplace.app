@@ -491,6 +491,72 @@
     return { matches: allMatches, tiers: tiers, converge: converge, byDest: byDest, waitlist: phaseWaitlist };
   }
 
+  // v3.1: FASE DE GRUPOS como fase posterior (≥1). Gera grupos round-robin a partir
+  // das colocações da fase anterior — o organizador configurou a fase como "Fase de
+  // Grupos" e o motor passa a HONRAR isso (antes sempre virava chave single-elim).
+  // Forma 1 pool de classificados (buildEntrantsByDest, destino único), distribui em
+  // N grupos em SERPENTINA por seed (espalha os fortes em grupos distintos) e gera
+  // todos os jogos round-robin. Composável: pra eliminar depois, adiciona-se uma fase
+  // de chave em seguida (buildPhaseBrackets puxa destes grupos via bracketPhaseGroups).
+  // Cada match: { bracket:'group', groupIdx, groupName, p1, p2, team1Obj, team2Obj }.
+  function buildPhaseGroupStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
+    idPrefix = idPrefix || 'phg';
+    var src = (phaseCfg && phaseCfg.source) || {};
+    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+    var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs === true) : false; // grupos: individual por padrão
+    var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
+    var scope = src.scope || 'per_group';
+    var rankingBasis = src.rankingBasis || 'individual';
+
+    // 1 pool único de classificados (profundidade = maior rankTo do mapping).
+    var maxRankTo = mapping.reduce(function (mx, m) { return Math.max(mx, parseInt(m.rankTo, 10) || 0); }, 0) || 999;
+    var byDest = buildEntrantsByDest(prevGroups, [{ dest: 'main', rankFrom: 1, rankTo: maxRankTo }],
+      fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
+    var pool = byDest.main || [];
+    if (!pool.length) return { matches: [], groups: [] };
+
+    var nGroups = parseInt(phaseCfg && phaseCfg.gruposCount, 10) || 4;
+    if (nGroups < 1) nGroups = 1;
+    if (nGroups > pool.length) nGroups = pool.length;
+
+    var groups = [];
+    for (var gi = 0; gi < nGroups; gi++) groups.push({ name: 'Grupo ' + String.fromCharCode(65 + gi), groupIdx: gi, players: [], matches: [] });
+    // Serpentina: ida 0..n-1, volta n-1..0 — cabeças (pool já ordenado por força) caem
+    // em grupos distintos e o equilíbrio fica melhor que blocos contíguos.
+    pool.forEach(function (tm, i) {
+      var round = Math.floor(i / nGroups);
+      var pos = i % nGroups;
+      var gIdx = (round % 2 === 0) ? pos : (nGroups - 1 - pos);
+      groups[gIdx].players.push(tm);
+    });
+
+    var counter = 0;
+    function mkId() { return idPrefix + '-' + (counter++); }
+    var allMatches = [];
+    groups.forEach(function (g) {
+      var P = g.players;
+      for (var a = 0; a < P.length; a++) {
+        for (var b = a + 1; b < P.length; b++) {
+          var m = {
+            id: mkId(), round: 1, bracket: 'group', groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
+            p1: P[a].displayName, p2: P[b].displayName, team1Obj: P[a], team2Obj: P[b],
+            winner: null, scoreP1: null, scoreP2: null,
+            label: g.name + ' • ' + P[a].displayName + ' vs ' + P[b].displayName
+          };
+          g.matches.push(m); allMatches.push(m);
+        }
+      }
+    });
+    return { matches: allMatches, groups: groups };
+  }
+
+  // Uma config de fase é "Fase de Grupos" (round-robin, sem eliminação embutida)?
+  function _phaseIsGroups(cfg) {
+    if (!cfg) return false;
+    var f = String(cfg.format || cfg.formatCode || '').toLowerCase();
+    return cfg.formatCode === 'grupos_mata' || /grupo/.test(f);
+  }
+
   // Standings por grupo a partir de matches p1/p2 (Fase de Grupos). Funciona
   // tanto pra individuais quanto pra DUPLAS (m.p1/m.p2 = "A / B") — o nome carrega
   // a dupla, e o keep implícito (buildEntrantsByDest) reforma o teamObj. Devolve
@@ -674,6 +740,28 @@
     var TIERS = ['gold', 'silver', 'main', 'line3', 'line4'];
     var tierMatches = pm.filter(function (m) { return TIERS.indexOf(m.bracket) !== -1; });
 
+    // v3.1: fase anterior é FASE DE GRUPOS (round-robin) → standings por grupo
+    // (cada grupo vira um "grupo" pra próxima fase puxar suas colocações, igual
+    // à Fase 0 de grupos). Ordena por _groupTeamStandings (tiebreakers do torneio
+    // são passados via cs no caller? não — aqui usa o default GSM-aware).
+    var groupMs = pm.filter(function (m) { return m.bracket === 'group'; });
+    if (groupMs.length) {
+      var byG = {};
+      groupMs.forEach(function (m) {
+        var k = (m.groupIdx != null) ? m.groupIdx : (m.groupName || 0);
+        if (!byG[k]) byG[k] = { name: m.groupName || ('Grupo ' + k), groupIdx: (m.groupIdx != null ? m.groupIdx : 0), matches: [], objs: {} };
+        byG[k].matches.push(m);
+        if (m.team1Obj && m.team1Obj.displayName) byG[k].objs[m.team1Obj.displayName] = m.team1Obj;
+        if (m.team2Obj && m.team2Obj.displayName) byG[k].objs[m.team2Obj.displayName] = m.team2Obj;
+      });
+      return Object.keys(byG).sort(function (a, b) { return byG[a].groupIdx - byG[b].groupIdx; }).map(function (k) {
+        var g = byG[k];
+        var st = _groupTeamStandings({ matches: g.matches, players: Object.keys(g.objs) });
+        var ordered = st.map(function (s) { return g.objs[s.name] || { name: s.name, displayName: s.name }; });
+        return { name: g.name, standings: ordered };
+      });
+    }
+
     if (gf) {
       var order = [], used = {};
       function push(nm) { if (nm && nm !== 'BYE' && nm !== 'TBD' && !used[nm]) { used[nm] = 1; order.push(entry(nm)); } }
@@ -713,7 +801,11 @@
     else { groups = bracketPhaseGroups(t, cur); cs = function (g) { return g.standings || []; }; }
     if (!groups.length) return { ok: false, error: 'no-groups' };
     var cfg = t.phases[nextIdx];
-    var built = buildPhaseBrackets(groups, cfg, cs, idPrefix || ('ph' + nextIdx));
+    // v3.1: HONRA o formato configurado da próxima fase — Fase de Grupos gera
+    // round-robin; demais geram chave (single-elim/convergência), como antes.
+    var built = _phaseIsGroups(cfg)
+      ? buildPhaseGroupStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
+      : buildPhaseBrackets(groups, cfg, cs, idPrefix || ('ph' + nextIdx));
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
     built.matches.forEach(function (m) { m.phaseIndex = nextIdx; if (m.category === undefined) m.category = null; });
     t.matches = (t.matches || []).concat(built.matches);
@@ -758,7 +850,8 @@
     // direto. Tamanhos das linhas são determinísticos (não dependem do sorteio).
     var _cur = t.currentPhaseIndex || 0;
     var _nextCfg = t.phases[_cur + 1] || {};
-    if (!_nextCfg.bracketResolution) {
+    // Fase de Grupos não tem chave → não precisa resolver potência de 2.
+    if (!_nextCfg.bracketResolution && !_phaseIsGroups(_nextCfg)) {
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _src = _nextCfg.source || {};
       var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
@@ -852,6 +945,8 @@
     buildEntrantsByDest: buildEntrantsByDest,
     genTierBracket: genTierBracket,
     buildPhaseBrackets: buildPhaseBrackets,
+    buildPhaseGroupStage: buildPhaseGroupStage,
+    phaseIsGroups: _phaseIsGroups,
     linkTierToFinal: linkTierToFinal,
     prevPhaseGroups: prevPhaseGroups,
     bracketPhaseGroups: bracketPhaseGroups,

@@ -12,7 +12,9 @@ name: Deploy Staging (Firebase Hosting)
 
 on:
   push:
-    branches: [main]
+    # Rotina: push no branch de feature → deploya SÓ o staging (pages.yml é só em
+    # main). Promoção pra prod (push em main) refresca o staging junto.
+    branches: [main, 'feature/**']
   workflow_dispatch: {}
 
 concurrency:
