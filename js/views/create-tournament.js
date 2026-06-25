@@ -1664,7 +1664,7 @@ function setupCreateTournamentModal() {
       var _s = ph.scope || 'per_group';
       ph.qualifyMode = (_q === 'all') ? 'all' : (_s === 'overall' ? 'overall' : 'per_group');
     }
-    if (['format', 'reiRainha', 'sourceType', 'fixedPairs', 'qualifyMode', 'qualifyQuantity', 'scope', 'grandFinal'].indexOf(field) !== -1) window._renderPhases();
+    if (['format', 'reiRainha', 'sourceType', 'fixedPairs', 'qualifyMode', 'qualifyQuantity', 'scope', 'grandFinal', 'pairingStrategy'].indexOf(field) !== -1) window._renderPhases();
   };
   // v2.6.77: estratégia de avanço (Performance/Equilíbrio/Sorteio) é INDEPENDENTE
   // do toggle "Duplas fixas". A estratégia sempre define COMO os classificados vão
@@ -1923,9 +1923,20 @@ function setupCreateTournamentModal() {
       }
     }
     if (isGrupos) {
-      h += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
+      h += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">';
       h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Nº de grupos <input type="number" min="2" max="16" value="' + (ph.gruposCount || 4) + '" oninput="window._setPhaseField(' + i + ', \'gruposCount\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
       h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Classificados/grupo <input type="number" min="1" max="8" value="' + (ph.gruposClassified || 2) + '" oninput="window._setPhaseField(' + i + ', \'gruposClassified\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
+      h += '</div>';
+      // v3.1.10: 🎯 Cabeças de chave (semear os melhores em grupos distintos pra não se
+      // cruzarem cedo) como TOGGLE do organizador. ON='seed' (serpentina sobre o ranking
+      // → espalha os fortes); OFF='draw_among' (pool embaralhado → grupos por sorteio).
+      // buildPhaseGroupStage já honra pairingStrategy via buildEntrantsByDest. Default ON.
+      if (ph.pairingStrategy !== 'draw_among') ph.pairingStrategy = 'seed';
+      var _grpSeedOn = ph.pairingStrategy === 'seed';
+      h += '<div style="display:flex;align-items:center;gap:10px;">';
+      h += '<label class="toggle-switch" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;flex-shrink:0;"><input type="checkbox"' + (_grpSeedOn ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'pairingStrategy\', this.checked ? \'seed\' : \'draw_among\')"><span class="toggle-slider"></span></label>';
+      h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">🎯 Cabeças de chave</span>';
+      h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_grpSeedOn ? 'os melhores são espalhados em grupos diferentes' : 'grupos formados por sorteio') + '</span>';
       h += '</div>';
     }
     // ─── Datas da fase POR FASE (v2.6.65) ───
