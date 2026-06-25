@@ -2475,9 +2475,22 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
     // ── Collect matches to notify about ─────────────────────────────────
     // allMatches = [{p1, p2, groupName?}]
     var allMatches = [];
+    // Construtor de fases: opts.phaseIndex => notifica as partidas da fase
+    // recém-materializada (tagueadas phaseIndex em t.matches), não a Liga/grupos.
+    var _phaseIdx = (opts.phaseIndex != null) ? (parseInt(opts.phaseIndex, 10) || 0) : null;
     var isGroupsStage = Array.isArray(t.groups) && t.groups.length > 0 && t.currentStage === 'groups';
 
-    if (isGroupsStage) {
+    if (_phaseIdx != null) {
+        // Só as partidas JOGÁVEIS de entrada da fase — as rodadas seguintes e a
+        // convergência (grande final/3º) têm p1/p2 = 'TBD' até os jogos anteriores
+        // fecharem; o tierLabel (Ouro/Prata) vira o "grupo" nas linhas do e-mail.
+        (Array.isArray(t.matches) ? t.matches : []).forEach(function(m) {
+            if ((m.phaseIndex || 0) !== _phaseIdx) return;
+            if (m.isBye || m.isSitOut) return;
+            if (!m.p1 || m.p1 === 'TBD' || !m.p2 || m.p2 === 'TBD') return;
+            allMatches.push({ p1: m.p1 || '', p2: m.p2 || '', groupName: m.tierLabel || '', label: m.label || '' });
+        });
+    } else if (isGroupsStage) {
         t.groups.forEach(function(g) {
             var gName = g.name || '';
             var r0 = Array.isArray(g.rounds) && g.rounds[0];
@@ -2507,7 +2520,8 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
 
     // ── v2.3.83: prazo p/ lançar resultados = PRÓXIMO SORTEIO (data + hora).
     // Antes o e-mail mostrava t.startDate (data de início do torneio) — errado.
-    var _nextDraw = (typeof window._calcNextDrawDate === 'function') ? window._calcNextDrawDate(t) : null;
+    // Fase de chave não tem cadência de sorteio (sem "próximo sorteio") → sem prazo.
+    var _nextDraw = (_phaseIdx == null && typeof window._calcNextDrawDate === 'function') ? window._calcNextDrawDate(t) : null;
     var deadlineLabel = '';
     if (_nextDraw && !isNaN(_nextDraw.getTime())) {
         deadlineLabel = _nextDraw.toLocaleDateString('pt-BR') + ' às ' +
@@ -2539,12 +2553,18 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
 
     // ── Notification labels per type ────────────────────────────────────
     var _isNewRound = (notifType === 'new_round');
-    var notifIcon = _isNewRound ? '🔄' : '🎲';
-    var notifTitle = (_isNewRound ? '🔄 Nova Rodada: ' : '🎲 Chaveamento: ') + tName;
-    var baseMsg = _isNewRound
-        ? 'Uma nova rodada foi gerada no torneio ' + tName + '.'
-        : 'O chaveamento do torneio ' + tName + ' foi gerado.';
-    var ctaText = _isNewRound ? 'Ver rodada' : 'Ver chaveamento';
+    var _isPhase = (notifType === 'new_phase');
+    var _phaseName = _isPhase ? ((((t.phases || [])[_phaseIdx]) || {}).name || ('Fase ' + ((_phaseIdx || 0) + 1))) : '';
+    var notifIcon = _isPhase ? '🏆' : (_isNewRound ? '🔄' : '🎲');
+    var notifTitle = _isPhase
+        ? ('🏆 ' + _phaseName + ': ' + tName)
+        : ((_isNewRound ? '🔄 Nova Rodada: ' : '🎲 Chaveamento: ') + tName);
+    var baseMsg = _isPhase
+        ? ('O torneio ' + tName + ' avançou para a fase ' + _phaseName + '. Confira seu próximo jogo.')
+        : (_isNewRound
+            ? 'Uma nova rodada foi gerada no torneio ' + tName + '.'
+            : 'O chaveamento do torneio ' + tName + ' foi gerado.');
+    var ctaText = _isPhase ? 'Ver fase' : (_isNewRound ? 'Ver rodada' : 'Ver chaveamento');
 
     // ── Notify each participant individually ─────────────────────────────
     var parts = Array.isArray(t.participants)
@@ -2608,7 +2628,7 @@ window._notifyDrawPersonalized = async function(t, tId, opts) {
             var _gamesText = playerMatches.map(function(pm) {
                 return pm.label + ':\n' + (pm.p1 || '?') + '\nvs\n' + (pm.p2 || '?');
             }).join('\n\n');
-            msg = notifIcon + ' ' + (_isNewRound ? 'Nova rodada no torneio' : 'Chaveamento do torneio') +
+            msg = notifIcon + ' ' + (_isPhase ? ('Você avançou para a fase ' + _phaseName + ' no torneio') : (_isNewRound ? 'Nova rodada no torneio' : 'Chaveamento do torneio')) +
                 ' ' + tName + '!' +
                 '\n\n' + _gamesText +
                 (venue ? '\n\n📍 ' + venue : '') +

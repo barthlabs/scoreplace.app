@@ -30,6 +30,8 @@ window.NOTIF_CATALOG = {
   // Draw / rounds
   draw:                        { level: 'fundamental', icon: '🎲', color: 'var(--primary-color)' },
   new_round:                   { level: 'fundamental', icon: '🔄', color: 'var(--primary-color)' },
+  // Construtor de fases: torneio avançou pra próxima fase (chaves materializadas).
+  new_phase:                   { level: 'fundamental', icon: '🏆', color: 'var(--primary-color)' },
 
   // Match events
   result:                      { level: 'fundamental', icon: '🏅', color: '#a78bfa' },

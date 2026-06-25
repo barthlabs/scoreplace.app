@@ -789,6 +789,12 @@
     }
     if (AppStore.syncImmediate) AppStore.syncImmediate(tId);
     if (window._rerenderBracket) window._rerenderBracket(tId);
+    // Notifica CADA participante do seu jogo na nova fase (app/push/e-mail/WhatsApp
+    // 1:1), igual ao sorteio de rodada. Personalizado por uid (cada membro da dupla).
+    // Fire-and-forget — não bloqueia o avanço. Só roda no cliente (avanço é manual).
+    if (typeof window._notifyDrawPersonalized === 'function') {
+      try { window._notifyDrawPersonalized(t, tId, { type: 'new_phase', phaseIndex: t.currentPhaseIndex }); } catch (e) {}
+    }
     var nm = (t.phases[t.currentPhaseIndex] || {}).name || ('Fase ' + (t.currentPhaseIndex + 1));
     if (window.showNotification) window.showNotification('Avançou para ' + nm, 'Chaves geradas a partir das colocações da fase anterior.', 'success');
   }
