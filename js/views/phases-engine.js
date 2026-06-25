@@ -553,8 +553,81 @@
   // Uma config de fase é "Fase de Grupos" (round-robin, sem eliminação embutida)?
   function _phaseIsGroups(cfg) {
     if (!cfg) return false;
+    if (_phaseIsMonarch(cfg)) return false; // Rei/Rainha tem gerador próprio
     var f = String(cfg.format || cfg.formatCode || '').toLowerCase();
     return cfg.formatCode === 'grupos_mata' || /grupo/.test(f);
+  }
+  // Uma config de fase é Rei/Rainha (grupos de 4, parceiros rotativos)?
+  function _phaseIsMonarch(cfg) {
+    if (!cfg) return false;
+    return cfg.reiRainha === true || cfg.drawMode === 'rei_rainha' || /rei|rainha|monarch/i.test(String(cfg.format || cfg.formatCode || ''));
+  }
+
+  // v3.1: REI/RAINHA como fase posterior. Forma o pool de classificados, distribui
+  // em grupos de 4 (serpentina) e gera os 3 jogos de parceiros rotativos por grupo
+  // (AB×CD, AC×BD, AD×BC) — classificação INDIVIDUAL. Sobra (pool % 4) fica de fora
+  // desta fase (registrado em .leftOut). Matches: { bracket:'monarch', isMonarch:true,
+  // team1:[A,B], team2:[C,D], p1:'A / B', p2:'C / D', groupIdx, groupName }.
+  function buildPhaseMonarchStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
+    idPrefix = idPrefix || 'phm';
+    var src = (phaseCfg && phaseCfg.source) || {};
+    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+    var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
+    var scope = src.scope || 'per_group';
+    var rankingBasis = src.rankingBasis || 'individual';
+    var maxRankTo = mapping.reduce(function (mx, m) { return Math.max(mx, parseInt(m.rankTo, 10) || 0); }, 0) || 999;
+
+    // Rei/Rainha é INDIVIDUAL (parceiros rotativos) → fixedPairs sempre false.
+    var byDest = buildEntrantsByDest(prevGroups, [{ dest: 'main', rankFrom: 1, rankTo: maxRankTo }],
+      false, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
+    var pool = byDest.main || [];
+    var nGroups = Math.floor(pool.length / 4);
+    if (nGroups < 1) return { matches: [], groups: [], leftOut: pool.map(function (p) { return p.displayName; }) };
+    var used = pool.slice(0, nGroups * 4);
+    var leftOut = pool.slice(nGroups * 4).map(function (p) { return p.displayName; });
+
+    var groups = [];
+    for (var gi = 0; gi < nGroups; gi++) groups.push({ name: 'Grupo ' + String.fromCharCode(65 + gi), groupIdx: gi, players: [], objs: {}, matches: [] });
+    used.forEach(function (tm, i) {
+      var round = Math.floor(i / nGroups), pos = i % nGroups;
+      var gIdx = (round % 2 === 0) ? pos : (nGroups - 1 - pos);
+      groups[gIdx].players.push(tm.displayName);
+      groups[gIdx].objs[tm.displayName] = tm;
+    });
+
+    var counter = 0;
+    function mkId() { return idPrefix + '-' + (counter++); }
+    var allMatches = [];
+    groups.forEach(function (g) {
+      var P = g.players; // [A,B,C,D]
+      var pairs = [{ t1: [P[0], P[1]], t2: [P[2], P[3]] }, { t1: [P[0], P[2]], t2: [P[1], P[3]] }, { t1: [P[0], P[3]], t2: [P[1], P[2]] }];
+      pairs.forEach(function (pr, mi) {
+        var m = {
+          id: mkId(), round: 1, bracket: 'monarch', isMonarch: true, monarchGroup: g.groupIdx,
+          groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
+          team1: pr.t1.slice(), team2: pr.t2.slice(), p1: pr.t1.join(' / '), p2: pr.t2.join(' / '),
+          winner: null, scoreP1: null, scoreP2: null, label: g.name + ' • Jogo ' + (mi + 1)
+        };
+        g.matches.push(m); allMatches.push(m);
+      });
+    });
+    return { matches: allMatches, groups: groups, leftOut: leftOut };
+  }
+
+  // Classificação INDIVIDUAL de um grupo Rei/Rainha (vitórias desc, saldo desc) —
+  // versão headless do _computeMonarchStandings p/ o feed-forward no motor (node).
+  function _monarchStandings(matches, players) {
+    var st = {};
+    (players || []).forEach(function (n) { st[n] = { name: n, wins: 0, diff: 0 }; });
+    (matches || []).forEach(function (m) {
+      if (!m.winner || !m.team1 || !m.team2) return;
+      var s1 = parseInt(m.scoreP1, 10) || 0, s2 = parseInt(m.scoreP2, 10) || 0;
+      var t1win = (m.winner === m.p1);
+      m.team1.forEach(function (n) { if (st[n]) { st[n].diff += (s1 - s2); if (t1win) st[n].wins++; } });
+      m.team2.forEach(function (n) { if (st[n]) { st[n].diff += (s2 - s1); if (!t1win) st[n].wins++; } });
+    });
+    return Object.keys(st).map(function (k) { return st[k]; })
+      .sort(function (a, b) { return (b.wins - a.wins) || (b.diff - a.diff); });
   }
 
   // Standings por grupo a partir de matches p1/p2 (Fase de Grupos). Funciona
@@ -744,6 +817,23 @@
     // (cada grupo vira um "grupo" pra próxima fase puxar suas colocações, igual
     // à Fase 0 de grupos). Ordena por _groupTeamStandings (tiebreakers do torneio
     // são passados via cs no caller? não — aqui usa o default GSM-aware).
+    // v3.1: fase anterior é REI/RAINHA → classificação INDIVIDUAL por grupo.
+    var monarchMs = pm.filter(function (m) { return m.bracket === 'monarch'; });
+    if (monarchMs.length) {
+      var byM = {};
+      monarchMs.forEach(function (m) {
+        var k = (m.groupIdx != null) ? m.groupIdx : 0;
+        if (!byM[k]) byM[k] = { name: m.groupName || ('Grupo ' + k), groupIdx: k, matches: [], names: {} };
+        byM[k].matches.push(m);
+        (m.team1 || []).concat(m.team2 || []).forEach(function (n) { byM[k].names[n] = (nameTeam[n] || { name: n, displayName: n }); });
+      });
+      return Object.keys(byM).sort(function (a, b) { return byM[a].groupIdx - byM[b].groupIdx; }).map(function (k) {
+        var g = byM[k];
+        var st = _monarchStandings(g.matches, Object.keys(g.names));
+        return { name: g.name, standings: st.map(function (s) { return g.names[s.name] || { name: s.name, displayName: s.name }; }) };
+      });
+    }
+
     var groupMs = pm.filter(function (m) { return m.bracket === 'group'; });
     if (groupMs.length) {
       var byG = {};
@@ -803,9 +893,11 @@
     var cfg = t.phases[nextIdx];
     // v3.1: HONRA o formato configurado da próxima fase — Fase de Grupos gera
     // round-robin; demais geram chave (single-elim/convergência), como antes.
-    var built = _phaseIsGroups(cfg)
-      ? buildPhaseGroupStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
-      : buildPhaseBrackets(groups, cfg, cs, idPrefix || ('ph' + nextIdx));
+    var built = _phaseIsMonarch(cfg)
+      ? buildPhaseMonarchStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
+      : _phaseIsGroups(cfg)
+        ? buildPhaseGroupStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
+        : buildPhaseBrackets(groups, cfg, cs, idPrefix || ('ph' + nextIdx));
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
     built.matches.forEach(function (m) { m.phaseIndex = nextIdx; if (m.category === undefined) m.category = null; });
     t.matches = (t.matches || []).concat(built.matches);
@@ -850,8 +942,8 @@
     // direto. Tamanhos das linhas são determinísticos (não dependem do sorteio).
     var _cur = t.currentPhaseIndex || 0;
     var _nextCfg = t.phases[_cur + 1] || {};
-    // Fase de Grupos não tem chave → não precisa resolver potência de 2.
-    if (!_nextCfg.bracketResolution && !_phaseIsGroups(_nextCfg)) {
+    // Fase de Grupos / Rei-Rainha não têm chave → não precisam resolver potência de 2.
+    if (!_nextCfg.bracketResolution && !_phaseIsGroups(_nextCfg) && !_phaseIsMonarch(_nextCfg)) {
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _src = _nextCfg.source || {};
       var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
@@ -946,7 +1038,9 @@
     genTierBracket: genTierBracket,
     buildPhaseBrackets: buildPhaseBrackets,
     buildPhaseGroupStage: buildPhaseGroupStage,
+    buildPhaseMonarchStage: buildPhaseMonarchStage,
     phaseIsGroups: _phaseIsGroups,
+    phaseIsMonarch: _phaseIsMonarch,
     linkTierToFinal: linkTierToFinal,
     prevPhaseGroups: prevPhaseGroups,
     bracketPhaseGroups: bracketPhaseGroups,

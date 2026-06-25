@@ -1552,10 +1552,47 @@ function _renderPhaseBracket(t, canEnterResult) {
         '</div>';
     }).join('');
   }
+  // v3.1: FASE REI/RAINHA posterior — grupos de 4 com classificação INDIVIDUAL.
+  function _renderPhaseMonarch() {
+    var ms = pm.filter(function (m) { return m.bracket === 'monarch'; });
+    if (!ms.length) return '';
+    var byG = {};
+    ms.forEach(function (m) {
+      var k = (m.groupIdx != null) ? m.groupIdx : 0;
+      if (!byG[k]) byG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + k)), idx: k, matches: [], players: {} };
+      byG[k].matches.push(m);
+      (m.team1 || []).concat(m.team2 || []).forEach(function (n) { byG[k].players[n] = 1; });
+    });
+    return Object.keys(byG).sort(function (a, b) { return byG[a].idx - byG[b].idx; }).map(function (k) {
+      var g = byG[k];
+      var standHtml = '';
+      if (typeof window._computeMonarchStandings === 'function') {
+        var st = [];
+        try { st = window._computeMonarchStandings({ players: Object.keys(g.players), matches: g.matches }); } catch (e) { st = []; }
+        if (st.length) {
+          standHtml = '<table style="width:100%;max-width:340px;border-collapse:collapse;font-size:0.78rem;margin-bottom:10px;">' +
+            '<thead><tr style="color:var(--text-muted);text-align:left;border-bottom:1px solid var(--border-color);"><th style="padding:3px 6px;">#</th><th style="padding:3px 6px;">Jogador</th><th style="padding:3px 6px;text-align:center;">V</th><th style="padding:3px 6px;text-align:center;">±</th></tr></thead><tbody>' +
+            st.map(function (s, i) {
+              var diff = (s.pointsFor || 0) - (s.pointsAgainst || 0);
+              return '<tr style="' + (i === 0 ? 'color:#fbbf24;font-weight:700;' : '') + '"><td style="padding:3px 6px;">' + (i + 1) + (i === 0 ? ' 👑' : '') + '</td><td style="padding:3px 6px;">' + window._safeHtml(s.name) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.wins || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (diff > 0 ? '+' : '') + diff + '</td></tr>';
+            }).join('') + '</tbody></table>';
+        }
+      }
+      var cards = g.matches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
+      return '<div style="margin-bottom:1.75rem;">' +
+        '<h4 style="color:#fbbf24;font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid #fbbf24;padding-left:10px;margin-bottom:0.75rem;">👑 ' + window._safeHtml(g.name) + '</h4>' +
+        standHtml +
+        '<div style="display:flex;flex-direction:column;gap:0.75rem;max-width:340px;">' + cards + '</div>' +
+        '</div>';
+    }).join('');
+  }
   var _isGroupPhase = pm.some(function (m) { return m.bracket === 'group'; });
+  var _isMonarchPhase = pm.some(function (m) { return m.bracket === 'monarch'; });
 
   var body;
-  if (_isGroupPhase) {
+  if (_isMonarchPhase) {
+    body = _renderPhaseMonarch();
+  } else if (_isGroupPhase) {
     body = _renderPhaseGroups();
   } else if (_hasGF && _tierKeys.length) {
     // v3.0.x: COM grande final → primeira linha, depois GRANDES SEMIS + GRANDE FINAL,
