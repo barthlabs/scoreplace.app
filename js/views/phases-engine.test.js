@@ -502,6 +502,50 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(pm.length === 12 && pm.every(function (m) { return m.bracket === 'group'; }), 'materialize: gerou 12 jogos de GRUPO (não chave)');
 })();
 
+// ── v3.1.9 (inc 7): roundRobinSchedule — núcleo compartilhado Fase 0/N ──────────
+// PARIDADE BYTE-IDÊNTICA: o helper reproduz EXATAMENTE a sequência de pares que a
+// lógica inline produzia na Fase 0 (tournaments-draw.js, método do círculo). Referência
+// = a lógica antiga literal; assert sequência (round + pares na ordem) idêntica.
+(function () {
+  function refInline(players) {
+    var arr = players.slice();
+    if (arr.length % 2 === 1) arr.push(null);
+    var m2 = arr.length, half = m2 / 2;
+    var fixed = arr[0], rest = arr.slice(1);
+    var out = [];
+    for (var r = 0; r < m2 - 1; r++) {
+      var lineup = [fixed].concat(rest);
+      var pairs = [];
+      for (var k = 0; k < half; k++) {
+        var a = lineup[k], b = lineup[m2 - 1 - k];
+        if (a === null || b === null) continue;
+        pairs.push(a + 'vs' + b);
+      }
+      if (pairs.length > 0) out.push((r + 1) + ':' + pairs.join(','));
+      rest.unshift(rest.pop());
+    }
+    return out.join(' | ');
+  }
+  function helperStr(players) {
+    return eng.roundRobinSchedule(players).map(function (rd) {
+      return rd.round + ':' + rd.pairs.map(function (p) { return p.a + 'vs' + p.b; }).join(',');
+    }).join(' | ');
+  }
+  for (var n = 2; n <= 8; n++) {
+    var pl = [];
+    for (var i = 1; i <= n; i++) pl.push('P' + i);
+    eq(helperStr(pl), refInline(pl), 'roundRobinSchedule paridade byte-idêntica n=' + n);
+  }
+  // cobertura: round-robin completo (cada par exatamente 1×) + folga em ímpar.
+  var sched6 = eng.roundRobinSchedule(['A', 'B', 'C', 'D', 'E', 'F']);
+  var seen = {}, total = 0;
+  sched6.forEach(function (rd) { rd.pairs.forEach(function (p) { var k = [p.a, p.b].sort().join('|'); seen[k] = (seen[k] || 0) + 1; total++; }); });
+  eq(total, 15, 'roundRobin n=6: C(6,2)=15 pares no total');
+  ok(Object.keys(seen).length === 15 && Object.keys(seen).every(function (k) { return seen[k] === 1; }), 'roundRobin n=6: cada par exatamente 1×');
+  var sched5 = eng.roundRobinSchedule(['A', 'B', 'C', 'D', 'E']);
+  ok(sched5.every(function (rd) { return rd.pairs.length === 2; }), 'roundRobin n=5 (ímpar): 2 jogos/rodada (1 folga)');
+})();
+
 // ── v3.1: REI/RAINHA como fase posterior ───────────────────────────────────
 (function () {
   ok(eng.phaseIsMonarch({ reiRainha: true }), 'phaseIsMonarch: reiRainha=true');

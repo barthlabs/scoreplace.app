@@ -1115,31 +1115,26 @@ window.generateDrawFunction = function (tId) {
         // jogador FOLGA por rodada (rodízio da folga). Antes era um split guloso que
         // deixava rodadas desbalanceadas e uma rodada-resto no fim.
         groups.forEach((g, gi) => {
-            const players = g.participants;
-            var arr = players.slice();
-            if (arr.length % 2 === 1) arr.push(null); // jogador fantasma = folga da rodada
-            var m2 = arr.length, half = m2 / 2;
-            var fixed = arr[0], rest = arr.slice(1), mi = 0;
-            for (var r = 0; r < m2 - 1; r++) {
-                var lineup = [fixed].concat(rest);
-                var roundMatches = [];
-                for (var k = 0; k < half; k++) {
-                    var a = lineup[k], b = lineup[m2 - 1 - k];
-                    if (a === null || b === null) continue; // quem cai com o fantasma folga
-                    roundMatches.push({
+            // v3.1.9 (motor canônico, inc 7): round-robin via núcleo COMPARTILHADO
+            // window._roundRobinSchedule (método do círculo) — mesma lógica que existia
+            // inline aqui, agora compartilhada com a Fase N (buildPhaseGroupStage).
+            // Byte-idêntico: mesma sequência de pares, mesmo nº de rodada/roundIndex.
+            var mi = 0;
+            window._roundRobinSchedule(g.participants).forEach(function (rd) {
+                var r = rd.round - 1;
+                var roundMatches = rd.pairs.map(function (pr) {
+                    var a = pr.a, b = pr.b;
+                    return {
                         id: 'grp' + gi + '-r' + r + '-m' + (mi++) + '-' + Date.now(),
                         p1: a, p2: b, winner: null, group: gi, roundIndex: r,
                         label: window._safeHtml(g.name) + ' • ' + window._safeHtml(a) + ' vs ' + window._safeHtml(b)
-                    });
-                }
-                if (roundMatches.length > 0) {
-                    g.rounds.push({ round: r + 1, status: r === 0 ? 'active' : 'pending', matches: roundMatches });
-                }
-                rest.unshift(rest.pop()); // rotaciona (mantém o fixo, gira o resto)
-            }
+                    };
+                });
+                g.rounds.push({ round: rd.round, status: r === 0 ? 'active' : 'pending', matches: roundMatches });
+            });
 
             // Initialize standings
-            g.standings = players.map(name => ({
+            g.standings = g.participants.map(name => ({
                 name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0
             }));
         });

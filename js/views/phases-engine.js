@@ -491,6 +491,33 @@
     return { matches: allMatches, tiers: tiers, converge: converge, byDest: byDest, waitlist: phaseWaitlist };
   }
 
+  // v3.1.9 (motor canônico, inc 7): agendador round-robin "MÉTODO DO CÍRCULO" — núcleo
+  // PURO/determinístico (sem random/Date) COMPARTILHADO entre a Fase 0 (grupos, em
+  // tournaments-draw.js) e a Fase N (buildPhaseGroupStage). Rodadas BALANCEADAS: antes do
+  // 2º jogo de qualquer um, TODOS jogam o 1º; etc. Grupo ímpar → 1 folga por rodada
+  // (rodízio via jogador fantasma null). Retorna [{ round, pairs:[{a,b}] }] 1-based, pulando
+  // rodadas vazias; a/b são os PRÓPRIOS itens de `players` (nomes OU objetos — preserva uid).
+  // Réplica EXATA da lógica inline que existia na Fase 0 → extração byte-idêntica (teste).
+  function roundRobinSchedule(players) {
+    var arr = players.slice();
+    if (arr.length % 2 === 1) arr.push(null); // jogador fantasma = folga da rodada
+    var m2 = arr.length, half = m2 / 2;
+    var fixed = arr[0], rest = arr.slice(1);
+    var out = [];
+    for (var r = 0; r < m2 - 1; r++) {
+      var lineup = [fixed].concat(rest);
+      var pairs = [];
+      for (var k = 0; k < half; k++) {
+        var a = lineup[k], b = lineup[m2 - 1 - k];
+        if (a === null || b === null) continue; // quem cai com o fantasma folga
+        pairs.push({ a: a, b: b });
+      }
+      if (pairs.length > 0) out.push({ round: r + 1, pairs: pairs });
+      rest.unshift(rest.pop()); // rotaciona (mantém o fixo, gira o resto)
+    }
+    return out;
+  }
+
   // v3.1: FASE DE GRUPOS como fase posterior (≥1). Gera grupos round-robin a partir
   // das colocações da fase anterior — o organizador configurou a fase como "Fase de
   // Grupos" e o motor passa a HONRAR isso (antes sempre virava chave single-elim).
@@ -534,18 +561,21 @@
     function mkId() { return idPrefix + '-' + (counter++); }
     var allMatches = [];
     groups.forEach(function (g) {
-      var P = g.players;
-      for (var a = 0; a < P.length; a++) {
-        for (var b = a + 1; b < P.length; b++) {
+      // v3.1.9: round-robin via núcleo compartilhado (método do círculo) → rodadas
+      // BALANCEADAS dentro do grupo (mesmo SET de pares de antes; agora com nº de rodada,
+      // igual à Fase 0). Estático: todos os jogos existem de uma vez (todas as rodadas).
+      roundRobinSchedule(g.players).forEach(function (rd) {
+        rd.pairs.forEach(function (pr) {
+          var A = pr.a, B = pr.b;
           var m = {
-            id: mkId(), round: 1, bracket: 'group', groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
-            p1: P[a].displayName, p2: P[b].displayName, team1Obj: P[a], team2Obj: P[b],
+            id: mkId(), round: rd.round, bracket: 'group', groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
+            p1: A.displayName, p2: B.displayName, team1Obj: A, team2Obj: B,
             winner: null, scoreP1: null, scoreP2: null,
-            label: g.name + ' • ' + P[a].displayName + ' vs ' + P[b].displayName
+            label: g.name + ' • ' + A.displayName + ' vs ' + B.displayName
           };
           g.matches.push(m); allMatches.push(m);
-        }
-      }
+        });
+      });
     });
     return { matches: allMatches, groups: groups };
   }
@@ -1120,6 +1150,7 @@
     mkTeam: mkTeam,
     buildEntrantsByDest: buildEntrantsByDest,
     genTierBracket: genTierBracket,
+    roundRobinSchedule: roundRobinSchedule,
     buildPhaseBrackets: buildPhaseBrackets,
     buildPhaseGroupStage: buildPhaseGroupStage,
     buildPhaseMonarchStage: buildPhaseMonarchStage,
@@ -1143,6 +1174,7 @@
   if (typeof window !== 'undefined') {
     window._phasesEngine = api;
     window._isMultiPhase = isMultiPhase;
+    window._roundRobinSchedule = roundRobinSchedule; // núcleo compartilhado Fase 0/N (inc 7)
     window._phasesPhaseComplete = phaseComplete;
     window._advanceMultiPhase = advanceMultiPhase;
     window._resolveRepechage = resolveRepechage;
