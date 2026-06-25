@@ -3165,6 +3165,58 @@ function _generateNextRoundForPlayers(t, category, _rn) {
 // v2.3.91: exposto pro Cloud Function autoDraw (ver _generateNextRound acima).
 window._generateNextRoundForPlayers = _generateNextRoundForPlayers;
 
+// v3.1.13 (brick 4): driver INCREMENTAL da Liga (Pontos Corridos) rodada a rodada
+// como fase POSTERIOR. Monta um faux "Liga isolada" desta fase (participants = pool
+// persistido em t.phaseLeagueState[idx]; rounds reconstruídos das partidas
+// bracket:'league'; opponentHistory/sitOutHistory acumulam na sub-state) e chama o
+// motor canônico _generateNextRoundForPlayers INTOCADO. A nova rodada é taggeada
+// (phaseIndex + bracket:'league') e mergeada em t.matches. PURO (sem DOM/AppStore) —
+// a cadência de UI (_phaseCloseLeagueRound) e o avanço por cron (etapa 4) são à parte.
+function _phaseGenNextLeagueRound(t, phaseIdx) {
+  if (!t || typeof window._generateNextRoundForPlayers !== 'function') return false;
+  var st = t.phaseLeagueState && t.phaseLeagueState[phaseIdx];
+  if (!st || !Array.isArray(st.pool) || !st.pool.length) return false;
+  var cfg = (t.phases && t.phases[phaseIdx]) || {};
+  // Rounds REAIS reconstruídos das partidas bracket:'league' desta fase (não
+  // colapsados) — alimentam _computeStandings (semente do pareamento por ranking)
+  // e o nº da próxima rodada.
+  var lm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && m.bracket === 'league'; });
+  var byR = {};
+  lm.forEach(function (m) { var r = m.round || 1; (byR[r] = byR[r] || []).push(m); });
+  var rkeys = Object.keys(byR).map(Number).sort(function (a, b) { return a - b; });
+  var rounds = rkeys.map(function (rn) {
+    var ms = byR[rn];
+    var done = ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
+    return { round: rn, status: done ? 'complete' : 'active', matches: ms };
+  });
+  st.opponentHistory = st.opponentHistory || {};
+  st.sitOutHistory = st.sitOutHistory || {};
+  var faux = {
+    id: t.id, format: 'Liga', ligaDrawMode: 'standard', ligaRoundFormat: 'standard',
+    participants: st.pool.slice(),
+    rounds: rounds, matches: [],
+    combinedCategories: [], skillCategories: [],
+    scoring: cfg.scoring || t.scoring, tiebreakers: t.tiebreakers,
+    equilibrado: cfg.equilibrado, clusterSize: cfg.clusterSize,
+    allowSelfDeactivation: false,
+    opponentHistory: st.opponentHistory, sitOutHistory: st.sitOutHistory
+  };
+  var before = faux.rounds.length;
+  try { window._generateNextRoundForPlayers(faux, null, before + 1); }
+  catch (e) { if (window._warn) window._warn('[brick4] gen liga round falhou', e); return false; }
+  if (faux.rounds.length <= before) return false;
+  var newRound = faux.rounds[faux.rounds.length - 1];
+  if (!newRound || !Array.isArray(newRound.matches) || !newRound.matches.length) return false;
+  if (!Array.isArray(t.matches)) t.matches = [];
+  newRound.matches.forEach(function (m) {
+    m.phaseIndex = phaseIdx; m.bracket = 'league';
+    if (m.category === undefined) m.category = null;
+    t.matches.push(m);
+  });
+  return true;
+}
+window._phaseGenNextLeagueRound = _phaseGenNextLeagueRound;
+
 // ─── v2.3.8: self-heal de rodadas geradas ANTES da hora ─────────────────────
 // O bug pré-v2.3.7 fazia COMPLETAR a rodada gerar a SEGUINTE imediatamente,
 // antes do sorteio agendado. Esta função remove rodadas extras que (a) ainda

@@ -1568,16 +1568,35 @@ function _renderPhaseBracket(t, canEnterResult) {
     // (tabela pobre P/V/E/D/± via groupTeamStandings, sem %G/PA/medalhas/CLASSIF) foi
     // removido em favor do canônico.
     var _lMs = pm.filter(function (m) { return m.bracket === 'league'; });
-    var _lAllDone = _lMs.length > 0 && _lMs.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
+    var _lIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _lRounds, _lOpts;
+    if (phaseCfg.ligaCadence === 'incremental') {
+      // v3.1.13 (brick 4): rodada a rodada — rodadas REAIS por m.round (última
+      // editável, anteriores viram resumo read-only). A cadência "encerrar rodada e
+      // sortear próxima" vai por opts.phaseLeagueCadence (botão chama
+      // _phaseCloseLeagueRound, NÃO _closeRound, que opera em t.rounds da Fase 0).
+      var _lByR = {};
+      _lMs.forEach(function (m) { var r = m.round || 1; (_lByR[r] = _lByR[r] || []).push(m); });
+      _lRounds = Object.keys(_lByR).map(Number).sort(function (a, b) { return a - b; }).map(function (rn) {
+        var ms = _lByR[rn];
+        var done = ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
+        return { round: rn, status: done ? 'complete' : 'active', matches: ms };
+      });
+      _lOpts = { phaseLeagueCadence: { tId: t.id, phaseIdx: curPhase } };
+    } else {
+      // todos contra todos (round-robin estático): colapsa numa rodada única → todos
+      // editáveis; sem cadência (renderBracket mostra o banner de próxima fase).
+      var _lAllDone = _lMs.length > 0 && _lMs.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
+      _lRounds = [{ matches: _lMs, status: _lAllDone ? 'complete' : 'active' }];
+      _lOpts = { suppressAutoAdvance: true };
+    }
     var _lFaux = {
-      id: t.id, format: 'Liga', matches: _lMs,
-      rounds: [{ matches: _lMs, status: _lAllDone ? 'complete' : 'active' }],
+      id: t.id, format: 'Liga', matches: _lMs, rounds: _lRounds,
       scoring: t.scoring, tiebreakers: t.tiebreakers, advancedScoring: t.advancedScoring,
       creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts
     };
-    var _lIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
     body = (typeof window.renderStandings === 'function')
-      ? window.renderStandings(_lFaux, _lIsOrg, canEnterResult, '', '', { suppressAutoAdvance: true })
+      ? window.renderStandings(_lFaux, _lIsOrg, canEnterResult, '', '', _lOpts)
       : '';
   } else if (_isGroupPhase) {
     // v3.1.7: Fase N grupos = MESMO renderer canônico da Fase 0 (renderGroupStage),
@@ -1634,6 +1653,40 @@ function _renderPhaseBracket(t, canEnterResult) {
   return '<div>' + header + body + '</div>';
 }
 window._renderPhaseBracket = _renderPhaseBracket;
+
+// v3.1.13 (brick 4): cadência "encerrar rodada e sortear próxima" da Liga rodada a
+// rodada numa fase POSTERIOR. Disparado pelo botão no render (renderStandings via
+// opts.phaseLeagueCadence). Gera a próxima rodada via o driver acima, persiste e
+// re-renderiza. NÃO usa _closeRound (que opera em t.rounds da Fase 0).
+window._phaseCloseLeagueRound = function (tId, phaseIdx) {
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  if (!t) return;
+  var lm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && m.bracket === 'league'; });
+  var maxR = lm.reduce(function (mx, m) { return Math.max(mx, m.round || 1); }, 0);
+  var cur = lm.filter(function (m) { return (m.round || 1) === maxR; });
+  var unfinished = cur.filter(function (m) { return !m.winner && !m.isBye && !m.isSitOut; });
+  var _go = function () {
+    if (typeof window._autoApprovePendingResults === 'function') { try { window._autoApprovePendingResults(t); } catch (e) {} }
+    var ok = window._phaseGenNextLeagueRound(t, phaseIdx);
+    if (!ok) {
+      if (window.showAlertDialog) window.showAlertDialog('Não foi possível sortear', 'Verifique se há jogadores suficientes na fase.', null, { type: 'warning' });
+      return;
+    }
+    if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(tId, 'Liga (fase ' + (phaseIdx + 1) + '): rodada ' + maxR + ' encerrada, próxima sorteada');
+    if (window.AppStore && window.AppStore.syncImmediate) window.AppStore.syncImmediate(tId);
+    if (typeof window._notifyDrawPersonalized === 'function') {
+      try { window._notifyDrawPersonalized(t, tId, { type: 'new_round', phaseIndex: phaseIdx }); } catch (e) {}
+    }
+    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+    else if (typeof renderBracket === 'function') renderBracket(document.getElementById('view-container'), tId);
+  };
+  if (unfinished.length > 0 && typeof window.showConfirmDialog === 'function') {
+    var _tt = window._t || function (k) { return k; };
+    window.showConfirmDialog(_tt('bui.incompleteRound'), _tt('bui.incompleteRoundMsg', { n: unfinished.length }), _go, null, { type: 'warning', confirmText: _tt('btn.finishAnyway'), cancelText: _tt('btn.back') });
+    return;
+  }
+  _go();
+};
 
 // v2.8.24: ocultar/mostrar rodadas concluídas POR LINHA (gold/silver…) no bracket de
 // fase. Estado por-tier em window._hiddenRoundsTier['<tId>|<bracketKey>'] (Set de round).
@@ -2810,6 +2863,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // rodada a gerar num bloco round-robin estático; renderBracket já mostra o banner
   // de próxima fase). Fase 0 / Liga de fase única chamam sem opts → comportamento intacto.
   var _suppressAdvance = !!(opts && opts.suppressAutoAdvance);
+  // v3.1.13 (brick 4): quando reusado por uma FASE POSTERIOR de Liga RODADA A RODADA,
+  // o botão "encerrar rodada" gera a próxima rodada DA FASE via _phaseCloseLeagueRound
+  // (NÃO _closeRound, que opera em t.rounds da Fase 0). Presença de opts.phaseLeagueCadence
+  // libera o botão (não suprime) e troca o handler.
+  var _phaseCad = (opts && opts.phaseLeagueCadence) || null;
   var _t = window._t || function(k) { return k; };
   // Source swiss/liga/monarch round columns from the unified adapter. Each
   // column is flattened back into the legacy {matches, status, format,
@@ -3027,7 +3085,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       ${rankingCountdownHtml}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
         <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound ? '👑 ' : ''}${isSwissQualifier ? _swissQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : '— ' + _t('bracket.ongoing')}</h3>
-        ${isOrg && !isFinished && allComplete && !_suppressAdvance && !(window._phasesPhaseComplete && window._phasesPhaseComplete(t)) ? `
+        ${isOrg && !isFinished && allComplete && _phaseCad ? `
+          <button class="btn btn-success btn-sm hover-lift" onclick="window._phaseCloseLeagueRound('${String(_phaseCad.tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${parseInt(_phaseCad.phaseIdx, 10) || 0})">
+            🔁 Encerrar rodada e sortear próxima
+          </button>` : ''}
+        ${isOrg && !isFinished && allComplete && !_suppressAdvance && !_phaseCad && !(window._phasesPhaseComplete && window._phasesPhaseComplete(t)) ? `
           <button class="btn btn-success btn-sm hover-lift" onclick="window._closeRound('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${currentRound - 1})">
             ${_t('bracket.closeRound')}
           </button>` : ''}

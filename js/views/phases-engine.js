@@ -691,6 +691,15 @@
     var pool = byDest.main || [];
     if (pool.length < 2) return { matches: [], players: pool.map(function (p) { return p.displayName; }) };
 
+    // v3.1.13 (brick 4): Pontos Corridos RODADA A RODADA como fase posterior. NÃO
+    // pré-gera o round-robin estático — devolve só o POOL de entrantes; o CLIENTE
+    // gera a 1ª rodada (e as seguintes) via o motor incremental compartilhado
+    // (_generateNextRoundForPlayers), estilo temporada. materializeNextPhase persiste
+    // o pool em t.phaseLeagueState[idx]. (Cron/autoDraw = brick 4 etapa 4, deferido.)
+    if (phaseCfg && phaseCfg.ligaCadence === 'incremental') {
+      return { matches: [], players: pool.map(function (p) { return p.displayName; }), pool: pool, incrementalLeague: true };
+    }
+
     var counter = 0;
     function mkId() { return idPrefix + '-' + (counter++); }
     var allMatches = [];
@@ -1012,6 +1021,24 @@
         : _fmt === 'groups'
           ? buildPhaseGroupStage(groups, cfg, cs, _id)
           : buildPhaseBrackets(groups, cfg, cs, _id);
+    // v3.1.13 (brick 4): Liga rodada a rodada — não mergeia matches aqui. Persiste o
+    // pool (slim: displayName + uid; identidade resolve por nome via t.participants) +
+    // a sub-state da fase (opponentHistory/sitOutHistory acumulam por rodada). O cliente
+    // (advanceMultiPhase → _phaseGenNextLeagueRound) gera a 1ª rodada logo após.
+    if (built.incrementalLeague) {
+      var _slim = (built.pool || []).map(function (e) {
+        var nm = e.displayName || e.name;
+        var o = { displayName: nm, name: nm };
+        var u = e.p1Uid || e.uid; if (u) o.uid = u;
+        return o;
+      });
+      t.phaseLeagueState = t.phaseLeagueState || {};
+      t.phaseLeagueState[nextIdx] = { pool: _slim, opponentHistory: {}, sitOutHistory: {} };
+      t.currentPhaseIndex = nextIdx;
+      t.currentStage = 'phase' + nextIdx;
+      t._phaseMaterialized = nextIdx;
+      return { ok: true, matches: [], built: built, incrementalLeague: true, phaseIndex: nextIdx };
+    }
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
     built.matches.forEach(function (m) { m.phaseIndex = nextIdx; if (m.category === undefined) m.category = null; });
     t.matches = (t.matches || []).concat(built.matches);
@@ -1085,6 +1112,12 @@
     if (!res.ok) {
       if (window.showAlertDialog) window.showAlertDialog('Não foi possível avançar', 'Motivo: ' + res.error, null, { type: 'warning' });
       return;
+    }
+    // v3.1.13 (brick 4): Liga rodada a rodada — a fase entra sem partidas; gera a 1ª
+    // rodada agora via o motor incremental (cliente). As seguintes saem da cadência
+    // "encerrar rodada" (_phaseCloseLeagueRound).
+    if (res.incrementalLeague && typeof window._phaseGenNextLeagueRound === 'function') {
+      window._phaseGenNextLeagueRound(t, res.phaseIndex);
     }
     if (AppStore.syncImmediate) AppStore.syncImmediate(tId);
     if (window._rerenderBracket) window._rerenderBracket(tId);
