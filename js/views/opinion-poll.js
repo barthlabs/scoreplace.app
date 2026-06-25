@@ -18,7 +18,17 @@
     if (typeof window._findTournamentById === 'function') return window._findTournamentById(tId);
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
   }
-  function _save(t) { try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t); } catch (e) {} }
+  // Retorna a Promise do save pra quem precisa saber se REALMENTE persistiu
+  // (ex.: voto). NUNCA mais engolir a rejeição em silêncio — um catch vazio aqui
+  // foi a causa do voto da Confra "salvar" na tela e sumir no servidor.
+  function _save(t) {
+    try {
+      if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
+        return Promise.resolve(window.FirestoreDB.saveTournament(t));
+      }
+    } catch (e) { return Promise.reject(e); }
+    return Promise.reject(new Error('FirestoreDB indisponível'));
+  }
   function _isOrg(t) { return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t)))); }
 
   window._opActivePoll = function (t) {
@@ -274,11 +284,22 @@
     if (!poll.multiSelect) checked = [checked[0]];
     if (!poll.votes) poll.votes = {};
     var _wasVoted = _hasVoted(poll, cu.uid);
+    var _prev = poll.votes[cu.uid]; // pra reverter o estado local se o save falhar
     poll.votes[cu.uid] = checked;
-    _save(t);
-    if (typeof showNotification === 'function') showNotification(_wasVoted ? '✓ Voto atualizado' : '✓ Voto registrado', '', 'success');
-    _renderVote(t, poll); // re-render no modo resultado
-    if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    // Só confirma DEPOIS que o servidor aceitar. Se a gravação for rejeitada
+    // (ex.: rule), reverte o voto local e avisa de verdade — nunca mais "voto
+    // registrado" mentiroso enquanto o servidor recusou.
+    _save(t).then(function () {
+      if (typeof showNotification === 'function') showNotification(_wasVoted ? '✓ Voto atualizado' : '✓ Voto registrado', '', 'success');
+      _renderVote(t, poll); // re-render no modo resultado
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }).catch(function (err) {
+      if (_prev === undefined) { try { delete poll.votes[cu.uid]; } catch (e) {} }
+      else poll.votes[cu.uid] = _prev;
+      var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
+      if (typeof showNotification === 'function') showNotification('⚠️ Voto NÃO salvo', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
+      try { console.error('[opinion-poll] voto rejeitado:', err); } catch (e) {}
+    });
   };
 
   window._opClose = function (tId, pollId) {
