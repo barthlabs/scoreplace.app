@@ -1552,40 +1552,9 @@ function _renderPhaseBracket(t, canEnterResult) {
         '</div>';
     }).join('');
   }
-  // v3.1: FASE REI/RAINHA posterior — grupos de 4 com classificação INDIVIDUAL.
-  function _renderPhaseMonarch() {
-    var ms = pm.filter(function (m) { return m.bracket === 'monarch'; });
-    if (!ms.length) return '';
-    var byG = {};
-    ms.forEach(function (m) {
-      var k = (m.groupIdx != null) ? m.groupIdx : 0;
-      if (!byG[k]) byG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + k)), idx: k, matches: [], players: {} };
-      byG[k].matches.push(m);
-      (m.team1 || []).concat(m.team2 || []).forEach(function (n) { byG[k].players[n] = 1; });
-    });
-    return Object.keys(byG).sort(function (a, b) { return byG[a].idx - byG[b].idx; }).map(function (k) {
-      var g = byG[k];
-      var standHtml = '';
-      if (typeof window._computeMonarchStandings === 'function') {
-        var st = [];
-        try { st = window._computeMonarchStandings({ players: Object.keys(g.players), matches: g.matches }); } catch (e) { st = []; }
-        if (st.length) {
-          standHtml = '<table style="width:100%;max-width:340px;border-collapse:collapse;font-size:0.78rem;margin-bottom:10px;">' +
-            '<thead><tr style="color:var(--text-muted);text-align:left;border-bottom:1px solid var(--border-color);"><th style="padding:3px 6px;">#</th><th style="padding:3px 6px;">Jogador</th><th style="padding:3px 6px;text-align:center;">V</th><th style="padding:3px 6px;text-align:center;">±</th></tr></thead><tbody>' +
-            st.map(function (s, i) {
-              var diff = (s.pointsFor || 0) - (s.pointsAgainst || 0);
-              return '<tr style="' + (i === 0 ? 'color:#fbbf24;font-weight:700;' : '') + '"><td style="padding:3px 6px;">' + (i + 1) + (i === 0 ? ' 👑' : '') + '</td><td style="padding:3px 6px;">' + window._safeHtml(s.name) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.wins || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (diff > 0 ? '+' : '') + diff + '</td></tr>';
-            }).join('') + '</tbody></table>';
-        }
-      }
-      var cards = g.matches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
-      return '<div style="margin-bottom:1.75rem;">' +
-        '<h4 style="color:#fbbf24;font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid #fbbf24;padding-left:10px;margin-bottom:0.75rem;">👑 ' + window._safeHtml(g.name) + '</h4>' +
-        standHtml +
-        '<div style="display:flex;flex-direction:column;gap:0.75rem;max-width:340px;">' + cards + '</div>' +
-        '</div>';
-    }).join('');
-  }
+  // v3.1.6: FASE REI/RAINHA posterior agora reusa _renderMonarchStage (render canônico
+  // da Fase 0) via faux-t — ver dispatch do `body` abaixo. O antigo _renderPhaseMonarch
+  // (tabela pobre #/Jogador/V/± sem coroa invicto) foi removido em favor do canônico.
   // v3.1: FASE LIGA posterior (Pontos Corridos) — tabela ÚNICA + jogos round-robin.
   function _renderPhaseLeague() {
     var lm = pm.filter(function (m) { return m.bracket === 'league'; });
@@ -1630,7 +1599,31 @@ function _renderPhaseBracket(t, canEnterResult) {
 
   var body;
   if (_isMonarchPhase) {
-    body = _renderPhaseMonarch();
+    // v3.1.6: Fase N rei/rainha = MESMO renderer canônico da Fase 0 (_renderMonarchStage),
+    // via faux-t reconstruído das partidas desta fase. Render mais rico (Pts/Saldo/%/coroa
+    // invicto/CLASSIF) e único caminho. Match cards usam t.id real → result-entry intacto.
+    var _mMs = pm.filter(function (m) { return m.bracket === 'monarch'; });
+    var _mByG = {};
+    _mMs.forEach(function (m) {
+      var k = (m.groupIdx != null) ? m.groupIdx : 0;
+      if (!_mByG[k]) _mByG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + k)), idx: k, matches: [], players: {} };
+      _mByG[k].matches.push(m);
+      (m.team1 || []).concat(m.team2 || []).forEach(function (n) { _mByG[k].players[n] = 1; });
+    });
+    var _mGroups = Object.keys(_mByG).sort(function (a, b) { return _mByG[a].idx - _mByG[b].idx; }).map(function (k) {
+      var g = _mByG[k];
+      return { name: g.name, players: Object.keys(g.players), matches: g.matches, rounds: [{ matches: g.matches }] };
+    });
+    var _mFaux = {
+      id: t.id, matches: _mMs, groups: _mGroups,
+      monarchClassified: phaseCfg.monarchClassified || t.monarchClassified || 1,
+      scoring: t.scoring, tiebreakers: t.tiebreakers,
+      creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts
+    };
+    var _mIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    body = (typeof window._renderMonarchStage === 'function')
+      ? window._renderMonarchStage(_mFaux, _mIsOrg, canEnterResult, { suppressAutoAdvance: true })
+      : '';
   } else if (_isLeaguePhase) {
     body = _renderPhaseLeague();
   } else if (_isGroupPhase) {
@@ -2416,7 +2409,7 @@ window.renderMatchCard = renderMatchCard;
 // ─── Highlight winner based on score while typing ─────────────────────────────
 
 // ── Rei/Rainha da Praia Rendering ────────────────────────────────────────────
-function _renderMonarchStage(t, isOrg, canEnterResult) {
+function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   var _t = window._t || function(k) { return k; };
   var html = '';
   var allGroupsDone = true;
@@ -2514,8 +2507,11 @@ function _renderMonarchStage(t, isOrg, canEnterResult) {
     '</div>';
   });
 
-  // Auto-advance to elimination when all groups are done
-  if (allGroupsDone) {
+  // Auto-advance to elimination when all groups are done.
+  // v3.1.6: quando reusado por uma FASE POSTERIOR rei/rainha (opts.suppressAutoAdvance),
+  // o motor de fases (renderBracket) já mostra o banner "próxima fase" e cuida da
+  // transição — não disparar o auto-advance Fase-0→eliminatória embutido aqui.
+  if (allGroupsDone && !(opts && opts.suppressAutoAdvance)) {
     html += '<div style="text-align:center;margin-top:1.5rem;padding:1rem;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:12px;">' +
       '<div style="font-size:1.2rem;font-weight:700;color:#fbbf24;">👑 ' + _t('monarch.groupsComplete') + '</div>' +
       '<div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">' + _t('monarch.advancingQualified') + '</div>' +
