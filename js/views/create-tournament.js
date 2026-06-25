@@ -484,6 +484,12 @@ function setupCreateTournamentModal() {
                   <label class="toggle-switch" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;flex-shrink:0;"><input type="checkbox" id="grupos-seed-vip"><span class="toggle-slider"></span></label>
                   <span style="font-size:0.84rem;color:var(--text-main);">🎯 Cabeças de chave <span style="color:var(--text-muted);font-size:0.78rem;">(VIPs espalhados em grupos diferentes)</span></span>
                 </div>
+                <!-- v3.1.12: equilibrar grupos por categoria/nível — espalha cada categoria
+                     entre os grupos (evita um grupo só de fortes). Toggle do organizador. -->
+                <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+                  <label class="toggle-switch" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;flex-shrink:0;"><input type="checkbox" id="grupos-seed-category"><span class="toggle-slider"></span></label>
+                  <span style="font-size:0.84rem;color:var(--text-main);">⚖️ Equilibrar por categoria <span style="color:var(--text-muted);font-size:0.78rem;">(cada nível espalhado entre os grupos)</span></span>
+                </div>
               </div>
 
               <!-- Campos específicos: Suíço -->
@@ -5195,6 +5201,7 @@ function setupCreateTournamentModal() {
     if (t.gruposClassified) document.getElementById('grupos-classified').value = t.gruposClassified;
     var _eqEl = document.getElementById('grupos-equal-only'); if (_eqEl) _eqEl.checked = !!t.gruposEqualOnly;
     var _svEl = document.getElementById('grupos-seed-vip'); if (_svEl) _svEl.checked = !!t.gruposSeedVip; // v3.1.11
+    var _scEl = document.getElementById('grupos-seed-category'); if (_scEl) _scEl.checked = !!t.gruposSeedCategory; // v3.1.12
 
     // Construtor de Fases — restaura fases extras (t.phases[0] = fase 1, do topo)
     window._phasesUserTouched = false; // v3.0.x: edição começa "limpa" — só vira true se add/remove
@@ -5910,6 +5917,7 @@ function setupCreateTournamentModal() {
           tourData.gruposClassified = parseInt(document.getElementById('grupos-classified').value) || 2;
           tourData.gruposEqualOnly = !!(document.getElementById('grupos-equal-only') || {}).checked;
           tourData.gruposSeedVip = !!(document.getElementById('grupos-seed-vip') || {}).checked; // v3.1.11: cabeças de chave por VIP
+          tourData.gruposSeedCategory = !!(document.getElementById('grupos-seed-category') || {}).checked; // v3.1.12: equilibrar por categoria
         }
 
         if (drawModeValue === 'rei_rainha' || drawModeValue === 'round_robin') {
@@ -7249,6 +7257,7 @@ window._prefillFromTemplate = function(tpl) {
   if (tpl.gruposClassified != null) _setV('grupos-classified', tpl.gruposClassified);
   if (tpl.gruposEqualOnly !== undefined) _setC('grupos-equal-only', tpl.gruposEqualOnly);
   if (tpl.gruposSeedVip !== undefined) _setC('grupos-seed-vip', tpl.gruposSeedVip);
+  if (tpl.gruposSeedCategory !== undefined) _setC('grupos-seed-category', tpl.gruposSeedCategory);
   if (tpl.allowSelfDeactivation !== undefined) _setC('liga-allow-self-deactivation', tpl.allowSelfDeactivation);
   if (tpl.reiRainhaGroupsBy) _setV('reirainha-groups-by', tpl.reiRainhaGroupsBy);
   // re-renderiza o construtor com as fases restauradas. Mesmo que a seção esteja oculta pelo
@@ -7595,6 +7604,7 @@ window._saveCurrentFormAsTemplate = function() {
       gruposClassified: parseInt(get('grupos-classified')) || 2,
       gruposEqualOnly: getChecked('grupos-equal-only'),
       gruposSeedVip: getChecked('grupos-seed-vip'),
+      gruposSeedCategory: getChecked('grupos-seed-category'),
       reiRainhaGroupsBy: get('reirainha-groups-by') || ''
     };
     if (typeof window._saveTemplate !== 'function') return;

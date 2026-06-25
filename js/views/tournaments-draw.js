@@ -1077,15 +1077,35 @@ window.generateDrawFunction = function (tId) {
             [_grpNames[i], _grpNames[j]] = [_grpNames[j], _grpNames[i]];
         }
 
-        // v3.1.11: 🎯 Cabeças de chave (toggle do organizador) — os marcados como VIP
-        // (uid-keyed, _entryHasVip) viram cabeças e são espalhados 1 por grupo. Como a
-        // distribuição abaixo é por módulo (idx % numGroups), basta ORDENAR os VIPs no
-        // INÍCIO (ambos os lados já embaralhados acima) → os primeiros slots caem em
-        // grupos distintos. Desligado = sorteio puro (lista só embaralhada).
-        if (t.gruposSeedVip) {
-            var _vipFirst = _grpNames.filter(function (n) { return window._entryHasVip(t, n); });
-            var _nonVip = _grpNames.filter(function (n) { return !window._entryHasVip(t, n); });
-            _grpNames = _vipFirst.concat(_nonVip);
+        // v3.1.11/12: 🎯 Cabeças de chave (toggles do organizador). Reordena ANTES da
+        // distribuição por módulo (idx % numGroups), que então espalha quem está no INÍCIO:
+        //  • VIP (t.gruposSeedVip): os marcados VIP (uid-keyed, _entryHasVip) viram cabeças,
+        //    1 por grupo.
+        //  • Categoria/nível (t.gruposSeedCategory): agrupa por categoria → o módulo espalha
+        //    cada categoria entre os grupos (equilibra os níveis; evita grupo só de fortes).
+        // Combináveis: VIPs primeiro, depois o resto ordenado por categoria. Desligados =
+        // sorteio puro (lista só embaralhada). VIP-only mantém o resto na ordem embaralhada.
+        if (t.gruposSeedVip || t.gruposSeedCategory) {
+            var _catOf = {};
+            if (t.gruposSeedCategory) {
+                participants.forEach(function (p) {
+                    var nm = window._pName ? window._pName(p) : getName(p);
+                    var cats = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : [];
+                    _catOf[nm] = (cats && cats[0]) || '~'; // sem categoria → '~' (agrupa no fim)
+                });
+            }
+            var _vipFirst = [], _rest = [];
+            _grpNames.forEach(function (n) {
+                if (t.gruposSeedVip && window._entryHasVip(t, n)) _vipFirst.push(n); else _rest.push(n);
+            });
+            if (t.gruposSeedCategory) {
+                // ordena ESTÁVEL por categoria (índice como desempate preserva o shuffle dentro
+                // da categoria) → mesma categoria adjacente → módulo distribui cada uma entre grupos.
+                _rest = _rest.map(function (n, i) { return { n: n, i: i, c: String(_catOf[n] || '~') }; })
+                    .sort(function (a, b) { return a.c < b.c ? -1 : a.c > b.c ? 1 : a.i - b.i; })
+                    .map(function (o) { return o.n; });
+            }
+            _grpNames = _vipFirst.concat(_rest);
         }
 
         const numGroups = t.gruposCount || 4;
