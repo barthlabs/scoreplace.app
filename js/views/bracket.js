@@ -1522,44 +1522,8 @@ function _renderPhaseBracket(t, canEnterResult) {
   // v3.1.6: FASE REI/RAINHA posterior agora reusa _renderMonarchStage (render canônico
   // da Fase 0) via faux-t — ver dispatch do `body` abaixo. O antigo _renderPhaseMonarch
   // (tabela pobre #/Jogador/V/± sem coroa invicto) foi removido em favor do canônico.
-  // v3.1: FASE LIGA posterior (Pontos Corridos) — tabela ÚNICA + jogos round-robin.
-  function _renderPhaseLeague() {
-    var lm = pm.filter(function (m) { return m.bracket === 'league'; });
-    if (!lm.length) return '';
-    var objs = {};
-    lm.forEach(function (m) {
-      if (m.team1Obj && m.team1Obj.displayName) objs[m.team1Obj.displayName] = 1; else if (m.p1) objs[m.p1] = 1;
-      if (m.team2Obj && m.team2Obj.displayName) objs[m.team2Obj.displayName] = 1; else if (m.p2) objs[m.p2] = 1;
-    });
-    var eng2 = window._phasesEngine;
-    var standHtml = '';
-    if (eng2 && eng2.groupTeamStandings) {
-      var st = [];
-      try { st = eng2.groupTeamStandings({ matches: lm, players: Object.keys(objs) }, { tiebreakers: t.tiebreakers }); } catch (e) { st = []; }
-      if (st.length) {
-        standHtml = '<table style="width:100%;max-width:420px;border-collapse:collapse;font-size:0.78rem;margin-bottom:12px;">' +
-          '<thead><tr style="color:var(--text-muted);text-align:left;border-bottom:1px solid var(--border-color);"><th style="padding:3px 6px;">#</th><th style="padding:3px 6px;">Jogador</th><th style="padding:3px 6px;text-align:center;">P</th><th style="padding:3px 6px;text-align:center;">V</th><th style="padding:3px 6px;text-align:center;">E</th><th style="padding:3px 6px;text-align:center;">D</th><th style="padding:3px 6px;text-align:center;">±</th></tr></thead><tbody>' +
-          st.map(function (s, i) {
-            return '<tr style="' + (i === 0 ? 'color:#fbbf24;font-weight:700;' : '') + '"><td style="padding:3px 6px;">' + (i + 1) + '</td><td style="padding:3px 6px;">' + window._safeHtml(s.name) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.points || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.wins || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.draws || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.losses || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + ((s.pointsDiff || 0) > 0 ? '+' : '') + (s.pointsDiff || 0) + '</td></tr>';
-          }).join('') + '</tbody></table>';
-      }
-    }
-    // jogos agrupados por turno (round)
-    var byTurn = {};
-    lm.forEach(function (m) { var r = m.round || 1; (byTurn[r] = byTurn[r] || []).push(m); });
-    var turns = Object.keys(byTurn).map(Number).sort(function (a, b) { return a - b; });
-    var multiTurn = turns.length > 1;
-    var matchesHtml = turns.map(function (r) {
-      var head = multiTurn ? '<h5 style="color:#10b981;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:0.5rem 0;border-left:3px solid #10b981;padding-left:8px;">Turno ' + r + '</h5>' : '';
-      var cards = byTurn[r].map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
-      return head + cards;
-    }).join('');
-    return '<div style="margin-bottom:1.5rem;">' +
-      '<h4 style="color:#10b981;font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid #10b981;padding-left:10px;margin-bottom:0.75rem;">📊 Classificação</h4>' +
-      standHtml +
-      '<div style="display:flex;flex-direction:column;gap:0.75rem;max-width:340px;">' + matchesHtml + '</div>' +
-      '</div>';
-  }
+  // v3.1.8: _renderPhaseLeague removido — Fase N Liga reusa renderStandings (canônico
+  // da Fase 0) via faux-t no dispatch do `body` abaixo. Ver comentário lá.
   var _isGroupPhase = pm.some(function (m) { return m.bracket === 'group'; });
   var _isMonarchPhase = pm.some(function (m) { return m.bracket === 'monarch'; });
   var _isLeaguePhase = pm.some(function (m) { return m.bracket === 'league'; });
@@ -1592,7 +1556,29 @@ function _renderPhaseBracket(t, canEnterResult) {
       ? window._renderMonarchStage(_mFaux, _mIsOrg, canEnterResult, { suppressAutoAdvance: true })
       : '';
   } else if (_isLeaguePhase) {
-    body = _renderPhaseLeague();
+    // v3.1.8: Fase N Liga (Pontos Corridos) = MESMO renderer canônico da Fase 0
+    // (renderStandings), via faux-t reconstruído das partidas bracket:'league' desta
+    // fase. Render mais rico (Pts/%G/V/D/Saldo/±S±G/PA/medalhas/CLASSIF + confrontos
+    // clicáveis) e único caminho. A fase posterior materializa TODOS os turnos de uma
+    // vez (bloco round-robin estático); como renderStandings só deixa a ÚLTIMA rodada
+    // editável (anteriores viram resumo read-only), colapsamos todos os turnos numa
+    // rodada ÚNICA → todos os jogos editáveis. Match cards usam t.id real →
+    // result-entry intacto. suppressAutoAdvance esconde o botão "encerrar rodada"
+    // (renderBracket já mostra o banner de próxima fase). O antigo _renderPhaseLeague
+    // (tabela pobre P/V/E/D/± via groupTeamStandings, sem %G/PA/medalhas/CLASSIF) foi
+    // removido em favor do canônico.
+    var _lMs = pm.filter(function (m) { return m.bracket === 'league'; });
+    var _lAllDone = _lMs.length > 0 && _lMs.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
+    var _lFaux = {
+      id: t.id, format: 'Liga', matches: _lMs,
+      rounds: [{ matches: _lMs, status: _lAllDone ? 'complete' : 'active' }],
+      scoring: t.scoring, tiebreakers: t.tiebreakers, advancedScoring: t.advancedScoring,
+      creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts
+    };
+    var _lIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    body = (typeof window.renderStandings === 'function')
+      ? window.renderStandings(_lFaux, _lIsOrg, canEnterResult, '', '', { suppressAutoAdvance: true })
+      : '';
   } else if (_isGroupPhase) {
     // v3.1.7: Fase N grupos = MESMO renderer canônico da Fase 0 (renderGroupStage),
     // via faux-t reconstruído das partidas bracket:'group' desta fase (grupos com
@@ -2818,7 +2804,12 @@ function _buildSwissPastColumns(t, swissPastCols) {
   return cols;
 }
 
-function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) {
+function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, opts) {
+  // v3.1.8: opts.suppressAutoAdvance — quando reusado por uma FASE POSTERIOR de Liga
+  // (Pontos Corridos) via faux-t, esconde o botão "encerrar rodada" (não há próxima
+  // rodada a gerar num bloco round-robin estático; renderBracket já mostra o banner
+  // de próxima fase). Fase 0 / Liga de fase única chamam sem opts → comportamento intacto.
+  var _suppressAdvance = !!(opts && opts.suppressAutoAdvance);
   var _t = window._t || function(k) { return k; };
   // Source swiss/liga/monarch round columns from the unified adapter. Each
   // column is flattened back into the legacy {matches, status, format,
@@ -3036,7 +3027,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       ${rankingCountdownHtml}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
         <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound ? '👑 ' : ''}${isSwissQualifier ? _swissQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : '— ' + _t('bracket.ongoing')}</h3>
-        ${isOrg && !isFinished && allComplete && !(window._phasesPhaseComplete && window._phasesPhaseComplete(t)) ? `
+        ${isOrg && !isFinished && allComplete && !_suppressAdvance && !(window._phasesPhaseComplete && window._phasesPhaseComplete(t)) ? `
           <button class="btn btn-success btn-sm hover-lift" onclick="window._closeRound('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${currentRound - 1})">
             ${_t('bracket.closeRound')}
           </button>` : ''}
