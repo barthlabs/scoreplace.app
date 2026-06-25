@@ -1586,12 +1586,53 @@ function _renderPhaseBracket(t, canEnterResult) {
         '</div>';
     }).join('');
   }
+  // v3.1: FASE LIGA posterior (Pontos Corridos) — tabela ÚNICA + jogos round-robin.
+  function _renderPhaseLeague() {
+    var lm = pm.filter(function (m) { return m.bracket === 'league'; });
+    if (!lm.length) return '';
+    var objs = {};
+    lm.forEach(function (m) {
+      if (m.team1Obj && m.team1Obj.displayName) objs[m.team1Obj.displayName] = 1; else if (m.p1) objs[m.p1] = 1;
+      if (m.team2Obj && m.team2Obj.displayName) objs[m.team2Obj.displayName] = 1; else if (m.p2) objs[m.p2] = 1;
+    });
+    var eng2 = window._phasesEngine;
+    var standHtml = '';
+    if (eng2 && eng2.groupTeamStandings) {
+      var st = [];
+      try { st = eng2.groupTeamStandings({ matches: lm, players: Object.keys(objs) }, { tiebreakers: t.tiebreakers }); } catch (e) { st = []; }
+      if (st.length) {
+        standHtml = '<table style="width:100%;max-width:420px;border-collapse:collapse;font-size:0.78rem;margin-bottom:12px;">' +
+          '<thead><tr style="color:var(--text-muted);text-align:left;border-bottom:1px solid var(--border-color);"><th style="padding:3px 6px;">#</th><th style="padding:3px 6px;">Jogador</th><th style="padding:3px 6px;text-align:center;">P</th><th style="padding:3px 6px;text-align:center;">V</th><th style="padding:3px 6px;text-align:center;">E</th><th style="padding:3px 6px;text-align:center;">D</th><th style="padding:3px 6px;text-align:center;">±</th></tr></thead><tbody>' +
+          st.map(function (s, i) {
+            return '<tr style="' + (i === 0 ? 'color:#fbbf24;font-weight:700;' : '') + '"><td style="padding:3px 6px;">' + (i + 1) + '</td><td style="padding:3px 6px;">' + window._safeHtml(s.name) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.points || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.wins || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.draws || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + (s.losses || 0) + '</td><td style="padding:3px 6px;text-align:center;">' + ((s.pointsDiff || 0) > 0 ? '+' : '') + (s.pointsDiff || 0) + '</td></tr>';
+          }).join('') + '</tbody></table>';
+      }
+    }
+    // jogos agrupados por turno (round)
+    var byTurn = {};
+    lm.forEach(function (m) { var r = m.round || 1; (byTurn[r] = byTurn[r] || []).push(m); });
+    var turns = Object.keys(byTurn).map(Number).sort(function (a, b) { return a - b; });
+    var multiTurn = turns.length > 1;
+    var matchesHtml = turns.map(function (r) {
+      var head = multiTurn ? '<h5 style="color:#10b981;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:0.5rem 0;border-left:3px solid #10b981;padding-left:8px;">Turno ' + r + '</h5>' : '';
+      var cards = byTurn[r].map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
+      return head + cards;
+    }).join('');
+    return '<div style="margin-bottom:1.5rem;">' +
+      '<h4 style="color:#10b981;font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid #10b981;padding-left:10px;margin-bottom:0.75rem;">📊 Classificação</h4>' +
+      standHtml +
+      '<div style="display:flex;flex-direction:column;gap:0.75rem;max-width:340px;">' + matchesHtml + '</div>' +
+      '</div>';
+  }
   var _isGroupPhase = pm.some(function (m) { return m.bracket === 'group'; });
   var _isMonarchPhase = pm.some(function (m) { return m.bracket === 'monarch'; });
+  var _isLeaguePhase = pm.some(function (m) { return m.bracket === 'league'; });
 
   var body;
   if (_isMonarchPhase) {
     body = _renderPhaseMonarch();
+  } else if (_isLeaguePhase) {
+    body = _renderPhaseLeague();
   } else if (_isGroupPhase) {
     body = _renderPhaseGroups();
   } else if (_hasGF && _tierKeys.length) {

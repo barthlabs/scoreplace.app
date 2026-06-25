@@ -614,6 +614,53 @@
     return { matches: allMatches, groups: groups, leftOut: leftOut };
   }
 
+  // Uma config de fase é Liga / Pontos Corridos (round-robin, tabela única)?
+  function _phaseIsLiga(cfg) {
+    if (!cfg) return false;
+    if (_phaseIsMonarch(cfg)) return false; // Liga + reiRainha = Rei/Rainha (gerador próprio)
+    return cfg.formatCode === 'liga' || /\bliga\b|pontos corridos|ranking/i.test(String(cfg.format || ''));
+  }
+
+  // v3.1: LIGA / PONTOS CORRIDOS como fase posterior. Tabela ÚNICA (não grupos):
+  // todos os classificados jogam todos (round-robin), repetido por `turnos`. Numa
+  // fase posterior o avanço é MANUAL, então materializa TODOS os jogos de uma vez
+  // (sem cadência de sorteio no tempo). Matches: { bracket:'league', round:turno }.
+  function buildPhaseLeagueStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
+    idPrefix = idPrefix || 'phl';
+    var src = (phaseCfg && phaseCfg.source) || {};
+    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+    var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs === true) : false;
+    var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
+    var scope = src.scope || 'per_group';
+    var rankingBasis = src.rankingBasis || 'individual';
+    var maxRankTo = mapping.reduce(function (mx, m) { return Math.max(mx, parseInt(m.rankTo, 10) || 0); }, 0) || 999;
+    var turnos = parseInt(phaseCfg && (phaseCfg.turnos || phaseCfg.ligaTurnos), 10) || 1;
+    if (turnos < 1) turnos = 1;
+
+    var byDest = buildEntrantsByDest(prevGroups, [{ dest: 'main', rankFrom: 1, rankTo: maxRankTo }],
+      fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
+    var pool = byDest.main || [];
+    if (pool.length < 2) return { matches: [], players: pool.map(function (p) { return p.displayName; }) };
+
+    var counter = 0;
+    function mkId() { return idPrefix + '-' + (counter++); }
+    var allMatches = [];
+    for (var turn = 1; turn <= turnos; turn++) {
+      for (var a = 0; a < pool.length; a++) {
+        for (var b = a + 1; b < pool.length; b++) {
+          var m = {
+            id: mkId(), round: turn, bracket: 'league', groupIdx: 0, tierLabel: (phaseCfg && phaseCfg.name) || 'Liga',
+            p1: pool[a].displayName, p2: pool[b].displayName, team1Obj: pool[a], team2Obj: pool[b],
+            winner: null, scoreP1: null, scoreP2: null,
+            label: (turnos > 1 ? ('Turno ' + turn + ' • ') : '') + pool[a].displayName + ' vs ' + pool[b].displayName
+          };
+          allMatches.push(m);
+        }
+      }
+    }
+    return { matches: allMatches, players: pool.map(function (p) { return p.displayName; }) };
+  }
+
   // Classificação INDIVIDUAL de um grupo Rei/Rainha (vitórias desc, saldo desc) —
   // versão headless do _computeMonarchStandings p/ o feed-forward no motor (node).
   function _monarchStandings(matches, players) {
@@ -834,6 +881,19 @@
       });
     }
 
+    // v3.1: fase anterior é LIGA (tabela única) → 1 grupo com a classificação geral.
+    var leagueMs = pm.filter(function (m) { return m.bracket === 'league'; });
+    if (leagueMs.length) {
+      var lobjs = {};
+      leagueMs.forEach(function (m) {
+        if (m.team1Obj && m.team1Obj.displayName) lobjs[m.team1Obj.displayName] = m.team1Obj;
+        if (m.team2Obj && m.team2Obj.displayName) lobjs[m.team2Obj.displayName] = m.team2Obj;
+      });
+      var lst = _groupTeamStandings({ matches: leagueMs, players: Object.keys(lobjs) });
+      var lname = (t.phases[phaseIdx] && t.phases[phaseIdx].name) || ('Fase ' + (phaseIdx + 1));
+      return [{ name: lname, standings: lst.map(function (s) { return lobjs[s.name] || { name: s.name, displayName: s.name }; }) }];
+    }
+
     var groupMs = pm.filter(function (m) { return m.bracket === 'group'; });
     if (groupMs.length) {
       var byG = {};
@@ -895,9 +955,11 @@
     // round-robin; demais geram chave (single-elim/convergência), como antes.
     var built = _phaseIsMonarch(cfg)
       ? buildPhaseMonarchStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
-      : _phaseIsGroups(cfg)
-        ? buildPhaseGroupStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
-        : buildPhaseBrackets(groups, cfg, cs, idPrefix || ('ph' + nextIdx));
+      : _phaseIsLiga(cfg)
+        ? buildPhaseLeagueStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
+        : _phaseIsGroups(cfg)
+          ? buildPhaseGroupStage(groups, cfg, cs, idPrefix || ('ph' + nextIdx))
+          : buildPhaseBrackets(groups, cfg, cs, idPrefix || ('ph' + nextIdx));
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
     built.matches.forEach(function (m) { m.phaseIndex = nextIdx; if (m.category === undefined) m.category = null; });
     t.matches = (t.matches || []).concat(built.matches);
@@ -942,8 +1004,8 @@
     // direto. Tamanhos das linhas são determinísticos (não dependem do sorteio).
     var _cur = t.currentPhaseIndex || 0;
     var _nextCfg = t.phases[_cur + 1] || {};
-    // Fase de Grupos / Rei-Rainha não têm chave → não precisam resolver potência de 2.
-    if (!_nextCfg.bracketResolution && !_phaseIsGroups(_nextCfg) && !_phaseIsMonarch(_nextCfg)) {
+    // Fase de Grupos / Rei-Rainha / Liga não têm chave → não precisam resolver potência de 2.
+    if (!_nextCfg.bracketResolution && !_phaseIsGroups(_nextCfg) && !_phaseIsMonarch(_nextCfg) && !_phaseIsLiga(_nextCfg)) {
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _src = _nextCfg.source || {};
       var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
@@ -1039,8 +1101,10 @@
     buildPhaseBrackets: buildPhaseBrackets,
     buildPhaseGroupStage: buildPhaseGroupStage,
     buildPhaseMonarchStage: buildPhaseMonarchStage,
+    buildPhaseLeagueStage: buildPhaseLeagueStage,
     phaseIsGroups: _phaseIsGroups,
     phaseIsMonarch: _phaseIsMonarch,
+    phaseIsLiga: _phaseIsLiga,
     linkTierToFinal: linkTierToFinal,
     prevPhaseGroups: prevPhaseGroups,
     bracketPhaseGroups: bracketPhaseGroups,

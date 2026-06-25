@@ -546,5 +546,47 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(pm.length === 6 && pm.every(function (m) { return m.bracket === 'monarch'; }), 'materialize: gerou 6 jogos REI/RAINHA (não chave)');
 })();
 
+// ── v3.1: LIGA (Pontos Corridos) como fase posterior ───────────────────────
+(function () {
+  ok(eng.phaseIsLiga({ formatCode: 'liga' }), 'phaseIsLiga: formatCode liga');
+  ok(eng.phaseIsLiga({ format: 'Pontos Corridos' }), 'phaseIsLiga: label Pontos Corridos');
+  ok(!eng.phaseIsLiga({ formatCode: 'liga', reiRainha: true }), 'phaseIsLiga: liga+reiRainha é monarch, não liga');
+  ok(!eng.phaseIsLiga({ formatCode: 'elim_dupla' }), 'phaseIsLiga: elim não é liga');
+
+  // 5 classificados → round-robin C(5,2)=10 (1 turno).
+  var prevG = [{ name: 'C', standings: [] }];
+  for (var i = 1; i <= 5; i++) prevG[0].standings.push({ name: 'P' + i, uid: 'u' + i });
+  var csId = function (g) { return g.standings; };
+  var lcfg = { name: 'Liga Final', formatCode: 'liga', source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 999 }] } };
+  var built = eng.buildPhaseLeagueStage(prevG, lcfg, csId, 'tl');
+  eq(built.matches.length, 10, 'liga: C(5,2)=10 jogos (1 turno)');
+  ok(built.matches.every(function (m) { return m.bracket === 'league'; }), 'liga: todas bracket=league');
+  // turnos 2 → dobro
+  var l2 = eng.buildPhaseLeagueStage(prevG, { name: 'L', formatCode: 'liga', turnos: 2, source: lcfg.source }, csId, 'tl2');
+  eq(l2.matches.length, 20, 'liga 2 turnos: 20 jogos');
+  ok(l2.matches.some(function (m) { return m.round === 2; }), 'liga 2 turnos: tem round=2');
+
+  // feed-forward: P1 vence tudo → 1ª colocação. Menor número vence cada jogo.
+  built.matches.forEach(function (m) {
+    m.phaseIndex = 1;
+    var n1 = parseInt(m.p1.slice(1), 10), n2 = parseInt(m.p2.slice(1), 10);
+    m.winner = (n1 < n2) ? m.p1 : m.p2; m.scoreP1 = (n1 < n2) ? 6 : 1; m.scoreP2 = (n1 < n2) ? 1 : 6;
+  });
+  var t = { phases: [{}, lcfg], matches: built.matches };
+  var fed = eng.bracketPhaseGroups(t, 1);
+  eq(fed.length, 1, 'liga feed-forward: tabela única (1 grupo)');
+  eq(fed[0].standings.length, 5, 'liga feed: 5 colocados');
+  eq(fed[0].standings[0].name, 'P1', 'liga feed: P1 (venceu todos) em 1º');
+
+  // materialize HONRA liga (gera round-robin, não chave).
+  var t2 = { phases: [{ name: 'F0' }, lcfg], currentPhaseIndex: 0,
+    groups: [{ name: 'G', players: ['P1','P2','P3','P4','P5'], matches: [] }] };
+  var cs0 = function (g) { return (g.players || []).map(function (n) { return { name: n, displayName: n }; }); };
+  var res = eng.materializeNextPhase(t2, cs0, 'm');
+  ok(res.ok, 'materialize liga: ok');
+  var pm = t2.matches.filter(function (m) { return (m.phaseIndex || 0) === 1; });
+  ok(pm.length === 10 && pm.every(function (m) { return m.bracket === 'league'; }), 'materialize: gerou 10 jogos de LIGA (não chave)');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);
