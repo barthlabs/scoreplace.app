@@ -3700,22 +3700,14 @@ exports.whatsappNightlyRestart = onSchedule(
 //   nextDrawDateStr: string,  // "DD/MM/YYYY às HH:MM" ou "Não agendado"
 // }
 // Output: { ok: true, groups: [{match, created, groupJid, error?}] }
-exports.notifyLeagueRoundWhatsApp = onCall(
-  {
-    region: "us-central1",
-    timeoutSeconds: 120,
-    memory: "256MiB",
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
-  },
-  async (request) => {
-    if (IS_STAGING) { console.log("[staging] notifyLeagueRoundWhatsApp suprimido (sem criação de grupo)"); return { ok: true, suppressed: true, groups: [] }; }
-    const { tournamentId, roundIndex, nextDrawDateStr } = request.data || {};
+// Núcleo compartilhado: cria 1 grupo de WhatsApp por unidade da rodada (partida
+// na Liga; grupo de 4 no Rei/Rainha). Usado pelo onCall `notifyLeagueRoundWhatsApp`
+// (disparado pelo cliente no sorteio manual/publish) E pelo trigger de fila
+// `processRoundWhatsappGroups` (disparado pelo autoDraw, que roda noutro codebase
+// sem acesso a esta callable nem aos segredos do Evolution). db/secrets por parâmetro.
+async function createRoundWhatsappGroups(db, apiUrl, apiKey, instance, opts) {
+    const { tournamentId, roundIndex, nextDrawDateStr } = opts || {};
     if (!tournamentId) return { ok: false, reason: "missing-tournament-id" };
-
-    const db = admin.firestore();
-    const apiUrl = EVOLUTION_API_URL.value();
-    const apiKey = EVOLUTION_API_KEY.value();
-    const instance = EVOLUTION_INSTANCE.value();
 
     // ── 1. Fetch tournament ──────────────────────────────────────────
     let t;
@@ -3732,11 +3724,44 @@ exports.notifyLeagueRoundWhatsApp = onCall(
     const rounds = t.rounds || [];
     const ri = (typeof roundIndex === "number") ? roundIndex : rounds.length - 1;
     const round = rounds[ri];
-    if (!round || !Array.isArray(round.matches)) {
-      return { ok: false, reason: "round-not-found" };
+    if (!round) return { ok: false, reason: "round-not-found" };
+
+    // ── 2b. Normaliza a rodada em "unidades" de grupo de WhatsApp ────
+    // Liga/Suíço: 1 unidade por PARTIDA (dupla ou individual).
+    // Rei/Rainha: 1 unidade por GRUPO de 4 (eles jogam 3 jogos com parceiros
+    // rotativos e precisam se combinar entre si) — NUNCA 1 por jogo, senão
+    // criaria 3 grupos redundantes com as mesmas 4 pessoas.
+    const monarchGroups = Array.isArray(round.monarchGroups) ? round.monarchGroups : [];
+    const isMonarchRound = monarchGroups.length > 0;
+    let units;
+    if (isMonarchRound) {
+      units = monarchGroups
+        .filter((g) => g && Array.isArray(g.players) && g.players.length >= 2)
+        .map((g) => ({
+          kind: "monarch",
+          group: g,
+          players: g.players.slice(),
+          subjectLabel: g.name || "Grupo",
+        }));
+      if (units.length === 0) return { ok: false, reason: "no-groups" };
+    } else {
+      if (!Array.isArray(round.matches)) return { ok: false, reason: "round-not-found" };
+      const realMatches = round.matches.filter((m) => !m.isSitOut && !m.isBye);
+      if (realMatches.length === 0) return { ok: false, reason: "no-matches" };
+      units = realMatches.map((m) => {
+        let playerNames = [];
+        if (Array.isArray(m.team1) && m.team1.length > 0) {
+          playerNames = [...m.team1, ...(m.team2 || [])];
+        } else {
+          if (m.p1) playerNames.push(m.p1);
+          if (m.p2) playerNames.push(m.p2);
+        }
+        const matchLabel = Array.isArray(m.team1)
+          ? `${(m.team1 || []).join("+")} vs ${(m.team2 || []).join("+")}`
+          : `${m.p1 || "?"} vs ${m.p2 || "?"}`;
+        return { kind: "match", match: m, players: playerNames, subjectLabel: matchLabel };
+      });
     }
-    const realMatches = round.matches.filter((m) => !m.isSitOut && !m.isBye);
-    if (realMatches.length === 0) return { ok: false, reason: "no-matches" };
 
     // ── 3. Build phone lookup from participants + users collection ───
     // participants[] can have: { displayName, name, uid, email, phone }
@@ -3834,17 +3859,11 @@ exports.notifyLeagueRoundWhatsApp = onCall(
     const roundNumber = ri + 1;
     const tId = String(tournamentId);
 
-    // ── 4. For each match: create WA group + send message ───────────
+    // ── 4. For each unit (partida da Liga ou grupo do Rei/Rainha):
+    //        create WA group + send message ───────────────────────────
     const results = [];
-    for (const match of realMatches) {
-      // Extract player names (supports singles p1/p2 and doubles team1/team2)
-      let playerNames = [];
-      if (Array.isArray(match.team1) && match.team1.length > 0) {
-        playerNames = [...match.team1, ...(match.team2 || [])];
-      } else {
-        if (match.p1) playerNames.push(match.p1);
-        if (match.p2) playerNames.push(match.p2);
-      }
+    for (const unit of units) {
+      const playerNames = unit.players;
       // For doubles: expand "Alice/Bob" → ["Alice/Bob", "Alice", "Bob"]
       // We include both the full team name AND individual members so that resolvePhone
       // can match via the team-key fallback AND via individual participant entries.
@@ -3866,28 +3885,44 @@ exports.notifyLeagueRoundWhatsApp = onCall(
       const phoneResults = await Promise.all(expandedNames.map(resolvePhone));
       const phones = [...new Set(phoneResults.filter(Boolean))];
 
+      const matchLabel = unit.subjectLabel;
       if (phones.length < 2) {
-        console.log(`[notifyLeagueRoundWhatsApp] match "${match.p1 || (match.team1||[]).join('+')} vs ${match.p2 || (match.team2||[]).join('+')}": only ${phones.length} phone(s) found — skipping group creation`);
-        results.push({ match: `${match.p1} vs ${match.p2}`, created: false, reason: "insufficient-phones" });
+        console.log(`[notifyLeagueRoundWhatsApp] ${unit.kind} "${matchLabel}": only ${phones.length} phone(s) found — skipping group creation`);
+        results.push({ match: matchLabel, created: false, reason: "insufficient-phones" });
         continue;
       }
 
       // Group subject — max 100 chars for WA
-      const matchLabel = Array.isArray(match.team1)
-        ? `${(match.team1 || []).join("+")} vs ${(match.team2 || []).join("+")}`
-        : `${match.p1 || "?"} vs ${match.p2 || "?"}`;
       const subject = `${tournamentName} R${roundNumber}: ${matchLabel}`.substring(0, 100);
 
       // Message body
       const nextDrawLabel = nextDrawDateStr || "Não agendado";
       const link = `https://scoreplace.app/#bracket/${tId}`;
-      const message =
-        `🎾 *${tournamentName} — Rodada ${roundNumber}*\n\n` +
-        `Olá! Vocês foram sorteados para jogar juntos nesta rodada.\n\n` +
-        `📋 *Partida:* ${matchLabel}\n` +
-        `⏰ *Prazo:* Lancem o resultado antes do próximo sorteio:\n` +
-        `📅 *Próximo sorteio:* ${nextDrawLabel}\n\n` +
-        `Combinem o horário aqui no grupo e registrem o placar no app:\n${link}`;
+      let message;
+      if (unit.kind === "monarch") {
+        // Rei/Rainha: lista os 3 jogos do grupo (parceiros rotativos) que as 4
+        // pessoas precisam combinar entre si.
+        const games = (unit.group.matches || [])
+          .filter((m) => m && !m.isSitOut && !m.isBye)
+          .map((m, gi) => `${gi + 1}) ${m.p1 || "?"} vs ${m.p2 || "?"}`)
+          .join("\n");
+        message =
+          `🎾 *${tournamentName} — Rodada ${roundNumber}*\n\n` +
+          `Olá! Vocês foram sorteados no mesmo grupo do Rei/Rainha da Praia.\n` +
+          `Joguem os jogos abaixo (parceiros trocam a cada jogo):\n\n` +
+          `${games}\n\n` +
+          `⏰ *Prazo:* Lancem os resultados antes do próximo sorteio:\n` +
+          `📅 *Próximo sorteio:* ${nextDrawLabel}\n\n` +
+          `Combinem os horários aqui no grupo e registrem os placares no app:\n${link}`;
+      } else {
+        message =
+          `🎾 *${tournamentName} — Rodada ${roundNumber}*\n\n` +
+          `Olá! Vocês foram sorteados para jogar juntos nesta rodada.\n\n` +
+          `📋 *Partida:* ${matchLabel}\n` +
+          `⏰ *Prazo:* Lancem o resultado antes do próximo sorteio:\n` +
+          `📅 *Próximo sorteio:* ${nextDrawLabel}\n\n` +
+          `Combinem o horário aqui no grupo e registrem o placar no app:\n${link}`;
+      }
 
       // ── Create group ────────────────────────────────────────────────
       let groupJid = null;
@@ -3951,8 +3986,58 @@ exports.notifyLeagueRoundWhatsApp = onCall(
     }
 
     const created = results.filter((r) => r.created).length;
-    console.log(`[notifyLeagueRoundWhatsApp] tournament ${tId} round ${roundNumber}: ${created}/${realMatches.length} groups created`);
+    console.log(`[notifyLeagueRoundWhatsApp] tournament ${tId} round ${roundNumber}: ${created}/${units.length} groups created`);
     return { ok: true, groups: results };
+}
+
+exports.notifyLeagueRoundWhatsApp = onCall(
+  {
+    region: "us-central1",
+    timeoutSeconds: 120,
+    memory: "256MiB",
+    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
+  },
+  async (request) => {
+    if (IS_STAGING) { console.log("[staging] notifyLeagueRoundWhatsApp suprimido (sem criação de grupo)"); return { ok: true, suppressed: true, groups: [] }; }
+    return await createRoundWhatsappGroups(
+      admin.firestore(),
+      EVOLUTION_API_URL.value(), EVOLUTION_API_KEY.value(), EVOLUTION_INSTANCE.value(),
+      request.data || {}
+    );
+  }
+);
+
+// ─── processRoundWhatsappGroups ─────────────────────────────────────────────
+// Trigger de fila: o autoDraw (codebase functions-autodraw, sem acesso à callable
+// notifyLeagueRoundWhatsApp nem aos segredos do Evolution) enfileira
+// `whatsapp_round_queue/{id}` = {tournamentId, roundIndex, nextDrawDateStr} após
+// sortear uma rodada da Liga/Rei-Rainha. Aqui (codebase default, COM os segredos)
+// criamos os grupos e apagamos o doc. Espelha o padrão de processWhatsAppQueue.
+exports.processRoundWhatsappGroups = onDocumentCreated(
+  {
+    document: "whatsapp_round_queue/{queueId}",
+    region: "us-central1",
+    timeoutSeconds: 120,
+    memory: "256MiB",
+    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data() || {};
+    if (IS_STAGING) { console.log("[staging] processRoundWhatsappGroups suprimido"); try { await snap.ref.delete(); } catch (_) {} return; }
+    try {
+      const res = await createRoundWhatsappGroups(
+        admin.firestore(),
+        EVOLUTION_API_URL.value(), EVOLUTION_API_KEY.value(), EVOLUTION_INSTANCE.value(),
+        { tournamentId: data.tournamentId, roundIndex: data.roundIndex, nextDrawDateStr: data.nextDrawDateStr }
+      );
+      const _n = (res && res.groups) ? res.groups.filter((g) => g.created).length : 0;
+      console.log(`[processRoundWhatsappGroups] ${event.params.queueId}:`, (res && res.ok) ? `${_n} grupo(s) criado(s)` : ((res && res.reason) || "sem resultado"));
+    } catch (e) {
+      console.error(`[processRoundWhatsappGroups] erro ${event.params.queueId}:`, e.message);
+    }
+    try { await snap.ref.delete(); } catch (_) {}
   }
 );
 
