@@ -330,10 +330,10 @@ function setupCreateTournamentModal() {
               </div>
 
               <!-- Agendamento de Sorteios (Liga/Pontos Corridos) — logo abaixo das Datas (v2.6.48); visibilidade via _onFormatoChange -->
-              <!-- v3.1.17: wrapper transparente p/ dois boxes — Agendamento (verde) + Sorteio manual (índigo, separado) -->
-              <div id="liga-draw-schedule" style="display:none; margin-bottom: 1rem;">
-                <div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 0.6rem 0.75rem;">
-                  <p style="margin: 0 0 0.35rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.drawSchedule')}</p>
+              <!-- v3.1.18: box do Agendamento (verde) com o "Sorteio manual" ANINHADO dentro (box dentro do box) -->
+              <div id="liga-draw-schedule" style="display:none; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 1rem;">
+                  <p style="margin: 0 0 0.25rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.drawSchedule')}</p>
+                  <p style="margin: 0 0 0.55rem; font-size: 0.72rem; color: var(--text-muted); line-height:1.45;">Indique o <b>intervalo de repetição</b> ou o <b>número de rodadas</b> — o sistema calcula o outro de acordo.</p>
                   <p style="margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-bright); font-weight: 600;">Primeiro Sorteio</p>
                   <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:0.5rem;">
                     <div class="form-group" style="margin:0;flex:0 0 auto;">
@@ -361,10 +361,9 @@ function setupCreateTournamentModal() {
                     </div>
                   </div>
                   <div id="liga-draw-explain" style="font-size:0.72rem; color: var(--text-muted); line-height:1.45; margin-top:2px;"></div>
-                </div>
-                <!-- Sorteio manual — box PRÓPRIO, separado do agendamento (v3.1.17) -->
-                <div style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.25); border-radius: 10px; padding: 0.5rem 0.75rem; margin-top: 0.6rem;">
-                  <div class="toggle-row" style="margin:0;">
+                  <!-- Sorteio manual — box ANINHADO dentro do Agendamento (v3.1.18) -->
+                  <div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.28); border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.6rem;">
+                    <div class="toggle-row" style="margin:0;">
                     <div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">${_t('create.manualDraw')}</span><div class="toggle-desc">${_t('create.manualDrawDesc')}</div></div></div>
                     <label class="toggle-switch"><input type="checkbox" id="liga-manual-draw"><span class="toggle-slider"></span></label>
                   </div>
@@ -1568,10 +1567,10 @@ function setupCreateTournamentModal() {
     var T = window._t || function(k){ return k; };
     var grp = 'margin:0;flex:0 0 auto;';
     var lblS = 'font-size:0.7rem;margin-bottom:2px;display:block;color:var(--text-muted);';
-    // wrapper transparente: box do Agendamento (verde) + box do Sorteio manual (índigo, separado).
-    var h = '<div style="margin-top: 12px;">';
-    h += '<div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 0.6rem 0.75rem;">';
-    h += '<p style="margin: 0 0 0.35rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">' + T('create.drawSchedule') + '</p>';
+    // v3.1.18: box do Agendamento (verde) com o "Sorteio manual" ANINHADO dentro (box dentro do box).
+    var h = '<div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 0.6rem 0.75rem; margin-top: 12px;">';
+    h += '<p style="margin: 0 0 0.25rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">' + T('create.drawSchedule') + '</p>';
+    h += '<p style="margin: 0 0 0.55rem; font-size: 0.72rem; color: var(--text-muted); line-height:1.45;">Indique o <b>intervalo de repetição</b> ou o <b>número de rodadas</b> — o sistema calcula o outro de acordo.</p>';
     h += '<p style="margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-bright); font-weight: 600;">Primeiro Sorteio</p>';
     h += '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:0.5rem;">';
     h += '<div style="' + grp + '"><label style="' + lblS + '">' + T('create.dateLabel') + '</label><input type="date" class="form-control" value="' + (ph.drawFirstDate || '') + '" oninput="window._setPhaseDraw(' + i + ',\'drawFirstDate\',this.value); window._recalcPhaseRounds(' + i + ')" style="width:160px;max-width:100%;padding:6px 8px;font-size:0.85rem;"></div>';
@@ -1580,8 +1579,7 @@ function setupCreateTournamentModal() {
     h += '<div style="margin:0;margin-left:18px;flex:0 0 auto;"><label style="font-size:0.7rem;margin-bottom:2px;display:block;color:#34d399;">Rodadas</label><div style="display:flex;align-items:center;gap:4px;"><input type="number" id="ph-rounds-' + i + '" min="1" max="60" value="' + (ph.rounds || 1) + '" class="form-control" oninput="window._applyPhaseRounds(' + i + ')" title="Digite o nº de rodadas — o intervalo entre sorteios é calculado sozinho a partir do fim da fase" style="width:62px;min-height:40px;padding:6px 8px;font-size:0.85rem;text-align:center;font-weight:700;color:#34d399;background:rgba(16,185,129,0.10);border-color:rgba(16,185,129,0.45);box-sizing:border-box;"><span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">rodadas</span></div></div>';
     h += '</div>';
     h += '<div id="ph-draw-explain-' + i + '" style="font-size:0.72rem;color:var(--text-muted);line-height:1.45;margin-top:2px;">' + window._drawScheduleExplainText({ interval: ph.drawIntervalDays, rounds: ph.rounds, firstDate: ph.drawFirstDate || ph.startDate || '', endDate: ph.endDate || '' }) + '</div>';
-    h += '</div>';
-    h += '<div style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.25); border-radius: 10px; padding: 0.5rem 0.75rem; margin-top: 0.6rem;">';
+    h += '<div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.28); border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.6rem;">';
     h += '<div class="toggle-row" style="margin:0;"><div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">' + T('create.manualDraw') + '</span><div class="toggle-desc">' + T('create.manualDrawDesc') + '</div></div></div><label class="toggle-switch"><input type="checkbox"' + (ph.drawManual ? ' checked' : '') + ' onchange="window._setPhaseDraw(' + i + ',\'drawManual\',this.checked)"><span class="toggle-slider"></span></label></div>';
     h += '</div>';
     h += '</div>';
