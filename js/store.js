@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.1.41-beta';
+window.SCOREPLACE_VERSION = '3.1.42-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -2998,6 +2998,17 @@ window._stickyFilterKeepRoom = function (keepY, bringToTop) {
     if (!bar || !bar.parentNode) return;
     var host = bar.parentNode;
     var spacer = document.getElementById('sp-sticky-spacer');
+    // v3.1.42: CANÔNICO — detecta BUSCA ATIVA pelo estado da PRÓPRIA barra
+    // (window._filterBarState[key].search). Assim TODA tela que usa a barra canônica
+    // (inscritos, Explorar, dashboard, …) ganha o "1º resultado colado na barra"
+    // automaticamente — sem cada caller precisar avisar. bringToTop explícito também força.
+    if (!bringToTop) {
+        try {
+            var _bkey = bar.id.replace('fbwrap-', '');
+            var _bst = window._filterBarState && window._filterBarState[_bkey];
+            if (_bst && _bst.search != null && String(_bst.search).trim() !== '') bringToTop = true;
+        } catch (e) {}
+    }
     // v3.1.41: com BUSCA ATIVA (bringToTop), NÃO prender o scroll embaixo. Leva o 1º
     // resultado pra logo abaixo da barra (topo) — antes, ao filtrar de muitos pra poucos,
     // o scroll ficava preso lá embaixo (tela preta) e o usuário tinha que rolar pra CIMA
