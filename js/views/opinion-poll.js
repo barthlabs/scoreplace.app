@@ -398,7 +398,7 @@
 
       // v3.1.54: sem rótulo "SEÇÃO N" — a própria PERGUNTA em LARANJA + negrito separa
       // as perguntas (pedido do dono). Mesma fonte usada no editor.
-      body += '<div style="margin-bottom:18px;' + (si > 0 ? 'padding-top:16px;border-top:1px solid var(--border-color);' : '') + '">' +
+      body += '<div id="op-vsec-' + _esc(sec.id) + '" style="margin-bottom:18px;scroll-margin-top:170px;' + (si > 0 ? 'padding-top:16px;border-top:1px solid var(--border-color);' : '') + '">' +
         '<div style="font-weight:900;font-size:1.02rem;color:#f59e0b;margin-bottom:3px;">' + _esc(sec.question) + '</div>' +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:11px;">' + (sec.multiSelect ? 'Pode escolher mais de uma' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>';
 
@@ -433,10 +433,12 @@
       });
 
       // rodapé da seção
+      // v3.1.64: SEM botão "Votar" por seção — há um único "Confirmar voto(s)" fixo no
+      // topo (window._opVoteAll). No modo EDIÇÃO de uma seção já votada, mantém só o
+      // "Cancelar" pra abortar a alteração.
       if (votingMode) {
-        body += '<button type="button" onclick="window._opVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\',\'' + _attr(sec.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:11px;font-size:0.92rem;margin-top:4px;">' + (voted ? '✅ Salvar voto' : '✅ Votar') + '</button>';
         if (voted) {
-          body += '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:11px;padding:8px;font-size:0.8rem;margin-top:6px;">↩️ Cancelar</button>';
+          body += '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:11px;padding:8px;font-size:0.8rem;margin-top:6px;">↩️ Cancelar alteração</button>';
         }
       } else if (voted && !poll.closed) {
         body += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;">' +
@@ -469,17 +471,29 @@
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' + _cells + '</div>' +
       '</div>';
     }
+    // v3.1.64: UM ÚNICO botão "Confirmar voto(s)" no TOPO (sticky), pra TODAS as seções.
+    // Aparece quando há ≥1 seção em modo de votação. Plural se a enquete tem >1 pergunta.
+    var _hasVotingSecs = false;
+    secs.forEach(function (s) { if (canVote && (!_opHasVotedSection(poll, s.id, uid) || editSecId === s.id)) _hasVotingSecs = true; });
+    var _voteTop = '';
+    if (_hasVotingSecs) {
+      var _voteLabel = (secs.length > 1) ? '✅ Confirmar votos' : '✅ Confirmar voto';
+      _voteTop = '<div style="padding:10px 1rem;border-bottom:1px solid var(--border-color);background:var(--bg-card,#0f172a);">' +
+        '<button type="button" onclick="window._opVoteAll(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:12px;font-size:0.95rem;">' + _voteLabel + '</button>' +
+      '</div>';
+    }
     // rodapé: só o aviso de "encerrada" (os botões subiram pro topo).
     var footer = '';
     if (poll.closed) footer += '<div style="text-align:center;font-size:0.8rem;color:var(--text-muted);font-weight:700;margin-top:4px;">🔒 Enquete encerrada</div>';
 
     var html =
-      // header + botões do org juntos num bloco STICKY no topo.
+      // header + confirmar voto + botões do org juntos num bloco STICKY no topo.
       '<div style="position:sticky;top:0;z-index:4;border-radius:16px 16px 0 0;">' +
         '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#4338ca,#6d28d9);border-radius:16px 16px 0 0;">' +
           '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📊 Enquete</span>' +
           '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">← Voltar</button>' +
         '</div>' +
+        _voteTop +
         _orgTop +
       '</div>' +
       '<div style="padding:1rem 1.1rem;">' +
@@ -513,6 +527,48 @@
       var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       if (typeof showNotification === 'function') showNotification('⚠️ Voto NÃO salvo', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
       try { console.error('[opinion-poll] voto rejeitado:', err); } catch (e) {}
+    });
+  };
+
+  // v3.1.64: confirma TODAS as seções em modo de votação de uma vez (botão único no topo).
+  // Se alguma seção não tem opção marcada, ROLA até ela e pede o voto antes de confirmar.
+  window._opVoteAll = function (tId, pollId) {
+    var t = _findT(tId); if (!t) return;
+    var poll = _findPoll(t, pollId); if (!poll || poll.closed) return;
+    var cu = _cu(); if (!cu || !cu.uid) { if (typeof showNotification === 'function') showNotification('Entre pra votar', 'Faça login pra votar na enquete.', 'warning'); return; }
+    if (!_canVote(t)) { if (typeof showNotification === 'function') showNotification('Só inscritos votam', 'Inscreva-se no torneio pra votar.', 'warning'); return; }
+    var secs = window._opSections(poll);
+    var toSave = [];
+    var firstMissing = null;
+    secs.forEach(function (sec) {
+      // Só as seções em modo de votação têm <input> no DOM; as que mostram resultado, não.
+      var inputs = document.querySelectorAll('#op-vote-overlay input[name="op-choice-' + sec.id + '"]');
+      if (!inputs.length) return;
+      var checked = [];
+      document.querySelectorAll('#op-vote-overlay input[name="op-choice-' + sec.id + '"]:checked').forEach(function (i) { checked.push(i.value); });
+      if (!checked.length) { if (!firstMissing) firstMissing = sec.id; return; }
+      if (!sec.multiSelect) checked = [checked[0]];
+      toSave.push({ secId: sec.id, checked: checked });
+    });
+    if (firstMissing) {
+      var el = document.getElementById('op-vsec-' + firstMissing);
+      if (el && el.scrollIntoView) { try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { el.scrollIntoView(); } }
+      if (typeof showNotification === 'function') showNotification('Falta votar', 'Escolha uma opção nesta pergunta antes de confirmar.', 'warning');
+      return;
+    }
+    if (!toSave.length) { if (typeof showNotification === 'function') showNotification('Nada a confirmar', '', 'info'); return; }
+    var _prev = poll.votes && poll.votes[cu.uid]; // snapshot pra reverter se o save falhar
+    var _prevClone = _prev == null ? undefined : (Array.isArray(_prev) ? _prev.slice() : JSON.parse(JSON.stringify(_prev)));
+    toSave.forEach(function (s) { _opSetVote(poll, cu.uid, s.secId, s.checked); });
+    _save(t).then(function () {
+      if (typeof showNotification === 'function') showNotification(secs.length > 1 ? '✓ Votos registrados' : '✓ Voto registrado', '', 'success');
+      _renderVote(t, poll, null);
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }).catch(function (err) {
+      if (poll.votes) { if (_prevClone === undefined) { try { delete poll.votes[cu.uid]; } catch (e) {} } else poll.votes[cu.uid] = _prevClone; }
+      var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
+      if (typeof showNotification === 'function') showNotification('⚠️ Voto NÃO salvo', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
+      try { console.error('[opinion-poll] voto-all rejeitado:', err); } catch (e) {}
     });
   };
 

@@ -575,11 +575,29 @@ function _performUserSearch(query, myUid, myFriends, mySent, myReceived) {
     var matched = (window._exploreInvitableCache || []).filter(_matchUser);
     _renderFromList(matched);
   }
+  // v3.1.65: cache PERSISTENTE (localStorage, TTL 30min) da lista de convidáveis.
+  // Antes o cache era só em memória → cada reload/reabertura do PWA refazia o scan
+  // de TODA a coleção users (Sentry WEB-5E: ~302 reads/abertura). Agora o scan roda
+  // no máximo ~1x/30min por aparelho. Dados já vêm sanitizados (campos públicos).
+  var _INV_CACHE_KEY = 'scoreplace_invitable_v1';
+  var _INV_CACHE_TTL = 30 * 60 * 1000;
+  if (!Array.isArray(window._exploreInvitableCache)) {
+    try {
+      var _rawC = localStorage.getItem(_INV_CACHE_KEY);
+      if (_rawC) {
+        var _objC = JSON.parse(_rawC);
+        if (_objC && _objC.t && Array.isArray(_objC.users) && (Date.now() - _objC.t) < _INV_CACHE_TTL) {
+          window._exploreInvitableCache = _objC.users;
+        }
+      }
+    } catch (_ce) {}
+  }
   if (Array.isArray(window._exploreInvitableCache)) {
     _runSubstringSearch();
   } else {
     window.FirestoreDB.listInvitableUsers().then(function(all) {
       window._exploreInvitableCache = all || [];
+      try { localStorage.setItem(_INV_CACHE_KEY, JSON.stringify({ t: Date.now(), users: all || [] })); } catch (_se) {}
       _runSubstringSearch();
     }).catch(function(err) {
       // Fallback: prefix search remoto se o load-all falhar
