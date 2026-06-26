@@ -2594,9 +2594,14 @@ function renderDashboard(container) {
   // devices. Pill mais largo (opts.wider) com subtitle "5V·3D·62%".
   // Pedido do user: "inves de aparecer o numero de partidas disputadas pelo
   // usuário com V/D/%, está aparecendo 0".
-  var _socialMatchesDisplay = '0';
-  var _socialMatchesSubtitle = '';
-  var _socialMatchesTitle = 'Suas partidas casuais e em torneios — clique pra ver detalhes';
+  // v3.1.40: cache GLOBAL do último valor conhecido (Firestore-backed) pra ACABAR com o
+  // pisca "71→0→71→0" nos vários re-renders do boot. Causa: o cache v2 local (só casuais)
+  // dá 0/baixo pra quem joga torneio; o valor real (71) vem do Firestore async. Recomputar
+  // do cache v2 a cada render mostrava 0 de novo. Agora o último valor conhecido persiste
+  // entre renders — a pill nunca volta pra 0 depois de já saber 71.
+  var _socialMatchesDisplay = (window._dashMatchesCache && window._dashMatchesCache.display) || '0';
+  var _socialMatchesSubtitle = (window._dashMatchesCache && window._dashMatchesCache.subtitle) || '';
+  var _socialMatchesTitle = (window._dashMatchesCache && window._dashMatchesCache.title) || 'Suas partidas casuais e em torneios — clique pra ver detalhes';
   var _socialMatchesClick = "if(typeof window._showPlayerStats==='function' && window.AppStore.currentUser){window._showPlayerStats(window.AppStore.currentUser.displayName||'')}";
 
   // Helper compartilhado: agrega W/L de uma lista de records.
@@ -2633,19 +2638,23 @@ function renderDashboard(container) {
 
   // Render inicial com cache local (v2 — mesma fonte do modal).
   var _myDn = ((_cuRef && _cuRef.displayName) || '').toLowerCase().trim();
-  try {
-    var _v2raw = localStorage.getItem('scoreplace_casual_history_v2') || '[]';
-    var _v2 = JSON.parse(_v2raw);
-    if (Array.isArray(_v2) && _v2.length > 0) {
-      var agg = _aggregateWL(_v2, _myUid, _myDn);
-      var fmt = _formatMatchesPill(agg.w, agg.l);
-      if (fmt) {
-        _socialMatchesDisplay = fmt.display;
-        _socialMatchesSubtitle = fmt.subtitle;
-        _socialMatchesTitle = fmt.title;
+  // Render inicial com cache local SÓ na 1ª vez (sem cache global ainda) — depois o
+  // Firestore async vira a fonte de verdade e persiste em window._dashMatchesCache.
+  if (!window._dashMatchesCache) {
+    try {
+      var _v2raw = localStorage.getItem('scoreplace_casual_history_v2') || '[]';
+      var _v2 = JSON.parse(_v2raw);
+      if (Array.isArray(_v2) && _v2.length > 0) {
+        var agg = _aggregateWL(_v2, _myUid, _myDn);
+        var fmt = _formatMatchesPill(agg.w, agg.l);
+        if (fmt) {
+          _socialMatchesDisplay = fmt.display;
+          _socialMatchesSubtitle = fmt.subtitle;
+          _socialMatchesTitle = fmt.title;
+        }
       }
-    }
-  } catch (_e) {}
+    } catch (_e) {}
+  }
 
   // Refresh async do Firestore matchHistory. Cobre partidas em outros
   // devices que não estão no cache local v2. Substitui via data attrs.
@@ -2657,6 +2666,7 @@ function renderDashboard(container) {
         var agg = _aggregateWL(records, _myUid, _myDn);
         var fmt = _formatMatchesPill(agg.w, agg.l);
         if (!fmt) return;
+        window._dashMatchesCache = fmt; // v3.1.40: fonte de verdade — persiste entre re-renders
         var pill = document.querySelector('[data-stat-matches-pill]');
         if (!pill) return;
         var numEl = pill.querySelector('[data-stat-matches-count]');

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.1.39-beta';
+window.SCOREPLACE_VERSION = '3.1.40-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -559,6 +559,29 @@ window._softRefreshView = function() {
       }
     } catch (e) {}
     return;
+  }
+
+  // v3.1.40: o DETALHE do torneio (#tournaments/:id) só re-renderiza quando o torneio
+  // ATUAL muda de verdade. Antes, cada snapshot do boot (cache→servidor, discovery,
+  // query por email) re-pintava o detalhe inteiro via initRouter → a foto do local
+  // "piscava várias vezes". Gate por assinatura (updatedAt + matches + inscritos + status):
+  // se nada mudou, não re-renderiza. A 1ª pintura vem do router (não passa por aqui), e
+  // navegar pra outro torneio muda o id → sig diferente → re-renderiza normalmente.
+  if (_currentView === 'tournaments') {
+    try {
+      var _tid = (window.location.hash || '').split('/')[1];
+      if (_tid) {
+        var _pool = ((window.AppStore && window.AppStore.tournaments) || []).concat((window.AppStore && window.AppStore.publicDiscovery) || []);
+        var _tdetail = _pool.find(function(x){ return x && String(x.id) === String(_tid); });
+        if (_tdetail) {
+          var _tsig = String(_tdetail.id) + ':' + (_tdetail.updatedAt || '') + ':' +
+            (Array.isArray(_tdetail.matches) ? _tdetail.matches.length : 0) + ':' +
+            (Array.isArray(_tdetail.participants) ? _tdetail.participants.length : 0) + ':' + (_tdetail.status || '');
+          if (_tsig === window._tdetailSig) return; // nada mudou → sem re-render (sem pisca)
+          window._tdetailSig = _tsig;
+        }
+      }
+    } catch (e) {}
   }
 
   // 1. If any modal is open or user is typing, defer — retry in 500ms

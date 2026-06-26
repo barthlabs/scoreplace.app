@@ -1649,6 +1649,16 @@ function renderTournaments(container, tournamentId = null) {
         // Venue photo background — overlay gradient on top of photo
         let venuePhotoBg = '';
         if (t.venuePhotoUrl) {
+            // v3.1.40: PRÉ-CARREGA e MANTÉM a referência (mesma técnica/cache da dashboard)
+            // pra que os vários re-renders do boot sirvam a foto do cache do browser em vez
+            // de re-baixar — acaba com o "pisca várias vezes" do background no detalhe.
+            try {
+                window._dashPhotoCache = window._dashPhotoCache || {};
+                if (!window._dashPhotoCache[t.venuePhotoUrl]) {
+                    var _vphIm = new Image(); _vphIm.src = t.venuePhotoUrl;
+                    window._dashPhotoCache[t.venuePhotoUrl] = _vphIm;
+                }
+            } catch (e) {}
             // v2.3.71: gradiente mais leve (foto mais visível); a leitura vem de
             // um box frosted sutil atrás do conteúdo (sem o contraste pesado).
             var overlayGradient = isOrg
