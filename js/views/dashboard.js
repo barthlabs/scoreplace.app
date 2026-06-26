@@ -493,8 +493,10 @@ function renderDashboard(container) {
       return dStr;
     };
 
-    const start = formatDateBr(t.startDate);
-    const end = formatDateBr(t.endDate);
+    // v3.1.35: CANÔNICO — início da 1ª fase → fim da ÚLTIMA fase (mesmo helper do detalhe).
+    const _tdr = (typeof window._tournamentDateRange === 'function') ? window._tournamentDateRange(t) : { start: t.startDate, end: t.endDate };
+    const start = formatDateBr(_tdr.start);
+    const end = formatDateBr(_tdr.end);
     const dates = start ? (end ? `${start} ${_t('tourn.dateTo')} ${end}` : `${start}`) : _t('tourn.dateTbd');
     // v2.6.24: data em grid — [🗓️ | data | hora] / ["A" | data | hora] com
     // tabular-nums → data e hora perfeitamente alinhadas entre as linhas.
@@ -1422,7 +1424,12 @@ function renderDashboard(container) {
       matchSources.forEach(function(m) {
         if (!m) return;
         if (m.isSitOut || m.p1 === 'FOLGA' || m.p2 === 'FOLGA') return; // folga não é jogo a disputar
-        if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return;
+        // v3.1.26: BYE = avanço automático (não é jogo a disputar). MAS o adversário
+        // pode estar "a definir" (TBD/vazio) — nesse caso o jogo AINDA aparece em
+        // "Próximos Jogos" (o check inP1/inP2 abaixo garante que o usuário está nele,
+        // ou seja, o lado DELE está definido). Pedido do dono: sempre mostrar o próximo
+        // jogo, mesmo com adversário a definir.
+        if (m.isBye || m.p1 === 'BYE' || m.p2 === 'BYE') return;
 
         // Am I in this match?
         var p1Names = String(m.p1 || '').split(/\s*\/\s*/).filter(Boolean);
@@ -1519,16 +1526,26 @@ function renderDashboard(container) {
       return '🏅';
     };
 
+    // v3.1.24: "Próximos Jogos" vira seção SEPARADA, NÃO colapsável, renderizada ANTES
+    // de "Meus Últimos Resultados" (colapsável). _upHtml acumula essa seção.
+    var _upHtml = '';
+    // A colapsável "Meus Últimos Resultados" só existe se há conteúdo de RESULTADO
+    // (pendências + confirmados); próximos jogos saem dela.
+    var _collapsibleHasContent = (pendingForMe.length + pendingByMe.length + disputedMatches.length + recentConfirmed.length) > 0;
+
     var _hasPendingApproval = (pendingForMe.length + pendingByMe.length + disputedMatches.length) > 0;
-    // v2.8.32: seção colapsável; preferência persiste entre versões (chave estável,
-    // sem número de versão → sobrevive a deploy/cache novo).
-    var _mrCollapsed = false;
-    try { _mrCollapsed = localStorage.getItem('scoreplace_collapse_myresults') === '1'; } catch (e) {}
-    var html = '<div id="meus-resultados-section"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
-    html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
-      '<span id="mr-chevron" style="font-size:0.8rem;display:inline-block;">' + (_mrCollapsed ? '▸' : '▾') + '</span>' +
-      '🏅 Meus Últimos Resultados</h3>';
-    html += '<div id="meus-resultados-body" style="margin-top:12px;' + (_mrCollapsed ? 'display:none;' : '') + '">';
+    // v3.1.24: COLAPSADA POR PADRÃO; lembra a escolha do usuário ('0' aberta | '1' fechada).
+    // Chave estável (sem número de versão → sobrevive a deploy/cache).
+    var _mrCollapsed = true;
+    try { var _mrPref = localStorage.getItem('scoreplace_collapse_myresults'); if (_mrPref === '0') _mrCollapsed = false; else if (_mrPref === '1') _mrCollapsed = true; } catch (e) {}
+    var html = '';
+    if (_collapsibleHasContent) {
+      html += '<div id="meus-resultados-section"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
+        '<span id="mr-chevron" style="font-size:0.8rem;display:inline-block;">' + (_mrCollapsed ? '▸' : '▾') + '</span>' +
+        '🏅 Meus Últimos Resultados</h3>';
+      html += '<div id="meus-resultados-body" style="margin-top:12px;' + (_mrCollapsed ? 'display:none;' : '') + '">';
+    }
 
     // Calcula label de fase para eliminatórias (FINAL, SEMI-FINAL etc.)
     function _elabFaseLabel(t, m) {
@@ -1598,6 +1615,11 @@ function renderDashboard(container) {
       var p1 = item.m.p1 || '';
       var p2 = item.m.p2 || '';
       var _esc = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
+      // v3.1.26: adversário "a definir" (TBD/vazio) → mostra "a definir" e NÃO permite
+      // lançar placar/Ao Vivo (não há contra quem jogar ainda).
+      var _isTbdSide = function(s) { return !s || s === 'TBD'; };
+      var _hasTbdSide = _isTbdSide(p1) || _isTbdSide(p2);
+      if (_hasTbdSide) canLaunch = false;
 
       // Fase label + cor da barra (igual às colunas do bracket)
       var tRef = participacoes.find(function(tt) { return tt.id === item.tId; });
@@ -1647,6 +1669,12 @@ function renderDashboard(container) {
       }
       // Time: jogadores EMPILHADOS verticalmente (um em cima do outro)
       function _teamHtml(teamStr) {
+        // v3.1.26: lado "a definir" (TBD/vazio) — placeholder discreto, sem avatar.
+        if (!teamStr || teamStr === 'TBD') {
+          return '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;color:#64748b;font-style:italic;font-size:0.82rem;">' +
+            '<span style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px dashed rgba(255,255,255,0.18);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.9rem;font-style:normal;">⏳</span>' +
+            '<span>a definir</span></div>';
+        }
         var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
         return '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">' +
           parts.map(_playerRow).join('') +
@@ -1800,66 +1828,50 @@ function renderDashboard(container) {
       html += '</div></div>';
     }
 
-    // ── Próximos jogos (horizontal, até 3, mais imediato à esquerda) ──
-    // Combina noResult (pode lançar) + upcoming (só ver) em ordem cronológica
+    // ── Próximo Jogo (UM só — o mais imediato). v3.1.27 (pedido do dono): a seção
+    // sempre mostra 1 jogo; em Rei/Rainha (3 jogos no grupo), mostra apenas o PRÓXIMO.
+    // Header sem contador. Sub-header: nome do torneio / quebra / Rodada · Fase · Linha
+    // (+ coroa se Rei/Rainha).
     var allUpcoming = [];
     noResult.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: true }); });
     upcoming.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: false }); });
-    // Ordena por round (menor = mais imediato)
-    allUpcoming.sort(function(a, b) { return (a.item.m.round || 0) - (b.item.m.round || 0); });
+    // ordena por rodada e, dentro da rodada, pelo nº do Jogo (o próximo a jogar primeiro)
+    var _jogoSeqU = function(m) { var mm = String(m.label || '').match(/Jogo\s*(\d+)/i); return mm ? Number(mm[1]) : 0; };
+    allUpcoming.sort(function(a, b) {
+      var ra = (a.item.m.round || 0), rb = (b.item.m.round || 0);
+      if (ra !== rb) return ra - rb;
+      return _jogoSeqU(a.item.m) - _jogoSeqU(b.item.m);
+    });
 
     if (allUpcoming.length > 0) {
-      var shown3 = allUpcoming.slice(0, 3);
-      html += '<div style="margin-bottom:10px;">';
-      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.04em;">⚔️ Próximos jogos (' + allUpcoming.length + ')</p>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
-      // v2.3.80: agrupa por (grupo + torneio) — o rótulo "GRUPO · TORNEIO"
-      // aparece UMA vez no topo e cada card mostra só "JOGO N". Espelha o
-      // comportamento já usado em "Últimos resultados". Antes cada card repetia
-      // "R3 GRUPO D · JOGO N · TESTE DE LIGA" no topo E no header (regressão).
-      var _splitFaseU = function(s) {
-        s = String(s || '');
-        var mm = s.match(/^(.*?)[\s·•\-]*\b([Jj][Oo][Gg][Oo]\s*\d+)\s*$/);
-        if (mm && mm[1].trim()) return { group: mm[1].replace(/[\s·•\-]+$/, '').trim(), jogo: mm[2].trim() };
-        return { group: s.trim(), jogo: '' };
-      };
-      var _upUnits = shown3.map(function(entry) {
-        var tRefU = participacoes.find(function(tt) { return tt.id === entry.item.tId; });
-        var faseStrU = tRefU ? _elabFaseLabel(tRefU, entry.item.m) : (entry.item.subLine || '');
-        var fl = faseStrU.toLowerCase();
-        var col = fl.indexOf('final') !== -1 ? '#fbbf24' : fl.indexOf('semi') !== -1 ? '#06b6d4' : fl.indexOf('quarta') !== -1 ? '#4ade80' : '#818cf8';
-        var sp = _splitFaseU(faseStrU);
-        return { entry: entry, group: sp.group, jogo: sp.jogo, tName: entry.item.tName, color: col };
-      });
-      var _upGroups = []; var _upIdx = {};
-      _upUnits.forEach(function(u) {
-        var canGroup = !!(u.group && u.jogo);
-        var key = (u.group || '').toLowerCase() + '||' + (u.tName || '').toLowerCase();
-        if (canGroup && _upIdx[key] != null) { _upGroups[_upIdx[key]].units.push(u); return; }
-        if (canGroup) _upIdx[key] = _upGroups.length;
-        _upGroups.push({ group: u.group, tName: u.tName, color: u.color, grouped: canGroup, units: [u] });
-      });
-      _upGroups.forEach(function(g) {
-        if (g.grouped) {
-          html += '<div style="flex-basis:100%;width:100%;display:flex;align-items:center;gap:8px;margin:6px 0 -2px;">' +
-            '<h4 style="color:' + g.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + g.color + ';padding-left:8px;flex:1;">' +
-              _sf(g.group) +
-              '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(g.tName) + '</span>' +
-            '</h4></div>';
-          g.units.forEach(function(u) {
-            html += _miniBracketCard(u.entry.item, u.entry.canLaunch, { hideFaseHeader: true, boxLabelOverride: u.jogo });
-          });
-        } else {
-          g.units.forEach(function(u) {
-            html += _miniBracketCard(u.entry.item, u.entry.canLaunch);
-          });
-        }
-      });
-      html += '</div>';
-      if (allUpcoming.length > 3) {
-        html += '<p style="margin:6px 0 0;font-size:0.68rem;color:var(--text-muted);text-align:center;">...e mais ' + (allUpcoming.length - 3) + ' jogos — <a href="#" onclick="event.preventDefault();window.location.hash=\'#tournaments\'" style="color:#818cf8;">ver todos os torneios</a></p>';
+      var _ngEntry = allUpcoming[0];
+      var _ng = _ngEntry.item;
+      var _ngM = _ng.m;
+      var _ngT = participacoes.find(function(tt) { return tt.id === _ng.tId; });
+      // meta: Rodada X · Fase Y (multi-fase) · Linha (Ouro/Prata) — coroa se Rei/Rainha
+      var _meta = [];
+      var _rdM = String(_ngM.label || '').match(/R(?:odada)?\s*(\d+)/i);
+      var _rnum = _rdM ? Number(_rdM[1]) : ((_ngM.round != null && !isNaN(Number(_ngM.round))) ? Number(_ngM.round) : null);
+      if (_rnum != null) _meta.push('Rodada ' + _rnum);
+      if (_ngT && window._isMultiPhase && window._isMultiPhase(_ngT) && _ngM.phaseIndex != null) {
+        var _phN = (_ngT.phases && _ngT.phases[_ngM.phaseIndex] && _ngT.phases[_ngM.phaseIndex].name) || ('Fase ' + ((Number(_ngM.phaseIndex) || 0) + 1));
+        _meta.push(_phN);
       }
-      html += '</div>';
+      if (_ngM.tierLabel) _meta.push(String(_ngM.tierLabel).trim());
+      var _crownU = _ngM.isMonarch ? '👑 ' : '';
+      var _metaStr = _crownU + _meta.join(' · ');
+      var _jgU = String(_ngM.label || '').match(/Jogo\s*\d+/i);
+      var _boxU = _jgU ? _jgU[0] : 'Jogo';
+
+      // v3.1.24: SEÇÃO SEPARADA, NÃO colapsável — renderizada ANTES de "Meus Últimos Resultados".
+      _upHtml += '<div id="proximos-jogos-section" style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      _upHtml += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#38bdf8;letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px;">⚔️ Próximo Jogo</h3>';
+      _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
+        '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
+        (_metaStr ? '<div style="color:#a5b4fc;font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
+      '</div>';
+      _upHtml += _miniBracketCard(_ng, _ngEntry.canLaunch, { hideFaseHeader: true, boxLabelOverride: _boxU });
+      _upHtml += '</div>'; // fecha #proximos-jogos-section
     }
 
     // ── Últimos resultados confirmados — estilo chave (não card flat) ──
@@ -2039,9 +2051,12 @@ function renderDashboard(container) {
       html += '</div>';
     }
 
-    html += '</div>'; // fecha #meus-resultados-body
-    html += '</div>'; // fecha #meus-resultados-section
-    return html;
+    if (_collapsibleHasContent) {
+      html += '</div>'; // fecha #meus-resultados-body
+      html += '</div>'; // fecha #meus-resultados-section
+    }
+    // v3.1.24: Próximos Jogos (não colapsável) PRIMEIRO, depois Meus Últimos Resultados (colapsável).
+    return _upHtml + html;
   }
 
   const curFilter = window._dashFilter || 'todos';
@@ -2766,6 +2781,9 @@ function renderDashboard(container) {
       </div>
     </div>
 
+    <!-- v3.1.25: Movimento nos seus locais — logo abaixo da hero box (pedido do dono) -->
+    <div id="dashboard-presences-widget" style="margin-bottom:1.25rem;">${window._dashMovementCache || ''}</div>
+
     <!-- v2.7.85: Convites de dupla pendentes (pro convidado) — banner âmbar prominente -->
     ${_buildPendingPairInvitesHtml()}
 
@@ -2787,8 +2805,8 @@ function renderDashboard(container) {
     <!-- My Active Presence (loaded async — pill at top when user has a check-in/plan live) -->
     <div id="dashboard-myactive-widget" style="margin-bottom:1rem;"></div>
 
-    <!-- Friends' Presences (loaded async) -->
-    <div id="dashboard-presences-widget" style="margin-bottom:1.25rem;">${window._dashMovementCache || ''}</div>
+    <!-- v3.1.25: "Movimento nos seus locais" (#dashboard-presences-widget) movido pra
+         logo abaixo da hero box — ver acima. -->
 
     <!-- v2.1.14: filtros de modalidade/formato/local movidos pra logo ACIMA do
          toggle Cards/Lista (pedido do usuário) — antes ficavam lá em cima, longe
@@ -2919,6 +2937,11 @@ function renderDashboard(container) {
     var _section = document.querySelector('[data-has-pending="1"]');
     if (_section) {
       window._dashPendingScrolled = true;
+      // v3.1.24: "Meus Últimos Resultados" é colapsada por padrão — mas se há pendência
+      // pra mim, expande (sem gravar preferência) pra não esconder a ação necessária.
+      var _mrBody = document.getElementById('meus-resultados-body');
+      var _mrChev = document.getElementById('mr-chevron');
+      if (_mrBody && _mrBody.style.display === 'none') { _mrBody.style.display = ''; if (_mrChev) _mrChev.textContent = '▾'; }
       // v1.9.94: instantâneo (não 'smooth'). Com re-renders assíncronos na
       // entrada, a animação suave era interrompida no meio e parecia "pulo".
       // O guard + scroll preservado garantem que isto roda UMA vez e fica.

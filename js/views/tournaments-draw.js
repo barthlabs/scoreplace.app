@@ -375,16 +375,19 @@ window._createExtraGamesFromWaitlist = function(t) {
   var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
   var seen = {}; var pool = [];
   _sp.concat(_wl).forEach(function(p){ var n = _name(p); if (n && !seen[n]) { seen[n] = true; pool.push(p); } });
-  // v2.2.39: só indivíduos PRESENTES (com check-in) e NÃO ausentes entram no
-  // novo confronto. Ausentes que estão na lista de espera NÃO contam — antes
-  // eram incluídos no jogo e na chave por engano. Junta-se 4 presentes.
-  var _ci = t.checkedIn || {}, _ab = t.absent || {};
-  pool = pool.filter(function(p){
-    var n = _name(p);
-    // só indivíduos presentes — uid-first (objeto p tem uid)
-    return n.indexOf(' / ') === -1 && window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p);
-  });
+  // só indivíduos (duplas já formadas ficam de fora).
+  pool = pool.filter(function(p){ return _name(p).indexOf(' / ') === -1; });
+  // v3.1.22: regra canônica — MESMO DIA conta presença (só check-in, não-ausentes);
+  // multi-dia ignora presença. v2.2.39: ausentes nunca entram. Sem helper → mesmo-dia.
+  if ((typeof window._tournamentIsSameDay !== 'function') || window._tournamentIsSameDay(t)) {
+    var _ci = t.checkedIn || {}, _ab = t.absent || {};
+    pool = pool.filter(function(p){ return window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p); });
+  }
   if (pool.length < 4) return 0;
+  // v3.1.22: sorteia a ordem do pareamento dos entrantes (os jogos já criados ficam
+  // inalterados). _plainShuffle é global (bracket-logic.js); fallback inline.
+  if (typeof window._plainShuffle === 'function') { pool = window._plainShuffle(pool); }
+  else { for (var _i = pool.length - 1; _i > 0; _i--) { var _j = Math.floor(Math.random() * (_i + 1)); var _tmp = pool[_i]; pool[_i] = pool[_j]; pool[_j] = _tmp; } }
 
   if (!Array.isArray(t.participants)) t.participants = [];
   if (!t.teamOrigins) t.teamOrigins = {};

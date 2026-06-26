@@ -1125,20 +1125,19 @@
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
       if (_anyNonPow2) {
-        // v3.0.x: na transição FASE DE GRUPOS (ou Rei/Rainha) → eliminatória, a
-        // solução é SEMPRE play-in (repescagem): todos jogam a 1ª rodada e os
-        // melhores perdedores são repescados pra fechar a potência de 2. Não cabe
-        // escolha — aplica direto, SEM painel. Outras origens (Pontos Corridos/Liga)
-        // mantêm o painel de escolha como já estava configurado.
-        var _prevFmt = (t.phases && t.phases[_cur] && t.phases[_cur].format) || t.format || '';
-        var _prevIsGroups = _isMonarchPrev || /grupo/i.test(_prevFmt);
-        if (_prevIsGroups) {
-          _nextCfg.bracketResolution = 'playin';
-        } else if (typeof window._showPhaseResolutionPanel === 'function') {
+        // v3.1.23: quando uma linha não fecha em potência de 2, SEMPRE pergunta ao
+        // organizador como resolver (Play-in/Repescagem · Lista de espera · BYE ·
+        // Exclusão) — com o equilíbrio de Nash, o tempo estimado e o nº de partidas
+        // de cada uma (_showPhaseResolutionPanel). Vale pra QUALQUER origem (Grupos,
+        // Rei/Rainha, Pontos Corridos). Antes (v3.0.x) a transição de Grupos/Rei-Rainha
+        // forçava play-in direto sem perguntar — pedido do dono: sempre perguntar.
+        // Fallback só se o painel não existir: play-in (repescagem, mais inclusivo).
+        if (typeof window._showPhaseResolutionPanel === 'function') {
           t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
           window._showPhaseResolutionPanel(tId);
           return;
         }
+        _nextCfg.bracketResolution = 'playin';
       }
     }
     var res = materializeNextPhase(t, cs, 'ph-' + tId + '-' + ((t.currentPhaseIndex || 0) + 1));

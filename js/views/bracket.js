@@ -131,6 +131,19 @@ function renderBracket(container, tournamentId, isInline) {
       }
     } catch (e) {}
   }
+
+  // v3.1.22: Rei/Rainha — novos GRUPOS a partir da lista de espera (Inscrições durante
+  // a fase, "Novos Confrontos"). Regra canônica: só quando expand, mesmo-dia conta
+  // presença, sorteia o pareamento. Idempotente (forma 0 em regime → sem loop/save).
+  if (isOrg && typeof window._expandMonarchFromWaitlist === 'function') {
+    try {
+      var _nRR = window._expandMonarchFromWaitlist(t);
+      if (_nRR > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('⚡ ' + _nRR + ' novo(s) grupo(s)', 'Novos confrontos formados da lista de espera.', 'info');
+      }
+    } catch (e) {}
+  }
   const canEnterResult = isOrg || window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee');
   const isLiga = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
   // Note: after Swiss-as-p2 transitions to elimination, currentStage becomes 'elimination'
@@ -249,18 +262,52 @@ function renderBracket(container, tournamentId, isInline) {
   if (window._isMultiPhase && window._isMultiPhase(t)) {
     var _curPh = t.currentPhaseIndex || 0;
     if (_curPh > 0 && typeof window._renderPhaseBracket === 'function') {
-      // Fase de chave concluída E existe próxima fase → banner pra avançar (encadeia
-      // 1→2→…→N; o motor puxa as colocações da CHAVE atual, não dos grupos da Fase 0).
+      var _tIdEsc2 = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      // v3.1.28: navegação de fases — qual fase está sendo VISUALIZADA (default = atual).
+      if (!window._bracketViewPhase) window._bracketViewPhase = {};
+      var _vp = window._bracketViewPhase[t.id];
+      if (_vp == null || _vp > _curPh || _vp < 0) _vp = _curPh;
+      var _viewingPast = _vp < _curPh;
+
+      // Fase de chave concluída E existe próxima fase → banner pra avançar (só na fase ATUAL).
       var _nextBanner = '';
-      if (isOrg && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
+      if (!_viewingPast && isOrg && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
         var _nnNm = window._safeHtml(((t.phases[_curPh + 1] || {}).name) || 'próxima fase');
-        var _tIdEsc2 = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         _nextBanner = '<div style="margin:0 0 1rem;padding:14px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(99,102,241,0.12));border:1px solid rgba(251,191,36,0.45);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
           '<div style="flex:1;min-width:180px;"><div style="font-weight:800;color:var(--text-bright);">Fase concluída ✓</div><div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px;">Avance para <strong>' + _nnNm + '</strong> — as chaves serão geradas pelas colocações desta fase.</div></div>' +
           '<button class="btn btn-success hover-lift" style="white-space:nowrap;" onclick="window._advanceMultiPhase(\'' + _tIdEsc2 + '\')">🏆 Avançar</button>' +
           '</div>';
       }
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + _nextBanner + window._renderPhaseBracket(t, canEnterResult) + standbyHtml;
+
+      // Botão vertical "Fase anterior" (estilo "Mostrar ocultas") — aparece sempre que
+      // a fase VISUALIZADA tem uma fase anterior (encerrada) que dá pra conferir.
+      var _phaseNav = '';
+      if (_vp > 0) {
+        var _prevName = window._safeHtml(((t.phases[_vp - 1] || {}).name) || ('Fase ' + _vp));
+        _phaseNav = '<button onclick="window._bracketGoPrevPhase(\'' + _tIdEsc2 + '\')" title="Conferir a fase anterior (encerrada): ' + _prevName + '" style="position:sticky;top:112px;align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 8px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;background:rgba(99,102,241,0.14);border:1px solid rgba(129,140,248,0.45);color:#a5b4fc;border-radius:10px;font-size:0.74rem;font-weight:700;cursor:pointer;">👁 Fase anterior</button>';
+      }
+
+      // Banner "visualizando fase encerrada" + voltar à atual (só quando viewing past).
+      var _pastBanner = '';
+      if (_viewingPast) {
+        var _vpName = window._safeHtml(((t.phases[_vp] || {}).name) || ('Fase ' + (_vp + 1)));
+        _pastBanner = '<div style="margin:0 0 1rem;padding:12px 16px;background:rgba(99,102,241,0.1);border:1px solid rgba(129,140,248,0.35);border-radius:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+          '<div style="flex:1;min-width:160px;font-size:0.85rem;color:var(--text-bright);font-weight:700;">👁 Conferindo <strong>' + _vpName + '</strong> — fase encerrada (só leitura)</div>' +
+          '<button class="btn btn-primary btn-sm hover-lift" onclick="window._bracketGoCurrentPhase(\'' + _tIdEsc2 + '\')" style="white-space:nowrap;">↩ Voltar à fase atual</button>' +
+          '</div>';
+      }
+
+      // Conteúdo da fase visualizada: Fase 0 = renderers da classificatória; ≥1 = chave da fase.
+      var _phaseContent = (_vp === 0)
+        ? window._renderPhase0ReadOnly(t)
+        : window._renderPhaseBracket(t, _viewingPast ? false : canEnterResult, _viewingPast ? '' : standbyHtml, _viewingPast ? _vp : null);
+
+      // Layout: botão vertical à esquerda + conteúdo (igual ao "Mostrar ocultas").
+      var _bodyWrap = _phaseNav
+        ? '<div style="display:flex;align-items:flex-start;gap:10px;">' + _phaseNav + '<div style="flex:1;min-width:0;">' + _phaseContent + '</div></div>'
+        : _phaseContent;
+
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + _nextBanner + _pastBanner + _bodyWrap;
       _applyMyMatchesFilter();
       return;
     }
@@ -276,7 +323,7 @@ function renderBracket(container, tournamentId, isInline) {
 
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
-    container.innerHTML = headerHtml + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml) + standbyHtml;
+    container.innerHTML = headerHtml + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, { standbyHtml: standbyHtml });
     _applyMyMatchesFilter();
     return;
   }
@@ -320,9 +367,9 @@ function renderBracket(container, tournamentId, isInline) {
   // (see renderSingleElimBracket / renderDoubleElimBracket). No separate card.
   try {
     if (isDupla) {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
     } else {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult) + standbyHtml;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult, standbyHtml);
     }
   } catch (bracketErr) {
     window._error('[Bracket] Render error:', bracketErr);
@@ -791,7 +838,7 @@ if (window._bracketMirrorMode === undefined) window._bracketMirrorMode = false;
 if (window._bracketZoom === undefined) window._bracketZoom = 1;
 
 
-function renderSingleElimBracket(t, canEnterResult) {
+function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   var _t = window._t || function(k) { return k; };
   // ── Auto-reparação: gera rodadas futuras se não existirem ──
   _ensureFutureRounds(t);
@@ -1171,20 +1218,22 @@ function renderSingleElimBracket(t, canEnterResult) {
   // Both modes use min-width:max-content + scrollable wrapper (no clipping)
   const zoomTransform = window._bracketZoom !== 1 ? `transform:scale(${window._bracketZoom});transform-origin:top left;` : '';
 
+  // v3.1.21: canônico — lista de espera logo APÓS as chaves e ANTES da classificação geral.
   return `
     ${championHtml}
-    ${classifHtml}
     ${toolbarHtml}
     <div class="bracket-sticky-scroll-wrapper" style="overflow-x:scroll!important;overflow-y:visible;display:block;width:100%;max-width:100%;">
       <div class="bracket-scroll-content" style="display:inline-flex;gap:32px;align-items:flex-start;padding:1rem 0;min-width:max-content;${zoomTransform}">
         ${roundsHtml}
         <div style="min-width:200px;flex-shrink:0;">&nbsp;</div>
       </div>
-    </div>`;
+    </div>
+    ${standbyHtml || ''}
+    ${classifHtml}`;
 }
 
 // ─── Double Elimination ───────────────────────────────────────────────────────
-function renderDoubleElimBracket(t, canEnterResult) {
+function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   var _t = window._t || function(k) { return k; };
   // Auto-reparação para dupla eliminatória também
   _ensureFutureRounds(t);
@@ -1297,9 +1346,9 @@ function renderDoubleElimBracket(t, canEnterResult) {
     _deClassifHtml = '<details style="margin-bottom:1rem;" ' + (t.status === 'finished' ? 'open' : 'open') + '><summary style="cursor:pointer;font-weight:700;font-size:0.8rem;color:var(--text-bright);padding:8px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + _t('bracket.classified', {n: _entries.length}) + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + _rows + '</div></details>';
   }
 
+  // v3.1.21: canônico — lista de espera logo APÓS as chaves e ANTES da classificação geral.
   return `
     <div>
-      ${_deClassifHtml}
       ${renderSection(upperCols, 'Chaveamento Superior', '#10b981')}
       ${renderSection(lowerCols, 'Chaveamento Inferior', '#f59e0b')}
       ${grandMatches.length ? `
@@ -1307,16 +1356,22 @@ function renderDoubleElimBracket(t, canEnterResult) {
           <h4 style="color:#fbbf24;font-size:0.8rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:1rem;border-left:3px solid #fbbf24;padding-left:10px;">🏆 ${_t('bracket.grandFinal')}</h4>
           <div style="max-width:280px;">${grandMatches.map(m => { deGlobalNum++; return renderMatchCard(m, canEnterResult, t.id, deGlobalNum); }).join('')}</div>
         </div>` : ''}
+      ${standbyHtml || ''}
+      ${_deClassifHtml}
     </div>`;
 }
 
 // ─── Construtor de Fases: render das chaves da fase atual (Ouro/Prata + final) ─
-function _renderPhaseBracket(t, canEnterResult) {
+function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   var _t = window._t || function (k) { return k; };
   if (typeof _updateProgressiveClassification === 'function') {
     try { _updateProgressiveClassification(t); } catch (e) {}
   }
-  var curPhase = t.currentPhaseIndex || 0;
+  // v3.1.28: navegação de fases — quando _viewPhaseIdx é passado, renderiza ESSA fase
+  // (encerrada) em vez da atual, só leitura. Default: a fase atual.
+  var _realCur = t.currentPhaseIndex || 0;
+  if (_viewPhaseIdx != null && _viewPhaseIdx < _realCur) canEnterResult = false;
+  var curPhase = (_viewPhaseIdx != null) ? _viewPhaseIdx : _realCur;
   var phaseCfg = (t.phases && t.phases[curPhase]) || {};
   var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === curPhase; });
 
@@ -1380,42 +1435,31 @@ function _renderPhaseBracket(t, canEnterResult) {
   // no topo → último embaixo (1º → último).
   // Bloco de classificação reusável (por linha OU geral). matchesArr = jogos que contam
   // pra posição; third = jogo de 3º/4º (vai como thirdPlaceMatch no faux).
+  // v3.1.33 CANÔNICO: estas funções DELEGAM pros globais (store.js) — a MESMA fonte que a
+  // página do torneio usa. Não duplicar a lógica de classificação aqui. Ver
+  // _renderPodiumsAndClassif / _renderClassifBlock / _classifMapFromMatches / _classifUnifiedMap.
+  function _renderClassifFromMap(cl, color, label, openByDefault) {
+    return (typeof window._renderClassifBlock === 'function')
+      ? window._renderClassifBlock(t, cl, { color: color, label: label, open: !!openByDefault })
+      : '';
+  }
+  // Classificação POR LINHA (mapa { nome: pos }) — delega ao global canônico.
+  function _lineClassifMap(bracketKey) {
+    var lm = pm.filter(function (m) { return (m.bracket || 'main') === bracketKey; });
+    return (typeof window._classifMapFromMatches === 'function') ? window._classifMapFromMatches(t, lm) : {};
+  }
   function _classifBlock(matchesArr, third, color, label, openByDefault) {
-    if (typeof _updateProgressiveClassification !== 'function') return '';
-    if (!matchesArr || !matchesArr.length) return '';
-    var faux = { matches: matchesArr, format: 'Eliminatórias Simples', thirdPlaceMatch: third, tiebreakers: t.tiebreakers };
-    try { _updateProgressiveClassification(faux); } catch (e) { return ''; }
-    var cl = faux.classification || {};
-    var keys = Object.keys(cl);
-    if (!keys.length) return '';
-    var medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
-    var entries = keys.map(function (k) { return [k, cl[k]]; }).sort(function (a, b) { return a[1] - b[1]; }); // 1º → último (campeão no topo)
-    var rows = entries.map(function (e) {
-      var name = e[0], pos = e[1];
-      var c = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
-      var nameHtml = (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(name, t) : window._safeHtml(name));
-      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
-        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + c + ';">' + pos + 'º</span>' +
-        '<span style="font-weight:600;color:' + c + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml + '</span>' +
-        (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
-        '</div>';
-    }).join('');
-    return '<details' + (openByDefault ? ' open' : '') + ' style="margin-bottom:1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + entries.length + ' definidos</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + rows + '</div></details>';
+    if (!matchesArr || !matchesArr.length || typeof window._classifMapFromMatches !== 'function') return '';
+    var src = third ? matchesArr.concat([third]) : matchesArr;
+    return _renderClassifFromMap(window._classifMapFromMatches(t, src), color, label, openByDefault);
   }
   function _tierClassifHtml(bracketKey, color) {
-    var lm = pm.filter(function (m) { return m.bracket === bracketKey; });
-    if (!lm.length) return '';
-    var third = lm.filter(function (m) { return m.isThirdPlace; })[0] || null;
-    var rest = lm.filter(function (m) { return !m.isThirdPlace; });
-    return _classifBlock(rest, third, color, '📊 Classificação parcial', false);
+    return _renderClassifFromMap(_lineClassifMap(bracketKey), color, '📊 Classificação parcial', false);
   }
-  // v3.0.x: classificação GERAL ÚNICA (não por linha) — usada quando há GRANDE FINAL.
-  // Conta TODOS os jogos da fase (linhas → semis → final, ligados por nextMatchId) com
-  // o 3º/4º geral como thirdPlaceMatch. Aberta por padrão.
+  // Classificação GERAL (quando HÁ grande final unindo as linhas) — delega ao global.
   function _unifiedClassifHtml() {
-    var third = pm.filter(function (m) { return (m.bracket || '') === 'thirdplace' || m.isThirdPlace; })[0] || null;
-    var rest = pm.filter(function (m) { return m !== third; });
-    return _classifBlock(rest, third, '#fbbf24', '📊 Classificação geral', true);
+    var map = (typeof window._classifUnifiedMap === 'function') ? window._classifUnifiedMap(t, pm, _tierKeys) : {};
+    return _renderClassifFromMap(map, '#fbbf24', '📊 Classificação geral', true);
   }
 
   function renderTier(bracketKey, title, color, showClassif) {
@@ -1504,7 +1548,12 @@ function _renderPhaseBracket(t, canEnterResult) {
   var _tierKeys = _tierOrder.filter(function (k) { return _present[k]; });
   Object.keys(_present).forEach(function (k) { if (_tierKeys.indexOf(k) === -1) _tierKeys.push(k); });
   var _palette = ['#fbbf24', '#cbd5e1', '#10b981', '#cd7f32', '#3b82f6', '#ec4899', '#14b8a6', '#f97316'];
-  var _hasGF = pm.some(function (m) { return (m.bracket || '') === 'grandfinal'; });
+  // v3.1.30: "grande final unindo as linhas" só vale quando o organizador NÃO a
+  // desabilitou (phaseCfg.grandFinal !== false) E existe jogo de grande final. Sem
+  // grande final (linhas SEPARADAS) → classificação POR LINHA, nunca uma "geral" — mesmo
+  // que sobre um jogo de GF resíduo de quando a opção esteve ligada. Pedido do dono.
+  var _gfEnabled = (phaseCfg.grandFinal !== false);
+  var _hasGF = _gfEnabled && pm.some(function (m) { return (m.bracket || '') === 'grandfinal'; });
   function _tierHtmlAt(bk, idx, showClassif) {
     var color = _tierColors[bk] || _palette[idx % _palette.length];
     return renderTier(bk, tierTitle(bk, _tierDefault[bk] || ('Chave ' + (idx + 1))), color, showClassif);
@@ -1533,6 +1582,8 @@ function _renderPhaseBracket(t, canEnterResult) {
   var _isLeaguePhase = !!_lSlot || pm.some(function (m) { return m.bracket === 'league'; });
 
   var body;
+  // v3.1.21: canônico — lista de espera logo APÓS as chaves e ANTES da classificação geral.
+  var _sb = standbyHtml || '';
   if (_isMonarchPhase) {
     // v3.1.6: Fase N rei/rainha = MESMO renderer canônico da Fase 0 (_renderMonarchStage),
     // via faux-t reconstruído das partidas desta fase. Render mais rico (Pts/Saldo/%/coroa
@@ -1559,6 +1610,7 @@ function _renderPhaseBracket(t, canEnterResult) {
     body = (typeof window._renderMonarchStage === 'function')
       ? window._renderMonarchStage(_mFaux, _mIsOrg, canEnterResult, { suppressAutoAdvance: true })
       : '';
+    body += _sb; // Rei/Rainha: classificação é por grupo (inline) → espera vai após as chaves
   } else if (_isLeaguePhase) {
     // v3.1.8: Fase N Liga (Pontos Corridos) = MESMO renderer canônico da Fase 0
     // (renderStandings), via faux-t reconstruído das partidas bracket:'league' desta
@@ -1628,6 +1680,7 @@ function _renderPhaseBracket(t, canEnterResult) {
       advancedScoring: (typeof window._effectiveAdvScoring === 'function') ? window._effectiveAdvScoring(t, curPhase) : t.advancedScoring,
       creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts
     };
+    if (_lOpts) _lOpts.standbyHtml = standbyHtml; // espera interposta antes da classificação (dentro de renderStandings)
     body = (typeof window.renderStandings === 'function')
       ? window.renderStandings(_lFaux, _lIsOrg, canEnterResult, '', '', _lOpts)
       : '';
@@ -1668,6 +1721,7 @@ function _renderPhaseBracket(t, canEnterResult) {
     body = (typeof window.renderGroupStage === 'function')
       ? window.renderGroupStage(_gFaux, _gIsOrg, canEnterResult, { suppressAutoAdvance: true })
       : '';
+    body += _sb; // Grupos: classificação é por grupo (inline) → espera vai após as chaves
   } else if (_hasGF && _tierKeys.length) {
     // v3.0.x: COM grande final → primeira linha, depois GRANDES SEMIS + GRANDE FINAL,
     // depois 3º/4º GERAL (abaixo da final), depois as demais linhas. Classificação
@@ -1678,14 +1732,55 @@ function _renderPhaseBracket(t, canEnterResult) {
     var _thirdHtml = renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32');
     var _restHtml = _tierKeys.slice(1).map(function (bk, i) { return _tierHtmlAt(bk, i + 1, false); }).join('');
     var _unified = _unifiedClassifHtml();
-    body = _unified + _firstHtml + _gfHtml + _thirdHtml + _restHtml;
+    // Classificação GERAL vai pro fim, com a lista de espera logo antes dela.
+    body = _firstHtml + _gfHtml + _thirdHtml + _restHtml + _sb + _unified;
   } else {
     var tiersHtml = _tierKeys.map(function (bk, idx) { return _tierHtmlAt(bk, idx, true); }).join('');
-    body = tiersHtml + renderFinalBox('grandfinal', '🏆 Grande Final', '#fbbf24') + renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32');
+    // v3.1.30: sem grande final (linhas separadas) NÃO renderiza box de Grande Final /
+    // 3º-4º geral — nem que sobre jogo de GF resíduo. Cada linha é independente.
+    var _gfBoxes = _gfEnabled
+      ? (renderFinalBox('grandfinal', '🏆 Grande Final', '#fbbf24') + renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32'))
+      : '';
+    body = tiersHtml + _gfBoxes + _sb;
   }
   return '<div>' + header + body + '</div>';
 }
 window._renderPhaseBracket = _renderPhaseBracket;
+
+// v3.1.28: navegação de fases — "Fase anterior" (botão vertical estilo "Mostrar
+// ocultas") pra rever uma fase ANTERIOR já encerrada (só leitura). Estado por torneio
+// em window._bracketViewPhase[tId]; default = fase atual.
+if (!window._bracketViewPhase) window._bracketViewPhase = {};
+window._bracketGoPrevPhase = function (tId) {
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  var cur = (t && (t.currentPhaseIndex || 0)) || 0;
+  var v = (window._bracketViewPhase[tId] != null) ? window._bracketViewPhase[tId] : cur;
+  window._bracketViewPhase[tId] = Math.max(0, v - 1);
+  if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+};
+window._bracketGoCurrentPhase = function (tId) {
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  window._bracketViewPhase[tId] = (t && (t.currentPhaseIndex || 0)) || 0;
+  if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+};
+// Renderiza a FASE 0 (classificatória — Pontos Corridos / Grupos / Rei-Rainha) só
+// leitura. Os renderers são orientados à fase ATUAL (via currentPhaseIndex), então
+// montamos um FAUX com currentPhaseIndex=0 pra eles surfarem a Fase 0. Usado pela
+// navegação de fases (botão "Fase anterior"). v3.1.28.
+window._renderPhase0ReadOnly = function (t) {
+  if (!t) return '';
+  var f0 = Object.assign({}, t, { currentPhaseIndex: 0 });
+  var _isLiga0 = !!(window._isLigaFormat && window._isLigaFormat(f0));
+  var _isMonarchDaPraia = (f0.format === 'Rei/Rainha da Praia');
+  var _hasGroups0 = Array.isArray(f0.groups) && f0.groups.length > 0;
+  try {
+    if (_isMonarchDaPraia && typeof window._renderMonarchStage === 'function') return window._renderMonarchStage(f0, false, false, { suppressAutoAdvance: true });
+    if (_isLiga0 && typeof window.renderStandings === 'function') return window.renderStandings(f0, false, false, '', '', { suppressAutoAdvance: true });
+    if (_hasGroups0 && typeof window.renderGroupStage === 'function') return window.renderGroupStage(f0, false, false, { suppressAutoAdvance: true });
+    if (typeof window.renderStandings === 'function') return window.renderStandings(f0, false, false, '', '', { suppressAutoAdvance: true });
+  } catch (e) { if (window._warn) window._warn('[phase0 readonly]', e); }
+  return '<div style="padding:1rem;color:var(--text-muted);">Não foi possível carregar a fase anterior.</div>';
+};
 
 // v3.1.13 (brick 4): cadência "encerrar rodada e sortear próxima" da Liga rodada a
 // rodada numa fase POSTERIOR. Disparado pelo botão no render (renderStandings via
@@ -2905,6 +3000,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // (NÃO _closeRound, que opera em t.rounds da Fase 0). Presença de opts.phaseLeagueCadence
   // libera o botão (não suprime) e troca o handler.
   var _phaseCad = (opts && opts.phaseLeagueCadence) || null;
+  // v3.1.21: canônico — lista de espera logo APÓS os jogos/chaves e ANTES da classificação geral.
+  var _sb = (opts && opts.standbyHtml) || '';
   var _t = window._t || function(k) { return k; };
   // Source swiss/liga/monarch round columns from the unified adapter. Each
   // column is flattened back into the legacy {matches, status, format,
@@ -3241,9 +3338,14 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // v2.6.99: Lista de espera Rei/Rainha — sobra do sorteio + novos inscritos.
         // Quando junta 4, forma um novo grupo automaticamente. Substitui o antigo
         // "Sem grupo (recebem média)" — quem espera NÃO recebe média, segue na fila.
-        var _wl = t.monarchWaitlist || {};
+        // v3.1.22: fonte CANÔNICA = _getWaitlist (waitlist + standbyParticipants +
+        // monarchWaitlist), idêntica ao painel "📋 Lista de Espera". Antes lia só
+        // monarchWaitlist e DIVERGIA (mostrava 1 quando o outro painel mostrava 4).
         var _wlNames = [];
-        Object.keys(_wl).forEach(function(k){ (_wl[k] || []).forEach(function(n){ if (n && _wlNames.indexOf(n) === -1) _wlNames.push(n); }); });
+        (typeof window._getWaitlist === 'function' ? window._getWaitlist(t) : []).forEach(function(e){
+          var n = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim();
+          if (n && n.indexOf(' / ') === -1 && _wlNames.indexOf(n) === -1) _wlNames.push(n);
+        });
         if (!_wlNames.length) return '';
         var _pills = _wlNames.map(function(n){
           var _isMe = _nameMatchesCurUser(n);
@@ -3253,8 +3355,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
           return '<span style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
         }).join('');
-        var _need = (4 - (_wlNames.length % 4)) % 4;
-        var _hint = _need === 0 ? 'completou 4 — formando grupo…' : ('faltam ' + _need + ' para formar o próximo grupo');
+        // v3.1.22: em torneio de MESMO DIA quem conta pra formar são os PRESENTES;
+        // multi-dia conta todos da fila. Hint honesto reflete isso.
+        var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
+        var _eligRR = _wlNames.length;
+        if (_sameDayRR) { var _ciRR = t.checkedIn || {}, _abRR = t.absent || {}; _eligRR = _wlNames.filter(function(n){ return window._idMapHas(t, _ciRR, n) && !window._idMapHas(t, _abRR, n); }).length; }
+        var _need = (4 - (_eligRR % 4)) % 4; if (_need === 0 && _eligRR === 0) _need = 4;
+        var _hint = (_need === 0) ? 'completou 4 — formando grupo…' : ('faltam ' + _need + (_sameDayRR ? ' presente(s)' : '') + ' para formar o próximo grupo');
         return '<div style="margin-bottom:1rem;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:10px 14px;">' +
           '<div style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
           '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— ao juntar 4, forma um novo grupo automaticamente · ' + _hint + '</span></div>' +
@@ -4047,7 +4154,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 
   var _progressBar = progressBarHtml || '';
   if (useColumnLayout) {
-    return _phaseBannerHtml + _progressBar + standingsTablesHtml + _readyBanner + roundsScrollHtml + statsHtml + h2hHtml;
+    return _phaseBannerHtml + _progressBar + _sb + standingsTablesHtml + _readyBanner + roundsScrollHtml + statsHtml + h2hHtml;
   }
   // Liga: user's matches at the top, then the round's standings table, then
   // the collapsible "Demais jogos da rodada" card.
@@ -4074,13 +4181,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     })();
     if (allComplete) {
       if (_txPerGroup) {
-        return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+        return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + _sb + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
       }
-      return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + standingsTablesHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+      return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + _sb + standingsTablesHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
     }
-    return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+    return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + _sb + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
   }
-  return _phaseBannerHtml + _progressBar + standingsTablesHtml + _readyBanner + currentRoundHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+  return _phaseBannerHtml + _progressBar + _sb + standingsTablesHtml + _readyBanner + currentRoundHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
 }
 
 // ─── Compute standings ────────────────────────────────────────────────────────

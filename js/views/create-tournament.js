@@ -88,6 +88,35 @@ function setupCreateTournamentModal() {
     h += '</div>';
     return h;
   };
+  // — Bloco 2b: Classificação (Personalizada × Em blocos) — CANÔNICO p/ TODAS as fases.
+  //   idx 0 = grava no hidden #elim-ranking-type da Fase 1 (save `elimRankingType` intacto);
+  //   idx>=1 = grava em _extraPhases[idx-1].rankingType. Mesma render em qualquer fase.
+  window._phaseRankingVal = function(idx) {
+    if (idx === 0) { var h = document.getElementById('elim-ranking-type'); return (h && h.value === 'blocks') ? 'blocks' : 'individual'; }
+    var ph = window._extraPhases && window._extraPhases[idx - 1]; return (ph && ph.rankingType === 'blocks') ? 'blocks' : 'individual';
+  };
+  window._setPhaseRankingType = function(idx, val) {
+    val = (val === 'blocks') ? 'blocks' : 'individual';
+    if (idx === 0) {
+      var h = document.getElementById('elim-ranking-type'); if (h) h.value = val;
+      var box = document.getElementById('phase-classif-0'); if (box) box.outerHTML = window._classifModeHtml(0);
+    } else {
+      var ph = window._extraPhases && window._extraPhases[idx - 1]; if (ph) { ph.rankingType = val; window._renderPhases(); }
+    }
+  };
+  window._classifModeHtml = function(idx) {
+    var T = window._t || function(k){ return k; };
+    var val = window._phaseRankingVal(idx);
+    function btn(v, label) {
+      var act = (val === v);
+      return '<button type="button" onclick="window._setPhaseRankingType(' + idx + ',\'' + v + '\')" style="flex:1;padding:10px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;' + (act ? 'border:2px solid #f87171;background:rgba(248,113,113,0.12);color:#fca5a5;font-weight:600;' : 'border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);font-weight:500;') + 'text-align:center;">' + label + '</button>';
+    }
+    return '<div id="phase-classif-' + idx + '">'
+      + (idx === 0 ? '<input type="hidden" id="elim-third-place" value="true"><input type="hidden" id="elim-ranking-type" value="' + val + '">' : '')
+      + '<div style="display:flex;gap:8px;">' + btn('individual', T('create.rankingPersonalized')) + btn('blocks', T('create.rankingBlocks')) + '</div>'
+      + '<small class="text-muted" style="display:block;margin-top:6px;">' + T('create.rankingTypeHint') + '</small>'
+      + '</div>';
+  };
   // — Bloco 3: Pontuação Avançada (GSM). idx 0 = IDs sem sufixo (Fase 1, save/load/motor
   //   intactos); idx>=1 = IDs sufixados -N, gravados em _extraPhases[idx-1].advancedScoring. —
   window._advScoringHtml = function(idx, initialDisplay, advData) {
@@ -665,33 +694,28 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- Classificação -->
-              <div id="elim-settings" style="display:none; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.classificationSection')}</p>
-                <input type="hidden" id="elim-third-place" value="true">
-                <div class="form-group">
-                  <div id="ranking-type-buttons" style="display:flex;gap:8px;">
-                    <button type="button" class="ranking-type-btn ranking-type-active" data-value="individual" onclick="window._selectRankingType('individual')" style="flex:1;padding:10px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid #f87171;background:rgba(248,113,113,0.12);color:#fca5a5;font-weight:600;text-align:center;">${_t('create.rankingPersonalized')}</button>
-                    <button type="button" class="ranking-type-btn" data-value="blocks" onclick="window._selectRankingType('blocks')" style="flex:1;padding:10px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;text-align:center;">${_t('create.rankingBlocks')}</button>
+              <!-- BOX CANÔNICO (v3.1.34): "Formação de duplas" + "W.O. (ausência)" num box
+                   só. O label antes solto "Formação das duplas" virou o cabeçalho do box, que
+                   agora cobre as 2 funções. W.O. usa a render CANÔNICA _woButtonsHtml(0) (a
+                   mesma de TODAS as fases). #manual-pairing-container interno mantém o id pra
+                   continuar escondendo/mostrando só a parte de duplas em Simples. -->
+              <div class="mb-3" style="background: rgba(167,139,250,0.06); border: 1px solid rgba(167,139,250,0.22); border-radius: 12px; padding: 1rem;" id="pairing-wo-box">
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #a78bfa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🤝 Formação de duplas e ausências (W.O.)</p>
+                <div id="manual-pairing-container">
+                  <input type="hidden" id="manual-pairing" value="organizer_only">
+                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
+                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🤝</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Participantes podem formar suas duplas</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">Ligado: cada um arrasta seu card sobre o de outro e a dupla fica pendente até o outro aceitar. Desligado: só o organizador monta as duplas. (Só vale em duplas.)</div></div></div>
+                    <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="manual-pairing-toggle" aria-label="Participantes formam duplas" onchange="window._syncManualPairing()"><span class="toggle-slider"></span></label>
                   </div>
-                  <small class="text-muted" style="display:block;margin-top:6px;">${_t('create.rankingTypeHint')}</small>
-                  <select class="form-control" id="elim-ranking-type" style="display:none;">
-                    <option value="individual">${_t('create.rankingPersonalized')}</option>
-                    <option value="blocks">${_t('create.rankingBlocks')}</option>
-                  </select>
+                  <!-- v2.6.91: aviso quando formação manual liga Times mas Individual segue marcado (misto) -->
+                  <div id="manual-pairing-notice" style="display:none;margin-top:8px;"></div>
                 </div>
-              </div>
-
-              <!-- Formação das duplas (movido pra dentro da config de fase — v2.6.49) -->
-              <div class="form-group mb-3" id="manual-pairing-container">
-                <label class="form-label">Formação das duplas</label>
-                <input type="hidden" id="manual-pairing" value="organizer_only">
-                <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
-                  <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🤝</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Participantes podem formar suas duplas</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">Ligado: cada um arrasta seu card sobre o de outro e a dupla fica pendente até o outro aceitar. Desligado: só o organizador monta as duplas. (Só vale em duplas.)</div></div></div>
-                  <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="manual-pairing-toggle" aria-label="Participantes formam duplas" onchange="window._syncManualPairing()"><span class="toggle-slider"></span></label>
+                <!-- W.O. (Ausência) — movido pra cá, logo após formação de duplas (v3.1.34) -->
+                <div id="wo-scope-container" style="margin-top:0.9rem;padding-top:0.85rem;border-top:1px solid rgba(255,255,255,0.08);">
+                  <p style="margin: 0 0 0.6rem; font-size: 0.78rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚠️ ${_t('create.woSection')}</p>
+                  <input type="hidden" id="wo-scope" value="individual">
+                  ${window._woButtonsHtml(0)}
                 </div>
-                <!-- v2.6.91: aviso quando formação manual liga Times mas Individual segue marcado (misto) -->
-                <div id="manual-pairing-notice" style="display:none;margin-top:8px;"></div>
               </div>
 
               <!-- (Inscrições durante a fase movida pra logo abaixo do Agendamento de Sorteios — v2.6.51) -->
@@ -699,19 +723,19 @@ function setupCreateTournamentModal() {
               <!-- v2.6.63: Pontuação Avançada agora usa a render CANÔNICA (mesma da Fase 1 e fases extras). -->
               ${window._advScoringHtml(0)}
 
-              <!-- W.O. Scope -->
-              <div style="background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;" id="wo-scope-container">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚠️ ${_t('create.woSection')}</p>
-                <input type="hidden" id="wo-scope" value="individual">
-                <!-- v2.6.61: W.O. agora usa a render CANÔNICA (mesma da Fase 1 e fases extras). -->
-                ${window._woButtonsHtml(0)}
-              </div>
-
               <!-- Lançamento de Resultados (toggles não-excludentes) -->
               <div style="background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #60a5fa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">📋 ${_t('create.resultSection')}</p>
                 ${window._resultEntryButtonsHtml(0)}
                 <input type="hidden" id="select-result-entry" value="organizer">
+              </div>
+
+              <!-- Classificação (Personalizada × Em blocos) — logo após o Lançamento de
+                   Resultados (v3.1.34). Render CANÔNICA _classifModeHtml(0), a MESMA das fases
+                   extras. Visível só em Eliminatórias/Grupos (#elim-settings + visibilidade). -->
+              <div id="elim-settings" style="display:none; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.classificationSection')}</p>
+                ${window._classifModeHtml(0)}
               </div>
 
               <!-- ═══════════ FIM BOX FASE 1 ═══════════ -->
@@ -1695,7 +1719,7 @@ function setupCreateTournamentModal() {
     window._phasesUserTouched = true; // v3.0.x: o usuário mexeu nas fases de propósito
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
     var n = window._extraPhases.length + 2;
-    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: 2, scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
+    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: 2, scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', rankingType: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
     window._renderPhases();
   };
   window._removePhase = function(i) { window._phasesUserTouched = true; if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
@@ -1906,19 +1930,19 @@ function setupCreateTournamentModal() {
       h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_fixed ? 'pares travados para toda a fase' : 'classificados entram individualmente') + '</span>';
       h += '</div>';
       if (_fixed) {
-        // v3.0.x: pares já formados (vêm travados da fase anterior) → as estratégias
-        // que (re)formam/distribuem pares (Sorteio/Performance/Equilíbrio) não se
-        // aplicam. Resta só "Cabeças de chave" (semear os melhores), como toggle
-        // ligado por padrão. Normaliza estratégia herdada (top/balanced → seed).
-        if (_ps !== 'seed' && _ps !== 'draw_among') {
-          _ps = 'seed'; ph.pairingStrategy = 'seed'; ph.scope = 'overall';
-          ph.qualifyMode = (ph.qualifyQuantity === 'all') ? 'all' : 'overall';
-        }
-        var _seedOn = _ps === 'seed';
-        h += '<div style="display:flex;align-items:center;gap:10px;">';
-        h += '<label class="toggle-switch" style="--toggle-on-bg:#818cf8;--toggle-on-glow:rgba(129,140,248,0.3);--toggle-on-border:#818cf8;flex-shrink:0;"><input type="checkbox"' + (_seedOn ? ' checked' : '') + ' onchange="window._setPhasePairing(' + i + ', this.checked ? \'seed\' : \'draw_among\')"><span class="toggle-slider"></span></label>';
-        h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">🎯 Cabeças de chave</span>';
-        h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_seedOn ? 'os melhores são espalhados pra se cruzarem só no fim' : 'chaveamento sorteado dentro de cada linha') + '</span>';
+        // v3.1.23: "Duplas fixas" FORMA as duplas a partir dos classificados (indivíduos)
+        // — a ESTRATÉGIA define COMO: Performance (1º+2º), Equilíbrio (1º+últ.), Sorteio,
+        // ou Cabeças de chave. Por grupo, a 1ª dupla vai pra Linha 1 (Ouro) e a 2ª pra
+        // Linha 2 (Prata). O motor aplica isso quando os entrantes são indivíduos; se a
+        // fase anterior já entregou duplas prontas, a estratégia é ignorada (mantém os pares).
+        // Antes (v3.0.x) a UI forçava 'seed' e escondia Performance/Equilíbrio — bug.
+        if (_ps !== 'seed' && _ps !== 'draw_among' && _ps !== 'top' && _ps !== 'balanced') _ps = 'top';
+        h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:4px;">Como formar as duplas</div>';
+        h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+        [['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.'], ['draw_among', '🎲 Sorteio'], ['seed', '🎯 Cabeças de chave']].forEach(function(p){
+          var act = _ps === p[0];
+          h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
+        });
         h += '</div>';
       } else {
         h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
@@ -1935,8 +1959,12 @@ function setupCreateTournamentModal() {
         var _Lx = ph.mapping.map(function(mp, k){ return (mp.label || '').trim() || ('Linha ' + (k + 1)); });
         var _expl;
         if (_fixed) {
-          if (_ps === 'seed') _expl = 'As duplas vão pra cada linha pela <b>colocação</b> (definida acima); dentro da linha, as melhores viram <b>cabeças de chave</b> — espalhadas pra só se cruzarem no fim.';
-          else _expl = 'As duplas vão pra cada linha pela <b>colocação</b> (definida acima); o chaveamento dentro de cada linha é <b>sorteado</b>.';
+          // v3.1.23: a estratégia FORMA as duplas dos classificados (indivíduos) e
+          // distribui — 1ª dupla → Linha 1 (Ouro), 2ª → Linha 2 (Prata)…
+          if (_ps === 'top') _expl = 'As duplas são formadas por <b>performance</b> em cada grupo: <b>1º+2º</b>, <b>3º+4º</b>… A 1ª dupla vai pra <b>' + esc(_Lx[0]) + '</b>, a 2ª pra <b>' + esc(_Lx[1]) + '</b>' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
+          else if (_ps === 'balanced') _expl = 'As duplas são formadas por <b>equilíbrio</b> em cada grupo: <b>1º+último</b>, <b>2º+penúltimo</b>… A 1ª dupla vai pra <b>' + esc(_Lx[0]) + '</b>, a 2ª pra <b>' + esc(_Lx[1]) + '</b>' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
+          else if (_ps === 'draw_among') _expl = 'As duplas são <b>sorteadas</b> em cada grupo e distribuídas igualmente entre as ' + _nLx + ' linhas.';
+          else _expl = 'Os <b>melhores</b> viram <b>cabeças de chave</b> (1 por linha), espalhados pra só se cruzarem no fim; os parceiros e as demais duplas são <b>sorteados</b>. <span style="opacity:0.8;">(usa escopo Geral)</span>';
         }
         else if (_ps === 'seed') _expl = 'Os <b>' + _nLx + ' melhores</b> (ranking geral) viram <b>cabeças de chave</b> — 1 por linha, espalhados pra só se cruzarem no fim; as demais vagas são <b>sorteadas</b> entre as linhas. <span style="opacity:0.8;">(usa escopo Geral)</span>';
         else if (_ps === 'balanced') _expl = '<b>' + esc(_Lx[0]) + '</b> recebe a dupla 1º+4º (forte+fraco); <b>' + esc(_Lx[1]) + '</b> recebe 2º+3º — linhas equilibradas.';
@@ -2021,6 +2049,12 @@ function setupCreateTournamentModal() {
     h += '<div style="margin-bottom:10px;">' + window._woButtonsHtml(i + 1) + '</div>';
     h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">📋 Lançamento dos resultados</div>';
     h += window._resultEntryButtonsHtml(i + 1);
+    // ─── Classificação (Personalizada × Em blocos) POR FASE — logo após o lançamento.
+    //     Render CANÔNICA _classifModeHtml(i+1) (a MESMA da Fase 1). Só em chave/grupos. ───
+    if (_isElim || isGrupos) {
+      h += '<div style="font-size:0.7rem;color:var(--text-muted);margin:10px 0 4px;">📊 ' + ((window._t && window._t('create.classificationSection')) || 'Classificação') + '</div>';
+      h += window._classifModeHtml(i + 1);
+    }
     h += '</div>';
     } // fim if(!_boxCol)
     h += '</div>'; // fim box da fase
@@ -2457,24 +2491,10 @@ function setupCreateTournamentModal() {
     if (hidden) hidden.value = value;
   };
 
-  // ── Ranking Type Selection ──
+  // ── Ranking Type Selection ── (v3.1.34: delega pro canônico _setPhaseRankingType(0,…),
+  //   que sincroniza o hidden #elim-ranking-type e re-renderiza os botões da Fase 1.)
   window._selectRankingType = function(value) {
-    var btns = document.querySelectorAll('#ranking-type-buttons .ranking-type-btn');
-    btns.forEach(function(b) {
-      if (b.getAttribute('data-value') === value) {
-        b.classList.add('ranking-type-active');
-        b.style.border = '2px solid #f87171';
-        b.style.background = 'rgba(248,113,113,0.12)';
-        b.style.color = '#fca5a5';
-      } else {
-        b.classList.remove('ranking-type-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)';
-        b.style.background = 'rgba(255,255,255,0.06)';
-        b.style.color = 'var(--text-main)';
-      }
-    });
-    var sel = document.getElementById('elim-ranking-type');
-    if (sel) sel.value = value;
+    if (typeof window._setPhaseRankingType === 'function') window._setPhaseRankingType(0, value);
   };
 
   // ── Logo Generator ──
@@ -5111,16 +5131,8 @@ function setupCreateTournamentModal() {
       }
     });
 
-    // Restore ranking type button
-    var _rkType = t.rankingType || 'individual';
-    var _rkBtns = document.querySelectorAll('#ranking-type-buttons .ranking-type-btn');
-    _rkBtns.forEach(function(rb) {
-      if (rb.getAttribute('data-value') === _rkType) {
-        rb.classList.add('ranking-type-active'); rb.style.border='2px solid #f87171'; rb.style.background='rgba(248,113,113,0.12)'; rb.style.color='#fca5a5';
-      } else {
-        rb.classList.remove('ranking-type-active'); rb.style.border='2px solid rgba(255,255,255,0.18)'; rb.style.background='rgba(255,255,255,0.06)'; rb.style.color='var(--text-main)';
-      }
-    });
+    // Restore ranking type (v3.1.34: render CANÔNICA — seta hidden + re-renderiza botões).
+    if (typeof window._setPhaseRankingType === 'function') window._setPhaseRankingType(0, (t.elimRankingType || t.rankingType || 'individual'));
     document.getElementById('tourn-max-participants').value = t.maxParticipants || '';
     document.getElementById('tourn-auto-close').checked = !!t.autoCloseOnFull;
     // Sorteio de Vagas (read defensivo: ausente ⇒ 'cap', idêntico ao legado)
@@ -5310,7 +5322,7 @@ function setupCreateTournamentModal() {
 
     // Elim settings
     // elimThirdPlace is always true — no toggle needed
-    document.getElementById('elim-ranking-type').value = t.elimRankingType || 'individual';
+    var _ertEl = document.getElementById('elim-ranking-type'); if (_ertEl) _ertEl.value = t.elimRankingType || 'individual';
 
     // Grupos
     if (t.gruposCount) document.getElementById('grupos-count').value = t.gruposCount;
@@ -5348,6 +5360,7 @@ function setupCreateTournamentModal() {
           grandFinal: ph.grandFinal !== false,
           // v2.6.59: config por fase — W.O. + lançamento (normaliza resultEntry pra array na UI).
           woScope: (ph.woScope === 'team' ? 'time' : (ph.woScope || 'individual')),
+          rankingType: (ph.rankingType === 'blocks' ? 'blocks' : 'individual'), // v3.1.34
           resultEntry: (function(){ var r = ph.resultEntry; if (Array.isArray(r)) return r.length ? r : ['organizer']; if (typeof r === 'string') { try { var p = JSON.parse(r); if (Array.isArray(p)) return p.length ? p : ['organizer']; } catch(e){} return [r]; } return ['organizer']; })(),
           // v2.6.63: Pontuação Avançada por fase (objeto {enabled, categories, applyLiveScoring} ou null).
           advancedScoring: ph.advancedScoring || null,
@@ -6057,19 +6070,48 @@ function setupCreateTournamentModal() {
         // Quando há ao menos uma fase extra, grava t.phases[] (fase 0 = formato do
         // topo + origem por inscrição; fases 1+ vêm do construtor). Fase única =
         // legado: t.phases fica null e o motor usa os campos top-level de sempre.
-        var _extra = Array.isArray(window._extraPhases) ? window._extraPhases : [];
-        if (_extra.length > 0) {
-          var _p1NameEl = document.getElementById('phase1-name');
-          var _phase1 = {
-            name: (_p1NameEl && _p1NameEl.value.trim()) || 'Fase 1',
+        // v3.1.37: UNIFICAÇÃO DE SCHEMA — a Fase 1 (phase 0) passa a ser uma fase CANÔNICA
+        // e COMPLETA em t.phases[0], com a MESMA shape das fases extras (datas + W.O. +
+        // lançamento + classificação + pontuação + config de formato). Fim da assimetria
+        // "Fase 1 mora no top-level, extras moram em phases[]" — que causava bugs (ex.: data
+        // de fim mostrando só a Fase 1). O top-level continua gravado como ESPELHO/fallback
+        // (motor lê t.phases[i].X || t.X), então docs antigos seguem funcionando. Os
+        // INSCRITOS/INSCRIÇÕES são top-level (t.participants/memberUids/...) e NÃO são tocados.
+        function _buildPhase0() {
+          var _p1NameEl0 = document.getElementById('phase1-name');
+          return {
+            name: (_p1NameEl0 && _p1NameEl0.value.trim()) || 'Fase 1',
             formatCode: formatValue,
             format: format, // string canônica (ex.: 'Liga', 'Dupla Eliminatória')
             drawMode: tourData.drawMode || 'sorteio',
             reiRainha: tourData.drawMode === 'rei_rainha',
             rounds: parseInt(window._phase1Rounds) || 1,
             source: { type: 'enrollment' },
-            fixedPairs: teamSizeVal > 1
+            fixedPairs: teamSizeVal > 1,
+            monarchClassified: parseInt(tourData.monarchClassified) || 1,
+            groupsBy: tourData.reiRainhaGroupsBy || 'sorteio',
+            gruposCount: parseInt(tourData.gruposCount) || 4,
+            gruposClassified: parseInt(tourData.gruposClassified) || 2,
+            pairingStrategy: 'top',
+            grandFinal: true, // fase base — não é uma linha de fase final
+            woScope: tourData.woScope || 'individual',
+            rankingType: (tourData.elimRankingType === 'blocks' ? 'blocks' : 'individual'),
+            resultEntry: tourData.resultEntry,
+            advancedScoring: (formatValue === 'liga' && typeof window._readAdvScoring === 'function') ? (window._readAdvScoring(0) || null) : null,
+            regDate: regDateRaw, regTime: regTimeRaw,
+            startDate: startDateRaw, startTime: startTimeRaw,
+            endDate: endDateRaw, endTime: endTimeRaw,
+            lateEnrollment: tourData.lateEnrollment || 'closed',
+            drawFirstDate: tourData.drawFirstDate || '',
+            drawFirstTime: tourData.drawFirstTime || '19:00',
+            drawIntervalDays: (parseInt(tourData.drawIntervalDays, 10) >= 1 ? parseInt(tourData.drawIntervalDays, 10) : null),
+            drawManual: !!tourData.drawManual,
+            scoring: (tourData.scoring && tourData.scoring.type) ? tourData.scoring : null
           };
+        }
+        var _extra = Array.isArray(window._extraPhases) ? window._extraPhases : [];
+        if (_extra.length > 0) {
+          var _phase1 = _buildPhase0();
           var _rest = _extra.map(function(ph, _ei) {
             var src = ph.sourceType === 'previous'
               ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: (ph.scope || 'per_group') !== 'overall', scope: (ph.scope || 'per_group'), qualifyMode: ph.qualifyMode || 'per_group', qualifyQuantity: ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top'), qualifyTopN: parseInt(ph.qualifyTopN) || 2, mapping: window._deriveMotorMapping(ph) }
@@ -6097,6 +6139,7 @@ function setupCreateTournamentModal() {
               // v2.6.59: config POR FASE — W.O. e lançamento de resultados. O motor lê
               // t.phases[i].X com fallback pro top-level (t.X = fase 0/default).
               woScope: ph.woScope || 'individual',
+              rankingType: (ph.rankingType === 'blocks' ? 'blocks' : 'individual'), // v3.1.34
               resultEntry: (function(){ var a = Array.isArray(ph.resultEntry) ? ph.resultEntry.slice() : [ph.resultEntry || 'organizer']; if (!a.length) a = ['organizer']; return a.length === 1 ? a[0] : a; })(),
               // v2.6.63: Pontuação Avançada por fase (só Pontos Corridos). Lê do DOM da fase.
               advancedScoring: (ph.format === 'liga' && typeof window._readAdvScoring === 'function') ? window._readAdvScoring(_ei + 1) : null,
@@ -6130,7 +6173,10 @@ function setupCreateTournamentModal() {
             tourData.phases = _existingPhases; // preserva — não foi remoção intencional
             if (window._warn) window._warn('[save] construtor de fases veio vazio mas torneio é multi-fase e usuário não removeu — preservando t.phases (' + _existingPhases.length + ')');
           } else {
-            tourData.phases = null; // fase única (criação OU remoção intencional de todas as fases extras)
+            // v3.1.37: fase única também grava t.phases CANÔNICA = [phase0 completa]. O guard
+            // de saveTournament (firebase-db.js) só "preserva" quando o EXISTENTE é multi-fase
+            // (length>1) e o save não foi autorizado — então torneio single legítimo grava [p0].
+            tourData.phases = [_buildPhase0()];
           }
         }
         // v3.0.x: autoriza o guard de saveTournament a REDUZIR/remover fases SÓ quando o

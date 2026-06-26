@@ -1475,8 +1475,11 @@ function renderTournaments(container, tournamentId = null) {
             return dStr;
         };
 
-        const start = formatDateBr(t.startDate);
-        const end = formatDateBr(t.endDate);
+        // v3.1.35: CANÔNICO — início da 1ª fase → fim da ÚLTIMA fase (nunca t.endDate cru,
+        // que é só a Fase 1). Mesmo helper usado no card da dashboard.
+        const _tdr = (typeof window._tournamentDateRange === 'function') ? window._tournamentDateRange(t) : { start: t.startDate, end: t.endDate };
+        const start = formatDateBr(_tdr.start);
+        const end = formatDateBr(_tdr.end);
         const dates = start ? (end ? `${start} ${_t('tourn.dateTo')} ${end}` : `${start}`) : _t('tourn.dateTbd');
         // v2.6.23/24: data em grid — [🗓️ | data | hora] / ["A" | data | hora].
         // Colunas separadas de data e hora + tabular-nums = data e hora
@@ -2039,91 +2042,12 @@ function renderTournaments(container, tournamentId = null) {
                 // --- Build actionsHtml based on tournament state ---
                 if (isFinished) {
                     // Torneio encerrado — mostrar pódio + Ver Chaves
-                    podiumHtml = '';
-                    // v2.8.100: Confra/multi-linha — quando a fase atual tem 2+ chaves
-                    // (Ouro/Prata/…) e NÃO há grande final cruzando as linhas, mostra um
-                    // pódio POR linha. Com grande final, segue 1 pódio (campeão geral).
-                    (function _maybeMultiTierPodium() {
-                        var _curPh = t.currentPhaseIndex || 0;
-                        var _pm = (t.matches || []).filter(function(m){ return (m.phaseIndex || 0) === _curPh; });
-                        var _tiers = [];
-                        ['gold','silver','line3','line4'].forEach(function(bk){ if (_pm.some(function(m){ return m.bracket === bk; })) _tiers.push(bk); });
-                        if (_tiers.length < 2) return;
-                        var _hasGF = _pm.some(function(m){ return m.bracket === 'grandfinal' && m.winner && !m.isBye; });
-                        if (_hasGF) return;
-                        var _lbl = { gold:'🥇 Série Ouro', silver:'🥈 Série Prata', line3:'Série 3', line4:'Série 4' };
-                        var _out = '';
-                        _tiers.forEach(function(bk){
-                            var _tm = _pm.filter(function(m){ return m.bracket === bk; });
-                            if (!_tm.length) return;
-                            var _title = (_tm[0] && _tm[0].tierLabel) ? _tm[0].tierLabel : _lbl[bk];
-                            var _nonThird = _tm.filter(function(m){ return !m.isThirdPlace; });
-                            var _rs = _nonThird.map(function(m){ return m.round == null ? 1 : m.round; });
-                            if (!_rs.length) return;
-                            var _maxR = Math.max.apply(null, _rs);
-                            var _fin = _nonThird.filter(function(m){ return (m.round == null ? 1 : m.round) === _maxR && m.winner && !m.isBye; })[0];
-                            if (!_fin) return;
-                            var _p1 = _fin.winner;
-                            var _p2 = (_fin.winner === _fin.p1) ? _fin.p2 : _fin.p1;
-                            if (_p2 === 'TBD' || _p2 === 'BYE') _p2 = null;
-                            var _tp = _tm.filter(function(m){ return m.isThirdPlace && m.winner; })[0];
-                            var _p3 = _tp ? _tp.winner : null;
-                            _out += window._buildPodiumHtml(_p1, _p2, _p3, null, null, null, { title: _title });
-                        });
-                        if (_out) podiumHtml = _out;
-                    })();
-                    // Prefer canonical adapter: look for the last elim/grand column
-                    // with a decided winner; fall back to legacy t.matches scan.
-                    let _finalMatch = null;
-                    let _thirdPlace = null;
-                    const _unif = (typeof window._getUnifiedRounds === 'function') ? window._getUnifiedRounds(t) : null;
-                    if (_unif && Array.isArray(_unif.columns) && _unif.columns.length > 0) {
-                        // Find the Grand Final (double-elim) or the last elim column.
-                        const _gf = _unif.columns.filter(function(c) { return c && c.phase === 'grandfinal'; }).pop();
-                        if (_gf && Array.isArray(_gf.matches) && _gf.matches.length > 0) {
-                            _finalMatch = _gf.matches.find(function(m) { return m && m.winner && !m.isBye; });
-                        }
-                        if (!_finalMatch) {
-                            const _elimCols = _unif.columns.filter(function(c) { return c && c.phase === 'elim'; });
-                            const _lastElim = _elimCols[_elimCols.length - 1];
-                            if (_lastElim && Array.isArray(_lastElim.matches)) {
-                                _finalMatch = _lastElim.matches.find(function(m) { return m && m.winner && !m.isBye; });
-                            }
-                        }
-                        const _tpCol = _unif.columns.find(function(c) { return c && c.phase === 'thirdplace'; });
-                        if (_tpCol && Array.isArray(_tpCol.matches) && _tpCol.matches[0] && _tpCol.matches[0].winner) {
-                            _thirdPlace = _tpCol.matches[0].winner;
-                        }
-                    }
-                    if (!_finalMatch) {
-                        // Legacy fallback: scan t.matches for highest round with decided winner.
-                        const _allM = t.matches || [];
-                        if (_allM.length > 0) {
-                            const _roundNums = _allM.map(function(m) { return m.round || 0; });
-                            const _lastR = Math.max.apply(null, _roundNums);
-                            const _finalM = _allM.filter(function(m) { return m.round === _lastR && !m.isBye && m.winner; });
-                            if (_finalM.length > 0) _finalMatch = _finalM[0];
-                        }
-                    }
-                    if (!_thirdPlace && t.thirdPlaceMatch && t.thirdPlaceMatch.winner) {
-                        _thirdPlace = t.thirdPlaceMatch.winner;
-                    }
-                    if (!podiumHtml && _finalMatch) {
-                        const _1st = _finalMatch.winner;
-                        const _2nd = _finalMatch.winner === _finalMatch.p1 ? _finalMatch.p2 : _finalMatch.p1;
-                        const _3rd = _thirdPlace;
-                            podiumHtml = window._buildPodiumHtml(_1st, _2nd, _3rd);
-                    }
-                    // Suíço/Liga: show standings-based podium
-                    if (!podiumHtml && Array.isArray(t.rounds) && t.rounds.length > 0 && t.standings && t.standings.length > 0) {
-                        const _top = t.standings.slice(0, 3);
-                        const _nm = function(s){ return s ? (s.name || s.player || '') : ''; };
-                        const _pts = function(s){ return (s && s.points != null) ? (s.points + ' pts') : ''; };
-                        podiumHtml = window._buildPodiumHtml(
-                            _nm(_top[0]), _nm(_top[1]), _nm(_top[2]),
-                            'Campeão', _pts(_top[1]) || '2º Lugar', _pts(_top[2]) || '3º Lugar'
-                        );
-                    }
+                    // v3.1.33: CANÔNICO — pódio(s) + classificação(ões) numa fonte só
+                    // (store.js · _renderPodiumsAndClassif). Regra por configuração: 1 linha
+                    // ou N linhas com grande final → 1 pódio + classificação geral; 2/4 linhas
+                    // separadas → 1 pódio + 1 classificação POR linha. NÃO duplicar a lógica
+                    // aqui — qualquer ajuste de apresentação é feito SÓ na função canônica.
+                    podiumHtml = (typeof window._renderPodiumsAndClassif === 'function') ? window._renderPodiumsAndClassif(t) : '';
                     actionsHtml = `
                    ${inviteModalHtml}
                    <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
@@ -2288,7 +2212,7 @@ function renderTournaments(container, tournamentId = null) {
             ${/* v2.3.96: rede de segurança — sorteio em revisão (só organizador) */ ''}
             ${(typeof window._renderPendingDrawBanner === 'function') ? window._renderPendingDrawBanner(t) : ''}
             ${/* v2.1.16: pódio do torneio encerrado logo abaixo do nome/logo */ ''}
-            ${(tournamentId && isFinished) ? (podiumHtml + (typeof window._collapsedClassifHtml === 'function' ? window._collapsedClassifHtml(t) : '')) : ''}
+            ${(tournamentId && isFinished) ? podiumHtml : ''}
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>

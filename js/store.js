@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.1.20-beta';
+window.SCOREPLACE_VERSION = '3.1.39-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -548,7 +548,11 @@ window._softRefreshView = function() {
   if (_currentView === '' || _currentView === 'dashboard') {
     try {
       var _dts = (window.AppStore && window.AppStore.tournaments) || [];
-      var _dsig = _dts.length + '|' + _dts.map(function(t){ return t && t.id; }).join(',');
+      // v3.1.26: inclui updatedAt no sig — assim mudanças de CONTEÚDO (resultado
+      // lançado, chave avançada → próximo jogo / adversário definido) re-renderizam a
+      // dashboard (via _dashRerender, scroll preservado), não só mudanças no SET de
+      // torneios. Mantém o gate por assinatura → só re-renderiza quando algo mudou.
+      var _dsig = _dts.length + '|' + _dts.map(function(t){ return (t && t.id) + ':' + ((t && t.updatedAt) || ''); }).join(',');
       if (_dsig !== window._dashDataSig) {
         window._dashDataSig = _dsig;
         if (typeof window._dashRerender === 'function') window._dashRerender();
@@ -2284,6 +2288,57 @@ window._getWaitlist = function(t) {
   return out;
 };
 
+// ─── Inscrições durante a fase: regra CANÔNICA de "Novos Confrontos" (jun/2026) ───
+// Vale pra qualquer formato/modo de sorteio. Três peças ortogonais:
+//
+// (a) Mesmo-dia × multi-dia. A presença (check-in) só CONTA num torneio de MESMO DIA:
+// quando início e fim caem no mesmo dia do calendário (ou não há data de fim). Multi-dia
+// (início/fim em dias diferentes) → presença ignorada. Usa as datas da FASE corrente
+// quando multi-fase; senão as do torneio. Pedido do dono.
+window._tournamentIsSameDay = function(t) {
+  if (!t) return true;
+  var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+  var startRaw = (ph && ph.startDate) || t.startDate || '';
+  var endRaw   = (ph && ph.endDate)   || t.endDate   || '';
+  var dayKey = function(s){ var m = String(s || '').match(/(\d{4})-(\d{2})-(\d{2})/); return m ? (m[1] + '-' + m[2] + '-' + m[3]) : null; };
+  var ds = dayKey(startRaw);
+  if (!ds) return true;   // sem início → trata como mesmo-dia (presença conta)
+  var de = dayKey(endRaw);
+  if (!de) return true;   // sem fim → mesmo-dia
+  return ds === de;       // mesmo dia do calendário → presença conta
+};
+
+// (b) lateEnrollment efetivo da FASE corrente (per-phase sobrepõe o top-level).
+window._effectiveLateEnrollment = function(t) {
+  if (!t) return undefined;
+  var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+  return (ph && ph.lateEnrollment) || t.lateEnrollment; // pode ser undefined (legado)
+};
+
+// (c) "Novos Confrontos" permite formar confronto automaticamente? Bloqueia SÓ quando
+// explicitamente 'standby' (Suplentes Apenas) ou 'closed' (Fechadas). Legado (undefined)
+// → permite (preserva o auto-form histórico do Rei/Rainha).
+window._expandFormationAllowed = function(t) {
+  var v = window._effectiveLateEnrollment(t);
+  return v !== 'standby' && v !== 'closed';
+};
+
+// (d) Pool elegível pra formar um novo confronto a partir da lista de espera, em ordem
+// de chegada. Só INDIVÍDUOS (duplas já formadas ficam de fora). Em torneio de MESMO DIA
+// filtra pra só PRESENTES (check-in) e não-ausentes; multi-dia traz todos. namesOnly →
+// retorna nomes (string).
+window._waitlistExpandPool = function(t, namesOnly) {
+  var list = (typeof window._getWaitlist === 'function') ? window._getWaitlist(t) : [];
+  var _nm = function(p){ return String(window._pName ? window._pName(p, '') : ((p && (p.displayName || p.name)) || p || '')).trim(); };
+  var seen = {}, pool = [];
+  list.forEach(function(p){ var n = _nm(p); if (n && n.indexOf(' / ') === -1 && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; pool.push(p); } });
+  if (window._tournamentIsSameDay(t)) {
+    var ci = t.checkedIn || {}, ab = t.absent || {};
+    pool = pool.filter(function(p){ return window._idMapHas(t, ci, p) && !window._idMapHas(t, ab, p); });
+  }
+  return namesOnly ? pool.map(_nm) : pool;
+};
+
 // CANÔNICO: a lista de espera vive em 3 storages (waitlist + standbyParticipants +
 // monarchWaitlist por categoria). Toda vez que se RE-DERIVA a espera (reset, re-sorteio)
 // tem que limpar OS TRÊS — senão um deles vira resíduo e o painel (que lê os 3 via
@@ -2696,45 +2751,32 @@ if (!window._spDragCompactWired) {
     document.addEventListener('dragend', function () { try { if (typeof window._setOrgDropActive === 'function') window._setOrgDropActive(false); window._participantDragData = null; } catch (e) {} }, true);
   } catch (e) {}
 }
-// v2.6.60: CONFIG POR FASE — resolve woScope / resultEntry da FASE de um match
-// (multifase), com FALLBACK pro top-level (= fase 0 / default). Single-phase ou
-// match sem phaseIndex → sempre o top-level (comportamento idêntico ao de sempre).
-// Match multifase é tagueado com m.phaseIndex; t.phases[i] guarda o override.
+// v3.1.38: CONFIG POR FASE — CANÔNICO, lê DIRETO de t.phases[i] (sem dual-source).
+// Desde v3.1.37 TODO torneio tem t.phases[0] completa (Fase 1) + os docs antigos foram
+// migrados; então `t.phases[match.phaseIndex||0].X` é a fonte única. Sobrou só um
+// null-guard pra objeto sem phases (em construção / cache pré-migração): aí cai no default.
 window._effectiveWoScope = function(t, match) {
-    var def = (t && t.woScope) || 'individual';
-    if (!t || !Array.isArray(t.phases) || t.phases.length <= 1 || !match) return def;
-    var ph = t.phases[match.phaseIndex || 0];
-    return (ph && ph.woScope) ? ph.woScope : def;
+    if (!t || !Array.isArray(t.phases) || !t.phases.length) return (t && t.woScope) || 'individual';
+    var ph = t.phases[(match && match.phaseIndex) || 0] || t.phases[0] || {};
+    return ph.woScope || 'individual';
 };
 window._effectiveResultEntry = function(t, match) {
-    var def = (t && t.resultEntry) || 'organizer';
-    if (!t || !Array.isArray(t.phases) || t.phases.length <= 1 || !match) return def;
-    var ph = t.phases[match.phaseIndex || 0];
-    return (ph && ph.resultEntry != null) ? ph.resultEntry : def;
+    if (!t || !Array.isArray(t.phases) || !t.phases.length) return (t && t.resultEntry) || 'organizer';
+    var ph = t.phases[(match && match.phaseIndex) || 0] || t.phases[0] || {};
+    return (ph.resultEntry != null) ? ph.resultEntry : 'organizer';
 };
-// v2.6.96 — placar (GSM) EFETIVO de um match no construtor de fases. Só diverge
-// do placar do torneio (t.scoring) quando o match é de uma fase ≥1 que tem placar
-// "Personalizado" (ph.scoring com type). Fase 0 e torneios de fase única usam
-// SEMPRE t.scoring — garantia de compat com tudo que já existe.
+// placar (GSM) EFETIVO de um match: lê o scoring da FASE do match (phases[i].scoring).
 window._effectiveScoring = function(t, match) {
-    var def = (t && t.scoring) || null;
-    var pi = (match && match.phaseIndex) || 0;
-    if (!t || pi < 1 || !Array.isArray(t.phases) || pi >= t.phases.length) return def;
-    var ph = t.phases[pi];
-    return (ph && ph.scoring != null && ph.scoring.type) ? ph.scoring : def;
+    if (!t || !Array.isArray(t.phases) || !t.phases.length) return (t && t.scoring) || null;
+    var ph = t.phases[(match && match.phaseIndex) || 0] || t.phases[0] || {};
+    return (ph.scoring && ph.scoring.type) ? ph.scoring : null;
 };
-// v3.1.16 (inc 8) — Pontos Avançados EFETIVO por fase. Overlay canônico ORTOGONAL ao
-// storage: a fase (phases[idx].advancedScoring, shape {enabled,categories,applyLiveScoring})
-// SOBREPÕE o top-level (t.advancedScoring) — inclusive quando a fase o desliga
-// (enabled:false). Fase 0 / single-phase / fase sem config própria → herda o top-level.
-// É o que faz "Pontos Avançados numa fase e simples noutra" CALCULAR de verdade nas
-// standings (renderStandings/_computeStandings leem advancedScoring do faux-t da fase).
+// Pontos Avançados EFETIVO por fase: lê phases[i].advancedScoring ({enabled,categories,
+// applyLiveScoring}). A fase manda — inclusive quando desliga (enabled:false).
 window._effectiveAdvScoring = function(t, phaseIndex) {
-    var def = (t && t.advancedScoring) || null;
-    var pi = phaseIndex || 0;
-    if (!t || pi < 1 || !Array.isArray(t.phases) || pi >= t.phases.length) return def;
-    var ph = t.phases[pi];
-    return (ph && ph.advancedScoring && typeof ph.advancedScoring === 'object') ? ph.advancedScoring : def;
+    if (!t || !Array.isArray(t.phases) || !t.phases.length) return (t && t.advancedScoring) || null;
+    var ph = t.phases[phaseIndex || 0] || t.phases[0] || {};
+    return (ph.advancedScoring && typeof ph.advancedScoring === 'object') ? ph.advancedScoring : null;
 };
 // v2.6.108: barra CANÔNICA de busca + ordenação + filtros (gênero/habilidade) pra
 // listas de inscritos. UI idêntica à Análise de Inscritos — uma fonte só, reusável.
@@ -5393,47 +5435,235 @@ window._enrollNumberBadge = function(num, side) {
     'fill="rgba(255,255,255,0.10)" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif">' + window._safeHtml(n) + '</text></svg>';
 };
 
-// v3.0.x: classificação GERAL COLAPSADA pra ficar SEMPRE abaixo do pódio no torneio
-// encerrado. Liga/Suíço → standings; eliminatória/multi-fase → classificação progressiva
-// (faux sobre os jogos da fase final, 3º/4º como thirdPlaceMatch). Retorna '' se não há
-// dados (não polui). Colapsada por padrão (<details> sem open).
-window._collapsedClassifHtml = function (t) {
+// ═══════════════════════════════════════════════════════════════════════════════════
+// CANÔNICO (v3.1.33): pódio(s) + classificação(ões) do torneio encerrado — UMA fonte só.
+// SEMPRE renderizado por estas linhas, em qualquer view, de acordo com a configuração:
+//   • 1 linha, OU N linhas COM grande final (linha cruza tudo) → 1 PÓDIO geral + 1
+//     "Classificação geral" colapsada embaixo.
+//   • 2/4 linhas SEPARADAS (sem grande final) → para CADA linha, na ordem de tier
+//     (Ouro, Prata, …): o PÓDIO da linha + a classificação DAQUELA linha colapsada logo
+//     embaixo. 2 linhas = 2 pódios+2 classif; 4 linhas = 4 pódios+4 classif.
+//   • Liga/Suíço (sem chave) → 1 pódio (top 3 da tabela) + classificação da tabela.
+// Modo de classificação: 'personalizada' (1º,2º,3º…) — default. ('blocos' = próxima leva.)
+// ─────────────────────────────────────────────────────────────────────────────────────
+
+// tiers (linhas) presentes num conjunto de matches — exclui grandfinal/thirdplace.
+window._classifTierKeys = function (matches) {
+  var order = ['gold', 'silver', 'main', 'line3', 'line4'];
+  var present = {};
+  (matches || []).forEach(function (m) { var bk = m.bracket || 'main'; if (bk !== 'grandfinal' && bk !== 'thirdplace') present[bk] = 1; });
+  var keys = order.filter(function (k) { return present[k]; });
+  Object.keys(present).forEach(function (k) { if (keys.indexOf(k) === -1) keys.push(k); });
+  return keys;
+};
+
+// classificação progressiva de um conjunto de matches (uma linha OU a fase) → { nome: pos }.
+window._classifMapFromMatches = function (t, matches) {
+  if (!matches || !matches.length || typeof window._updateProgressiveClassification !== 'function') return {};
+  var third = matches.filter(function (m) { return m.isThirdPlace || (m.bracket || '') === 'thirdplace'; })[0] || null;
+  var rest = matches.filter(function (m) { return m !== third; });
+  var faux = { matches: rest, format: 'Eliminatórias Simples', thirdPlaceMatch: third, tiebreakers: t && t.tiebreakers };
+  try { window._updateProgressiveClassification(faux); } catch (e) { return {}; }
+  return faux.classification || {};
+};
+
+// classificação GERAL com grande final: campeão=1º, vice=2º, 3º/4º das semis, depois as
+// linhas interleaved por (posição-na-linha, ordem-do-tier). → { nome: pos }.
+window._classifUnifiedMap = function (t, fpMatches, tierKeys) {
+  var cl = {}, nextPos = 1, placed = {};
+  function place(n) { if (n && n !== 'TBD' && n !== 'BYE' && !placed[n]) { placed[n] = 1; cl[n] = nextPos++; } }
+  var gf = (fpMatches || []).filter(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner; })[0];
+  if (gf) { place(gf.winner); place(gf.winner === gf.p1 ? gf.p2 : gf.p1); }
+  var tp = (fpMatches || []).filter(function (m) { return (m.bracket || '') === 'thirdplace' && m.winner; })[0];
+  if (tp) { place(tp.winner); place(tp.winner === tp.p1 ? tp.p2 : tp.p1); }
+  var rest = [];
+  (tierKeys || []).forEach(function (bk, li) {
+    var lm = (fpMatches || []).filter(function (m) { return (m.bracket || 'main') === bk; });
+    var map = window._classifMapFromMatches(t, lm);
+    Object.keys(map).forEach(function (n) { if (!placed[n]) rest.push({ name: n, pos: map[n], line: li }); });
+  });
+  rest.sort(function (a, b) { return (a.pos !== b.pos) ? (a.pos - b.pos) : (a.line - b.line); });
+  rest.forEach(function (e) { place(e.name); });
+  return cl;
+};
+
+// renderiza um bloco <details> de classificação PERSONALIZADA (1º..Nº) do mapa {nome:pos}.
+// opts: { label, color, open }. Vazio → ''.
+// v3.1.38 CANÔNICO: modo de classificação ('individual'|'blocks') lido DIRETO da fase
+// (t.phases[cur].rankingType). Toda fase — incl. a 0 — tem rankingType desde v3.1.37/migração.
+window._classifModeFor = function (t, phaseIdx) {
+  if (!t || !Array.isArray(t.phases) || !t.phases.length) return (t && (t.elimRankingType === 'blocks' || t.rankingType === 'blocks')) ? 'blocks' : 'individual';
+  var cur = (phaseIdx != null) ? phaseIdx : (typeof t.currentPhaseIndex === 'number' ? t.currentPhaseIndex : 0);
+  var ph = t.phases[cur] || t.phases[0] || {};
+  return (ph.rankingType === 'blocks') ? 'blocks' : 'individual';
+};
+window._renderClassifBlock = function (t, clMap, opts) {
+  opts = opts || {};
+  var keys = Object.keys(clMap || {});
+  if (!keys.length) return '';
+  var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+  var nameHtml = function (n) { return (typeof window._nameWithCrown === 'function' && t) ? window._nameWithCrown(n, t) : esc(n); };
+  var color = opts.color || '#fbbf24', label = opts.label || '📊 Classificação', open = !!opts.open;
+  var mode = opts.mode || window._classifModeFor(t, opts.phaseIdx);
+  var entries = keys.map(function (k) { return { name: k, pos: clMap[k] }; }).sort(function (a, b) { return a.pos - b.pos; });
+  var inner, countLabel;
+  if (mode === 'blocks') {
+    // EM BLOCOS — por FAIXA de posição: 1º–2º · 3º–4º · 5º–8º · 9º–16º… Quem cai na mesma
+    // faixa COMPARTILHA a colocação (eliminados na mesma fase). Faixa k: [2^(k-1)+1 .. 2^k]
+    // (k=1 = [1..2]). Rótulo = min–max REAL presente na faixa (cobre N não-potência de 2).
+    var blockK = function (pos) { return pos <= 2 ? 1 : Math.ceil(Math.log2(pos)); };
+    var groups = [], byK = {};
+    entries.forEach(function (e) {
+      var k = blockK(e.pos);
+      if (byK[k] == null) { byK[k] = groups.length; groups.push({ k: k, lo: e.pos, hi: e.pos, names: [] }); }
+      var g = groups[byK[k]]; g.names.push(e.name); if (e.pos < g.lo) g.lo = e.pos; if (e.pos > g.hi) g.hi = e.pos;
+    });
+    inner = groups.map(function (g) {
+      var rng = (g.lo === g.hi) ? (g.lo + 'º') : (g.lo + 'º–' + g.hi + 'º');
+      var bc = g.k === 1 ? '#fbbf24' : g.k === 2 ? '#cd7f32' : 'var(--text-muted)';
+      return '<div style="padding:6px 12px;">' +
+        '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:800;color:' + bc + ';margin-bottom:3px;">' + rng + (g.names.length > 1 ? ' · ' + g.names.length + ' times' : '') + '</div>' +
+        g.names.map(function (n) { return '<div style="font-size:0.84rem;font-weight:600;color:var(--text-bright,#f1f5f9);padding:1px 0;">' + nameHtml(n) + '</div>'; }).join('') +
+        '</div>';
+    }).join('');
+    countLabel = groups.length + ' faixas';
+  } else {
+    var medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+    inner = entries.map(function (e) {
+      var pos = e.pos;
+      var c = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
+        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + c + ';">' + pos + 'º</span>' +
+        '<span style="font-weight:600;color:' + c + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(e.name) + '</span>' +
+        (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
+        '</div>';
+    }).join('');
+    countLabel = entries.length + ' definidos';
+  }
+  return '<details' + (open ? ' open' : '') + ' style="margin:6px 0 1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + countLabel + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + inner + '</div></details>';
+};
+
+// pódio de UMA linha (winner/loser da final da linha + 3º da linha). '' se não há final.
+window._linePodiumHtml = function (t, lineMatches, title) {
+  if (typeof window._buildPodiumHtml !== 'function') return '';
+  var nonThird = (lineMatches || []).filter(function (m) { return !m.isThirdPlace && (m.bracket || '') !== 'thirdplace'; });
+  var rs = nonThird.map(function (m) { return m.round == null ? 1 : m.round; });
+  if (!rs.length) return '';
+  var maxR = Math.max.apply(null, rs);
+  var fin = nonThird.filter(function (m) { return (m.round == null ? 1 : m.round) === maxR && m.winner && !m.isBye; })[0];
+  if (!fin) return '';
+  var p1 = fin.winner, p2 = (fin.winner === fin.p1) ? fin.p2 : fin.p1;
+  if (p2 === 'TBD' || p2 === 'BYE') p2 = null;
+  var tp = (lineMatches || []).filter(function (m) { return (m.isThirdPlace || (m.bracket || '') === 'thirdplace') && m.winner; })[0];
+  var p3 = tp ? tp.winner : null;
+  return window._buildPodiumHtml(p1, p2, p3, null, null, null, { title: title });
+};
+
+// FUNÇÃO CANÔNICA: pódio(s) + classificação(ões). Usada na página do torneio (encerrado).
+window._renderPodiumsAndClassif = function (t) {
   if (!t) return '';
-  var rows = [];
-  var isLiga = (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) ||
-    (Array.isArray(t.rounds) && t.rounds.length && (!Array.isArray(t.matches) || !t.matches.length));
-  if (isLiga && typeof window._computeStandings === 'function') {
-    try {
-      var st = window._computeStandings(t);
-      if (Array.isArray(st) && st.length) rows = st.map(function (s, i) { return { pos: i + 1, name: (s && (s.name || s.player)) || '' }; });
-    } catch (e) {}
+  var cur = (typeof t.currentPhaseIndex === 'number') ? t.currentPhaseIndex : 0;
+  var isMulti = Array.isArray(t.phases) && t.phases.length > 1 && cur > 0;
+  var fp = isMulti ? (t.phases[cur] || {}) : {};
+  var fpMatches = isMulti ? (Array.isArray(t.matches) ? t.matches : []).filter(function (m) { return (m.phaseIndex || 0) === cur; })
+    : (Array.isArray(t.matches) ? t.matches : []);
+  var tierKeys = window._classifTierKeys(fpMatches);
+  var hasGF = (fp.grandFinal !== false) && fpMatches.some(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner && !m.isBye; });
+
+  // ── LINHAS SEPARADAS (2+ sem grande final) → pódio + classificação POR LINHA ──
+  if (tierKeys.length >= 2 && !hasGF) {
+    var tierColors = { gold: '#fbbf24', silver: '#cbd5e1', main: '#10b981', line3: '#cd7f32', line4: '#3b82f6' };
+    var palette = ['#fbbf24', '#cbd5e1', '#10b981', '#cd7f32', '#3b82f6', '#ec4899'];
+    var defLbl = { gold: '🥇 Série Ouro', silver: '🥈 Série Prata', line3: 'Série 3', line4: 'Série 4' };
+    var out = tierKeys.map(function (bk, i) {
+      var lm = fpMatches.filter(function (m) { return (m.bracket || 'main') === bk; });
+      var title = (lm[0] && lm[0].tierLabel) ? lm[0].tierLabel : (defLbl[bk] || ('Linha ' + (i + 1)));
+      var pod = window._linePodiumHtml(t, lm, title);
+      if (!pod) return '';
+      var color = tierColors[bk] || palette[i % palette.length];
+      var cls = window._renderClassifBlock(t, window._classifMapFromMatches(t, lm), { label: '📊 Classificação · ' + title, color: color, open: false });
+      return '<div style="margin-bottom:1.25rem;">' + pod + cls + '</div>';
+    }).join('');
+    if (out) return out;
   }
-  if (!rows.length && Array.isArray(t.matches) && t.matches.length && typeof window._updateProgressiveClassification === 'function') {
-    try {
-      var ph = t.matches;
-      if (typeof t.currentPhaseIndex === 'number' && Array.isArray(t.phases) && t.phases.length > 1) {
-        var fp = t.matches.filter(function (m) { return (m.phaseIndex || 0) === t.currentPhaseIndex; });
-        if (fp.length) ph = fp;
-      }
-      var third = ph.filter(function (m) { return m.isThirdPlace || (m.bracket || '') === 'thirdplace'; })[0] || null;
-      var rest = ph.filter(function (m) { return m !== third; });
-      var faux = { matches: rest, format: 'Eliminatórias Simples', thirdPlaceMatch: third, tiebreakers: t.tiebreakers };
-      window._updateProgressiveClassification(faux);
-      var cl = faux.classification || {}, keys = Object.keys(cl);
-      if (keys.length) rows = keys.map(function (k) { return { pos: cl[k], name: k }; }).sort(function (a, b) { return a.pos - b.pos; });
-    } catch (e) {}
+
+  // ── CONVERGIDO / FASE ÚNICA → 1 pódio geral + 1 classificação geral ──
+  var podium = '', classifMap = null;
+  var finalMatch = null, thirdPlace = null;
+  if (hasGF) {
+    finalMatch = fpMatches.filter(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner && !m.isBye; })[0] || null;
+    var tpc = fpMatches.filter(function (m) { return (m.bracket || '') === 'thirdplace' && m.winner; })[0];
+    if (tpc) thirdPlace = tpc.winner;
+    classifMap = window._classifUnifiedMap(t, fpMatches, tierKeys);
+  } else if (tierKeys.length >= 1 && fpMatches.some(function (m) { return m.winner; })) {
+    var nonThird = fpMatches.filter(function (m) { return !m.isThirdPlace && (m.bracket || '') !== 'thirdplace'; });
+    var rs = nonThird.map(function (m) { return m.round == null ? 1 : m.round; });
+    if (rs.length) { var maxR = Math.max.apply(null, rs); finalMatch = nonThird.filter(function (m) { return (m.round == null ? 1 : m.round) === maxR && m.winner && !m.isBye; })[0] || null; }
+    var tp2 = fpMatches.filter(function (m) { return (m.isThirdPlace || (m.bracket || '') === 'thirdplace') && m.winner; })[0];
+    if (tp2) thirdPlace = tp2.winner;
+    classifMap = window._classifMapFromMatches(t, fpMatches);
   }
-  if (!rows.length) return '';
-  var medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
-  var body = rows.map(function (r) {
-    var c = r.pos === 1 ? '#fbbf24' : r.pos === 2 ? '#94a3b8' : r.pos === 3 ? '#cd7f32' : 'var(--text-muted)';
-    var nm = (typeof window._nameWithCrown === 'function') ? window._nameWithCrown(r.name, t) : window._safeHtml(r.name);
-    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 14px;">' +
-      '<span style="min-width:30px;text-align:center;font-weight:800;color:' + c + ';">' + r.pos + 'º</span>' +
-      '<span style="flex:1;min-width:0;font-weight:600;color:' + c + ';">' + nm + '</span>' +
-      (r.pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;">' + medals[r.pos] + '</span>' : '') + '</div>';
-  }).join('');
-  return '<details style="margin-top:1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.82rem;color:var(--text-bright,#f1f5f9);padding:9px 14px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">📊 Classificação geral (' + rows.length + ')</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:6px 0;">' + body + '</div></details>';
+  if (finalMatch && typeof window._buildPodiumHtml === 'function') {
+    var w1 = finalMatch.winner, w2 = (finalMatch.winner === finalMatch.p1) ? finalMatch.p2 : finalMatch.p1;
+    if (w2 === 'TBD' || w2 === 'BYE') w2 = null;
+    podium = window._buildPodiumHtml(w1, w2, thirdPlace);
+  }
+  // Liga/Suíço (sem chave) → pódio + classificação por standings.
+  if (!podium && !isMulti && Array.isArray(t.rounds) && t.rounds.length && typeof window._buildPodiumHtml === 'function') {
+    var st = (typeof window._computeStandings === 'function') ? window._computeStandings(t) : (t.standings || []);
+    if (Array.isArray(st) && st.length) {
+      var nm = function (s) { return s ? (s.name || s.player || '') : ''; };
+      var pts = function (s) { return (s && s.points != null) ? (s.points + ' pts') : ''; };
+      podium = window._buildPodiumHtml(nm(st[0]), nm(st[1]), nm(st[2]), 'Campeão', pts(st[1]) || '2º Lugar', pts(st[2]) || '3º Lugar');
+      var smap = {}; st.forEach(function (s, i) { var n = nm(s); if (n) smap[n] = i + 1; });
+      classifMap = smap;
+    }
+  }
+  var classif = classifMap ? window._renderClassifBlock(t, classifMap, { label: '📊 Classificação geral', color: '#fbbf24', open: false }) : '';
+  return podium + classif;
+};
+
+// DEPRECATED (v3.1.33): substituída por _renderPodiumsAndClassif (que JÁ inclui o pódio +
+// a(s) classificação(ões), na fonte canônica). Mantida como no-op pra qualquer caller
+// legado — a página do torneio usa a canônica e NÃO deve somar classificação por fora.
+window._collapsedClassifHtml = function (t) { return ''; };
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// CANÔNICO (v3.1.35): intervalo de datas do TORNEIO INTEIRO — início da PRIMEIRA fase →
+// fim da ÚLTIMA fase. Por que existe: a Fase 1 guarda as datas no top-level (t.startDate/
+// t.endDate) e as fases extras em t.phases[i].startDate/endDate. Logo, t.endDate cru = fim
+// só da Fase 1 — NUNCA usar t.endDate direto pra mostrar "fim do torneio". TODO card
+// (detalhe + dashboard + qualquer lugar) usa este helper. Retorna { start, end } como
+// strings 'YYYY-MM-DD' (opcional 'THH:MM') que o formatDateBr de cada view já parseia.
+window._tournamentDateRange = function (t) {
+  if (!t) return { start: '', end: '' };
+  function _ms(dateStr, defTime) {
+    if (!dateStr) return null;
+    var s = String(dateStr);
+    if (s.indexOf('T') === -1) s += 'T' + (defTime || '00:00');
+    var m = new Date(s).getTime();
+    return isNaN(m) ? null : m;
+  }
+  // v3.1.38: lê DIRETO das fases (toda fase tem datas pós-migração) — início mais cedo,
+  // fim mais tardio. Null-guard pro top-level só quando não há phases / fase sem data.
+  if (!Array.isArray(t.phases) || !t.phases.length) return { start: t.startDate || '', end: t.endDate || '' };
+  var startStr = '', endStr = '', startM = null, endM = null;
+  t.phases.forEach(function (ph) {
+    if (!ph) return;
+    if (ph.endDate) {
+      var eStr = ph.endDate + (ph.endTime ? ('T' + ph.endTime) : '');
+      var eM = _ms(eStr, '23:59');
+      if (eM != null && (endM == null || eM > endM)) { endM = eM; endStr = eStr; }
+    }
+    if (ph.startDate) {
+      var sStr = ph.startDate + (ph.startTime ? ('T' + ph.startTime) : '');
+      var sM = _ms(sStr, '00:00');
+      if (sM != null && (startM == null || sM < startM)) { startM = sM; startStr = sStr; }
+    }
+  });
+  if (!startStr) startStr = t.startDate || '';
+  if (!endStr) endStr = t.endDate || '';
+  return { start: startStr, end: endStr };
 };
 
 // ─── Competitors helper: filter out non-competing organizers from participants ─

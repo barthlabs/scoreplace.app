@@ -1458,16 +1458,23 @@ function _updateProgressiveClassification(t) {
     } else {
       // Collect all losers in this round for tiebreaking
       var posStart = Math.pow(2, roundFromEnd) + 1;
-      var losers = [];
+      // v3.1.29: DEDUP por nome dentro do round. Na resolução PLAY-IN/REPESCAGEM, o
+      // round 0 tem o jogo normal (isPhaseRepR1) E o jogo de repescagem (isPhaseRepGame).
+      // Um derrotado da R1 que é repescado pra disputar a repescagem e PERDE de novo
+      // aparece como loser em DOIS jogos do mesmo round → era contado 2x e estourava o
+      // total (28 numa linha de 27). O `placed` só é setado DEPOIS do round, então não
+      // pega o duplo dentro do mesmo round. Mantém a ÚLTIMA aparição (a derrota que de
+      // fato o eliminou). Bug reportado pelo dono.
+      var _losersByName = {};
       matchesInRound.forEach(function(m) {
         if (!m.winner || m.winner === 'draw' || m.isBye) return;
         var stats = _getLoserStats(m);
         if (!stats.loser || stats.loser === 'TBD' || stats.loser === 'BYE') return;
         if (placed[stats.loser]) return;
         if (_advancedPast(stats.loser, roundNum)) return; // repescado: avançou além deste round → não é eliminado aqui
-        var history = _getPlayerHistory(stats.loser);
-        losers.push({ name: stats.loser, stats: stats, history: history });
+        _losersByName[stats.loser] = { name: stats.loser, stats: stats, history: _getPlayerHistory(stats.loser) };
       });
+      var losers = Object.keys(_losersByName).map(function(k) { return _losersByName[k]; });
 
       if (losers.length > 0) {
         positionGroups.push({ posStart: posStart, losers: losers });
@@ -2766,9 +2773,24 @@ function _setMonarchWaitlist(t, category, names) {
 }
 // Forma grupos de 4 a partir da lista de espera e anexa à COLUNA da rodada corrente.
 // Retorna quantos grupos formou. Chamado após o sorteio e após +participante.
+// v3.1.22: regra canônica de "Novos Confrontos" (Inscrições durante a fase):
+//   (1) só forma quando habilitado (não 'standby'/'closed' — Suplentes Apenas espera);
+//   (2) MESMO DIA → só PRESENTES (check-in, não-ausentes) contam; multi-dia → todos;
+//   (3) sorteia a ORDEM do pareamento dos 4 entrantes (os grupos já formados ficam
+//       inalterados). Não-presentes e a sobra permanecem na fila pra próxima vez.
 window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
-  var wl = window._getMonarchWaitlist(t, category);
-  if (wl.length < 4) return 0;
+  // (1) "Novos Confrontos" desligado (standby/closed) → não forma automaticamente.
+  if (typeof window._expandFormationAllowed === 'function' && !window._expandFormationAllowed(t)) return 0;
+  var fullWl = window._getMonarchWaitlist(t, category); // todos da fila (persistido)
+  if (fullWl.length < 4) return 0;
+  // (2) MESMO DIA → só presentes formam (sem helper = trata multi-dia, sem filtro).
+  var sameDay = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
+  var eligible = fullWl.slice();
+  if (sameDay) {
+    var _ci = t.checkedIn || {}, _ab = t.absent || {};
+    eligible = eligible.filter(function (n) { return window._idMapHas(t, _ci, n) && !window._idMapHas(t, _ab, n); });
+  }
+  if (eligible.length < 4) return 0;
   var rounds = t.rounds || [];
   var colIdx = -1;
   for (var ci = rounds.length - 1; ci >= 0; ci--) {
@@ -2782,21 +2804,72 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   if (colIdx === -1) return 0;
   var col = rounds[colIdx];
   var ts = Date.now();
-  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
-  var catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
+  // (3) sorteia a ordem do pareamento dos entrantes elegíveis.
+  eligible = _plainShuffle(eligible);
+  var used = [];
   var formed = 0;
-  while (wl.length >= 4) {
-    var grp = wl.splice(0, 4);
+  while (eligible.length >= 4) {
+    var grp = eligible.splice(0, 4);
     var gi = (col.monarchGroups || []).length;
     var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed });
     col.monarchGroups.push(g);
     col.matches = (col.matches || []).concat(g.matches);
+    grp.forEach(function (n) { used.push(n); });
     formed++;
   }
-  _setMonarchWaitlist(t, category, wl);
+  // remove os usados de TODAS as fontes da espera (monarch + standby + waitlist);
+  // não-presentes e a sobra permanecem na fila monarch desta categoria.
+  if (used.length) {
+    used.forEach(function (n) { if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(t, n); });
+    _setMonarchWaitlist(t, category, fullWl.filter(function (n) { return used.indexOf(n) === -1; }));
+  }
   if (formed > 0 && typeof _recordOpponentHistory === 'function') {
     try { _recordOpponentHistory(t, col.monarchGroups.slice(-formed), category); } catch (e) {}
   }
+  return formed;
+};
+
+// v3.1.22: dispara a formação de novos grupos Rei/Rainha a partir da LISTA DE ESPERA
+// completa — inclui a inscrição tardia (que cai em standbyParticipants/waitlist) além
+// da fila monarch. Faz a ponte standby → fila do Rei/Rainha e chama a formação canônica
+// (expand + presença mesmo-dia + sorteio, dentro de _tryFormMonarchWaitlistGroups).
+// Idempotente: sem 4 elegíveis → forma 0 (sem efeito). Retorna nº de grupos formados.
+window._expandMonarchFromWaitlist = function (t) {
+  if (!t) return 0;
+  if (!(window._isLigaFormat && window._isLigaFormat(t)) || t.ligaRoundFormat !== 'rei_rainha') return 0;
+  if ((t.currentPhaseIndex || 0) !== 0) return 0; // só na fase de grupos (fase 0)
+  if (typeof window._expandFormationAllowed === 'function' && !window._expandFormationAllowed(t)) return 0;
+  var rounds = t.rounds || [];
+  var target = null;
+  for (var i = rounds.length - 1; i >= 0; i--) {
+    var r = rounds[i];
+    if (r && Array.isArray(r.monarchGroups) && r.monarchGroups.length) { target = r; break; }
+  }
+  if (!target) return 0;
+  var roundNum = target.round;
+  // nomes já em algum grupo desta rodada (não re-enfileira)
+  var inGroup = {};
+  (target.monarchGroups || []).forEach(function (g) { (g.players || []).forEach(function (n) { inGroup[String(n).toLowerCase()] = 1; }); });
+  // ponte: indivíduos em standbyParticipants/waitlist → fila monarch da sua categoria.
+  var cats = {};
+  var bridge = function (e) {
+    var nm = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim();
+    if (!nm || nm.indexOf(' / ') !== -1) return;       // só indivíduos
+    if (inGroup[nm.toLowerCase()]) return;             // já joga nesta rodada
+    var cat = (e && (e.category || (Array.isArray(e.categories) && e.categories[0]))) || null;
+    var wl = window._getMonarchWaitlist(t, cat);
+    if (wl.indexOf(nm) === -1) { wl.push(nm); _setMonarchWaitlist(t, cat, wl); }
+    cats[cat || '_default_'] = cat || null;
+  };
+  (Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []).forEach(bridge);
+  (Array.isArray(t.waitlist) ? t.waitlist : []).forEach(bridge);
+  // a categoria da própria rodada também entra (fila monarch pode já ter gente)
+  var sample = (target.matches || [])[0];
+  cats[((sample && sample.category) || '_default_')] = (sample && sample.category) || null;
+  var formed = 0;
+  Object.keys(cats).forEach(function (k) {
+    try { formed += (window._tryFormMonarchWaitlistGroups(t, cats[k], roundNum) || 0); } catch (e) {}
+  });
   return formed;
 };
 // Chamado quando um +participante entra num torneio Rei/Rainha com rodada em
@@ -3213,7 +3286,7 @@ function _phaseGenNextLeagueRound(t, phaseIdx) {
     participants: st.pool.slice(),
     rounds: st.rounds, matches: [],
     combinedCategories: [], skillCategories: [],
-    scoring: cfg.scoring || t.scoring, tiebreakers: t.tiebreakers,
+    scoring: cfg.scoring, tiebreakers: t.tiebreakers, // v3.1.39: phase-only (cfg=fase; completa pós-migração)
     equilibrado: cfg.equilibrado, clusterSize: cfg.clusterSize,
     allowSelfDeactivation: false,
     opponentHistory: st.opponentHistory, sitOutHistory: st.sitOutHistory
