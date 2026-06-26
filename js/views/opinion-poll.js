@@ -601,24 +601,21 @@
           majText = sec.options[majIdx].text;
         }
       }
-      // Tem alguém que ficaria de fora? (votou na seção mas não na opção da maioria)
-      var hasExcluded = false;
-      if (majSet) {
-        var seen = {};
-        optVoters.forEach(function (vs) { vs.forEach(function (u) { if (!majSet[u]) seen[u] = 1; }); });
-        hasExcluded = Object.keys(seen).length > 0;
-      }
       body += '<div style="margin-bottom:18px;' + (si > 0 ? 'padding-top:14px;border-top:1px solid var(--border-color);' : '') + '">' +
-        // v3.1.54: sem "SEÇÃO N" — pergunta em LARANJA + negrito (mesma fonte do editor).
-        '<div style="font-weight:900;font-size:0.98rem;color:#f59e0b;margin-bottom:' + (hasExcluded ? '6px' : '10px') + ';">' + _esc(sec.question) + '</div>' +
-        (hasExcluded ? '<div style="font-size:0.74rem;color:#fca5a5;background:rgba(220,38,38,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 9px;margin-bottom:10px;line-height:1.4;">🔴 Nomes em vermelho <b>não votaram na maioria</b> (' + _esc(majText) + ') — ficariam de fora se ela vencer.</div>' : '');
+        // sem "SEÇÃO N" — pergunta em LARANJA + negrito (mesma fonte do editor).
+        '<div style="font-weight:900;font-size:0.98rem;color:#f59e0b;margin-bottom:10px;">' + _esc(sec.question) + '</div>';
       sec.options.forEach(function (o, oi) {
         var voters = optVoters[oi];
         var isMaj = (oi === majIdx);
-        body += '<div style="margin-bottom:11px;">' +
-          '<div style="font-size:0.86rem;font-weight:700;color:var(--text-bright);margin-bottom:5px;">' + _esc(o.text) + ' <span style="color:var(--text-muted);font-weight:600;">· ' + voters.length + '</span>' +
-            (isMaj ? ' <span style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.45);color:#34d399;border-radius:999px;padding:1px 8px;font-size:0.66rem;font-weight:800;">✅ maioria</span>' : '') +
-          '</div>' +
+        // v3.1.56: BOX VERDE em volta da opção MAIS votada da seção (só multiseleção) —
+        // sinal visual, SEM texto. Chips vermelhos = quem votou nesta opção mas NÃO na
+        // da maioria (ficaria de fora). Não-votantes (seção "ainda não votaram") NÃO
+        // entram aqui, então nunca ficam vermelhos.
+        var wrapStyle = isMaj
+          ? 'margin-bottom:11px;border:2px solid rgba(16,185,129,0.65);background:rgba(16,185,129,0.08);border-radius:10px;padding:8px 10px;'
+          : 'margin-bottom:11px;';
+        body += '<div style="' + wrapStyle + '">' +
+          '<div style="font-size:0.86rem;font-weight:700;color:var(--text-bright);margin-bottom:5px;">' + _esc(o.text) + ' <span style="color:var(--text-muted);font-weight:600;">· ' + voters.length + '</span></div>' +
           '<div>' + (voters.length ? voters.map(function (u) { return nameChip(u, !!(majSet && !majSet[u])); }).join('') : '<span style="font-size:0.78rem;color:var(--text-muted);">ninguém ainda</span>') + '</div>' +
         '</div>';
       });
@@ -632,7 +629,10 @@
     if (missing.length) {
       body += '<div style="padding-top:14px;border-top:1px solid var(--border-color);">' +
         '<div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:8px;">⏳ Ainda não votaram (' + missing.length + ')</div>' +
-        '<div>' + missing.map(nameChip).join('') + '</div>' +
+        // v3.1.56: NÃO passar nameChip direto pro .map — o 2º arg do map é o ÍNDICE, que
+        // a nameChip lia como "excluded" e pintava de vermelho a partir do 2º. Não-votantes
+        // são sempre normais.
+        '<div>' + missing.map(function (u) { return nameChip(u); }).join('') + '</div>' +
       '</div>';
     }
     var html =
