@@ -3371,7 +3371,23 @@ function renderTournaments(container, tournamentId = null) {
                 : '';
               var _wmL = members ? _wmNum(_s1, 'left') : '';
               var _wmR = (members && members[1]) ? _wmNum(_s2, 'right') : '';
-              return '<div class="participant-card" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
+              // v3.1.x: data-part-* canônicos pra a BARRA de filtro/busca operar TAMBÉM no
+              // modo duplas pré-sorteio (solos + duplas formadas). Solo: 1 pessoa → gênero/
+              // skill reais (e o profile-patch refina depois). Dupla: data-part-multi="1" →
+              // gênero/skill viram wildcard no filtro; a busca casa qualquer um dos nomes.
+              var _dpMulti = members ? '1' : '0';
+              var _dpNameAttr = (members ? members.join(' ') : nm).toLowerCase().replace(/"/g, '&quot;');
+              var _dpGender = members ? 'none' : ((typeof window._canonGender === 'function') ? window._canonGender(typeof p === 'object' && p ? p.gender : '') : 'none');
+              var _dpSkill = 'none';
+              if (!members) {
+                var _dpCats = t.skillCategories || [];
+                var _dpCatStr = (typeof p === 'object' && p) ? (p.category || '') : '';
+                for (var _dpi = 0; _dpi < _dpCats.length; _dpi++) { if (_dpCatStr === _dpCats[_dpi] || _dpCatStr.endsWith(' ' + _dpCats[_dpi])) { _dpSkill = _dpCats[_dpi]; break; } }
+              }
+              var _dpOrder = members
+                ? (parseInt(_s1 || '0', 10) || 0)
+                : (window._enrollNumber ? (parseInt(window._enrollNumber(_enrollOrderMapD, p), 10) || 0) : 0);
+              return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
                 ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
                 _enrollBadge + _wmL + _wmR +
                 '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' +
@@ -3445,12 +3461,20 @@ function renderTournaments(container, tournamentId = null) {
               };
               var _pendingCardsHtml = _reqs.length ? ('<div style="display:flex;flex-direction:column;gap:6px;' + (_soloAvailable.length ? 'margin-top:6px;' : '') + '">' + _reqs.map(_pendingCard).join('') + '</div>') : '';
               var _semDuplaTotal = _soloAvailable.length + _reqs.length;
+              // v3.1.47: BARRA de inscrito CANÔNICA (preset window._inscritosBar) também no
+              // modo duplas pré-sorteio — a regra é: onde há cards de participante, a barra
+              // está lá. Opera sobre os [data-part-card] de AMBAS as seções (Sem dupla +
+              // Duplas formadas) via window._partApplyFilter (que ordena por seção).
+              var _doublesFilterBar = (typeof window._inscritosBar === 'function')
+                ? window._inscritosBar(t, (_soloAvailable.length + _pairedParticipants.length) > 1)
+                : '';
               // Modo duplas pré-sorteio: Sem Dupla (solos arrastáveis + duplas pendentes âmbar) + Duplas formadas
               participantsHtml = `
                 <div class="mt-5 mb-4">
                   <h3 style="margin-bottom:1.2rem;font-size:1.1rem;color:var(--text-bright);border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     👥 Inscritos <span style="font-size:0.8rem;background:rgba(255,255,255,0.1);padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">${individualCountParts}</span>
                   </h3>
+                  ${_doublesFilterBar}
 
                   ${(_soloAvailable.length > 0 || _reqs.length > 0) ? `
                   <div style="margin-bottom:1.2rem;">
@@ -3474,18 +3498,12 @@ function renderTournaments(container, tournamentId = null) {
                 </div>`;
             } else {
               // Modo normal (individual ou duplas pós-sorteio)
-              // v3.0.x: barra de filtro/busca CANÔNICA (a mesma de #participants) —
-              // v3.0.91: sort A-Z/🕒 + gênero + habilidade + busca. STICKY no fluxo do
-              // conteúdo (logo acima dos cards) — rola junto até o cabeçalho e gruda
-              // nele. Lê os data-part-* dos cards via window._partApplyFilter
-              // (idêntico ao #participants). Aparece com >1 card (pedido do usuário).
-              _inscritosFilterBarHtml = (!drawDone && parts.length > 1 && typeof window._inscritosFilterBar === 'function')
-                ? window._inscritosFilterBar({
-                    stateKey: 'inscritos', sort: 'name-asc', sticky: true,
-                    searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
-                    onChange: 'window._partApplyFilter()',
-                    skillCategories: (t.skillCategories || [])
-                  })
+              // v3.1.47: barra de inscrito CANÔNICA (preset window._inscritosBar — o MESMO
+              // de #participants e do modo duplas). Sort A-Z/🕒 + gênero + habilidade +
+              // busca, STICKY no fluxo, lê os data-part-* via window._partApplyFilter.
+              // Aparece com >1 card e antes do sorteio.
+              _inscritosFilterBarHtml = (typeof window._inscritosBar === 'function')
+                ? window._inscritosBar(t, !drawDone && parts.length > 1)
                 : '';
               participantsHtml = `
                 <div class="mt-5 mb-4">
@@ -3496,7 +3514,6 @@ function renderTournaments(container, tournamentId = null) {
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
                    ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela brilha quando você começa a arrastar. No celular, <b>toque na estrela do organizador</b> e escolha quem promover. Funciona durante o torneio também.</div>' : ''}
                    ${_inscritosFilterBarHtml}
-                   ${_inscritosFilterBarHtml ? `<div id="part-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum inscrito encontrado.</div>` : ''}
                    <div data-merge-container="${t.id}" class="sp-dnd-host" style="${gridStyle}">
                       ${cardsStr}
                    </div>

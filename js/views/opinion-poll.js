@@ -162,12 +162,15 @@
     var q0 = (secs[0] && secs[0].question) || '';
     var qmore = secs.length > 1 ? (' +' + (secs.length - 1)) : '';
     var qline = q0 ? (_esc(q0.length > 34 ? q0.slice(0, 34) + '…' : q0) + qmore) : '';
-    return '<div style="display:flex;justify-content:center;margin:10px 0 6px;">' +
+    // v3.1.48: LARANJA pra chamar atenção + VOLUME real (inset canônico do .btn —
+    // sem isso o box-shadow inline só com glow externo deixava o botão chapado) +
+    // mais largo + fonte maior/mais pesada. Pedido do dono.
+    return '<div style="display:flex;justify-content:center;margin:12px 0 8px;">' +
       '<button class="btn btn-shine hover-lift" onclick="event.stopPropagation(); window._opOpenVote(\'' + _attr(t.id) + '\')" ' +
-      'style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;width:auto;max-width:92%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:14px;padding:16px 26px;box-shadow:0 6px 20px rgba(139,92,246,0.55);">' +
-        '<span style="font-size:1.55rem;line-height:1;">📊</span>' +
-        '<span style="font-weight:900;font-size:1rem;line-height:1.1;">' + (votedAll ? 'Ver enquete' : 'Responder enquete') + '</span>' +
-        (qline ? '<span style="font-weight:600;font-size:0.8rem;opacity:0.85;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + qline + '</span>' : '') +
+      'style="display:inline-flex;flex-direction:column;align-items:center;gap:4px;width:100%;max-width:380px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;border-radius:16px;padding:18px 28px;box-shadow:inset 0 2px 0 rgba(255,255,255,0.45),inset 0 6px 9px rgba(255,255,255,0.30),inset 0 -11px 14px rgba(0,0,0,0.26),inset 0 -2px 0 rgba(0,0,0,0.22),0 8px 24px rgba(234,88,12,0.55);">' +
+        '<span style="font-size:1.7rem;line-height:1;">📊</span>' +
+        '<span style="font-weight:900;font-size:1.3rem;line-height:1.1;letter-spacing:0.2px;">' + (votedAll ? 'Ver enquete' : 'Responder enquete') + '</span>' +
+        (qline ? '<span style="font-weight:700;font-size:0.88rem;opacity:0.9;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + qline + '</span>' : '') +
       '</button>' +
     '</div>';
   };

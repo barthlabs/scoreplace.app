@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.1.46-beta';
+window.SCOREPLACE_VERSION = '3.1.48-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -2977,6 +2977,24 @@ window._inscritosFilterBar = function (opts) {
         wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
     }
     return '<div id="fbwrap-' + key + '"' + wrapStyle + '>' + window._fbInner(key) + '</div>';
+};
+// v3.1.47 CANÔNICO: a barra de filtro/busca dos CARDS DE INSCRITO viaja JUNTO com os
+// cards. REGRA (dono): "onde há card de participante numa seção, essa barra deve estar
+// lá." Em vez de cada render site copiar o bloco de opções (drift → fácil esquecer um),
+// TODOS chamam este preset único. Inclui a barra + o slot de "nenhum encontrado". Quem
+// renderiza cards de inscrito (#participants, detalhe individual, detalhe duplas pré-
+// sorteio) usa: `${window._inscritosBar(t, parts.length > 1)}` logo acima dos cards.
+// Filtro/sort operam via window._partApplyFilter (lê os data-part-* — inclusive em
+// telas de DUAS seções, que ele ordena por seção). NÃO criar variação local da barra.
+window._inscritosBar = function (t, show) {
+    if (!show || typeof window._inscritosFilterBar !== 'function') return '';
+    var bar = window._inscritosFilterBar({
+        stateKey: 'inscritos', sort: 'name-asc', sticky: true,
+        searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
+        onChange: 'window._partApplyFilter()',
+        skillCategories: ((t && t.skillCategories) || [])
+    });
+    return bar + '<div id="part-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum inscrito encontrado.</div>';
 };
 // v3.0.97 CANÔNICO: evita que a tela "pule" e a barra sticky saia do lugar quando um
 // filtro/busca esvazia (ou encurta) a lista. Mantém um spacer invisível no FIM do

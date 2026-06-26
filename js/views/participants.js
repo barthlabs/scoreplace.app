@@ -788,37 +788,51 @@ window._partApplyFilter = function () {
     var nm = c.getAttribute('data-part-name') || '';
     var g = c.getAttribute('data-part-gender') || 'none';
     var s = c.getAttribute('data-part-skill') || 'none';
+    // v3.1.x: card de DUPLA (data-part-multi="1") = 2 pessoas. Gênero/habilidade não
+    // se aplicam a um PAR (cada membro tem o seu) — viram wildcard; só a BUSCA filtra
+    // (data-part-name casa qualquer um dos nomes). Pra solo, mantém o casamento exato,
+    // tolerando também valor multi (g/s separados por vírgula) por segurança.
+    var isMulti = c.getAttribute('data-part-multi') === '1';
     var okSearch = !q || nm.indexOf(q) !== -1;
-    var okGender = gf === 'all' || g === gf;
-    var okSkill = sk === 'all' || s === sk;
+    var okGender = isMulti || gf === 'all' || g === gf || g.split(',').indexOf(gf) !== -1;
+    var okSkill = isMulti || sk === 'all' || s === sk || s.split(',').indexOf(sk) !== -1;
     var ok = okSearch && okGender && okSkill;
     c.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
-  // Ordenar: reordena os nós no container (DOM, focus-safe).
-  var parent = cards[0].parentNode;
-  if (parent) {
-    cards.slice().sort(function (a, b) {
-      // v2.7.37: ORGANIZADORES sempre no topo (acima até dos VIPs), independente do
-      // sort/filtro. Depois VIPs. Depois o sort escolhido (v2.7.29).
-      var ga = a.getAttribute('data-part-org') === '1' ? 1 : 0;
-      var gb = b.getAttribute('data-part-org') === '1' ? 1 : 0;
-      if (ga !== gb) return gb - ga;
-      var va = a.getAttribute('data-part-vip') === '1' ? 1 : 0;
-      var vb = b.getAttribute('data-part-vip') === '1' ? 1 : 0;
-      if (va !== vb) return vb - va;
-      // v2.7.53: LISTA DE ESPERA NÃO é mais fixada no rodapé — ela entra na ordem
-      // normal (alfabética/cronológica) junto com os demais inscritos, só em âmbar.
-      // Assim, quando a pessoa chega, é achada pela ordem alfabética. (Continua
-      // também no painel "Lista de Espera".)
-      if (sort === 'name-asc' || sort === 'name-desc') {
-        var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
-        return sort === 'name-desc' ? -r : r;
-      }
-      var oa = parseInt(a.getAttribute('data-part-order') || '0', 10), ob = parseInt(b.getAttribute('data-part-order') || '0', 10);
-      return sort === 'order-desc' ? (ob - oa) : (oa - ob);
-    }).forEach(function (c) { parent.appendChild(c); });
-  }
+  // Ordenar: reordena os nós no container (DOM, focus-safe). v3.1.x: agrupa por
+  // parentNode e ordena DENTRO de cada container — telas com DUAS seções (ex.:
+  // duplas pré-sorteio: "Sem dupla" + "Duplas formadas") mantêm cada card na sua
+  // seção. Telas de seção única ficam idênticas (1 grupo só).
+  var _cmp = function (a, b) {
+    // v2.7.37: ORGANIZADORES sempre no topo (acima até dos VIPs), independente do
+    // sort/filtro. Depois VIPs. Depois o sort escolhido (v2.7.29).
+    var ga = a.getAttribute('data-part-org') === '1' ? 1 : 0;
+    var gb = b.getAttribute('data-part-org') === '1' ? 1 : 0;
+    if (ga !== gb) return gb - ga;
+    var va = a.getAttribute('data-part-vip') === '1' ? 1 : 0;
+    var vb = b.getAttribute('data-part-vip') === '1' ? 1 : 0;
+    if (va !== vb) return vb - va;
+    // v2.7.53: LISTA DE ESPERA NÃO é mais fixada no rodapé — ela entra na ordem
+    // normal (alfabética/cronológica) junto com os demais inscritos, só em âmbar.
+    if (sort === 'name-asc' || sort === 'name-desc') {
+      var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
+      return sort === 'name-desc' ? -r : r;
+    }
+    var oa = parseInt(a.getAttribute('data-part-order') || '0', 10), ob = parseInt(b.getAttribute('data-part-order') || '0', 10);
+    return sort === 'order-desc' ? (ob - oa) : (oa - ob);
+  };
+  var _groups = [];
+  cards.forEach(function (c) {
+    var pr = c.parentNode; if (!pr) return;
+    var grp = null;
+    for (var gi = 0; gi < _groups.length; gi++) { if (_groups[gi].parent === pr) { grp = _groups[gi]; break; } }
+    if (!grp) { grp = { parent: pr, items: [] }; _groups.push(grp); }
+    grp.items.push(c);
+  });
+  _groups.forEach(function (grp) {
+    grp.items.slice().sort(_cmp).forEach(function (c) { grp.parent.appendChild(c); });
+  });
   var empty = document.getElementById('part-search-empty');
   if (empty) empty.style.display = (shown === 0 && cards.length > 0) ? '' : 'none';
   // v3.0.97: não pula a tela / a barra sticky não sai do lugar quando o filtro esvazia.
@@ -2468,17 +2482,12 @@ function renderParticipants(container, tournamentId) {
   // (rola junto até o cabeçalho e gruda nele) — antes ia fixa no belowHtml do
   // back-header. Aparece com >1 card (pedido do usuário). A mensagem de "nenhum
   // encontrado" fica perto dos cards.
-  const _filterBarCtrls = (parts.length > 1 && typeof window._inscritosFilterBar === 'function')
-    ? window._inscritosFilterBar({
-        stateKey: 'inscritos',
-        // v3.0.x: lista de inscritos/presença vem em ordem ALFABÉTICA crescente por
-        // padrão (mais fácil de achar na chamada) — não mais ordem de inscrição.
-        sort: 'name-asc',
-        sticky: true,
-        searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
-        onChange: 'window._partApplyFilter()',
-        skillCategories: (t.skillCategories || [])
-      })
+  // v3.1.47: preset CANÔNICO window._inscritosBar (store.js) — o MESMO usado na tela
+  // de detalhe do torneio (modo individual e modo duplas). A barra viaja junto com os
+  // cards de inscrito; nunca recriar o bloco de opções localmente. Default A-Z (mais
+  // fácil de achar na chamada). Já inclui o slot "Nenhum inscrito encontrado".
+  const _filterBarCtrls = (typeof window._inscritosBar === 'function')
+    ? window._inscritosBar(t, parts.length > 1)
     : '';
 
   container.innerHTML = `
@@ -2503,7 +2512,6 @@ function renderParticipants(container, tournamentId) {
     ${startedBadge}
     ${readyBannerHtml}
     ${_filterBarCtrls}
-    ${_filterBarCtrls ? '<div id="part-search-empty" style="display:none;text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem;">Nenhum inscrito encontrado.</div>' : ''}
     ${parts.length > 0 ? `
       <div style="${gridStyle}">
         ${cardsStr}
