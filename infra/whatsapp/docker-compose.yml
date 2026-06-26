@@ -26,7 +26,7 @@ services:
     # Sem `ports:` — o Postgres só é acessível dentro da rede interna do compose.
 
   evolution:
-    image: atendai/evolution-api:v2.3.7
+    image: evoapicloud/evolution-api:v2.3.7
     container_name: scoreplace-evolution
     restart: unless-stopped
     depends_on:

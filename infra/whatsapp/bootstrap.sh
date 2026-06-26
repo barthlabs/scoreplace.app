@@ -20,14 +20,18 @@ apt-get install -y ca-certificates curl gnupg ufw openssl
 
 echo "==> 2/7 Docker"
 if ! command -v docker >/dev/null 2>&1; then
-  install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-  chmod a+r /etc/apt/keyrings/docker.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
-    > /etc/apt/sources.list.d/docker.list
-  apt-get update -y
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  # Script oficial lida com versões novas do Ubuntu melhor que repo fixo por codename.
+  curl -fsSL https://get.docker.com | sh || true
 fi
+# Fallback pro pacote do Ubuntu se o repo da Docker ainda não cobrir esta versão.
+if ! command -v docker >/dev/null 2>&1; then
+  apt-get install -y docker.io
+fi
+# Garante o plugin "docker compose v2".
+if ! docker compose version >/dev/null 2>&1; then
+  apt-get install -y docker-compose-v2 2>/dev/null || apt-get install -y docker-compose-plugin 2>/dev/null || true
+fi
+systemctl enable --now docker 2>/dev/null || true
 
 echo "==> 3/7 rclone"
 command -v rclone >/dev/null 2>&1 || curl -fsSL https://rclone.org/install.sh | bash
@@ -48,9 +52,11 @@ cp "$SRC/backup/scoreplace-pg-backup.service" /etc/systemd/system/
 cp "$SRC/backup/scoreplace-pg-backup.timer"   /etc/systemd/system/
 
 echo "==> 6/7 gerando .env (segredos aleatórios)"
-DOMAIN=""
 if [ ! -f "$APP_DIR/.env" ]; then
-  read -rp "Domínio público do Evolution [${DOMAIN_DEFAULT}]: " DOMAIN
+  # Honra DOMAIN vindo do ambiente (modo automatizado); senão pergunta.
+  if [ -z "${DOMAIN:-}" ]; then
+    read -rp "Domínio público do Evolution [${DOMAIN_DEFAULT}]: " DOMAIN || true
+  fi
   DOMAIN="${DOMAIN:-$DOMAIN_DEFAULT}"
   PGPASS="$(openssl rand -hex 24)"
   APIKEY="$(openssl rand -hex 32)"
