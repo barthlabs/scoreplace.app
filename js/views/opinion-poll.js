@@ -227,11 +227,12 @@
     var optsHtml = opts.map(function (o) { return _optionRow(o.text || '', o.id || ''); }).join('');
     // v3.1.53: data-sec-id preserva o id da seção no re-save (votos sobrevivem).
     return '<div class="op-section"' + (sec && sec.id ? ' data-sec-id="' + _esc(sec.id) + '"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:12px;margin-bottom:12px;">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-        '<span class="op-sec-title" style="font-size:0.72rem;font-weight:800;color:#a5b4fc;letter-spacing:0.4px;">SEÇÃO</span>' +
-        '<button type="button" onclick="window._opRemoveSection(this)" title="Remover seção" style="background:none;border:none;color:#ef4444;font-weight:900;font-size:0.95rem;cursor:pointer;padding:2px 4px;">✕</button>' +
+      // v3.1.54: sem rótulo "SEÇÃO" — só o ✕ pra remover (à direita). A PERGUNTA fica
+      // em LARANJA + negrito, a MESMA fonte da visualização (pedido do dono).
+      '<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:8px;">' +
+        '<button type="button" onclick="window._opRemoveSection(this)" title="Remover pergunta" style="background:none;border:none;color:#ef4444;font-weight:900;font-size:0.95rem;cursor:pointer;padding:2px 4px;">✕</button>' +
       '</div>' +
-      '<input type="text" class="op-sec-q" value="' + _esc((sec && sec.question) || '') + '" placeholder="Pergunta da seção" maxlength="140" style="width:100%;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:10px;padding:10px 12px;color:var(--text-bright,#f1f5f9);font-size:0.93rem;box-sizing:border-box;margin-bottom:10px;">' +
+      '<input type="text" class="op-sec-q" value="' + _esc((sec && sec.question) || '') + '" placeholder="Pergunta da seção" maxlength="140" style="width:100%;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:10px;padding:10px 12px;color:#f59e0b;font-weight:800;font-size:0.97rem;box-sizing:border-box;margin-bottom:10px;">' +
       '<div class="op-sec-opts">' + optsHtml + '</div>' +
       '<button type="button" onclick="window._opAddOption(this)" style="width:100%;background:rgba(99,102,241,0.12);border:1px dashed rgba(99,102,241,0.45);color:#a5b4fc;font-weight:700;border-radius:9px;padding:8px;font-size:0.83rem;cursor:pointer;">＋ opção</button>' +
       _sectionToggleHtml(!!(sec && sec.multiSelect)) +
@@ -395,12 +396,10 @@
       var total = _opSectionVoters(poll, sec.id);
       var myChoices = _opGetVote(poll, uid, sec.id);
 
-      var qHead = secs.length > 1
-        ? '<div style="font-size:0.7rem;font-weight:800;color:#a5b4fc;letter-spacing:0.4px;margin-bottom:2px;">SEÇÃO ' + (si + 1) + '</div>'
-        : '';
+      // v3.1.54: sem rótulo "SEÇÃO N" — a própria PERGUNTA em LARANJA + negrito separa
+      // as perguntas (pedido do dono). Mesma fonte usada no editor.
       body += '<div style="margin-bottom:18px;' + (si > 0 ? 'padding-top:16px;border-top:1px solid var(--border-color);' : '') + '">' +
-        qHead +
-        '<div style="font-weight:800;font-size:1.02rem;color:var(--text-bright);margin-bottom:3px;">' + _esc(sec.question) + '</div>' +
+        '<div style="font-weight:900;font-size:1.02rem;color:#f59e0b;margin-bottom:3px;">' + _esc(sec.question) + '</div>' +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:11px;">' + (sec.multiSelect ? 'Pode escolher mais de uma' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>';
 
       // v3.1.50: barra de resultado (helper reutilizado nos dois modos).
@@ -516,11 +515,10 @@
     else go();
   };
 
-  // v3.1.49: REPUBLICAR a enquete — re-dispara as notificações pros inscritos (lembrete).
-  // Permissão: criador da enquete OU organizador/co-org do torneio. Bloqueio anti-spam:
-  // só 1x a cada 24h desde a ÚLTIMA notificação (poll.notifiedAt) — abaixo disso, avisa
-  // quanto falta e não envia. force:true no _opNotifyEnrolled re-notifica e re-ancora o
-  // notifiedAt (que vira o relógio do cooldown).
+  // v3.1.54: REPUBLICAR — re-avisa SÓ quem AINDA NÃO votou (quem já respondeu NÃO é
+  // incomodado). Permissão: criador da enquete OU organizador/co-org. Cooldown anti-spam
+  // usa poll.republishedAt (NÃO o notifiedAt da criação) → o 1º republish SEMPRE vale; o
+  // aviso de "espere 24h" só aparece se a pessoa clicar de NOVO em < 24h.
   var _OP_REPUB_COOLDOWN_MS = 24 * 60 * 60 * 1000;
   window._opRepublish = function (tId, pollId) {
     var t = _findT(tId); if (!t) return;
@@ -529,29 +527,42 @@
     var isPollCreator = !!(cu && cu.uid && poll.createdByUid && poll.createdByUid === cu.uid);
     if (!isPollCreator && !_isOrg(t)) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o criador da enquete ou o organizador pode republicar.', 'warning'); return; }
     if (poll.closed) { if (typeof showNotification === 'function') showNotification('Enquete encerrada', 'Reabra ou crie uma nova pra notificar de novo.', 'warning'); return; }
-    var last = poll.notifiedAt ? Date.parse(poll.notifiedAt) : 0;
+    // Cooldown ancorado na ÚLTIMA REPUBLICAÇÃO (não na criação) → 1ª vez sempre passa.
+    var last = poll.republishedAt ? Date.parse(poll.republishedAt) : 0;
     var now = Date.now();
     if (last && (now - last) < _OP_REPUB_COOLDOWN_MS) {
       var rest = _OP_REPUB_COOLDOWN_MS - (now - last);
       var h = Math.floor(rest / 3600000);
       var m = Math.ceil((rest % 3600000) / 60000);
       var when = h > 0 ? (h + 'h' + (m > 0 ? (' ' + m + 'min') : '')) : (m + 'min');
-      if (typeof showNotification === 'function') showNotification('⏳ Ainda não dá pra republicar', 'A enquete foi notificada há menos de 24h. Você poderá reenviar em ' + when + '.', 'warning');
+      if (typeof showNotification === 'function') showNotification('⏳ Já republicada', 'Você já republicou nas últimas 24h. Poderá reenviar em ' + when + '.', 'warning');
       return;
     }
     var go = function () {
-      window._opNotifyEnrolled(t, poll, { force: true, excludeEmail: (cu && cu.email) || '' });
+      // Notifica SÓ quem ainda NÃO votou (e nunca o próprio que republicou).
+      var info = (typeof _opVoterInfoMap === 'function') ? _opVoterInfoMap(t) : {};
+      var myUid = (cu && cu.uid) || '';
+      var data = (typeof _opPollNotifData === 'function') ? _opPollNotifData(t, poll) : null;
+      var sent = 0;
+      if (data && typeof window._sendUserNotification === 'function') {
+        Object.keys(info).forEach(function (uid) {
+          if (!uid || uid === myUid) return;
+          if (_opHasVotedAny(poll, uid)) return;   // já votou → não incomoda
+          try { window._sendUserNotification(uid, data); sent++; } catch (e) {}
+        });
+      }
+      poll.republishedAt = new Date().toISOString();
+      try { _save(t); } catch (e) {}
       window._opCloseOverlay();
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
-      // v3.1.53: confirmação EXPLÍCITA de que a republicação disparou (pedido do dono) —
-      // modal não-perdível em vez de toast efêmero/ambíguo.
-      if (typeof window.showAlertDialog === 'function') {
-        window.showAlertDialog('✅ Enquete republicada', 'Pronto — os inscritos foram notificados de novo sobre a enquete. A próxima republicação só vai estar disponível daqui a 24h.');
-      } else if (typeof showNotification === 'function') {
-        showNotification('✅ Enquete republicada', 'Os inscritos foram notificados de novo.', 'success');
-      }
+      // Confirmação explícita de que disparou (pedido do dono).
+      var msg = sent > 0
+        ? ('Avisamos de novo ' + sent + ' inscrito(s) que ainda não responderam. Quem já votou não foi incomodado.')
+        : 'Todos os inscritos já responderam — não havia ninguém pra avisar.';
+      if (typeof window.showAlertDialog === 'function') window.showAlertDialog('✅ Enquete republicada', msg);
+      else if (typeof showNotification === 'function') showNotification('✅ Enquete republicada', msg, 'success');
     };
-    if (typeof window.showConfirmDialog === 'function') window.showConfirmDialog('Republicar enquete?', 'Vamos notificar de novo os inscritos sobre a enquete. Isso só pode ser feito 1x a cada 24h.', go, null, { confirmText: 'Republicar', cancelText: 'Cancelar' });
+    if (typeof window.showConfirmDialog === 'function') window.showConfirmDialog('Republicar enquete?', 'Vamos avisar de novo SÓ quem ainda não respondeu. Quem já votou não será incomodado.', go, null, { confirmText: 'Republicar', cancelText: 'Cancelar' });
     else go();
   };
 
@@ -598,8 +609,8 @@
         hasExcluded = Object.keys(seen).length > 0;
       }
       body += '<div style="margin-bottom:18px;' + (si > 0 ? 'padding-top:14px;border-top:1px solid var(--border-color);' : '') + '">' +
-        (secs.length > 1 ? '<div style="font-size:0.7rem;font-weight:800;color:#a5b4fc;letter-spacing:0.4px;margin-bottom:2px;">SEÇÃO ' + (si + 1) + '</div>' : '') +
-        '<div style="font-weight:800;font-size:0.98rem;color:var(--text-bright);margin-bottom:' + (hasExcluded ? '6px' : '10px') + ';">' + _esc(sec.question) + '</div>' +
+        // v3.1.54: sem "SEÇÃO N" — pergunta em LARANJA + negrito (mesma fonte do editor).
+        '<div style="font-weight:900;font-size:0.98rem;color:#f59e0b;margin-bottom:' + (hasExcluded ? '6px' : '10px') + ';">' + _esc(sec.question) + '</div>' +
         (hasExcluded ? '<div style="font-size:0.74rem;color:#fca5a5;background:rgba(220,38,38,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 9px;margin-bottom:10px;line-height:1.4;">🔴 Nomes em vermelho <b>não votaram na maioria</b> (' + _esc(majText) + ') — ficariam de fora se ela vencer.</div>' : '');
       sec.options.forEach(function (o, oi) {
         var voters = optVoters[oi];
