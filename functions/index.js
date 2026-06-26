@@ -2322,9 +2322,6 @@ exports.listCommunications = onCall(
 const EVOLUTION_API_URL = defineSecret("EVOLUTION_API_URL");
 const EVOLUTION_API_KEY = defineSecret("EVOLUTION_API_KEY");
 const EVOLUTION_INSTANCE = defineSecret("EVOLUTION_INSTANCE");
-// v2.4.65: token da API do Railway pra reiniciar o container da Evolution quando
-// a conexão Baileys trava (auto-heal). Criar em railway.app (Account/Project token).
-const RAILWAY_API_TOKEN = defineSecret("RAILWAY_API_TOKEN");
 // v2.6.x: API key de SERVIDOR (restrita à Identity Toolkit API, SEM restrição de
 // referer/IP) usada pra verificar senha server-side via accounts:signInWithPassword.
 // A web key tem restrição de referer e dá 403 quando chamada do servidor. Criar:
@@ -3534,14 +3531,12 @@ exports.cleanupOldWhatsAppQueue = onSchedule(
 // Railway (restart/logout/delete via Evolution API não revivem). Aqui:
 //   • whatsappHealthGuard (a cada 10 min): sonda o socket VIVO via
 //     /chat/whatsappNumbers (não envia msg). Se travado e fora da janela de
-//     cooldown → redeploy do container via API do Railway. Marca aviso pendente.
+//     cooldown → restart da instância via Evolution (/instance/restart). Marca aviso pendente.
 //     Quando volta a ficar saudável após um restart → manda o aviso (WhatsApp+email).
-//   • whatsappNightlyRestart (04:30 BRT): redeploy preventivo diário.
-// IDs do Railway são estáveis (projeto scoreplace-whatsapp / serviço evolution-api).
+//   • whatsappNightlyRestart (04:30 BRT): restart preventivo diário da instância.
+// v3.1.45: migrado do Railway pro VPS (Hetzner) — auto-heal via restart nativo do
+// Evolution, sem IDs nem token do Railway.
 
-const RAILWAY_PROJECT_ID = "f9c9cc88-9b26-443a-ab01-58fc397c7e91";
-const RAILWAY_ENVIRONMENT_ID = "8cc8728f-6f6e-459a-a545-f434e73cebb6";
-const RAILWAY_SERVICE_ID = "823562f0-02c6-4447-97f1-0977223b7a97";
 const GUARD_DOC = "system/whatsappGuard";
 const RESTART_COOLDOWN_MS = 20 * 60 * 1000; // não reinicia 2x em < 20 min
 
@@ -3564,18 +3559,19 @@ async function _probeWhatsAppHealth(apiUrl, apiKey, instance) {
   }
 }
 
-// Reinicia o container do serviço no Railway (mesmo efeito de `railway redeploy`).
-async function _railwayRedeploy(token) {
-  const query = "mutation($e:String!,$s:String!){serviceInstanceRedeploy(environmentId:$e,serviceId:$s)}";
+// v3.1.45: migrado do Railway pro VPS (Hetzner). Auto-heal agora usa o restart
+// NATIVO do Evolution (POST /instance/restart/{instance}) — reinicia só a conexão
+// Baileys da instância, sem reboot de VM nem token externo. A sessão vive no
+// Postgres do VPS, então reconecta sem re-parear QR. Ver memória project_whatsapp_vps_migration.
+async function _evolutionRestart(apiUrl, apiKey, instance) {
   try {
-    const resp = await fetch("https://backboard.railway.com/graphql/v2", {
+    const resp = await fetch(String(apiUrl).replace(/\/+$/, "") + "/instance/restart/" + encodeURIComponent(instance), {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
-      body: JSON.stringify({ query, variables: { e: RAILWAY_ENVIRONMENT_ID, s: RAILWAY_SERVICE_ID } }),
+      headers: { "apikey": apiKey, "Content-Type": "application/json" },
     });
     const data = await resp.json().catch(() => null);
-    if (!resp.ok || (data && data.errors)) {
-      return { ok: false, error: "Railway HTTP " + resp.status + ": " + JSON.stringify(data && data.errors || resp.statusText) };
+    if (!resp.ok) {
+      return { ok: false, error: "Evolution HTTP " + resp.status + ": " + JSON.stringify((data && (data.message || data.error)) || resp.statusText) };
     }
     return { ok: true };
   } catch (e) {
@@ -3608,7 +3604,7 @@ exports.whatsappHealthGuard = onSchedule(
     schedule: "every 10 minutes",
     timeZone: "America/Sao_Paulo",
     region: "us-central1",
-    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE, RAILWAY_API_TOKEN],
+    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
   },
   async () => {
     const db = admin.firestore();
@@ -3616,7 +3612,6 @@ exports.whatsappHealthGuard = onSchedule(
     const apiUrl = EVOLUTION_API_URL.value();
     const apiKey = EVOLUTION_API_KEY.value();
     const instance = EVOLUTION_INSTANCE.value();
-    const railwayToken = RAILWAY_API_TOKEN.value();
     if (!apiUrl || !apiKey || !instance) { console.error("[whatsappHealthGuard] secrets Evolution ausentes"); return; }
 
     const probe = await _probeWhatsAppHealth(apiUrl, apiKey, instance);
@@ -3644,13 +3639,8 @@ exports.whatsappHealthGuard = onSchedule(
       console.warn("[whatsappHealthGuard] travado (" + probe.detail + ") mas em cooldown (" + Math.round(sinceLast / 60000) + " min) — aguardando subir");
       return;
     }
-    if (!railwayToken) {
-      console.error("[whatsappHealthGuard] travado (" + probe.detail + ") mas RAILWAY_API_TOKEN ausente — não dá pra reiniciar");
-      return;
-    }
-
-    console.warn("[whatsappHealthGuard] travado (" + probe.detail + ") → reiniciando container Railway");
-    const r = await _railwayRedeploy(railwayToken);
+    console.warn("[whatsappHealthGuard] travado (" + probe.detail + ") → reiniciando a conexão do Evolution");
+    const r = await _evolutionRestart(apiUrl, apiKey, instance);
     await guardRef.set({
       lastRestartAt: new Date().toISOString(),
       lastRestartAtMs: nowMs,
@@ -3664,10 +3654,10 @@ exports.whatsappHealthGuard = onSchedule(
     if (!r.ok) {
       // Restart falhou (token inválido?). Avisa o dev por e-mail (WhatsApp está fora).
       await _notifyDevRecovery(db, "Falha ao reiniciar WhatsApp automaticamente",
-        "Detectei o WhatsApp travado mas o restart automático no Railway falhou: " + r.error + ". Precisa reiniciar manualmente.");
-      console.error("[whatsappHealthGuard] redeploy falhou:", r.error);
+        "Detectei o WhatsApp travado mas o restart automático (Evolution/VPS) falhou: " + r.error + ". Precisa reiniciar manualmente.");
+      console.error("[whatsappHealthGuard] restart falhou:", r.error);
     } else {
-      console.log("[whatsappHealthGuard] redeploy disparado com sucesso");
+      console.log("[whatsappHealthGuard] restart do Evolution disparado com sucesso");
     }
   }
 );
@@ -3677,13 +3667,15 @@ exports.whatsappNightlyRestart = onSchedule(
     schedule: "every day 04:30",
     timeZone: "America/Sao_Paulo",
     region: "us-central1",
-    secrets: [RAILWAY_API_TOKEN],
+    secrets: [EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE],
   },
   async () => {
     const db = admin.firestore();
-    const railwayToken = RAILWAY_API_TOKEN.value();
-    if (!railwayToken) { console.error("[whatsappNightlyRestart] RAILWAY_API_TOKEN ausente"); return; }
-    const r = await _railwayRedeploy(railwayToken);
+    const apiUrl = EVOLUTION_API_URL.value();
+    const apiKey = EVOLUTION_API_KEY.value();
+    const instance = EVOLUTION_INSTANCE.value();
+    if (!apiUrl || !apiKey || !instance) { console.error("[whatsappNightlyRestart] secrets Evolution ausentes"); return; }
+    const r = await _evolutionRestart(apiUrl, apiKey, instance);
     await db.doc(GUARD_DOC).set({
       lastRestartAt: new Date().toISOString(),
       lastRestartAtMs: Date.now(),
@@ -3691,7 +3683,7 @@ exports.whatsappNightlyRestart = onSchedule(
       lastRestartOk: r.ok,
       restartCount: admin.firestore.FieldValue.increment(1),
     }, { merge: true });
-    console.log("[whatsappNightlyRestart] redeploy preventivo:", r.ok ? "ok" : ("falhou: " + r.error));
+    console.log("[whatsappNightlyRestart] restart preventivo:", r.ok ? "ok" : ("falhou: " + r.error));
   }
 );
 
