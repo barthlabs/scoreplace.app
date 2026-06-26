@@ -196,9 +196,12 @@
     window._opOpenEditor(tId);
   };
 
-  function _optionRow(text) {
+  function _optionRow(text, optId) {
     return '<div class="op-opt-row" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
-      '<input type="text" class="op-opt-input" value="' + _esc(text || '') + '" placeholder="Texto da opção" maxlength="80" ' +
+      // v3.1.53: carrega o id EXISTENTE da opção (data-opt-id) pra que o save PRESERVE
+      // o id ao re-salvar — sem isso, editar a enquete regenerava todos os ids e os
+      // votos viravam órfãos (apareciam zerados). Opção nova fica sem o attr → gera id.
+      '<input type="text" class="op-opt-input"' + (optId ? ' data-opt-id="' + _esc(optId) + '"' : '') + ' value="' + _esc(text || '') + '" placeholder="Texto da opção" maxlength="80" ' +
       'style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:9px 11px;color:var(--text-bright,#f1f5f9);font-size:0.9rem;box-sizing:border-box;">' +
       '<button type="button" onclick="this.closest(\'.op-opt-row\').remove()" title="Remover opção" style="background:none;border:none;color:#ef4444;font-weight:900;font-size:0.9rem;cursor:pointer;flex-shrink:0;padding:4px;">✕</button>' +
     '</div>';
@@ -221,8 +224,9 @@
   // Bloco de uma seção (pergunta + opções + toggle multi). sec opcional (edição).
   function _sectionBlock(sec) {
     var opts = (sec && Array.isArray(sec.options) && sec.options.length) ? sec.options : [{ text: '' }, { text: '' }];
-    var optsHtml = opts.map(function (o) { return _optionRow(o.text || ''); }).join('');
-    return '<div class="op-section" style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:12px;margin-bottom:12px;">' +
+    var optsHtml = opts.map(function (o) { return _optionRow(o.text || '', o.id || ''); }).join('');
+    // v3.1.53: data-sec-id preserva o id da seção no re-save (votos sobrevivem).
+    return '<div class="op-section"' + (sec && sec.id ? ' data-sec-id="' + _esc(sec.id) + '"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:12px;margin-bottom:12px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
         '<span class="op-sec-title" style="font-size:0.72rem;font-weight:800;color:#a5b4fc;letter-spacing:0.4px;">SEÇÃO</span>' +
         '<button type="button" onclick="window._opRemoveSection(this)" title="Remover seção" style="background:none;border:none;color:#ef4444;font-weight:900;font-size:0.95rem;cursor:pointer;padding:2px 4px;">✕</button>' +
@@ -311,7 +315,10 @@
       var question = qEl ? qEl.value.trim() : '';
       var opts = [];
       b.querySelectorAll('.op-sec-opts .op-opt-input').forEach(function (inp) {
-        var v = (inp.value || '').trim(); if (v) opts.push({ id: 'o' + (i + 1) + '_' + opts.length + '_' + _rand(), text: v });
+        var v = (inp.value || '').trim();
+        // v3.1.53: PRESERVA o id existente da opção (data-opt-id) — só gera id novo
+        // pra opção nova. Sem isso, re-salvar regenerava ids e os votos viravam órfãos.
+        if (v) opts.push({ id: inp.getAttribute('data-opt-id') || ('o' + (i + 1) + '_' + opts.length + '_' + _rand()), text: v });
       });
       var multi = !!(b.querySelector('.op-sec-multi') && b.querySelector('.op-sec-multi').checked);
       // v3.1.50: NÃO pula seção incompleta em silêncio — AVISA claramente o requisito
@@ -322,7 +329,8 @@
         if (!bad) bad = 'Seção ' + (i + 1) + ': cada seção precisa de 1 pergunta e pelo menos 2 opções.';
         return;
       }
-      sections.push({ id: 's' + (i + 1) + '_' + _rand(), question: question, options: opts, multiSelect: multi });
+      // v3.1.53: PRESERVA o id existente da seção (data-sec-id) — votos seguem válidos.
+      sections.push({ id: b.getAttribute('data-sec-id') || ('s' + (i + 1) + '_' + _rand()), question: question, options: opts, multiSelect: multi });
     });
     if (bad) { if (typeof showNotification === 'function') showNotification('Revise a enquete', bad, 'warning'); return; }
     if (!sections.length) { if (typeof showNotification === 'function') showNotification('Sem seções', 'Adicione pelo menos uma seção.', 'warning'); return; }
@@ -533,9 +541,15 @@
     }
     var go = function () {
       window._opNotifyEnrolled(t, poll, { force: true, excludeEmail: (cu && cu.email) || '' });
-      if (typeof showNotification === 'function') showNotification('📣 Enquete republicada', 'Notificando os inscritos de novo…', 'success');
       window._opCloseOverlay();
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      // v3.1.53: confirmação EXPLÍCITA de que a republicação disparou (pedido do dono) —
+      // modal não-perdível em vez de toast efêmero/ambíguo.
+      if (typeof window.showAlertDialog === 'function') {
+        window.showAlertDialog('✅ Enquete republicada', 'Pronto — os inscritos foram notificados de novo sobre a enquete. A próxima republicação só vai estar disponível daqui a 24h.');
+      } else if (typeof showNotification === 'function') {
+        showNotification('✅ Enquete republicada', 'Os inscritos foram notificados de novo.', 'success');
+      }
     };
     if (typeof window.showConfirmDialog === 'function') window.showConfirmDialog('Republicar enquete?', 'Vamos notificar de novo os inscritos sobre a enquete. Isso só pode ser feito 1x a cada 24h.', go, null, { confirmText: 'Republicar', cancelText: 'Cancelar' });
     else go();
@@ -546,21 +560,55 @@
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
     var poll = _findPoll(t, pollId); if (!poll) return;
     var secs = window._opSections(poll);
-    var nameChip = function (uid) {
+    // v3.1.52: chip normal (índigo) OU "ficaria de fora" (vermelho+branco). O 2º só
+    // em seção MULTISELEÇÃO: marca quem NÃO votou na opção da maioria — visualmente
+    // mostra quem ficaria de fora se a maioria vencer (ajuda a decidir). Em seção
+    // excludente não pinta (a maioria vence e pronto, como pediu o dono).
+    var nameChip = function (uid, excluded) {
       var nm = window._opVoterName(t, uid);
+      if (excluded) {
+        return '<span title="Não votou na opção da maioria — ficaria de fora" style="display:inline-block;background:#dc2626;border:1px solid #ef4444;color:#fff;border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:700;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
+      }
       return '<span style="display:inline-block;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:var(--text-bright);border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:600;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
     };
     var body = '';
     secs.forEach(function (sec, si) {
+      // Pré-computa os votantes de cada opção desta seção.
+      var optVoters = sec.options.map(function (o) {
+        var vs = [];
+        if (poll.votes) Object.keys(poll.votes).forEach(function (u) { if (_opGetVote(poll, u, sec.id).indexOf(o.id) !== -1) vs.push(u); });
+        return vs;
+      });
+      // Opção da MAIORIA (só em multiseleção). majSet = quem topou a opção mais votada.
+      var majIdx = -1, majSet = null, majText = '';
+      if (sec.multiSelect) {
+        var maxN = 0;
+        optVoters.forEach(function (vs, oi) { if (vs.length > maxN) { maxN = vs.length; majIdx = oi; } });
+        if (majIdx >= 0 && maxN > 0) {
+          majSet = {};
+          optVoters[majIdx].forEach(function (u) { majSet[u] = 1; });
+          majText = sec.options[majIdx].text;
+        }
+      }
+      // Tem alguém que ficaria de fora? (votou na seção mas não na opção da maioria)
+      var hasExcluded = false;
+      if (majSet) {
+        var seen = {};
+        optVoters.forEach(function (vs) { vs.forEach(function (u) { if (!majSet[u]) seen[u] = 1; }); });
+        hasExcluded = Object.keys(seen).length > 0;
+      }
       body += '<div style="margin-bottom:18px;' + (si > 0 ? 'padding-top:14px;border-top:1px solid var(--border-color);' : '') + '">' +
         (secs.length > 1 ? '<div style="font-size:0.7rem;font-weight:800;color:#a5b4fc;letter-spacing:0.4px;margin-bottom:2px;">SEÇÃO ' + (si + 1) + '</div>' : '') +
-        '<div style="font-weight:800;font-size:0.98rem;color:var(--text-bright);margin-bottom:10px;">' + _esc(sec.question) + '</div>';
-      sec.options.forEach(function (o) {
-        var voters = [];
-        if (poll.votes) Object.keys(poll.votes).forEach(function (u) { if (_opGetVote(poll, u, sec.id).indexOf(o.id) !== -1) voters.push(u); });
+        '<div style="font-weight:800;font-size:0.98rem;color:var(--text-bright);margin-bottom:' + (hasExcluded ? '6px' : '10px') + ';">' + _esc(sec.question) + '</div>' +
+        (hasExcluded ? '<div style="font-size:0.74rem;color:#fca5a5;background:rgba(220,38,38,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 9px;margin-bottom:10px;line-height:1.4;">🔴 Nomes em vermelho <b>não votaram na maioria</b> (' + _esc(majText) + ') — ficariam de fora se ela vencer.</div>' : '');
+      sec.options.forEach(function (o, oi) {
+        var voters = optVoters[oi];
+        var isMaj = (oi === majIdx);
         body += '<div style="margin-bottom:11px;">' +
-          '<div style="font-size:0.86rem;font-weight:700;color:var(--text-bright);margin-bottom:5px;">' + _esc(o.text) + ' <span style="color:var(--text-muted);font-weight:600;">· ' + voters.length + '</span></div>' +
-          '<div>' + (voters.length ? voters.map(nameChip).join('') : '<span style="font-size:0.78rem;color:var(--text-muted);">ninguém ainda</span>') + '</div>' +
+          '<div style="font-size:0.86rem;font-weight:700;color:var(--text-bright);margin-bottom:5px;">' + _esc(o.text) + ' <span style="color:var(--text-muted);font-weight:600;">· ' + voters.length + '</span>' +
+            (isMaj ? ' <span style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.45);color:#34d399;border-radius:999px;padding:1px 8px;font-size:0.66rem;font-weight:800;">✅ maioria</span>' : '') +
+          '</div>' +
+          '<div>' + (voters.length ? voters.map(function (u) { return nameChip(u, !!(majSet && !majSet[u])); }).join('') : '<span style="font-size:0.78rem;color:var(--text-muted);">ninguém ainda</span>') + '</div>' +
         '</div>';
       });
       body += '</div>';

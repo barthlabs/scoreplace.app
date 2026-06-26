@@ -9,7 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.51-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.53-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🗳️ Votos preservados ao editar a enquete:</b> agora dá pra <b>adicionar/ajustar</b> seções e opções sem zerar os votos já dados — quem já respondeu continua contando.</li>' +
+        '<li><b>🔴 Quem ficaria de fora em destaque:</b> nos votos nominais de uma enquete de <b>múltipla escolha</b>, a opção mais votada ganha o selo <b>✅ maioria</b> e quem não votou nela aparece em <b>vermelho</b> — mostra na hora quem ficaria de fora se a maioria vencer.</li>' +
+        '<li><b>📣 Republicar com confirmação:</b> ao republicar a enquete, aparece uma confirmação clara de que os inscritos foram notificados de novo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.51-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📊 Enquetes melhores:</b> botões <b>Cancelar/Salvar</b> ficam travados no topo ao rolar; se a opção "ocultar resultados até votar" estiver <b>desligada</b>, agora você vê as parciais <b>enquanto vota</b>; e ao montar a enquete, se faltar pergunta ou opção o app avisa claramente (cada seção precisa de 1 pergunta e pelo menos 2 opções).</li>' +
         '<li><b>📣 Republicar enquete:</b> o organizador pode <b>notificar de novo</b> os inscritos sobre a enquete (lembrete), no máximo 1x a cada 24h.</li>' +
