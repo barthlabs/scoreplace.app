@@ -1479,6 +1479,41 @@
     return true;
   }
 
+  // v3.1.51: coração de preferido na ficha do local (como no torneio). Cheio (❤️)
+  // quando o local JÁ é um dos preferidos do perfil; vazio (🤍) quando não. Clicar
+  // adiciona/remove em cu.preferredLocations e persiste no Firestore. Reusa o
+  // matching canônico (_findPreferredByPid) e a gravação (_autoAddPreferredSilent),
+  // então um local nunca duplica nem fica órfão.
+  function _updateFavHeartUI() {
+    var btn = document.getElementById('venue-fav-heart');
+    if (!btn) return;
+    var v = state.detailVenue;
+    var isFav = !!(v && _findPreferredByPid(v));
+    btn.innerHTML = isFav ? '❤️' : '🤍';
+    btn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+    btn.setAttribute('title', isFav ? 'Remover dos locais preferidos' : 'Salvar como local preferido');
+  }
+  window._venuesToggleFavorite = function() {
+    var v = state.detailVenue;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!v) return;
+    if (!cu || !cu.uid) { if (typeof showNotification === 'function') showNotification('Entre pra favoritar', 'Faça login pra salvar locais preferidos.', 'warning'); return; }
+    var existing = _findPreferredByPid(v);
+    if (existing) {
+      var arr = (Array.isArray(cu.preferredLocations) ? cu.preferredLocations : []).filter(function(pl){ return pl !== existing; });
+      cu.preferredLocations = arr;
+      if (Array.isArray(window._profileLocations)) window._profileLocations = arr.slice();
+      try { if (window.FirestoreDB && window.FirestoreDB.db) window.FirestoreDB.db.collection('users').doc(cu.uid).set({ preferredLocations: arr }, { merge: true }).catch(function(){}); } catch (e) {}
+      if (typeof showNotification === 'function') showNotification('Removido dos preferidos', v.name || '', 'info');
+    } else {
+      if (Array.isArray(cu.preferredLocations) && cu.preferredLocations.length >= 5) { if (typeof showNotification === 'function') showNotification('Limite de preferidos', 'Você já tem 5 locais preferidos. Remova um pra adicionar este.', 'warning'); return; }
+      if (v.lat == null || v.lon == null) { if (typeof showNotification === 'function') showNotification('Sem localização', 'Este local não tem coordenadas pra salvar nos preferidos.', 'warning'); return; }
+      if (!_autoAddPreferredSilent(v)) { if (typeof showNotification === 'function') showNotification('Não foi possível', 'Tente novamente.', 'warning'); return; }
+      if (typeof showNotification === 'function') showNotification('⭐ Salvo nos preferidos', v.name || '', 'success');
+    }
+    _updateFavHeartUI();
+  };
+
   // Escape hatch: usuário pode clicar "Ver outros preferidos" pra sair do
   // modo focado sem cancelar a presença.
   window._venuesClearFocusedPreferred = function() {
@@ -2782,6 +2817,8 @@
     // (var(--bg-dark)) pra não bleedar o #venues por trás. O padrão
     // voltar+título+hamburger fica dentro do próprio card via
     // window._renderBackHeader — consistente com todas as outras views.
+    // v3.1.51: guarda o venue da ficha aberta pro toggle do coração (_venuesToggleFavorite).
+    state.detailVenue = v;
     var overlay = document.createElement('div');
     overlay.id = 'venues-detail-overlay';
     overlay.style.cssText = 'position:fixed;top:60px;left:0;right:0;bottom:0;background:var(--bg-dark);z-index:10010;display:flex;align-items:flex-start;justify-content:center;padding:0;overflow-y:auto;';
@@ -2848,16 +2885,33 @@
           onClickOverride: backCb
         })
       : '';
-    // Nome + endereço em linha cheia logo abaixo do header
+    // v3.1.51: coração de PREFERIDO alinhado com o nome (igual ao torneio). Cheio se
+    // o local já é preferido do usuário; clicar adiciona/remove no perfil. Só logado.
+    var _isFav = !!(cu && cu.uid && _findPreferredByPid(v));
+    var favBtn = (cu && cu.uid)
+      ? '<button id="venue-fav-heart" type="button" onclick="event.stopPropagation();window._venuesToggleFavorite()" aria-pressed="' + (_isFav ? 'true' : 'false') + '" title="' + (_isFav ? 'Remover dos locais preferidos' : 'Salvar como local preferido') + '" style="background:none;border:none;cursor:pointer;font-size:1.6rem;line-height:1;flex-shrink:0;padding:0 2px;align-self:center;">' + (_isFav ? '❤️' : '🤍') + '</button>'
+      : '';
+    // Nome + endereço em linha cheia logo abaixo do header (+ coração à direita)
     var nameRowHtml =
       '<div style="background:var(--bg-card);padding:14px 18px 12px;border-bottom:1px solid var(--border-color);">' +
-        '<div style="font-weight:800;color:var(--text-bright);font-size:1.05rem;line-height:1.3;word-break:break-word;">🏢 ' + _safe(v.name) + '</div>' +
-        (v.address ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;line-height:1.4;word-break:break-word;">📍 ' + _safe(v.address) + '</div>' : '') +
+        '<div style="display:flex;align-items:flex-start;gap:10px;">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-weight:800;color:var(--text-bright);font-size:1.05rem;line-height:1.3;word-break:break-word;">🏢 ' + _safe(v.name) + '</div>' +
+            (v.address ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;line-height:1.4;word-break:break-word;">📍 ' + _safe(v.address) + '</div>' : '') +
+          '</div>' +
+          favBtn +
+        '</div>' +
       '</div>';
     overlay.innerHTML =
       '<div id="venue-detail-card" style="background:var(--bg-card);width:100%;max-width:640px;min-height:100%;box-shadow:0 0 0 1px var(--border-color);">' +
-        stdHeader +
-        nameRowHtml +
+        // v3.1.51: header + nome/coração TRAVADOS no topo (sticky) — Voltar/Editar/
+        // Reivindicar sempre visíveis e clicáveis ao rolar. O overlay é o scroller;
+        // wrapper sticky em vez de mexer no .sticky-back-header (que é forçado static
+        // dentro deste overlay pela CSS).
+        '<div style="position:sticky;top:0;z-index:6;background:var(--bg-card);">' +
+          stdHeader +
+          nameRowHtml +
+        '</div>' +
         '<div id="venue-detail-body" style="padding:16px 18px;">' +
           (ownershipTag ? '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;">' + ownershipTag + '</div>' : '') +
           (sportsHtml ? '<div style="margin-bottom:10px;">' + sportsHtml + '</div>' : '') +

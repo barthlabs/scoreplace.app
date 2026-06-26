@@ -243,6 +243,11 @@
     _renumberSections();
   };
   window._opAddSection = function () {
+    // v3.1.49: guarda anti duplo-disparo — no mobile um toque às vezes vira 2 cliques
+    // (ghost click), criando uma seção fantasma vazia. Ignora chamadas em < 500ms.
+    var _now = Date.now();
+    if (window._opLastAddSection && (_now - window._opLastAddSection) < 500) return;
+    window._opLastAddSection = _now;
     var box = document.getElementById('op-sections-box'); if (!box) return;
     box.insertAdjacentHTML('beforeend', _sectionBlock(null));
     _renumberSections();
@@ -276,7 +281,10 @@
     };
     var saveCall = editing ? ("window._opSavePoll('" + _attr(t.id) + "','" + _attr(poll.id) + "')") : ("window._opSavePoll('" + _attr(t.id) + "')");
     var html =
-      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#4338ca,#6d28d9);border-radius:16px 16px 0 0;">' +
+      // v3.1.49: header STICKY — Cancelar/Salvar SEMPRE no topo, visíveis e funcionais
+      // ao rolar (o container do overlay é o scroller; top:0 gruda nele). z-index alto
+      // pra ficar acima dos blocos de seção.
+      '<div style="position:sticky;top:0;z-index:10;padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#4338ca,#6d28d9);border-radius:16px 16px 0 0;">' +
         '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Cancelar</button>' +
         '<span style="font-weight:800;color:#fff;font-size:0.95rem;">📊 ' + (editing ? 'Editar enquete' : 'Nova enquete') + '</span>' +
         '<button type="button" onclick="' + saveCall + '" class="btn btn-sm" style="background:#fff;color:#4338ca;font-weight:800;border:none;">' + (editing ? 'Salvar' : 'Criar') + '</button>' +
@@ -306,8 +314,14 @@
         var v = (inp.value || '').trim(); if (v) opts.push({ id: 'o' + (i + 1) + '_' + opts.length + '_' + _rand(), text: v });
       });
       var multi = !!(b.querySelector('.op-sec-multi') && b.querySelector('.op-sec-multi').checked);
-      if (!question) { if (!bad) bad = 'Falta a pergunta na seção ' + (i + 1) + '.'; return; }
-      if (opts.length < 2) { if (!bad) bad = 'Adicione pelo menos 2 opções na seção ' + (i + 1) + '.'; return; }
+      // v3.1.50: NÃO pula seção incompleta em silêncio — AVISA claramente o requisito
+      // (pedido do dono). O duplo-disparo do "adicionar seção" (que criava a seção
+      // fantasma) já é evitado pelo guard em _opAddSection, então um bloco incompleto
+      // aqui é intencional e merece feedback explícito.
+      if (!question || opts.length < 2) {
+        if (!bad) bad = 'Seção ' + (i + 1) + ': cada seção precisa de 1 pergunta e pelo menos 2 opções.';
+        return;
+      }
       sections.push({ id: 's' + (i + 1) + '_' + _rand(), question: question, options: opts, multiSelect: multi });
     });
     if (bad) { if (typeof showNotification === 'function') showNotification('Revise a enquete', bad, 'warning'); return; }
@@ -381,25 +395,33 @@
         '<div style="font-weight:800;font-size:1.02rem;color:var(--text-bright);margin-bottom:3px;">' + _esc(sec.question) + '</div>' +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:11px;">' + (sec.multiSelect ? 'Pode escolher mais de uma' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>';
 
+      // v3.1.50: barra de resultado (helper reutilizado nos dois modos).
+      var _resultBar = function (o, c, pct, mine) {
+        return '<div style="margin-bottom:10px;">' +
+          '<div style="display:flex;justify-content:space-between;font-size:0.86rem;margin-bottom:3px;color:var(--text-bright);">' +
+            '<span style="font-weight:' + (mine ? '800' : '600') + ';">' + (mine ? '✓ ' : '') + _esc(o.text) + '</span>' +
+            '<span style="color:var(--text-muted);font-weight:700;">' + c + ' · ' + pct + '%</span>' +
+          '</div>' +
+          '<div style="height:9px;background:rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;">' +
+            '<div style="height:100%;width:' + pct + '%;background:' + (mine ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#6366f1,#8b5cf6)') + ';border-radius:6px;transition:width 0.3s;"></div>' +
+          '</div></div>';
+      };
       sec.options.forEach(function (o) {
         var c = _opOptCount(poll, sec.id, o.id);
         var pct = total > 0 ? Math.round((c / total) * 100) : 0;
         var mine = myChoices.indexOf(o.id) !== -1;
         if (!votingMode) {
-          body += '<div style="margin-bottom:10px;">' +
-            '<div style="display:flex;justify-content:space-between;font-size:0.86rem;margin-bottom:3px;color:var(--text-bright);">' +
-              '<span style="font-weight:' + (mine ? '800' : '600') + ';">' + (mine ? '✓ ' : '') + _esc(o.text) + '</span>' +
-              '<span style="color:var(--text-muted);font-weight:700;">' + c + ' · ' + pct + '%</span>' +
-            '</div>' +
-            '<div style="height:9px;background:rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;">' +
-              '<div style="height:100%;width:' + pct + '%;background:' + (mine ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#6366f1,#8b5cf6)') + ';border-radius:6px;transition:width 0.3s;"></div>' +
-            '</div></div>';
+          body += _resultBar(o, c, pct, mine);
         } else {
           var inputType = sec.multiSelect ? 'checkbox' : 'radio';
-          body += '<label style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);border-radius:11px;cursor:pointer;margin-bottom:8px;">' +
+          body += '<label style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);border-radius:11px;cursor:pointer;margin-bottom:' + (showResults ? '4px' : '8px') + ';">' +
             '<input type="' + inputType + '" name="op-choice-' + _esc(sec.id) + '" value="' + _esc(o.id) + '"' + (mine ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#8b5cf6;flex-shrink:0;">' +
-            '<span style="font-size:0.92rem;color:var(--text-bright);font-weight:600;">' + _esc(o.text) + (showResults ? ' <span style="color:var(--text-muted);font-weight:500;">(' + c + ')</span>' : '') + '</span>' +
+            '<span style="font-size:0.92rem;color:var(--text-bright);font-weight:600;">' + _esc(o.text) + '</span>' +
           '</label>';
+          // v3.1.50: org NÃO ocultou os resultados → mostra a parcial (barra) logo abaixo
+          // do input, pra o votante ver enquanto escolhe. Antes ficava escondido mesmo
+          // com hideResultsUntilVote=false (só quem já tinha votado via as barras).
+          if (showResults) body += _resultBar(o, c, pct, mine);
         }
       });
 
@@ -427,6 +449,9 @@
         '<button type="button" onclick="window._opOpenTally(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:1;background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.4);font-weight:700;border-radius:11px;padding:10px;font-size:0.82rem;">👁️ Ver votos</button>' +
       '</div>';
       if (!poll.closed) {
+        // v3.1.49: REPUBLICAR — re-dispara as notificações pros inscritos (lembrete).
+        // Criador da enquete + organizadores. Bloqueia se notificada há < 24h (avisa).
+        footer += '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(245,158,11,0.14);color:#fbbf24;border:1px solid rgba(245,158,11,0.45);font-weight:700;border-radius:11px;padding:10px;font-size:0.84rem;margin-top:8px;">📣 Republicar — notificar de novo</button>';
         footer += '<button type="button" onclick="window._opClose(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(239,68,68,0.14);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;border-radius:11px;padding:10px;font-size:0.84rem;margin-top:8px;">🔒 Encerrar enquete</button>';
       }
     }
@@ -480,6 +505,39 @@
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
     };
     if (typeof window.showConfirmDialog === 'function') window.showConfirmDialog('Encerrar enquete?', 'Os inscritos não poderão mais votar. Os resultados continuam visíveis.', go, null, { confirmText: 'Encerrar', cancelText: 'Cancelar' });
+    else go();
+  };
+
+  // v3.1.49: REPUBLICAR a enquete — re-dispara as notificações pros inscritos (lembrete).
+  // Permissão: criador da enquete OU organizador/co-org do torneio. Bloqueio anti-spam:
+  // só 1x a cada 24h desde a ÚLTIMA notificação (poll.notifiedAt) — abaixo disso, avisa
+  // quanto falta e não envia. force:true no _opNotifyEnrolled re-notifica e re-ancora o
+  // notifiedAt (que vira o relógio do cooldown).
+  var _OP_REPUB_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+  window._opRepublish = function (tId, pollId) {
+    var t = _findT(tId); if (!t) return;
+    var poll = _findPoll(t, pollId); if (!poll) return;
+    var cu = _cu();
+    var isPollCreator = !!(cu && cu.uid && poll.createdByUid && poll.createdByUid === cu.uid);
+    if (!isPollCreator && !_isOrg(t)) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o criador da enquete ou o organizador pode republicar.', 'warning'); return; }
+    if (poll.closed) { if (typeof showNotification === 'function') showNotification('Enquete encerrada', 'Reabra ou crie uma nova pra notificar de novo.', 'warning'); return; }
+    var last = poll.notifiedAt ? Date.parse(poll.notifiedAt) : 0;
+    var now = Date.now();
+    if (last && (now - last) < _OP_REPUB_COOLDOWN_MS) {
+      var rest = _OP_REPUB_COOLDOWN_MS - (now - last);
+      var h = Math.floor(rest / 3600000);
+      var m = Math.ceil((rest % 3600000) / 60000);
+      var when = h > 0 ? (h + 'h' + (m > 0 ? (' ' + m + 'min') : '')) : (m + 'min');
+      if (typeof showNotification === 'function') showNotification('⏳ Ainda não dá pra republicar', 'A enquete foi notificada há menos de 24h. Você poderá reenviar em ' + when + '.', 'warning');
+      return;
+    }
+    var go = function () {
+      window._opNotifyEnrolled(t, poll, { force: true, excludeEmail: (cu && cu.email) || '' });
+      if (typeof showNotification === 'function') showNotification('📣 Enquete republicada', 'Notificando os inscritos de novo…', 'success');
+      window._opCloseOverlay();
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    };
+    if (typeof window.showConfirmDialog === 'function') window.showConfirmDialog('Republicar enquete?', 'Vamos notificar de novo os inscritos sobre a enquete. Isso só pode ser feito 1x a cada 24h.', go, null, { confirmText: 'Republicar', cancelText: 'Cancelar' });
     else go();
   };
 

@@ -164,7 +164,13 @@ window._maybeCreateTournamentPresencePlan = function(t, user) {
       tournamentId: t.id
     }, w);
     window.PresenceDB.savePresence(payload).then(function() {
-      if (typeof showNotification !== 'undefined') {
+      // v3.1.50: o plano é criado já na inscrição (pra sincronizar depois), MAS o toast
+      // "Ida planejada" só faz sentido quando o torneio está dentro da janela visível de
+      // presença (≤24h) — mesma regra do _tournVisibleNow. Antes disparava pra torneio a
+      // dias de distância, o que confunde (a "ida planejada" nem aparece no Place/dashboard
+      // ainda). Plano segue criado; só o aviso espera a hora certa.
+      var _visibleSoon = !w.startsAt || w.startsAt <= (Date.now() + 24 * 3600000);
+      if (typeof showNotification !== 'undefined' && _visibleSoon) {
         var _hh = function(ms){ var d = new Date(ms); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
         showNotification('🗓️ Ida planejada', (w.venueName || 'Local') + ' · ' + _hh(w.startsAt) + '–' + _hh(w.endsAt), 'info');
       }
