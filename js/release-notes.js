@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.45-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.46-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📅 Combinar jogos:</b> em torneios sem horário fixo por jogo, os jogadores de cada confronto agora combinam quando jogar pelo próprio app. Cada um propõe uma data e hora (ou dias da semana) e marca o que consegue; quando todos dão o OK ✅ no mesmo horário, o jogo fica combinado e a data aparece direto no card do confronto.</li>' +
+        '<li><b>🛠️ Organizador acompanha:</b> botão "📅 Combinar jogos" mostra o andamento de cada jogo da rodada (combinado / combinando / sem propostas) e avisa os jogadores num toque.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.45-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📊 Enquete com várias perguntas:</b> agora dá pra montar uma enquete com mais de uma pergunta de uma vez (basta tocar em "＋ adicionar seção"), e cada pergunta pode aceitar uma só resposta ou várias. Os inscritos respondem todas na mesma tela, cada pergunta com seu próprio botão de votar.</li>' +
         '<li><b>📊 Botão da enquete em destaque:</b> no torneio, o botão da enquete ficou maior e mais visível — não parece mais uma barrinha.</li>' +
