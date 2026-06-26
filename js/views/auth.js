@@ -6739,7 +6739,7 @@ function setupProfileModal() {
             '<div class="form-group" style="margin-bottom: 6px;">' +
               '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
               '<div style="display: flex; gap: 6px; align-items: center;">' +
-                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 120px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
+                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 124px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem; padding: 0.75rem 0.45rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
@@ -6765,7 +6765,7 @@ function setupProfileModal() {
               // fonte, mesma altura) — antes o DDI era 110px/0.82rem e cortava "+55" pra
               // "+5", e o input era menor que o de cima.
               '<div style="display:flex;gap:6px;align-items:center;">' +
-                '<select id="profile-link-phone-country" aria-label="DDI do celular vinculado" class="form-control" style="width:120px;flex-shrink:0;box-sizing:border-box;font-size:0.85rem;">' +
+                '<select id="profile-link-phone-country" aria-label="DDI do celular vinculado" class="form-control" style="width:124px;flex-shrink:0;box-sizing:border-box;font-size:0.85rem;padding:0.75rem 0.45rem;">' +
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-link-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;" oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
