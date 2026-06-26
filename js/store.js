@@ -4281,6 +4281,18 @@ window.AppStore = {
       this._profileUnsubscribe();
       this._profileUnsubscribe = null;
     }
+    // v3.1.44: derruba também os listeners de presença, que vivem fora do
+    // AppStore. Sem isto, ao expirar a sessão (onAuthStateChanged null) o
+    // listenMyActive do dashboard e o _presenceUnsubscribe do #presence
+    // continuavam anexados e disparavam permission-denied em massa durante
+    // o grace de sign-out (Sentry WEB-62/63).
+    if (typeof window._teardownPresenceListeners === 'function') {
+      try { window._teardownPresenceListeners(); } catch (e) {}
+    }
+    if (typeof window._presenceUnsubscribe === 'function') {
+      try { window._presenceUnsubscribe(); } catch (e) {}
+      window._presenceUnsubscribe = null;
+    }
   },
 
   // Real-time listener for user notifications — fires on new/updated notifications

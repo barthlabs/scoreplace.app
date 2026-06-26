@@ -996,6 +996,14 @@ if (typeof firebase !== 'undefined' && firebase.auth) {
         _commitSignOut();
         return;
       }
+      // v3.1.44: para os listeners Firestore IMEDIATAMENTE — o token já morreu,
+      // então mantê-los anexados durante o grace de 2,5s só gera permission-denied
+      // em massa (Sentry WEB-62/63: todos os onSnapshot falhando ao mesmo tempo
+      // às 3h, expiração de sessão). Se a auth re-resolver dentro do grace, o
+      // simulateLoginSuccess religa tudo (os guards _xUnsubscribe evitam duplicar).
+      if (window.AppStore && window.AppStore.stopRealtimeListener) {
+        try { window.AppStore.stopRealtimeListener(); } catch (e) {}
+      }
       // Transient null event — defer the clear so a quick re-resolution
       // (common on Safari) cancels it silently.
       window._log('[scoreplace-auth] onAuthStateChanged: null — deferring sign-out ' + _AUTH_SIGNOUT_GRACE_MS + 'ms');
