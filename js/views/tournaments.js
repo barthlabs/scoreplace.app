@@ -2513,14 +2513,17 @@ function renderTournaments(container, tournamentId = null) {
     // pra ficar sempre visível e ser empurrada pelo hambúrguer.
     var _inscritosFilterBarHtml = '';
 
+    // v3.1.44: pop-up da enquete pro inscrito que ainda não votou — roda em TODO render
+    // do detalhe (não no bloco one-time): a trava interna (_opPoppedPollId + hashchange)
+    // dedup por VISITA, então aparece sempre que ele reentra no torneio até votar.
+    if (tournamentId && visible.length === 1 && typeof window._opMaybePopup === 'function') window._opMaybePopup(visible[0]);
+
     // ── One-time checks per tournament view (run once, not on every re-render from sort/scroll) ──
     var _checksKey = tournamentId ? ('_tournChecks_' + tournamentId) : null;
     var _checksRan = _checksKey && window[_checksKey];
     if (tournamentId && visible.length === 1 && !_checksRan) {
         if (_checksKey) window[_checksKey] = true;
 
-        // v2.8.67: pop-up da enquete pro inscrito que ainda não votou (1x/sessão).
-        if (typeof window._opMaybePopup === 'function') window._opMaybePopup(visible[0]);
         // v2.8.86: se o CRIADOR abre um torneio com enquete ativa ainda não
         // notificada, dispara a notificação (fundamental) pra todos os inscritos.
         if (typeof window._opMaybeNotifyExisting === 'function') window._opMaybeNotifyExisting(visible[0]);
