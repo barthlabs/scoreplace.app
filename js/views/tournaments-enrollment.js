@@ -582,7 +582,11 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
                     if (orgUid) {
                         window._sendUserNotification(orgUid, {
                             type: 'enrollment_new',
-                            message: _t('enroll.orgEnrollMsg', {name: user.displayName || _t('enroll.anonParticipant'), tourn: window._safeHtml(t.name)}),
+                            // v3.1.59: usa _dispName (já resolve displayName→e-mail→telefone via
+                            // _enrollDisplayName) — NUNCA o user.displayName cru, que era null em
+                            // conta sem nome e caía no genérico "Um participante". Sempre há e-mail
+                            // ou telefone, então a notificação sempre nomeia a pessoa.
+                            message: _t('enroll.orgEnrollMsg', {name: _dispName || _t('enroll.anonParticipant'), tourn: window._safeHtml(t.name)}),
                             tournamentId: String(t.id),
                             tournamentName: t.name || '',
                             level: 'all'
@@ -887,7 +891,8 @@ window.deenrollCurrentUser = function (tId) {
                                 if (orgUid) {
                                     window._sendUserNotification(orgUid, {
                                         type: 'enrollment_cancelled',
-                                        message: _t('enroll.orgUnenrollMsg', {name: user.displayName || _t('enroll.anonParticipant'), tourn: window._safeHtml(t.name)}),
+                                        // v3.1.59: nome com fallback e-mail→telefone (nunca "Um participante").
+                                        message: _t('enroll.orgUnenrollMsg', {name: (window._enrollDisplayName && window._enrollDisplayName(user)) || user.displayName || _t('enroll.anonParticipant'), tourn: window._safeHtml(t.name)}),
                                         tournamentId: String(t.id),
                                         tournamentName: t.name || '',
                                         level: 'important'

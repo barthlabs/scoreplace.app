@@ -9,8 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.58-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.59-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🙋 Notificação de inscrição com o nome certo:</b> quando alguém se inscreve/cancela, o organizador é avisado com o <b>nome</b> da pessoa (ou e-mail/telefone se ela ainda não tiver nome) — não aparece mais o genérico "Um participante".</li>' +
         '<li><b>🟩 Mais votada em destaque:</b> nos votos nominais, a opção <b>mais votada de cada pergunta</b> ganha um <b>contorno verde</b> (em qualquer tipo de pergunta).</li>' +
         '<li><b>📣 Botão Republicar com estado:</b> depois de republicar, o botão fica <b>cinza "Notificados"</b> durante as 24h e volta ao normal sozinho.</li>' +
         '<li><b>🔴 Quem ficaria de fora:</b> em enquetes de <b>múltipla escolha</b>, quem votou numa opção diferente da mais votada aparece em <b>vermelho</b>. Quem ainda não votou fica na cor normal.</li>' +
