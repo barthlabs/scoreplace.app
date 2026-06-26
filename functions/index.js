@@ -2987,13 +2987,21 @@ async function _uidByProfileEmail(db, raw) {
   return null;
 }
 // Acha o uid pelo telefone (E.164) no PERFIL — cobre conta cujo número está só no
-// perfil Firestore, não no phoneNumber do Auth.
+// perfil Firestore, não no phoneNumber do Auth. Cobre TAMBÉM celulares SECUNDÁRIOS/
+// VINCULADOS (linkedPhones[]), espelhando _uidByProfileEmail → linkedEmails. Assim
+// qualquer celular que a pessoa vinculou no perfil funciona pra login/reset/checkAccount.
 async function _uidByProfilePhone(db, phoneE164) {
   if (!phoneE164) return null;
-  try {
-    const snap = await db.collection("users").where("phone", "==", phoneE164).limit(1).get();
-    if (!snap.empty) return snap.docs[0].id;
-  } catch (e) { /* nada */ }
+  const tries = [
+    { f: "phone", op: "==", v: phoneE164 },
+    { f: "linkedPhones", op: "array-contains", v: phoneE164 },
+  ];
+  for (const t of tries) {
+    try {
+      const snap = await db.collection("users").where(t.f, t.op, t.v).limit(1).get();
+      if (!snap.empty) return snap.docs[0].id;
+    } catch (e) { /* índice ausente/erro → tenta próximo */ }
+  }
   return null;
 }
 

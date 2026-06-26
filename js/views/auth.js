@@ -4552,8 +4552,9 @@ async function simulateLoginSuccess(user) {
     if (_uiSliderLbl) _uiSliderLbl.textContent = _uiSliderPct + '%';
     var curTheme = document.documentElement.getAttribute('data-theme') || 'dark';
     if (typeof window._applyProfileThemeUI === 'function') window._applyProfileThemeUI(curTheme);
-    // Renderizar emails vinculados
+    // Renderizar emails + celulares vinculados
     if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
+    if (typeof window._profileRenderLinkedPhones === 'function') window._profileRenderLinkedPhones();
   };
 
   // v1.3.5-beta: perfil agora é uma rota (#profile), não modal-overlay.
@@ -6746,6 +6747,25 @@ function setupProfileModal() {
                 '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
               '</div>' +
             '</div>' +
+            // ── Celulares vinculados (linkedPhones[]) — espelha "E-mails vinculados".
+            // Verifica posse por SMS/WhatsApp e grava em linkedPhones[]; o login por
+            // qualquer um deles + senha cai nesta conta (server _uidByProfilePhone).
+            '<div style="margin:0 0 6px 0;">' +
+              '<label class="form-label" style="font-size:0.75rem;">📱 Celulares vinculados</label>' +
+              '<div id="profile-linked-phones" style="margin-bottom:6px;display:flex;flex-direction:column;gap:4px;"></div>' +
+              '<div style="display:flex;gap:6px;align-items:center;">' +
+                '<select id="profile-link-phone-country" aria-label="DDI do celular vinculado" class="form-control" style="width:110px;flex-shrink:0;box-sizing:border-box;font-size:0.82rem;">' +
+                  countryOpts +
+                '</select>' +
+                '<input type="tel" id="profile-link-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;font-size:0.85rem;" oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
+              '</div>' +
+              '<div style="margin-top:6px;">' +
+                '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone({linked:true})" style="background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.4);color:#6ee7b7;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📲 Verificar e vincular</button>' +
+                '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;display:block;margin-top:4px;">Confirme por SMS/WhatsApp. O número vira mais um login da sua conta (com a sua senha).</span>' +
+                '<div id="profile-link-phone-otp" style="display:none;margin-top:8px;"></div>' +
+                '<div id="profile-link-phone-recaptcha" style="display:none;"></div>' +
+              '</div>' +
+            '</div>' +
             // v2.4.3: privacidade — ocultar telefone de outros usuários (default OFF).
             // Liga: também tira a pessoa do GRUPO automático de WhatsApp (grupo
             // revela o número aos membros). Ela segue avisada por notificação 1:1
@@ -7795,16 +7815,34 @@ function setupProfileModal() {
     // troca a sessão atual). Se o número já é de outra conta, o idToken dessa
     // conta vira a PROVA pra mesclar ela na conta atual (sobrevivente). Número
     // novo: o merge traz o telefone e o login por ele cai aqui (redirect).
-    window._profileVerifyPhone = function() {
+    window._profileVerifyPhone = function(opts) {
+      opts = opts || {};
+      var linked = !!opts.linked;
+      // Contexto do fluxo (primário OU celular vinculado secundário). _profileConfirmPhoneCode
+      // e o merge leem isto pra usar os IDs certos e saber se grava em linkedPhones[].
+      var ctx = window._profilePhoneCtx = {
+        linked: linked,
+        inputId: linked ? 'profile-link-phone-input' : 'profile-edit-phone',
+        countryId: linked ? 'profile-link-phone-country' : 'profile-phone-country',
+        otpId: linked ? 'profile-link-phone-otp' : 'profile-phone-otp',
+        recaptchaId: linked ? 'profile-link-phone-recaptcha' : 'profile-phone-recaptcha',
+        codeId: linked ? 'profile-link-phone-code' : 'profile-phone-code'
+      };
       var cu = window.AppStore && window.AppStore.currentUser;
       if (!cu || !cu.uid) { showNotification('Sessão', 'Entre novamente.', 'warning'); return; }
-      var inp = document.getElementById('profile-edit-phone');
-      var country = (document.getElementById('profile-phone-country') || {}).value || '55';
+      var inp = document.getElementById(ctx.inputId);
+      var country = (document.getElementById(ctx.countryId) || {}).value || '55';
       var digits = inp ? String(inp.getAttribute('data-digits') || inp.value || '').replace(/\D/g, '') : '';
       if (digits.length < 10) { showNotification('Número incompleto', 'Digite DDD + número do celular.', 'warning'); if (inp) inp.focus(); return; }
       var e164 = (typeof window._normalizePhoneE164 === 'function') ? window._normalizePhoneE164(digits, country) : ('+' + country + digits);
-      var otpEl = document.getElementById('profile-phone-otp');
-      var recEl = document.getElementById('profile-phone-recaptcha');
+      if (linked) {
+        if (cu.phone && cu.phone === e164) { showNotification('Mesmo celular', 'Esse já é o seu celular principal.', 'warning'); return; }
+        var _lp = Array.isArray(cu.linkedPhones) ? cu.linkedPhones : [];
+        if (_lp.indexOf(e164) !== -1) { showNotification('Já vinculado', 'Esse celular já está na sua lista.', 'info'); return; }
+      }
+      window._profilePhoneCtx.e164 = e164;
+      var otpEl = document.getElementById(ctx.otpId);
+      var recEl = document.getElementById(ctx.recaptchaId);
       if (otpEl) { otpEl.style.display = 'block'; otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Enviando código para ' + window._safeHtml(e164) + '…</div>'; }
       var cfg = firebase.app().options;
       var sapp = firebase.apps.find(function(a){ return a.name === 'profilephone'; }) || firebase.initializeApp(cfg, 'profilephone');
@@ -7830,10 +7868,10 @@ function setupProfileModal() {
         if (otpEl) otpEl.innerHTML =
           '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por <b>SMS</b> ou <b>WhatsApp</b>:</div>' +
           '<div style="display:flex;gap:8px;">' +
-            '<input id="profile-phone-code" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
+            '<input id="' + ctx.codeId + '" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
             '<button type="button" onclick="window._profileConfirmPhoneCode()" class="btn btn-success" style="white-space:nowrap;">Confirmar</button>' +
           '</div>';
-        var c = document.getElementById('profile-phone-code'); if (c) { try { c.focus(); } catch(e){} }
+        var c = document.getElementById(ctx.codeId); if (c) { try { c.focus(); } catch(e){} }
       }).catch(function(err) {
         if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(String((err && (err.code || err.message)) || 'erro')) + '</div>';
       });
@@ -7867,6 +7905,21 @@ function setupProfileModal() {
       }
       function finishOk(merged) {
         try { sapp.auth().signOut(); } catch(e){}
+        // Celular VINCULADO secundário: grava o número em linkedPhones[] do sobrevivente
+        // pra que "celular + senha" resolva pra esta conta (via _uidByProfilePhone no server).
+        try {
+          var _ctx = window._profilePhoneCtx;
+          if (_ctx && _ctx.linked && _ctx.e164) {
+            var _cu = window.AppStore && window.AppStore.currentUser;
+            var _db = window.FirestoreDB && window.FirestoreDB.db;
+            if (_cu && _db && _cu.uid) {
+              var _lp = Array.isArray(_cu.linkedPhones) ? _cu.linkedPhones.slice() : [];
+              if (_lp.indexOf(_ctx.e164) === -1) _lp.push(_ctx.e164);
+              _cu.linkedPhones = _lp;
+              _db.collection('users').doc(_cu.uid).update({ linkedPhones: _lp }).catch(function(){});
+            }
+          }
+        } catch (e) {}
         if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.82rem;">' +
           (merged ? '✅ Contas unidas e celular vinculado! Atualizando…' : '✅ Celular verificado e vinculado! Atualizando…') + '</div>';
         setTimeout(function() { window.location.reload(); }, 1600);
@@ -7912,9 +7965,10 @@ function setupProfileModal() {
     };
 
     window._profileConfirmPhoneCode = function() {
-      var codeEl = document.getElementById('profile-phone-code');
+      var ctx = window._profilePhoneCtx || { codeId: 'profile-phone-code', otpId: 'profile-phone-otp' };
+      var codeEl = document.getElementById(ctx.codeId);
       var code = codeEl ? codeEl.value.trim() : '';
-      var otpEl = document.getElementById('profile-phone-otp');
+      var otpEl = document.getElementById(ctx.otpId);
       if (!/^\d{6}$/.test(code)) { showNotification('Código', 'Digite os 6 dígitos.', 'warning'); return; }
       if (otpEl) otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Confirmando…</div>';
       var sapp = firebase.app('profilephone');
@@ -7958,6 +8012,41 @@ function setupProfileModal() {
           '<button type="button" onclick="window._profileUnlinkEmail(\'' + em.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;padding:0 2px;" title="Remover">×</button>' +
         '</div>';
       }).join('');
+    };
+
+    // ── Celulares vinculados ──────────────────────────────────────────────
+    window._profileRenderLinkedPhones = function() {
+      var cu = window.AppStore && window.AppStore.currentUser;
+      var container = document.getElementById('profile-linked-phones');
+      if (!container || !cu) return;
+      var linked = Array.isArray(cu.linkedPhones) ? cu.linkedPhones : [];
+      var fmt = function(p) {
+        var s = String(p || ''); var m = s.match(/^\+(\d{2})(\d+)$/);
+        if (m && typeof window._formatPhoneDisplay === 'function') return '+' + m[1] + ' ' + window._formatPhoneDisplay(m[2], m[1]);
+        return s;
+      };
+      container.innerHTML = linked.map(function(ph) {
+        return '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);">' +
+          '<span style="flex:1;font-size:0.82rem;color:var(--text-bright);">✅ ' + window._safeHtml(fmt(ph)) + '</span>' +
+          '<button type="button" onclick="window._profileUnlinkPhone(\'' + ph.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;padding:0 2px;" title="Remover">×</button>' +
+        '</div>';
+      }).join('');
+    };
+
+    window._profileUnlinkPhone = function(phone) {
+      var cu = window.AppStore && window.AppStore.currentUser;
+      if (!cu || !cu.uid || !window.FirestoreDB || !window.FirestoreDB.db) return;
+      if (!confirm('Remover ' + phone + ' dos seus celulares vinculados?')) return;
+      var linked = Array.isArray(cu.linkedPhones) ? cu.linkedPhones.slice() : [];
+      var idx = linked.indexOf(phone);
+      if (idx !== -1) linked.splice(idx, 1);
+      cu.linkedPhones = linked;
+      window.FirestoreDB.db.collection('users').doc(cu.uid).update({
+        linkedPhones: linked
+      }).then(function() {
+        window._profileRenderLinkedPhones();
+        if (window.showNotification) window.showNotification('Celular removido', phone, 'info');
+      }).catch(function(e) { window._warn('[LinkedPhone] unlink error:', e); });
     };
 
     window._profileSendEmailLink = function() {
