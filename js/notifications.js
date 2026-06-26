@@ -294,7 +294,7 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100010;
+    z-index: 100100;
   `;
 
   const colors = {
@@ -388,7 +388,7 @@ function showAlertDialog(title, message, onOk, options = {}) {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100010;
+    z-index: 100100;
   `;
 
   const colors = {
@@ -469,7 +469,7 @@ function showInputDialog(title, message, onSubmit, options = {}) {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100010;
+    z-index: 100100;
   `;
 
   dialog.innerHTML = `
@@ -570,7 +570,7 @@ function showMultiInputDialog(title, items, onSubmit, options = {}) {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100010;
+    z-index: 100100;
   `;
 
   const inputsHtml = items.map((item, i) => `
