@@ -395,7 +395,7 @@
           details: desc,
           location: p.venueName || ''
         });
-        window.open('https://calendar.google.com/calendar/render?' + params.toString(), '_blank', 'noopener');
+        window._openExternalUrl('https://calendar.google.com/calendar/render?' + params.toString());
       } catch(e) {}
       return;
     }

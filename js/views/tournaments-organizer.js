@@ -1069,7 +1069,7 @@ window._submitContactOrg = async function(tId) {
   // Canal externo: conversa de WhatsApp OU compositor de e-mail, já preenchido.
   try {
     if (pend.useWhatsApp && pend.phoneFull) {
-      window.open('https://wa.me/' + pend.phoneFull + '?text=' + encodeURIComponent(fullMsg), '_blank', 'noopener');
+      window._openExternalUrl('https://wa.me/' + pend.phoneFull + '?text=' + encodeURIComponent(fullMsg));
     } else if (pend.email && pend.email.indexOf('@') !== -1) {
       var subject = encodeURIComponent('Torneio: ' + (t.name || ''));
       window.open('mailto:' + pend.email + '?subject=' + subject + '&body=' + encodeURIComponent(fullMsg), '_self');

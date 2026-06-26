@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.1.59-beta';
+window.SCOREPLACE_VERSION = '3.1.61-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3360,6 +3360,28 @@ window.renderSupportPage = function(container) {
 window._safeHtml = function(str) {
   if (!str) return '';
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+};
+
+// v3.1.60: abre URL EXTERNA de forma confiável — especialmente no iOS PWA (standalone).
+// O `window.open(url, '_blank', 'noopener')` no iOS cria uma ABA INTERMEDIÁRIA EM BRANCO
+// no navegador in-app: o usuário vai ao Google Maps e, ao tocar em "voltar", cai numa
+// TELA BRANCA (a aba vazia inicial). Clicar num <a target="_blank"> real abre direto a
+// URL (sem o intermediário em branco) e o "voltar" funciona. Fonte única — todos os
+// "abrir no Maps/WhatsApp/Instagram" devem usar isto em vez de window.open.
+window._openExternalUrl = function(url) {
+  if (!url) return;
+  try {
+    var a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { try { document.body.removeChild(a); } catch (e) {} }, 0);
+  } catch (e) {
+    try { window.open(url, '_blank'); } catch (_) {}
+  }
 };
 
 // v2.8.36 (canonização B-2): distância great-circle em KM entre dois pontos

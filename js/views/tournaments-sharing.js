@@ -1434,9 +1434,9 @@ window._calPick = function(kind) {
   var ov = document.getElementById('cal-picker-overlay');
   if (ov) ov.remove();
   if (kind === 'google') {
-    window.open(_googleCalendarUrl(payload), '_blank', 'noopener');
+    window._openExternalUrl(_googleCalendarUrl(payload));
   } else if (kind === 'outlook') {
-    window.open(_outlookCalendarUrl(payload), '_blank', 'noopener');
+    window._openExternalUrl(_outlookCalendarUrl(payload));
   } else if (kind === 'ics') {
     _icsDownload(payload, filename || 'torneio.ics');
     if (typeof showNotification === 'function') showNotification('Arquivo gerado', 'Abra o .ics pra importar na sua agenda.', 'success');

@@ -70,7 +70,7 @@
     mode: 'map',
     selectedPlace: null,
     // v0.16.20: quando o usuário faz check-in/plano em um preferido, a seção
-    // "⭐ Locais preferidos" colapsa pra mostrar só o focado + um gráfico de
+    // "Locais preferidos" colapsa pra mostrar só o focado + um gráfico de
     // barras com movimento por hora. Campo null = lista completa como antes.
     // Shape: { placeId, docId, type, startsAt, endsAt, sports[], venue, prefObj }
     focusedPreferred: null
@@ -240,7 +240,8 @@
       marker.addListener('click', function() {
         var url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p.name || '') +
           (p.placeId ? '&query_place_id=' + encodeURIComponent(p.placeId) : '');
-        try { window.open(url, '_blank', 'noopener'); } catch(e) {}
+        // v3.1.60: helper (clique em <a target=_blank>) — evita a aba em branco do iOS PWA.
+        if (window._openExternalUrl) window._openExternalUrl(url); else try { window.open(url, '_blank'); } catch(e) {}
       });
       _markers.push(marker);
       bounds.extend(pos);
@@ -455,13 +456,16 @@
       '<div onclick="window._venuesOpenDetail(\'' + safeId + '\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;">' +
         '<div style="flex:1;min-width:0;">' +
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">' +
-            '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⭐ ' + _safe(v.name) + '</span>' +
+            '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(v.name) + '</span>' +
             officialBadge +
           '</div>' +
           (v.address ? '<div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">' + _safe(v.address) + '</div>' : '') +
           (sportsHtml ? '<div style="display:flex;flex-wrap:wrap;gap:3px;">' + sportsHtml + '</div>' : '') +
         '</div>' +
         (distText ? '<div style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);text-align:right;min-width:36px;">' + _safe(distText) + '</div>' : '') +
+        // v3.1.61: coração de preferido à direita do nome (cheio = já é preferido). Clicar
+        // remove dos preferidos. stopPropagation pra não abrir a ficha do local.
+        '<button type="button" onclick="event.stopPropagation();window._venuesTogglePreferredFromList(this)" title="Remover dos locais preferidos" style="background:none;border:none;cursor:pointer;font-size:1.4rem;line-height:1;flex-shrink:0;padding:0 2px;align-self:center;">❤️</button>' +
       '</div>' +
       '<div id="pref-presence-slot-' + safePid + '" data-pref-presence-slot="' + safePid + '" style="display:flex;gap:6px;flex-wrap:wrap;"></div>' +
       // v0.16.28: slots de movimento (chart + "Agora" + "Próximas horas") ficam
@@ -509,7 +513,7 @@
         (p.lng != null ? Number(p.lng) : 'null') +
         ')" style="flex-shrink:0;white-space:nowrap;font-size:0.66rem;font-weight:700;padding:3px 9px;line-height:1.3;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.45);color:#a5b4fc;border-radius:999px;cursor:pointer;" title="Cadastrar este local no scoreplace">+<span class="gv-register-label"> Cadastrar</span></button>'
       : '';
-    return '<div onclick="window.open(\'' + _safe(mapsUrl) + '\', \'_blank\', \'noopener\')" style="display:flex;align-items:center;gap:10px;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;cursor:pointer;">' +
+    return '<div onclick="window._openExternalUrl(\'' + _safe(mapsUrl) + '\')" style="display:flex;align-items:center;gap:10px;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;cursor:pointer;">' +
       '<div style="flex:1;min-width:0;">' +
         '<div style="font-weight:600;color:var(--text-bright);font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">🗺️ ' + _safe(p.name) + '</div>' +
         (p.address ? '<div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(p.address) + '</div>' : '') +
@@ -1514,6 +1518,29 @@
     _updateFavHeartUI();
   };
 
+  // v3.1.61: coração ❤️ nos cards da seção "Locais preferidos" (#place). Como o card já
+  // É um preferido, o clique REMOVE dos preferidos e re-renderiza a lista. Lê o local
+  // pelos data-attrs do card (placeId/synthetic pid/nome) e casa via _findPreferredByPid.
+  window._venuesTogglePreferredFromList = function(btn) {
+    var card = btn && btn.closest ? btn.closest('[data-pref-pid]') : null;
+    if (!card) return;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) return;
+    var realPid = card.getAttribute('data-pref-placeid') || '';
+    var synthPid = card.getAttribute('data-pref-pid') || '';
+    var vname = card.getAttribute('data-pref-venuename') || '';
+    var existing = _findPreferredByPid({ placeId: realPid, name: vname })
+                || _findPreferredByPid(synthPid)
+                || _findPreferredByPid(realPid);
+    if (!existing) { if (typeof showNotification === 'function') showNotification('Não encontrado', 'Não consegui localizar este preferido.', 'warning'); return; }
+    var arr = (Array.isArray(cu.preferredLocations) ? cu.preferredLocations : []).filter(function(pl){ return pl !== existing; });
+    cu.preferredLocations = arr;
+    if (Array.isArray(window._profileLocations)) window._profileLocations = arr.slice();
+    try { if (window.FirestoreDB && window.FirestoreDB.db) window.FirestoreDB.db.collection('users').doc(cu.uid).set({ preferredLocations: arr }, { merge: true }).catch(function(){}); } catch (e) {}
+    if (typeof showNotification === 'function') showNotification('Removido dos preferidos', vname || '', 'info');
+    try { renderResults(); } catch (e) {}
+  };
+
   // Escape hatch: usuário pode clicar "Ver outros preferidos" pra sair do
   // modo focado sem cancelar a presença.
   window._venuesClearFocusedPreferred = function() {
@@ -1552,11 +1579,13 @@
     return '<div class="pref-nomatch-card hover-lift" data-pref-pid="' + safePid + '" data-pref-placeid="' + safeRealPid + '" data-pref-venuename="' + safeVenueName + '" style="background:var(--bg-card);border:1px solid rgba(251,191,36,0.25);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;">' +
       '<div style="display:flex;align-items:center;gap:10px;">' +
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⭐ ' + safeName + '</div>' +
+          '<div style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + safeName + '</div>' +
           '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">do seu perfil · não cadastrado</div>' +
         '</div>' +
         (distText ? '<div style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);text-align:right;min-width:36px;">' + _safe(distText) + '</div>' : '') +
         '<a href="' + _safe(mapsUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="Ver no Google Maps" style="flex-shrink:0;font-size:0.85rem;color:#94a3b8;text-decoration:none;padding:4px 6px;border-radius:6px;">🗺️</a>' +
+        // v3.1.61: coração de preferido (cheio) à direita — clicar remove dos preferidos.
+        '<button type="button" onclick="event.stopPropagation();window._venuesTogglePreferredFromList(this)" title="Remover dos locais preferidos" style="background:none;border:none;cursor:pointer;font-size:1.4rem;line-height:1;flex-shrink:0;padding:0 2px;align-self:center;">❤️</button>' +
       '</div>' +
       '<div id="pref-presence-slot-' + safePid + '" data-pref-presence-slot="' + safePid + '" data-pref-synthetic="1" style="display:flex;gap:6px;flex-wrap:wrap;"></div>' +
       // v0.16.28: mesmos slots de movimento do matched card. Quando há placeId
@@ -1725,7 +1754,7 @@
       html += '</div></div>';
     } else if (resolvedPreferred.length > 0) {
       html += '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:14px;padding:10px 12px;margin-bottom:14px;">';
-      html += '<div style="font-size:0.7rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">⭐ Locais preferidos</div>';
+      html += '<div style="font-size:0.7rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Locais preferidos</div>';
       html += '<div style="display:flex;flex-direction:column;gap:6px;">';
       resolvedPreferred.forEach(function(x) {
         if (x.match) html += _preferredCardMatched(x.match);
@@ -1738,7 +1767,7 @@
       // errado durante o gap async entre simulateLoginSuccess e profile merge —
       // usuário com preferreds salvos via "Marque seus lugares" mesmo tendo.
       html += '<div style="background:rgba(251,191,36,0.06);border:1px dashed rgba(251,191,36,0.35);border-radius:14px;padding:10px 12px;margin-bottom:14px;">';
-      html += '<div style="font-size:0.7rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">⭐ Locais preferidos</div>';
+      html += '<div style="font-size:0.7rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Locais preferidos</div>';
       html += '<div style="font-size:0.82rem;color:var(--text-muted);line-height:1.4;margin-bottom:8px;">Marque seus lugares favoritos no perfil e eles aparecem aqui primeiro.</div>';
       html += '<button type="button" onclick="if(window._openMyProfileModal)window._openMyProfileModal();else window.location.hash=\'#dashboard\';" style="background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);color:#fbbf24;border-radius:10px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">Adicionar no perfil →</button>';
       html += '</div>';
@@ -1747,7 +1776,7 @@
       // O listener registrado no início de render() vai re-disparar refresh()
       // quando o profile chegar.
       html += '<div style="background:rgba(251,191,36,0.04);border:1px dashed rgba(251,191,36,0.18);border-radius:14px;padding:10px 12px;margin-bottom:14px;">';
-      html += '<div style="font-size:0.7rem;font-weight:700;color:rgba(251,191,36,0.6);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">⭐ Locais preferidos</div>';
+      html += '<div style="font-size:0.7rem;font-weight:700;color:rgba(251,191,36,0.6);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Locais preferidos</div>';
       html += (typeof window._renderBallLoaderInline === 'function' ? window._renderBallLoaderInline('Carregando perfil…') : '<div style="font-size:0.78rem;color:var(--text-muted);">Carregando perfil…</div>');
       html += '</div>';
     }
@@ -3807,7 +3836,7 @@
     var timeLine = opts.hmLabel || '';
     // v0.16.26: botão "Cancelar" removido daqui — usuário pediu explicitamente
     // ("o cancelar não deve ficar aqui"). Cancelamento é exclusivo do card
-    // focado da seção ⭐ Locais preferidos (swap inline pra "❌ Cancelar
+    // focado da seção Locais preferidos (swap inline pra "❌ Cancelar
     // plano/presença" via `_hydratePreferredPresenceSlots`) OU dos botões no
     // slot `#venue-presence-btns-slot` da ficha do venue. Esse overlay é só
     // uma confirmação dispensável — OK pra fechar e ver o gráfico atrás.
