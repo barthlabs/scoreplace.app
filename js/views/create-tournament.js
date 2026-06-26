@@ -6262,6 +6262,10 @@ function setupCreateTournamentModal() {
             // trocar o dono. Esses campos têm fluxo próprio (host-transfer.js).
             var _editPreserve = { coHosts: true, creatorUid: true, creatorEmail: true, organizerEmail: true, organizerName: true };
             Object.keys(tourData).forEach(k => { if (_editPreserve[k]) return; t[k] = tourData[k]; });
+            // v3.1.62: bumpa o "Atualizado em" na EDIÇÃO. tourData não traz updatedAt,
+            // então sem isto a edição salvava os campos mas o carimbo de atualização
+            // ficava de uma ação anterior (parecia fuso errado, mas era valor velho).
+            t.updatedAt = new Date().toISOString();
             window.AppStore.logAction(editId, `Regras atualizadas: formato ${format}, lançamento por ${resultEntryVal}`);
             // v2.1.67: se a data/hora/local mudou, sincroniza o "Planejar ida" do
             // próprio organizador (os demais participantes sincronizam ao abrir o
