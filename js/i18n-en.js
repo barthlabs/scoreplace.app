@@ -1757,6 +1757,8 @@ window._translations['en'] = {
   'create.woTeamDesc': 'W.O. eliminates the entire team. Opponent advances automatically.',
   'create.lateEnrollSection': 'Registrations During the Phase',
   'create.lateEnrollClosed': 'Closed',
+  'create.lateEnrollOpen': 'Open',
+  'create.lateEnrollSuplentesOnly': 'Substitutes Only',
   'create.lateEnrollClosedDesc': 'On: no one can register after the deadline. Off: new registrations go to the waitlist.',
   'create.lateEnrollClosedOnDesc': 'No one can register after the deadline — not even during the tournament.',
   'create.lateEnrollClosedOffDesc': 'New registrations are still accepted even after the start and go to the waitlist as substitutes.',

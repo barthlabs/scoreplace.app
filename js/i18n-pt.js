@@ -1769,6 +1769,8 @@ window._translations['pt'] = {
   'create.woTeamDesc': 'W.O. elimina o time completo. Adversário avança automaticamente.',
   'create.lateEnrollSection': 'Inscrições Durante a Fase',
   'create.lateEnrollClosed': 'Fechadas',
+  'create.lateEnrollOpen': 'Abertas',
+  'create.lateEnrollSuplentesOnly': 'Suplentes Apenas',
   'create.lateEnrollClosedDesc': 'Ligado: ninguém mais pode se inscrever. Desligado: novos inscritos vão para a lista de espera.',
   'create.lateEnrollClosedOnDesc': 'Ninguém mais pode se inscrever após o prazo — nem durante o torneio.',
   'create.lateEnrollClosedOffDesc': 'Novos inscritos continuam sendo aceitos mesmo após o início e vão para a lista de espera como suplentes.',

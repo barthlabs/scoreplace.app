@@ -376,11 +376,11 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="late-enrollment" value="closed">
                 <div style="display:flex;flex-direction:column;gap:8px;" id="late-enrollment-buttons">
                   <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🚫</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollClosed')}</span><div class="toggle-desc" id="late-closed-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollClosedOnDesc')}</div></div></div>
+                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="late-closed-icon">🚫</span><div><span id="late-closed-title" style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollClosed')}</span><div class="toggle-desc" id="late-closed-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollClosedOnDesc')}</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-closed" aria-label="Inscrições fora do prazo fechadas" checked onchange="window._syncLateEnrollment('closed')"><span class="toggle-slider"></span></label>
                   </div>
                   <div class="toggle-row" style="display:none;padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">➕</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollExpand')}</span><div class="toggle-desc" id="late-expand-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollExpandDisabledDesc')}</div></div></div>
+                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="late-expand-icon">➕</span><div><span id="late-expand-title" style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollExpand')}</span><div class="toggle-desc" id="late-expand-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollExpandDisabledDesc')}</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-expand" aria-label="Inscrições fora do prazo expandem lista" onchange="window._syncLateEnrollment('expand')"><span class="toggle-slider"></span></label>
                   </div>
                 </div>
@@ -1480,15 +1480,18 @@ function setupCreateTournamentModal() {
     var expand = (mode === 'expand');
     var rowS = 'padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
     var swS = '--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;';
+    // Título + ícone canônicos seguem a posição de cada toggle (v3.1.20) — idêntico à Fase 1.
+    var mLbl = window._lateEnrollLabel('master', closed);
+    var cLbl = window._lateEnrollLabel('conf', expand);
     var h = '<div style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-top: 12px;">';
     h += '<p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>';
     h += '<div style="display:flex;flex-direction:column;gap:8px;">';
-    // Fechadas (master): ligado = fechada; desligado = aberta (cai em standby).
-    h += '<div class="toggle-row" style="' + rowS + '"><div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🚫</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + T('create.lateEnrollClosed') + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(closed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc') + '</div></div></div>';
+    // Fechadas/Abertas (master): ligado = fechada; desligado = aberta (cai em standby).
+    h += '<div class="toggle-row" style="' + rowS + '"><div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">' + mLbl.icon + '</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + mLbl.title + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(closed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc') + '</div></div></div>';
     h += '<label class="toggle-switch" style="' + swS + '"><input type="checkbox"' + (closed ? ' checked' : '') + ' onchange="window._setPhaseLateEnroll(' + i + ', this.checked ? \'closed\' : \'standby\')"><span class="toggle-slider"></span></label></div>';
-    // Novos Confrontos: SÓ aparece quando NÃO fechada (não há suplentes com inscrição fechada).
+    // Novos Confrontos / Suplentes Apenas: SÓ aparece quando NÃO fechada (não há suplentes com inscrição fechada).
     if (!closed) {
-      h += '<div class="toggle-row" style="' + rowS + '"><div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">➕</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + T('create.lateEnrollExpand') + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(expand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc') + '</div></div></div>';
+      h += '<div class="toggle-row" style="' + rowS + '"><div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">' + cLbl.icon + '</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + cLbl.title + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(expand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc') + '</div></div></div>';
       h += '<label class="toggle-switch" style="' + swS + '"><input type="checkbox"' + (expand ? ' checked' : '') + ' onchange="window._setPhaseLateEnroll(' + i + ', this.checked ? \'expand\' : \'standby\')"><span class="toggle-slider"></span></label></div>';
     }
     h += '</div></div>';
@@ -2251,6 +2254,18 @@ function setupCreateTournamentModal() {
   // inscrições) com "Novos Confrontos" (auto-expand) ativos juntos não fazia
   // sentido. Agora: ligar um desliga o outro automaticamente. Defaults pra
   // estado inicial: closed=ON, expand=OFF.
+  // ── Rótulos canônicos dos toggles de "Inscrições durante a fase" (v3.1.20) ──
+  // O título E o ícone de cada toggle acompanham a POSIÇÃO — mesma regra na Fase 1,
+  // no construtor de fases e em qualquer formato que use este bloco:
+  //   master ('closed'):  ligado → Fechadas (🚫) | desligado → Abertas (🔓)
+  //   conf   ('expand'):  ligado → Novos Confrontos (➕) | desligado → Suplentes Apenas (🪑)
+  // A descrição já é dinâmica (lateEnroll*OnDesc / *OffDesc) e explica cada posição.
+  window._lateEnrollLabel = function(which, on) {
+    var T = window._t || function(k){ return k; };
+    if (which === 'master') return { title: T(on ? 'create.lateEnrollClosed' : 'create.lateEnrollOpen'), icon: on ? '🚫' : '🔓' };
+    return { title: T(on ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'), icon: on ? '➕' : '🪑' };
+  };
+
   window._syncLateEnrollment = function(source) {
     var closed = document.getElementById('late-toggle-closed');
     var expand = document.getElementById('late-toggle-expand');
@@ -2283,6 +2298,18 @@ function setupCreateTournamentModal() {
       rows[1].style.display = closed.checked ? 'none' : '';
       rows[1].style.opacity = '1';
     }
+    // Título + ícone canônicos acompanham a posição de cada toggle (v3.1.20).
+    var mLbl = window._lateEnrollLabel('master', closed.checked);
+    var closedTitle = document.getElementById('late-closed-title');
+    if (closedTitle) closedTitle.textContent = mLbl.title;
+    var closedIcon = document.getElementById('late-closed-icon');
+    if (closedIcon) closedIcon.textContent = mLbl.icon;
+    // Segundo toggle só aparece com inscrição aberta; rótulo segue o próprio estado.
+    var cLbl = window._lateEnrollLabel('conf', (expand.checked && !closed.checked));
+    var expandTitle = document.getElementById('late-expand-title');
+    if (expandTitle) expandTitle.textContent = cLbl.title;
+    var expandIcon = document.getElementById('late-expand-icon');
+    if (expandIcon) expandIcon.textContent = cLbl.icon;
     var closedDesc = document.getElementById('late-closed-desc');
     if (closedDesc) closedDesc.textContent = _t(closed.checked ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc');
     var expandDesc = document.getElementById('late-expand-desc');
