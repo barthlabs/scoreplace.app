@@ -6761,11 +6761,14 @@ function setupProfileModal() {
             '<div style="margin:0 0 6px 0;">' +
               '<label class="form-label" style="font-size:0.75rem;">📱 Celulares vinculados</label>' +
               '<div id="profile-linked-phones" style="margin-bottom:6px;display:flex;flex-direction:column;gap:4px;"></div>' +
+              // v3.1.66: IDÊNTICO à linha do WhatsApp acima (mesma largura de DDI, mesma
+              // fonte, mesma altura) — antes o DDI era 110px/0.82rem e cortava "+55" pra
+              // "+5", e o input era menor que o de cima.
               '<div style="display:flex;gap:6px;align-items:center;">' +
-                '<select id="profile-link-phone-country" aria-label="DDI do celular vinculado" class="form-control" style="width:110px;flex-shrink:0;box-sizing:border-box;font-size:0.82rem;">' +
+                '<select id="profile-link-phone-country" aria-label="DDI do celular vinculado" class="form-control" style="width:120px;flex-shrink:0;box-sizing:border-box;font-size:0.85rem;">' +
                   countryOpts +
                 '</select>' +
-                '<input type="tel" id="profile-link-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;font-size:0.85rem;" oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
+                '<input type="tel" id="profile-link-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;" oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
               '</div>' +
               '<div style="margin-top:6px;">' +
                 '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone({linked:true})" style="background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.4);color:#6ee7b7;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📲 Verificar e vincular</button>' +

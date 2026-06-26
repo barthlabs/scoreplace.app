@@ -9,8 +9,9 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.65-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.66-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📱 Campos de celular alinhados no perfil:</b> os campos de WhatsApp e de celulares vinculados ficaram do mesmo tamanho e altura, sem cortar o "+55".</li>' +
         '<li><b>✅ Confirmar voto único:</b> na enquete, um único botão fixo no topo confirma <b>todas as perguntas de uma vez</b> — se faltar responder alguma, o app rola até ela e pede o voto antes de confirmar.</li>' +
         '<li><b>⚡ Busca de pessoas mais leve:</b> a busca de amigos no Explorar passou a reaproveitar a lista por até 30 min — menos consumo e abertura mais rápida.</li>' +
         '<li><b>🛠️ Controles da enquete no topo:</b> para o organizador, os botões <b>Editar / Ver votos / Re-notificar / Encerrar</b> ficam fixos no topo da enquete (em 2x2), sempre visíveis ao rolar. O "Fechar" virou "← Voltar".</li>' +
