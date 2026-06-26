@@ -9,9 +9,11 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.56-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.58-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>🟩 Maioria em destaque nos votos nominais:</b> em enquetes de <b>múltipla escolha</b>, a opção mais votada de cada pergunta ganha um <b>contorno verde</b>, e quem votou em outra opção (ficaria de fora da maioria) aparece em <b>vermelho</b>. Quem ainda não votou fica na cor normal.</li>' +
+        '<li><b>🟩 Mais votada em destaque:</b> nos votos nominais, a opção <b>mais votada de cada pergunta</b> ganha um <b>contorno verde</b> (em qualquer tipo de pergunta).</li>' +
+        '<li><b>📣 Botão Republicar com estado:</b> depois de republicar, o botão fica <b>cinza "Notificados"</b> durante as 24h e volta ao normal sozinho.</li>' +
+        '<li><b>🔴 Quem ficaria de fora:</b> em enquetes de <b>múltipla escolha</b>, quem votou numa opção diferente da mais votada aparece em <b>vermelho</b>. Quem ainda não votou fica na cor normal.</li>' +
         '<li><b>✅ Confirmações sempre visíveis:</b> avisos de confirmação (republicar enquete, encerrar, etc.) agora aparecem <b>por cima</b> da tela — antes, dentro de algumas telas, eles abriam escondidos atrás e parecia que o botão "não fazia nada".</li>' +
         '<li><b>📣 Republicar avisa só quem falta:</b> ao republicar a enquete, agora só recebem aviso os inscritos que <b>ainda não responderam</b> — quem já votou não é incomodado. O bloqueio de 24h só aparece se você clicar em Republicar <b>de novo</b> dentro de 24h.</li>' +
         '<li><b>🎨 Pergunta em destaque:</b> as perguntas da enquete agora aparecem em <b>laranja</b> (sem os rótulos "Seção 1/2"), tanto na votação quanto na criação.</li>' +

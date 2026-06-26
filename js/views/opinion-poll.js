@@ -457,8 +457,18 @@
       '</div>';
       if (!poll.closed) {
         // v3.1.49: REPUBLICAR — re-dispara as notificações pros inscritos (lembrete).
-        // Criador da enquete + organizadores. Bloqueia se notificada há < 24h (avisa).
-        footer += '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(245,158,11,0.14);color:#fbbf24;border:1px solid rgba(245,158,11,0.45);font-weight:700;border-radius:11px;padding:10px;font-size:0.84rem;margin-top:8px;">📣 Republicar — notificar de novo</button>';
+        // Criador da enquete + organizadores. v3.1.57: durante as 24h de cooldown o botão
+        // fica CINZA/inabilitado (clicar ainda explica quanto falta). Cooldown ancorado em
+        // poll.republishedAt (1ª republicação sempre disponível).
+        var _repubLast = poll.republishedAt ? Date.parse(poll.republishedAt) : 0;
+        var _repubRest = _repubLast ? (24 * 3600000 - (Date.now() - _repubLast)) : 0;
+        if (_repubRest > 0) {
+          // Cooldown: CINZA + "Notificados" (clicar ainda explica quanto falta). Volta ao
+          // normal sozinho depois de 24h (o render lê republishedAt).
+          footer += '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:11px;padding:10px;font-size:0.84rem;margin-top:8px;opacity:0.6;cursor:not-allowed;">✅ Notificados</button>';
+        } else {
+          footer += '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(245,158,11,0.14);color:#fbbf24;border:1px solid rgba(245,158,11,0.45);font-weight:700;border-radius:11px;padding:10px;font-size:0.84rem;margin-top:8px;">📣 Republicar — notificar de novo</button>';
+        }
         footer += '<button type="button" onclick="window._opClose(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(239,68,68,0.14);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;border-radius:11px;padding:10px;font-size:0.84rem;margin-top:8px;">🔒 Encerrar enquete</button>';
       }
     }
@@ -553,8 +563,10 @@
       }
       poll.republishedAt = new Date().toISOString();
       try { _save(t); } catch (e) {}
-      window._opCloseOverlay();
+      // v3.1.57: RE-RENDERIZA a enquete (em vez de fechar) → o botão Republicar vira
+      // CINZA "✅ Notificados" na hora. Volta ao normal sozinho depois de 24h.
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      try { _renderVote(t, poll, null); } catch (e) {}
       // Confirmação explícita de que disparou (pedido do dono).
       var msg = sent > 0
         ? ('Avisamos de novo ' + sent + ' inscrito(s) que ainda não responderam. Quem já votou não foi incomodado.')
@@ -590,16 +602,16 @@
         if (poll.votes) Object.keys(poll.votes).forEach(function (u) { if (_opGetVote(poll, u, sec.id).indexOf(o.id) !== -1) vs.push(u); });
         return vs;
       });
-      // Opção da MAIORIA (só em multiseleção). majSet = quem topou a opção mais votada.
-      var majIdx = -1, majSet = null, majText = '';
-      if (sec.multiSelect) {
-        var maxN = 0;
-        optVoters.forEach(function (vs, oi) { if (vs.length > maxN) { maxN = vs.length; majIdx = oi; } });
-        if (majIdx >= 0 && maxN > 0) {
-          majSet = {};
-          optVoters[majIdx].forEach(function (u) { majSet[u] = 1; });
-          majText = sec.options[majIdx].text;
-        }
+      // v3.1.58: opção MAIS VOTADA da seção → box verde. Vale pra TODA seção (1 por
+      // seção), inclusive escolha única. Empate: o 1º com o máximo. Sem votos: sem box.
+      var majIdx = -1, maxN = 0;
+      optVoters.forEach(function (vs, oi) { if (vs.length > maxN) { maxN = vs.length; majIdx = oi; } });
+      if (maxN === 0) majIdx = -1;
+      // majSet (pinta de VERMELHO quem votou em OUTRA opção) SÓ em multiseleção (não-excludente).
+      var majSet = null;
+      if (sec.multiSelect && majIdx >= 0) {
+        majSet = {};
+        optVoters[majIdx].forEach(function (u) { majSet[u] = 1; });
       }
       body += '<div style="margin-bottom:18px;' + (si > 0 ? 'padding-top:14px;border-top:1px solid var(--border-color);' : '') + '">' +
         // sem "SEÇÃO N" — pergunta em LARANJA + negrito (mesma fonte do editor).
