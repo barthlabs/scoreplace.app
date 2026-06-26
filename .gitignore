@@ -25,3 +25,6 @@ firebase-debug*.log
 # Artefatos/documentos locais de trabalho (não fazem parte do app)
 AUDIT-codigo-morto.md
 dicas-coachmarks-scoreplace.pdf
+
+# WhatsApp VPS — .env real nunca commitado (o .env.vps.example sim)
+infra/whatsapp/.env

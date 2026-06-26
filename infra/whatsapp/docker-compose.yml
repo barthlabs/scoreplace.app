@@ -1,0 +1,62 @@
+# scoreplace.app — Evolution API + Postgres + Caddy (TLS) num VPS único.
+# Stack 100% scriptável (substitui o Railway). Sobe com:
+#   docker compose up -d
+#
+# Variáveis vêm do arquivo .env ao lado (gerado pelo bootstrap.sh).
+# A sessão do WhatsApp é persistida NO POSTGRES (DATABASE_SAVE_DATA_INSTANCE=true)
+# + no volume evolution_instances — por isso o backup do Postgres preserva o pareamento.
+name: scoreplace-wa
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: scoreplace-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: evolution
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Sem `ports:` — o Postgres só é acessível dentro da rede interna do compose.
+
+  evolution:
+    image: atendai/evolution-api:v2.3.7
+    container_name: scoreplace-evolution
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    volumes:
+      - evolution_instances:/evolution/instances
+    expose:
+      - "8080"
+    # Sem `ports:` — só o Caddy fala com o Evolution; o mundo externo passa pelo Caddy (TLS).
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: scoreplace-caddy
+    restart: unless-stopped
+    depends_on:
+      - evolution
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?defina DOMAIN no .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pg_data:
+  evolution_instances:
+  caddy_data:
+  caddy_config:

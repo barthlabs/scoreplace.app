@@ -1,0 +1,10 @@
+[Unit]
+Description=scoreplace.app — backup do Postgres (Evolution) pro Google Drive
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# .env do compose traz GDRIVE_REMOTE/FOLDER/RETENTION_DAYS (o "-" torna opcional)
+EnvironmentFile=-/opt/scoreplace-wa/.env
+ExecStart=/opt/scoreplace-wa/backup/pg-backup.sh

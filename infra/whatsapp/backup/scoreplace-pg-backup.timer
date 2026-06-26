@@ -1,0 +1,9 @@
+[Unit]
+Description=Dispara o backup do Postgres (Evolution) diariamente às 03:30
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

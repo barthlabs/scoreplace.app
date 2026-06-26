@@ -1,0 +1,5 @@
+# Caddy emite e renova o certificado HTTPS (Let's Encrypt) sozinho,
+# assim que o DNS de {$DOMAIN} apontar pro IP deste VPS.
+{$DOMAIN} {
+	reverse_proxy evolution:8080
+}
