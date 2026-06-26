@@ -1,0 +1,550 @@
+// schedule-poll.js — "Combinar jogos" (agendamento POR JOGO) — Frente F (v3.1.46)
+//
+// Deixa os JOGADORES de cada confronto da RODADA ATUAL combinarem quando jogar,
+// dentro da janela da rodada, e ao haver consenso AGENDAR o jogo (grava data/hora
+// no próprio match). Usado em torneios sem data/hora fixa por jogo (ex.: Confra
+// fase 1 = 1 rodada Liga até o próximo sorteio; fase 2 = eliminatória multi-dia).
+//
+// ── DECISÕES DO DONO (que moldam o design) ───────────────────────────────────
+//  1. ESCOPO = POR JOGO: cada confronto; os 2 jogadores (4 nas duplas) combinam.
+//  2. Janela em fase de ELIMINAÇÃO = endDate da fase/torneio, dividida pelo nº de
+//     rodadas restantes; em LIGA = próximo sorteio devido (_nextOwedDrawMs).
+//  3. CONSENSO + OK FINAL: cada jogador marca disponibilidade; ao convergir, cada
+//     um dá um OK final na opção escolhida; quando TODOS confirmam a MESMA opção →
+//     agenda (m.scheduledAt), aparece chip no card e a UI de combinar colapsa.
+//
+// ── MODELO DE DADOS (no MATCH, sem container em opinionPolls) ─────────────────
+//  m.schedule = {
+//    enabledAt,                          // ISO, set no 1º write (auditoria)
+//    options: [
+//      { id, kind:'date',   dateISO:'2026-07-02', time:'17:00', byUid },
+//      { id, kind:'weekly', weekdays:[2,4], time:'17:00', byUid }  // 0=Dom..6=Sáb
+//    ],
+//    avail:    { [uid]: [optId,...] },    // quais opções cada jogador CONSEGUE
+//    confirms: { [uid]: optId },          // OK FINAL de cada jogador numa opção
+//    scheduledOptId
+//  }
+//  m.scheduledAt = ISO   // espelho TOP-LEVEL — dirige o chip + estado colapsado
+//  m.scheduledBy = uid
+//
+// Rules: matches/rounds/groups/rodadas já estão na allowlist isParticipantBracketDiff
+// → SEM mudança de firestore.rules. Mesmo padrão save→confirma-ou-reverte de _opVote.
+//
+// Módulo NOVO (window._sch*), espelha o ESTILO de opinion-poll.js sem tocá-lo.
+(function () {
+  'use strict';
+  var WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  var DAY = 86400000;
+
+  function _esc(s) { return (window._safeHtml ? window._safeHtml(s) : String(s == null ? '' : s)); }
+  function _attr(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+  function _cu() { return window.AppStore && window.AppStore.currentUser; }
+  function _rand() { return Math.floor(Math.random() * 1e6); }
+  function _findT(tId) {
+    if (typeof window._findTournamentById === 'function') return window._findTournamentById(tId);
+    return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
+  }
+  // Promise do save — NUNCA engolir rejeição (classe do bug Confra).
+  function _save(t) {
+    try {
+      if (window.FirestoreDB && window.FirestoreDB.saveTournament) return Promise.resolve(window.FirestoreDB.saveTournament(t));
+    } catch (e) { return Promise.reject(e); }
+    return Promise.reject(new Error('FirestoreDB indisponível'));
+  }
+  function _isOrg(t) { return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t)))); }
+
+  // ─── datas / formatação (BRT) ────────────────────────────────────────────────
+  function _brtYmd(ms) {
+    try { return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
+    catch (e) { return new Date(ms).toISOString().slice(0, 10); }
+  }
+  function _fmtDateTime(iso) {
+    try {
+      var d = new Date(iso); if (isNaN(d.getTime())) return String(iso || '');
+      var dd = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+      var hh = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+      return dd + ' às ' + hh;
+    } catch (e) { return String(iso || ''); }
+  }
+  function _optLabel(o) {
+    if (!o) return '';
+    if (o.kind === 'date' && o.dateISO) {
+      var p = String(o.dateISO).split('-');
+      var dm = (p.length === 3) ? (p[2] + '/' + p[1]) : o.dateISO;
+      return dm + (o.time ? ' às ' + o.time : '');
+    }
+    var days = (o.weekdays || []).slice().sort(function (a, b) { return a - b; }).map(function (w) { return WD[w] || '?'; }).join('+');
+    return days + (o.time ? ' ' + o.time : '');
+  }
+
+  // ─── janela da rodada atual ───────────────────────────────────────────────────
+  // Liga: até o próximo sorteio devido. Elim/Grupos/Monarch: divide [agora→endDate]
+  // pelo nº de rodadas restantes.
+  window._schWindow = function (t) {
+    var now = Date.now();
+    var endMs = null;
+    try {
+      var isLiga = t && (t.format === 'Liga' || t.format === 'Ranking');
+      if (isLiga && typeof window._nextOwedDrawMs === 'function') {
+        endMs = window._nextOwedDrawMs(t, now);
+      }
+      if (endMs == null) {
+        // endDate da fase atual (multi-fase) ou do torneio
+        var cur = (t && t.currentPhaseIndex) || 0;
+        var pcfg = (t && Array.isArray(t.phases) && t.phases[cur]) || {};
+        var endStr = pcfg.endDate || (t && t.endDate) || '';
+        var endTime = pcfg.endTime || (t && t.endTime) || '23:59';
+        var phaseEndMs = null;
+        if (endStr) {
+          var s = String(endStr); if (s.indexOf('T') !== -1) s = s.split('T')[0];
+          var pe = new Date(s + 'T' + endTime + ':00-03:00').getTime();
+          if (!isNaN(pe)) phaseEndMs = pe;
+        }
+        if (phaseEndMs != null && phaseEndMs > now) {
+          // divide pelos rounds restantes (cross-formato via o adapter canônico)
+          var remaining = 1;
+          try {
+            var ur = (typeof window._getUnifiedRounds === 'function') ? window._getUnifiedRounds(t) : { columns: [] };
+            var cols = (ur && ur.columns) || [];
+            var done = cols.filter(function (c) { return c && c.status === 'done'; }).length;
+            remaining = Math.max(1, cols.length - done);
+          } catch (e2) { remaining = 1; }
+          var band = (phaseEndMs - now) / remaining;
+          endMs = Math.min(phaseEndMs, now + band);
+        } else if (phaseEndMs != null) {
+          endMs = phaseEndMs; // já passou — deixa o usuário ver, mas no passado
+        }
+      }
+    } catch (e) { endMs = null; }
+    if (endMs == null || isNaN(endMs)) endMs = now + 14 * DAY; // fallback 14 dias
+    var startMs = now;
+    if (t && t.lastAutoDrawAt) { var la = new Date(t.lastAutoDrawAt).getTime(); if (!isNaN(la) && la < now) startMs = la; }
+    return { startMs: startMs, endMs: Math.max(endMs, now + 60000) };
+  };
+
+  // ─── rodada atual (cross-formato) ──────────────────────────────────────────────
+  function _filterPlayable(matches) {
+    return (matches || []).filter(function (m) {
+      if (!m) return false;
+      if (m.isBye || m.isSitOut) return false;
+      var a = m.p1, b = m.p2;
+      if (a === 'BYE' || b === 'BYE' || a === 'TBD' || b === 'TBD') return false;
+      if (!a || !b) return false;
+      return true;
+    });
+  }
+  window._schCurrentRoundMatches = function (t) {
+    var empty = { round: null, matches: [], col: null };
+    if (!t) return empty;
+    var ur = (typeof window._getUnifiedRounds === 'function') ? window._getUnifiedRounds(t) : null;
+    var cols = (ur && ur.columns) || [];
+    if (!cols.length) return empty;
+    var col = null;
+    for (var i = cols.length - 1; i >= 0; i--) { if (cols[i] && cols[i].status !== 'done') { col = cols[i]; break; } }
+    if (!col) col = cols[cols.length - 1];
+    return { round: col.round, matches: _filterPlayable(col.matches), col: col };
+  };
+
+  // memo leve: o chip é chamado por CADA card; evita rodar o adapter N vezes/render.
+  var _crCache = null;
+  function _currentRoundIdSet(t) {
+    var now = Date.now();
+    if (_crCache && _crCache.tid === String(t.id) && (now - _crCache.at) < 1500) return _crCache.ids;
+    var ids = {};
+    try { window._schCurrentRoundMatches(t).matches.forEach(function (m) { if (m && m.id != null) ids[m.id] = 1; }); } catch (e) {}
+    _crCache = { tid: String(t.id), ids: ids, at: now };
+    return ids;
+  }
+  function _schIsCurrentRoundMatch(t, m) { return !!(m && m.id != null && _currentRoundIdSet(t)[m.id]); }
+
+  // ─── uids dos jogadores do match (singles + duplas + monarch) ──────────────────
+  function _schMatchUids(t, m) {
+    if (!t || !m) return [];
+    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    var allUids = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return p && p.uid ? [p.uid] : []; };
+    var out = {};
+    function addByName(nm) {
+      if (!nm || nm === 'TBD' || nm === 'BYE') return;
+      var pp = parts.find(function (p) { return typeof p === 'object' && (p.displayName || p.name || '') === nm; });
+      if (pp) allUids(pp).forEach(function (u) { if (u) out[u] = 1; });
+    }
+    if (m.isMonarch) {
+      (Array.isArray(m.team1) ? m.team1 : []).forEach(addByName);
+      (Array.isArray(m.team2) ? m.team2 : []).forEach(addByName);
+    } else { addByName(m.p1); addByName(m.p2); }
+    return Object.keys(out);
+  }
+  function _schUserIsPlayer(t, m, user) {
+    if (!user) return false;
+    if (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, user) > 0) return true;
+    return !!(user.uid && _schMatchUids(t, m).indexOf(user.uid) !== -1);
+  }
+
+  function _schFindMatch(t, matchId) {
+    var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+    return (all || []).find(function (m) { return m && String(m.id) === String(matchId); }) || null;
+  }
+  function _ensureSchedule(m) {
+    if (!m.schedule || typeof m.schedule !== 'object') m.schedule = { options: [], avail: {}, confirms: {} };
+    if (!Array.isArray(m.schedule.options)) m.schedule.options = [];
+    if (!m.schedule.avail || typeof m.schedule.avail !== 'object') m.schedule.avail = {};
+    if (!m.schedule.confirms || typeof m.schedule.confirms !== 'object') m.schedule.confirms = {};
+    if (!m.schedule.enabledAt) m.schedule.enabledAt = new Date().toISOString();
+    return m.schedule;
+  }
+
+  // Resolve a opção escolhida → ISO concreto pra m.scheduledAt.
+  function _schResolveISO(opt, t) {
+    if (!opt) return '';
+    if (opt.kind === 'date' && opt.dateISO) {
+      var d = new Date(opt.dateISO + 'T' + (opt.time || '12:00') + ':00-03:00');
+      return isNaN(d.getTime()) ? '' : d.toISOString();
+    }
+    // weekly → próxima ocorrência do menor weekday dentro da janela (descritor
+    // recorrente fica na option só pra exibição).
+    var win = window._schWindow(t);
+    var wds = (opt.weekdays || []).slice().sort(function (a, b) { return a - b; });
+    if (!wds.length) return '';
+    var tp = String(opt.time || '12:00').split(':');
+    var hh = ('0' + (parseInt(tp[0], 10) || 0)).slice(-2), mm = ('0' + (parseInt(tp[1], 10) || 0)).slice(-2);
+    for (var i = 0; i < 28; i++) {
+      var ms = win.startMs + i * DAY;
+      var ymd = _brtYmd(ms);
+      var wd = new Date(ymd + 'T12:00:00-03:00').getDay(); // weekday em BRT
+      if (wds.indexOf(wd) !== -1) {
+        var d2 = new Date(ymd + 'T' + hh + ':' + mm + ':00-03:00');
+        if (!isNaN(d2.getTime()) && d2.getTime() >= win.startMs) return d2.toISOString();
+      }
+    }
+    return '';
+  }
+
+  // Consenso: todos os uids confirmaram a MESMA opção → agenda. Roda DENTRO do
+  // confirm, ANTES do save → escrita atômica. Retorna true se fechou agora.
+  function _schTrySchedule(t, m) {
+    var uids = _schMatchUids(t, m);
+    if (uids.length < 2) return false;
+    var conf = (m.schedule && m.schedule.confirms) || {};
+    var first = conf[uids[0]];
+    if (!first) return false;
+    if (!uids.every(function (u) { return conf[u] === first; })) return false;
+    var opt = (m.schedule.options || []).find(function (o) { return o.id === first; });
+    if (!opt) return false;
+    var iso = _schResolveISO(opt, t);
+    if (!iso) return false;
+    m.schedule.scheduledOptId = first;
+    m.scheduledAt = iso;
+    m.scheduledBy = (_cu() || {}).uid || '';
+    return true;
+  }
+
+  // ─── notificações (level fundamental) ──────────────────────────────────────────
+  function _schKickoffData(t, m) {
+    return {
+      type: 'schedule', tournamentId: String(t.id), tournamentName: t.name || '', matchId: m.id,
+      title: '📅 Combine seu jogo',
+      message: 'Combine com o adversário quando jogar "' + (m.p1 || '') + ' vs ' + (m.p2 || '') + '" em "' + (t.name || '') + '".',
+      level: 'fundamental', timestamp: Date.now()
+    };
+  }
+  function _schScheduledData(t, m) {
+    return {
+      type: 'schedule', tournamentId: String(t.id), tournamentName: t.name || '', matchId: m.id,
+      title: '📅 Jogo combinado',
+      message: 'Seu jogo "' + (m.p1 || '') + ' vs ' + (m.p2 || '') + '" foi combinado para ' + _fmtDateTime(m.scheduledAt) + '.',
+      level: 'fundamental', timestamp: Date.now()
+    };
+  }
+  function _schNotifyScheduled(t, m) {
+    if (typeof window._sendUserNotification !== 'function') return;
+    var data = _schScheduledData(t, m);
+    var uids = _schMatchUids(t, m);
+    uids.forEach(function (u) { window._sendUserNotification(u, data); });
+    if (t.creatorUid && uids.indexOf(t.creatorUid) === -1) window._sendUserNotification(t.creatorUid, data);
+  }
+
+  // ─── overlay (helpers) ─────────────────────────────────────────────────────────
+  function _overlay(id, innerHtml) {
+    var ex = document.getElementById(id); if (ex) ex.remove();
+    var o = document.createElement('div');
+    o.id = id;
+    o.style.cssText = 'position:fixed;inset:0;z-index:100040;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:1rem;';
+    o.innerHTML = '<div style="background:var(--bg-card,#0f172a);width:96%;max-width:460px;max-height:90vh;overflow:auto;border-radius:16px;border:1px solid rgba(16,185,129,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);">' + innerHtml + '</div>';
+    o.addEventListener('click', function (e) { if (e.target === o) o.remove(); });
+    document.body.appendChild(o);
+    return o;
+  }
+  function _close(id) { var o = document.getElementById(id); if (o) o.remove(); }
+  window._schCloseOverlay = function () { _close('sch-overlay'); _close('sch-org-overlay'); };
+
+  // ─── chip / botão no card ──────────────────────────────────────────────────────
+  window._schCardChip = function (t, m) {
+    try {
+      if (!t || !m) return '';
+      if (m.scheduledAt) {
+        return '<div style="display:flex;justify-content:center;margin:8px 0 2px;"><span style="display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.45);color:#34d399;font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + _esc(_fmtDateTime(m.scheduledAt)) + '</span></div>';
+      }
+      if (m.winner || m.isBye || m.isSitOut) return '';
+      if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return '';
+      var cu = _cu(); if (!cu || !cu.uid) return '';
+      if (!_schIsCurrentRoundMatch(t, m)) return '';
+      if (!_schUserIsPlayer(t, m, cu)) return '';
+      var n = (m.schedule && Array.isArray(m.schedule.options)) ? m.schedule.options.length : 0;
+      return '<div style="display:flex;justify-content:center;margin:8px 0 2px;">' +
+        '<button class="btn btn-shine hover-lift" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
+        'style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:11px;padding:8px 16px;font-weight:800;font-size:0.82rem;box-shadow:0 4px 14px rgba(16,185,129,0.4);">' +
+        '📅 Combinar jogo' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:1px 7px;font-size:0.72rem;">' + n + '</span>' : '') +
+        '</button></div>';
+    } catch (e) { return ''; }
+  };
+
+  // ─── overlay por jogo ──────────────────────────────────────────────────────────
+  window._schOpenMatch = function (tId, matchId) {
+    var t = _findT(tId); if (!t) return;
+    var m = _schFindMatch(t, matchId); if (!m) return;
+    _renderMatch(t, m);
+  };
+
+  function _avatarsFor(t, uids) {
+    if (!uids || !uids.length) return '';
+    return uids.map(function (u) {
+      var nm = (typeof window._opVoterName === 'function') ? window._opVoterName(t, u) : 'Jogador';
+      var src = (typeof window._profileAvatarUrl === 'function') ? window._profileAvatarUrl(nm, '', 26)
+        : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm));
+      return '<img src="' + _esc(src) + '" title="' + _esc(nm) + '" alt="' + _esc(nm) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card,#0f172a);margin-left:-6px;flex-shrink:0;">';
+    }).join('');
+  }
+
+  function _renderMatch(t, m) {
+    var cu = _cu();
+    var uid = cu && cu.uid;
+    var isPlayer = _schUserIsPlayer(t, m, cu);
+    var isOrg = _isOrg(t);
+    var win = window._schWindow(t);
+    var allUids = _schMatchUids(t, m);
+    var sched = m.schedule || {};
+    var header =
+      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
+        '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📅 Combinar jogo</span>' +
+        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Fechar</button>' +
+      '</div>';
+    var matchLine = '<div style="font-weight:800;font-size:1.02rem;color:var(--text-bright);margin-bottom:2px;">' + _esc(m.p1 || '') + ' <span style="color:var(--text-muted);font-weight:600;">vs</span> ' + _esc(m.p2 || '') + '</div>';
+
+    // ── estado AGENDADO (colapsado) ──
+    if (m.scheduledAt) {
+      var canUndo = isPlayer && !(typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m));
+      var body =
+        '<div style="padding:1.1rem;">' + matchLine +
+          '<div style="margin-top:14px;text-align:center;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.4);border-radius:14px;padding:18px;">' +
+            '<div style="font-size:2rem;line-height:1;">📅</div>' +
+            '<div style="font-weight:900;font-size:1.1rem;color:#34d399;margin-top:8px;">Jogo combinado</div>' +
+            '<div style="font-size:0.95rem;color:var(--text-bright);margin-top:4px;">' + _esc(_fmtDateTime(m.scheduledAt)) + '</div>' +
+          '</div>' +
+          (canUndo ? '<button type="button" onclick="window._schUnconfirm(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="width:100%;margin-top:12px;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;border-radius:11px;padding:9px;font-size:0.82rem;">↩️ Desfazer combinação</button>' : '') +
+        '</div>';
+      _overlay('sch-overlay', header + body);
+      return;
+    }
+
+    // ── opções + disponibilidade + OK final ──
+    var myAvail = (sched.avail && sched.avail[uid]) || [];
+    var myConfirm = sched.confirms && sched.confirms[uid];
+    var confirmedCount = {};
+    (sched.options || []).forEach(function (o) { confirmedCount[o.id] = 0; });
+    if (sched.confirms) Object.keys(sched.confirms).forEach(function (u) { var oid = sched.confirms[u]; if (confirmedCount[oid] != null) confirmedCount[oid]++; });
+
+    var optsHtml = '';
+    (sched.options || []).forEach(function (o) {
+      var availUids = Object.keys(sched.avail || {}).filter(function (u) { return (sched.avail[u] || []).indexOf(o.id) !== -1; });
+      var iCan = myAvail.indexOf(o.id) !== -1;
+      var iPicked = myConfirm === o.id;
+      var nConf = confirmedCount[o.id] || 0;
+      optsHtml +=
+        '<div style="background:rgba(16,185,129,0.05);border:1px solid ' + (iPicked ? '#10b981' : 'rgba(16,185,129,0.22)') + ';border-radius:12px;padding:11px 12px;margin-bottom:10px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+            '<span style="font-weight:800;font-size:0.95rem;color:var(--text-bright);">' + _esc(_optLabel(o)) + '</span>' +
+            '<span style="font-size:0.72rem;color:var(--text-muted);font-weight:700;flex-shrink:0;">' + availUids.length + '/' + (allUids.length || '?') + ' ✔' + (nConf ? ' · ' + nConf + ' OK' : '') + '</span>' +
+          '</div>' +
+          (availUids.length ? '<div style="display:flex;align-items:center;padding-left:6px;margin-top:8px;">' + _avatarsFor(t, availUids) + '</div>' : '') +
+          (isPlayer ? (
+            '<div style="display:flex;gap:8px;margin-top:10px;">' +
+              '<button type="button" onclick="window._schToggleAvail(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\',\'' + _attr(o.id) + '\')" class="btn" style="flex:1;background:' + (iCan ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.05)') + ';color:' + (iCan ? '#34d399' : 'var(--text-muted)') + ';border:1px solid ' + (iCan ? 'rgba(16,185,129,0.45)' : 'var(--border-color)') + ';font-weight:700;border-radius:9px;padding:8px;font-size:0.8rem;">' + (iCan ? '✔ Consigo' : 'Consigo?') + '</button>' +
+              '<button type="button" onclick="window._schConfirm(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\',\'' + _attr(o.id) + '\')" class="btn" style="flex:1;background:' + (iPicked ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(99,102,241,0.1)') + ';color:' + (iPicked ? '#fff' : '#a5b4fc') + ';border:' + (iPicked ? 'none' : '1px solid rgba(99,102,241,0.4)') + ';font-weight:800;border-radius:9px;padding:8px;font-size:0.8rem;">' + (iPicked ? '✅ É esse' : 'É esse') + '</button>' +
+            '</div>'
+          ) : '') +
+        '</div>';
+    });
+    if (!(sched.options || []).length) optsHtml = '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:14px 0;">Ninguém propôs horário ainda. Proponha abaixo 👇</div>';
+
+    var minD = _brtYmd(win.startMs), maxD = _brtYmd(win.endMs);
+    var addHtml = isPlayer ? (
+      '<div style="margin-top:6px;padding-top:14px;border-top:1px solid var(--border-color);">' +
+        '<div style="font-size:0.78rem;font-weight:800;color:#34d399;margin-bottom:8px;">Combinar até ' + _esc(_fmtDateTime(win.endMs)) + '</div>' +
+        // data + hora
+        '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+          '<input type="date" id="sch-date" min="' + minD + '" max="' + maxD + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+          '<input type="time" id="sch-date-time" value="17:00" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+        '</div>' +
+        '<button type="button" onclick="window._schProposeDate(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="width:100%;background:rgba(16,185,129,0.12);border:1px dashed rgba(16,185,129,0.5);color:#34d399;font-weight:700;border-radius:9px;padding:9px;font-size:0.82rem;margin-bottom:14px;">＋ propor data e hora</button>' +
+        // combo de dias
+        '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:6px;">ou combo de dias da semana:</div>' +
+        '<div id="sch-weekdays" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">' +
+          WD.map(function (w, i) { return '<button type="button" data-wd="' + i + '" data-on="0" onclick="window._schToggleWd(this)" style="background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);color:var(--text-muted);border-radius:8px;padding:6px 9px;font-size:0.78rem;font-weight:700;cursor:pointer;">' + w + '</button>'; }).join('') +
+        '</div>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<input type="time" id="sch-weekly-time" value="17:00" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+          '<button type="button" onclick="window._schProposeWeekly(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="flex:1;background:rgba(16,185,129,0.12);border:1px dashed rgba(16,185,129,0.5);color:#34d399;font-weight:700;border-radius:9px;padding:9px;font-size:0.82rem;">＋ propor dias</button>' +
+        '</div>' +
+      '</div>'
+    ) : (isOrg ? '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);text-align:center;">Você não joga este confronto — acompanhando como organizador.</div>' : '');
+
+    var body = '<div style="padding:1rem 1.1rem;">' + matchLine +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin:2px 0 12px;">Quem joga propõe horários e marca o que consegue. Quando todos derem ✅ no mesmo, o jogo é combinado.</div>' +
+      optsHtml + addHtml + '</div>';
+    _overlay('sch-overlay', header + body);
+  }
+
+  // toggle visual dos chips de dia da semana
+  window._schToggleWd = function (btn) {
+    if (!btn) return; var on = btn.getAttribute('data-on') === '1';
+    btn.setAttribute('data-on', on ? '0' : '1');
+    if (on) { btn.style.background = 'var(--bg-darker,#0b1220)'; btn.style.color = 'var(--text-muted)'; btn.style.borderColor = 'rgba(255,255,255,0.14)'; }
+    else { btn.style.background = 'linear-gradient(135deg,#10b981,#059669)'; btn.style.color = '#fff'; btn.style.borderColor = '#10b981'; }
+  };
+
+  // ─── mutadores (otimista + save/revert, espelhando _opVote) ────────────────────
+  function _guardPlayer(t, m) {
+    var cu = _cu();
+    if (!cu || !cu.uid) { if (typeof showNotification === 'function') showNotification('Entre pra combinar', 'Faça login pra combinar o jogo.', 'warning'); return null; }
+    if (!_schUserIsPlayer(t, m, cu)) { if (typeof showNotification === 'function') showNotification('Só os jogadores', 'Só quem joga este confronto pode combinar.', 'warning'); return null; }
+    return cu;
+  }
+  function _saveSchedule(t, m, prevClone, scheduledNow) {
+    return _save(t).then(function () {
+      _renderMatch(t, m);
+      if (scheduledNow) { try { _schNotifyScheduled(t, m); } catch (e) {} }
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      _crCache = null;
+    }).catch(function (err) {
+      m.schedule = prevClone.schedule; m.scheduledAt = prevClone.scheduledAt; m.scheduledBy = prevClone.scheduledBy;
+      var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
+      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
+      try { console.error('[schedule-poll] rejeitado:', err); } catch (e) {}
+      _renderMatch(t, m);
+    });
+  }
+  function _snapshot(m) {
+    return {
+      schedule: m.schedule ? JSON.parse(JSON.stringify(m.schedule)) : undefined,
+      scheduledAt: m.scheduledAt, scheduledBy: m.scheduledBy
+    };
+  }
+
+  window._schProposeDate = function (tId, matchId) {
+    var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
+    var cu = _guardPlayer(t, m); if (!cu) return;
+    var dEl = document.getElementById('sch-date'), tEl = document.getElementById('sch-date-time');
+    var dateISO = dEl && dEl.value; var time = (tEl && tEl.value) || '17:00';
+    if (!dateISO) { if (typeof showNotification === 'function') showNotification('Escolha a data', '', 'warning'); return; }
+    var win = window._schWindow(t);
+    var ms = new Date(dateISO + 'T' + time + ':00-03:00').getTime();
+    if (isNaN(ms) || ms < win.startMs - DAY || ms > win.endMs + DAY) { if (typeof showNotification === 'function') showNotification('Fora do prazo', 'Escolha uma data dentro da janela da rodada.', 'warning'); return; }
+    var prev = _snapshot(m); var s = _ensureSchedule(m);
+    s.options.push({ id: 'so_' + Date.now() + '_' + _rand(), kind: 'date', dateISO: dateISO, time: time, byUid: cu.uid });
+    _saveSchedule(t, m, prev, false);
+  };
+
+  window._schProposeWeekly = function (tId, matchId) {
+    var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
+    var cu = _guardPlayer(t, m); if (!cu) return;
+    var wds = [];
+    document.querySelectorAll('#sch-weekdays [data-wd][data-on="1"]').forEach(function (b) { wds.push(parseInt(b.getAttribute('data-wd'), 10)); });
+    var tEl = document.getElementById('sch-weekly-time'); var time = (tEl && tEl.value) || '17:00';
+    if (!wds.length) { if (typeof showNotification === 'function') showNotification('Escolha os dias', 'Marque ao menos um dia da semana.', 'warning'); return; }
+    var prev = _snapshot(m); var s = _ensureSchedule(m);
+    s.options.push({ id: 'so_' + Date.now() + '_' + _rand(), kind: 'weekly', weekdays: wds, time: time, byUid: cu.uid });
+    _saveSchedule(t, m, prev, false);
+  };
+
+  window._schToggleAvail = function (tId, matchId, optId) {
+    var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
+    var cu = _guardPlayer(t, m); if (!cu) return;
+    var prev = _snapshot(m); var s = _ensureSchedule(m);
+    var arr = (s.avail[cu.uid] || []).slice();
+    var idx = arr.indexOf(optId);
+    if (idx === -1) arr.push(optId); else arr.splice(idx, 1);
+    if (arr.length) s.avail[cu.uid] = arr; else delete s.avail[cu.uid];
+    // se desmarcou disponibilidade da opção que tinha confirmado, tira o OK também
+    if (idx !== -1 && s.confirms[cu.uid] === optId) delete s.confirms[cu.uid];
+    _saveSchedule(t, m, prev, false);
+  };
+
+  window._schConfirm = function (tId, matchId, optId) {
+    var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
+    var cu = _guardPlayer(t, m); if (!cu) return;
+    var prev = _snapshot(m); var s = _ensureSchedule(m);
+    if (s.confirms[cu.uid] === optId) { delete s.confirms[cu.uid]; } // toggle off
+    else {
+      s.confirms[cu.uid] = optId;
+      // confirmar implica disponível
+      var arr = (s.avail[cu.uid] || []).slice(); if (arr.indexOf(optId) === -1) { arr.push(optId); s.avail[cu.uid] = arr; }
+    }
+    var scheduledNow = _schTrySchedule(t, m);
+    _saveSchedule(t, m, prev, scheduledNow);
+  };
+
+  window._schUnconfirm = function (tId, matchId) {
+    var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
+    var cu = _guardPlayer(t, m); if (!cu) return;
+    if (typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m)) {
+      if (typeof showNotification === 'function') showNotification('Jogo já começou', 'Não dá pra desfazer — o jogo já tem placar.', 'warning'); return;
+    }
+    var prev = _snapshot(m); var s = _ensureSchedule(m);
+    delete s.confirms[cu.uid];
+    s.scheduledOptId = null; m.scheduledAt = ''; m.scheduledBy = '';
+    _saveSchedule(t, m, prev, false);
+  };
+
+  // ─── overlay do organizador (kickoff + overview) ───────────────────────────────
+  window._schOpenOrganizer = function (tId) {
+    var t = _findT(tId); if (!t || !_isOrg(t)) return;
+    var cr = window._schCurrentRoundMatches(t);
+    var rows = (cr.matches || []).map(function (m) {
+      var status, color;
+      if (m.scheduledAt) { status = '📅 ' + _fmtDateTime(m.scheduledAt); color = '#34d399'; }
+      else if (m.schedule && (m.schedule.options || []).length) { status = '⏳ combinando (' + m.schedule.options.length + ' opç.)'; color = '#fbbf24'; }
+      else { status = 'sem propostas'; color = 'var(--text-muted)'; }
+      return '<div onclick="window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:10px;margin-bottom:8px;cursor:pointer;">' +
+        '<span style="font-size:0.88rem;color:var(--text-bright);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc((m.p1 || '') + ' vs ' + (m.p2 || '')) + '</span>' +
+        '<span style="font-size:0.74rem;font-weight:700;color:' + color + ';flex-shrink:0;">' + _esc(status) + '</span>' +
+      '</div>';
+    }).join('');
+    if (!rows) rows = '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:14px 0;">Sem jogos na rodada atual.</div>';
+    var header =
+      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
+        '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📅 Combinar jogos</span>' +
+        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Fechar</button>' +
+      '</div>';
+    var body = '<div style="padding:1rem 1.1rem;">' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">Os jogadores de cada confronto combinam o horário entre eles, dentro do prazo da rodada. Toque num jogo pra acompanhar.</div>' +
+      rows +
+      '<button type="button" onclick="window._schNotifyRound(\'' + _attr(t.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;border:none;border-radius:11px;padding:11px;font-size:0.9rem;margin-top:6px;">📣 Notificar jogadores da rodada</button>' +
+    '</div>';
+    _overlay('sch-org-overlay', header + body);
+  };
+
+  window._schNotifyRound = function (tId) {
+    var t = _findT(tId); if (!t || !_isOrg(t)) return;
+    if (typeof window._sendUserNotification !== 'function') { if (typeof showNotification === 'function') showNotification('Indisponível', 'Notificações indisponíveis.', 'warning'); return; }
+    var cr = window._schCurrentRoundMatches(t);
+    var n = 0;
+    (cr.matches || []).forEach(function (m) {
+      if (m.scheduledAt) return; // já combinado
+      _ensureSchedule(m);
+      _schMatchUids(t, m).forEach(function (u) { window._sendUserNotification(u, _schKickoffData(t, m)); n++; });
+    });
+    try { _save(t); } catch (e) {}
+    window._schCloseOverlay();
+    if (typeof showNotification === 'function') showNotification('📣 Notificados', n + ' aviso(s) enviado(s).', 'success');
+  };
+})();

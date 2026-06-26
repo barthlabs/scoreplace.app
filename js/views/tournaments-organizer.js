@@ -327,6 +327,7 @@ window._notifCta = function(type, td) {
   if ((t === 'casual_invite' || t === 'casual_link_accepted' || t === 'casual_link_rejected' || t === 'casual_link_request') && td.roomCode) return { label: 'Ver partida', url: base + '/#casual/' + String(td.roomCode).toUpperCase() };
   if (t === 'friend_request') return { label: 'Responder', url: base + '/#notifications' };
   if (t === 'poll' && tUrl) return { label: '📊 Responder enquete', url: tUrl };
+  if (t === 'schedule' && tId) return { label: '📅 Combinar jogo', url: base + '/#bracket/' + tId };
   if (tUrl) return { label: 'Ver torneio', url: tUrl };
   return { label: 'Abrir scoreplace', url: base };
 };

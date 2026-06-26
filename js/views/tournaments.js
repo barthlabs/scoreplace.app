@@ -2442,6 +2442,7 @@ function renderTournaments(container, tournamentId = null) {
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
                 ${isOrg ? `<button class="btn btn-tool-indigo hover-lift" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
+                ${(isOrg && hasDraw && !isFinished) ? `<button class="btn btn-tool-green hover-lift" onclick="event.stopPropagation(); window._schOpenOrganizer('${t.id}')">📅 Combinar jogos</button>` : ''}
                 ${_arbitrosBtn}
                 ${toggleRegBtn}
                 ${sortearBtn}

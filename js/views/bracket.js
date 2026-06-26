@@ -2572,6 +2572,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${vsRow}
       ${p2Row}
       ${winnerBadge}
+      ${(typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : ''}
     </div>`;
 }
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
