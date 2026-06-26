@@ -447,36 +447,40 @@
       body += '</div>';
     });
 
-    // rodapé nível-poll
-    var footer = '';
-    if (poll.closed) footer += '<div style="text-align:center;font-size:0.8rem;color:var(--text-muted);font-weight:700;margin-top:4px;">🔒 Enquete encerrada</div>';
+    // v3.1.63: botões do ORGANIZADOR no TOPO, sempre visíveis (sticky), em grade 2x2:
+    //   Editar | Ver votos  /  Re-notificar | Encerrar
+    // (com enquete encerrada, só Editar | Ver votos). O "Fechar" do topo vira "← Voltar".
+    var _orgTop = '';
     if (isOrg) {
-      footer += '<div style="display:flex;gap:8px;margin-top:14px;">' +
-        '<button type="button" onclick="window._opOpenEditor(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:1;background:rgba(99,102,241,0.14);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4);font-weight:700;border-radius:11px;padding:10px;font-size:0.82rem;">✏️ Editar</button>' +
-        '<button type="button" onclick="window._opOpenTally(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:1;background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.4);font-weight:700;border-radius:11px;padding:10px;font-size:0.82rem;">👁️ Ver votos</button>' +
-      '</div>';
+      var _cellStyle = 'border-radius:10px;padding:10px;font-size:0.82rem;font-weight:700;';
+      var _cells =
+        '<button type="button" onclick="window._opOpenEditor(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(99,102,241,0.16);color:#a5b4fc;border:1px solid rgba(99,102,241,0.45);">✏️ Editar</button>' +
+        '<button type="button" onclick="window._opOpenTally(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(16,185,129,0.14);color:#34d399;border:1px solid rgba(16,185,129,0.45);">👁️ Ver votos</button>';
       if (!poll.closed) {
-        // v3.1.49: REPUBLICAR — re-dispara as notificações pros inscritos (lembrete).
-        // Criador da enquete + organizadores. v3.1.57: durante as 24h de cooldown o botão
-        // fica CINZA/inabilitado (clicar ainda explica quanto falta). Cooldown ancorado em
-        // poll.republishedAt (1ª republicação sempre disponível).
+        // Re-notificar: cinza "Notificados" durante as 24h de cooldown (lê republishedAt).
         var _repubLast = poll.republishedAt ? Date.parse(poll.republishedAt) : 0;
         var _repubRest = _repubLast ? (24 * 3600000 - (Date.now() - _repubLast)) : 0;
-        if (_repubRest > 0) {
-          // Cooldown: CINZA + "Notificados" (clicar ainda explica quanto falta). Volta ao
-          // normal sozinho depois de 24h (o render lê republishedAt).
-          footer += '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:11px;padding:10px;font-size:0.84rem;margin-top:8px;opacity:0.6;cursor:not-allowed;">✅ Notificados</button>';
-        } else {
-          footer += '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(245,158,11,0.14);color:#fbbf24;border:1px solid rgba(245,158,11,0.45);font-weight:700;border-radius:11px;padding:10px;font-size:0.84rem;margin-top:8px;">📣 Republicar — notificar de novo</button>';
-        }
-        footer += '<button type="button" onclick="window._opClose(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(239,68,68,0.14);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;border-radius:11px;padding:10px;font-size:0.84rem;margin-top:8px;">🔒 Encerrar enquete</button>';
+        _cells += (_repubRest > 0)
+          ? '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border-color);opacity:0.6;cursor:not-allowed;">✅ Notificados</button>'
+          : '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(245,158,11,0.16);color:#fbbf24;border:1px solid rgba(245,158,11,0.5);">📣 Re-notificar</button>';
+        _cells += '<button type="button" onclick="window._opClose(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(239,68,68,0.16);color:#f87171;border:1px solid rgba(239,68,68,0.45);">🔒 Encerrar</button>';
       }
+      _orgTop = '<div style="padding:10px 1rem;border-bottom:1px solid var(--border-color);background:var(--bg-card,#0f172a);">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' + _cells + '</div>' +
+      '</div>';
     }
+    // rodapé: só o aviso de "encerrada" (os botões subiram pro topo).
+    var footer = '';
+    if (poll.closed) footer += '<div style="text-align:center;font-size:0.8rem;color:var(--text-muted);font-weight:700;margin-top:4px;">🔒 Enquete encerrada</div>';
 
     var html =
-      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#4338ca,#6d28d9);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
-        '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📊 Enquete</span>' +
-        '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Fechar</button>' +
+      // header + botões do org juntos num bloco STICKY no topo.
+      '<div style="position:sticky;top:0;z-index:4;border-radius:16px 16px 0 0;">' +
+        '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#4338ca,#6d28d9);border-radius:16px 16px 0 0;">' +
+          '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📊 Enquete</span>' +
+          '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">← Voltar</button>' +
+        '</div>' +
+        _orgTop +
       '</div>' +
       '<div style="padding:1rem 1.1rem;">' +
         body + _voterAvatarsHtml(t, poll) + footer +
