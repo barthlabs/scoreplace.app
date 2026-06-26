@@ -496,7 +496,8 @@ window._exploreFilterAllSections = function () {
     else sec.classList.remove('sp-explore-hidden');
   });
   // v3.0.97: não pula a tela / a barra sticky não sai do lugar quando o filtro esvazia.
-  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(); } catch (e) {}
+  // v3.1.41: com BUSCA ATIVA, leva o 1º resultado pra logo abaixo da barra (sem tela preta).
+  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(null, !!q); } catch (e) {}
 };
 
 // v3.0.x: onChange da barra canônica. Mapeia o sort canônico (name/order × asc/

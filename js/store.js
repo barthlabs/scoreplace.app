@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.1.40-beta';
+window.SCOREPLACE_VERSION = '3.1.41-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -2985,7 +2985,7 @@ window._inscritosFilterBar = function (opts) {
 // (altura 0) quando os resultados voltam e o conteúdo cresce de novo. Pedido do dono:
 // "quando não há nada a mostrar não deve pular a tela e a barra sair de onde estava".
 // TODO consumidor de filtro/busca in-place ou re-render deve chamar isto após aplicar.
-window._stickyFilterKeepRoom = function (keepY) {
+window._stickyFilterKeepRoom = function (keepY, bringToTop) {
     var doc = document.scrollingElement || document.documentElement;
     if (keepY == null) keepY = doc.scrollTop;
     // CRÍTICO: position:sticky só gruda ENQUANTO o bloco-pai (containing block) está na
@@ -2998,6 +2998,18 @@ window._stickyFilterKeepRoom = function (keepY) {
     if (!bar || !bar.parentNode) return;
     var host = bar.parentNode;
     var spacer = document.getElementById('sp-sticky-spacer');
+    // v3.1.41: com BUSCA ATIVA (bringToTop), NÃO prender o scroll embaixo. Leva o 1º
+    // resultado pra logo abaixo da barra (topo) — antes, ao filtrar de muitos pra poucos,
+    // o scroll ficava preso lá embaixo (tela preta) e o usuário tinha que rolar pra CIMA
+    // pra ver os resultados. Zera o spacer e sobe pro topo da seção (só sobe, nunca desce).
+    if (bringToTop) {
+        if (spacer) spacer.style.height = '0px';
+        var _bh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--backheader-h')) || 0;
+        var _hostTopDoc = host.getBoundingClientRect().top + doc.scrollTop;
+        var _tgt = Math.max(0, Math.round(_hostTopDoc - _bh - 4));
+        if (doc.scrollTop > _tgt + 2) doc.scrollTop = _tgt;
+        return;
+    }
     if (!spacer) {
         spacer = document.createElement('div');
         spacer.id = 'sp-sticky-spacer';

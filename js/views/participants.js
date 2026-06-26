@@ -822,7 +822,9 @@ window._partApplyFilter = function () {
   var empty = document.getElementById('part-search-empty');
   if (empty) empty.style.display = (shown === 0 && cards.length > 0) ? '' : 'none';
   // v3.0.97: não pula a tela / a barra sticky não sai do lugar quando o filtro esvazia.
-  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(_keepY); } catch (e) {}
+  // v3.1.41: com BUSCA ATIVA, leva o 1º resultado pra logo abaixo da barra (nunca tela
+  // preta embaixo tendo que rolar pra cima).
+  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(_keepY, !!q); } catch (e) {}
 };
 
 window._toggleVip = function (tId, participantName) {
