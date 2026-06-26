@@ -9,7 +9,16 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.45-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📊 Enquete com várias perguntas:</b> agora dá pra montar uma enquete com mais de uma pergunta de uma vez (basta tocar em "＋ adicionar seção"), e cada pergunta pode aceitar uma só resposta ou várias. Os inscritos respondem todas na mesma tela, cada pergunta com seu próprio botão de votar.</li>' +
+        '<li><b>📊 Botão da enquete em destaque:</b> no torneio, o botão da enquete ficou maior e mais visível — não parece mais uma barrinha.</li>' +
+        '<li><b>🔔 Lembrete de votar:</b> quem ainda não votou recebe um lembrete da enquete toda vez que abre o torneio — e ele para de aparecer assim que a pessoa vota.</li>' +
+        '<li><b>🛠️ Organizador no controle:</b> dá pra editar a enquete depois de criada e ver quem votou em cada opção (por nome), além de quem ainda não respondeu.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.0.90-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(24 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>👥 Tela Pessoas mais limpa e segura:</b> o cartão de perfil e o de convite de uma pessoa agora têm um único botão <b>Voltar</b> (saiu o ✕ repetido), e a tela ganhou reforços de segurança e estabilidade nos bastidores.</li>' +
         '<li><b>📋 Cartões de dupla na chamada padronizados:</b> dupla já formada, dupla pendente e o atalho de "formar dupla" do jogador sozinho seguem agora o mesmo layout dos demais cartões de inscrito.</li>' +
