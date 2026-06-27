@@ -261,7 +261,7 @@
       if (o.kind === 'date') {
         if (uids.every(function (u) { return (votes[u] || {})[o.id] === 1; })) {
           var iso = _schResolveISO(o, t);
-          if (iso) { s.scheduledOptId = o.id; s.scheduledWd = null; m.scheduledAt = iso; m.scheduledBy = (_cu() || {}).uid || ''; return true; }
+          if (iso) { s.scheduledOptId = o.id; s.scheduledWd = null; m.scheduledAt = iso; m.scheduledBy = (_cu() || {}).uid || ''; _schMirrorToGroup(t, m); return true; }
         }
       } else {
         var wds = (o.weekdays || []).slice().sort(function (a, b) { return a - b; });
@@ -271,10 +271,18 @@
           var di = _schResolveDayISO(o.time, wd, t);
           if (di && (!best || di < best)) { best = di; bestWd = wd; }
         });
-        if (best) { s.scheduledOptId = o.id; s.scheduledWd = bestWd; m.scheduledAt = best; m.scheduledBy = (_cu() || {}).uid || ''; return true; }
+        if (best) { s.scheduledOptId = o.id; s.scheduledWd = bestWd; m.scheduledAt = best; m.scheduledBy = (_cu() || {}).uid || ''; _schMirrorToGroup(t, m); return true; }
       }
     }
     return false;
+  }
+  // Rei/Rainha: ao combinar (ou desfazer) o m0, espelha o scheduledAt nos outros
+  // jogos do grupo — os 3 jogos acontecem na mesma data. No-op fora de modo grupo.
+  function _schMirrorToGroup(t, m0) {
+    if (!_schGroupMode || String(m0.id) !== _schGroupMode) return;
+    _schGroupMatches(t, m0).forEach(function (sm) {
+      if (sm && sm !== m0) { sm.scheduledAt = m0.scheduledAt; sm.scheduledBy = m0.scheduledBy; }
+    });
   }
 
   // ─── notificações (level fundamental) ──────────────────────────────────────────
@@ -320,6 +328,9 @@
   window._schCardChip = function (t, m) {
     try {
       if (!t || !m) return '';
+      // Rei/Rainha: o "Combinar jogos" é ÚNICO por GRUPO (no cabeçalho do grupo,
+      // via _schGroupChip) — não um por jogo. Suprime o chip por card aqui.
+      if (m.isMonarch) return '';
       if (m.scheduledAt) {
         return '<div style="display:flex;justify-content:center;margin:8px 0 2px;"><span style="display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.45);color:#34d399;font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + _esc(_fmtDateTime(m.scheduledAt)) + '</span></div>';
       }
@@ -337,10 +348,58 @@
     } catch (e) { return ''; }
   };
 
+  // ─── grupo Rei/Rainha: 1 enquete pros 3 jogos (mesmos 4 jogadores) ──────────────
+  // O portador do schedule é o 1º match jogável do grupo (m0). Os 3 jogos
+  // compartilham os MESMOS 4 uids → m0 já resolve o grupo todo. Ao combinar,
+  // espelha scheduledAt nos 3 jogos (consumidores downstream leem por match).
+  var _schGroupMode = null; // = id do m0 quando o overlay está em modo grupo
+
+  function _schGroupMatches(t, m0) {
+    if (!m0) return [];
+    var key = _schMatchUids(t, m0).slice().sort().join(',');
+    var round = m0.round;
+    var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+    var sibs = (all || []).filter(function (m) {
+      return m && m.isMonarch && m.round === round && _schMatchUids(t, m).slice().sort().join(',') === key;
+    });
+    return sibs.length ? sibs : [m0];
+  }
+  function _schGroupFirst(groupMatches) {
+    if (!Array.isArray(groupMatches) || !groupMatches.length) return null;
+    return groupMatches.find(function (m) { return m && !m.isBye && !m.isSitOut; }) || groupMatches[0];
+  }
+
+  // chip ÚNICO do grupo (vai no cabeçalho do grupo, ao lado de "Faltou alguém?").
+  window._schGroupChip = function (t, groupMatches) {
+    try {
+      if (!t || !Array.isArray(groupMatches) || !groupMatches.length) return '';
+      var m0 = _schGroupFirst(groupMatches); if (!m0) return '';
+      var cu = _cu(); if (!cu || !cu.uid) return '';
+      if (!_schUserIsPlayer(t, m0, cu)) return '';
+      var schedISO = m0.scheduledAt || ((groupMatches.find(function (m) { return m && m.scheduledAt; }) || {}).scheduledAt);
+      var open = 'event.stopPropagation(); window._schOpenGroup(\'' + _attr(t.id) + '\',\'' + _attr(m0.id) + '\')';
+      if (schedISO) {
+        return '<button type="button" class="btn btn-sm hover-lift" onclick="' + open + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.45);color:#34d399;font-weight:800;font-size:0.72rem;border-radius:8px;padding:4px 10px;">📅 ' + _esc(_fmtDateTime(schedISO)) + '</button>';
+      }
+      if (!_schIsCurrentRoundMatch(t, m0)) return '';
+      if (groupMatches.every(function (m) { return m.winner || m.isBye || m.isSitOut; })) return '';
+      var n = (m0.schedule && Array.isArray(m0.schedule.options)) ? m0.schedule.options.length : 0;
+      return '<button type="button" class="btn btn-sm btn-shine hover-lift" onclick="' + open + '" style="display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:800;font-size:0.72rem;border-radius:8px;padding:4px 10px;box-shadow:0 3px 10px rgba(16,185,129,0.35);">📅 Combinar jogos' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:0 6px;font-size:0.66rem;">' + n + '</span>' : '') + '</button>';
+    } catch (e) { return ''; }
+  };
+
+  window._schOpenGroup = function (tId, firstMatchId) {
+    var t = _findT(tId); if (!t) return;
+    var m0 = _schFindMatch(t, firstMatchId); if (!m0) return;
+    _schGroupMode = String(m0.id);
+    _renderMatch(t, m0);
+  };
+
   // ─── overlay por jogo ──────────────────────────────────────────────────────────
   window._schOpenMatch = function (tId, matchId) {
     var t = _findT(tId); if (!t) return;
     var m = _schFindMatch(t, matchId); if (!m) return;
+    _schGroupMode = null;
     _renderMatch(t, m);
   };
 
@@ -369,13 +428,23 @@
     var win = window._schWindow(t);
     var allUids = _schMatchUids(t, m);
     var sched = m.scheduledAt ? (m.schedule || {}) : _ensureSchedule(m);
+    // modo GRUPO Rei/Rainha: m é o m0 portador; mesmos 4 jogadores nos 3 jogos.
+    var groupMode = !!(_schGroupMode && String(m.id) === _schGroupMode);
+    var titleTxt = groupMode ? '📅 Combinar jogos' : '📅 Combinar jogo';
     var header =
       '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
         '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);font-weight:700;">‹ Voltar</button>' +
-        '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📅 Combinar jogo</span>' +
+        '<span style="font-weight:800;color:#fff;font-size:0.92rem;">' + titleTxt + '</span>' +
         '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:rgba(16,185,129,0.9);color:#fff;border:1px solid rgba(255,255,255,0.35);font-weight:800;">Confirmar</button>' +
       '</div>';
-    var matchLine = '<div style="font-weight:800;font-size:1.02rem;color:var(--text-bright);margin-bottom:2px;">' + _esc(m.p1 || '') + ' <span style="color:var(--text-muted);font-weight:600;">vs</span> ' + _esc(m.p2 || '') + '</div>';
+    var matchLine;
+    if (groupMode) {
+      var gnames = (Array.isArray(m.team1) ? m.team1 : []).concat(Array.isArray(m.team2) ? m.team2 : []);
+      matchLine = '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);margin-bottom:2px;">👑 ' + _esc(gnames.join(' · ')) + '</div>' +
+        '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:2px;">Os 3 jogos do grupo acontecem na mesma data combinada.</div>';
+    } else {
+      matchLine = '<div style="font-weight:800;font-size:1.02rem;color:var(--text-bright);margin-bottom:2px;">' + _esc(m.p1 || '') + ' <span style="color:var(--text-muted);font-weight:600;">vs</span> ' + _esc(m.p2 || '') + '</div>';
+    }
 
     // ── estado AGENDADO (colapsado) ──
     if (m.scheduledAt) {
@@ -384,7 +453,7 @@
         '<div style="padding:1.1rem;">' + matchLine +
           '<div style="margin-top:14px;text-align:center;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.4);border-radius:14px;padding:18px;">' +
             '<div style="font-size:2rem;line-height:1;">📅</div>' +
-            '<div style="font-weight:900;font-size:1.1rem;color:#34d399;margin-top:8px;">Jogo combinado</div>' +
+            '<div style="font-weight:900;font-size:1.1rem;color:#34d399;margin-top:8px;">' + (groupMode ? 'Jogos combinados' : 'Jogo combinado') + '</div>' +
             '<div style="font-size:0.95rem;color:var(--text-bright);margin-top:4px;">' + _esc(_fmtDateTime(m.scheduledAt)) + '</div>' +
           '</div>' +
           (canUndo ? '<button type="button" onclick="window._schUnconfirm(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="width:100%;margin-top:12px;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;border-radius:11px;padding:9px;font-size:0.82rem;">↩️ Desfazer combinação</button>' : '') +
@@ -550,6 +619,7 @@
       _crCache = null;
     }).catch(function (err) {
       m.schedule = prevClone.schedule; m.scheduledAt = prevClone.scheduledAt; m.scheduledBy = prevClone.scheduledBy;
+      _schMirrorToGroup(t, m); // reverte também o espelho nos jogos do grupo
       var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
       try { console.error('[schedule-poll] rejeitado:', err); } catch (e) {}
@@ -681,7 +751,9 @@
   window._schUnconfirm = function (tId, matchId) {
     var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
     var cu = _guardPlayer(t, m); if (!cu) return;
-    if (typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m)) {
+    var groupMode = !!(_schGroupMode && String(m.id) === _schGroupMode);
+    var playCheck = groupMode ? _schGroupMatches(t, m) : [m];
+    if (typeof window._matchHasRealPlay === 'function' && playCheck.some(function (mm) { return window._matchHasRealPlay(mm); })) {
       if (typeof showNotification === 'function') showNotification('Jogo já começou', 'Não dá pra desfazer — o jogo já tem placar.', 'warning'); return;
     }
     var prev = _snapshot(m); var s = _ensureSchedule(m);
@@ -692,6 +764,7 @@
       else { if (s.votes[cu.uid]) delete s.votes[cu.uid][oid]; }
     }
     s.scheduledOptId = null; s.scheduledWd = null; m.scheduledAt = ''; m.scheduledBy = '';
+    _schMirrorToGroup(t, m); // espelha o "desfeito" nos outros jogos do grupo
     _saveSchedule(t, m, prev, false);
   };
 

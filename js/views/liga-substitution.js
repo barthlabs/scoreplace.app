@@ -421,10 +421,18 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   if (group.woAbsent && (group.subStatus === 'open' || !group.subStatus) && manage) {
     return '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaPickFill(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\',\'' + _esc(group.woAbsent) + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">⚠️ ' + _safe(group.woAbsent) + ' levou W.O. · escolher substituto</button>';
   }
-  // Estado normal: oferece declarar ausência (só se grupo não terminou)
-  if (!gDone && manage) {
-    return window._woBtnHtml("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", true,
-      { label: '⚠️ Faltou alguém?', title: 'Algum jogador não pôde vir? Dê W.O. e chame um substituto.' });
+  // Estado normal: oferece declarar ausência (só se grupo não terminou).
+  // v3.1.72: torneio multi-dia + jogadores lançam resultado → usa o fluxo CANÔNICO
+  // confirmar/contesta (wo-claim.js), apontável pelos próprios jogadores. Caso
+  // contrário, mantém o gatilho do organizador (imediato + reverter), como antes.
+  if (!gDone) {
+    if (typeof window._woClaimEnabled === 'function' && window._woClaimEnabled(t) && typeof window._woClaimChip === 'function') {
+      return window._woClaimChip(t, { scope: 'group', roundIndex: roundIndex, groupName: group.name, players: group.players, matches: group.matches });
+    }
+    if (manage) {
+      return window._woBtnHtml("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", true,
+        { label: '⚠️ Faltou alguém?', title: 'Algum jogador não pôde vir? Dê W.O. e chame um substituto.' });
+    }
   }
   return '';
 };

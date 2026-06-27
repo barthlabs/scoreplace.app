@@ -2573,6 +2573,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${p2Row}
       ${winnerBadge}
       ${(typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : ''}
+      ${(typeof window._woClaimChip === 'function' && typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m)) ? `<div style="display:flex;justify-content:center;margin:8px 0 2px;">${window._woClaimChip(t, { scope: 'match', matchId: m.id })}</div>` : ''}
     </div>`;
 }
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
@@ -2669,10 +2670,11 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
 
     var statusBadge = groupDone ? '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;background:rgba(16,185,129,0.15);color:#4ade80;font-weight:700;">' + _t('bracket.complete') + '</span>' : '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">' + _t('bracket.ongoing') + '</span>';
 
+    var _schGrpBtn2 = (typeof window._schGroupChip === 'function') ? window._schGroupChip(t, matches) : '';
     html += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap;">' +
         '<h3 style="margin:0;font-size:1.1rem;color:var(--text-bright);flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
-        statusBadge +
+        statusBadge + _schGrpBtn2 +
       '</div>' +
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">Jogadores: ' + (sg.players || []).map(function(n) { return window._safeHtml(n); }).join(', ') + '</div>' +
       '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;">' + _t('bracket.monarchMatchRotation') + '</div>' +
@@ -2876,9 +2878,12 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;margin-left:8px;">SEU GRUPO</span>'
       : '';
 
+    var _woGsMatches = gRounds.reduce(function (a, r) { return a.concat(r.matches || []); }, []).filter(function (m) { return m && !m.isBye && !m.isSitOut; });
+    var _woGsPlayers = (sg.players && sg.players.length) ? sg.players : sorted.map(function (s) { return s.name; });
+    var _woGsChip = (typeof window._woClaimChip === 'function') ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
     return `
       <div class="card" id="group-section-${gi}" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:120px;">
-        <h3 style="margin:0 0 1rem;color:${isMyGroupGS ? '#22d3ee' : groupColor};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>
+        <div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:${isMyGroupGS ? '#22d3ee' : groupColor};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>${_woGsChip ? `<span style="margin-left:auto;">${_woGsChip}</span>` : ''}</div>
         <div class="standings-scroll" style="margin-bottom:1rem;">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem;min-width:480px;">
             <thead>
@@ -3523,12 +3528,16 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var _monarchTitle = (typeof window._monarchGroupTitle === 'function') ? window._monarchGroupTitle(g.players, t) : 'Rei/Rainha';
           var _monarchBadge = '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
           var _ligaCtrl = (typeof window._ligaGroupControlsHtml === 'function') ? window._ligaGroupControlsHtml(t, currentRound - 1, g) : '';
+          // v3.1.71: "Combinar jogos" ÚNICO por grupo Rei/Rainha, à direita do
+          // "Faltou alguém?" (ou sozinho, pra jogadores não-organizadores).
+          var _schGrpBtn = (typeof window._schGroupChip === 'function') ? window._schGroupChip(t, g.matches) : '';
+          var _rightCtrl = (_ligaCtrl || '') + _schGrpBtn;
           // v2.4.65: a CHAVE marca o ausente riscado + W.O. na lista de jogadores;
           // o convite pendente aparece UMA vez só no card de controle (_ligaCtrl) e
           // o substituto convidado já surge nos cards de jogo (via _pendingSub).
           // _woName já foi calculado acima.
           return '<div style="background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + _monarchBadge + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + (_ligaCtrl ? '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">' + _ligaCtrl + '</span>' : '') + '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + _monarchBadge + statusBadge + (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') + (_rightCtrl ? '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">' + _rightCtrl + '</span>' : '') + '</div>' +
             '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;">Jogadores: ' + g.players.map(function(n){ return (_woName && n === _woName) ? ('<span style="text-decoration:line-through;opacity:0.6;">' + window._safeHtml(n) + '</span> <span style="color:#f87171;font-weight:800;font-size:0.66rem;">W.O.</span>') : window._safeHtml(n); }).join(', ') + '</div>' +
             _grpStTable +
             '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;">' + gCards + '</div>' +

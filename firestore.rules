@@ -120,6 +120,10 @@ service cloud.firestore {
           // rejeitado com permission-denied — só o organizador (admin) conseguia
           // votar. O _save engolia o erro e o toast mentia "voto registrado".
           'opinionPolls',
+          // W.O. apontado por participante (wo-claim.js): jogador aponta a falta,
+          // o outro lado confirma/contesta. Campo top-level novo que o PARTICIPANTE
+          // grava → precisa estar aqui (classe do bug Confra do opinionPolls).
+          'woClaims',
           // Categorias notificadas (auto-assign comunica ao participante)
           'categoryNotifications',
           // Flags internas setadas em fim de torneio / transições
