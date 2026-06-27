@@ -3837,48 +3837,33 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var p2Players = p2Name.indexOf('/') > 0 ? p2Name.split('/').map(function(s){return s.trim();}).filter(Boolean) : (p2Name.trim() ? [p2Name.trim()] : []);
   var isDoubles = p1Players.length > 1 || p2Players.length > 1 || !!(opts && opts.isDoubles);
   // Default names when empty
+  // v4.0.6: placeholders POSICIONAIS (Jogador 1-4), iguais pra todos — sem mais
+  // "Parceiro"/"Adversário N" relativos ao espectador. Duplas: T1=1,2 T2=3,4.
   if (isDoubles) {
-    if (p1Players.length === 0) p1Players = ['Jogador 1', 'Parceiro'];
-    if (p1Players.length === 1) p1Players.push('Parceiro');
-    if (p2Players.length === 0) p2Players = ['Adversário 1', 'Adversário 2'];
-    if (p2Players.length === 1) p2Players.push('Adversário 2');
+    if (p1Players.length === 0) p1Players = ['Jogador 1', 'Jogador 2'];
+    if (p1Players.length === 1) p1Players.push('Jogador 2');
+    if (p2Players.length === 0) p2Players = ['Jogador 3', 'Jogador 4'];
+    if (p2Players.length === 1) p2Players.push('Jogador 4');
   } else {
     if (p1Players.length === 0) p1Players = ['Jogador 1'];
-    if (p2Players.length === 0) p2Players = ['Adversário 1'];
+    if (p2Players.length === 0) p2Players = ['Jogador 2'];
   }
 
-  // ── Perspective-based role labels ──
-  // Stored names for unidentified slots may be "Parceiro" or "Adversário N"
-  // (assigned by the host at match start). But those labels only make sense
-  // from the host's perspective — someone on Team 2 sees the host's partner
-  // as an adversary, not as "Parceiro". Remap role-labeled slots based on
-  // the current viewer's team so every client sees the match from their own
-  // side. Real player names pass through untouched.
-  //
-  // CRITICAL: This must be re-applied after every Firestore sync that rewrites
-  // p1Players/p2Players — otherwise the host's perspective labels ("Parceiro"
-  // on Team 1) leak into other viewers who would see the same slot correctly
-  // as "Adversário N". The remote sync handlers below call this function
-  // after overwriting the arrays.
-  var _roleRe = /^(Parceiro|Adversário\s*\d+)$/;
+  // ── Placeholders POSICIONAIS (v4.0.6) ──
+  // Slots sem uid/nome digitado viram "Jogador N" pela POSIÇÃO (iguais pra todos
+  // os clientes) — fim do esquema relativo "Parceiro/Adversário" por perspectiva.
+  // Duplas: T1 = Jogador 1,2 · T2 = Jogador 3,4. Simples: T1 = Jogador 1 · T2 = Jogador 2.
+  // Também CONVERTE rótulos antigos persistidos ("Parceiro"/"Adversário N"/
+  // "Oponente N") pra posicional — backward-compat de partidas já salvas. É
+  // idempotente (re-normaliza "Jogador N" pra a posição certa). Mantém o nome
+  // _localizeRoleLabels porque os handlers de sync remoto chamam essa função
+  // depois de reescrever p1Players/p2Players.
+  var _roleRe = /^(Parceiro|Advers[áa]rio\s*\d+|Oponente\s*\d+|Jogador\s*\d+)$/;
   function _localizeRoleLabels() {
-    if (!isDoubles) return;
-    var cu = window.AppStore && window.AppStore.currentUser;
-    if (!cu || !cu.uid) return; // spectator with no identity — leave stored labels
-    var viewerTeam = null;
-    if (opts && Array.isArray(opts.players)) {
-      for (var vi = 0; vi < opts.players.length; vi++) {
-        if (opts.players[vi] && opts.players[vi].uid === cu.uid) {
-          viewerTeam = opts.players[vi].team;
-          break;
-        }
-      }
-    }
-    if (viewerTeam !== 1 && viewerTeam !== 2) return; // viewer not in match
     function remap(arr, team) {
       for (var j = 0; j < arr.length; j++) {
-        if (_roleRe.test(arr[j])) {
-          arr[j] = (viewerTeam === team) ? 'Parceiro' : ('Adversário ' + (j + 1));
+        if (_roleRe.test((arr[j] || '').trim())) {
+          arr[j] = isDoubles ? ('Jogador ' + ((team === 1 ? 0 : 2) + j + 1)) : ('Jogador ' + (team === 1 ? 1 : 2));
         }
       }
     }
@@ -5421,10 +5406,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var otherTeam = team === 1 ? 2 : 1;
       var opponents = otherTeam === 1 ? p1Players.slice() : p2Players.slice();
       state.serveOrder = [
-        { team: team, name: name },
-        { team: otherTeam, name: opponents[0] || 'Oponente 1' },
-        { team: team, name: teammate || 'Parceiro' },
-        { team: otherTeam, name: opponents[1] || 'Oponente 2' }
+        { team: team, name: name, pIdx: 0 },
+        { team: otherTeam, name: opponents[0] || ('Jogador ' + (otherTeam === 1 ? 1 : 3)), pIdx: 0 },
+        { team: team, name: teammate || ('Jogador ' + (team === 1 ? 2 : 4)), pIdx: 1 },
+        { team: otherTeam, name: opponents[1] || ('Jogador ' + (otherTeam === 1 ? 2 : 4)), pIdx: 1 }
       ];
     } else if (state.totalGamesPlayed === 1) {
       // Setting 2nd server: MUST be from the team that serves 2nd (serveOrder[1].team).
@@ -11984,7 +11969,7 @@ window._openCasualMatch = function(restoreOpts) {
           if (!_coachMode) {
           var usedLobby = 0;
           for (var pi = 0; pi < players.length; pi++) {
-            var defaultNames = ['Jogador 1', 'Parceiro', 'Adversário 1', 'Adversário 2'];
+            var defaultNames = ['Jogador 1', 'Jogador 2', 'Jogador 3', 'Jogador 4', 'Parceiro', 'Adversário 1', 'Adversário 2', 'Oponente 1', 'Oponente 2'];
             var isDefault = !players[pi].name || defaultNames.indexOf(players[pi].name) !== -1;
             if (isDefault && usedLobby < lobbyNames.length) {
               players[pi].name = lobbyNames[usedLobby];
@@ -12032,6 +12017,8 @@ window._openCasualMatch = function(restoreOpts) {
         if (players[ii].team === 1) t1List.push(players[ii]);
         else if (players[ii].team === 2) t2List.push(players[ii]);
       }
+      // v4.0.6: numeração POSICIONAL — duplas T1=1,2 T2=3,4 · simples T1=1 T2=2.
+      var _isDbl = (t1List.length > 1 || t2List.length > 1);
       // v1.9.72: APENAS UM slot do time 1 pode ser o usuário atual. Sem essa
       // guarda, se um segundo slot batia em _isCurrentUser (por uid herdado ou
       // por nome já igual ao do usuário), AMBOS recebiam cu.displayName → a
@@ -12049,13 +12036,13 @@ window._openCasualMatch = function(restoreOpts) {
           continue;
         }
         if (isDefault1) {
-          p1p.name = 'Parceiro';
+          p1p.name = 'Jogador ' + (ti + 1);
         }
       }
       for (var tj = 0; tj < t2List.length; tj++) {
         var p2p = t2List[tj];
         var isDefault2 = !p2p.name || defaultNames.indexOf(p2p.name) !== -1;
-        if (isDefault2) p2p.name = 'Adversário ' + (tj + 1);
+        if (isDefault2) p2p.name = 'Jogador ' + (_isDbl ? (tj + 3) : 2);
       }
       // v1.9.72: dedupe de segurança — dois jogadores do MESMO time nunca
       // podem ter o mesmo nome (ex.: slot do parceiro carregando o nome real
@@ -12067,7 +12054,7 @@ window._openCasualMatch = function(restoreOpts) {
           var nmk = (list[di].name || '').trim().toLowerCase();
           if (!nmk) continue;
           if (seen[nmk]) {
-            list[di].name = isTeam1 ? 'Parceiro' : ('Adversário ' + (di + 1));
+            list[di].name = isTeam1 ? ('Jogador ' + (di + 1)) : ('Jogador ' + (_isDbl ? (di + 3) : 2));
           } else {
             seen[nmk] = true;
           }
