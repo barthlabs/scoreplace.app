@@ -6391,7 +6391,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var display = player === 1 ? p1Display : p2Display;
       var plateBg = _isDeuce ? '#f97316' : '#fff';
       var plateClr = _isDeuce ? '#fff' : '#111';
-      return '<div class="ls-plate-box" style="width:100%;height:100%;background:' + plateBg + ';border-radius:calc(18px * var(--live-plate-scale,1));padding:calc(6px * var(--live-plate-scale,1));box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
+      // v4.0.11: height:auto → o box BRANCO abraça o número (sem espaço branco
+      // sobrando); o número é dimensionado pela largura (mesmo tamanho p/ 0/15/
+      // 30/40/AD) no _fitLivePlateText. max-height:100% impede transbordar a linha.
+      return '<div class="ls-plate-box" style="width:100%;height:auto;max-height:100%;background:' + plateBg + ';border-radius:calc(18px * var(--live-plate-scale,1));padding:calc(10px * var(--live-plate-scale,1)) calc(6px * var(--live-plate-scale,1));box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
         '<span class="ls-plate-num" style="font-size:calc(clamp(4rem,20vw,9rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
       '</div>';
     };
@@ -6412,10 +6415,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var minFs = Infinity;
         boxes.forEach(function(box) {
           var pad = parseFloat(getComputedStyle(box).paddingTop) || 6;
-          var bh = box.offsetHeight - pad * 2;
+          // v4.0.11: altura disponível = do PAI (wrapper com a altura da linha),
+          // NÃO do próprio box — o box agora tem height:auto (abraça o número), e
+          // medir a altura dele criaria circularidade (encolhia o número). A
+          // largura é a real restrição (2 chars na metade da tela); usamos ~0.9
+          // dela pro maior valor (AD/40) caber sempre no MESMO tamanho.
+          var availH = ((box.parentElement && box.parentElement.clientHeight) || box.offsetHeight) - pad * 2;
           var bw = box.offsetWidth - pad * 2;
-          if (bh < 10 || bw < 10) return;
-          var fs = Math.min(bh * 0.88, (bw * 0.85) / (REF_CHARS * 0.65));
+          if (availH < 10 || bw < 10) return;
+          var fs = Math.min(availH * 0.92, (bw * 0.9) / (REF_CHARS * 0.66));
           if (fs < minFs) minFs = fs;
         });
         if (minFs === Infinity || minFs < 16) return;
@@ -6581,9 +6589,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
             '</div>' +
           '</div>' +
           // Placares — flex escala com --live-plate-scale
-          '<div style="flex:calc(4 * var(--live-plate-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
-            '<div style="flex:1;display:flex;align-items:stretch;">' + _buildPlate(leftTeam) + '</div>' +
-            '<div style="flex:1;display:flex;align-items:stretch;">' + _buildPlate(rightTeam) + '</div>' +
+          '<div style="flex:calc(2.8 * var(--live-plate-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+            '<div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;">' + _buildPlate(leftTeam) + '</div>' +
+            '<div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;">' + _buildPlate(rightTeam) + '</div>' +
           '</div>' +
           // Botões ↑ — flex escala com --live-btn-scale
           (!state.isFinished ? '<div style="flex:calc(3 * var(--live-btn-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
