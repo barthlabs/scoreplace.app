@@ -5382,7 +5382,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Confirm the proposed order
   window._liveConfirmServeOrder = function() {
-    state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name }; });
+    state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name, pIdx: p.pIdx }; });
     state.serveSkipped = false;
     state.servePending = false;
     _render();
@@ -5397,7 +5397,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Auto-confirm serve order from proposed order (no separate picker screen)
   if (state.serveOrder.length === 0 && !state.serveSkipped && _proposedOrder.length >= serveSlots) {
-    state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name }; });
+    state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name, pIdx: p.pIdx }; });
   }
 
   // Set 1st server by dragging ball to a player name (inline, on the live scoring screen)
@@ -6278,9 +6278,22 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var bgClr = team === 1 ? 'rgba(59,130,246,0.12)' : 'rgba(239,68,68,0.12)';
       var bdrClr = team === 1 ? 'rgba(59,130,246,0.30)' : 'rgba(239,68,68,0.30)';
       var cards = '';
+      // v4.0.4: a bola de saque deve aparecer em UM jogador só. Quando os 2
+      // jogadores do time têm o mesmo nome (ex.: "Parceiro"/"Parceiro"), casar
+      // por nome acendia a bola nos DOIS. Casa por pIdx (posição) quando existe;
+      // senão, mostra no 1º que bate o nome (guarda _ballShown).
+      var _ballShown = false;
       for (var ni = 0; ni < players.length; ni++) {
         var pn = players[ni];
-        var isServing = serverInfo && !state.isFinished && serverInfo.team === team && serverInfo.name === pn;
+        var isServing = false;
+        if (serverInfo && !state.isFinished && serverInfo.team === team) {
+          if (serverInfo.pIdx != null) {
+            isServing = (serverInfo.pIdx === ni);
+          } else if (serverInfo.name === pn && !_ballShown) {
+            isServing = true;
+          }
+          if (isServing) _ballShown = true;
+        }
         var fullName = window._safeHtml(pn);
         var avatar = '<span class="live-av-wrap">' + _liveAvatarHtml(pn, 30) + '</span>';
 
@@ -6462,8 +6475,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var display = player === 1 ? p1Display : p2Display;
         var plateBg = _isDeuce ? '#f97316' : '#fff';
         var plateClr = _isDeuce ? '#fff' : '#111';
-        return '<div style="width:100%;background:' + plateBg + ';border-radius:calc(14px * var(--live-plate-scale,1));padding:calc(clamp(10px,4vh,28px) * var(--live-plate-scale,1)) calc(4px * var(--live-plate-scale,1));box-shadow:0 4px 24px rgba(0,0,0,0.5),0 0 0 3px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
-          '<span style="font-size:calc(clamp(3.5rem,14vw,7rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
+        // v4.0.5: classes ls-plate-box/ls-plate-num pra o _fitLivePlateText tratar
+        // o NÚMERO em paisagem também — reserva 2 chars (15/30/40/AD), sem truncar.
+        return '<div class="ls-plate-box" style="width:100%;background:' + plateBg + ';border-radius:calc(14px * var(--live-plate-scale,1));padding:calc(clamp(10px,4vh,28px) * var(--live-plate-scale,1)) calc(4px * var(--live-plate-scale,1));box-shadow:0 4px 24px rgba(0,0,0,0.5),0 0 0 3px ' + clr + ';display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
+          '<span class="ls-plate-num" style="font-size:calc(clamp(3.5rem,14vw,7rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + display + '</span>' +
         '</div>';
       };
       var _lsUpBtn = function(player) {
@@ -6523,6 +6538,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
             '</div>' +
           '</div>' +
         '</div>';
+      // v4.0.5: ajusta o número do placar em PAISAGEM (reserva 2 chars, sem
+      // truncar) — antes só o retrato chamava o fit.
+      _fitLivePlateText();
     } else {
       // ── PORTRAIT: 5 linhas proporcionais preenchendo a tela inteira ──
       // Ordem: Games+Desfazer → Times → Placares → Botões ↑ → Botões ↓
@@ -7681,7 +7699,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (_pi < p2Players.length) _proposedOrder.push({ team: 2, name: p2Players[_pi], pIdx: _pi });
     }
     if (!state.serveSkipped && _proposedOrder.length >= serveSlots) {
-      state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name }; });
+      state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name, pIdx: p.pIdx }; });
     }
   }
 
@@ -8766,7 +8784,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Outer: quase-transparente e pointer-events:none → toques fora fecham pelo botão
     // ou caem no placar (para ver mudanças em tempo real)
     panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:transparent;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;';
-    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.55);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);">' +
+    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100dvh - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:#fff;">Ajustar</div>' +
         '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
@@ -8780,7 +8798,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       '<div style="margin:6px 0 12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1);">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">' +
           '<div style="font-size:0.82rem;color:rgba(255,255,255,0.9);font-weight:600;">Fixar lados</div>' +
-          '<button id="lss-fixsides-btn" onclick="window._liveScoreToggleFixSides()" role="switch" aria-checked="' + (_liveScorePrefs.fixSides ? 'true' : 'false') + '" style="flex-shrink:0;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;transition:background 0.2s;background:' + (_liveScorePrefs.fixSides ? '#10b981' : 'rgba(255,255,255,0.18)') + ';"><span style="position:absolute;top:3px;left:' + (_liveScorePrefs.fixSides ? '21px' : '3px') + ';width:22px;height:22px;border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></span></button>' +
+          '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox" id="lss-fixsides-input"' + (_liveScorePrefs.fixSides ? ' checked' : '') + ' onchange="window._liveScoreToggleFixSides()"><span class="toggle-slider"></span></label>' +
         '</div>' +
         '<div style="font-size:0.66rem;color:rgba(255,255,255,0.45);line-height:1.35;margin-top:5px;">Desativado: o sacador fica sempre à esquerda. Ativado: lados fixos.</div>' +
       '</div>' +
@@ -8804,16 +8822,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     });
   };
   window._liveScoreToggleFixSides = function() {
-    _liveScorePrefs.fixSides = !_liveScorePrefs.fixSides;
+    // v4.0.5: toggle canônico (.toggle-switch) — o <input> já alternou
+    // nativamente; usa o estado dele como verdade (o CSS cuida do visual).
+    var inp = document.getElementById('lss-fixsides-input');
+    _liveScorePrefs.fixSides = inp ? !!inp.checked : !_liveScorePrefs.fixSides;
     _saveLiveScorePrefs(_liveScorePrefs);
-    // Atualiza o visual do toggle no painel
-    var btn = document.getElementById('lss-fixsides-btn');
-    if (btn) {
-      btn.setAttribute('aria-checked', _liveScorePrefs.fixSides ? 'true' : 'false');
-      btn.style.background = _liveScorePrefs.fixSides ? '#10b981' : 'rgba(255,255,255,0.18)';
-      var knob = btn.querySelector('span');
-      if (knob) knob.style.left = _liveScorePrefs.fixSides ? '21px' : '3px';
-    }
     // Re-renderiza o placar com a nova regra de lados
     try { _render(); } catch(e) {}
   };
@@ -11425,6 +11438,10 @@ window._openCasualMatch = function(restoreOpts) {
       if (el) _savedPlayerNames[i] = el.value;
     });
     _configOpen = true;
+    // v4.0.4: na tela de Configuração, esconde o "Iniciar" do topo (só faz
+    // sentido no lobby). Reaparece ao voltar pro lobby (_casualCloseConfig).
+    var _sbHide = document.getElementById('casual-header-start');
+    if (_sbHide) _sbHide.style.display = 'none';
     var cfg = _getConfig();
     var content = document.getElementById('casual-setup-content');
     if (!content) return;
@@ -11446,9 +11463,10 @@ window._openCasualMatch = function(restoreOpts) {
 
     content.innerHTML =
       '<div style="margin-bottom:1rem;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">' +
+        // v4.0.4: "Voltar" interno removido — o Voltar do topo (back-header) já
+        // volta pro lobby quando _configOpen está ativo. Dois Voltar confundiam.
+        '<div style="display:flex;align-items:center;margin-bottom:1rem;">' +
           '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright);">⚙️ ' + _t('casual.config') + '</div>' +
-          '<button onclick="window._casualCloseConfig()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:600;cursor:pointer;">← ' + _t('casual.back') + '</button>' +
         '</div>' +
 
         // Sport picker
@@ -11539,6 +11557,9 @@ window._openCasualMatch = function(restoreOpts) {
   window._casualCloseConfig = function() {
     _configOpen = false;
     _tempCfg = null;
+    // v4.0.4: voltou pro lobby → "Iniciar" do topo reaparece.
+    var _sbShow = document.getElementById('casual-header-start');
+    if (_sbShow) _sbShow.style.display = '';
     _renderSetup();
   };
 
@@ -12741,6 +12762,10 @@ window._openCasualMatch = function(restoreOpts) {
   // Antes esta versão, sempre cancelava — modelo antigo onde quem criou era
   // "dono" da sala. Agora todos são iguais, então sair = liberar slot.
   window._casualSetupClose = function() {
+    // v4.0.4: na tela de Configuração, o Voltar do topo volta pro LOBBY da
+    // partida que está sendo configurada (não fecha a partida nem vai pra
+    // dashboard). Só fecha de verdade quando já está no lobby.
+    if (_configOpen) { window._casualCloseConfig(); return; }
     // 1. Stop polling interval
     try { if (window._casualSetupCleanup) window._casualSetupCleanup(); } catch(e) {}
 
