@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.21-beta';
+window.SCOREPLACE_VERSION = '4.0.22-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -2391,7 +2391,7 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
         '</div>' +
       '</div>'
     ) +
-    '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">' + (COVER ? 'Arraste · Zoom · Luminosidade' : 'Arraste · Zoom · Luminosidade · Fundo') + '</div>' +
+    '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">' + (COVER ? 'Arraste · Zoom · Luminosidade · a faixa tracejada central é o que aparece no celular em pé' : 'Arraste · Zoom · Luminosidade · Fundo') + '</div>' +
     '<div style="display:flex;gap:10px;">' +
       '<button id="crop-cancel" class="btn btn-sm" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted,#94a3b8);border:1px solid rgba(255,255,255,0.1);">Cancelar</button>' +
       '<button id="crop-confirm" class="btn btn-sm btn-primary" style="flex:2;">✅ Confirmar</button>' +
@@ -2466,6 +2466,32 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     ctx.strokeStyle = 'rgba(99,102,241,0.4)'; ctx.lineWidth = 2;
     var _bCorner = COVER ? 9 : (RADIUS_CTRL ? (cropRadiusPct / 50) * (_minSide / 2 - 1) : (SHAPE === 'circle' ? _minSide / 2 - 1 : 11));
     ctx.beginPath(); ctx.roundRect(1, 1, PREV_W - 2, PREV_H - 2, Math.max(0, _bCorner)); ctx.stroke();
+    // v4.0.22: guias de recorte (só no cover). O fundo do torneio é
+    // background-size:cover → em telas estreitas (celular EM PÉ / detalhe) só o
+    // CENTRO da foto 2:1 sobrevive. Mostra a faixa retrato (3:4, o que aparece no
+    // celular em pé) e a faixa card (3:2, paisagem); escurece as margens cortadas.
+    if (COVER) {
+      ctx.save();
+      var _paP = 3 / 4, _bandWP = Math.min(PREV_W, _paP * PREV_H), _bandXP = (PREV_W - _bandWP) / 2;
+      var _paC = 3 / 2, _bandWC = Math.min(PREV_W, _paC * PREV_H), _bandXC = (PREV_W - _bandWC) / 2;
+      // margens cortadas no retrato (fora da faixa 3:4)
+      ctx.fillStyle = 'rgba(0,0,0,0.42)';
+      ctx.fillRect(0, 0, _bandXP, PREV_H);
+      ctx.fillRect(_bandXP + _bandWP, 0, PREV_W - _bandXP - _bandWP, PREV_H);
+      // faixa card (paisagem) — linha sutil
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      ctx.strokeRect(_bandXC + 0.5, 0.5, _bandWC - 1, PREV_H - 1);
+      // faixa retrato (celular em pé) — tracejado forte
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+      ctx.strokeRect(_bandXP + 0.75, 0.75, _bandWP - 1.5, PREV_H - 1.5);
+      ctx.setLineDash([]);
+      // rótulos das proporções
+      ctx.fillStyle = 'rgba(255,255,255,0.96)'; ctx.font = '700 9px sans-serif'; ctx.textAlign = 'center';
+      ctx.textBaseline = 'top'; ctx.fillText('📱 retrato 3:4', PREV_W / 2, 4);
+      ctx.textBaseline = 'bottom'; ctx.fillText('card 3:2', PREV_W / 2, PREV_H - 4);
+      ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+      ctx.restore();
+    }
   }
 
   img.onload = function() {
