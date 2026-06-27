@@ -275,6 +275,15 @@
   // v0.17.16: delega ao resolver global em store.js (centralização).
   function _sportIcon(sport) { return window._sportIcon ? window._sportIcon(sport) : '🎾'; }
 
+  // Miniatura do logo do local (quando cadastrado). Respeita a forma escolhida
+  // (círculo/quadrado/raio). Sem logo → string vazia (o card mantém o 🏢).
+  function _venueLogoThumb(v, size) {
+    if (!v || !v.logoData) return '';
+    size = size || 38;
+    var radius = (v.logoShape === 'circle') ? '50%' : ((v.logoRadius != null ? v.logoRadius : 14) + '%');
+    return '<img src="' + _safe(v.logoData) + '" alt="" style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;border-radius:' + radius + ';flex-shrink:0;background:#0a0e1a;">';
+  }
+
   // v0.16.27: helpers portados de presence.js pras seções "Agora no local"
   // e "Próximas horas" do card focado.
   function _sportsIcons(list) {
@@ -407,9 +416,10 @@
       distText = d < 1 ? Math.round(d * 1000) + 'm' : d.toFixed(1) + 'km';
     }
     return '<div onclick="window._venuesOpenDetail(\'' + _safe(v._id) + '\')" class="hover-lift" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;">' +
+      _venueLogoThumb(v, 40) +
       '<div style="flex:1;min-width:0;">' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">' +
-          '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🏢 ' + _safe(v.name) + '</span>' +
+          '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (v.logoData ? '' : '🏢 ') + _safe(v.name) + '</span>' +
           officialBadge +
         '</div>' +
         (v.address ? '<div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">' + _safe(v.address) + '</div>' : '') +
@@ -454,6 +464,7 @@
     // de stopPropagation pra não disparar o abrir-detalhe.
     return '<div class="pref-matched-card hover-lift" data-pref-pid="' + safePid + '" data-pref-placeid="' + safeRealPid + '" data-pref-venuename="' + safeVenueName + '" style="background:var(--bg-card);border:1px solid rgba(251,191,36,0.35);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;">' +
       '<div onclick="window._venuesOpenDetail(\'' + safeId + '\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;">' +
+        _venueLogoThumb(v, 40) +
         '<div style="flex:1;min-width:0;">' +
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">' +
             '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(v.name) + '</span>' +
@@ -2924,8 +2935,9 @@
     var nameRowHtml =
       '<div style="background:var(--bg-card);padding:14px 18px 12px;border-bottom:1px solid var(--border-color);">' +
         '<div style="display:flex;align-items:flex-start;gap:10px;">' +
+          _venueLogoThumb(v, 52) +
           '<div style="flex:1;min-width:0;">' +
-            '<div style="font-weight:800;color:var(--text-bright);font-size:1.05rem;line-height:1.3;word-break:break-word;">🏢 ' + _safe(v.name) + '</div>' +
+            '<div style="font-weight:800;color:var(--text-bright);font-size:1.05rem;line-height:1.3;word-break:break-word;">' + (v.logoData ? '' : '🏢 ') + _safe(v.name) + '</div>' +
             (v.address ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;line-height:1.4;word-break:break-word;">📍 ' + _safe(v.address) + '</div>' : '') +
           '</div>' +
           favBtn +
