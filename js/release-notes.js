@@ -9,7 +9,16 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.68-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.70-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📅 Combinar jogo reformulado:</b> as opções de horário agora ficam <b>agrupadas por pessoa</b> (com nome e foto de quem propôs). No topo: <b>‹ Voltar</b> e <b>Confirmar</b>.</li>' +
+        '<li><b>✅🚫 Voto "posso / não posso":</b> em cada horário você marca <b>✅ posso</b> ou <b>🚫 não posso</b>. Nas propostas de <b>dias da semana</b>, dá pra votar em <b>cada dia separadamente</b>. Quando todos marcam ✅ no mesmo, o jogo é combinado.</li>' +
+        '<li><b>✏️🗑️ Editar e apagar a própria proposta:</b> cada horário que você propôs tem um <b>lápis</b> (editar) e um <b>✕</b> (apagar).</li>' +
+        '<li><b>🚫 Símbolo de "não" padronizado:</b> em <b>todas as enquetes</b>, o "não quero / não posso" passou a usar o <b>🚫</b> (em vez do ❌) — pra não confundir com o ✕ de cancelar uma opção.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v3.1.68-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(26 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>✅❌ Enquete: dizer o que NÃO quer também:</b> em perguntas de <b>múltipla escolha</b>, cada opção agora tem <b>✅ quero</b> e <b>❌ não quero</b>. A visualização mostra nº e % de ✅ e de ❌ por opção; no "Ver votos", quem marcou ❌ aparece em vermelho.</li>' +
         '<li><b>📱 Campos de celular alinhados no perfil:</b> os campos de WhatsApp e de celulares vinculados ficaram do mesmo tamanho e altura, sem cortar o "+55".</li>' +

@@ -417,7 +417,13 @@
     _renderVote(t, poll, secId);
   };
 
-  // v3.1.68: estilo dos botões ✅/❌ das opções multiSelect (tri-estado).
+  // v3.1.69: GLIFOS CANÔNICOS de voto — compartilhados por TODAS as enquetes
+  // (opinião + combinar jogo). Positivo = ✅; negativo = 🚫 (proibido) em vez de
+  // ❌, pra NÃO confundir com o ❌ de cancelar/excluir uma opção. Qualquer enquete
+  // nova deve usar window._opVoteGlyph(kind) em vez de hardcodar o símbolo.
+  window._opVoteGlyph = function (kind) { return kind === 'yes' ? '✅' : '🚫'; };
+
+  // v3.1.68: estilo dos botões ✅/🚫 das opções multiSelect (tri-estado).
   window._opVoteBtnStyle = function (kind, active) {
     var base = 'display:inline-flex;align-items:center;justify-content:center;width:42px;height:38px;border-radius:9px;font-size:1.05rem;cursor:pointer;flex-shrink:0;transition:all 0.15s;';
     if (kind === 'yes') {
@@ -461,7 +467,7 @@
       // as perguntas (pedido do dono). Mesma fonte usada no editor.
       body += '<div id="op-vsec-' + _esc(sec.id) + '" style="margin-bottom:18px;scroll-margin-top:170px;' + (si > 0 ? 'padding-top:16px;border-top:1px solid var(--border-color);' : '') + '">' +
         '<div style="font-weight:900;font-size:1.02rem;color:#f59e0b;margin-bottom:3px;">' + _esc(sec.question) + '</div>' +
-        '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:11px;">' + (sec.multiSelect ? 'Marque ✅ no que você quer e ❌ no que não quer' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>';
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:11px;">' + (sec.multiSelect ? 'Marque ✅ no que você quer e 🚫 no que não quer' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>';
 
       var myNo = _opGetVoteNo(poll, uid, sec.id);
       // v3.1.50: barra de resultado simples (seção de escolha ÚNICA).
@@ -488,9 +494,9 @@
           '</div>';
         };
         return '<div style="margin-bottom:13px;">' +
-          '<div style="font-size:0.84rem;font-weight:' + (mineY || mineN ? '800' : '600') + ';color:var(--text-bright);margin-bottom:4px;">' + (mineY ? '✅ ' : (mineN ? '❌ ' : '')) + _esc(o.text) + '</div>' +
+          '<div style="font-size:0.84rem;font-weight:' + (mineY || mineN ? '800' : '600') + ';color:var(--text-bright);margin-bottom:4px;">' + (mineY ? '✅ ' : (mineN ? '🚫 ' : '')) + _esc(o.text) + '</div>' +
           _line('✅', yp, yc, 'linear-gradient(90deg,#10b981,#34d399)') +
-          _line('❌', np, nc, 'linear-gradient(90deg,#dc2626,#f87171)') +
+          _line('🚫', np, nc, 'linear-gradient(90deg,#dc2626,#f87171)') +
         '</div>';
       };
       sec.options.forEach(function (o) {
@@ -504,7 +510,7 @@
           body += '<div data-opt-row data-opt-id="' + _esc(o.id) + '" data-vote="' + vs + '" style="display:flex;align-items:center;gap:8px;padding:8px 11px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.25);border-radius:11px;margin-bottom:' + (showResults ? '4px' : '8px') + ';">' +
             '<span style="flex:1;min-width:0;font-size:0.92rem;color:var(--text-bright);font-weight:600;">' + _esc(o.text) + '</span>' +
             '<button type="button" data-vote-btn="yes" onclick="window._opToggleVote(this,\'yes\')" title="Quero" style="' + window._opVoteBtnStyle('yes', vs === 'yes') + '">✅</button>' +
-            '<button type="button" data-vote-btn="no" onclick="window._opToggleVote(this,\'no\')" title="Não quero" style="' + window._opVoteBtnStyle('no', vs === 'no') + '">❌</button>' +
+            '<button type="button" data-vote-btn="no" onclick="window._opToggleVote(this,\'no\')" title="Não quero" style="' + window._opVoteBtnStyle('no', vs === 'no') + '">' + window._opVoteGlyph('no') + '</button>' +
           '</div>';
           if (showResults) body += _resultBarMulti(o);
         } else {
@@ -747,7 +753,7 @@
     var nameChip = function (uid, isNo) {
       var nm = window._opVoterName(t, uid);
       if (isNo) {
-        return '<span title="Marcou ❌ (não quer)" style="display:inline-block;background:#dc2626;border:1px solid #ef4444;color:#fff;border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:700;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
+        return '<span title="Marcou 🚫 (não quer)" style="display:inline-block;background:#dc2626;border:1px solid #ef4444;color:#fff;border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:700;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
       }
       return '<span style="display:inline-block;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:var(--text-bright);border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:600;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
     };
@@ -777,7 +783,7 @@
           ? 'margin-bottom:11px;border:2px solid rgba(16,185,129,0.65);background:rgba(16,185,129,0.08);border-radius:10px;padding:8px 10px;'
           : 'margin-bottom:11px;';
         var countLabel = sec.multiSelect
-          ? ('<span style="color:#34d399;font-weight:700;">✅ ' + yesV.length + '</span> <span style="color:#f87171;font-weight:700;">· ❌ ' + noV.length + '</span>')
+          ? ('<span style="color:#34d399;font-weight:700;">✅ ' + yesV.length + '</span> <span style="color:#f87171;font-weight:700;">· 🚫 ' + noV.length + '</span>')
           : ('<span style="color:var(--text-muted);font-weight:600;">· ' + yesV.length + '</span>');
         var chips = '';
         if (yesV.length) chips += yesV.map(function (u) { return nameChip(u, false); }).join('');

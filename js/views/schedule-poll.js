@@ -20,10 +20,12 @@
 //      { id, kind:'date',   dateISO:'2026-07-02', time:'17:00', byUid },
 //      { id, kind:'weekly', weekdays:[2,4], time:'17:00', byUid }  // 0=Dom..6=Sáb
 //    ],
-//    avail:    { [uid]: [optId,...] },    // quais opções cada jogador CONSEGUE
-//    confirms: { [uid]: optId },          // OK FINAL de cada jogador numa opção
-//    scheduledOptId
+//    votes:    { [uid]: { [optId]: 1 | -1 } },           // posso (1) / não posso (-1)
+//    dayVotes: { [uid]: { [optId]: { [wd]: 1 | -1 } } }, // voto POR DIA (opções weekly)
+//    scheduledOptId, scheduledWd
 //  }
+//  Consenso: opção 'date' com TODOS = 1 agenda; opção 'weekly' agenda no 1º dia em
+//  que TODOS votaram 1 (ocorrência mais próxima). Legado avail/confirms migra p/ votes.
 //  m.scheduledAt = ISO   // espelho TOP-LEVEL — dirige o chip + estado colapsado
 //  m.scheduledBy = uid
 //
@@ -35,6 +37,7 @@
   'use strict';
   var WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   var DAY = 86400000;
+  var _schEdit = null; // { matchId, optId } — opção em edição inline
 
   function _esc(s) { return (window._safeHtml ? window._safeHtml(s) : String(s == null ? '' : s)); }
   function _attr(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
@@ -185,12 +188,22 @@
     return (all || []).find(function (m) { return m && String(m.id) === String(matchId); }) || null;
   }
   function _ensureSchedule(m) {
-    if (!m.schedule || typeof m.schedule !== 'object') m.schedule = { options: [], avail: {}, confirms: {} };
-    if (!Array.isArray(m.schedule.options)) m.schedule.options = [];
-    if (!m.schedule.avail || typeof m.schedule.avail !== 'object') m.schedule.avail = {};
-    if (!m.schedule.confirms || typeof m.schedule.confirms !== 'object') m.schedule.confirms = {};
-    if (!m.schedule.enabledAt) m.schedule.enabledAt = new Date().toISOString();
-    return m.schedule;
+    if (!m.schedule || typeof m.schedule !== 'object') m.schedule = { options: [], votes: {}, dayVotes: {} };
+    var s = m.schedule;
+    if (!Array.isArray(s.options)) s.options = [];
+    if (!s.votes || typeof s.votes !== 'object') s.votes = {};
+    if (!s.dayVotes || typeof s.dayVotes !== 'object') s.dayVotes = {};
+    // migração legado: avail (posso) → votes ; confirms vira voto posso na opção
+    if (s.avail && typeof s.avail === 'object') {
+      Object.keys(s.avail).forEach(function (u) { (s.avail[u] || []).forEach(function (oid) { (s.votes[u] = s.votes[u] || {})[oid] = 1; }); });
+      delete s.avail;
+    }
+    if (s.confirms && typeof s.confirms === 'object') {
+      Object.keys(s.confirms).forEach(function (u) { var oid = s.confirms[u]; if (oid) (s.votes[u] = s.votes[u] || {})[oid] = 1; });
+      delete s.confirms;
+    }
+    if (!s.enabledAt) s.enabledAt = new Date().toISOString();
+    return s;
   }
 
   // Resolve a opção escolhida → ISO concreto pra m.scheduledAt.
@@ -219,23 +232,49 @@
     return '';
   }
 
-  // Consenso: todos os uids confirmaram a MESMA opção → agenda. Roda DENTRO do
-  // confirm, ANTES do save → escrita atômica. Retorna true se fechou agora.
+  // Resolve a próxima ocorrência de um weekday específico (BRT) dentro da janela.
+  function _schResolveDayISO(time, wd, t) {
+    var win = window._schWindow(t);
+    var tp = String(time || '12:00').split(':');
+    var hh = ('0' + (parseInt(tp[0], 10) || 0)).slice(-2), mm = ('0' + (parseInt(tp[1], 10) || 0)).slice(-2);
+    for (var i = 0; i < 28; i++) {
+      var ymd = _brtYmd(win.startMs + i * DAY);
+      var d = new Date(ymd + 'T12:00:00-03:00').getDay();
+      if (d === wd) {
+        var d2 = new Date(ymd + 'T' + hh + ':' + mm + ':00-03:00');
+        if (!isNaN(d2.getTime()) && d2.getTime() >= win.startMs) return d2.toISOString();
+      }
+    }
+    return '';
+  }
+
+  // Consenso: TODOS os uids votaram "posso" (1) na MESMA opção (ou no MESMO dia, p/
+  // weekly) → agenda na ocorrência mais próxima. Roda DENTRO do voto, ANTES do save
+  // → escrita atômica. Retorna true se fechou agora.
   function _schTrySchedule(t, m) {
     var uids = _schMatchUids(t, m);
     if (uids.length < 2) return false;
-    var conf = (m.schedule && m.schedule.confirms) || {};
-    var first = conf[uids[0]];
-    if (!first) return false;
-    if (!uids.every(function (u) { return conf[u] === first; })) return false;
-    var opt = (m.schedule.options || []).find(function (o) { return o.id === first; });
-    if (!opt) return false;
-    var iso = _schResolveISO(opt, t);
-    if (!iso) return false;
-    m.schedule.scheduledOptId = first;
-    m.scheduledAt = iso;
-    m.scheduledBy = (_cu() || {}).uid || '';
-    return true;
+    var s = m.schedule || {}; var votes = s.votes || {}, dayVotes = s.dayVotes || {};
+    var opts = s.options || [];
+    for (var k = 0; k < opts.length; k++) {
+      var o = opts[k];
+      if (o.kind === 'date') {
+        if (uids.every(function (u) { return (votes[u] || {})[o.id] === 1; })) {
+          var iso = _schResolveISO(o, t);
+          if (iso) { s.scheduledOptId = o.id; s.scheduledWd = null; m.scheduledAt = iso; m.scheduledBy = (_cu() || {}).uid || ''; return true; }
+        }
+      } else {
+        var wds = (o.weekdays || []).slice().sort(function (a, b) { return a - b; });
+        var best = null, bestWd = null;
+        wds.forEach(function (wd) {
+          if (!uids.every(function (u) { return (((dayVotes[u] || {})[o.id]) || {})[wd] === 1; })) return;
+          var di = _schResolveDayISO(o.time, wd, t);
+          if (di && (!best || di < best)) { best = di; bestWd = wd; }
+        });
+        if (best) { s.scheduledOptId = o.id; s.scheduledWd = bestWd; m.scheduledAt = best; m.scheduledBy = (_cu() || {}).uid || ''; return true; }
+      }
+    }
+    return false;
   }
 
   // ─── notificações (level fundamental) ──────────────────────────────────────────
@@ -305,10 +344,17 @@
     _renderMatch(t, m);
   };
 
+  function _userName(t, u) { return (typeof window._opVoterName === 'function') ? window._opVoterName(t, u) : 'Jogador'; }
+  function _avatarImg(t, u, size) {
+    var nm = _userName(t, u); var sz = size || 24;
+    var src = (typeof window._profileAvatarUrl === 'function') ? window._profileAvatarUrl(nm, '', sz)
+      : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm));
+    return '<img src="' + _esc(src) + '" title="' + _esc(nm) + '" alt="' + _esc(nm) + '" style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card,#0f172a);flex-shrink:0;">';
+  }
   function _avatarsFor(t, uids) {
     if (!uids || !uids.length) return '';
     return uids.map(function (u) {
-      var nm = (typeof window._opVoterName === 'function') ? window._opVoterName(t, u) : 'Jogador';
+      var nm = _userName(t, u);
       var src = (typeof window._profileAvatarUrl === 'function') ? window._profileAvatarUrl(nm, '', 26)
         : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm));
       return '<img src="' + _esc(src) + '" title="' + _esc(nm) + '" alt="' + _esc(nm) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card,#0f172a);margin-left:-6px;flex-shrink:0;">';
@@ -322,11 +368,12 @@
     var isOrg = _isOrg(t);
     var win = window._schWindow(t);
     var allUids = _schMatchUids(t, m);
-    var sched = m.schedule || {};
+    var sched = m.scheduledAt ? (m.schedule || {}) : _ensureSchedule(m);
     var header =
-      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
+      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
+        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);font-weight:700;">‹ Voltar</button>' +
         '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📅 Combinar jogo</span>' +
-        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Fechar</button>' +
+        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:rgba(16,185,129,0.9);color:#fff;border:1px solid rgba(255,255,255,0.35);font-weight:800;">Confirmar</button>' +
       '</div>';
     var matchLine = '<div style="font-weight:800;font-size:1.02rem;color:var(--text-bright);margin-bottom:2px;">' + _esc(m.p1 || '') + ' <span style="color:var(--text-muted);font-weight:600;">vs</span> ' + _esc(m.p2 || '') + '</div>';
 
@@ -346,37 +393,113 @@
       return;
     }
 
-    // ── opções + disponibilidade + OK final ──
-    var myAvail = (sched.avail && sched.avail[uid]) || [];
-    var myConfirm = sched.confirms && sched.confirms[uid];
-    var confirmedCount = {};
-    (sched.options || []).forEach(function (o) { confirmedCount[o.id] = 0; });
-    if (sched.confirms) Object.keys(sched.confirms).forEach(function (u) { var oid = sched.confirms[u]; if (confirmedCount[oid] != null) confirmedCount[oid]++; });
+    // ── opções (agrupadas por quem propôs) + voto posso/não posso ──
+    var votes = sched.votes || {}, dayVotes = sched.dayVotes || {};
+    var myVotes = votes[uid] || {}, myDayVotes = dayVotes[uid] || {};
+    var minD = _brtYmd(win.startMs), maxD = _brtYmd(win.endMs);
 
-    var optsHtml = '';
-    (sched.options || []).forEach(function (o) {
-      var availUids = Object.keys(sched.avail || {}).filter(function (u) { return (sched.avail[u] || []).indexOf(o.id) !== -1; });
-      var iCan = myAvail.indexOf(o.id) !== -1;
-      var iPicked = myConfirm === o.id;
-      var nConf = confirmedCount[o.id] || 0;
-      optsHtml +=
-        '<div style="background:rgba(16,185,129,0.05);border:1px solid ' + (iPicked ? '#10b981' : 'rgba(16,185,129,0.22)') + ';border-radius:12px;padding:11px 12px;margin-bottom:10px;">' +
+    // botão de voto (posso=1 / não posso=-1). `mine` = meu voto atual nesta célula.
+    // Glifo CANÔNICO via window._opVoteGlyph: ✅ posso / 🚫 não posso (🚫 = proibido,
+    // pra não confundir com o ✕ de apagar a opção).
+    function _voteBtn(val, mine, onclick, big) {
+      var on = mine === val, pos = val === 1;
+      var bg = on ? (pos ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#ef4444,#dc2626)') : 'rgba(255,255,255,0.05)';
+      var col = on ? '#fff' : (pos ? '#34d399' : '#f87171');
+      var bd = on ? 'none' : ('1px solid ' + (pos ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'));
+      var pad = big ? '8px' : '5px 8px', fs = big ? '0.82rem' : '0.8rem';
+      var g = (typeof window._opVoteGlyph === 'function') ? window._opVoteGlyph(pos ? 'yes' : 'no') : (pos ? '✅' : '🚫');
+      var label = big ? (g + (pos ? ' Posso' : ' Não')) : g;
+      return '<button type="button" onclick="' + onclick + '" class="btn" style="' + (big ? 'flex:1;' : '') + 'background:' + bg + ';color:' + col + ';border:' + bd + ';font-weight:800;border-radius:9px;padding:' + pad + ';font-size:' + fs + ';line-height:1;">' + label + '</button>';
+    }
+
+    function _renderOption(o) {
+      var mine = o.byUid === uid;
+      var canManage = mine || isOrg;
+      var editing = _schEdit && _schEdit.matchId === String(m.id) && _schEdit.optId === o.id;
+      var oa = "'" + _attr(t.id) + "','" + _attr(m.id) + "','" + _attr(o.id) + "'";
+
+      // ── modo edição inline ──
+      if (editing && canManage) {
+        var ed;
+        if (o.kind === 'date') {
+          ed = '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+            '<input type="date" id="sch-edit-date" value="' + _esc(o.dateISO || '') + '" min="' + minD + '" max="' + maxD + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+            '<input type="time" id="sch-edit-time" value="' + _esc(o.time || '17:00') + '" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;"></div>';
+        } else {
+          var wsel = (o.weekdays || []);
+          ed = '<div id="sch-edit-weekdays" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">' +
+            WD.map(function (w, i) { var on = wsel.indexOf(i) !== -1; return '<button type="button" data-wd="' + i + '" data-on="' + (on ? '1' : '0') + '" onclick="window._schToggleWd(this)" style="background:' + (on ? 'linear-gradient(135deg,#10b981,#059669)' : 'var(--bg-darker,#0b1220)') + ';border:1px solid ' + (on ? '#10b981' : 'rgba(255,255,255,0.14)') + ';color:' + (on ? '#fff' : 'var(--text-muted)') + ';border-radius:8px;padding:6px 9px;font-size:0.78rem;font-weight:700;cursor:pointer;">' + w + '</button>'; }).join('') +
+            '</div>' +
+            '<input type="time" id="sch-edit-weekly-time" value="' + _esc(o.time || '17:00') + '" style="width:96px;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;margin-bottom:8px;">';
+        }
+        return '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.4);border-radius:11px;padding:11px 12px;margin-bottom:9px;">' + ed +
+          '<div style="display:flex;gap:8px;">' +
+            '<button type="button" onclick="window._schCancelEdit(' + oa + ')" class="btn" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:9px;padding:8px;font-size:0.8rem;">Cancelar</button>' +
+            '<button type="button" onclick="window._schSaveEdit(' + oa + ')" class="btn" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:800;border-radius:9px;padding:8px;font-size:0.8rem;">Salvar</button>' +
+          '</div></div>';
+      }
+
+      // ── ícones gerenciar (lápis / X) ──
+      var manage = canManage ? (
+        '<span style="display:inline-flex;gap:4px;flex-shrink:0;">' +
+          '<button type="button" title="Editar" onclick="window._schEditOption(' + oa + ')" class="btn" style="background:rgba(255,255,255,0.06);color:#cbd5e1;border:1px solid var(--border-color);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">✏️</button>' +
+          '<button type="button" title="Apagar" onclick="window._schDeleteOption(' + oa + ')" class="btn" style="background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">✕</button>' +
+        '</span>') : '';
+
+      var rows = '';
+      if (o.kind === 'date') {
+        var yesU = allUids.filter(function (u) { return (votes[u] || {})[o.id] === 1; });
+        var noN = allUids.filter(function (u) { return (votes[u] || {})[o.id] === -1; }).length;
+        rows =
+          (yesU.length ? '<div style="display:flex;align-items:center;padding-left:6px;margin-top:8px;">' + _avatarsFor(t, yesU) + '</div>' : '') +
+          (isPlayer ? '<div style="display:flex;gap:8px;margin-top:9px;">' +
+            _voteBtn(1, myVotes[o.id], 'window._schVote(' + oa + ',1)', true) +
+            _voteBtn(-1, myVotes[o.id], 'window._schVote(' + oa + ',-1)', true) +
+          '</div>' : '');
+        return '<div style="background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.22);border-radius:11px;padding:10px 12px;margin-bottom:9px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
             '<span style="font-weight:800;font-size:0.95rem;color:var(--text-bright);">' + _esc(_optLabel(o)) + '</span>' +
-            '<span style="font-size:0.72rem;color:var(--text-muted);font-weight:700;flex-shrink:0;">' + availUids.length + '/' + (allUids.length || '?') + ' ✔' + (nConf ? ' · ' + nConf + ' OK' : '') + '</span>' +
-          '</div>' +
-          (availUids.length ? '<div style="display:flex;align-items:center;padding-left:6px;margin-top:8px;">' + _avatarsFor(t, availUids) + '</div>' : '') +
-          (isPlayer ? (
-            '<div style="display:flex;gap:8px;margin-top:10px;">' +
-              '<button type="button" onclick="window._schToggleAvail(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\',\'' + _attr(o.id) + '\')" class="btn" style="flex:1;background:' + (iCan ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.05)') + ';color:' + (iCan ? '#34d399' : 'var(--text-muted)') + ';border:1px solid ' + (iCan ? 'rgba(16,185,129,0.45)' : 'var(--border-color)') + ';font-weight:700;border-radius:9px;padding:8px;font-size:0.8rem;">' + (iCan ? '✔ Consigo' : 'Consigo?') + '</button>' +
-              '<button type="button" onclick="window._schConfirm(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\',\'' + _attr(o.id) + '\')" class="btn" style="flex:1;background:' + (iPicked ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(99,102,241,0.1)') + ';color:' + (iPicked ? '#fff' : '#a5b4fc') + ';border:' + (iPicked ? 'none' : '1px solid rgba(99,102,241,0.4)') + ';font-weight:800;border-radius:9px;padding:8px;font-size:0.8rem;">' + (iPicked ? '✅ É esse' : 'É esse') + '</button>' +
-            '</div>'
-          ) : '') +
+            '<span style="display:inline-flex;align-items:center;gap:6px;flex-shrink:0;"><span style="font-size:0.72rem;color:var(--text-muted);font-weight:700;">' + yesU.length + '/' + (allUids.length || '?') + ' ✅' + (noN ? ' · ' + noN + ' 🚫' : '') + '</span>' + manage + '</span>' +
+          '</div>' + rows + '</div>';
+      }
+      // weekly → uma linha por dia, com voto por dia
+      var wds = (o.weekdays || []).slice().sort(function (a, b) { return a - b; });
+      var dayRows = wds.map(function (wd) {
+        var yc = allUids.filter(function (u) { return (((dayVotes[u] || {})[o.id]) || {})[wd] === 1; }).length;
+        var nc = allUids.filter(function (u) { return (((dayVotes[u] || {})[o.id]) || {})[wd] === -1; }).length;
+        var mv = (myDayVotes[o.id] || {})[wd];
+        var da = oa + ',' + wd;
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.06);">' +
+          '<span style="font-weight:700;font-size:0.85rem;color:var(--text-bright);min-width:52px;">' + WD[wd] + (o.time ? ' <span style="color:var(--text-muted);font-weight:600;">' + _esc(o.time) + '</span>' : '') + '</span>' +
+          '<span style="font-size:0.7rem;color:var(--text-muted);font-weight:700;flex:1;text-align:right;">' + yc + '/' + (allUids.length || '?') + ' ✅' + (nc ? ' · ' + nc + ' 🚫' : '') + '</span>' +
+          (isPlayer ? '<span style="display:inline-flex;gap:5px;flex-shrink:0;">' +
+            _voteBtn(1, mv, 'window._schVoteDay(' + da + ',1)', false) +
+            _voteBtn(-1, mv, 'window._schVoteDay(' + da + ',-1)', false) +
+          '</span>' : '') +
         '</div>';
-    });
+      }).join('');
+      return '<div style="background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.22);border-radius:11px;padding:10px 12px;margin-bottom:9px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+          '<span style="font-weight:800;font-size:0.9rem;color:#34d399;">📆 Dias da semana ' + (o.time ? '· ' + _esc(o.time) : '') + '</span>' + manage +
+        '</div>' + dayRows + '</div>';
+    }
+
+    // agrupa por quem propôs; meu box primeiro, depois por nome
+    var byUser = {}, order = [];
+    (sched.options || []).forEach(function (o) { if (!byUser[o.byUid]) { byUser[o.byUid] = []; order.push(o.byUid); } byUser[o.byUid].push(o); });
+    order.sort(function (a, b) { if (a === uid) return -1; if (b === uid) return 1; return _userName(t, a).localeCompare(_userName(t, b)); });
+
+    var optsHtml = order.map(function (puid) {
+      var nm = _userName(t, puid) + (puid === uid ? ' (você)' : '');
+      var inner = byUser[puid].map(_renderOption).join('');
+      return '<div style="background:rgba(255,255,255,0.02);border:1px solid var(--border-color);border-radius:14px;padding:10px 11px 4px;margin-bottom:12px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">' + _avatarImg(t, puid, 24) +
+          '<span style="font-weight:800;font-size:0.86rem;color:var(--text-bright);">' + _esc(nm) + '</span>' +
+          '<span style="font-size:0.7rem;color:var(--text-muted);font-weight:700;">propôs</span></div>' +
+        inner + '</div>';
+    }).join('');
     if (!(sched.options || []).length) optsHtml = '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:14px 0;">Ninguém propôs horário ainda. Proponha abaixo 👇</div>';
 
-    var minD = _brtYmd(win.startMs), maxD = _brtYmd(win.endMs);
     var addHtml = isPlayer ? (
       '<div style="margin-top:6px;padding-top:14px;border-top:1px solid var(--border-color);">' +
         '<div style="font-size:0.78rem;font-weight:800;color:#34d399;margin-bottom:8px;">Combinar até ' + _esc(_fmtDateTime(win.endMs)) + '</div>' +
@@ -466,29 +589,91 @@
     _saveSchedule(t, m, prev, false);
   };
 
-  window._schToggleAvail = function (tId, matchId, optId) {
+  // voto posso(1)/não posso(-1) numa opção 'date'. Clicar no voto ativo → neutro.
+  window._schVote = function (tId, matchId, optId, val) {
     var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
     var cu = _guardPlayer(t, m); if (!cu) return;
     var prev = _snapshot(m); var s = _ensureSchedule(m);
-    var arr = (s.avail[cu.uid] || []).slice();
-    var idx = arr.indexOf(optId);
-    if (idx === -1) arr.push(optId); else arr.splice(idx, 1);
-    if (arr.length) s.avail[cu.uid] = arr; else delete s.avail[cu.uid];
-    // se desmarcou disponibilidade da opção que tinha confirmado, tira o OK também
-    if (idx !== -1 && s.confirms[cu.uid] === optId) delete s.confirms[cu.uid];
-    _saveSchedule(t, m, prev, false);
+    var mine = s.votes[cu.uid] = s.votes[cu.uid] || {};
+    if (mine[optId] === val) delete mine[optId]; else mine[optId] = val;
+    if (!Object.keys(mine).length) delete s.votes[cu.uid];
+    var scheduledNow = _schTrySchedule(t, m);
+    _saveSchedule(t, m, prev, scheduledNow);
   };
 
-  window._schConfirm = function (tId, matchId, optId) {
+  // voto posso/não posso POR DIA numa opção 'weekly'.
+  window._schVoteDay = function (tId, matchId, optId, wd, val) {
     var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
     var cu = _guardPlayer(t, m); if (!cu) return;
+    wd = parseInt(wd, 10);
     var prev = _snapshot(m); var s = _ensureSchedule(m);
-    if (s.confirms[cu.uid] === optId) { delete s.confirms[cu.uid]; } // toggle off
-    else {
-      s.confirms[cu.uid] = optId;
-      // confirmar implica disponível
-      var arr = (s.avail[cu.uid] || []).slice(); if (arr.indexOf(optId) === -1) { arr.push(optId); s.avail[cu.uid] = arr; }
+    var mine = s.dayVotes[cu.uid] = s.dayVotes[cu.uid] || {};
+    var perOpt = mine[optId] = mine[optId] || {};
+    if (perOpt[wd] === val) delete perOpt[wd]; else perOpt[wd] = val;
+    if (!Object.keys(perOpt).length) delete mine[optId];
+    if (!Object.keys(mine).length) delete s.dayVotes[cu.uid];
+    var scheduledNow = _schTrySchedule(t, m);
+    _saveSchedule(t, m, prev, scheduledNow);
+  };
+
+  // apagar opção (proponente ou organizador) + votos associados.
+  window._schDeleteOption = function (tId, matchId, optId) {
+    var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
+    var cu = _cu(); if (!cu || !cu.uid) return;
+    var s = _ensureSchedule(m);
+    var opt = (s.options || []).find(function (o) { return o.id === optId; }); if (!opt) return;
+    if (opt.byUid !== cu.uid && !_isOrg(t)) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só quem propôs (ou o organizador) pode apagar.', 'warning'); return; }
+    var run = function () {
+      var prev = _snapshot(m);
+      s.options = s.options.filter(function (o) { return o.id !== optId; });
+      Object.keys(s.votes).forEach(function (u) { delete s.votes[u][optId]; if (!Object.keys(s.votes[u]).length) delete s.votes[u]; });
+      Object.keys(s.dayVotes).forEach(function (u) { delete s.dayVotes[u][optId]; if (!Object.keys(s.dayVotes[u]).length) delete s.dayVotes[u]; });
+      _saveSchedule(t, m, prev, false);
+    };
+    if (typeof showConfirmDialog === 'function') showConfirmDialog('Apagar opção?', 'Remove "' + _optLabel(opt) + '" e os votos dela.', run, null, 'Apagar', 'Cancelar');
+    else run();
+  };
+
+  // entrar/sair do modo edição inline de uma opção.
+  window._schEditOption = function (tId, matchId, optId) {
+    var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
+    var cu = _cu(); if (!cu || !cu.uid) return;
+    var s = _ensureSchedule(m);
+    var opt = (s.options || []).find(function (o) { return o.id === optId; }); if (!opt) return;
+    if (opt.byUid !== cu.uid && !_isOrg(t)) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só quem propôs (ou o organizador) pode editar.', 'warning'); return; }
+    _schEdit = { matchId: String(m.id), optId: optId };
+    _renderMatch(t, m);
+  };
+  window._schCancelEdit = function (tId, matchId, optId) {
+    _schEdit = null;
+    var t = _findT(tId); var m = t && _schFindMatch(t, matchId);
+    if (t && m) _renderMatch(t, m);
+  };
+  window._schSaveEdit = function (tId, matchId, optId) {
+    var t = _findT(tId); if (!t) return; var m = _schFindMatch(t, matchId); if (!m) return;
+    var cu = _cu(); if (!cu || !cu.uid) return;
+    var s = _ensureSchedule(m);
+    var opt = (s.options || []).find(function (o) { return o.id === optId; }); if (!opt) { _schEdit = null; _renderMatch(t, m); return; }
+    if (opt.byUid !== cu.uid && !_isOrg(t)) return;
+    var prev = _snapshot(m);
+    if (opt.kind === 'date') {
+      var dEl = document.getElementById('sch-edit-date'), tEl = document.getElementById('sch-edit-time');
+      var dateISO = dEl && dEl.value; var time = (tEl && tEl.value) || '17:00';
+      if (!dateISO) { if (typeof showNotification === 'function') showNotification('Escolha a data', '', 'warning'); return; }
+      var win = window._schWindow(t);
+      var ms = new Date(dateISO + 'T' + time + ':00-03:00').getTime();
+      if (isNaN(ms) || ms < win.startMs - DAY || ms > win.endMs + DAY) { if (typeof showNotification === 'function') showNotification('Fora do prazo', 'Escolha uma data dentro da janela da rodada.', 'warning'); return; }
+      opt.dateISO = dateISO; opt.time = time;
+    } else {
+      var wds = [];
+      document.querySelectorAll('#sch-edit-weekdays [data-wd][data-on="1"]').forEach(function (b) { wds.push(parseInt(b.getAttribute('data-wd'), 10)); });
+      var wt = document.getElementById('sch-edit-weekly-time'); var wtime = (wt && wt.value) || '17:00';
+      if (!wds.length) { if (typeof showNotification === 'function') showNotification('Escolha os dias', 'Marque ao menos um dia da semana.', 'warning'); return; }
+      opt.weekdays = wds; opt.time = wtime;
+      // limpa votos por dia em dias que não existem mais
+      Object.keys(s.dayVotes).forEach(function (u) { var po = s.dayVotes[u][optId]; if (po) Object.keys(po).forEach(function (wd) { if (wds.indexOf(parseInt(wd, 10)) === -1) delete po[wd]; }); });
     }
+    _schEdit = null;
     var scheduledNow = _schTrySchedule(t, m);
     _saveSchedule(t, m, prev, scheduledNow);
   };
@@ -500,8 +685,13 @@
       if (typeof showNotification === 'function') showNotification('Jogo já começou', 'Não dá pra desfazer — o jogo já tem placar.', 'warning'); return;
     }
     var prev = _snapshot(m); var s = _ensureSchedule(m);
-    delete s.confirms[cu.uid];
-    s.scheduledOptId = null; m.scheduledAt = ''; m.scheduledBy = '';
+    // remove meu voto na opção/dia agendado pra quebrar o consenso e não reagendar
+    var oid = s.scheduledOptId, swd = s.scheduledWd;
+    if (oid) {
+      if (swd != null) { if (s.dayVotes[cu.uid] && s.dayVotes[cu.uid][oid]) { delete s.dayVotes[cu.uid][oid][swd]; } }
+      else { if (s.votes[cu.uid]) delete s.votes[cu.uid][oid]; }
+    }
+    s.scheduledOptId = null; s.scheduledWd = null; m.scheduledAt = ''; m.scheduledBy = '';
     _saveSchedule(t, m, prev, false);
   };
 
