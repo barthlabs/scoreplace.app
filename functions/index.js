@@ -791,37 +791,42 @@ exports.cleanupOldCasualMatches = onSchedule(
   },
   async () => {
     const db = admin.firestore();
-    // (1) Registros finalizados antigos (>30 dias) — garbage collection do histórico.
-    const threshold = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const finishedQuery = db.collection("casualMatches")
-      .where("status", "==", "finished")
-      .where("finishedAt", "<", threshold);
-    const deletedFinished = await _batchDeleteQuery(finishedQuery);
-
-    // (2) Salas NÃO finalizadas abandonadas — Firestore não tem `!=`, então
-    // varremos a coleção (pequena) e filtramos client-side por status.
-    // Regra: finished persiste como registro histórico; todo o resto é efêmero.
-    //   • status='active': dissolve se lastActivityAt > 2h (sem pontos marcados).
-    //   • status='setup'/'waiting'/outro: dissolve se lastActivityAt > 12h.
-    // lastActivityAt é escrito pelo cliente a cada ponto marcado (_syncLiveState).
-    // Quando ausente, cai no createdAt/updatedAt como fallback.
+    // v4.0.9: UMA varredura só, SEM query indexada. A versão anterior fazia
+    // primeiro um where(status==finished).where(finishedAt<thr) que exigia um
+    // índice composto (status, finishedAt) — que NÃO existia. Resultado: a função
+    // lançava FAILED_PRECONDITION logo no passo 1 e os passos 2/3 (dissolver salas
+    // inativas + limpar ponteiros) NUNCA rodavam → salas mortas sobreviviam por
+    // semanas e usuários caíam nelas. Agora um único get() resolve finished+stale,
+    // client-side, sem depender de índice (a coleção é pequena).
+    // Regras:
+    //   • status='finished': registro histórico → apaga só após 30 dias.
+    //   • status='active'  : sala em jogo → dissolve se inativa > 2h (sem pontos).
+    //   • setup/waiting/outro: dissolve se inativa > 12h.
+    // lastActivityAt é escrito pelo cliente a cada ponto (_syncLiveState); na
+    // ausência cai em finishedAt/updatedAt/createdAt. Sem timestamp = legado → apaga.
     const now = Date.now();
+    const threshold30d = now - 30 * 24 * 60 * 60 * 1000;
     const cutoff2h  = now - 2  * 60 * 60 * 1000;
     const cutoff12h = now - 12 * 60 * 60 * 1000;
+    const _ts = (raw) => { if (!raw) return 0; const p = Number(raw); return (!isNaN(p) && p > 1e12) ? p : new Date(raw).getTime(); };
+    let deletedFinished = 0;
     let deletedStale = 0;
     const allSnap = await db.collection("casualMatches").get();
     let batch = db.batch();
     let inBatch = 0;
     for (const doc of allSnap.docs) {
       const d = doc.data() || {};
-      if (d.status === "finished") continue; // registro — nunca apaga aqui
-      const tsRaw = d.lastActivityAt || d.updatedAt || d.createdAt || null;
-      let ts = 0;
-      if (tsRaw) { const p = Number(tsRaw); ts = !isNaN(p) && p > 1e12 ? p : new Date(tsRaw).getTime(); }
-      const cutoff = d.status === "active" ? cutoff2h : cutoff12h;
-      // Sem timestamp = legado → trata como antigo (apaga).
-      if (ts === 0 || ts < cutoff) {
-        batch.delete(doc.ref); inBatch++; deletedStale++;
+      let del = false;
+      if (d.status === "finished") {
+        const ft = _ts(d.finishedAt || d.updatedAt || d.createdAt);
+        if (ft === 0 || ft < threshold30d) { del = true; deletedFinished++; }
+      } else {
+        const ts = _ts(d.lastActivityAt || d.updatedAt || d.createdAt);
+        const cutoff = d.status === "active" ? cutoff2h : cutoff12h;
+        if (ts === 0 || ts < cutoff) { del = true; deletedStale++; }
+      }
+      if (del) {
+        batch.delete(doc.ref); inBatch++;
         if (inBatch >= 400) { await batch.commit(); batch = db.batch(); inBatch = 0; }
       }
     }
