@@ -1668,6 +1668,10 @@ function renderTournaments(container, tournamentId = null) {
                     : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
             venuePhotoBg = 'background-image: ' + overlayGradient + ', url(' + t.venuePhotoUrl + '); background-size: cover; background-position: center;';
         }
+        // v4.0.14: re-busca a foto fresca pelo placeId (token salvo expira → 400).
+        var vphotoAttrs = (t.venuePhotoUrl && t.venuePlaceId)
+            ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGradient + '" data-vphoto-w="1000" data-vphoto-h="500"'
+            : '';
 
         // v3.0.x: contagem canônica (deduplicada, equipe-aware) — estável antes E
         // depois do sorteio. Ver window._countCompetitors.
@@ -2173,7 +2177,7 @@ function renderTournaments(container, tournamentId = null) {
         var _pReadBd = _rb ? _rb.border : 'rgba(255,255,255,0.12)';
 
         return `
-        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}" style="position:relative;${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transition: transform 0.2s; ${!tournamentId ? 'cursor: pointer;' : ''}" ${!tournamentId ? `onclick="window.location.hash='#tournaments/${t.id}'" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'"` : ''}>
+        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}"${vphotoAttrs} style="position:relative;${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); transition: transform 0.2s; ${!tournamentId ? 'cursor: pointer;' : ''}" ${!tournamentId ? `onclick="window.location.hash='#tournaments/${t.id}'" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'"` : ''}>
           <div class="card-body p-4" style="${_photoPanel}${isOrg ? 'padding-bottom: 38px;' : ''}">
 
             <!-- Top Row: Icon/Modality | Status (same line on mobile) -->

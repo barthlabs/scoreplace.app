@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.13-beta';
+window.SCOREPLACE_VERSION = '4.0.14-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -25,6 +25,78 @@ window._formatDisplayName = function (fmt) {
   if (fmt === 'Fase de Grupos + Eliminatórias') return 'Fase de Grupos';
   return fmt;
 };
+
+// ─── Foto do local (Google Places) — re-busca FRESCA por placeId (v4.0.14) ───
+// A URL de foto do Places (novo) tem token de VALIDADE CURTA: salvar a URL
+// inteira na criação do torneio e reusar meses depois → 400 INVALID_ARGUMENT
+// ("photo resource invalid"). Por isso o fundo do card ficava sem foto mesmo
+// com o local pinado. Solução: re-buscar a foto pelo `venuePlaceId` na hora de
+// exibir (o billing/Places está ativo). Cache em memória (dedupe por sessão) +
+// localStorage com TTL (evita re-busca a cada navegação). onerror invalida o
+// cache e re-busca na próxima. Render sites marcam o elemento de fundo com
+// data-vphoto-pid (+ data-vphoto-overlay/w/h); o hidratador pinta o background.
+(function _setupVenuePhotos() {
+  var _mem = {};                       // placeId -> Promise<url|null>
+  var TTL = 6 * 3600 * 1000;           // 6h
+  function _lsGet(pid) { try { var r = JSON.parse(localStorage.getItem('sp_vphoto_' + pid) || 'null'); if (r && r.u && (Date.now() - r.t) < TTL) return r.u; } catch (e) {} return null; }
+  function _lsSet(pid, u) { try { localStorage.setItem('sp_vphoto_' + pid, JSON.stringify({ u: u, t: Date.now() })); } catch (e) {} }
+  function _lsDel(pid) { try { localStorage.removeItem('sp_vphoto_' + pid); } catch (e) {} }
+
+  window._venueFreshPhoto = function (pid, w, h) {
+    if (!pid) return Promise.resolve(null);
+    if (_mem[pid]) return _mem[pid];
+    var cached = _lsGet(pid);
+    if (cached) { _mem[pid] = Promise.resolve(cached); return _mem[pid]; }
+    _mem[pid] = (async function () {
+      try {
+        if (!(window.google && window.google.maps && window.google.maps.importLibrary)) return null;
+        await window.google.maps.importLibrary('places');
+        var place = new window.google.maps.places.Place({ id: pid });
+        await place.fetchFields({ fields: ['photos'] });
+        if (place.photos && place.photos.length) {
+          var url = place.photos[0].getURI({ maxWidth: w || 800, maxHeight: h || 400 });
+          if (url) { _lsSet(pid, url); return url; }
+        }
+      } catch (e) {}
+      return null;
+    })();
+    return _mem[pid];
+  };
+
+  window._hydrateVenuePhotos = function (root) {
+    root = root || document;
+    var els;
+    try { els = root.querySelectorAll('[data-vphoto-pid]:not([data-vphoto-done])'); } catch (e) { return; }
+    Array.prototype.forEach.call(els, function (el) {
+      el.setAttribute('data-vphoto-done', '1');
+      var pid = el.getAttribute('data-vphoto-pid');
+      if (!pid) return;
+      var overlay = el.getAttribute('data-vphoto-overlay') || '';
+      var w = parseInt(el.getAttribute('data-vphoto-w'), 10) || 800;
+      var h = parseInt(el.getAttribute('data-vphoto-h'), 10) || 400;
+      window._venueFreshPhoto(pid, w, h).then(function (url) {
+        if (!url) return;
+        var img = new Image();
+        img.onload = function () {
+          el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + url + ')';
+          el.style.backgroundSize = 'cover';
+          el.style.backgroundPosition = 'center';
+        };
+        img.onerror = function () { _lsDel(pid); delete _mem[pid]; el.removeAttribute('data-vphoto-done'); };
+        img.src = url;
+      });
+    });
+  };
+
+  // Observer debounced — hidrata cards novos sem precisar chamar em cada render.
+  var _deb = null;
+  function _kick() { if (_deb) return; _deb = setTimeout(function () { _deb = null; try { window._hydrateVenuePhotos(document); } catch (e) {} }, 250); }
+  try {
+    var _obs = new MutationObserver(_kick);
+    var _start = function () { if (document.body) { _obs.observe(document.body, { childList: true, subtree: true }); _kick(); } };
+    if (document.body) _start(); else document.addEventListener('DOMContentLoaded', _start);
+  } catch (e) {}
+})();
 
 // ─── Número GLOBAL do "Jogo N" em Rei/Rainha-Liga (v4.0.2) ───────────────────
 // Espelha EXATAMENTE a numeração do bracket (bracket.js, caminho monarch-Liga):

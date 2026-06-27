@@ -654,6 +654,11 @@ function renderDashboard(container) {
       venuePhotoBg = 'background-image: ' + overlayGrad + ', url(' + t.venuePhotoUrl + '); background-size: cover; background-position: center;';
       _cardTextColor = 'white'; // Overlay sempre escuro, texto branco
     }
+    // v4.0.14: re-busca a foto fresca pelo placeId (o token salvo na criação
+    // expira → 400). O hidratador pinta o fundo com a URL nova.
+    var vphotoAttrs = (t.venuePhotoUrl && t.venuePlaceId)
+      ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGrad + '" data-vphoto-w="800" data-vphoto-h="400"'
+      : '';
 
     // v3.0.x: usa a contagem CANÔNICA (mesma do detalhe) — antes a dashboard tinha
     // a própria lógica que EXCLUÍA os da lista de espera, dando números diferentes
@@ -694,7 +699,7 @@ function renderDashboard(container) {
     const _pReadFg = _rb ? _rb.fg : '#f1f5f9';
     const _pReadBd = _rb ? _rb.border : 'rgba(255,255,255,0.12)';
     return `
-        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}" data-search-blob="${window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '')}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'">
+        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}"${vphotoAttrs} data-search-blob="${window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '')}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'">
           ${isOrg ? `
              <div style="position: absolute; bottom: 6px; right: 8px; opacity: 0.9; pointer-events: none;" title="${window._genderWord ? window._genderWord(window.AppStore && window.AppStore.currentUser, 'Organizador', 'Organizadora') : 'Organizador'}">
                <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(251,191,36,0.95)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>

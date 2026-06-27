@@ -3034,7 +3034,11 @@ window._tvMode = function(tId) {
   var heroBg = t.venuePhotoUrl
     ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + t.venuePhotoUrl + ');background-size:cover;background-position:center;'
     : 'background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1e1b4b 100%);';
-  var hero = '<div style="' + heroBg + 'padding:30px 40px;flex-shrink:0;position:relative;">';
+  // v4.0.14: re-busca a foto fresca pelo placeId (token salvo expira → 400).
+  var _heroVphoto = (t.venuePhotoUrl && t.venuePlaceId)
+    ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95))" data-vphoto-w="1200" data-vphoto-h="600"'
+    : '';
+  var hero = '<div' + _heroVphoto + ' style="' + heroBg + 'padding:30px 40px;flex-shrink:0;position:relative;">';
   // Exit button (top right)
   hero += '<button onclick="window._exitTvMode()" style="position:absolute;top:16px;right:20px;background:rgba(239,68,68,0.25);color:#f87171;border:1px solid rgba(239,68,68,0.4);padding:10px 20px;border-radius:10px;cursor:pointer;font-size:0.9rem;font-weight:700;z-index:1;">✕ Sair do Modo TV</button>';
   // Clock (top right, below exit)
