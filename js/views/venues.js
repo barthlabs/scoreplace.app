@@ -419,10 +419,10 @@
       _venueLogoThumb(v, 40) +
       '<div style="flex:1;min-width:0;">' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">' +
-          '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (v.logoData ? '' : '🏢 ') + _safe(v.name) + '</span>' +
+          '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;line-height:1.2;overflow-wrap:break-word;word-break:normal;">' + (v.logoData ? '' : '🏢 ') + _safe(v.name) + '</span>' +
           officialBadge +
         '</div>' +
-        (v.address ? '<div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">' + _safe(v.address) + '</div>' : '') +
+        (v.address ? '<div style="font-size:0.72rem;color:var(--text-muted);overflow-wrap:break-word;margin-bottom:4px;">' + _safe(v.address) + '</div>' : '') +
         (sportsHtml ? '<div style="display:flex;flex-wrap:wrap;gap:3px;">' + sportsHtml + '</div>' : '') +
       '</div>' +
       (distText ? '<div style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);text-align:right;min-width:36px;">' + _safe(distText) + '</div>' : '') +
@@ -463,20 +463,25 @@
     // clicável, assim os botões de presença podem ser siblings sem precisar
     // de stopPropagation pra não disparar o abrir-detalhe.
     return '<div class="pref-matched-card hover-lift" data-pref-pid="' + safePid + '" data-pref-placeid="' + safeRealPid + '" data-pref-venuename="' + safeVenueName + '" style="background:var(--bg-card);border:1px solid rgba(251,191,36,0.35);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;">' +
-      '<div onclick="window._venuesOpenDetail(\'' + safeId + '\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;">' +
-        _venueLogoThumb(v, 40) +
-        '<div style="flex:1;min-width:0;">' +
-          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">' +
-            '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(v.name) + '</span>' +
+      // v4.0.17: nome em LINHA CHEIA no topo (alinhado à esquerda do card = do
+      // logo), quebra livre, SEM cortar. Logo + chips vêm ABAIXO. Antes o nome
+      // ficava espremido na coluna à direita do logo + coração e truncava.
+      '<div onclick="window._venuesOpenDetail(\'' + safeId + '\')" style="cursor:pointer;display:flex;flex-direction:column;gap:7px;">' +
+        '<div style="display:flex;align-items:flex-start;gap:8px;">' +
+          '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+            '<span style="font-weight:700;color:var(--text-bright);font-size:0.95rem;line-height:1.2;overflow-wrap:break-word;word-break:normal;">' + _safe(v.name) + '</span>' +
             officialBadge +
           '</div>' +
-          (v.address ? '<div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">' + _safe(v.address) + '</div>' : '') +
-          (sportsHtml ? '<div style="display:flex;flex-wrap:wrap;gap:3px;">' + sportsHtml + '</div>' : '') +
+          (distText ? '<span style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);margin-top:2px;">' + _safe(distText) + '</span>' : '') +
+          // coração de preferido (cheio = já é preferido). Clicar remove. stopPropagation.
+          '<button type="button" onclick="event.stopPropagation();window._venuesTogglePreferredFromList(this)" title="Remover dos locais preferidos" style="background:none;border:none;cursor:pointer;font-size:1.4rem;line-height:1;flex-shrink:0;padding:0 2px;">❤️</button>' +
         '</div>' +
-        (distText ? '<div style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);text-align:right;min-width:36px;">' + _safe(distText) + '</div>' : '') +
-        // v3.1.61: coração de preferido à direita do nome (cheio = já é preferido). Clicar
-        // remove dos preferidos. stopPropagation pra não abrir a ficha do local.
-        '<button type="button" onclick="event.stopPropagation();window._venuesTogglePreferredFromList(this)" title="Remover dos locais preferidos" style="background:none;border:none;cursor:pointer;font-size:1.4rem;line-height:1;flex-shrink:0;padding:0 2px;align-self:center;">❤️</button>' +
+        ((sportsHtml || v.logoData) ?
+          '<div style="display:flex;align-items:center;gap:10px;">' +
+            _venueLogoThumb(v, 40) +
+            (sportsHtml ? '<div style="flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:3px;">' + sportsHtml + '</div>' : '<div style="flex:1;"></div>') +
+          '</div>'
+        : '') +
       '</div>' +
       '<div id="pref-presence-slot-' + safePid + '" data-pref-presence-slot="' + safePid + '" style="display:flex;gap:6px;flex-wrap:wrap;"></div>' +
       // v0.16.28: slots de movimento (chart + "Agora" + "Próximas horas") ficam
