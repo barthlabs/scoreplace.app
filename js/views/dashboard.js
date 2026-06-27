@@ -749,7 +749,8 @@ function renderDashboard(container) {
             </div>
             ` : ''}
 
-            <!-- Below Name: Calendário + Data + badge contextual (HOJE/AMANHÃ/Em Xd) -->
+            <!-- Below Name: Calendário + Data + badge contextual (HOJE/AMANHÃ/Em Xd) + logo do local à direita (v4.0.19) -->
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
             <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
                ${datesGridHtml}
                ${(() => {
@@ -782,6 +783,8 @@ function renderDashboard(container) {
                    return '<span style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:10px;background:' + _bg + ';color:' + _color + ';border:1px solid ' + _bd + ';white-space:nowrap;">' + _label + '</span>';
                  } catch(e) { return ''; }
                })()}
+            </div>
+            ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="flex-shrink:0;width:clamp(40px,13vw,58px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
 
             ${(() => {
