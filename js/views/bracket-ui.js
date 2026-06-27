@@ -6573,10 +6573,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // (flex, encolhem) absorvem o resto — aumentar Nomes/Foto cresce este
           // box e reduz os outros proporcionalmente.
           '<div style="flex:0 0 auto;flex-shrink:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:4px clamp(4px,1.5vw,10px) 2px;">' +
-            '<div class="court-side" data-court-side="left" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:' + leftBg + ';border:1px solid ' + leftBdr + ';border-radius:12px;padding:4px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
+            '<div class="court-side" data-court-side="left" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center;background:transparent;border:none;padding:0;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
               _buildNameStack(leftTeam) +
             '</div>' +
-            '<div class="court-side" data-court-side="right" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:' + rightBg + ';border:1px solid ' + rightBdr + ';border-radius:12px;padding:4px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
+            '<div class="court-side" data-court-side="right" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center;background:transparent;border:none;padding:0;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
               _buildNameStack(rightTeam) +
             '</div>' +
           '</div>' +
