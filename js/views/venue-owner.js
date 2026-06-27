@@ -748,6 +748,37 @@
           '<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:8px;">' + _safe(place.address || '') + '</div>' +
         '</div>' +
 
+        // ── Logo do Local (espelha a seção do torneio) ──
+        '<div id="vlogo-section" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:12px;padding:1rem;margin-bottom:12px;">' +
+          '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:#a5b4fc;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Logo do local</p>' +
+          '<div style="display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;">' +
+            '<div id="vlogo-preview" style="width:80px;height:80px;border-radius:16px;border:2px dashed rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:rgba(0,0,0,0.2);">' +
+              '<span style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:4px;">Sem logo</span>' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:180px;">' +
+              '<button type="button" onclick="window._generateVenueLogo()" style="padding:8px 16px;border-radius:10px;border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.15);color:#a5b4fc;font-size:0.8rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;">🎨 Gerar Logo</button>' +
+              '<div style="display:flex;gap:6px;">' +
+                '<button type="button" onclick="window._generateVenueLogo()" title="Regerar logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.08);color:#a5b4fc;font-size:0.8rem;cursor:pointer;">🔄</button>' +
+                '<button type="button" id="vlogo-lock-btn" onclick="window._toggleVenueLogoLock()" title="Travar logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.8rem;cursor:pointer;">🔓</button>' +
+                '<button type="button" onclick="window._downloadVenueLogo()" title="Baixar logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.8rem;cursor:pointer;">⬇️</button>' +
+                '<button type="button" onclick="document.getElementById(\'vlogo-file-input\').click()" title="Upload de arquivo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.8rem;cursor:pointer;">📁</button>' +
+                '<button type="button" onclick="window._clearVenueLogo()" title="Remover logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.08);color:#f87171;font-size:0.8rem;cursor:pointer;">✕</button>' +
+              '</div>' +
+              '<input type="file" id="vlogo-file-input" accept="image/*" style="display:none;" onchange="window._handleVenueLogoUpload(event)">' +
+              '<input type="hidden" id="vlogo-data" value="' + _safe(ex.logoData || '') + '">' +
+              '<input type="hidden" id="vlogo-locked" value="' + (ex.logoLocked ? '1' : '') + '">' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:14px;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.7rem;color:var(--text-muted);margin-bottom:5px;">' +
+              '<span>⚫ Círculo</span><span style="font-weight:600;">Forma do logo</span><span>Quadrado ⬛</span>' +
+            '</div>' +
+            '<input type="range" id="vlogo-forma-range" min="0" max="50" value="' + (ex.logoShape === 'circle' ? 0 : (ex.logoRadius != null ? ex.logoRadius : 36)) + '" oninput="window._setVenueLogoForma(this.value)" style="width:100%;accent-color:#6366f1;">' +
+            '<input type="hidden" id="vlogo-shape" value="' + _safe(ex.logoShape || 'square') + '">' +
+            '<input type="hidden" id="vlogo-radius" value="' + (ex.logoRadius != null ? ex.logoRadius : 14) + '">' +
+          '</div>' +
+        '</div>' +
+
         // ── Política de acesso ──
         '<label style="display:block;font-size:0.76rem;font-weight:600;color:var(--text-muted);margin-bottom:12px;">🔐 Política de acesso' +
           '<select id="venue-owner-access" style="display:block;width:100%;margin-top:4px;padding:10px;border-radius:8px;background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-bright);font-size:0.88rem;">' +
@@ -804,6 +835,12 @@
     // Setup hours grid painting + zoom the top map onto this venue.
     setTimeout(function() {
       _setupHoursGridListeners();
+      // Logo do local: se já existe (edição), renderiza o preview + estado do lock.
+      if (ex.logoData && typeof window._applyVenueLogo === 'function') {
+        window._venueLogoLocked = !!ex.logoLocked;
+        window._applyVenueLogo(ex.logoData);
+        if (ex.logoLocked) { var _lb = document.getElementById('vlogo-lock-btn'); if (_lb) { _lb.textContent = '🔒'; _lb.style.background = 'rgba(251,191,36,0.12)'; _lb.style.color = '#fbbf24'; _lb.style.border = '1px solid rgba(251,191,36,0.4)'; } }
+      }
       _focusOwnerMapOn(place);
       // O mapa subiu pro topo da view — garante que o usuário veja o pin vermelho
       // + o card de edição juntos sem precisar rolar até o fim do form.
@@ -1057,6 +1094,133 @@
     if (_selectedPinMarker) { _selectedPinMarker.map = null; _selectedPinMarker = null; }
   };
 
+  // ─── Logo do Local ───────────────────────────────────────────────────────
+  // Espelha o gerador de logo do torneio, mas com IDs próprios (vlogo-*) porque
+  // o modal de torneio fica SEMPRE no DOM (appended no init) e reusar os mesmos
+  // IDs causaria colisão. Não toca no código do torneio. Salva em
+  // venue.logoData / logoShape / logoRadius / logoLocked (merge no saveVenue).
+  window._venueLogoLocked = false;
+  function _vlogo(id) { return document.getElementById('vlogo-' + id); }
+  window._venueLogoShapeCss = function() {
+    var shape = (_vlogo('shape') || {}).value || 'square';
+    if (shape === 'circle') return '50%';
+    var r = parseInt((_vlogo('radius') || {}).value, 10);
+    return (isNaN(r) ? 14 : r) + '%';
+  };
+  window._applyVenueLogo = function(dataUrl) {
+    var data = _vlogo('data'); if (data) data.value = dataUrl || '';
+    var prev = _vlogo('preview');
+    if (!prev) return;
+    if (dataUrl) {
+      prev.style.border = 'none';
+      prev.innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;object-fit:cover;border-radius:' + window._venueLogoShapeCss() + ';">';
+    } else {
+      prev.style.border = '2px dashed rgba(99,102,241,0.3)';
+      prev.innerHTML = '<span style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:4px;">Sem logo</span>';
+    }
+  };
+  window._setVenueLogoForma = function(v) {
+    v = parseInt(v, 10); if (isNaN(v)) v = 36;
+    var isCircle = v <= 2;
+    var shapeEl = _vlogo('shape'); if (shapeEl) shapeEl.value = isCircle ? 'circle' : 'square';
+    var radEl = _vlogo('radius'); if (radEl) radEl.value = isCircle ? 50 : v;
+    var img = document.querySelector('#vlogo-preview img');
+    if (img) img.style.borderRadius = isCircle ? '50%' : (v + '%');
+  };
+  window._clearVenueLogo = function() {
+    window._venueLogoLocked = false;
+    var hl = _vlogo('locked'); if (hl) hl.value = '';
+    var lb = _vlogo('lock-btn'); if (lb) { lb.textContent = '🔓'; lb.style.background = 'rgba(255,255,255,0.05)'; lb.style.color = 'var(--text-muted)'; }
+    window._applyVenueLogo('');
+  };
+  window._toggleVenueLogoLock = function() {
+    window._venueLogoLocked = !window._venueLogoLocked;
+    var hl = _vlogo('locked'); if (hl) hl.value = window._venueLogoLocked ? '1' : '';
+    var lb = _vlogo('lock-btn');
+    if (lb) { lb.textContent = window._venueLogoLocked ? '🔒' : '🔓'; lb.style.background = window._venueLogoLocked ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.05)'; lb.style.color = window._venueLogoLocked ? '#fbbf24' : 'var(--text-muted)'; lb.style.border = window._venueLogoLocked ? '1px solid rgba(251,191,36,0.4)' : '1px solid rgba(255,255,255,0.1)'; }
+  };
+  window._downloadVenueLogo = function() {
+    var data = (_vlogo('data') || {}).value;
+    if (!data) { if (window.showNotification) showNotification('Sem logo', 'Gere ou envie um logo primeiro.', 'warning'); return; }
+    var a = document.createElement('a'); a.href = data; a.download = 'logo-local.jpg'; a.click();
+  };
+  window._handleVenueLogoUpload = function(ev) {
+    var file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var side = Math.min(img.width, img.height);
+        var sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        var c = document.createElement('canvas'); c.width = 400; c.height = 400;
+        c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, 400, 400);
+        window._applyVenueLogo(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    ev.target.value = '';
+  };
+  window._generateVenueLogo = async function() {
+    var place = _currentEditingPlace || {};
+    var name = String(place.name || 'Arena').trim();
+    var sports = Array.isArray(place.sports) ? place.sports : [];
+    var sportNameForAI = String(sports[0] || '').replace(/^[^\wÀ-ɏ]+/u, '').trim();
+    var sportImagery = {
+      'Beach Tennis': 'beach tennis paddle, sand court, ocean, tropical beach',
+      'Pickleball': 'pickleball paddle and yellow whiffle ball, outdoor court',
+      'Tênis': 'tennis racket, fuzzy yellow ball, hard court',
+      'Tênis de Mesa': 'table tennis paddle, white ball, wooden table',
+      'Padel': 'padel racket, padel court with glass walls',
+      'Vôlei de Praia': 'beach volleyball, sand court, net, sun',
+      'Futevôlei': 'soccer ball on sand court, volleyball net, beach sunset'
+    };
+    var imagery = sportImagery[sportNameForAI] || 'sports arena, multiple courts';
+    var styleVariants = [
+      'vintage emblem with ribbon banner, retro sports logo, bold outline',
+      'modern flat geometric badge, bold solid colors',
+      'minimalist line art circular crest, monoline',
+      'art deco shield with gold accents',
+      'tropical sunset gradient circular emblem'
+    ];
+    var style = styleVariants[Math.floor(Math.random() * styleVariants.length)];
+    var stop = ['de','da','do','dos','das','a','o','os','as','e','arena','clube','quadra','centro'];
+    var kw = name.toLowerCase().split(/\s+/).filter(function(w){ return w.length > 2 && stop.indexOf(w) === -1; }).slice(0, 3).join(' ');
+    var aiPrompt = ['sports club / arena emblem', imagery, style, kw ? ('inspired by: ' + kw) : '', 'no text, no letters, no words, iconic visual only'].filter(Boolean).join(', ');
+    var seed = Math.floor(Math.random() * 1000000);
+    var url = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(aiPrompt) + '?width=400&height=400&seed=' + seed + '&nologo=true&model=flux';
+    var prev = _vlogo('preview');
+    if (prev) {
+      prev.style.border = '2px dashed rgba(99,102,241,0.3)';
+      prev.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;gap:6px;color:#a5b4fc;font-size:0.65rem;font-weight:600;text-align:center;padding:6px;"><div style="width:24px;height:24px;border:3px solid rgba(99,102,241,0.2);border-top-color:#6366f1;border-radius:50%;animation:scoreplace-spin 0.8s linear infinite;"></div><span>Gerando<br>logo IA…</span></div>';
+      if (!document.getElementById('scoreplace-logo-keyframes')) {
+        var st = document.createElement('style'); st.id = 'scoreplace-logo-keyframes'; st.textContent = '@keyframes scoreplace-spin { to { transform: rotate(360deg); } }'; document.head.appendChild(st);
+      }
+    }
+    try {
+      var resp = await fetch(url); if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var blob = await resp.blob(); var ou = URL.createObjectURL(blob);
+      var dataUrl = await new Promise(function(res, rej) {
+        var im = new Image(); im.crossOrigin = 'anonymous';
+        im.onload = function() { var c = document.createElement('canvas'); c.width = 400; c.height = 400; c.getContext('2d').drawImage(im, 0, 0, 400, 400); URL.revokeObjectURL(ou); res(c.toDataURL('image/jpeg', 0.85)); };
+        im.onerror = function() { URL.revokeObjectURL(ou); rej(new Error('img')); };
+        im.src = ou;
+      });
+      window._applyVenueLogo(dataUrl);
+    } catch (e) {
+      // Fallback: iniciais do nome num círculo colorido (sem depender de rede).
+      try {
+        var cc = document.createElement('canvas'); cc.width = 400; cc.height = 400; var ctx = cc.getContext('2d');
+        var palette = ['#6366f1','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6'];
+        ctx.fillStyle = palette[Math.floor(Math.random() * palette.length)]; ctx.fillRect(0, 0, 400, 400);
+        var inits = name.split(/\s+/).slice(0, 2).map(function(w){ return w[0] || ''; }).join('').toUpperCase() || 'A';
+        ctx.fillStyle = '#fff'; ctx.font = '900 180px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(inits, 200, 215);
+        window._applyVenueLogo(cc.toDataURL('image/jpeg', 0.85));
+      } catch (e2) { window._applyVenueLogo(''); }
+    }
+  };
+
   window._venueOwnerSubmit = async function(place) {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu || !cu.uid) return;
@@ -1089,7 +1253,12 @@
         email: (document.getElementById('venue-owner-email') || {}).value.trim() || ''
       },
       plan: (claimAsOwner && isUserPro) ? 'pro' : 'free',
-      claimAsOwner: claimAsOwner
+      claimAsOwner: claimAsOwner,
+      // Logo do local (mesmos campos do logo de torneio).
+      logoData: ((document.getElementById('vlogo-data') || {}).value) || '',
+      logoShape: ((document.getElementById('vlogo-shape') || {}).value) || 'square',
+      logoRadius: parseInt((document.getElementById('vlogo-radius') || {}).value, 10) || 14,
+      logoLocked: !!((document.getElementById('vlogo-locked') || {}).value)
     };
     try {
       await window.VenueDB.saveVenue(place.placeId, payload);
@@ -1136,6 +1305,10 @@
         accessPolicy: (accessPolicyEl && accessPolicyEl.value) || 'public',
         openingHours: _gridAny(hoursGrid) ? { grid: _flattenGrid(hoursGrid) } : null,
         plan: (claimAsOwner && isUserPro) ? 'pro' : 'free',
+        logoData: ((document.getElementById('vlogo-data') || {}).value) || '',
+        logoShape: ((document.getElementById('vlogo-shape') || {}).value) || 'square',
+        logoRadius: parseInt((document.getElementById('vlogo-radius') || {}).value, 10) || 14,
+        logoLocked: !!((document.getElementById('vlogo-locked') || {}).value),
         // BUG FIX (v0.16.17): era `claimAsOwner: true` hardcoded — qualquer
         // usuário que clicava "Cadastrar quadras" antes de salvar virava dono
         // automático (venue ficava "✅ oficial"), mesmo sem ter tocado o botão
