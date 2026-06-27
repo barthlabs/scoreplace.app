@@ -6564,8 +6564,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
           (gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '') +
           // Games + Desfazer
           portGamesRow +
-          // Times (fotos/ícones + nomes) — flex:2
-          '<div style="flex:2;min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:4px clamp(4px,1.5vw,10px) 2px;">' +
+          // Times (fotos/ícones + nomes) — v4.0.7: o flex ESCALA com o maior
+          // entre Nomes e Foto. Assim aumentar nomes/foto cresce ESTE box (não
+          // trunca) e, como o total de flex é a altura fixa da tela, os demais
+          // (placar 4× · botão↑ 3× · botão↓ 1.5×) encolhem proporcionalmente.
+          // No padrão (100%/100%) = flex:2, igual antes.
+          '<div style="flex:calc(2 * max(var(--live-name-scale,1), var(--live-photo-scale,1)));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:4px clamp(4px,1.5vw,10px) 2px;">' +
             '<div class="court-side" data-court-side="left" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:' + leftBg + ';border:1px solid ' + leftBdr + ';border-radius:12px;padding:4px;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
               _buildNameStack(leftTeam) +
             '</div>' +
