@@ -279,8 +279,9 @@ window._initMergeTouchDrag = function(tId) {
                 _touchClone.style.transform = 'scale(1.05)';
                 document.body.appendChild(_touchClone);
 
-                // Vibrate if supported
-                if (navigator.vibrate) navigator.vibrate(50);
+                // Haptic de "peguei o item" no long-press (Android; iOS não
+                // dispara fora de gesto direto — limitação do switch trick).
+                if (window._haptic) window._haptic('medium');
             }, 500);
         }, { passive: true });
 

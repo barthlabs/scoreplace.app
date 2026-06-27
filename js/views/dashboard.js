@@ -1738,7 +1738,7 @@ function renderDashboard(container) {
           '</div>') +
         '<div id="card-' + mId + '" style="background:' + cardBgStr + ';border:2px solid ' + cardBorderStr + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
-            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;">' + _sf(opts.boxLabelOverride || matchLabel) + '</span>' +
+            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;display:inline-flex;align-items:center;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(opts.boxLabelOverride || matchLabel) + '</span>' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;">' +
               '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">' + finalHeaderBtns + '</div>' +
               goToBtn +
@@ -1856,6 +1856,11 @@ function renderDashboard(container) {
       if (_ngT && window._isMultiPhase && window._isMultiPhase(_ngT) && _ngM.phaseIndex != null) {
         var _phN = (_ngT.phases && _ngT.phases[_ngM.phaseIndex] && _ngT.phases[_ngM.phaseIndex].name) || ('Fase ' + ((Number(_ngM.phaseIndex) || 0) + 1));
         _meta.push(_phN);
+      } else if (_ngT && _ngT.format) {
+        // Fase única: o "nome da fase" é o próprio formato (rótulo de exibição —
+        // 'Liga'→'Pontos Corridos', 'Fase de Grupos + Eliminatórias'→'Fase de Grupos').
+        var _fmtN = (typeof window._formatDisplayName === 'function') ? window._formatDisplayName(_ngT.format) : _ngT.format;
+        if (_fmtN) _meta.push(_fmtN);
       }
       if (_ngM.tierLabel) _meta.push(String(_ngM.tierLabel).trim());
       var _crownU = _ngM.isMonarch ? '👑 ' : '';

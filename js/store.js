@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '3.1.72-beta';
+window.SCOREPLACE_VERSION = '4.0.1-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -25,6 +25,108 @@ window._formatDisplayName = function (fmt) {
   if (fmt === 'Fase de Grupos + Eliminatórias') return 'Fase de Grupos';
   return fmt;
 };
+
+// ─── Haptic feedback CANÔNICO (v4.0.0) ───────────────────────────────────────
+// Retorno tátil de "apertar botão" em TODO o app — botões, toggles, checkboxes.
+//
+// Duas plataformas, dois caminhos:
+//  • Android (Chrome/Edge/Samsung/Firefox): navigator.vibrate() — funciona direto.
+//  • iPhone (iOS 17.4+): a Vibration API NÃO existe no Safari. O truque é o
+//    elemento nativo <input type="checkbox" switch>: alterná-lo dispara o Taptic
+//    Engine real. Mantemos um switch escondido e damos .click() nele dentro do
+//    gesto do usuário. (iPad não tem Taptic → degrada em silêncio; iOS<17.4 idem.)
+//
+// window._haptic(tipo) é o ÚNICO ponto de vibração do app. Nunca chamar
+// navigator.vibrate direto — sempre passar por aqui (centraliza mute + coalescência
+// + fallback iOS). Tipos: 'tap'(default), 'light', 'medium', 'success', 'warning',
+// 'undo', 'error'.
+(function _setupHaptics() {
+  var SUPPORTS_VIBRATE = (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function');
+
+  // Padrões de vibração (ms) — só o Android varia a intensidade; no iOS o tick é
+  // sempre o mesmo (limitação do truque do switch).
+  var PATTERNS = {
+    light:   8,
+    tap:     12,
+    medium:  30,
+    success: [14, 36, 14],
+    warning: [14, 40, 14],
+    undo:    [10, 28, 10, 28, 10],
+    error:   [40, 60, 40]
+  };
+  // Prioridade pra coalescência: quando um botão dispara o 'tap' global no
+  // pointerdown E logo em seguida um haptic semântico (success/undo) no click,
+  // o mais forte vence dentro da janela; taps fracos repetidos são descartados.
+  var PRI = { light: 1, tap: 1, medium: 2, warning: 2, success: 3, undo: 3, error: 3 };
+  var COALESCE_MS = 70;
+  var _lastT = 0, _lastPri = 0;
+
+  // Mute: respeita opt-out explícito (localStorage). Wireável a um toggle de perfil.
+  window._hapticsMuted = function () {
+    try { if (localStorage.getItem('scoreplace_haptics') === 'off') return true; } catch (e) {}
+    return false;
+  };
+
+  // ── Fallback iOS: switch escondido que dispara o Taptic ao ser alternado ──
+  var _iosLabel = null, _iosTried = false;
+  function _ensureIosSwitch() {
+    if (_iosLabel || _iosTried) return _iosLabel;
+    _iosTried = true;
+    try {
+      var host = document.body || document.documentElement;
+      if (!host) { _iosTried = false; return null; } // tenta de novo quando houver body
+      var label = document.createElement('label');
+      label.setAttribute('aria-hidden', 'true');
+      label.style.cssText = 'position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0;';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.setAttribute('switch', '');   // iOS 17.4+ → Taptic ao alternar
+      input.tabIndex = -1;
+      label.appendChild(input);
+      host.appendChild(label);
+      _iosLabel = label;
+    } catch (e) { _iosLabel = null; }
+    return _iosLabel;
+  }
+  function _iosTick() {
+    var l = _ensureIosSwitch();
+    if (l) { try { l.click(); return true; } catch (e) {} }
+    return false;
+  }
+
+  window._haptic = function (type) {
+    type = type || 'tap';
+    if (window._hapticsMuted && window._hapticsMuted()) return;
+    var now = Date.now();
+    var pri = PRI[type] || 1;
+    if (now - _lastT < COALESCE_MS && pri <= _lastPri) return; // coalesce
+    _lastT = now; _lastPri = pri;
+    if (SUPPORTS_VIBRATE) {
+      try { navigator.vibrate(PATTERNS[type] != null ? PATTERNS[type] : 12); return; } catch (e) {}
+    }
+    _iosTick(); // iPhone (tick único, best-effort, só dentro de gesto)
+  };
+
+  // ── Listener global: "tique" de apertar em todo controle interativo ──
+  // pointerdown (não click) pra dar a sensação de PRESSIONAR. Captura no
+  // capture-phase pra funcionar mesmo se um handler chamar stopPropagation.
+  var SEL = '.btn, button, [role="button"], .toggle-switch, label.toggle-switch, ' +
+            'input[type="checkbox"], input[type="radio"], summary';
+  function _onPointerDown(e) {
+    try {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var el = t.closest(SEL);
+      if (!el) return;
+      if (el.disabled) return;
+      // Zonas do placar ao vivo têm haptic dedicado (evita duplicar).
+      if (el.matches && el.matches('.live-vol, .live-vol-sm')) return;
+      if (el.closest('[data-haptic="off"]')) return;
+      window._haptic('tap');
+    } catch (_e) {}
+  }
+  try { document.addEventListener('pointerdown', _onPointerDown, true); } catch (e) {}
+})();
 
 // ─── Tempo mínimo de splash imposto pela camada JS FRESCA ────────────────────
 // v2.4.89: a v2.4.88 colocou o piso de tempo no boot loader INLINE (index.html).

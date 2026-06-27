@@ -1463,7 +1463,7 @@ function _attachCatManagerDragDrop(tId) {
         _touchClone.style.borderRadius = '12px';
         document.body.appendChild(_touchClone);
         target.style.opacity = '0.3';
-        if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_v) {} }
+        if (window._haptic) window._haptic('medium');
     }
 
     function _onTouchStart(e) {

@@ -3214,7 +3214,7 @@ window._ensureStHeaderExplainer = function() {
     try {
       var ttl = th.getAttribute('data-explain-title') || 'Coluna';
       var msg = th.getAttribute('data-explain') || '';
-      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (_v) {} }
+      if (window._haptic) window._haptic('tap');
       if (window.showAlertDialog) window.showAlertDialog(ttl, msg, null, { type: 'info' });
     } catch (_e) {}
   };
@@ -4428,8 +4428,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (state._undoSnapshots.length > 30) state._undoSnapshots.shift();
 
     // Haptic feedback — pulso curto a cada ponto. Confirma tap sem precisar
-    // olhar a tela (útil com celular na trave). Android + iOS 18+ suportam.
-    try { if (navigator.vibrate) navigator.vibrate(25); } catch (e) {}
+    // olhar a tela (útil com celular na trave). Android + iPhone (iOS 17.4+).
+    if (window._haptic) window._haptic('tap');
 
     // Track match start time on first point
     if (!_matchStartTime) {
@@ -7591,7 +7591,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (state.tieRulePending) return;
     // Haptic distintivo do +ponto — padrão de 2 pulsos curtos para sinalizar
     // "desfeito" vs 1 pulso do ponto adicionado.
-    try { if (navigator.vibrate) navigator.vibrate([15, 40, 15]); } catch (e) {}
+    if (window._haptic) window._haptic('warning');
     if (player === 1) {
       if (state.currentGameP1 > 0) state.currentGameP1--;
     } else {
@@ -7662,7 +7662,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _matchStartTime = snap.matchStartTime;
     _matchEndTime = snap.matchEndTime;
     // Haptic distintivo — 3 pulsos curtos pra "voltei no tempo".
-    try { if (navigator.vibrate) navigator.vibrate([10, 30, 10, 30, 10]); } catch (e) {}
+    if (window._haptic) window._haptic('undo');
     // Re-render. Se o último ponto tinha encerrado o match (state.isFinished
     // true), agora volta pra false e _render renderiza a UI de live scoring
     // de novo no lugar do finish screen.
