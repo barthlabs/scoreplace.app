@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.14-beta';
+window.SCOREPLACE_VERSION = '4.0.15-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -90,12 +90,50 @@ window._formatDisplayName = function (fmt) {
 
   // Observer debounced — hidrata cards novos sem precisar chamar em cada render.
   var _deb = null;
-  function _kick() { if (_deb) return; _deb = setTimeout(function () { _deb = null; try { window._hydrateVenuePhotos(document); } catch (e) {} }, 250); }
+  function _kick() { if (_deb) return; _deb = setTimeout(function () { _deb = null; try { window._hydrateVenuePhotos(document); } catch (e) {} try { if (window._hydrateVenueLogos) window._hydrateVenueLogos(document); } catch (e) {} }, 250); }
   try {
     var _obs = new MutationObserver(_kick);
     var _start = function () { if (document.body) { _obs.observe(document.body, { childList: true, subtree: true }); _kick(); } };
     if (document.body) _start(); else document.addEventListener('DOMContentLoaded', _start);
   } catch (e) {}
+})();
+
+// ─── Logo do LOCAL ao lado do logo do TORNEIO (v4.0.15) ──────────────────────
+// Quando o torneio tem `venuePlaceId` e o local cadastrado tem logo, mostra o
+// logo do local como brasão sobreposto no canto do logo do torneio. Busca o
+// doc do venue pelo placeId (cache em memória por sessão) e injeta no slot
+// marcado com data-vlogo-pid. Hidratado pelo mesmo observer das fotos.
+(function _setupVenueLogos() {
+  var _mem = {}; // placeId -> Promise<{logoData,logoShape,logoRadius}|null>
+  window._venueLogoByPlaceId = function (pid) {
+    if (!pid) return Promise.resolve(null);
+    if (_mem[pid]) return _mem[pid];
+    _mem[pid] = (async function () {
+      try {
+        if (!(window.VenueDB && typeof window.VenueDB.loadVenue === 'function')) return null;
+        var v = await window.VenueDB.loadVenue(pid);
+        if (v && v.logoData) return { logoData: v.logoData, logoShape: v.logoShape || 'square', logoRadius: (v.logoRadius != null ? v.logoRadius : 14) };
+      } catch (e) {}
+      return null;
+    })();
+    return _mem[pid];
+  };
+  window._hydrateVenueLogos = function (root) {
+    root = root || document;
+    var els;
+    try { els = root.querySelectorAll('[data-vlogo-pid]:not([data-vlogo-done])'); } catch (e) { return; }
+    Array.prototype.forEach.call(els, function (el) {
+      el.setAttribute('data-vlogo-done', '1');
+      var pid = el.getAttribute('data-vlogo-pid');
+      if (!pid) return;
+      window._venueLogoByPlaceId(pid).then(function (info) {
+        if (!info || !info.logoData) return;
+        var radius = (info.logoShape === 'circle') ? '50%' : ((info.logoRadius != null ? info.logoRadius : 14) + '%');
+        // Anel claro + sombra → brasão destacado sobre o logo do torneio.
+        el.innerHTML = '<img src="' + info.logoData + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:' + radius + ';display:block;box-shadow:0 0 0 3px rgba(255,255,255,0.92),0 2px 8px rgba(0,0,0,0.45);">';
+      });
+    });
+  };
 })();
 
 // ─── Número GLOBAL do "Jogo N" em Rei/Rainha-Liga (v4.0.2) ───────────────────

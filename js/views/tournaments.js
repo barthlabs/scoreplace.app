@@ -2206,6 +2206,7 @@ function renderTournaments(container, tournamentId = null) {
                     style="width:100%;aspect-ratio:1/1;border-radius:${window._tournamentLogoRadius(t)};object-fit:cover;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
                     ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
                   >
+                  ${t.venuePlaceId ? `<span data-vlogo-pid="${window._safeHtml(t.venuePlaceId)}" title="Logo do local" style="position:absolute;right:-6px;bottom:-6px;width:33%;aspect-ratio:1/1;z-index:2;pointer-events:none;"></span>` : ''}
                 </div>
               ` : ''}
               <div style="flex:1;min-width:0;">
