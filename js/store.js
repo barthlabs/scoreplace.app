@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.17-beta';
+window.SCOREPLACE_VERSION = '4.0.18-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -142,7 +142,9 @@ window._formatDisplayName = function (fmt) {
       window._venueLogoByPlaceId(pid).then(function (info) {
         if (!info || !info.logoData) return;
         var radius = (info.logoShape === 'circle') ? '50%' : ((info.logoRadius != null ? info.logoRadius : 14) + '%');
-        // Anel claro + sombra → brasão destacado sobre o logo do torneio.
+        // Slot começa display:none (não reserva espaço quando o local não tem
+        // logo). Ao preencher, revela. Anel claro + sombra destaca o brasão.
+        if (el.style.display === 'none') el.style.display = '';
         el.innerHTML = '<img src="' + info.logoData + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:' + radius + ';display:block;box-shadow:0 0 0 3px rgba(255,255,255,0.92),0 2px 8px rgba(0,0,0,0.45);">';
       });
     });

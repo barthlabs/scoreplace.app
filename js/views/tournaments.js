@@ -2201,12 +2201,14 @@ function renderTournaments(container, tournamentId = null) {
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
             <div style="display: flex; align-items: ${t.logoData && tournamentId ? 'flex-start' : 'center'}; gap: ${t.logoData && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
               ${t.logoData ? `
-                <div style="position:relative;width:33%;min-width:100px;flex-shrink:0;">
-                  <img src="${t.logoData}" alt="Logo"
-                    style="width:100%;aspect-ratio:1/1;border-radius:${window._tournamentLogoRadius(t)};object-fit:cover;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
-                    ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
-                  >
-                  ${t.venuePlaceId ? `<span data-vlogo-pid="${window._safeHtml(t.venuePlaceId)}" title="Logo do local" style="position:absolute;right:-6px;bottom:-6px;width:33%;aspect-ratio:1/1;z-index:2;pointer-events:none;"></span>` : ''}
+                <div style="display:flex;align-items:flex-end;gap:4px;flex-shrink:0;">
+                  <div style="position:relative;width:clamp(100px,32vw,150px);flex-shrink:0;">
+                    <img src="${t.logoData}" alt="Logo"
+                      style="width:100%;aspect-ratio:1/1;border-radius:${window._tournamentLogoRadius(t)};object-fit:cover;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
+                      ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
+                    >
+                  </div>
+                  ${t.venuePlaceId ? `<span data-vlogo-pid="${window._safeHtml(t.venuePlaceId)}" title="Logo do local" style="flex-shrink:0;width:clamp(30px,10vw,48px);aspect-ratio:1/1;display:none;"></span>` : ''}
                 </div>
               ` : ''}
               <div style="flex:1;min-width:0;">
