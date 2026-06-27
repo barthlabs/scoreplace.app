@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.15-beta';
+window.SCOREPLACE_VERSION = '4.0.16-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -104,17 +104,21 @@ window._formatDisplayName = function (fmt) {
 // doc do venue pelo placeId (cache em memória por sessão) e injeta no slot
 // marcado com data-vlogo-pid. Hidratado pelo mesmo observer das fotos.
 (function _setupVenueLogos() {
-  var _mem = {}; // placeId -> Promise<{logoData,logoShape,logoRadius}|null>
+  var _mem = {}; // placeId -> Promise<{logoData,...}|null>  (só cacheia resultado carregado)
+  function _vdbReady() { return !!(window.VenueDB && window.VenueDB.db && typeof window.VenueDB.loadVenue === 'function'); }
   window._venueLogoByPlaceId = function (pid) {
     if (!pid) return Promise.resolve(null);
     if (_mem[pid]) return _mem[pid];
+    // v4.0.16: NÃO cacheia se o VenueDB ainda não está pronto — senão o null fica
+    // grudado pra sempre e o brasão nunca aparece (bug do "Paineiras tem logo
+    // mas não mostra"). Retorna null sem cachear → re-tenta depois.
+    if (!_vdbReady()) return Promise.resolve(null);
     _mem[pid] = (async function () {
       try {
-        if (!(window.VenueDB && typeof window.VenueDB.loadVenue === 'function')) return null;
         var v = await window.VenueDB.loadVenue(pid);
         if (v && v.logoData) return { logoData: v.logoData, logoShape: v.logoShape || 'square', logoRadius: (v.logoRadius != null ? v.logoRadius : 14) };
-      } catch (e) {}
-      return null;
+        return null; // carregado, sem logo → cacheia (não re-busca)
+      } catch (e) { delete _mem[pid]; return null; } // erro → permite re-tentar
     })();
     return _mem[pid];
   };
@@ -123,9 +127,18 @@ window._formatDisplayName = function (fmt) {
     var els;
     try { els = root.querySelectorAll('[data-vlogo-pid]:not([data-vlogo-done])'); } catch (e) { return; }
     Array.prototype.forEach.call(els, function (el) {
-      el.setAttribute('data-vlogo-done', '1');
       var pid = el.getAttribute('data-vlogo-pid');
-      if (!pid) return;
+      if (!pid) { el.setAttribute('data-vlogo-done', '1'); return; }
+      // VenueDB ainda carregando (Firebase async) → NÃO marca done; re-tenta em
+      // breve (até ~16s). Sem isso, o card hidratava antes do Firebase e nunca
+      // mais voltava (bug "Paineiras tem logo mas não aparece").
+      if (!_vdbReady()) {
+        var tries = (parseInt(el.getAttribute('data-vlogo-tries'), 10) || 0);
+        if (tries < 20) { el.setAttribute('data-vlogo-tries', tries + 1); setTimeout(function () { try { window._hydrateVenueLogos(document); } catch (e) {} }, 800); }
+        else { el.setAttribute('data-vlogo-done', '1'); }
+        return;
+      }
+      el.setAttribute('data-vlogo-done', '1');
       window._venueLogoByPlaceId(pid).then(function (info) {
         if (!info || !info.logoData) return;
         var radius = (info.logoShape === 'circle') ? '50%' : ((info.logoRadius != null ? info.logoRadius : 14) + '%');
