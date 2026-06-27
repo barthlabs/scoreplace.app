@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.2-beta';
+window.SCOREPLACE_VERSION = '4.0.3-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -149,7 +149,12 @@ window._monarchGlobalJogoNum = function (t, m, isMe) {
     if (SUPPORTS_VIBRATE) {
       try { navigator.vibrate(PATTERNS[type] != null ? PATTERNS[type] : 12); return; } catch (e) {}
     }
-    _iosTick(); // iPhone (tick único, best-effort, só dentro de gesto)
+    // iPhone: SEM fallback. O truque do <input switch> (a) não vibra com
+    // .click() programático (Apple só dá haptic em toque REAL/isTrusted —
+    // confirmado em device iOS 18) e (b) o .click() no switch escondido ROUBA o
+    // 1º toque do botão (regressão "tem que clicar 2x"). Então no iOS é no-op
+    // total — nenhuma manipulação de DOM. Haptic no iPhone só com app nativo.
+    // (_ensureIosSwitch/_iosTick ficam definidos mas NÃO são chamados.)
   };
 
   // ── Listener global: "tique" de apertar em todo controle interativo ──

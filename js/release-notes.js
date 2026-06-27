@@ -9,12 +9,10 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.1-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(27 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.3-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(27 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>📳 Vibração ao tocar — o app responde no seu dedo:</b> agora <b>botões, toggles e checkboxes</b> dão um <b>retorno tátil</b> ao serem apertados, deixando claro que o toque registrou (ótimo pra quem usa o celular na quadra, sem olhar a tela).</li>' +
-        '<li><b>📱 Funciona no Android e no iPhone:</b> no <b>Android</b> sempre; no <b>iPhone</b> a partir do <b>iOS 17.4</b> (iPad não tem o motor de vibração).</li>' +
-        '<li><b>🎯 Toques especiais no placar ao vivo:</b> ponto, correção e "desfazer" têm <b>vibrações distintas</b>, agora também no iPhone.</li>' +
-        '<li><b>👑 Card "Próximo Jogo" no Rei/Rainha:</b> a <b>coroa</b> aparece maior ao lado do "Jogo", e ao lado da rodada agora vem também o <b>nome da fase/formato</b> do torneio.</li>' +
+        '<li><b>📳 Vibração ao tocar (Android):</b> <b>botões, toggles e checkboxes</b> dão um <b>retorno tátil</b> ao serem apertados — ótimo pra usar o celular na quadra sem olhar a tela. (No iPhone, o iOS não permite vibração por web; fica pro app nativo.)</li>' +
+        '<li><b>👑 Card "Próximo Jogo" no Rei/Rainha:</b> a <b>coroa</b> aparece maior ao lado do "Jogo", o <b>número do jogo agora é o correto</b> (o número de verdade do torneio, ex.: Jogo 73 em vez de Jogo 1), e ao lado da rodada vem também o <b>nome da fase</b>.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
