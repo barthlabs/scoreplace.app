@@ -1636,6 +1636,12 @@ function renderDashboard(container) {
 
       // matchLabel — JOGO N do match ou fallback
       var matchLabel = item.m.label || 'JOGO 1';
+      // v4.0.2: em Rei/Rainha o m.label é "Jogo N" POR GRUPO (sempre Jogo 1/2/3).
+      // O número GLOBAL que o usuário vê no bracket (ex.: Jogo 73) vem do helper
+      // canônico — outros grupos contam primeiro, o grupo do usuário vem depois.
+      var _gJogoNum = (item.m && item.m.isMonarch && tRef && typeof window._monarchGlobalJogoNum === 'function')
+        ? window._monarchGlobalJogoNum(tRef, item.m, _isMe) : null;
+      var _monarchBoxLabel = (_gJogoNum != null) ? ('Jogo ' + _gJogoNum) : null;
 
       // Foto real do jogador: tenta _playerPhotoCache, depois perfil do usuário
       function _initials(name) {
@@ -1738,7 +1744,7 @@ function renderDashboard(container) {
           '</div>') +
         '<div id="card-' + mId + '" style="background:' + cardBgStr + ';border:2px solid ' + cardBorderStr + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
-            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;display:inline-flex;align-items:center;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(opts.boxLabelOverride || matchLabel) + '</span>' +
+            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;display:inline-flex;align-items:center;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) + '</span>' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;">' +
               '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">' + finalHeaderBtns + '</div>' +
               goToBtn +
@@ -1863,8 +1869,8 @@ function renderDashboard(container) {
         if (_fmtN) _meta.push(_fmtN);
       }
       if (_ngM.tierLabel) _meta.push(String(_ngM.tierLabel).trim());
-      var _crownU = _ngM.isMonarch ? '👑 ' : '';
-      var _metaStr = _crownU + _meta.join(' · ');
+      // v4.0.2: a coroa fica SÓ ao lado do "JOGO N" (no card) — não repetir aqui.
+      var _metaStr = _meta.join(' · ');
       var _jgU = String(_ngM.label || '').match(/Jogo\s*\d+/i);
       var _boxU = _jgU ? _jgU[0] : 'Jogo';
 
@@ -1965,7 +1971,10 @@ function renderDashboard(container) {
         // v2.3.63: no header de cada box mostra só "JOGO N" (o grupo+torneio já
         // aparece no cabeçalho compartilhado). Fallback pro label completo
         // quando não há "jogo N" (ex.: eliminatórias "Final").
-        var _boxLabel = _fp2.jogo || matchLabel2;
+        // v4.0.2: Rei/Rainha usa o número GLOBAL (idem card "Próximo Jogo").
+        var _gJogoNum2 = (m2 && m2.isMonarch && tRef2 && typeof window._monarchGlobalJogoNum === 'function')
+          ? window._monarchGlobalJogoNum(tRef2, m2, _isMe) : null;
+        var _boxLabel = (_gJogoNum2 != null) ? ('Jogo ' + _gJogoNum2) : (_fp2.jogo || matchLabel2);
         var _body = _posBadge +
           '<div onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
             // Header: label + badge resultado

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.1-beta';
+window.SCOREPLACE_VERSION = '4.0.2-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -24,6 +24,48 @@ window._formatDisplayName = function (fmt) {
   if (fmt === 'Liga' || fmt === 'Ranking') return 'Pontos Corridos';
   if (fmt === 'Fase de Grupos + Eliminatórias') return 'Fase de Grupos';
   return fmt;
+};
+
+// ─── Número GLOBAL do "Jogo N" em Rei/Rainha-Liga (v4.0.2) ───────────────────
+// Espelha EXATAMENTE a numeração do bracket (bracket.js, caminho monarch-Liga):
+// na rodada, os jogos dos OUTROS grupos são contados primeiro e o grupo do
+// usuário recebe os números seguintes (por isso o 1º jogo do seu grupo pode ser
+// "Jogo 73"). Offset pelas rodadas anteriores (round.matches sem sit-outs).
+// `isMe(name)` identifica o usuário logado entre os players individuais do grupo.
+// Verificado contra dados reais do Confra (25 grupos/75 jogos → grupo do dono = 73/74/75).
+window._monarchGlobalJogoNum = function (t, m, isMe) {
+  try {
+    if (!t || !m || !m.id || typeof isMe !== 'function') return null;
+    var rounds = t.rounds || [];
+    var ri = -1, roundGroups = null;
+    for (var i = 0; i < rounds.length && ri < 0; i++) {
+      var mg = (rounds[i] && rounds[i].monarchGroups) || [];
+      for (var gi = 0; gi < mg.length && ri < 0; gi++) {
+        var ms = (mg[gi] && mg[gi].matches) || [];
+        for (var k = 0; k < ms.length; k++) { if (ms[k] && ms[k].id === m.id) { ri = i; roundGroups = mg; break; } }
+      }
+    }
+    if (ri < 0 || !roundGroups) return null;
+    var prev = 0;
+    for (var pr = 0; pr < ri; pr++) {
+      var pm = (rounds[pr] && rounds[pr].matches) || [];
+      prev += pm.filter(function (x) { return x && !x.isSitOut; }).length;
+    }
+    var hasMe = function (g) { return ((g.players) || []).some(function (p) { return isMe(p); }); };
+    var myG = [], otherG = [];
+    roundGroups.forEach(function (g) { (hasMe(g) ? myG : otherG).push(g); });
+    if (!myG.length) {
+      var n0 = prev;
+      for (var a0 = 0; a0 < roundGroups.length; a0++) { var ms0 = (roundGroups[a0].matches) || []; for (var b0 = 0; b0 < ms0.length; b0++) { n0++; if (ms0[b0].id === m.id) return n0; } }
+      return null;
+    }
+    var otherCount = 0; otherG.forEach(function (g) { otherCount += ((g.matches) || []).length; });
+    var n = prev + otherCount;
+    for (var a = 0; a < myG.length; a++) { var ms = (myG[a].matches) || []; for (var b = 0; b < ms.length; b++) { n++; if (ms[b].id === m.id) return n; } }
+    n = prev;
+    for (var a2 = 0; a2 < otherG.length; a2++) { var ms2 = (otherG[a2].matches) || []; for (var b2 = 0; b2 < ms2.length; b2++) { n++; if (ms2[b2].id === m.id) return n; } }
+    return null;
+  } catch (e) { return null; }
 };
 
 // ─── Haptic feedback CANÔNICO (v4.0.0) ───────────────────────────────────────
@@ -77,7 +119,10 @@ window._formatDisplayName = function (fmt) {
       if (!host) { _iosTried = false; return null; } // tenta de novo quando houver body
       var label = document.createElement('label');
       label.setAttribute('aria-hidden', 'true');
-      label.style.cssText = 'position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0;';
+      // NÃO usar opacity:0 / display:none / visibility:hidden — qualquer um deles
+      // "des-renderiza" o switch e o iOS deixa de disparar o Taptic. Mantém o
+      // elemento renderizado (1×1px) fora da tela via position, sem ocultar.
+      label.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;overflow:hidden;pointer-events:none;z-index:-1;';
       var input = document.createElement('input');
       input.type = 'checkbox';
       input.setAttribute('switch', '');   // iOS 17.4+ → Taptic ao alternar
