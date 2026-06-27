@@ -9,8 +9,10 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.20-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(27 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.21-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(27 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🖼️ Foto de fundo do torneio:</b> na criação/edição, logo abaixo do logo, o organizador pode <b>definir uma foto de fundo</b> pro torneio. Quando definida, ela <b>substitui a foto do Google</b> nos cards, no detalhe e no Modo TV. Ao escolher, dá pra <b>dar zoom e arrastar pra enquadrar sem distorcer</b> (e ainda clarear/escurecer pra leitura).</li>' +
+        '<li><b>📍 Box do Local mais organizado (detalhe):</b> botões <b>Place</b> e <b>mapa</b> alinhados à direita (Place em cima, mapa abaixo), brasão do local no canto inferior direito, e o nome/endereço ganham mais espaço à esquerda.</li>' +
         '<li><b>📳 Vibração ao tocar (Android):</b> <b>botões, toggles e checkboxes</b> dão um <b>retorno tátil</b> ao serem apertados — ótimo pra usar o celular na quadra sem olhar a tela. (No iPhone, o iOS não permite vibração por web; fica pro app nativo.)</li>' +
         '<li><b>👑 Card "Próximo Jogo" no Rei/Rainha:</b> a <b>coroa</b> aparece maior ao lado do "Jogo", o <b>número do jogo agora é o correto</b> (ex.: Jogo 73 em vez de Jogo 1), e ao lado da rodada vem também o <b>nome da fase</b>.</li>' +
         '<li><b>⚡ Partida Casual mais redonda:</b> na tela de Configuração, só um "Voltar" (que volta pro lobby) e sem "Iniciar"; no placar ao vivo de duplas, <b>uma bola de saque só</b> (mesmo com nomes iguais); a tela de "Ajustar" agora <b>cabe deitada</b> (rola pra ver tudo), o toggle "Fixar lados" virou um toggle de verdade e o <b>número do placar não trunca</b> mais (reserva 15/30/40/AD).</li>' +

@@ -1647,8 +1647,19 @@ function renderTournaments(container, tournamentId = null) {
         }
 
         // Venue photo background — overlay gradient on top of photo
+        // v2.3.71: gradiente mais leve (foto mais visível); a leitura vem de
+        // um box frosted sutil atrás do conteúdo (sem o contraste pesado).
+        var overlayGradient = isOrg
+            ? 'linear-gradient(135deg, rgba(67,56,202,0.5) 0%, rgba(99,102,241,0.42) 100%)'
+            : isParticipating
+                ? 'linear-gradient(135deg, rgba(15,118,110,0.5) 0%, rgba(20,184,166,0.42) 100%)'
+                : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
         let venuePhotoBg = '';
-        if (t.venuePhotoUrl) {
+        if (t.coverPhotoData) {
+            // v4.0.21: foto de fundo custom do organizador — substitui a do Google.
+            // Já vem enquadrada (cropper), então só cover+center, sem hidratar Google.
+            venuePhotoBg = 'background-image: ' + overlayGradient + ', url(' + t.coverPhotoData + '); background-size: cover; background-position: center;';
+        } else if (t.venuePhotoUrl) {
             // v3.1.40: PRÉ-CARREGA e MANTÉM a referência (mesma técnica/cache da dashboard)
             // pra que os vários re-renders do boot sirvam a foto do cache do browser em vez
             // de re-baixar — acaba com o "pisca várias vezes" do background no detalhe.
@@ -1659,17 +1670,11 @@ function renderTournaments(container, tournamentId = null) {
                     window._dashPhotoCache[t.venuePhotoUrl] = _vphIm;
                 }
             } catch (e) {}
-            // v2.3.71: gradiente mais leve (foto mais visível); a leitura vem de
-            // um box frosted sutil atrás do conteúdo (sem o contraste pesado).
-            var overlayGradient = isOrg
-                ? 'linear-gradient(135deg, rgba(67,56,202,0.5) 0%, rgba(99,102,241,0.42) 100%)'
-                : isParticipating
-                    ? 'linear-gradient(135deg, rgba(15,118,110,0.5) 0%, rgba(20,184,166,0.42) 100%)'
-                    : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
             venuePhotoBg = 'background-image: ' + overlayGradient + ', url(' + t.venuePhotoUrl + '); background-size: cover; background-position: center;';
         }
         // v4.0.14: re-busca a foto fresca pelo placeId (token salvo expira → 400).
-        var vphotoAttrs = (t.venuePhotoUrl && t.venuePlaceId)
+        // v4.0.21: desligado quando há foto custom (não sobrescrever com a do Google).
+        var vphotoAttrs = (!t.coverPhotoData && t.venuePhotoUrl && t.venuePlaceId)
             ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGradient + '" data-vphoto-w="1000" data-vphoto-h="500"'
             : '';
 

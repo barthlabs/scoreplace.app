@@ -265,6 +265,21 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
+              <!-- Foto de fundo do torneio (v4.0.21) — se definida, substitui a do Google -->
+              <div id="cover-section" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: #a5b4fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🖼️ Foto de fundo do torneio</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">Opcional. Se você definir, ela substitui a foto do Google nos cards e no detalhe. Ao escolher, dá pra dar zoom e arrastar pra enquadrar (sem distorcer).</p>
+                <div id="cover-preview" style="width: 100%; max-width: 300px; aspect-ratio: 2/1; border-radius: 12px; border: 2px dashed rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; background: rgba(0,0,0,0.2); background-size: cover; background-position: center; margin-bottom: 8px;">
+                  <span id="cover-placeholder" style="font-size: 0.72rem; color: var(--text-muted);">Sem foto de fundo</span>
+                </div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                  <button type="button" onclick="document.getElementById('cover-file-input').click()" style="padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: #a5b4fc; font-size: 0.8rem; font-weight: 600; cursor: pointer;">🖼️ Escolher foto</button>
+                  <button type="button" id="btn-cover-clear" onclick="window._clearCoverPhoto()" title="Remover foto de fundo" style="padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: #f87171; font-size: 0.8rem; cursor: pointer; display: none;">✕ Remover</button>
+                </div>
+                <input type="file" id="cover-file-input" accept="image/*" style="display:none;" onchange="window._handleCoverUpload(event)">
+                <input type="hidden" id="tourn-cover-data" value="">
+              </div>
+
               <!-- Público/Privado -->
               <div class="form-group mb-2">
                 <input type="hidden" id="tourn-public" value="true">
@@ -2780,6 +2795,43 @@ function setupCreateTournamentModal() {
     window._applyTournamentLogo(dataUrl);
   };
 
+  // ─── Foto de fundo do torneio (v4.0.21) ───────────────────────────────────
+  // Sobe arquivo → cropper retangular 2:1 (zoom+pan sem distorção, recorte assado
+  // no canvas) → salva o resultado já enquadrado em #tourn-cover-data. No render,
+  // quando t.coverPhotoData existe, ela substitui a foto do Google.
+  window._handleCoverUpload = function(event) {
+    var file = event.target && event.target.files && event.target.files[0];
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) {
+      if (typeof showNotification === 'function') showNotification('Arquivo muito grande', 'Escolha uma imagem de até 12MB.', 'error');
+      event.target.value = '';
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      if (typeof window._openImageCropEditor === 'function') {
+        window._openImageCropEditor(e.target.result, { aspect: 2, cover: true, size: 1000, title: '🖼️ Enquadrar foto de fundo' }, function(croppedDataUrl) {
+          window._applyCoverPhoto(croppedDataUrl);
+        });
+      } else {
+        window._applyCoverPhoto(e.target.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = ''; // permite re-escolher o mesmo arquivo
+  };
+  window._applyCoverPhoto = function(dataUrl) {
+    var hidden = document.getElementById('tourn-cover-data');
+    if (hidden) hidden.value = dataUrl || '';
+    var prev = document.getElementById('cover-preview');
+    var ph = document.getElementById('cover-placeholder');
+    var clr = document.getElementById('btn-cover-clear');
+    if (prev) { prev.style.backgroundImage = dataUrl ? 'url(' + dataUrl + ')' : ''; prev.style.borderStyle = dataUrl ? 'solid' : 'dashed'; }
+    if (ph) ph.style.display = dataUrl ? 'none' : '';
+    if (clr) clr.style.display = dataUrl ? '' : 'none';
+  };
+  window._clearCoverPhoto = function() { window._applyCoverPhoto(''); };
+
   window._handleLogoUpload = function(event) {
     var file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -5182,6 +5234,10 @@ function setupCreateTournamentModal() {
     if (t.venuePhotoUrl) {
       setTimeout(function() { window._applyVenuePhoto(t.venuePhotoUrl); }, 50);
     }
+    // v4.0.21: foto de fundo custom do torneio
+    if (typeof window._applyCoverPhoto === 'function') {
+      setTimeout(function() { window._applyCoverPhoto(t.coverPhotoData || ''); }, 50);
+    }
     // Show venue map if lat/lon available
     if (t.venueLat && t.venueLon) {
       setTimeout(function() { window._initVenueCreateMap(parseFloat(t.venueLat), parseFloat(t.venueLon), t.venue || ''); }, 300);
@@ -5819,6 +5875,7 @@ function setupCreateTournamentModal() {
         const venueAddressVal = document.getElementById('tourn-venue-address').value || '';
         const venuePlaceIdVal = document.getElementById('tourn-venue-place-id').value || '';
         const venuePhotoUrlVal = document.getElementById('tourn-venue-photo-url').value || '';
+        const coverPhotoDataVal = (document.getElementById('tourn-cover-data') || {}).value || '';
         const logoDataVal = document.getElementById('tourn-logo-data').value || '';
         const logoLockedVal = document.getElementById('tourn-logo-locked').value === '1';
         const logoShapeVal = (document.getElementById('tourn-logo-shape') || {}).value === 'circle' ? 'circle' : 'square';
@@ -5885,6 +5942,7 @@ function setupCreateTournamentModal() {
           venueAddress: venueAddressVal,
           venuePlaceId: venuePlaceIdVal,
           venuePhotoUrl: venuePhotoUrlVal,
+          coverPhotoData: coverPhotoDataVal,
           logoData: logoDataVal,
           logoLocked: logoLockedVal,
           logoShape: logoShapeVal,
@@ -7365,6 +7423,7 @@ window._prefillFromTemplate = function(tpl) {
   _setV('tourn-venue-address', tpl.venueAddress);
   _setV('tourn-venue-place-id', tpl.venuePlaceId);
   _setV('tourn-venue-photo-url', tpl.venuePhotoUrl);
+  if (typeof window._applyCoverPhoto === 'function') window._applyCoverPhoto(tpl.coverPhotoData || '');
   // Logo
   if (typeof window._setLogoFormaFromRadius === 'function') { try { window._setLogoFormaFromRadius((tpl.logoRadius != null && tpl.logoRadius !== '') ? tpl.logoRadius : 14, tpl.logoShape === 'circle'); } catch (e) {} }
   if (tpl.logoData) { _setV('tourn-logo-data', tpl.logoData); _setV('tourn-logo-locked', tpl.logoLocked ? '1' : '0'); if (typeof window._applyTournamentLogo === 'function') { try { window._applyTournamentLogo(tpl.logoData); } catch (e) {} } }
@@ -7748,6 +7807,7 @@ window._saveCurrentFormAsTemplate = function() {
       venueAddress: get('tourn-venue-address') || '',
       venuePlaceId: get('tourn-venue-place-id') || '',
       venuePhotoUrl: get('tourn-venue-photo-url') || '',
+      coverPhotoData: (document.getElementById('tourn-cover-data') || {}).value || '',
       logoData: get('tourn-logo-data') || '',
       logoLocked: get('tourn-logo-locked') === '1',
       logoShape: get('tourn-logo-shape') === 'circle' ? 'circle' : 'square',

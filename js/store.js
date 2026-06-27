@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.20-beta';
+window.SCOREPLACE_VERSION = '4.0.21-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -2311,10 +2311,21 @@ function _pNameDisplay(raw) {
 //   callback(croppedDataUrl) chamado quando usuário confirma
 window._openImageCropEditor = function(dataUrl, opts, callback) {
   opts = opts || {};
-  var SIZE   = opts.size  || 400;
   var SHAPE  = opts.shape || 'square';
   var TITLE  = opts.title || 'Ajustar imagem';
-  var PREV   = 240; // preview canvas size (px)
+  // v4.0.21: aspect (largura/altura) + cover → recorte RETANGULAR pra foto de
+  // fundo do torneio (sem forma/fundo; assa o recorte zoom+pan no canvas, então
+  // o render só usa background-size:cover, sem distorção). aspect=1 (default) =
+  // comportamento quadrado original do logo, intocado.
+  var ASPECT = (opts.aspect && opts.aspect > 0) ? opts.aspect : 1;
+  var COVER  = !!opts.cover;
+  var SIZE_W = opts.size || 400;
+  var SIZE_H = Math.round(SIZE_W / ASPECT);
+  // Preview com o MESMO aspecto do output
+  var PREV_W, PREV_H;
+  if (ASPECT === 1) { PREV_W = 240; PREV_H = 240; }
+  else if (ASPECT >= 1) { PREV_W = 288; PREV_H = Math.round(288 / ASPECT); }
+  else { PREV_H = 240; PREV_W = Math.round(240 * ASPECT); }
   // v2.3.64: quando radiusControl=true (logo do torneio), o overlay ganha um
   // slider de FORMA contínuo (quadrado ↔ círculo) e a imagem é exportada como
   // QUADRADO inteiro — o arredondamento é aplicado via CSS no display/impressão.
@@ -2354,10 +2365,10 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       '</div>' +
       '<div style="font-size:0.62rem;color:var(--text-muted,#94a3b8);margin:0 0 6px;text-align:left;">Forma: arraste pra arredondar (círculo ↔ quadrado)</div>'
     : '';
-  var _canvasRadius = RADIUS_CTRL ? (cropRadiusPct + '%') : (SHAPE === 'circle' ? '50%' : '12px');
+  var _canvasRadius = COVER ? '10px' : (RADIUS_CTRL ? (cropRadiusPct + '%') : (SHAPE === 'circle' ? '50%' : '12px'));
   panel.innerHTML =
     '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright,#f1f5f9);margin-bottom:14px;">' + TITLE + '</div>' +
-    '<canvas id="crop-canvas" width="' + PREV + '" height="' + PREV + '" style="border-radius:' + _canvasRadius + ';cursor:move;touch-action:none;max-width:100%;"></canvas>' +
+    '<canvas id="crop-canvas" width="' + PREV_W + '" height="' + PREV_H + '" style="border-radius:' + _canvasRadius + ';cursor:move;touch-action:none;max-width:100%;"></canvas>' +
     '<div style="margin:14px 0 4px;display:flex;align-items:center;gap:10px;">' +
       '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">🔍−</span>' +
       '<input type="range" id="crop-zoom" min="50" max="300" value="100" style="flex:1;accent-color:var(--primary-color,#6366f1);">' +
@@ -2370,15 +2381,17 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">+☀</span>' +
       '<span id="crop-brightness-label" style="font-size:0.7rem;color:#fbbf24;min-width:32px;text-align:right;">0%</span>' +
     '</div>' +
-    '<div style="margin:6px 0 8px;">' +
-      '<div style="font-size:0.65rem;color:var(--text-muted,#94a3b8);margin-bottom:5px;text-align:left;">Fundo</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
-        _bgSwatchHtml +
-        '<button id="crop-bg-eyedropper" title="Conta-gotas — capturar cor da tela" onclick="window._cropEyedropper()" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;background:rgba(255,255,255,0.08);font-size:0.8rem;padding:0;flex-shrink:0;">🩸</button>' +
-        '<input type="color" id="crop-bg-custom" title="Cor personalizada" onchange="window._cropCustomColor(this.value)" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;padding:1px;background:none;flex-shrink:0;">' +
-      '</div>' +
-    '</div>' +
-    '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">Arraste · Zoom · Luminosidade · Fundo</div>' +
+    (COVER ? '' :
+      '<div style="margin:6px 0 8px;">' +
+        '<div style="font-size:0.65rem;color:var(--text-muted,#94a3b8);margin-bottom:5px;text-align:left;">Fundo</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+          _bgSwatchHtml +
+          '<button id="crop-bg-eyedropper" title="Conta-gotas — capturar cor da tela" onclick="window._cropEyedropper()" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;background:rgba(255,255,255,0.08);font-size:0.8rem;padding:0;flex-shrink:0;">🩸</button>' +
+          '<input type="color" id="crop-bg-custom" title="Cor personalizada" onchange="window._cropCustomColor(this.value)" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;padding:1px;background:none;flex-shrink:0;">' +
+        '</div>' +
+      '</div>'
+    ) +
+    '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">' + (COVER ? 'Arraste · Zoom · Luminosidade' : 'Arraste · Zoom · Luminosidade · Fundo') + '</div>' +
     '<div style="display:flex;gap:10px;">' +
       '<button id="crop-cancel" class="btn btn-sm" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted,#94a3b8);border:1px solid rgba(255,255,255,0.1);">Cancelar</button>' +
       '<button id="crop-confirm" class="btn btn-sm btn-primary" style="flex:2;">✅ Confirmar</button>' +
@@ -2423,18 +2436,19 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   };
 
   function draw() {
-    ctx.clearRect(0, 0, PREV, PREV);
+    ctx.clearRect(0, 0, PREV_W, PREV_H);
     var sw = img.width * scale;
     var sh = img.height * scale;
-    var dx = PREV/2 + offsetX - sw/2;
-    var dy = PREV/2 + offsetY - sh/2;
+    var dx = PREV_W/2 + offsetX - sw/2;
+    var dy = PREV_H/2 + offsetY - sh/2;
     ctx.save();
-    var _cornerPx = RADIUS_CTRL ? (cropRadiusPct / 50) * (PREV / 2) : (SHAPE === 'circle' ? PREV / 2 : 12);
-    ctx.beginPath(); ctx.roundRect(0, 0, PREV, PREV, _cornerPx); ctx.clip();
+    var _minSide = Math.min(PREV_W, PREV_H);
+    var _cornerPx = COVER ? 10 : (RADIUS_CTRL ? (cropRadiusPct / 50) * (_minSide / 2) : (SHAPE === 'circle' ? _minSide / 2 : 12));
+    ctx.beginPath(); ctx.roundRect(0, 0, PREV_W, PREV_H, _cornerPx); ctx.clip();
     // Preencher fundo antes de desenhar a imagem
     if (bgColor && bgColor !== 'transparent') {
       ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, PREV, PREV);
+      ctx.fillRect(0, 0, PREV_W, PREV_H);
     }
     ctx.drawImage(img, dx, dy, sw, sh);
     // Luminosidade: overlay branco (clarear) ou preto (escurecer).
@@ -2445,18 +2459,18 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       ctx.fillStyle = brightness > 0
         ? 'rgba(255,255,255,' + alpha + ')'
         : 'rgba(0,0,0,' + alpha + ')';
-      ctx.fillRect(0, 0, PREV, PREV);
+      ctx.fillRect(0, 0, PREV_W, PREV_H);
     }
     ctx.restore();
     // Borda sutil (acompanha a forma)
     ctx.strokeStyle = 'rgba(99,102,241,0.4)'; ctx.lineWidth = 2;
-    var _bCorner = RADIUS_CTRL ? (cropRadiusPct / 50) * (PREV / 2 - 1) : (SHAPE === 'circle' ? PREV / 2 - 1 : 11);
-    ctx.beginPath(); ctx.roundRect(1, 1, PREV - 2, PREV - 2, Math.max(0, _bCorner)); ctx.stroke();
+    var _bCorner = COVER ? 9 : (RADIUS_CTRL ? (cropRadiusPct / 50) * (_minSide / 2 - 1) : (SHAPE === 'circle' ? _minSide / 2 - 1 : 11));
+    ctx.beginPath(); ctx.roundRect(1, 1, PREV_W - 2, PREV_H - 2, Math.max(0, _bCorner)); ctx.stroke();
   }
 
   img.onload = function() {
     // Fit image to fill the preview
-    var ratio = Math.max(PREV / img.width, PREV / img.height);
+    var ratio = Math.max(PREV_W / img.width, PREV_H / img.height);
     scale = ratio;
     zoomSlider.min = Math.max(20, Math.round(ratio * 80));
     zoomSlider.max = Math.round(ratio * 400);
@@ -2503,24 +2517,25 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
 
   document.getElementById('crop-cancel').addEventListener('click', function() { overlay.remove(); });
   document.getElementById('crop-confirm').addEventListener('click', function() {
-    // Render final output at target SIZE
+    // Render final output at target SIZE (mesmo aspecto do preview → ratio uniforme)
     var out = document.createElement('canvas');
-    out.width = SIZE; out.height = SIZE;
+    out.width = SIZE_W; out.height = SIZE_H;
     var octx = out.getContext('2d');
-    var ratio = SIZE / PREV;
+    var ratio = SIZE_W / PREV_W; // === SIZE_H / PREV_H
     var sw = img.width * scale * ratio;
     var sh = img.height * scale * ratio;
-    var dx = SIZE/2 + offsetX*ratio - sw/2;
-    var dy = SIZE/2 + offsetY*ratio - sh/2;
+    var dx = SIZE_W/2 + offsetX*ratio - sw/2;
+    var dy = SIZE_H/2 + offsetY*ratio - sh/2;
     // Logo (RADIUS_CTRL): exporta QUADRADO inteiro (sem recortar) — o radius é
     // aplicado via CSS no display/impressão, sem cantos pretos no JPEG.
-    if (!RADIUS_CTRL) {
-      if (SHAPE === 'circle') { octx.beginPath(); octx.arc(SIZE/2,SIZE/2,SIZE/2,0,Math.PI*2); octx.clip(); }
-      else { octx.beginPath(); octx.roundRect(0,0,SIZE,SIZE,Math.round(12*ratio)); octx.clip(); }
+    // Cover: exporta retângulo inteiro (recorte já é a moldura escolhida).
+    if (!RADIUS_CTRL && !COVER) {
+      if (SHAPE === 'circle') { octx.beginPath(); octx.arc(SIZE_W/2,SIZE_H/2,Math.min(SIZE_W,SIZE_H)/2,0,Math.PI*2); octx.clip(); }
+      else { octx.beginPath(); octx.roundRect(0,0,SIZE_W,SIZE_H,Math.round(12*ratio)); octx.clip(); }
     }
     if (bgColor && bgColor !== 'transparent') {
       octx.fillStyle = bgColor;
-      octx.fillRect(0, 0, SIZE, SIZE);
+      octx.fillRect(0, 0, SIZE_W, SIZE_H);
     }
     octx.drawImage(img, dx, dy, sw, sh);
     if (brightness !== 0) {
@@ -2528,9 +2543,9 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       octx.fillStyle = brightness > 0
         ? 'rgba(255,255,255,' + oAlpha + ')'
         : 'rgba(0,0,0,' + oAlpha + ')';
-      octx.fillRect(0, 0, SIZE, SIZE);
+      octx.fillRect(0, 0, SIZE_W, SIZE_H);
     }
-    var result = out.toDataURL('image/jpeg', 0.88);
+    var result = out.toDataURL('image/jpeg', COVER ? 0.82 : 0.88);
     overlay.remove();
     if (typeof callback === 'function') callback(result, RADIUS_CTRL ? cropRadiusPct : undefined);
   });

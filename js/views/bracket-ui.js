@@ -3031,11 +3031,15 @@ window._tvMode = function(tId) {
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0a0e1a;z-index:99999;overflow:auto;display:flex;flex-direction:column;';
 
   // Hero section with venue photo background
-  var heroBg = t.venuePhotoUrl
-    ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + t.venuePhotoUrl + ');background-size:cover;background-position:center;'
-    : 'background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1e1b4b 100%);';
+  // v4.0.21: foto de fundo custom do organizador tem prioridade sobre a do Google.
+  var heroBg = t.coverPhotoData
+    ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + t.coverPhotoData + ');background-size:cover;background-position:center;'
+    : t.venuePhotoUrl
+      ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + t.venuePhotoUrl + ');background-size:cover;background-position:center;'
+      : 'background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1e1b4b 100%);';
   // v4.0.14: re-busca a foto fresca pelo placeId (token salvo expira → 400).
-  var _heroVphoto = (t.venuePhotoUrl && t.venuePlaceId)
+  // v4.0.21: desligado quando há foto custom.
+  var _heroVphoto = (!t.coverPhotoData && t.venuePhotoUrl && t.venuePlaceId)
     ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95))" data-vphoto-w="1200" data-vphoto-h="600"'
     : '';
   var hero = '<div' + _heroVphoto + ' style="' + heroBg + 'padding:30px 40px;flex-shrink:0;position:relative;">';

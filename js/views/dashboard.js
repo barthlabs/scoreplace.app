@@ -644,19 +644,24 @@ function renderDashboard(container) {
     var _cardTextColor = _isLight ? '#1f2937' : 'white';
 
     // Venue photo background
+    var overlayGrad = isOrg
+      ? 'linear-gradient(135deg, rgba(67,56,202,0.5) 0%, rgba(99,102,241,0.42) 100%)'
+      : isParticipating
+        ? 'linear-gradient(135deg, rgba(15,118,110,0.5) 0%, rgba(20,184,166,0.42) 100%)'
+        : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
     let venuePhotoBg = '';
-    if (t.venuePhotoUrl) {
-      var overlayGrad = isOrg
-        ? 'linear-gradient(135deg, rgba(67,56,202,0.5) 0%, rgba(99,102,241,0.42) 100%)'
-        : isParticipating
-          ? 'linear-gradient(135deg, rgba(15,118,110,0.5) 0%, rgba(20,184,166,0.42) 100%)'
-          : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
+    if (t.coverPhotoData) {
+      // v4.0.21: foto de fundo custom do organizador — substitui a do Google.
+      venuePhotoBg = 'background-image: ' + overlayGrad + ', url(' + t.coverPhotoData + '); background-size: cover; background-position: center;';
+      _cardTextColor = 'white';
+    } else if (t.venuePhotoUrl) {
       venuePhotoBg = 'background-image: ' + overlayGrad + ', url(' + t.venuePhotoUrl + '); background-size: cover; background-position: center;';
       _cardTextColor = 'white'; // Overlay sempre escuro, texto branco
     }
     // v4.0.14: re-busca a foto fresca pelo placeId (o token salvo na criação
     // expira → 400). O hidratador pinta o fundo com a URL nova.
-    var vphotoAttrs = (t.venuePhotoUrl && t.venuePlaceId)
+    // v4.0.21: desligado quando há foto custom.
+    var vphotoAttrs = (!t.coverPhotoData && t.venuePhotoUrl && t.venuePlaceId)
       ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGrad + '" data-vphoto-w="800" data-vphoto-h="400"'
       : '';
 
