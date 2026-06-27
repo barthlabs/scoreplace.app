@@ -46,7 +46,13 @@
     if (Array.isArray(poll.sections) && poll.sections.length) return poll.sections;
     return [{ id: '_s0', question: poll.question || '', options: Array.isArray(poll.options) ? poll.options : [], multiSelect: !!poll.multiSelect }];
   };
-  // Array de optIds que o uid escolheu na seção. Tolera votos legados (array) e novos (objeto).
+  // v3.1.68: voto de seção multiSelect agora é TRI-ESTADO por opção — ✅ quero (yes) /
+  // ❌ não quero (no) / neutro. Modelo no banco:
+  //   - multiSelect:  votes[uid][secId] = { yes:[optIds], no:[optIds] }
+  //   - single/radio: votes[uid][secId] = [optId]   (array = só "yes", como sempre)
+  //   - legado:       votes[uid] = [optId]  (seção única)  →  yes=array, no=[]
+  // _opGetVote SEMPRE devolve o array de YES (compat com toda a lógica de contagem);
+  // _opGetVoteNo devolve o array de NO.
   function _opGetVote(poll, uid, sectionId) {
     if (!poll || !poll.votes || !uid) return [];
     var v = poll.votes[uid];
@@ -57,15 +63,25 @@
       var only = secs.length === 1 ? secs[0].id : null;
       return (sectionId === '_s0' || (only && sectionId === only)) ? v.slice() : [];
     }
-    return Array.isArray(v[sectionId]) ? v[sectionId].slice() : [];
+    var sv = v[sectionId];
+    if (Array.isArray(sv)) return sv.slice();
+    if (sv && typeof sv === 'object' && Array.isArray(sv.yes)) return sv.yes.slice();
+    return [];
   }
   window._opGetVote = _opGetVote;
-  // Grava o voto de uma seção; migra array legado pra objeto no 1º write.
-  function _opSetVote(poll, uid, sectionId, optIds) {
+  function _opGetVoteNo(poll, uid, sectionId) {
+    if (!poll || !poll.votes || !uid) return [];
+    var v = poll.votes[uid];
+    if (v == null || Array.isArray(v)) return []; // legado/array = só yes
+    var sv = v[sectionId];
+    if (sv && typeof sv === 'object' && !Array.isArray(sv) && Array.isArray(sv.no)) return sv.no.slice();
+    return [];
+  }
+  window._opGetVoteNo = _opGetVoteNo;
+  function _opEnsureUserMap(poll, uid) {
     if (!poll.votes) poll.votes = {};
     var v = poll.votes[uid];
     if (Array.isArray(v)) {
-      // migra: o array antigo era da seção única → preserva sob o id dela
       var secs = window._opSections(poll);
       var legacyId = secs.length ? secs[0].id : '_s0';
       var migrated = {}; migrated[legacyId] = v.slice();
@@ -73,10 +89,24 @@
     } else if (v == null || typeof v !== 'object') {
       v = poll.votes[uid] = {};
     }
+    return v;
+  }
+  // Grava o voto de uma seção (single/radio) — array de optIds.
+  function _opSetVote(poll, uid, sectionId, optIds) {
+    var v = _opEnsureUserMap(poll, uid);
     if (optIds && optIds.length) v[sectionId] = optIds.slice();
     else delete v[sectionId];
   }
-  function _opHasVotedSection(poll, sectionId, uid) { return _opGetVote(poll, uid, sectionId).length > 0; }
+  // Grava o voto de uma seção multiSelect — yes/no por opção.
+  function _opSetVoteMulti(poll, uid, sectionId, yesArr, noArr) {
+    var v = _opEnsureUserMap(poll, uid);
+    var y = (yesArr || []).slice(), n = (noArr || []).slice();
+    if (y.length || n.length) v[sectionId] = { yes: y, no: n };
+    else delete v[sectionId];
+  }
+  function _opHasVotedSection(poll, sectionId, uid) {
+    return _opGetVote(poll, uid, sectionId).length > 0 || _opGetVoteNo(poll, uid, sectionId).length > 0;
+  }
   function _opHasVotedAny(poll, uid) {
     if (!poll || !uid) return false;
     return window._opSections(poll).some(function (s) { return _opHasVotedSection(poll, s.id, uid); });
@@ -88,9 +118,15 @@
     });
     return n;
   }
+  function _opOptCountNo(poll, sectionId, optId) {
+    var n = 0; if (poll && poll.votes) Object.keys(poll.votes).forEach(function (u) {
+      if (_opGetVoteNo(poll, u, sectionId).indexOf(optId) !== -1) n++;
+    });
+    return n;
+  }
   function _opSectionVoters(poll, sectionId) {
     if (!poll || !poll.votes) return 0;
-    return Object.keys(poll.votes).filter(function (u) { return _opGetVote(poll, u, sectionId).length > 0; }).length;
+    return Object.keys(poll.votes).filter(function (u) { return _opGetVote(poll, u, sectionId).length > 0 || _opGetVoteNo(poll, u, sectionId).length > 0; }).length;
   }
   // Mapa nome/foto por uid (inscritos + p1/p2 de duplas + organizador). Reusado por avatares E tela nominal.
   function _opVoterInfoMap(t) {
@@ -381,6 +417,31 @@
     _renderVote(t, poll, secId);
   };
 
+  // v3.1.68: estilo dos botões ✅/❌ das opções multiSelect (tri-estado).
+  window._opVoteBtnStyle = function (kind, active) {
+    var base = 'display:inline-flex;align-items:center;justify-content:center;width:42px;height:38px;border-radius:9px;font-size:1.05rem;cursor:pointer;flex-shrink:0;transition:all 0.15s;';
+    if (kind === 'yes') {
+      return base + (active
+        ? 'background:rgba(16,185,129,0.85);border:1px solid #10b981;opacity:1;box-shadow:0 0 0 2px rgba(16,185,129,0.25);'
+        : 'background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);opacity:0.55;');
+    }
+    return base + (active
+      ? 'background:rgba(220,38,38,0.85);border:1px solid #ef4444;opacity:1;box-shadow:0 0 0 2px rgba(239,68,68,0.25);'
+      : 'background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.35);opacity:0.55;');
+  };
+  // Toggle do voto de uma opção: ✅/❌/neutro (mutuamente exclusivos). Re-estiliza os 2 botões.
+  window._opToggleVote = function (btn, kind) {
+    var row = btn && btn.closest ? btn.closest('[data-opt-row]') : null;
+    if (!row) return;
+    var cur = row.getAttribute('data-vote') || '';
+    var next = (cur === kind) ? '' : kind;
+    row.setAttribute('data-vote', next);
+    var yb = row.querySelector('[data-vote-btn="yes"]');
+    var nb = row.querySelector('[data-vote-btn="no"]');
+    if (yb) yb.setAttribute('style', window._opVoteBtnStyle('yes', next === 'yes'));
+    if (nb) nb.setAttribute('style', window._opVoteBtnStyle('no', next === 'no'));
+  };
+
   function _renderVote(t, poll, editSecId) {
     var cu = _cu();
     var uid = cu && cu.uid;
@@ -400,9 +461,10 @@
       // as perguntas (pedido do dono). Mesma fonte usada no editor.
       body += '<div id="op-vsec-' + _esc(sec.id) + '" style="margin-bottom:18px;scroll-margin-top:170px;' + (si > 0 ? 'padding-top:16px;border-top:1px solid var(--border-color);' : '') + '">' +
         '<div style="font-weight:900;font-size:1.02rem;color:#f59e0b;margin-bottom:3px;">' + _esc(sec.question) + '</div>' +
-        '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:11px;">' + (sec.multiSelect ? 'Pode escolher mais de uma' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>';
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:11px;">' + (sec.multiSelect ? 'Marque ✅ no que você quer e ❌ no que não quer' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>';
 
-      // v3.1.50: barra de resultado (helper reutilizado nos dois modos).
+      var myNo = _opGetVoteNo(poll, uid, sec.id);
+      // v3.1.50: barra de resultado simples (seção de escolha ÚNICA).
       var _resultBar = function (o, c, pct, mine) {
         return '<div style="margin-bottom:10px;">' +
           '<div style="display:flex;justify-content:space-between;font-size:0.86rem;margin-bottom:3px;color:var(--text-bright);">' +
@@ -413,21 +475,45 @@
             '<div style="height:100%;width:' + pct + '%;background:' + (mine ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#6366f1,#8b5cf6)') + ';border-radius:6px;transition:width 0.3s;"></div>' +
           '</div></div>';
       };
+      // v3.1.68: barra de resultado DUPLA (multiSelect) — ✅ quero (verde) + ❌ não quero (vermelho).
+      var _resultBarMulti = function (o) {
+        var yc = _opOptCount(poll, sec.id, o.id), nc = _opOptCountNo(poll, sec.id, o.id);
+        var yp = total > 0 ? Math.round((yc / total) * 100) : 0, np = total > 0 ? Math.round((nc / total) * 100) : 0;
+        var mineY = myChoices.indexOf(o.id) !== -1, mineN = myNo.indexOf(o.id) !== -1;
+        var _line = function (icon, pct, cnt, grad) {
+          return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">' +
+            '<span style="font-size:0.72rem;width:16px;flex-shrink:0;text-align:center;">' + icon + '</span>' +
+            '<div style="flex:1;height:7px;background:rgba(255,255,255,0.08);border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + grad + ';border-radius:5px;transition:width 0.3s;"></div></div>' +
+            '<span style="font-size:0.74rem;color:var(--text-muted);font-weight:700;min-width:54px;text-align:right;flex-shrink:0;">' + cnt + ' · ' + pct + '%</span>' +
+          '</div>';
+        };
+        return '<div style="margin-bottom:13px;">' +
+          '<div style="font-size:0.84rem;font-weight:' + (mineY || mineN ? '800' : '600') + ';color:var(--text-bright);margin-bottom:4px;">' + (mineY ? '✅ ' : (mineN ? '❌ ' : '')) + _esc(o.text) + '</div>' +
+          _line('✅', yp, yc, 'linear-gradient(90deg,#10b981,#34d399)') +
+          _line('❌', np, nc, 'linear-gradient(90deg,#dc2626,#f87171)') +
+        '</div>';
+      };
       sec.options.forEach(function (o) {
-        var c = _opOptCount(poll, sec.id, o.id);
-        var pct = total > 0 ? Math.round((c / total) * 100) : 0;
         var mine = myChoices.indexOf(o.id) !== -1;
         if (!votingMode) {
-          body += _resultBar(o, c, pct, mine);
+          if (sec.multiSelect) { body += _resultBarMulti(o); }
+          else { var c0 = _opOptCount(poll, sec.id, o.id); body += _resultBar(o, c0, total > 0 ? Math.round((c0 / total) * 100) : 0, mine); }
+        } else if (sec.multiSelect) {
+          // v3.1.68: linha tri-estado — ✅ quero / ❌ não quero / neutro. Estado em data-vote.
+          var vs = mine ? 'yes' : (myNo.indexOf(o.id) !== -1 ? 'no' : '');
+          body += '<div data-opt-row data-opt-id="' + _esc(o.id) + '" data-vote="' + vs + '" style="display:flex;align-items:center;gap:8px;padding:8px 11px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.25);border-radius:11px;margin-bottom:' + (showResults ? '4px' : '8px') + ';">' +
+            '<span style="flex:1;min-width:0;font-size:0.92rem;color:var(--text-bright);font-weight:600;">' + _esc(o.text) + '</span>' +
+            '<button type="button" data-vote-btn="yes" onclick="window._opToggleVote(this,\'yes\')" title="Quero" style="' + window._opVoteBtnStyle('yes', vs === 'yes') + '">✅</button>' +
+            '<button type="button" data-vote-btn="no" onclick="window._opToggleVote(this,\'no\')" title="Não quero" style="' + window._opVoteBtnStyle('no', vs === 'no') + '">❌</button>' +
+          '</div>';
+          if (showResults) body += _resultBarMulti(o);
         } else {
-          var inputType = sec.multiSelect ? 'checkbox' : 'radio';
+          var c = _opOptCount(poll, sec.id, o.id);
+          var pct = total > 0 ? Math.round((c / total) * 100) : 0;
           body += '<label style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);border-radius:11px;cursor:pointer;margin-bottom:' + (showResults ? '4px' : '8px') + ';">' +
-            '<input type="' + inputType + '" name="op-choice-' + _esc(sec.id) + '" value="' + _esc(o.id) + '"' + (mine ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#8b5cf6;flex-shrink:0;">' +
+            '<input type="radio" name="op-choice-' + _esc(sec.id) + '" value="' + _esc(o.id) + '"' + (mine ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#8b5cf6;flex-shrink:0;">' +
             '<span style="font-size:0.92rem;color:var(--text-bright);font-weight:600;">' + _esc(o.text) + '</span>' +
           '</label>';
-          // v3.1.50: org NÃO ocultou os resultados → mostra a parcial (barra) logo abaixo
-          // do input, pra o votante ver enquanto escolhe. Antes ficava escondido mesmo
-          // com hideResultsUntilVote=false (só quem já tinha votado via as barras).
           if (showResults) body += _resultBar(o, c, pct, mine);
         }
       });
@@ -541,25 +627,38 @@
     var toSave = [];
     var firstMissing = null;
     secs.forEach(function (sec) {
-      // Só as seções em modo de votação têm <input> no DOM; as que mostram resultado, não.
-      var inputs = document.querySelectorAll('#op-vote-overlay input[name="op-choice-' + sec.id + '"]');
-      if (!inputs.length) return;
-      var checked = [];
-      document.querySelectorAll('#op-vote-overlay input[name="op-choice-' + sec.id + '"]:checked').forEach(function (i) { checked.push(i.value); });
-      if (!checked.length) { if (!firstMissing) firstMissing = sec.id; return; }
-      if (!sec.multiSelect) checked = [checked[0]];
-      toSave.push({ secId: sec.id, checked: checked });
+      var secEl = document.getElementById('op-vsec-' + sec.id);
+      if (sec.multiSelect) {
+        // v3.1.68: lê o tri-estado (data-vote) de cada linha de opção da seção.
+        var rows = secEl ? secEl.querySelectorAll('[data-opt-row]') : [];
+        if (!rows.length) return; // não está em modo votação (mostrando resultado)
+        var yes = [], no = [];
+        Array.prototype.forEach.call(rows, function (r) {
+          var st = r.getAttribute('data-vote'), oid = r.getAttribute('data-opt-id');
+          if (st === 'yes') yes.push(oid); else if (st === 'no') no.push(oid);
+        });
+        if (!yes.length && !no.length) { if (!firstMissing) firstMissing = sec.id; return; }
+        toSave.push({ secId: sec.id, multi: true, yes: yes, no: no });
+      } else {
+        // Escolha única: lê o radio marcado.
+        var inputs = document.querySelectorAll('#op-vote-overlay input[name="op-choice-' + sec.id + '"]');
+        if (!inputs.length) return;
+        var checked = [];
+        document.querySelectorAll('#op-vote-overlay input[name="op-choice-' + sec.id + '"]:checked').forEach(function (i) { checked.push(i.value); });
+        if (!checked.length) { if (!firstMissing) firstMissing = sec.id; return; }
+        toSave.push({ secId: sec.id, multi: false, yes: [checked[0]] });
+      }
     });
     if (firstMissing) {
       var el = document.getElementById('op-vsec-' + firstMissing);
       if (el && el.scrollIntoView) { try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { el.scrollIntoView(); } }
-      if (typeof showNotification === 'function') showNotification('Falta votar', 'Escolha uma opção nesta pergunta antes de confirmar.', 'warning');
+      if (typeof showNotification === 'function') showNotification('Falta votar', 'Marque sua resposta nesta pergunta antes de confirmar.', 'warning');
       return;
     }
     if (!toSave.length) { if (typeof showNotification === 'function') showNotification('Nada a confirmar', '', 'info'); return; }
     var _prev = poll.votes && poll.votes[cu.uid]; // snapshot pra reverter se o save falhar
     var _prevClone = _prev == null ? undefined : (Array.isArray(_prev) ? _prev.slice() : JSON.parse(JSON.stringify(_prev)));
-    toSave.forEach(function (s) { _opSetVote(poll, cu.uid, s.secId, s.checked); });
+    toSave.forEach(function (s) { if (s.multi) _opSetVoteMulti(poll, cu.uid, s.secId, s.yes, s.no); else _opSetVote(poll, cu.uid, s.secId, s.yes); });
     _save(t).then(function () {
       if (typeof showNotification === 'function') showNotification(secs.length > 1 ? '✓ Votos registrados' : '✓ Voto registrado', '', 'success');
       _renderVote(t, poll, null);
@@ -643,52 +742,50 @@
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
     var poll = _findPoll(t, pollId); if (!poll) return;
     var secs = window._opSections(poll);
-    // v3.1.52: chip normal (índigo) OU "ficaria de fora" (vermelho+branco). O 2º só
-    // em seção MULTISELEÇÃO: marca quem NÃO votou na opção da maioria — visualmente
-    // mostra quem ficaria de fora se a maioria vencer (ajuda a decidir). Em seção
-    // excludente não pinta (a maioria vence e pronto, como pediu o dono).
-    var nameChip = function (uid, excluded) {
+    // v3.1.68: chip normal (índigo, quem marcou ✅) OU vermelho (quem marcou ❌). Em
+    // multiseleção cada opção lista os dois grupos; em escolha única só há ✅.
+    var nameChip = function (uid, isNo) {
       var nm = window._opVoterName(t, uid);
-      if (excluded) {
-        return '<span title="Não votou na opção da maioria — ficaria de fora" style="display:inline-block;background:#dc2626;border:1px solid #ef4444;color:#fff;border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:700;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
+      if (isNo) {
+        return '<span title="Marcou ❌ (não quer)" style="display:inline-block;background:#dc2626;border:1px solid #ef4444;color:#fff;border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:700;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
       }
       return '<span style="display:inline-block;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:var(--text-bright);border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:600;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
     };
     var body = '';
     secs.forEach(function (sec, si) {
-      // Pré-computa os votantes de cada opção desta seção.
-      var optVoters = sec.options.map(function (o) {
+      // Votantes ✅ (yes) e ❌ (no, só multiseleção) de cada opção.
+      var optYes = sec.options.map(function (o) {
         var vs = [];
         if (poll.votes) Object.keys(poll.votes).forEach(function (u) { if (_opGetVote(poll, u, sec.id).indexOf(o.id) !== -1) vs.push(u); });
         return vs;
       });
-      // v3.1.58: opção MAIS VOTADA da seção → box verde. Vale pra TODA seção (1 por
-      // seção), inclusive escolha única. Empate: o 1º com o máximo. Sem votos: sem box.
+      var optNo = sec.options.map(function (o) {
+        var vs = [];
+        if (sec.multiSelect && poll.votes) Object.keys(poll.votes).forEach(function (u) { if (_opGetVoteNo(poll, u, sec.id).indexOf(o.id) !== -1) vs.push(u); });
+        return vs;
+      });
+      // v3.1.58: opção mais ✅ da seção → box verde (1 por seção). Empate: 1º; sem votos: nenhum.
       var majIdx = -1, maxN = 0;
-      optVoters.forEach(function (vs, oi) { if (vs.length > maxN) { maxN = vs.length; majIdx = oi; } });
+      optYes.forEach(function (vs, oi) { if (vs.length > maxN) { maxN = vs.length; majIdx = oi; } });
       if (maxN === 0) majIdx = -1;
-      // majSet (pinta de VERMELHO quem votou em OUTRA opção) SÓ em multiseleção (não-excludente).
-      var majSet = null;
-      if (sec.multiSelect && majIdx >= 0) {
-        majSet = {};
-        optVoters[majIdx].forEach(function (u) { majSet[u] = 1; });
-      }
       body += '<div style="margin-bottom:18px;' + (si > 0 ? 'padding-top:14px;border-top:1px solid var(--border-color);' : '') + '">' +
-        // sem "SEÇÃO N" — pergunta em LARANJA + negrito (mesma fonte do editor).
         '<div style="font-weight:900;font-size:0.98rem;color:#f59e0b;margin-bottom:10px;">' + _esc(sec.question) + '</div>';
       sec.options.forEach(function (o, oi) {
-        var voters = optVoters[oi];
+        var yesV = optYes[oi], noV = optNo[oi];
         var isMaj = (oi === majIdx);
-        // v3.1.56: BOX VERDE em volta da opção MAIS votada da seção (só multiseleção) —
-        // sinal visual, SEM texto. Chips vermelhos = quem votou nesta opção mas NÃO na
-        // da maioria (ficaria de fora). Não-votantes (seção "ainda não votaram") NÃO
-        // entram aqui, então nunca ficam vermelhos.
         var wrapStyle = isMaj
           ? 'margin-bottom:11px;border:2px solid rgba(16,185,129,0.65);background:rgba(16,185,129,0.08);border-radius:10px;padding:8px 10px;'
           : 'margin-bottom:11px;';
+        var countLabel = sec.multiSelect
+          ? ('<span style="color:#34d399;font-weight:700;">✅ ' + yesV.length + '</span> <span style="color:#f87171;font-weight:700;">· ❌ ' + noV.length + '</span>')
+          : ('<span style="color:var(--text-muted);font-weight:600;">· ' + yesV.length + '</span>');
+        var chips = '';
+        if (yesV.length) chips += yesV.map(function (u) { return nameChip(u, false); }).join('');
+        if (noV.length) chips += noV.map(function (u) { return nameChip(u, true); }).join('');
+        if (!chips) chips = '<span style="font-size:0.78rem;color:var(--text-muted);">ninguém ainda</span>';
         body += '<div style="' + wrapStyle + '">' +
-          '<div style="font-size:0.86rem;font-weight:700;color:var(--text-bright);margin-bottom:5px;">' + _esc(o.text) + ' <span style="color:var(--text-muted);font-weight:600;">· ' + voters.length + '</span></div>' +
-          '<div>' + (voters.length ? voters.map(function (u) { return nameChip(u, !!(majSet && !majSet[u])); }).join('') : '<span style="font-size:0.78rem;color:var(--text-muted);">ninguém ainda</span>') + '</div>' +
+          '<div style="font-size:0.86rem;font-weight:700;color:var(--text-bright);margin-bottom:5px;">' + _esc(o.text) + ' ' + countLabel + '</div>' +
+          '<div>' + chips + '</div>' +
         '</div>';
       });
       body += '</div>';
