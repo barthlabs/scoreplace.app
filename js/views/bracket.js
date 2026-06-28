@@ -1324,11 +1324,20 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   })();
   const renderSection = (cols, title, color) => {
     if (!cols || !cols.length) return '';
-    const colsHtml = cols.map(function(col) {
+    const colsHtml = cols.map(function(col, ci) {
       var matches = col.matches || [];
+      // Nome CANÔNICO da rodada por FUNÇÃO + contagem de jogos (dono): última = Final;
+      // 2 jogos = Semifinais; 4 = Quartas; 8 = Oitavas; senão "Rodada X". Vale na Chave
+      // Superior E na Inferior. "se não tiver 4 não é quartas; se não tiver 8 não é oitavas".
+      var games = matches.length, fromEnd = cols.length - ci, rname;
+      if (fromEnd === 1) rname = _t('bracket.final');
+      else if (fromEnd === 2 && games === 2) rname = _t('bracket.semiFinal');
+      else if (fromEnd === 3 && games === 4) rname = _t('bracket.quarterFinal');
+      else if (fromEnd === 4 && games === 8) rname = _t('bracket.roundOf16');
+      else rname = _t('bracket.round', { n: ci + 1 });
       return `
       <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">
-        <h5 style="color:${color};font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ${color};padding-left:8px;">${col.label || (col.round < 0 ? (Math.abs(col.round) > 1 ? _t('bracket.repechageN', {n: Math.abs(col.round)}) : _t('bracket.repechage')) : _t('bracket.round', {n: col.round}))}</h5>
+        <h5 style="color:${color};font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ${color};padding-left:8px;">${rname}</h5>
         ${matches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
       </div>`;
     }).join('');
@@ -1371,15 +1380,18 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   }
 
   // v3.1.21: canônico — lista de espera logo APÓS as chaves e ANTES da classificação geral.
-  return `
-    <div>
-      ${renderSection(upperCols, 'Chave Superior', '#10b981')}
-      ${renderSection(lowerCols, 'Chave Inferior', '#f59e0b')}
-      ${grandMatches.length ? `
+  var _grandHtml = grandMatches.length ? `
         <div style="margin-top:1rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">
           <h4 style="color:#fbbf24;font-size:0.8rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:1rem;border-left:3px solid #fbbf24;padding-left:10px;">🏆 ${_t('bracket.grandFinal')}</h4>
           <div style="max-width:280px;">${grandMatches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}</div>
-        </div>` : ''}
+        </div>` : '';
+  // Layout canônico (dono): Grande Final LOGO APÓS a final da Chave Superior; a Chave
+  // Inferior vem em seguida. (O campeão da Superior vai direto à Grande Final.)
+  return `
+    <div>
+      ${renderSection(upperCols, 'Chave Superior', '#10b981')}
+      ${_grandHtml}
+      ${renderSection(lowerCols, 'Chave Inferior', '#f59e0b')}
       ${standbyHtml || ''}
       ${_deClassifHtml}
     </div>`;
