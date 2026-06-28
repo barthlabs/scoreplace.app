@@ -1285,7 +1285,11 @@ window.generateDrawFunction = function (tId) {
 
     // ── Gerar chaveamento para cada categoria ───────────────────────
     var _matchCounter = 0;
-    Object.keys(_catGroups).forEach(function(catName) {
+    // v4.0.25 (motor canônico): true quando a Eliminatória Simples foi semeada pelo
+    // núcleo único genTierBracket (que já gera TODAS as rodadas + links). Nesse caso
+    // pulamos o _buildNextMatchLinks legado (geraria as R2+ de novo, agora redundante).
+    var _elimCoreBuilt = false;
+    Object.keys(_catGroups).forEach(function(catName, _catIdx) {
         var catParticipants = _catGroups[catName];
 
         // Shuffle dentro da categoria
@@ -1298,8 +1302,12 @@ window.generateDrawFunction = function (tId) {
             }
         }
 
-        // BYE handling por categoria — interleave for proper bracket distribution
-        if (t.p2Resolution === 'bye') {
+        // BYE handling por categoria — interleave for proper bracket distribution.
+        // v4.0.25 (motor canônico): SÓ a Dupla Eliminatória ainda usa este interleave
+        // manual (precisa dos placeholders 'BYE' na R1 pra _buildDoubleElimBracket). A
+        // Eliminatória SIMPLES passou a ser semeada pelo núcleo único genTierBracket
+        // (seed 1×N desde a R1, BYEs resolvidos internamente) — então pula este bloco.
+        if (isDupla && t.p2Resolution === 'bye') {
             var catLen = catParticipants.length;
             var catTarget = 1;
             while (catTarget < catLen) catTarget *= 2;
@@ -1542,7 +1550,47 @@ window.generateDrawFunction = function (tId) {
             }
         }
 
-        // Gerar partidas de 1ª Rodada (standard — no play-in)
+        // ── Eliminatória SIMPLES pelo NÚCLEO ÚNICO (v4.0.25, motor canônico) ──────
+        // window._phasesEngine.genTierBracket é a MESMA chave da Fase N: semente 1×N
+        // honrada DESDE A R1 (sem o cross-seed-na-R2 antigo), BYEs resolvidos dentro do
+        // núcleo (cabeças folgam) e R2+ já ligadas via nextMatchId/nextSlot. A Dupla
+        // Eliminatória mantém a geração própria da R1 logo abaixo (o _buildDoubleElimBracket
+        // consome essas R1 + os placeholders de BYE do interleave). Fallback defensivo
+        // pro loop legado se o motor não tiver carregado.
+        var _engine = window._phasesEngine;
+        if (!isDupla && _engine && typeof _engine.genTierBracket === 'function') {
+            // Times na ORDEM do pool (shuffle já aplicado acima; p2OrderedList = ordem
+            // explícita do organizador). Cabeças VIP flutuam pro topo → recebem os BYEs
+            // (sementes altas), preservando o "VIP folga" de antes.
+            var _teams = catParticipants.map(function (p) { return { displayName: getName(p) }; });
+            if (!t.p2OrderedList && t.vips && Object.keys(t.vips).length > 0) {
+                var _vipT = [], _restT = [];
+                catParticipants.forEach(function (p, _pi) {
+                    (window._entryHasVip(t, p) ? _vipT : _restT).push(_teams[_pi]);
+                });
+                _teams = _vipT.concat(_restT);
+            }
+            if (_teams.length === 0) return; // categoria vazia → nada a chavear
+            if (_teams.length === 1) {
+                // 1 inscrito na categoria → campeão por BYE (preserva o comportamento legado).
+                var _solo = { id: 'match-' + timestamp + '-' + _matchCounter, round: 1, p1: _teams[0].displayName, p2: 'BYE (Avança Direto)', winner: _teams[0].displayName, isBye: true };
+                if (catName) _solo.category = catName;
+                matches.push(_solo); _matchCounter++;
+                return;
+            }
+            // Resolução de não-potência-de-2 = 'bye' (cabeças folgam) — o caminho default
+            // da Fase 0. 'playin'/'swiss' já trataram/retornaram acima.
+            var _built = _engine.genTierBracket(_teams, undefined, 'e' + timestamp + '-c' + (_catIdx || 0), 'bye', false);
+            (_built.matches || []).forEach(function (m) {
+                delete m.team1Obj; delete m.team2Obj; // Fase 0 simples referencia por NOME (paridade de shape com o legado)
+                if (catName) m.category = catName;
+                matches.push(m);
+            });
+            _elimCoreBuilt = true;
+            return; // próxima categoria
+        }
+
+        // Gerar partidas de 1ª Rodada (Dupla Eliminatória / fallback legado)
         for (var mi = 0; mi < catParticipants.length; mi += 2) {
             var p1 = catParticipants[mi];
             var p2 = mi + 1 < catParticipants.length ? catParticipants[mi + 1] : 'BYE (Avança Direto)';
@@ -1576,7 +1624,9 @@ window.generateDrawFunction = function (tId) {
     // Build bracket structure with advancement links
     if (isDupla) {
         window._buildDoubleElimBracket(t);
-    } else {
+    } else if (!_elimCoreBuilt) {
+        // Eliminatória SIMPLES via núcleo (genTierBracket) já trouxe TODAS as rodadas
+        // ligadas — só o caminho legado/fallback precisa montar as R2+ aqui.
         window._buildNextMatchLinks(t);
     }
 
