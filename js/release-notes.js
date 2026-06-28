@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.23-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(27 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.37-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(28 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📊 Enquete — quem ficou fora da maioria fica em vermelho:</b> na tela de <b>Votos (nominal)</b> (organizador), quem votou numa opção que <b>não é a mais votada</b> agora aparece com o <b>nome em vermelho</b>. Vale pra enquetes de escolha única e de múltipla escolha (ex.: votação de data). Fica fácil enxergar quem está fora da preferência da maioria.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.23-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(27 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🔧 Menos travamentos de conexão:</b> corrigimos um erro do servidor que, em algumas situações (principalmente com o app aberto em <b>várias abas</b>), podia travar o carregamento e o salvamento. Agora o app evita esse cenário e, se mesmo assim acontecer, <b>se recupera sozinho</b> (recarrega na hora certa — nunca no meio de um placar ao vivo).</li>' +
         '<li><b>👑 Classificação certa no Rei/Rainha de várias fases:</b> em torneios com fase Rei/Rainha que alimenta a fase seguinte, a classificação agora é <b>individual</b> (por pessoa), como deve ser — garantindo que <b>avançam as pessoas certas</b>.</li>' +

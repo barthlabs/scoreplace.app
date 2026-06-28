@@ -750,10 +750,15 @@
     var secs = window._opSections(poll);
     // v3.1.68: chip normal (índigo, quem marcou ✅) OU vermelho (quem marcou ❌). Em
     // multiseleção cada opção lista os dois grupos; em escolha única só há ✅.
-    var nameChip = function (uid, isNo) {
+    // minority (multiseleção): votou ✅ mas NÃO na opção vencedora da seção → nome vermelho
+    // (borda/texto vermelhos, fundo suave) pra distinguir do 🚫 explícito (fundo vermelho sólido).
+    var nameChip = function (uid, isNo, isMinority) {
       var nm = window._opVoterName(t, uid);
       if (isNo) {
         return '<span title="Marcou 🚫 (não quer)" style="display:inline-block;background:#dc2626;border:1px solid #ef4444;color:#fff;border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:700;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
+      }
+      if (isMinority) {
+        return '<span title="Não votou na opção da maioria" style="display:inline-block;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.45);color:#ef4444;border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:700;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
       }
       return '<span style="display:inline-block;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:var(--text-bright);border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:600;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
     };
@@ -786,7 +791,15 @@
           ? ('<span style="color:#34d399;font-weight:700;">✅ ' + yesV.length + '</span> <span style="color:#f87171;font-weight:700;">· 🚫 ' + noV.length + '</span>')
           : ('<span style="color:var(--text-muted);font-weight:600;">· ' + yesV.length + '</span>');
         var chips = '';
-        if (yesV.length) chips += yesV.map(function (u) { return nameChip(u, false); }).join('');
+        // v4.0.x: votante ✅ que NÃO está entre os votantes da opção vencedora (majIdx)
+        // é minoria → nome vermelho. Vale tanto pra ESCOLHA ÚNICA (votou numa opção
+        // perdedora) quanto pra MULTISELEÇÃO (votou aqui mas não escolheu TAMBÉM a
+        // vencedora). Sob a própria vencedora ninguém é minoria (todos estão em majVoters).
+        var majVoters = (majIdx !== -1) ? optYes[majIdx] : null;
+        if (yesV.length) chips += yesV.map(function (u) {
+          var isMinority = !!(majVoters && majVoters.indexOf(u) === -1);
+          return nameChip(u, false, isMinority);
+        }).join('');
         if (noV.length) chips += noV.map(function (u) { return nameChip(u, true); }).join('');
         if (!chips) chips = '<span style="font-size:0.78rem;color:var(--text-muted);">ninguém ainda</span>';
         body += '<div style="' + wrapStyle + '">' +
