@@ -1036,9 +1036,39 @@ window._submitContactOrg = async function(tId) {
   var btn = document.querySelector('#modal-msg-org-' + tId + ' .sp-send-org');
   if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerHTML = 'Enviando…'; }
 
+  // CRÍTICO (gesto do usuário): abrir o canal externo (WhatsApp/e-mail) PRIMEIRO,
+  // de forma SÍNCRONA, antes de qualquer `await`. Em iOS Safari (e bloqueadores de
+  // pop-up em geral) só é permitido abrir nova aba/janela DENTRO do gesto de
+  // clique — assim que um `await` resolve, o gesto se perde e a navegação pro
+  // wa.me é silenciosamente suprimida ("a conversa não aparece no WhatsApp"). Por
+  // isso o wa.me/mailto é disparado aqui, e a notificação in-app (assíncrona) vai
+  // logo depois. Para mailto usamos _blank em vez de _self pra não destruir esta
+  // página antes do dispatch in-app completar.
+  try {
+    if (pend.useWhatsApp && pend.phoneFull) {
+      window._openExternalUrl('https://wa.me/' + pend.phoneFull + '?text=' + encodeURIComponent(fullMsg));
+    } else if (pend.email && pend.email.indexOf('@') !== -1) {
+      var subject = encodeURIComponent('Torneio: ' + (t.name || ''));
+      window._openExternalUrl('mailto:' + pend.email + '?subject=' + subject + '&body=' + encodeURIComponent(fullMsg));
+    }
+  } catch (e) {}
+
+  var modalEl = document.getElementById('modal-msg-org-' + tId);
+  if (modalEl) modalEl.remove();
+
+  if (typeof showNotification !== 'undefined') {
+    showNotification('Mensagem enviada',
+      pend.useWhatsApp ? 'Abrimos o WhatsApp e avisamos o organizador na plataforma.' :
+      (pend.email && pend.email.indexOf('@') !== -1) ? 'Abrimos seu e-mail e avisamos o organizador na plataforma.' :
+      'O organizador foi avisado na plataforma.',
+      'success');
+  }
+
   // Plataforma (in-app) SEMPRE → criador + co-organizadores ativos. No caminho
   // WhatsApp, manda cópia por e-mail mas pula o auto-WhatsApp (o wa.me entrega).
-  // No caminho e-mail/plataforma, só in-app (o mailto entrega o e-mail).
+  // No caminho e-mail/plataforma, só in-app (o mailto entrega o e-mail). Roda
+  // DEPOIS de abrir o canal externo — os awaits aqui não podem mais bloquear a
+  // navegação porque ela já aconteceu.
   var skipOpt = pend.useWhatsApp ? { skipWhatsApp: true } : true;
   var targets = [];
   if (t.creatorUid) targets.push({ uid: t.creatorUid, email: t.organizerEmail || '' });
@@ -1061,27 +1091,6 @@ window._submitContactOrg = async function(tId) {
         }, skipOpt);
       } catch (e) {}
     }
-  }
-
-  var modalEl = document.getElementById('modal-msg-org-' + tId);
-  if (modalEl) modalEl.remove();
-
-  // Canal externo: conversa de WhatsApp OU compositor de e-mail, já preenchido.
-  try {
-    if (pend.useWhatsApp && pend.phoneFull) {
-      window._openExternalUrl('https://wa.me/' + pend.phoneFull + '?text=' + encodeURIComponent(fullMsg));
-    } else if (pend.email && pend.email.indexOf('@') !== -1) {
-      var subject = encodeURIComponent('Torneio: ' + (t.name || ''));
-      window.open('mailto:' + pend.email + '?subject=' + subject + '&body=' + encodeURIComponent(fullMsg), '_self');
-    }
-  } catch (e) {}
-
-  if (typeof showNotification !== 'undefined') {
-    showNotification('Mensagem enviada',
-      pend.useWhatsApp ? 'Abrimos o WhatsApp e avisamos o organizador na plataforma.' :
-      (pend.email && pend.email.indexOf('@') !== -1) ? 'Abrimos seu e-mail e avisamos o organizador na plataforma.' :
-      'O organizador foi avisado na plataforma.',
-      'success');
   }
 };
 
