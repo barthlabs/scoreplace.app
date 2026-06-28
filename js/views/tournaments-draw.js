@@ -1536,18 +1536,17 @@ window.generateDrawFunction = function (tId) {
             }
         }
 
-        // ── Eliminatória SIMPLES pelo NÚCLEO ÚNICO (v4.0.25, motor canônico) ──────
-        // window._phasesEngine.genTierBracket é a MESMA chave da Fase N: semente 1×N
-        // honrada DESDE A R1 (sem o cross-seed-na-R2 antigo), BYEs resolvidos dentro do
-        // núcleo (cabeças folgam) e R2+ já ligadas via nextMatchId/nextSlot. A Dupla
-        // Eliminatória mantém a geração própria da R1 logo abaixo (o _buildDoubleElimBracket
-        // consome essas R1 + os placeholders de BYE do interleave). Fallback defensivo
-        // pro loop legado se o motor não tiver carregado.
-        var _engine = window._phasesEngine;
-        if (!isDupla && _engine && typeof _engine.genTierBracket === 'function') {
-            // Times na ORDEM do pool (shuffle já aplicado acima; p2OrderedList = ordem
+        // ── Eliminatória simples pelo motor único (genTierBracket) ───────────────
+        // genTierBracket é o MESMO chaveamento usado em qualquer fase, em qualquer
+        // posição: semente 1×N honrada desde a R1, BYEs resolvidos no motor (cabeças
+        // folgam) e R2+ já ligadas via nextMatchId/nextSlot. A Dupla Eliminatória segue
+        // na geração própria da R1 logo abaixo (o _buildDoubleElimBracket consome essas
+        // R1 + os placeholders de BYE do interleave). O motor é dependência fixa do
+        // index.html — se não estiver lá, é bug que tem que estourar, não ser mascarado.
+        if (!isDupla) {
+            // Times na ordem do pool (shuffle já aplicado; p2OrderedList = ordem
             // explícita do organizador). Cabeças VIP flutuam pro topo → recebem os BYEs
-            // (sementes altas), preservando o "VIP folga" de antes.
+            // (sementes altas), preservando o "VIP folga".
             var _teams = catParticipants.map(function (p) { return { displayName: getName(p) }; });
             if (!t.p2OrderedList && t.vips && Object.keys(t.vips).length > 0) {
                 var _vipT = [], _restT = [];
@@ -1558,17 +1557,17 @@ window.generateDrawFunction = function (tId) {
             }
             if (_teams.length === 0) return; // categoria vazia → nada a chavear
             if (_teams.length === 1) {
-                // 1 inscrito na categoria → campeão por BYE (preserva o comportamento legado).
+                // 1 inscrito na categoria → campeão por BYE.
                 var _solo = { id: 'match-' + timestamp + '-' + _matchCounter, round: 1, p1: _teams[0].displayName, p2: 'BYE (Avança Direto)', winner: _teams[0].displayName, isBye: true };
                 if (catName) _solo.category = catName;
                 matches.push(_solo); _matchCounter++;
                 return;
             }
-            // Resolução de não-potência-de-2 = 'bye' (cabeças folgam) — o caminho default
-            // da Fase 0. 'playin'/'swiss' já trataram/retornaram acima.
-            var _built = _engine.genTierBracket(_teams, undefined, 'e' + timestamp + '-c' + (_catIdx || 0), 'bye', false);
+            // Resolução de não-potência-de-2 = 'bye' (cabeças folgam). 'playin'/'swiss'
+            // já trataram/retornaram acima.
+            var _built = window._phasesEngine.genTierBracket(_teams, undefined, 'e' + timestamp + '-c' + (_catIdx || 0), 'bye', false);
             (_built.matches || []).forEach(function (m) {
-                delete m.team1Obj; delete m.team2Obj; // Fase 0 simples referencia por NOME (paridade de shape com o legado)
+                delete m.team1Obj; delete m.team2Obj; // referência por NOME (paridade de shape com o legado)
                 if (catName) m.category = catName;
                 matches.push(m);
             });
@@ -1576,7 +1575,7 @@ window.generateDrawFunction = function (tId) {
             return; // próxima categoria
         }
 
-        // Gerar partidas de 1ª Rodada (Dupla Eliminatória / fallback legado)
+        // Gerar a R1 da Dupla Eliminatória (alimenta o _buildDoubleElimBracket)
         for (var mi = 0; mi < catParticipants.length; mi += 2) {
             var p1 = catParticipants[mi];
             var p2 = mi + 1 < catParticipants.length ? catParticipants[mi + 1] : 'BYE (Avança Direto)';
