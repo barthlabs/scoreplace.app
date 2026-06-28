@@ -714,11 +714,22 @@
       return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: 'main', p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true }] };
     }
     if (dupla) {
-      // Dupla Eliminatória: a R1 do upper sai do núcleo; o lower é montado por
-      // _buildDoubleElimBracket (lê t.matches) → sinaliza needsDoubleElim pro chamador.
-      var up = genTierBracket(pool, 'upper', idPrefix + '-upper', _res, false);
-      up.needsDoubleElim = true;
-      return up;
+      // Dupla Eliminatória: gera SÓ a R1 do upper (pares na ordem do pool semeado). O
+      // upper R2+, o lower e a grande final são montados por _buildDoubleElimBracket
+      // (lê t.matches round 1) → sinaliza needsDoubleElim pro chamador. (Não usa o
+      // genTierBracket completo, que duplicaria as rodadas que o _buildDoubleElimBracket faz.)
+      var dms = [];
+      for (var di = 0; di < pool.length; di += 2) {
+        var da = pool[di], db = (di + 1 < pool.length) ? pool[di + 1] : null;
+        var dbye = !db;
+        dms.push({
+          id: idPrefix + '-u' + (di / 2), round: 1, bracket: 'upper',
+          p1: da.displayName, p2: dbye ? 'BYE (Avança Direto)' : db.displayName,
+          team1Obj: da, team2Obj: dbye ? null : db,
+          winner: dbye ? da.displayName : null, isBye: dbye, scoreP1: null, scoreP2: null
+        });
+      }
+      return { matches: dms, needsDoubleElim: true };
     }
     // Linha única = bracket 'main' (igual à Fase N) → _renderPhaseBracket renderiza por 1 render só.
     return genTierBracket(pool, 'main', idPrefix, _res, _third);

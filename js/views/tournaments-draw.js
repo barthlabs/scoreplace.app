@@ -933,7 +933,7 @@ window.generateDrawFunction = function (tId) {
     // via t._canonicalDraw). Sem geração por formato aqui. (Demais formatos seguem o
     // caminho legado nesta etapa; serão convergidos nas próximas — grupos+elim/monarch
     // viram pilha de fases, Liga vira phaseRounds[0].) Play-in/Suíço ficam no legado.
-    if (t.format === 'Eliminatórias Simples' && t.p2Resolution !== 'swiss' && t.p2Resolution !== 'playin') {
+    if ((t.format === 'Eliminatórias Simples' || t.format === 'Dupla Eliminatória') && t.p2Resolution !== 'swiss' && t.p2Resolution !== 'playin') {
         var _E0 = window._phasesEngine;
         t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
         t.currentPhaseIndex = 0; delete t._phaseMaterialized;
@@ -957,6 +957,21 @@ window.generateDrawFunction = function (tId) {
         });
         var _r0 = _E0.storePhase(t, 0, _built0);
         if (!_r0 || !_r0.ok) { showNotification(_t('draw.warning'), _t('tdraw.drawDone'), 'warning'); return; }
+        // Dupla Eliminatória: monta upper R2+ / lower / grande final a partir da R1 (lê
+        // t.matches) e tagueia tudo na fase 0. Mesmo _buildDoubleElimBracket do legado.
+        if (_built0.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {
+            window._buildDoubleElimBracket(t);
+            (t.matches || []).forEach(function (m) {
+                if (m.phaseIndex == null) m.phaseIndex = 0;
+                // Rótulos das linhas da dupla (o render único mostra por tier — sem rótulo
+                // sairia "CHAVE 1/2/3"). Vencedores / Perdedores / Grande Final.
+                if (!m.tierLabel) {
+                    if (m.bracket === 'upper') m.tierLabel = 'Chave dos Vencedores';
+                    else if (m.bracket === 'lower') m.tierLabel = 'Chave dos Perdedores';
+                    else if (m.bracket === 'grand' || m.bracket === 'grandfinal') m.tierLabel = 'Grande Final';
+                }
+            });
+        }
         t._canonicalDraw = true; t.status = 'active';
         window.AppStore.logAction(tId, 'Sorteio Realizado — ' + t.format + ' (motor canônico)');
         if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
