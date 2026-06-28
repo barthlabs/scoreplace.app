@@ -6239,6 +6239,12 @@ function setupCreateTournamentModal() {
             };
           });
           tourData.phases = [_phase1].concat(_rest);
+          // Framing CANÔNICO (dono): não existe "Grupos+Eliminatória" — são duas fases
+          // canônicas. Nomeia a fase 0 do preset como a fase canônica que ela é ("Fase de
+          // Grupos" / "Rei/Rainha"); a fase elim auto-injetada já se chama "Eliminatória".
+          if (_presetTwoPhase && tourData.phases[0]) {
+            tourData.phases[0].name = (drawModeValue === 'rei_rainha') ? 'Rei/Rainha' : 'Fase de Grupos';
+          }
         } else {
           // v3.0.x: NÃO apagar fases silenciosamente. Se está editando um torneio
           // multi-fase e o usuário NÃO removeu fases de propósito (_phasesUserTouched),
