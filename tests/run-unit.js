@@ -9,8 +9,11 @@ const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
   'tests/bracket-logic.test.js',
+  'tests/draw-cores.test.js',
   'tests/phase-transition-matrix.test.js',
   'tests/phase-adversarial.test.js',
+  'tests/phase-lifecycle.test.js',
+  'tests/elim-seed.test.js',
   'js/views/phases-engine.test.js',
   'js/views/phase-generators.test.js',
   'js/views/team-formation.test.js',

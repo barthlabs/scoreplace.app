@@ -1074,104 +1074,35 @@ window.generateDrawFunction = function (tId) {
             .filter(p => _grpTeamSize <= 1 || !!window._entryTeamMembers(p)) // v3.0.x: time por estrutura
             .map(p => (window._pName ? window._pName(p) : getName(p)));       // canônico "A / B" pra duplas (não perde o p2)
 
-        // Shuffle
-        for (let i = _grpNames.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [_grpNames[i], _grpNames[j]] = [_grpNames[j], _grpNames[i]];
-        }
-
-        // v3.1.11/12: 🎯 Cabeças de chave (toggles do organizador). Reordena ANTES da
-        // distribuição por módulo (idx % numGroups), que então espalha quem está no INÍCIO:
-        //  • VIP (t.gruposSeedVip): os marcados VIP (uid-keyed, _entryHasVip) viram cabeças,
-        //    1 por grupo.
-        //  • Categoria/nível (t.gruposSeedCategory): agrupa por categoria → o módulo espalha
-        //    cada categoria entre os grupos (equilibra os níveis; evita grupo só de fortes).
-        // Combináveis: VIPs primeiro, depois o resto ordenado por categoria. Desligados =
-        // sorteio puro (lista só embaralhada). VIP-only mantém o resto na ordem embaralhada.
-        if (t.gruposSeedVip || t.gruposSeedCategory) {
-            var _catOf = {};
-            if (t.gruposSeedCategory) {
-                participants.forEach(function (p) {
-                    var nm = window._pName ? window._pName(p) : getName(p);
-                    var cats = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : [];
-                    _catOf[nm] = (cats && cats[0]) || '~'; // sem categoria → '~' (agrupa no fim)
-                });
-            }
-            var _vipFirst = [], _rest = [];
-            _grpNames.forEach(function (n) {
-                if (t.gruposSeedVip && window._entryHasVip(t, n)) _vipFirst.push(n); else _rest.push(n);
-            });
-            if (t.gruposSeedCategory) {
-                // ordena ESTÁVEL por categoria (índice como desempate preserva o shuffle dentro
-                // da categoria) → mesma categoria adjacente → módulo distribui cada uma entre grupos.
-                _rest = _rest.map(function (n, i) { return { n: n, i: i, c: String(_catOf[n] || '~') }; })
-                    .sort(function (a, b) { return a.c < b.c ? -1 : a.c > b.c ? 1 : a.i - b.i; })
-                    .map(function (o) { return o.n; });
-            }
-            _grpNames = _vipFirst.concat(_rest);
-        }
-
+        // v4.0.24 (motor canônico — ordem do dono 27-jun): geração de grupos pelo NÚCLEO
+        // pool-based ÚNICO (draw-cores.js → _buildGroupsCore). MESMA lógica de antes
+        // (shuffle → cabeças de chave VIP/categoria → distribuição módulo/grupos-iguais →
+        // round-robin via _roundRobinSchedule → standings), agora num só lugar — a Fase 0
+        // não tem mais geração própria; a Fase N passará a usar o MESMO núcleo (então os
+        // buildPhase* duplicados saem). Comportamento idêntico (paridade: tests/draw-cores.test.js).
         const numGroups = t.gruposCount || 4;
         const classifiedPerGroup = t.gruposClassified || 2;
-        const _grpEqualOnly = t.gruposEqualOnly === true;
-
-        // Distribute participants into groups (snake draft)
-        const groups = Array.from({ length: numGroups }, (_, i) => ({
-            name: window._groupName(i),
-            participants: [],
-            standings: [],
-            rounds: []
-        }));
-
-        // v3.0.x: "Apenas grupos de mesmo tamanho" → todos os grupos com o MESMO
-        // tamanho (floor de unidades/grupos); o excedente vira SUPLENTE (lista de
-        // espera), ninguém é desativado. Sem o toggle, distribuição balanceada
-        // (modulo: alguns grupos com 1 a mais) — comportamento padrão intocado.
-        let _grpWaitNames = [];
-        if (_grpEqualOnly && numGroups > 0) {
-            const _equalSize = Math.floor(_grpNames.length / numGroups);
-            if (_equalSize >= 1) {
-                const _placed = _equalSize * numGroups;
-                for (let idx = 0; idx < _placed; idx++) {
-                    groups[idx % numGroups].participants.push(_grpNames[idx]);
-                }
-                _grpWaitNames = _grpNames.slice(_placed); // excedente → suplentes
-            } else {
-                _grpNames.forEach((name, idx) => { groups[idx % numGroups].participants.push(name); });
-            }
-        } else {
-            _grpNames.forEach((name, idx) => { groups[idx % numGroups].participants.push(name); });
-        }
-
-        // Generate round-robin matches within each group — MÉTODO DO CÍRCULO, pra
-        // rodadas BALANCEADAS: antes do 2º jogo de qualquer um, TODOS jogam o 1º;
-        // antes do 3º, todos jogam o 2º — o quanto for possível. Grupo ímpar → 1
-        // jogador FOLGA por rodada (rodízio da folga). Antes era um split guloso que
-        // deixava rodadas desbalanceadas e uma rodada-resto no fim.
-        groups.forEach((g, gi) => {
-            // v3.1.9 (motor canônico, inc 7): round-robin via núcleo COMPARTILHADO
-            // window._roundRobinSchedule (método do círculo) — mesma lógica que existia
-            // inline aqui, agora compartilhada com a Fase N (buildPhaseGroupStage).
-            // Byte-idêntico: mesma sequência de pares, mesmo nº de rodada/roundIndex.
-            var mi = 0;
-            window._roundRobinSchedule(g.participants).forEach(function (rd) {
-                var r = rd.round - 1;
-                var roundMatches = rd.pairs.map(function (pr) {
-                    var a = pr.a, b = pr.b;
-                    return {
-                        id: 'grp' + gi + '-r' + r + '-m' + (mi++) + '-' + Date.now(),
-                        p1: a, p2: b, winner: null, group: gi, roundIndex: r,
-                        label: window._safeHtml(g.name) + ' • ' + window._safeHtml(a) + ' vs ' + window._safeHtml(b)
-                    };
-                });
-                g.rounds.push({ round: rd.round, status: r === 0 ? 'active' : 'pending', matches: roundMatches });
+        var _catByName = {};
+        if (t.gruposSeedCategory) {
+            participants.forEach(function (p) {
+                var nm = window._pName ? window._pName(p) : getName(p);
+                var cats = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : [];
+                _catByName[nm] = (cats && cats[0]) || '~';
             });
-
-            // Initialize standings
-            g.standings = g.participants.map(name => ({
-                name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0
-            }));
+        }
+        const _grpCore = window._buildGroupsCore(_grpNames, {
+            numGroups: numGroups,
+            equalOnly: t.gruposEqualOnly === true,
+            seedVip: !!t.gruposSeedVip,
+            seedCategory: !!t.gruposSeedCategory,
+            isVip: function (n) { return window._entryHasVip(t, n); },
+            catOf: function (n) { return _catByName[n]; },
+            roundRobin: window._roundRobinSchedule,
+            groupName: window._groupName,
+            safeHtml: window._safeHtml
         });
+        const groups = _grpCore.groups;
+        let _grpWaitNames = _grpCore.waitNames;
 
         t.groups = groups;
         t.gruposClassified = classifiedPerGroup;
