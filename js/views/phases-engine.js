@@ -752,6 +752,24 @@
     } else if (fmt === 'groups') {
       built = genGroupsFromPool(pool, cfg, idPrefix);
     } else if (fmt === 'league') {
+      // FASE 0 (inscrição): a 1ª rodada da Liga/Suíço é gerada pelo MESMO motor
+      // incremental _generateNextRound, escrevendo o STORAGE NATIVO (t.rounds/t.standings).
+      // Preserva categorias, equilíbrio, temporada e o autoDraw da Cloud Function (que
+      // leem t.rounds). É o mesmo gerador da Fase N (lá via _phaseGenNextLeagueRound).
+      if (enroll && ctx.t && typeof window !== 'undefined' && typeof window._generateNextRound === 'function') {
+        var LT = ctx.t;
+        LT.standings = pool.map(function (p) {
+          var nm = p.displayName || p.name || '';
+          var e = { name: nm, points: 0, wins: 0, losses: 0, pointsDiff: 0, played: 0 };
+          var cs = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : [];
+          if (cs && cs.length) { e.category = cs[0]; e.categories = cs; }
+          return e;
+        });
+        LT.rounds = []; LT.status = 'active';
+        window._generateNextRound(LT);
+        var _lrc = ((LT.rounds[0] && LT.rounds[0].matches) || []).filter(function (m) { return !m.isSitOut; }).length;
+        return { kind: 'league', appliedToT: true, roundMatchCount: _lrc };
+      }
       // Cadência = eixo da cfg (mesma lógica do buildPhaseLeagueStage, p/ identidade):
       // 'incremental' → rodada-a-rodada (o chamador gera a 1ª rodada via _generateNextRound).
       if (cfg && cfg.ligaCadence === 'incremental') { built = { matches: [], players: pool.map(function (p) { return p.displayName; }), pool: pool, incrementalLeague: true }; }

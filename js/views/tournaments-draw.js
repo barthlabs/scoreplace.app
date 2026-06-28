@@ -980,31 +980,15 @@ window.generateDrawFunction = function (tId) {
     // ── Liga / Suíço Puro / Ranking: generate first round standings ──────────────────
     // Note: Swiss-as-p2Resolution (t.p2Resolution === 'swiss') is handled separately below
     if ((window._isLigaFormat(t) || t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss') && !t.p2Resolution) {
-        let participants = Array.isArray(t.participants) ? [...t.participants] : Object.values(t.participants || {});
+        // Geração pelo MOTOR ÚNICO generatePhase (inscrição = entrada da fase). A Liga/Suíço
+        // escreve o STORAGE NATIVO (t.rounds/t.standings) via _generateNextRound — preserva
+        // categorias, equilíbrio, temporada e o autoDraw da Cloud Function. Render: renderStandings.
+        var _lpool = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}))
+            .map(function (p) { var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || '')); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
+        var _lr = window._phasesEngine.generatePhase(_lpool, window._buildPhase0Cfg(t), { t: t, idPrefix: 'p0-' + Date.now() });
+        if (!_lr || !_lr.appliedToT) { showNotification(_t('draw.warning'), _t('tdraw.drawDone'), 'warning'); return; }
 
-        // Shuffle participants
-        for (let i = participants.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [participants[i], participants[j]] = [participants[j], participants[i]];
-        }
-
-        // Initialize standings (with category if applicable)
-        t.standings = participants.map(p => {
-            const name = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            var entry = { name, points: 0, wins: 0, losses: 0, pointsDiff: 0, played: 0 };
-            if (typeof p === 'object') {
-                var _pcs = window._getParticipantCategories(p);
-                if (_pcs.length > 0) { entry.category = _pcs[0]; entry.categories = _pcs; }
-            }
-            return entry;
-        });
-        t.rounds = [];
-        t.status = 'active';
-
-        // Generate first round using Swiss pairing (respects categories automatically)
-        _generateNextRound(t);
-
-        var _roundMatchCount = (t.rounds[0].matches || []).filter(function(m) { return !m.isSitOut; }).length;
+        var _roundMatchCount = (_lr.roundMatchCount != null) ? _lr.roundMatchCount : (t.rounds[0].matches || []).filter(function(m) { return !m.isSitOut; }).length;
         var _roundSitOuts = (t.rounds[0].matches || []).filter(function(m) { return m.isSitOut; }).length;
         window.AppStore.logAction(tId, `Sorteio Realizado — ${t.format}: Rodada 1 gerada com ${_roundMatchCount} partida(s)` + (_roundSitOuts ? ` e ${_roundSitOuts} folga(s)` : ''));
 
