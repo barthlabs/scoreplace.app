@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.41-beta';
+window.SCOREPLACE_VERSION = '4.0.42-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -521,7 +521,13 @@ window._devWhatsAppTip = 'Clique aqui para a sua Linha direta com o desenvolvedo
   'Estamos em versão beta — queremos ouvi-lo!';
 window._openDevWhatsApp = function () {
   var msg = encodeURIComponent('Olá! Sou usuário do scoreplace.app e gostaria de falar com o desenvolvedor.');
-  try { window.open('https://wa.me/' + window.SCOREPLACE_DEV_WHATSAPP + '?text=' + msg, '_blank', 'noopener'); } catch (e) {}
+  var url = 'https://wa.me/' + window.SCOREPLACE_DEV_WHATSAPP + '?text=' + msg;
+  // v4.0.42: abre via _openExternalUrl (anchor-click) — mesmo mecanismo robusto
+  // do botão "Falar com o organizador". Mais confiável no iOS/PWA standalone que
+  // window.open('_blank','noopener'), que o Safari às vezes bloqueia. Abre o
+  // WhatsApp direto no barthlabs com o texto já preenchido — o usuário só envia.
+  if (typeof window._openExternalUrl === 'function') window._openExternalUrl(url);
+  else { try { window.open(url, '_blank', 'noopener'); } catch (e) {} }
 };
 // HTML do botão verde "Fale com o Desenvolvedor" (reusado no dashboard e no
 // torneio). opts.extra = estilos extras; opts.height/padding/font ajustáveis.

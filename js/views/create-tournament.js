@@ -3764,8 +3764,8 @@ function setupCreateTournamentModal() {
 
     try {
       var request = {
+        // v4.0.42: sem includedRegionCodes — busca de local não é restrita ao BR.
         input: query,
-        includedRegionCodes: ['br'],
         includedPrimaryTypes: ['establishment', 'geocode'],
         language: 'pt-BR'
       };

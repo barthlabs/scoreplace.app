@@ -2235,8 +2235,10 @@
     var sugs = [];
     try {
       var result = await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        // v4.0.42: SEM includedRegionCodes — o app não é só BR. Usuário no
+        // exterior tem que conseguir achar quadra/local onde estiver; o único
+        // limitante é a distância (locationBias/haversine no _loadGoogleNearby).
         input: q,
-        includedRegionCodes: ['br'],
         includedPrimaryTypes: ['establishment'],
         language: 'pt-BR'
       });
@@ -2339,7 +2341,7 @@
       await google.maps.importLibrary('geocoding');
       var geocoder = new google.maps.Geocoder();
       return await new Promise(function(resolve) {
-        geocoder.geocode({ location: { lat: lat, lng: lng }, language: 'pt-BR', region: 'br' }, function(results, status) {
+        geocoder.geocode({ location: { lat: lat, lng: lng }, language: 'pt-BR' }, function(results, status) {
           if (status !== 'OK' || !results || results.length === 0) { resolve(null); return; }
           var preferred = ['street_address', 'route', 'premise', 'neighborhood', 'sublocality', 'locality'];
           for (var i = 0; i < preferred.length; i++) {

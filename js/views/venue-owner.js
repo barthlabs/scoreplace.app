@@ -556,8 +556,8 @@
     if (window.google && window.google.maps && window.google.maps.places) {
       try {
         var result = await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          // v4.0.42: sem includedRegionCodes — busca de local não é restrita ao BR.
           input: q,
-          includedRegionCodes: ['br'],
           includedPrimaryTypes: ['establishment'],
           language: 'pt-BR'
         });
