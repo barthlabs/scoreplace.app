@@ -6174,12 +6174,12 @@ function setupCreateTournamentModal() {
         // o botão "Avançar" já despacha multi-fase em bracket.js). Só auto-injeta em torneio NOVO
         // sem fases próprias do construtor — edição respeita o que já existe (backward-compat dos
         // torneios single-format já sorteados em prod).
-        // v4.0.x: por ora SÓ grupos_mata vira 2 fases (verificado: elim individual correto).
-        // Rei/Rainha standalone fica no caminho legado até a transição monarch→elim ser
-        // ajustada (hoje forma duplas no elim; Rei/Rainha coroa UM campeão = elim individual).
-        var _presetTwoPhase = (formatValue === 'grupos_mata');
+        // PILHA DE 2 FASES (preset): grupos_mata E Rei/Rainha standalone. Ambos verificados:
+        // a transição grupos/monarch→elim usa standings INDIVIDUAIS (fix em advanceMultiPhase:
+        // _isMonarchPrev detecta monarch da Fase 0 em t.groups) → elim INDIVIDUAL nos dois.
+        var _presetTwoPhase = (formatValue === 'grupos_mata') || (drawModeValue === 'rei_rainha' && formatValue !== 'liga');
         if (!editId && _extra.length === 0 && _presetTwoPhase) {
-          var _autoTopN = (parseInt(tourData.gruposClassified, 10) || 2);
+          var _autoTopN = (drawModeValue === 'rei_rainha') ? (parseInt(tourData.monarchClassified, 10) || 2) : (parseInt(tourData.gruposClassified, 10) || 2);
           _extra = [{
             name: 'Eliminatória', format: 'elim_simples', reiRainha: false, rounds: 1,
             monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2,

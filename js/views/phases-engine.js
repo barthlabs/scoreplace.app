@@ -1304,13 +1304,32 @@
     //  • Rei/Rainha (monarchGroups) → standings INDIVIDUAL (_computeMonarchStandings).
     //  • Fase de Grupos (t.groups, individuais OU duplas) → _groupTeamStandings
     //    (lê m.p1/m.p2; pro caso de duplas o nome "A / B" segue junto via keep).
+    // Rei/Rainha como fase ANTERIOR: detecta tanto a forma de fase posterior
+    // (t.rounds[].monarchGroups) QUANTO a Fase 0 standalone (grupos em t.groups com jogos
+    // isMonarch). Sem o 2º ramo, o monarch da Fase 0 caía em _groupTeamStandings (lê os
+    // jogos rotativos como TIMES → classificava DUPLAS → elim virava de duplas; mas
+    // Rei/Rainha coroa UM campeão = classificação e elim INDIVIDUAIS).
     var _isMonarchPrev = (t.rounds || []).some(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
+    if (!_isMonarchPrev) {
+      var _curIdxM = t.currentPhaseIndex || 0;
+      var _prevGM = (_curIdxM === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _curIdxM);
+      _isMonarchPrev = (_prevGM || []).some(function (g) {
+        var ms = (g.matches || []).concat((g.rounds || []).reduce(function (a, r) { return a.concat(r.matches || []); }, []));
+        return ms.some(function (m) { return m && m.isMonarch; });
+      });
+    }
     // v2.6.95 (Chunk 5): passa os tiebreakers configurados + datas de nascimento
     // (antiguidade/juventude) pro _groupTeamStandings, pra classificação na transição
     // respeitar a ordem que o organizador definiu.
     var _tbOpts = { tiebreakers: t.tiebreakers, birthByName: (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {} };
     var cs = _isMonarchPrev
-      ? (window._computeMonarchStandings || function (g) { return g.standings || []; })
+      ? function (g) {
+          // standings INDIVIDUAL do grupo Rei/Rainha. Achata jogos de g.matches (fase
+          // posterior) E g.rounds[].matches (Fase 0 standalone) → _computeMonarchStandings.
+          if (typeof window._computeMonarchStandings !== 'function') return g.standings || [];
+          var ms = (g.matches || []).concat((g.rounds || []).reduce(function (a, r) { return a.concat(r.matches || []); }, []));
+          return window._computeMonarchStandings({ players: g.players || [], matches: ms });
+        }
       : function (g) { return _groupTeamStandings(g, _tbOpts); };
     // v2.7.24: se alguma LINHA da próxima fase NÃO for potência de 2 e o organizador
     // ainda não escolheu como resolver → PERGUNTA (painel) em vez de aplicar BYE
