@@ -674,19 +674,65 @@
   // Despacha por FORMATO (classifyPhaseFormat) + MODO (isMonarchDraw — Rei/Rainha é modo,
   // não formato). Eliminatória usa o núcleo único genTierBracket (linha única; tiers
   // Ouro/Prata da Fase N são extensão sobre o MESMO núcleo, em buildPhaseBrackets).
+  function _shufflePool(a) {
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  // Ordena o pool da INSCRIÇÃO segundo os eixos de seeding (cabeças VIP, equilíbrio por
+  // categoria). Após o seeding, a distribuição serpentina (grupos) ou a semente 1×N (elim)
+  // ESPALHA os cabeças. Eixos vêm da cfg; os predicados (isVip/catOf) vêm do ctx.
+  function _seedEnrollmentPool(pool, cfg, ctx) {
+    var out = pool.slice();
+    if (cfg && cfg.seedCategory && ctx && typeof ctx.catOf === 'function') {
+      out = out.map(function (e, i) { return { e: e, i: i, c: String(ctx.catOf(e) || '~') }; })
+        .sort(function (a, b) { return a.c < b.c ? -1 : a.c > b.c ? 1 : a.i - b.i; }).map(function (o) { return o.e; });
+    }
+    if (cfg && cfg.seedVip && ctx && typeof ctx.isVip === 'function') {
+      var vip = [], rest = [];
+      out.forEach(function (e) { (ctx.isVip(e) ? vip : rest).push(e); });
+      out = vip.concat(rest);
+    }
+    return out;
+  }
+
+  // generatePhase — O GERADOR ÚNICO. Recebe um POOL de entrantes + cfg → estrutura
+  // (flat tagueada). Em QUALQUER posição:
+  //  • Fase 0  → cfg.source.type==='enrollment': aplica os EIXOS da inscrição
+  //              (embaralhar, cabeças VIP/categoria) antes de gerar. teamSize/dupla e
+  //              resolução pot-2 são tratados pelo chamador na montagem do pool/cfg.
+  //  • Fase N  → pool já ranqueado pela transição: sem embaralhar (semente preservada).
+  // Categorias: o chamador separa o pool por categoria e chama 1× por categoria (cada
+  // chamada tagueia matches com cfg.category). Liga incremental devolve {incrementalLeague}.
   function generatePhase(pool, cfg, ctx) {
     ctx = ctx || {};
     var idPrefix = ctx.idPrefix || 'gp';
-    pool = pool || [];
-    if (isMonarchDraw(cfg)) return genMonarchFromPool(pool, cfg, idPrefix);
-    switch (classifyPhaseFormat(cfg)) {
-      case 'groups': return genGroupsFromPool(pool, cfg, idPrefix);
-      case 'league': return genLeagueFromPool(pool, cfg, idPrefix);
-      default:
-        var _res = (cfg && cfg.bracketResolution) || 'bye';
-        var _third = cfg ? (cfg.thirdPlace !== false) : true;
-        return genTierBracket(pool, undefined, idPrefix, _res, _third);
+    pool = (pool || []).slice();
+    var enroll = !!(cfg && cfg.source && cfg.source.type === 'enrollment');
+    if (enroll && !ctx.ordered) {
+      pool = _shufflePool(pool);
+      pool = _seedEnrollmentPool(pool, cfg, ctx);
     }
+    var built;
+    if (isMonarchDraw(cfg)) {
+      built = genMonarchFromPool(pool, cfg, idPrefix);
+    } else {
+      switch (classifyPhaseFormat(cfg)) {
+        case 'groups': built = genGroupsFromPool(pool, cfg, idPrefix); break;
+        case 'league':
+          // Cadência = eixo da cfg (mesma lógica do buildPhaseLeagueStage, p/ identidade):
+          // 'incremental' → rodada-a-rodada (pool; o chamador gera a 1ª rodada via
+          // _generateNextRound). Caso contrário (incl. 'round_robin'/ausente) → estático.
+          if (cfg && cfg.ligaCadence === 'incremental') { built = { matches: [], players: pool.map(function (p) { return p.displayName; }), pool: pool, incrementalLeague: true }; }
+          else { built = genLeagueFromPool(pool, cfg, idPrefix); }
+          break;
+        default:
+          var _res = (cfg && cfg.bracketResolution) || 'bye';
+          var _third = cfg ? (cfg.thirdPlace !== false) : true;
+          built = genTierBracket(pool, undefined, idPrefix, _res, _third);
+      }
+    }
+    if (cfg && cfg.category != null) (built.matches || []).forEach(function (m) { if (m.category == null) m.category = cfg.category; });
+    return built;
   }
 
   // Uma config de fase é Liga / Pontos Corridos (round-robin, tabela única)?
