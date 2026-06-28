@@ -61,19 +61,49 @@
   // Sem DSN — sai limpo. Os no-ops acima já estão ativos.
   if (!DSN) return;
 
+  // ── 2b. Recuperação do bug FATAL do Firestore (SDK 10.8.1) ─────────────────
+  // "INTERNAL ASSERTION FAILED: Unexpected state": a AsyncQueue do Firestore "falha" e
+  // NÃO se recupera — TODA chamada seguinte morre em cascata (Sentry SCOREPLACE-WEB-67).
+  // Único conserto em runtime é recarregar a página. Aqui: detecta o erro e faz UM reload
+  // GUARDADO — só quando _isSafeToReload() (nunca no meio de um placar ao vivo) e no máximo
+  // 1x por sessão. Se nunca for seguro em ~60s, desiste sem recarregar (não interrompe).
+  // Causa-raiz atacada em paralelo: synchronizeTabs removido (firebase-db.js). Fix
+  // definitivo = subir o SDK.
+  var _fsRecovering = false;
+  function _fsFatal(s) { return /INTERNAL ASSERTION FAILED|Unexpected state/i.test(String(s || '')); }
+  function _maybeRecoverFirestore(text) {
+    if (_fsRecovering || !_fsFatal(text)) return;
+    try { if (sessionStorage.getItem('sp_fsRecovered')) return; } catch (_) { }
+    _fsRecovering = true;
+    var tries = 0;
+    (function attempt() {
+      var safe = (typeof window._isSafeToReload !== 'function') || window._isSafeToReload();
+      if (!safe) {
+        if (tries++ < 12) { setTimeout(attempt, 5000); return; }
+        _fsRecovering = false; return; // nunca ficou seguro → não interrompe o usuário
+      }
+      try { sessionStorage.setItem('sp_fsRecovered', '1'); } catch (_) { }
+      try { if (typeof window.showNotification === 'function') window.showNotification('🔄 Reconectando', 'Recuperando a conexão com o servidor…', 'info'); } catch (_) { }
+      setTimeout(function () { try { window.location.reload(); } catch (_) { } }, 1200);
+    })();
+  }
+
   // ── 3. Capturar erros DO MOMENTO ZERO até o SDK carregar ───────────────────
   // window.onerror handler temporário que enche o buffer. Quando o SDK
   // termina de carregar e drena o buffer, o handler nativo do Sentry assume.
   var _origOnError = window.onerror;
   window.onerror = function (msg, src, line, col, err) {
     _preInitBuffer.push({ kind: 'onerror', msg: msg, src: src, line: line, col: col, err: err });
+    _maybeRecoverFirestore((err && err.message) || msg);
     if (typeof _origOnError === 'function') return _origOnError.apply(this, arguments);
     return false;
   };
 
   var _origOnRejection = window.onunhandledrejection;
   window.onunhandledrejection = function (event) {
-    _preInitBuffer.push({ kind: 'rejection', reason: event && event.reason });
+    var _reason = event && event.reason;
+    _preInitBuffer.push({ kind: 'rejection', reason: _reason });
+    _maybeRecoverFirestore(_reason && (_reason.message || _reason));
     if (typeof _origOnRejection === 'function') return _origOnRejection.apply(this, arguments);
   };
 

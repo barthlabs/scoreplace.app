@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.22-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(27 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.23-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(27 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🔧 Menos travamentos de conexão:</b> corrigimos um erro do servidor que, em algumas situações (principalmente com o app aberto em <b>várias abas</b>), podia travar o carregamento e o salvamento. Agora o app evita esse cenário e, se mesmo assim acontecer, <b>se recupera sozinho</b> (recarrega na hora certa — nunca no meio de um placar ao vivo).</li>' +
+        '<li><b>👑 Classificação certa no Rei/Rainha de várias fases:</b> em torneios com fase Rei/Rainha que alimenta a fase seguinte, a classificação agora é <b>individual</b> (por pessoa), como deve ser — garantindo que <b>avançam as pessoas certas</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.22-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(27 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🖼️ Foto de fundo do torneio:</b> na criação/edição, logo abaixo do logo, o organizador pode <b>definir uma foto de fundo</b> pro torneio. Quando definida, ela <b>substitui a foto do Google</b> nos cards, no detalhe e no Modo TV. Ao escolher, dá pra <b>dar zoom e arrastar pra enquadrar sem distorcer</b> (e clarear/escurecer pra leitura). O enquadramento mostra uma <b>faixa central tracejada = o que aparece no celular em pé (retrato)</b>, com as margens cortadas escurecidas.</li>' +
         '<li><b>📍 Box do Local mais organizado (detalhe):</b> botão <b>📍 Place dourado com pino</b> (igual ao da dashboard) e <b>mapa</b> alinhados à direita (Place em cima, mapa abaixo), brasão do local no canto inferior direito, e o nome/endereço ganham mais espaço à esquerda.</li>' +

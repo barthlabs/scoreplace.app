@@ -4,7 +4,8 @@
   "private": true,
   "description": "scoreplace.app — vanilla JS SPA. Package.json existe apenas para devDependencies de tooling (Playwright, Lighthouse). NÃO há build step nem bundler — index.html serve js/ e css/ direto.",
   "scripts": {
-    "test": "node tests/test-utils.js",
+    "test": "node tests/run-unit.js",
+    "test:unit": "node tests/run-unit.js",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",

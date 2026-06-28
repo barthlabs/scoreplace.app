@@ -883,6 +883,38 @@
     return pm.every(function (m) { return m.winner || m.isBye; });
   }
 
+  // ESPELHO de phaseComplete: enumera os JOGOS PENDENTES da fase atual (sem vencedor,
+  // não-BYE, não-folga), nos MESMOS 3 formatos que phaseComplete varre. Usado pelo painel
+  // de resolução de pendentes (organizador decide: W.O. / lançar / liberar com prazo) antes
+  // de avançar de fase. Retorna [{ match, groupIdx?, groupName?, round?, bracket? }].
+  function pendingMatches(t) {
+    if (!isMultiPhase(t)) return [];
+    var cur = t.currentPhaseIndex || 0;
+    var out = [];
+    if (cur === 0) {
+      var groups = prevPhaseGroups(t);
+      groups.forEach(function (g, gi) {
+        var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
+        (ms || []).forEach(function (m) {
+          if (m && !m.winner && !m.isBye && !m.isSitOut) out.push({ match: m, groupIdx: gi, groupName: g.name || ('Grupo ' + (gi + 1)) });
+        });
+      });
+      return out;
+    }
+    var _liSlot = t.phaseRounds && t.phaseRounds[cur];
+    if (_liSlot && Array.isArray(_liSlot.rounds)) {
+      _liSlot.rounds.forEach(function (r) {
+        (r.matches || []).forEach(function (m) {
+          if (m && !m.winner && !m.isBye && !m.isSitOut) out.push({ match: m, round: r.round });
+        });
+      });
+      return out;
+    }
+    (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; })
+      .forEach(function (m) { if (m && !m.winner && !m.isBye) out.push({ match: m, bracket: m.bracket, round: m.round }); });
+    return out;
+  }
+
   // ── Fase 1+ → próxima fase: derivar colocações de uma CHAVE já jogada ─────────
   // (v2.6.94, Motor Chunk 4 — encadeamento além de 0→1.)
 
@@ -961,13 +993,29 @@
     // v3.1: fase anterior é LIGA (tabela única) → 1 grupo com a classificação geral.
     var leagueMs = pm.filter(function (m) { return m.bracket === 'league'; });
     if (leagueMs.length) {
+      var lname = (t.phases[phaseIdx] && t.phases[phaseIdx].name) || ('Fase ' + (phaseIdx + 1));
+      // Liga incremental em forma REI/RAINHA: pontuação é INDIVIDUAL (parceiro rotativo a
+      // cada rodada), então a classificação ranqueia PESSOAS — nunca as duplas efêmeras de
+      // cada rodada. Sem este ramo o feed-forward usava _groupTeamStandings e devolvia
+      // duplas em número variável conforme o sorteio (bug de correção: avançava quem não
+      // devia; e flaky no phase-brick4 — às vezes 8 duplas, às vezes 6/7). Corrigido na
+      // Fase 2 de testes do roadmap 1.0 (jun/2026).
+      if (leagueMs.some(function (m) { return m.isMonarch; })) {
+        var lnamesI = {};
+        leagueMs.forEach(function (m) {
+          (m.team1 || []).concat(m.team2 || []).forEach(function (n) {
+            lnamesI[n] = nameTeam[n] || { name: n, displayName: n };
+          });
+        });
+        var lstI = _monarchStandings(leagueMs, Object.keys(lnamesI));
+        return [{ name: lname, standings: lstI.map(function (s) { return lnamesI[s.name] || { name: s.name, displayName: s.name }; }) }];
+      }
       var lobjs = {};
       leagueMs.forEach(function (m) {
         if (m.team1Obj && m.team1Obj.displayName) lobjs[m.team1Obj.displayName] = m.team1Obj;
         if (m.team2Obj && m.team2Obj.displayName) lobjs[m.team2Obj.displayName] = m.team2Obj;
       });
       var lst = _groupTeamStandings({ matches: leagueMs, players: Object.keys(lobjs) });
-      var lname = (t.phases[phaseIdx] && t.phases[phaseIdx].name) || ('Fase ' + (phaseIdx + 1));
       return [{ name: lname, standings: lst.map(function (s) { return lobjs[s.name] || { name: s.name, displayName: s.name }; }) }];
     }
 
@@ -1230,6 +1278,7 @@
     prevPhaseGroups: prevPhaseGroups,
     bracketPhaseGroups: bracketPhaseGroups,
     phaseComplete: phaseComplete,
+    pendingMatches: pendingMatches,
     materializeNextPhase: materializeNextPhase,
     groupTeamStandings: _groupTeamStandings,
     resolveRepechage: resolveRepechage
@@ -1241,6 +1290,7 @@
     window._isMultiPhase = isMultiPhase;
     window._roundRobinSchedule = roundRobinSchedule; // núcleo compartilhado Fase 0/N (inc 7)
     window._phasesPhaseComplete = phaseComplete;
+    window._phasesPendingMatches = pendingMatches;
     window._advanceMultiPhase = advanceMultiPhase;
     window._resolveRepechage = resolveRepechage;
   }
