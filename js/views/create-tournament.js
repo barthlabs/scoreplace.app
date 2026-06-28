@@ -6167,7 +6167,29 @@ function setupCreateTournamentModal() {
             scoring: (tourData.scoring && tourData.scoring.type) ? tourData.scoring : null
           };
         }
-        var _extra = Array.isArray(window._extraPhases) ? window._extraPhases : [];
+        var _extra = Array.isArray(window._extraPhases) ? window._extraPhases.slice() : [];
+        // PILHA DE 2 FASES (preset, decisão do dono 28-jun): "Fase de Grupos + Eliminatórias"
+        // e Rei/Rainha (standalone) viram phases=[grupos/monarch, eliminatória]. A transição
+        // grupos→elim deixa de ser avanço INTERNO e passa pelo motor multi-fase (advanceMultiPhase;
+        // o botão "Avançar" já despacha multi-fase em bracket.js). Só auto-injeta em torneio NOVO
+        // sem fases próprias do construtor — edição respeita o que já existe (backward-compat dos
+        // torneios single-format já sorteados em prod).
+        // v4.0.x: por ora SÓ grupos_mata vira 2 fases (verificado: elim individual correto).
+        // Rei/Rainha standalone fica no caminho legado até a transição monarch→elim ser
+        // ajustada (hoje forma duplas no elim; Rei/Rainha coroa UM campeão = elim individual).
+        var _presetTwoPhase = (formatValue === 'grupos_mata');
+        if (!editId && _extra.length === 0 && _presetTwoPhase) {
+          var _autoTopN = (parseInt(tourData.gruposClassified, 10) || 2);
+          _extra = [{
+            name: 'Eliminatória', format: 'elim_simples', reiRainha: false, rounds: 1,
+            monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2,
+            sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: _autoTopN,
+            scope: 'per_group', fixedPairs: teamSizeVal > 1, pairingStrategy: 'top', grandFinal: true,
+            woScope: tourData.woScope || 'individual', rankingType: 'individual',
+            resultEntry: tourData.resultEntry, advancedScoring: null, lateEnrollment: 'closed',
+            drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null
+          }];
+        }
         if (_extra.length > 0) {
           var _phase1 = _buildPhase0();
           var _rest = _extra.map(function(ph, _ei) {
