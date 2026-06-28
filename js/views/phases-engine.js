@@ -557,9 +557,17 @@
 
     var groups = [];
     for (var gi = 0; gi < nGroups; gi++) groups.push({ name: 'Grupo ' + String.fromCharCode(65 + gi), groupIdx: gi, players: [], matches: [] });
+    // "Apenas grupos de mesmo tamanho" (cfg.gruposEqualOnly): todos os grupos com o MESMO
+    // tamanho (floor de pool/grupos); o excedente vira SUPLENTE (waitlist → storePhase manda
+    // pra t.standbyParticipants). Eixo da fase, igual ao legado da Fase 0 — não se perde a função.
+    var _placePool = pool, _waitlist = [];
+    if (phaseCfg && phaseCfg.gruposEqualOnly && nGroups > 0) {
+      var _eq = Math.floor(pool.length / nGroups);
+      if (_eq >= 1) { _placePool = pool.slice(0, _eq * nGroups); _waitlist = pool.slice(_eq * nGroups); }
+    }
     // Serpentina: ida 0..n-1, volta n-1..0 — cabeças (pool já ordenado por força) caem
     // em grupos distintos e o equilíbrio fica melhor que blocos contíguos.
-    pool.forEach(function (tm, i) {
+    _placePool.forEach(function (tm, i) {
       var round = Math.floor(i / nGroups);
       var pos = i % nGroups;
       var gIdx = (round % 2 === 0) ? pos : (nGroups - 1 - pos);
@@ -586,7 +594,9 @@
         });
       });
     });
-    return { matches: allMatches, groups: groups };
+    var _ret = { matches: allMatches, groups: groups };
+    if (_waitlist.length) _ret.waitlist = _waitlist;  // suplentes (grupos de mesmo tamanho) → storePhase → standbyParticipants
+    return _ret;
   }
 
   function buildPhaseGroupStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
@@ -976,6 +986,30 @@
 
   // Grupos da fase anterior: última rodada Rei/Rainha com monarchGroups; senão
   // t.groups (estilo Grupos+Elim).
+  // Reconstrói grupos CRUS (name, players, matches) a partir de t.matches taggeado por
+  // fase (m.phaseIndex) e por grupo (m.bracket 'group'/'monarch' + m.groupIdx). É a leitura
+  // ÚNICA do storage canônico de grupos/monarca — usada pelo prevPhaseGroups (avanço/
+  // standings) quando a fase 0 foi desenhada pelo motor (não há t.groups/t.rounds nativo).
+  // Devolve os JOGOS crus (não standings prontas) porque phaseComplete checa decididos e o
+  // cs (computeMonarch/groupTeamStandings) lê g.players + g.matches.
+  function _groupsFromTaggedMatches(t, phaseIdx) {
+    var pm = (t.matches || []).filter(function (m) {
+      return (m.phaseIndex || 0) === phaseIdx && (m.bracket === 'group' || m.bracket === 'monarch' || m.isMonarch);
+    });
+    if (!pm.length) return [];
+    var byG = {}, order = [];
+    pm.forEach(function (m) {
+      var k = (m.groupIdx != null) ? m.groupIdx : (m.monarchGroup != null ? m.monarchGroup : (m.group != null ? m.group : 0));
+      if (!byG[k]) { byG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + (parseInt(k, 10) || 0))), groupIdx: parseInt(k, 10) || 0, players: [], _seen: {}, matches: [] }; order.push(k); }
+      byG[k].matches.push(m);
+      var ps = (m.isMonarch || m.bracket === 'monarch') ? (m.team1 || []).concat(m.team2 || []) : [m.p1, m.p2];
+      ps.forEach(function (n) { if (n && n !== 'BYE' && n !== 'TBD' && n !== 'BYE (Avança Direto)' && !byG[k]._seen[n]) { byG[k]._seen[n] = 1; byG[k].players.push(n); } });
+    });
+    return order.sort(function (a, b) { return byG[a].groupIdx - byG[b].groupIdx; }).map(function (k) {
+      var g = byG[k]; return { name: g.name, groupIdx: g.groupIdx, players: g.players, matches: g.matches };
+    });
+  }
+
   function prevPhaseGroups(t) {
     var rounds = t.rounds || [];
     for (var i = rounds.length - 1; i >= 0; i--) {
@@ -983,7 +1017,8 @@
       if (r && Array.isArray(r.monarchGroups) && r.monarchGroups.length) return r.monarchGroups;
     }
     if (Array.isArray(t.groups) && t.groups.length) return t.groups;
-    return [];
+    // Storage canônico: grupos/monarca da fase 0 moram em t.matches taggeado.
+    return _groupsFromTaggedMatches(t, 0);
   }
 
   // A fase ATUAL está completa? (libera o avanço)

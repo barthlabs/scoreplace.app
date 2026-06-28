@@ -781,6 +781,7 @@ window._buildPhase0Cfg = function (t) {
         reiRainha: rei,
         gruposCount: parseInt(t.gruposCount, 10) || 4,
         gruposClassified: parseInt(t.gruposClassified, 10) || 2,
+        gruposEqualOnly: t.gruposEqualOnly === true,
         teamSize: parseInt(t.teamSize, 10) || 1,
         // Elim: cabeças VIP SEMPRE sobem ao topo (recebem os BYEs = "VIP folga"). Grupos:
         // só quando o organizador liga o toggle (gruposSeedVip → espalha pelos grupos).
@@ -927,18 +928,19 @@ window.generateDrawFunction = function (tId) {
         t.drawVisibility = 'public';
     }
 
-    // ── ETAPA 1 do motor canônico: Eliminatória Simples pela Fase 0 = índice 0 ────────
-    // A inscrição é a ENTRADA da fase: generateDrawFunction monta a cfg0 e chama o MESMO
-    // generatePhase+storePhase das fases seguintes; o render é ÚNICO (_renderPhaseBracket
-    // via t._canonicalDraw). Sem geração por formato aqui. (Demais formatos seguem o
-    // caminho legado nesta etapa; serão convergidos nas próximas — grupos+elim/monarch
-    // viram pilha de fases, Liga vira phaseRounds[0].) Play-in/Suíço ficam no legado.
-    if ((t.format === 'Eliminatórias Simples' || t.format === 'Dupla Eliminatória') && t.p2Resolution !== 'swiss' && t.p2Resolution !== 'playin') {
+    // ── MOTOR CANÔNICO: a primeira fase (índice 0) é desenhada pelo MESMO generatePhase das
+    // fases seguintes. A INSCRIÇÃO é a entrada da fase. SEM switch por t.format: o FORMATO
+    // (Eliminatória/Grupos/Liga), o MODO (Rei/Rainha) e os eixos (categoria, VIP, dupla,
+    // grupos-iguais, resolução de pot-2) são cfg que o generatePhase honra. Storage e render
+    // ÚNICOS (storePhase tagueia t.matches por fase, ou t.rounds nativo pra Liga/Suíço;
+    // _renderPhaseBracket via t._canonicalDraw; o avanço lê grupos/monarca de t.matches via
+    // prevPhaseGroups). Só Play-in e Suíço-classificatório (escolhas de p2Resolution, NÃO
+    // formatos) seguem nas suas resoluções abaixo.
+    // (contrato project_unify_initial_phase_canonical — fim do caminho não-canônico da fase 0.)
+    if (t.p2Resolution !== 'swiss' && t.p2Resolution !== 'playin') {
         var _E0 = window._phasesEngine;
-        t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
-        t.currentPhaseIndex = 0; delete t._phaseMaterialized;
         var _cfg0 = window._buildPhase0Cfg(t);
-        // Formação de duplas (eixo da inscrição) — pool-prep, não geração de chave.
+        // Formação de duplas (eixo da inscrição) quando teamSize > 1 — pool-prep, não chave.
         var _ts0 = parseInt(t.teamSize, 10) || 1;
         var _enr0 = t.enrollmentMode || t.enrollment || 'individual';
         if ((_enr0 === 'time' || _enr0 === 'misto') && _ts0 < 2) _ts0 = 2;
@@ -946,7 +948,17 @@ window.generateDrawFunction = function (tId) {
             if (!t.teamOrigins) t.teamOrigins = {};
             var _f0 = _formDoublesTeams(Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}), _ts0, t.teamOrigins, t._drawBalanceMode);
             t.participants = _f0.participants;
+            if (t._drawBalanceMode === 'equilibrado' && _f0.allMaleCount > 0 && typeof showNotification !== 'undefined') {
+                showNotification('⚖️ Sorteio equilibrado', _f0.allMaleCount + ' dupla(s) ficaram 100% masculinas — não havia mulheres suficientes pra cobrir todas.', 'warning');
+            }
+            if (t.mixedPairingSeparated && _enr0 === 'misto' && _ts0 === 2 && typeof window._applyMixedOriginCategories === 'function') {
+                window._applyMixedOriginCategories(t, t.participants);
+            }
         }
+        // Reset do storage stale da fase 0 (generatePhase/storePhase reescrevem t.matches
+        // taggeado, ou t.rounds/t.standings nativo no caso da Liga/Suíço).
+        t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
+        t.currentPhaseIndex = 0; delete t._phaseMaterialized;
         var _pool0 = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}))
             .filter(function (p) { return _ts0 <= 1 || !!window._entryTeamMembers(p) || (typeof p === 'object' && !p.p1Name && !Array.isArray(p.participants)); })
             .map(function (p) { var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || '')); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
@@ -955,14 +967,30 @@ window.generateDrawFunction = function (tId) {
             isVip: function (e) { return window._entryHasVip(t, e); },
             catOf: function (e) { var c = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(e) : []; return (c && c[0]) || ''; }
         });
+
+        // Liga / Suíço (cadência incremental): generatePhase já escreveu t.rounds/t.standings
+        // via _generateNextRound (storage NATIVO, lido por renderStandings/autoDraw da CF).
+        if (_built0 && _built0.appliedToT) {
+            t._canonicalDraw = true; t.status = 'active';
+            var _lrc = (_built0.roundMatchCount != null) ? _built0.roundMatchCount : ((t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return !m.isSitOut; }).length);
+            var _lso = (t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return m.isSitOut; }).length;
+            window.AppStore.logAction(tId, `Sorteio Realizado — ${t.format}: Rodada 1 gerada com ${_lrc} partida(s)` + (_lso ? ` e ${_lso} folga(s)` : '') + ' [motor canônico]');
+            if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
+            showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: _lrc }), 'success');
+            if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
+            window._lastActiveTournamentId = tId;
+            window.AppStore.syncImmediate(tId).then(function () {
+                if (typeof _notifyLigaRoundWhatsApp === 'function') _notifyLigaRoundWhatsApp(t, 0);
+                window.location.hash = '#bracket/' + tId;
+            });
+            return;
+        }
+
+        // Eliminatória / Grupos / Rei-Rainha: matches flat taggeados na fase 0 via storePhase.
         var _r0 = _E0.storePhase(t, 0, _built0);
         if (!_r0 || !_r0.ok) { showNotification(_t('draw.warning'), _t('tdraw.drawDone'), 'warning'); return; }
-        // Dupla Eliminatória: monta upper R2+ / lower / grande final a partir da R1 (lê
-        // t.matches) e tagueia tudo na fase 0. Mesmo _buildDoubleElimBracket do legado.
-        // Dupla Eliminatória CLÁSSICA: _buildDoubleElimBracket monta upper R2+/lower/grande
-        // final a partir da R1 (perdedor da superior CAI pra inferior; 3º = perdedor da
-        // final inferior, SEM jogo de 3º). O render usa o layout dedicado
-        // (renderDoubleElimBracket: Chave Superior/Inferior + Grande Final).
+        // Dupla Eliminatória clássica: _buildDoubleElimBracket monta upper R2+/lower/grande
+        // final a partir da R1 (lê t.matches) e tagueia tudo na fase 0. Mesmo do legado.
         if (_built0.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {
             window._buildDoubleElimBracket(t);
             (t.matches || []).forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
@@ -977,249 +1005,11 @@ window.generateDrawFunction = function (tId) {
         return;
     }
 
-    // ── Liga / Suíço Puro / Ranking: generate first round standings ──────────────────
-    // Note: Swiss-as-p2Resolution (t.p2Resolution === 'swiss') is handled separately below
-    if ((window._isLigaFormat(t) || t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss') && !t.p2Resolution) {
-        // Geração pelo MOTOR ÚNICO generatePhase (inscrição = entrada da fase). A Liga/Suíço
-        // escreve o STORAGE NATIVO (t.rounds/t.standings) via _generateNextRound — preserva
-        // categorias, equilíbrio, temporada e o autoDraw da Cloud Function. Render: renderStandings.
-        var _lpool = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}))
-            .map(function (p) { var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || '')); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
-        var _lr = window._phasesEngine.generatePhase(_lpool, window._buildPhase0Cfg(t), { t: t, idPrefix: 'p0-' + Date.now() });
-        if (!_lr || !_lr.appliedToT) { showNotification(_t('draw.warning'), _t('tdraw.drawDone'), 'warning'); return; }
-
-        var _roundMatchCount = (_lr.roundMatchCount != null) ? _lr.roundMatchCount : (t.rounds[0].matches || []).filter(function(m) { return !m.isSitOut; }).length;
-        var _roundSitOuts = (t.rounds[0].matches || []).filter(function(m) { return m.isSitOut; }).length;
-        window.AppStore.logAction(tId, `Sorteio Realizado — ${t.format}: Rodada 1 gerada com ${_roundMatchCount} partida(s)` + (_roundSitOuts ? ` e ${_roundSitOuts} folga(s)` : ''));
-
-        if (document.getElementById('final-review-panel')) document.getElementById('final-review-panel').remove(); document.body.style.overflow = '';
-        showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: _roundMatchCount }), 'success');
-
-        // Notify all participants — personalized per recipient (shows their match)
-        if (typeof window._notifyDrawPersonalized === 'function') {
-            window._notifyDrawPersonalized(t, tId);
-        }
-
-        // Save immediately to Firestore, then navigate
-        window.AppStore.syncImmediate(tId).then(function() {
-            // Notify Liga round via WhatsApp (fire-and-forget)
-            if (typeof _notifyLigaRoundWhatsApp === 'function') {
-                _notifyLigaRoundWhatsApp(t, 0);
-            }
-            window.location.hash = `#bracket/${tId}`;
-        });
-        return;
-    }
-
-    // ── Rei/Rainha da Praia ──────────────────────────────────────────
-    if (t.format === 'Rei/Rainha da Praia') {
-        let participants = Array.isArray(t.participants) ? [...t.participants] : Object.values(t.participants || {});
-        const getName = (p) => typeof p === 'string' ? p : (p.displayName || p.name || '');
-
-        if (participants.length < 4) {
-            showAlertDialog(_t('monarch.minParticipantsTitle'), _t('monarch.minParticipants'), null, { type: 'warning' });
-            return;
-        }
-
-        // v4.0.26 (motor canônico): grupos de Rei/Rainha pelo NÚCLEO ÚNICO
-        // window._buildMonarchCore (draw-cores.js) — shuffle → grupos de 4 → 3 jogos
-        // de PARCEIRO ROTATIVO pelo _buildMonarchGroup (a MESMA fonte de pairings da
-        // Liga Rei/Rainha e da Fase N). A Fase 0 não monta mais os pares inline; a
-        // sobra volta como leftOut (mesmo aviso de antes). Comportamento idêntico
-        // (paridade: tests/draw-cores + tests/phase0-monarch).
-        const _monNames = participants.map(getName);
-        const _monCore = window._buildMonarchCore(_monNames, {
-            buildMonarchGroup: window._buildMonarchGroup,
-            groupName: window._groupName
-        });
-        const groups = _monCore.groups;
-        const numGroups = groups.length;
-        const remainder = _monCore.leftOut.length;
-
-        // Sobra (não fechou grupo de 4): fica de fora com aviso (legado mantido).
-        if (remainder > 0) {
-            showNotification(_t('draw.warning'), _t('tdraw.monarchWarningMsg', { n: remainder }), 'warning');
-        }
-
-        t.groups = groups;
-        t.currentStage = 'groups';
-        t.status = 'active';
-        window.AppStore.logAction(tId, _t('monarch.drawDone') + ' — ' + numGroups + ' grupos de 4');
-
-        // Notify participants — personalized per recipient
-        if (typeof window._notifyDrawPersonalized === 'function') {
-            window._notifyDrawPersonalized(t, tId);
-        }
-        if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-            window.FirestoreDB.saveTournament(t).then(function() {
-                showNotification(_t('monarch.drawDone'), _t('monarch.groupsFormed', {count: numGroups}), 'success');
-                window.location.hash = '#bracket/' + tId;
-            });
-        } else {
-            window.FirestoreDB.saveTournament(t);
-            showNotification(_t('monarch.drawDone'), _t('monarch.groupsFormed', {count: numGroups}), 'success');
-            window.location.hash = '#bracket/' + tId;
-        }
-        return;
-    }
-
-    // ── Fase de Grupos + Eliminatórias ──────────────────────────────
-    if (t.format === 'Fase de Grupos + Eliminatórias') {
-        let participants = Array.isArray(t.participants) ? [...t.participants] : Object.values(t.participants || {});
-        const getName = (p) => typeof p === 'string' ? p : (p.displayName || p.name || '');
-
-        // v3.0.x: DEFENSIVO contra ACÚMULO de suplentes em re-sorteios. A lista de
-        // espera é SEMPRE derivada (o excedente DESTE sorteio) — então zera aqui antes
-        // de montar. Quem está na espera e ainda NÃO está representado no pool (por
-        // uid/email/nome, inclusive como integrante de dupla) volta pro pool; quem já
-        // está (ex.: integrante da dupla excedente) é ignorado pra não duplicar. Sem
-        // isto, mudar a config e re-sortear somava 3 + 3 = 5/7 na espera (bug 103→5).
-        (function () {
-            var seen = {};
-            var mark = function (p) {
-                if (!p) return;
-                if (typeof p === 'object') {
-                    ['uid', 'email', 'p1Uid', 'p2Uid', 'p1Email', 'p2Email'].forEach(function (k) { if (p[k]) seen['id:' + String(p[k]).toLowerCase()] = 1; });
-                    if (Array.isArray(p.participants)) p.participants.forEach(mark);
-                }
-                var nm = getName(p);
-                if (nm) { if (nm.indexOf('/') !== -1) nm.split('/').forEach(function (x) { x = x.trim(); if (x) seen['n:' + x.toLowerCase()] = 1; }); else seen['n:' + nm.toLowerCase()] = 1; }
-            };
-            participants.forEach(mark);
-            var keyOf = function (p) { if (p && typeof p === 'object' && (p.uid || p.email)) return 'id:' + String(p.uid || p.email).toLowerCase(); var s = getName(p); return s ? 'n:' + s.trim().toLowerCase() : ''; };
-            // CANÔNICO: devolve ao pool quem está na espera dos TRÊS storages e zera os 3.
-            var prev = (typeof window._clearAllWaitlists === 'function')
-              ? window._clearAllWaitlists(t)
-              : (function () { var p = (Array.isArray(t.waitlist) ? t.waitlist : []).concat(Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []); t.waitlist = []; t.standbyParticipants = []; t.monarchWaitlist = {}; return p; })();
-            prev.forEach(function (p) { var k = keyOf(p); if (k && !seen[k]) { seen[k] = 1; participants.push(p); } });
-        })();
-        t.participants = participants;
-
-        // --- Team formation (when teamSize > 1) ---
-        let _grpTeamSize = parseInt(t.teamSize) || 1;
-        const _grpEnrMode = t.enrollmentMode || t.enrollment || 'individual';
-        if ((_grpEnrMode === 'time' || _grpEnrMode === 'misto') && _grpTeamSize < 2) {
-            _grpTeamSize = 2;
-        }
-        if (_grpTeamSize > 1) {
-            // v1.9.85: times como OBJETOS preservando uid/email (helper compartilhado).
-            if (!t.teamOrigins) t.teamOrigins = {};
-            const _grpFormed = _formDoublesTeams(participants, _grpTeamSize, t.teamOrigins);
-            participants = _grpFormed.participants;
-            t.participants = participants;
-            if (_grpFormed.newTeamsCount > 0) {
-                window.AppStore.logAction(tId, `Sorteio de times: ${_grpFormed.newTeamsCount} time(s) de ${_grpTeamSize} formado(s)`);
-            }
-            // v3.0.x: a sobra ímpar (quem não formou dupla) NÃO entra num grupo como
-            // "time de 1" — vai pra lista de espera (suplente). Continua inscrita.
-            if (_grpFormed.leftoverCount > 0) {
-                const _grpSolos = participants.filter(p => !window._entryTeamMembers(p)); // v3.0.x: solo por estrutura, não '/'
-                if (_grpSolos.length) {
-                    if (!Array.isArray(t.waitlist)) t.waitlist = [];
-                    _grpSolos.forEach(s => t.waitlist.push(s));
-                    window.AppStore.logAction(tId, `${_grpSolos.length} inscrito(s) sem dupla → lista de espera`);
-                }
-            }
-        }
-
-        // Convert participants to name strings — duplas: só os TIMES (a sobra ímpar
-        // já foi pra lista de espera); individual: todos.
-        let _grpNames = participants
-            .filter(p => _grpTeamSize <= 1 || !!window._entryTeamMembers(p)) // v3.0.x: time por estrutura
-            .map(p => (window._pName ? window._pName(p) : getName(p)));       // canônico "A / B" pra duplas (não perde o p2)
-
-        // v4.0.24 (motor canônico — ordem do dono 27-jun): geração de grupos pelo NÚCLEO
-        // pool-based ÚNICO (draw-cores.js → _buildGroupsCore). MESMA lógica de antes
-        // (shuffle → cabeças de chave VIP/categoria → distribuição módulo/grupos-iguais →
-        // round-robin via _roundRobinSchedule → standings), agora num só lugar — a Fase 0
-        // não tem mais geração própria; a Fase N passará a usar o MESMO núcleo (então os
-        // buildPhase* duplicados saem). Comportamento idêntico (paridade: tests/draw-cores.test.js).
-        const numGroups = t.gruposCount || 4;
-        const classifiedPerGroup = t.gruposClassified || 2;
-        var _catByName = {};
-        if (t.gruposSeedCategory) {
-            participants.forEach(function (p) {
-                var nm = window._pName ? window._pName(p) : getName(p);
-                var cats = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : [];
-                _catByName[nm] = (cats && cats[0]) || '~';
-            });
-        }
-        const _grpCore = window._buildGroupsCore(_grpNames, {
-            numGroups: numGroups,
-            equalOnly: t.gruposEqualOnly === true,
-            seedVip: !!t.gruposSeedVip,
-            seedCategory: !!t.gruposSeedCategory,
-            isVip: function (n) { return window._entryHasVip(t, n); },
-            catOf: function (n) { return _catByName[n]; },
-            roundRobin: window._roundRobinSchedule,
-            groupName: window._groupName,
-            safeHtml: window._safeHtml
-        });
-        const groups = _grpCore.groups;
-        let _grpWaitNames = _grpCore.waitNames;
-
-        t.groups = groups;
-        t.gruposClassified = classifiedPerGroup;
-        t.currentStage = 'groups';
-        t.status = 'active';
-
-        // v3.0.x: excedente dos grupos iguais entra como SUPLENTE na lista de espera —
-        // SEMPRE por INDIVÍDUOS (a dupla excedente é desmembrada nos 2 integrantes).
-        // "As pessoas na espera devem ser consideradas individualmente." Continuam
-        // inscritas; entram por substituição ou por "Novos Confrontos".
-        if (_grpWaitNames.length) {
-            const _grpObjByName = {};
-            participants.forEach(p => { const nm = getName(p); if (nm && !(nm in _grpObjByName)) _grpObjByName[nm] = p; });
-            if (!Array.isArray(t.waitlist)) t.waitlist = [];
-            const _splitToIndividuals = (p) => {
-                if (!p || typeof p !== 'object') { const s = String(p || ''); return [{ name: s, displayName: s }]; }
-                if (Array.isArray(p.participants) && p.participants.length) return p.participants.slice();
-                if (p.p1Name && p.p2Name) return [
-                    { name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo },
-                    { name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo }
-                ];
-                const nm = p.displayName || p.name || '';
-                if (nm.indexOf(' / ') !== -1) return nm.split(' / ').map(x => { x = x.trim(); return { name: x, displayName: x }; });
-                return [p];
-            };
-            // Desmembra cada dupla excedente UMA vez nos mesmos objetos-indivíduo que
-            // vão (a) pra lista de espera E (b) substituir a dupla em t.participants —
-            // assim a pessoa aparece UMA vez só (indivíduo na espera), nunca como dupla
-            // sorteada E indivíduo ao mesmo tempo.
-            const _waitSet = {}, _indsByTeam = {};
-            let _waitPeople = 0;
-            _grpWaitNames.forEach(nm => {
-                _waitSet[nm] = 1;
-                const _inds = _splitToIndividuals(_grpObjByName[nm] || { name: nm, displayName: nm });
-                _indsByTeam[nm] = _inds;
-                _inds.forEach(ind => { t.waitlist.push(ind); _waitPeople++; });
-            });
-            // Remove a dupla excedente de t.participants e coloca os 2 integrantes como
-            // INDIVÍDUOS (não estão em grupo nenhum — eram o excedente).
-            const _newParts = [];
-            (Array.isArray(t.participants) ? t.participants : []).forEach(p => {
-                const _pn = getName(p);
-                if (_waitSet[_pn] && _indsByTeam[_pn]) _indsByTeam[_pn].forEach(ind => _newParts.push(ind));
-                else _newParts.push(p);
-            });
-            t.participants = _newParts;
-            participants = _newParts;
-            window.AppStore.logAction(tId, `${_waitPeople} suplente(s) na lista de espera (grupos de mesmo tamanho)`);
-        }
-
-        window.AppStore.logAction(tId, `Sorteio Realizado — ${numGroups} grupos criados com rodízio interno`);
-
-        if (document.getElementById('final-review-panel')) document.getElementById('final-review-panel').remove(); document.body.style.overflow = '';
-        showNotification(_t('tdraw.groupsStarted'), _t('tdraw.groupsStartedMsg', { n: numGroups }), 'success');
-        // Notify participants — personalized per recipient
-        if (typeof window._notifyDrawPersonalized === 'function') {
-            window._notifyDrawPersonalized(t, tId);
-        }
-        window.AppStore.syncImmediate(tId).then(function() {
-            window.location.hash = `#bracket/${tId}`;
-        });
-        return;
-    }
+    // ── Rei/Rainha e Fase de Grupos NÃO têm branch por formato aqui: são desenhados pelo
+    // MOTOR CANÔNICO acima (generatePhase). Rei/Rainha é MODO de sorteio (drawMode), não
+    // formato; Grupos+Elim é PILHA DE FASES (grupos → eliminatória), não um formato. Os
+    // branches inline por t.format foram removidos (contrato project_unify_initial_phase_canonical).
+    // Abaixo segue só o caminho de p2Resolution: Suíço-classificatório e Play-in (eliminatória).
 
     let participants = Array.isArray(t.participants) ? [...t.participants] : Object.values(t.participants || {});
 

@@ -1,10 +1,10 @@
-/* Rei/Rainha da Praia da Fase 0 roteado pelo núcleo único buildMonarchCore — node tests/phase0-monarch.test.js
+/* Rei/Rainha (MODO de sorteio) na fase 0 pelo motor canônico — node tests/phase0-monarch.test.js
  *
- * Increment 9 do motor canônico (swap do Rei/Rainha puro da Fase 0). Roda a
- * generateDrawFunction REAL (tournaments-draw.js) num sandbox headless e confere que
- * os grupos saem do núcleo (buildMonarchCore → _buildMonarchGroup): grupos de 4 com
- * 3 jogos de parceiro rotativo (AB/CD, AC/BD, AD/BC), wrapper da Fase 0 (rounds[0]
- * + individualStandings) e m.group preservado (consumido no save pra avançar a rodada).
+ * Contrato project_unify_initial_phase_canonical. Roda a generateDrawFunction REAL
+ * (tournaments-draw.js) num sandbox headless e confere que Rei/Rainha (modo, NÃO formato)
+ * é desenhado pelo MOTOR ÚNICO: t._canonicalDraw, jogos isMonarch taggeados na fase 0
+ * (t.matches, bracket='monarch'), grupos de 4 com 3 jogos rotativos (AB/CD, AC/BD, AD/BC),
+ * e o avanço lê via prevPhaseGroups. SEM t.groups nativo (era o caminho legado).
  */
 const { window, load } = require('./headless.js');
 
@@ -20,15 +20,16 @@ window.showAlertDialog = function () {};
 window.showNotification = function () {};
 window.document = { getElementById: function () { return null; }, body: { style: {} } };
 window.location = { hash: '' };
-// gates de pré-sorteio (não relevantes pro Rei/Rainha, mas bypassados por segurança)
 window.checkOddEntries = function () { return { isOdd: false }; };
 window.showOddEntriesPanel = function () {};
 window.checkPowerOf2 = function (t) { var n = (t.participants || []).length; return { count: n, isPowerOf2: (n & (n - 1)) === 0, teamSize: 1 }; };
 window.showPowerOf2Panel = function () {};
-// FirestoreDB.saveTournament: thenable que NÃO navega (evita disparar #bracket)
-window.FirestoreDB = { saveTournament: function () { return { then: function () { return { catch: function () {} }; } }; } };
+// helpers de identidade do store.js (não carregado no headless)
+window._pName = function (p) { return typeof p === 'string' ? p : (p.displayName || p.name || ''); };
+window._entryTeamMembers = function () { return null; };
+window._entryHasVip = function () { return false; };
 
-load('draw-cores.js');      // window._buildMonarchCore
+load('draw-cores.js');
 load('tournaments-draw.js');
 
 let pass = 0, fail = 0;
@@ -40,43 +41,42 @@ function mkT(n) {
   return { id: 'm', format: 'Rei/Rainha da Praia', participants: parts };
 }
 function runDraw(t) { _curT = t; window.generateDrawFunction('m'); return t; }
-// chave de partição 2+2 (ordenada) — pra checar que os 3 jogos cobrem as 3 divisões distintas
 function partKey(m) { return [m.team1.slice().sort().join('+'), m.team2.slice().sort().join('+')].sort().join(' | '); }
+function monMatches(t) { return (t.matches || []).filter(function (m) { return m.isMonarch && (m.phaseIndex || 0) === 0; }); }
 
-// ── 8 jogadores → 2 grupos de 4, 3 jogos rotativos cada, m.group preservado ──
+// ── 8 jogadores → motor canônico: 2 grupos de 4, 3 jogos rotativos, t.matches taggeado ──
 (function () {
   var t = runDraw(mkT(8));
-  ok(t.groups && t.groups.length === 2, '8 jogadores → 2 grupos [' + (t.groups ? t.groups.length : 'nenhum') + ']');
-  ok(t.currentStage === 'groups' && t.status === 'active', 'stage=groups, status=active');
+  ok(t._canonicalDraw === true && t.status === 'active', 'Rei/Rainha vai pelo motor canônico (t._canonicalDraw)');
+  ok(!t.groups, 'sem t.groups nativo (era o caminho legado)');
+  var ms = monMatches(t);
+  ok(ms.length === 6, '8 jogadores → 6 jogos monarca taggeados na fase 0 (2 grupos × 3) [' + ms.length + ']');
+  // reconstrói os grupos via a leitura canônica (a mesma que o avanço usa)
+  var groups = window._phasesEngine.prevPhaseGroups(t);
+  ok(groups.length === 2, '8 jogadores → prevPhaseGroups reconstrói 2 grupos [' + groups.length + ']');
   var allOk = true, conserved = {};
-  (t.groups || []).forEach(function (g, gi) {
+  groups.forEach(function (g) {
     if (!g.players || g.players.length !== 4) allOk = false;
     g.players.forEach(function (p) { conserved[p] = 1; });
-    var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : [];
-    if (ms.length !== 3) allOk = false;
-    // 3 partições distintas, cada uma cobrindo os 4 jogadores do grupo
+    if (g.matches.length !== 3) allOk = false;
     var keys = {};
-    ms.forEach(function (m) {
+    g.matches.forEach(function (m) {
       keys[partKey(m)] = 1;
       var four = (m.team1 || []).concat(m.team2 || []).slice().sort().join(',');
       if (four !== g.players.slice().sort().join(',')) allOk = false;
-      if (m.group !== gi) allOk = false;          // m.group consumido por _checkGroupRoundComplete
       if (!m.isMonarch) allOk = false;
-      if (m.winner !== null) allOk = false;
     });
-    if (Object.keys(keys).length !== 3) allOk = false;  // parceiro rotativo = 3 divisões únicas
-    if (!g.individualStandings || g.individualStandings.length !== 4) allOk = false;
+    if (Object.keys(keys).length !== 3) allOk = false; // parceiro rotativo = 3 divisões únicas
   });
-  ok(allOk, '8 jogadores → cada grupo: 4 players, 3 jogos rotativos distintos, m.group/isMonarch, standings dos 4');
-  ok(Object.keys(conserved).length === 8, '8 jogadores → todos os 8 conservados nos grupos');
+  ok(allOk, '8 jogadores → cada grupo: 4 jogadores, 3 jogos rotativos distintos cobrindo os 4, isMonarch');
+  ok(Object.keys(conserved).length === 8, '8 jogadores → todos os 8 conservados');
 })();
 
-// ── 12 jogadores → 3 grupos ──────────────────────────────────────────────────
+// ── 12 jogadores → 3 grupos (9 jogos) ────────────────────────────────────────
 (function () {
   var t = runDraw(mkT(12));
-  ok(t.groups && t.groups.length === 3, '12 jogadores → 3 grupos [' + (t.groups ? t.groups.length : 'nenhum') + ']');
-  var total = (t.groups || []).reduce(function (a, g) { return a + (g.rounds[0].matches || []).length; }, 0);
-  ok(total === 9, '12 jogadores → 9 jogos no total (3 por grupo)');
+  ok(monMatches(t).length === 9, '12 jogadores → 9 jogos monarca (3 grupos × 3) [' + monMatches(t).length + ']');
+  ok(window._phasesEngine.prevPhaseGroups(t).length === 3, '12 jogadores → 3 grupos reconstruídos');
 })();
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phase0-monarch: ' + pass + ' asserts ok, ' + fail + ' falharam');
