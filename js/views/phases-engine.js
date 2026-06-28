@@ -526,20 +526,29 @@
   // todos os jogos round-robin. Composável: pra eliminar depois, adiciona-se uma fase
   // de chave em seguida (buildPhaseBrackets puxa destes grupos via bracketPhaseGroups).
   // Cada match: { bracket:'group', groupIdx, groupName, p1, p2, team1Obj, team2Obj }.
-  function buildPhaseGroupStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
-    idPrefix = idPrefix || 'phg';
+  // Transição → pool: deriva o pool ÚNICO de classificados de prevGroups (standings
+  // ranqueadas + distribuição por seed). É a ENTRADA da fase. A Fase 0 não usa isto
+  // (o pool é a inscrição); a Fase N usa pra transformar a fase anterior em pool.
+  function _poolFromPrev(prevGroups, phaseCfg, computeStandings) {
     var src = (phaseCfg && phaseCfg.source) || {};
-    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs === true) : false; // grupos: individual por padrão
     var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
     var scope = src.scope || 'per_group';
     var rankingBasis = src.rankingBasis || 'individual';
-
-    // 1 pool único de classificados (profundidade = maior rankTo do mapping).
+    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
     var maxRankTo = mapping.reduce(function (mx, m) { return Math.max(mx, parseInt(m.rankTo, 10) || 0); }, 0) || 999;
     var byDest = buildEntrantsByDest(prevGroups, [{ dest: 'main', rankFrom: 1, rankTo: maxRankTo }],
       fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
-    var pool = byDest.main || [];
+    return byDest.main || [];
+  }
+
+  // GERADOR pool-based de Fase de Grupos (round-robin). Recebe o POOL (entrantes já
+  // ranqueados/embaralhados) + cfg → estrutura. Usado em QUALQUER posição (Fase 0 com
+  // pool=inscritos; Fase N com pool=transição). Esta é a forma canônica; o wrapper
+  // buildPhaseGroupStage apenas deriva o pool da fase anterior e delega aqui.
+  function genGroupsFromPool(pool, phaseCfg, idPrefix) {
+    idPrefix = idPrefix || 'phg';
+    pool = pool || [];
     if (!pool.length) return { matches: [], groups: [] };
 
     var nGroups = parseInt(phaseCfg && phaseCfg.gruposCount, 10) || 4;
@@ -580,6 +589,13 @@
     return { matches: allMatches, groups: groups };
   }
 
+  function buildPhaseGroupStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
+    idPrefix = idPrefix || 'phg';
+    var pool = _poolFromPrev(prevGroups, phaseCfg, computeStandings);
+    if (!pool.length) return { matches: [], groups: [] };
+    return genGroupsFromPool(pool, phaseCfg, idPrefix);
+  }
+
   // Uma config de fase é "Fase de Grupos" (round-robin, sem eliminação embutida)?
   // ── FORMATO CANÔNICO (fonte única) — os 3 formatos da visão do dono. ─────────
   // Rei/Rainha NÃO é um 4º formato: é um MODO DE SORTEIO (isMonarchDraw), ortogonal.
@@ -608,17 +624,16 @@
   // team1:[A,B], team2:[C,D], p1:'A / B', p2:'C / D', groupIdx, groupName }.
   function buildPhaseMonarchStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
     idPrefix = idPrefix || 'phm';
-    var src = (phaseCfg && phaseCfg.source) || {};
-    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
-    var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
-    var scope = src.scope || 'per_group';
-    var rankingBasis = src.rankingBasis || 'individual';
-    var maxRankTo = mapping.reduce(function (mx, m) { return Math.max(mx, parseInt(m.rankTo, 10) || 0); }, 0) || 999;
+    // Rei/Rainha é INDIVIDUAL (parceiros rotativos) → fixedPairs sempre false na transição.
+    var cfgInd = phaseCfg ? Object.assign({}, phaseCfg, { fixedPairs: false }) : { fixedPairs: false };
+    return genMonarchFromPool(_poolFromPrev(prevGroups, cfgInd, computeStandings), phaseCfg, idPrefix);
+  }
 
-    // Rei/Rainha é INDIVIDUAL (parceiros rotativos) → fixedPairs sempre false.
-    var byDest = buildEntrantsByDest(prevGroups, [{ dest: 'main', rankFrom: 1, rankTo: maxRankTo }],
-      false, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
-    var pool = byDest.main || [];
+  // GERADOR pool-based de Rei/Rainha (modo de sorteio, não formato): grupos de 4 com
+  // parceiros rotativos (AB×CD, AC×BD, AD×BC), classificação INDIVIDUAL. Pool → estrutura.
+  function genMonarchFromPool(pool, phaseCfg, idPrefix) {
+    idPrefix = idPrefix || 'phm';
+    pool = pool || [];
     var nGroups = Math.floor(pool.length / 4);
     if (nGroups < 1) return { matches: [], groups: [], leftOut: pool.map(function (p) { return p.displayName; }) };
     var used = pool.slice(0, nGroups * 4);
@@ -652,6 +667,28 @@
     return { matches: allMatches, groups: groups, leftOut: leftOut };
   }
 
+  // ── generatePhase — O GERADOR CANÔNICO ÚNICO (pool, cfg) → estrutura ──────────
+  // Contrato project_unify_initial_phase_canonical: UM gerador recebe (pool, cfg) →
+  // estrutura. A posição é só índice. generateDrawFunction (Fase 0, pool = inscritos) e
+  // materializeNextPhase (Fase N, pool = transição via _poolFromPrev) chamam o MESMO.
+  // Despacha por FORMATO (classifyPhaseFormat) + MODO (isMonarchDraw — Rei/Rainha é modo,
+  // não formato). Eliminatória usa o núcleo único genTierBracket (linha única; tiers
+  // Ouro/Prata da Fase N são extensão sobre o MESMO núcleo, em buildPhaseBrackets).
+  function generatePhase(pool, cfg, ctx) {
+    ctx = ctx || {};
+    var idPrefix = ctx.idPrefix || 'gp';
+    pool = pool || [];
+    if (isMonarchDraw(cfg)) return genMonarchFromPool(pool, cfg, idPrefix);
+    switch (classifyPhaseFormat(cfg)) {
+      case 'groups': return genGroupsFromPool(pool, cfg, idPrefix);
+      case 'league': return genLeagueFromPool(pool, cfg, idPrefix);
+      default:
+        var _res = (cfg && cfg.bracketResolution) || 'bye';
+        var _third = cfg ? (cfg.thirdPlace !== false) : true;
+        return genTierBracket(pool, undefined, idPrefix, _res, _third);
+    }
+  }
+
   // Uma config de fase é Liga / Pontos Corridos (round-robin, tabela única)?
   function _phaseIsLiga(cfg) {
     return !!cfg && !isMonarchDraw(cfg) && classifyPhaseFormat(cfg) === 'league';
@@ -676,19 +713,17 @@
   // (sem cadência de sorteio no tempo). Matches: { bracket:'league', round:turno }.
   function buildPhaseLeagueStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
     idPrefix = idPrefix || 'phl';
-    var src = (phaseCfg && phaseCfg.source) || {};
-    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
-    var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs === true) : false;
-    var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
-    var scope = src.scope || 'per_group';
-    var rankingBasis = src.rankingBasis || 'individual';
-    var maxRankTo = mapping.reduce(function (mx, m) { return Math.max(mx, parseInt(m.rankTo, 10) || 0); }, 0) || 999;
+    return genLeagueFromPool(_poolFromPrev(prevGroups, phaseCfg, computeStandings), phaseCfg, idPrefix);
+  }
+
+  // GERADOR pool-based de Pontos Corridos / Liga (round-robin estático OU pool p/
+  // cadência incremental). Pool → estrutura. A Fase 0 rodada-a-rodada continua via
+  // _generateNextRound (incremental); aqui é o caminho estático "todos contra todos".
+  function genLeagueFromPool(pool, phaseCfg, idPrefix) {
+    idPrefix = idPrefix || 'phl';
+    pool = pool || [];
     var turnos = parseInt(phaseCfg && (phaseCfg.turnos || phaseCfg.ligaTurnos), 10) || 1;
     if (turnos < 1) turnos = 1;
-
-    var byDest = buildEntrantsByDest(prevGroups, [{ dest: 'main', rankFrom: 1, rankTo: maxRankTo }],
-      fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
-    var pool = byDest.main || [];
     if (pool.length < 2) return { matches: [], players: pool.map(function (p) { return p.displayName; }) };
 
     // v3.1.13 (brick 4): Pontos Corridos RODADA A RODADA como fase posterior. NÃO
@@ -1268,6 +1303,11 @@
     buildPhaseGroupStage: buildPhaseGroupStage,
     buildPhaseMonarchStage: buildPhaseMonarchStage,
     buildPhaseLeagueStage: buildPhaseLeagueStage,
+    generatePhase: generatePhase,
+    genGroupsFromPool: genGroupsFromPool,
+    genMonarchFromPool: genMonarchFromPool,
+    genLeagueFromPool: genLeagueFromPool,
+    poolFromPrev: _poolFromPrev,
     classifyPhaseFormat: classifyPhaseFormat,
     isMonarchDraw: isMonarchDraw,
     selectQualifiers: selectQualifiers,
