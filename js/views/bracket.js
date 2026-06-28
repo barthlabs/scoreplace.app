@@ -1155,8 +1155,15 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     </div>` : '';
 
   // Progressive classification
+  // v4.0.33: a classificação só aparece quando a eliminatória de fato TERMINOU —
+  // campeão definido OU torneio encerrado. Antes renderizava t.classification sempre
+  // que tivesse qualquer entrada, o que expunha posições PARCIAIS (durante o torneio)
+  // ou ESTALE (de um sorteio anterior, com nomes que nem batem com a chave atual) no
+  // meio do andamento. Bug reportado: torneio em QUARTAS exibindo "1º/2º/3º". A
+  // classificação só deve aparecer após a conclusão de todas as rodadas/fases.
   let classifHtml = '';
-  if (t.classification && Object.keys(t.classification).length > 0) {
+  const _elimComplete = !!champion || t.status === 'finished';
+  if (_elimComplete && t.classification && Object.keys(t.classification).length > 0) {
     const medals = {1:'🥇',2:'🥈',3:'🥉',4:'4º'};
     const entries = Object.entries(t.classification).sort((a,b) => a[1] - b[1]);
     const rows = entries.map(function(e) {
@@ -1229,6 +1236,22 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   // Both modes use min-width:max-content + scrollable wrapper (no clipping)
   const zoomTransform = window._bracketZoom !== 1 ? `transform:scale(${window._bracketZoom});transform-origin:top left;` : '';
 
+  // v4.0.33: em "Fase de Grupos + Eliminatórias", quando o torneio avança pra fase
+  // eliminatória, renderBracket pula renderGroupStage e o nav de grupos some — a fase
+  // de grupos (as "rodadas anteriores": jogos + classificação de cada grupo) ficava
+  // COMPLETAMENTE inacessível. Reaparece aqui como histórico recolhível, read-only
+  // (isOrg=false + canEnterResult=false + suppressAutoAdvance), abaixo da chave. Mesmo
+  // padrão read-only que o motor de fases usa pra conferir uma fase anterior.
+  let groupHistoryHtml = '';
+  if (t.format === 'Fase de Grupos + Eliminatórias' && t.currentStage === 'elimination'
+      && Array.isArray(t.groups) && t.groups.length > 0
+      && typeof window.renderGroupStage === 'function') {
+    groupHistoryHtml = '<details style="margin-top:1.5rem;">'
+      + '<summary style="cursor:pointer;font-weight:700;font-size:0.85rem;color:var(--text-bright);padding:10px 14px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">📜 Fase de Grupos — rodadas anteriores</summary>'
+      + '<div style="margin-top:10px;">' + window.renderGroupStage(t, false, false, { suppressAutoAdvance: true }) + '</div>'
+      + '</details>';
+  }
+
   // v3.1.21: canônico — lista de espera logo APÓS as chaves e ANTES da classificação geral.
   return `
     ${championHtml}
@@ -1240,7 +1263,8 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       </div>
     </div>
     ${standbyHtml || ''}
-    ${classifHtml}`;
+    ${classifHtml}
+    ${groupHistoryHtml}`;
 }
 
 // ─── Double Elimination ───────────────────────────────────────────────────────
