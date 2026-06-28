@@ -1322,7 +1322,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
     }
     grandCols.forEach(function (c) { (c.matches || []).forEach(function (m) { m._gameNum = ++n; }); });
   })();
-  const renderSection = (cols, title, color) => {
+  const renderSection = (cols, title, color, trailingColHtml) => {
     if (!cols || !cols.length) return '';
     const colsHtml = cols.map(function(col, ci) {
       var matches = col.matches || [];
@@ -1344,11 +1344,18 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
     return `
       <div style="margin-bottom:2rem;">
         <h4 style="color:var(--text-bright);font-size:0.8rem;text-transform:uppercase;letter-spacing:2px;border-left:3px solid ${color};padding-left:10px;margin-bottom:1rem;">${title}</h4>
-        <div class="bracket-scroll-container" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;gap:32px;min-width:max-content;">${colsHtml}<div style="min-width:200px;flex-shrink:0;">&nbsp;</div></div></div>
+        <div class="bracket-scroll-container" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;gap:32px;min-width:max-content;">${colsHtml}${trailingColHtml || ''}<div style="min-width:200px;flex-shrink:0;">&nbsp;</div></div></div>
       </div>`;
   };
 
   var grandMatches = grandCols.reduce(function(acc, c) { return acc.concat(c.matches || []); }, []);
+  // Grande Final = COLUNA NOVA logo APÓS a coluna da Final da Chave Superior, na MESMA
+  // linha horizontal (não seção separada). O campeão da Superior segue direto pra cá.
+  var _grandColHtml = grandMatches.length ? `
+      <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">
+        <h5 style="color:#fbbf24;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid #fbbf24;padding-left:8px;">🏆 ${_t('bracket.grandFinal')}</h5>
+        ${grandMatches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
+      </div>` : '';
 
   // v1.0.94-beta: render classificação progressiva em DE no MESMO LUGAR
   // que Single Elim — TOPO do bracket — pra consistência visual entre
@@ -1380,17 +1387,11 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   }
 
   // v3.1.21: canônico — lista de espera logo APÓS as chaves e ANTES da classificação geral.
-  var _grandHtml = grandMatches.length ? `
-        <div style="margin-top:1rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">
-          <h4 style="color:#fbbf24;font-size:0.8rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:1rem;border-left:3px solid #fbbf24;padding-left:10px;">🏆 ${_t('bracket.grandFinal')}</h4>
-          <div style="max-width:280px;">${grandMatches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}</div>
-        </div>` : '';
-  // Layout canônico (dono): Grande Final LOGO APÓS a final da Chave Superior; a Chave
-  // Inferior vem em seguida. (O campeão da Superior vai direto à Grande Final.)
+  // Layout canônico (dono): a Grande Final é uma COLUNA ao final da linha da Chave
+  // Superior (logo após a Final dela); a Chave Inferior vem embaixo.
   return `
     <div>
-      ${renderSection(upperCols, 'Chave Superior', '#10b981')}
-      ${_grandHtml}
+      ${renderSection(upperCols, 'Chave Superior', '#10b981', _grandColHtml)}
       ${renderSection(lowerCols, 'Chave Inferior', '#f59e0b')}
       ${standbyHtml || ''}
       ${_deClassifHtml}
