@@ -914,7 +914,11 @@ window._hydrateContactOrgButtons = async function(root) {
       cache[uid] = prof || null;
     }
     var phone = (prof && prof.phone) ? String(prof.phone).replace(/\D/g, '') : '';
-    var waOk = phone.length >= 10 && prof && prof.notifyWhatsApp !== false;
+    // v4.0.36: WhatsApp de CONTATO direto não depende de notifyWhatsApp. Esse
+    // toggle é a preferência do org de receber NOTIFICAÇÕES automáticas por
+    // WhatsApp — não deve bloquear um participante de falar com ele. Se tem
+    // número cadastrado, o botão fica verde (WhatsApp).
+    var waOk = phone.length >= 10;
     if (waOk) {
       btn.style.background = 'linear-gradient(135deg,#25D366,#128C7E)';
       btn.style.color = '#fff';
@@ -953,7 +957,9 @@ window._contactOrganizer = async function(tId) {
                 (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador';
   var phoneDigits = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
   var email = (profile && profile.email) || t.organizerEmail || '';
-  var useWhatsApp = phoneDigits.length >= 10 && (!profile || profile.notifyWhatsApp !== false);
+  // v4.0.36: ver _hydrateContactOrgButtons — contato direto não é gated por
+  // notifyWhatsApp (que rege só notificações automáticas). Org com número → WhatsApp.
+  var useWhatsApp = phoneDigits.length >= 10;
   var phoneFull = '';
   if (useWhatsApp) {
     var cc = (profile && profile.phoneCountry ? String(profile.phoneCountry).replace(/\D/g, '') : '') || '55';
