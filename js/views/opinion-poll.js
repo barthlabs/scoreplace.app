@@ -743,24 +743,65 @@
     else go();
   };
 
+  // wa.me precisa de dígitos com DDI sem '+'. Telefone canônico já vem com DDI
+  // (>=12 díg); legado (~11) → prefixa o país (phoneCountry ou 55). <10 = sem número.
+  function _opPhoneFull(profile) {
+    var d = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
+    if (d.length < 10) return '';
+    if (d.length >= 12) return d;
+    var cc = (profile && profile.phoneCountry ? String(profile.phoneCountry).replace(/\D/g, '') : '') || '55';
+    return cc + d;
+  }
   // ─── PASSO 4: Ver votos nominalmente (org/creator) ──────────────────────────────
-  window._opOpenTally = function (tId, pollId) {
+  // v4.0.x: async — pré-carrega os telefones de todos os inscritos/votantes pra que
+  // o organizador toque no chip e abra o WhatsApp DIRETO (mensagem pessoal pré-pronta).
+  // O telefone fica cacheado em window._opWa pra que o clique abra wa.me de forma
+  // SÍNCRONA (iOS Safari só permite abrir aba dentro do gesto — sem await no meio).
+  window._opOpenTally = async function (tId, pollId) {
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
     var poll = _findPoll(t, pollId); if (!poll) return;
     var secs = window._opSections(poll);
+    var info = _opVoterInfoMap(t);
+    // ── Pré-carrega telefones (uids de inscritos + votantes) → window._opWa ──
+    window._opWa = {};
+    var _uidSet = {};
+    Object.keys(info).forEach(function (u) { _uidSet[u] = 1; });
+    if (poll.votes) Object.keys(poll.votes).forEach(function (u) { _uidSet[u] = 1; });
+    var _cuU = (window.AppStore && window.AppStore.currentUser) || {};
+    var _orgName = t.organizerName || _cuU.displayName || _cuU.name || 'o organizador';
+    var _q = (secs[0] && secs[0].question) ? secs[0].question : '';
+    var _tName = t.name || 'nosso torneio';
+    try {
+      await Promise.all(Object.keys(_uidSet).map(function (u) {
+        if (!window.FirestoreDB || !window.FirestoreDB.loadUserProfile) return null;
+        return window.FirestoreDB.loadUserProfile(u).then(function (prof) {
+          var ph = _opPhoneFull(prof);
+          if (!ph) return;
+          var nm = (info[u] && info[u].name) || window._opVoterName(t, u) || '';
+          var first = String(nm).trim().split(/\s+/)[0] || '';
+          var msg = 'Oi ' + first + '! 👋 Aqui é ' + _orgName + ', organizador do torneio "' + _tName + '"' +
+            (_q ? '. Sobre a enquete "' + _q + '": ' : '. ');
+          window._opWa[u] = { phone: ph, msg: msg };
+        }).catch(function () {});
+      }));
+    } catch (e) {}
     // v3.1.68: chip normal (índigo, quem marcou ✅) OU vermelho (quem marcou ❌). Em
     // multiseleção cada opção lista os dois grupos; em escolha única só há ✅.
     // minority (multiseleção): votou ✅ mas NÃO na opção vencedora da seção → nome vermelho
     // (borda/texto vermelhos, fundo suave) pra distinguir do 🚫 explícito (fundo vermelho sólido).
+    // v4.0.x: quando o inscrito tem telefone (window._opWa[uid]), o chip vira clicável
+    // (cursor pointer + 💬) e abre o WhatsApp pessoal via window._opWaVoter.
     var nameChip = function (uid, isNo, isMinority) {
       var nm = window._opVoterName(t, uid);
-      if (isNo) {
-        return '<span title="Marcou 🚫 (não quer)" style="display:inline-block;background:#dc2626;border:1px solid #ef4444;color:#fff;border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:700;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
-      }
-      if (isMinority) {
-        return '<span title="Não votou na opção da maioria" style="display:inline-block;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.45);color:#ef4444;border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:700;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
-      }
-      return '<span style="display:inline-block;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:var(--text-bright);border-radius:999px;padding:3px 10px;font-size:0.8rem;font-weight:600;margin:0 6px 6px 0;">' + _esc(nm) + '</span>';
+      var wa = (window._opWa && window._opWa[uid]) ? window._opWa[uid] : null;
+      var sty, baseTitle;
+      if (isNo) { sty = 'background:#dc2626;border:1px solid #ef4444;color:#fff;font-weight:700;'; baseTitle = 'Marcou 🚫 (não quer)'; }
+      else if (isMinority) { sty = 'background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.45);color:#ef4444;font-weight:700;'; baseTitle = 'Não votou na opção da maioria'; }
+      else { sty = 'background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:var(--text-bright);font-weight:600;'; baseTitle = ''; }
+      var title = wa ? ('Tocar pra mandar WhatsApp pra ' + nm) : baseTitle;
+      var click = wa ? (' onclick="window._opWaVoter(\'' + String(uid).replace(/'/g, "\\'") + '\')"') : '';
+      var cursor = wa ? 'cursor:pointer;' : '';
+      return '<span title="' + _esc(title) + '"' + click + ' style="display:inline-block;' + sty + cursor + 'border-radius:999px;padding:3px 10px;font-size:0.8rem;margin:0 6px 6px 0;">' + _esc(nm) + (wa ? ' 💬' : '') + '</span>';
     };
     var body = '';
     secs.forEach(function (sec, si) {
@@ -814,8 +855,7 @@
       });
       body += '</div>';
     });
-    // quem não votou em NENHUMA seção (inscritos com uid conhecido)
-    var info = _opVoterInfoMap(t);
+    // quem não votou em NENHUMA seção (inscritos com uid conhecido) — info já carregado acima
     var voted = {};
     if (poll.votes) Object.keys(poll.votes).forEach(function (u) { if (_opHasVotedAny(poll, u)) voted[u] = 1; });
     var missing = Object.keys(info).filter(function (u) { return !voted[u]; });
@@ -835,6 +875,22 @@
       '</div>' +
       '<div style="padding:1rem 1.1rem;">' + body + '</div>';
     _overlay('op-tally-overlay', html);
+  };
+
+  // Organizador toca no chip de um inscrito → abre WhatsApp com mensagem pessoal
+  // pré-pronta. Lê o telefone do cache window._opWa (preenchido em _opOpenTally)
+  // pra abrir wa.me DENTRO do gesto de clique (iOS Safari exige isso).
+  window._opWaVoter = function (uid) {
+    var wa = (window._opWa && window._opWa[uid]) ? window._opWa[uid] : null;
+    if (!wa || !wa.phone) {
+      if (typeof showNotification === 'function') showNotification('Sem WhatsApp', 'Esse inscrito não tem telefone cadastrado.', 'info');
+      return;
+    }
+    try {
+      var url = 'https://wa.me/' + wa.phone + '?text=' + encodeURIComponent(wa.msg || '');
+      if (typeof window._openExternalUrl === 'function') window._openExternalUrl(url);
+      else window.open(url, '_blank', 'noopener');
+    } catch (e) {}
   };
 
   // ─── PASSO 6: Pop-up automático pro inscrito que ainda não votou (a cada visita) ──
