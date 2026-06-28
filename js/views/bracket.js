@@ -321,6 +321,17 @@ function renderBracket(container, tournamentId, isInline) {
     }
   }
 
+  // ── Fase 0 pelo motor canônico (índice 0, matches taggeados) → RENDER ÚNICO ──────
+  // "Tudo é fase N": a Fase 0 sorteada pelo motor único renderiza pelo MESMO
+  // _renderPhaseBracket das fases seguintes (reusa renderGroupStage/renderStandings/
+  // _renderMonarchStage/renderTier por dentro). Transição: enquanto formatos não migrados
+  // seguem o render legado abaixo; ao migrar todos, este vira o ÚNICO caminho.
+  if (t._canonicalDraw && (t.currentPhaseIndex || 0) === 0 && typeof window._renderPhaseBracket === 'function') {
+    container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
+    _applyMyMatchesFilter();
+    return;
+  }
+
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
     container.innerHTML = headerHtml + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, { standbyHtml: standbyHtml });

@@ -761,6 +761,40 @@ window._confirmManualAutoDraw = function (tId) {
     );
 };
 
+// Monta a cfg da fase 0 (índice 0) a partir do torneio — a inscrição é a ENTRADA da
+// fase (source.type='enrollment'). Os eixos (modo de sorteio, cabeças, categoria, pot-2,
+// cadência) viram propriedades da cfg que o motor único (generatePhase) honra. Rei/Rainha
+// é MODO (drawMode/reiRainha), não formato.
+window._buildPhase0Cfg = function (t) {
+    var fmt = t.format || 'Eliminatórias Simples';
+    var code;
+    if (window._isLigaFormat && window._isLigaFormat(t)) code = 'liga';
+    else if (fmt === 'Suíço Clássico' || t.classifyFormat === 'swiss') code = 'liga';
+    else if (/Grupo/.test(fmt)) code = 'grupos_mata';
+    else if (/Dupla/.test(fmt)) code = 'elim_dupla';
+    else if (/Rei|Rainha|monarch/i.test(fmt)) code = 'grupos_mata';
+    else code = 'elim_simples';
+    var rei = (t.drawMode === 'rei_rainha') || (t.ligaRoundFormat === 'rei_rainha') || /Rei|Rainha/i.test(fmt);
+    var cfg = {
+        format: fmt, formatCode: code,
+        drawMode: t.drawMode || (rei ? 'rei_rainha' : 'sorteio'),
+        reiRainha: rei,
+        gruposCount: parseInt(t.gruposCount, 10) || 4,
+        gruposClassified: parseInt(t.gruposClassified, 10) || 2,
+        teamSize: parseInt(t.teamSize, 10) || 1,
+        // Elim: cabeças VIP SEMPRE sobem ao topo (recebem os BYEs = "VIP folga"). Grupos:
+        // só quando o organizador liga o toggle (gruposSeedVip → espalha pelos grupos).
+        seedVip: (code === 'elim_simples' || code === 'elim_dupla') ? true : !!t.gruposSeedVip,
+        seedCategory: !!t.gruposSeedCategory,
+        bracketResolution: t.p2Resolution || 'bye',
+        thirdPlace: t.thirdPlace !== false,
+        categories: (Array.isArray(t.combinedCategories) && t.combinedCategories.length) ? t.combinedCategories.slice() : null,
+        source: { type: 'enrollment' }
+    };
+    if (code === 'liga') cfg.ligaCadence = (t.ligaDrawMode === 'round_robin') ? 'round_robin' : 'incremental';
+    return cfg;
+};
+
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
@@ -891,6 +925,46 @@ window.generateDrawFunction = function (tId) {
     // Divulgação sempre imediata a todos
     if (!t.drawVisibility) {
         t.drawVisibility = 'public';
+    }
+
+    // ── ETAPA 1 do motor canônico: Eliminatória Simples pela Fase 0 = índice 0 ────────
+    // A inscrição é a ENTRADA da fase: generateDrawFunction monta a cfg0 e chama o MESMO
+    // generatePhase+storePhase das fases seguintes; o render é ÚNICO (_renderPhaseBracket
+    // via t._canonicalDraw). Sem geração por formato aqui. (Demais formatos seguem o
+    // caminho legado nesta etapa; serão convergidos nas próximas — grupos+elim/monarch
+    // viram pilha de fases, Liga vira phaseRounds[0].) Play-in/Suíço ficam no legado.
+    if (t.format === 'Eliminatórias Simples' && t.p2Resolution !== 'swiss' && t.p2Resolution !== 'playin') {
+        var _E0 = window._phasesEngine;
+        t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
+        t.currentPhaseIndex = 0; delete t._phaseMaterialized;
+        var _cfg0 = window._buildPhase0Cfg(t);
+        // Formação de duplas (eixo da inscrição) — pool-prep, não geração de chave.
+        var _ts0 = parseInt(t.teamSize, 10) || 1;
+        var _enr0 = t.enrollmentMode || t.enrollment || 'individual';
+        if ((_enr0 === 'time' || _enr0 === 'misto') && _ts0 < 2) _ts0 = 2;
+        if (_ts0 > 1) {
+            if (!t.teamOrigins) t.teamOrigins = {};
+            var _f0 = _formDoublesTeams(Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}), _ts0, t.teamOrigins, t._drawBalanceMode);
+            t.participants = _f0.participants;
+        }
+        var _pool0 = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}))
+            .filter(function (p) { return _ts0 <= 1 || !!window._entryTeamMembers(p) || (typeof p === 'object' && !p.p1Name && !Array.isArray(p.participants)); })
+            .map(function (p) { var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || '')); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
+        var _built0 = _E0.generatePhase(_pool0, _cfg0, {
+            t: t, idPrefix: 'p0-' + Date.now(),
+            isVip: function (e) { return window._entryHasVip(t, e); },
+            catOf: function (e) { var c = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(e) : []; return (c && c[0]) || ''; }
+        });
+        var _r0 = _E0.storePhase(t, 0, _built0);
+        if (!_r0 || !_r0.ok) { showNotification(_t('draw.warning'), _t('tdraw.drawDone'), 'warning'); return; }
+        t._canonicalDraw = true; t.status = 'active';
+        window.AppStore.logAction(tId, 'Sorteio Realizado — ' + t.format + ' (motor canônico)');
+        if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
+        showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
+        if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
+        window._lastActiveTournamentId = tId;
+        window.AppStore.syncImmediate(tId).then(function () { window.location.hash = '#bracket/' + tId; });
+        return;
     }
 
     // ── Liga / Suíço Puro / Ranking: generate first round standings ──────────────────

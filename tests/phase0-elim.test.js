@@ -54,7 +54,8 @@ function mkT(n, extra) {
   return t;
 }
 function runDraw(t) { _curT = t; window.generateDrawFunction('x'); return t; }
-function byRound(t, r) { return (t.matches || []).filter(function (m) { return m.round === r; }); }
+// rodadas da CHAVE (exclui o jogo de 3º/4º, que o motor canônico gera no sorteio).
+function byRound(t, r) { return (t.matches || []).filter(function (m) { return m.round === r && !m.isThirdPlace; }); }
 function realNames(t) {
   var s = {};
   byRound(t, 1).forEach(function (m) {
@@ -69,9 +70,10 @@ function realNames(t) {
   var t = runDraw(mkT(8));
   ok(byRound(t, 1).length === 4 && byRound(t, 2).length === 2 && byRound(t, 3).length === 1, '8 jogadores → 4/2/1 por rodada [' + byRound(t, 1).length + '/' + byRound(t, 2).length + '/' + byRound(t, 3).length + ']');
   ok(byRound(t, 1).every(function (m) { return !m.isBye; }), '8 jogadores → R1 sem BYE');
-  ok(byRound(t, 1).every(function (m) { return m.nextMatchId && (m.nextSlot === 'p1' || m.nextSlot === 'p2'); }), '8 jogadores → R1 com nextMatchId + nextSlot (saiu do núcleo, não do _buildNextMatchLinks legado)');
-  ok((t.matches || []).every(function (m) { return !m.team1Obj && !m.team2Obj; }), 'paridade de shape: sem team1Obj/team2Obj');
-  ok((t.matches || []).every(function (m) { return m.bracket === undefined; }), 'paridade de shape: m.bracket undefined (single-elim)');
+  ok(byRound(t, 1).every(function (m) { return m.nextMatchId && (m.nextSlot === 'p1' || m.nextSlot === 'p2'); }), '8 jogadores → R1 com nextMatchId + nextSlot (saiu do núcleo)');
+  ok(byRound(t, 1).every(function (m) { return m.team1Obj && m.team2Obj; }), 'shape canônico: R1 com team1Obj/team2Obj (uid preservado)');
+  ok((t.matches || []).every(function (m) { return m.bracket === 'main'; }), 'shape canônico: m.bracket === "main" (linha única, render único)');
+  ok(t._canonicalDraw === true, 'Fase 0 marcada como canônica (render único via _renderPhaseBracket)');
   ok(realNames(t).length === 8, '8 jogadores → todos os 8 na R1');
 })();
 
@@ -104,9 +106,9 @@ function realNames(t) {
   for (var j = 1; j <= 4; j++) parts.push({ displayName: 'B' + j, name: 'B' + j, categories: ['Masc A'] });
   var t = { id: 'x', format: 'Eliminatórias Simples', teamSize: 1, participants: parts, combinedCategories: ['Fem A', 'Masc A'] };
   runDraw(t);
-  var fem = (t.matches || []).filter(function (m) { return m.category === 'Fem A'; });
-  var masc = (t.matches || []).filter(function (m) { return m.category === 'Masc A'; });
-  ok(fem.length === 3 && masc.length === 3, '2 categorias (4+4) → 3 jogos por categoria [' + fem.length + '/' + masc.length + ']');
+  var fem = (t.matches || []).filter(function (m) { return m.category === 'Fem A' && !m.isThirdPlace; });
+  var masc = (t.matches || []).filter(function (m) { return m.category === 'Masc A' && !m.isThirdPlace; });
+  ok(fem.length === 3 && masc.length === 3, '2 categorias (4+4) → 3 jogos de chave por categoria [' + fem.length + '/' + masc.length + ']');
   ok((t.matches || []).every(function (m) { return m.category === 'Fem A' || m.category === 'Masc A'; }), 'todo match marcado com a categoria');
 })();
 

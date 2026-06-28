@@ -711,7 +711,7 @@
     var dupla = !!(cfg && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))));
     if (pool.length === 1) {
       // 1 inscrito → campeão por BYE (preserva o legado da Fase 0).
-      return { matches: [{ id: idPrefix + '-bye', round: 1, p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true }] };
+      return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: 'main', p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true }] };
     }
     if (dupla) {
       // Dupla Eliminatória: a R1 do upper sai do núcleo; o lower é montado por
@@ -720,7 +720,8 @@
       up.needsDoubleElim = true;
       return up;
     }
-    return genTierBracket(pool, undefined, idPrefix, _res, _third);
+    // Linha única = bracket 'main' (igual à Fase N) → _renderPhaseBracket renderiza por 1 render só.
+    return genTierBracket(pool, 'main', idPrefix, _res, _third);
   }
 
   function generatePhase(pool, cfg, ctx) {
