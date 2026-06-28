@@ -18,6 +18,7 @@ const SUITES = [
   'tests/phase0-monarch.test.js',
   'tests/phase0-groups-canonical.test.js',
   'tests/phase-identity.test.js',
+  'tests/no-format-regression.test.js',
   'js/views/phases-engine.test.js',
   'js/views/phase-generators.test.js',
   'js/views/team-formation.test.js',

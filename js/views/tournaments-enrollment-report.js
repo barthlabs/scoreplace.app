@@ -139,7 +139,7 @@
     var isLiga = (typeof window._isLigaFormat === 'function') ? window._isLigaFormat(t) : (fmt === 'Liga' || fmt === 'Ranking');
     var isSuico = lf.indexOf('su') === 0 && (lf.indexOf('suí') !== -1 || lf.indexOf('sui') !== -1);
     var isDupla = lf.indexOf('dupla') !== -1;
-    var isMonarchFmt = (typeof window._isMonarchFormat === 'function') ? window._isMonarchFormat(t) : (fmt === 'Rei/Rainha da Praia');
+    var isMonarchFmt = !!(window._isMonarchFormat && window._isMonarchFormat(t));
     // Rei/Rainha (modo) tem precedência sobre "grupos": é grupos de 4 rotativos, estimativa própria.
     var isGrupos = !isMonarchFmt && lf.indexOf('grupo') !== -1;
 
