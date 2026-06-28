@@ -5,6 +5,15 @@ window._isLigaFormat = window._isLigaFormat || function(t) {
     return t && (t.format === 'Liga' || t.format === 'Ranking');
 };
 
+// Rei/Rainha é MODO de sorteio/chaveamento (parceiro rotativo), NÃO um formato de fase.
+// A fonte da verdade é t.drawMode === 'rei_rainha' (ou ligaRoundFormat='rei_rainha' p/ Liga
+// Rei/Rainha). O string legado t.format === 'Rei/Rainha da Praia' é só FALLBACK de compat pra
+// torneios antigos (criados antes do drawMode virar a fonte). Toda LÓGICA/display que precisa
+// saber "é Rei/Rainha?" usa este helper — nunca compara t.format direto.
+window._isMonarchFormat = window._isMonarchFormat || function(t) {
+    return !!(t && (t.drawMode === 'rei_rainha' || t.ligaRoundFormat === 'rei_rainha' || t.format === 'Rei/Rainha da Praia'));
+};
+
 // ── Merge Participants: mesclar dois participantes (organizer, após sorteio) ──
 // Supports both desktop drag-and-drop AND mobile touch drag.
 // Core logic in _executeMerge(); drag/touch just determine source+target names.

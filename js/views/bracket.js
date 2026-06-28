@@ -212,7 +212,7 @@ function renderBracket(container, tournamentId, isInline) {
       : ''}
     <div class="d-flex justify-between align-center mb-4" style="flex-wrap:wrap;gap:1rem;">
       <div>
-        <h2 style="margin:0;">${isLiga || isSuico ? _t('bracket.title.standings') + ' — ' : isGrupos ? _t('bracket.title.groups') + ' — ' : t.format === 'Rei/Rainha da Praia' ? '👑 ' + _t('bracket.title.monarch') + ' — ' : _t('bracket.title.bracket') + ' — '}${window._safeHtml(t.name)}</h2>
+        <h2 style="margin:0;">${isLiga || isSuico ? _t('bracket.title.standings') + ' — ' : window._isMonarchFormat(t) ? '👑 ' + _t('bracket.title.monarch') + ' — ' : isGrupos ? _t('bracket.title.groups') + ' — ' : _t('bracket.title.bracket') + ' — '}${window._safeHtml(t.name)}</h2>
         <div class="d-flex gap-2 mt-1">
           ${hasContent ? `<span class="badge badge-success" style="background:rgba(16,185,129,0.2);color:#34d399;">${_t('bracket.drawDone')}</span>` : `<span class="badge badge-warning">${_t('bracket.waitingDraw')}</span>`}
           <span class="badge badge-info">${(window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || 'Eliminatórias'}</span>
@@ -349,8 +349,9 @@ function renderBracket(container, tournamentId, isInline) {
     // If stage is elimination, fall through to bracket rendering below
   }
 
-  // ── Rei/Rainha da Praia ───────────────────────────────────────────────────
-  var isMonarch = t.format === 'Rei/Rainha da Praia';
+  // ── Rei/Rainha (MODO de sorteio) — caminho legado de t.groups nativo ──────
+  // (o canônico, t.matches taggeado, renderiza acima via _renderPhaseBracket.)
+  var isMonarch = window._isMonarchFormat(t);
   if (isMonarch && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
       container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + _renderMonarchStage(t, isOrg, canEnterResult) + standbyHtml;
@@ -1839,7 +1840,7 @@ window._renderPhase0ReadOnly = function (t) {
   if (!t) return '';
   var f0 = Object.assign({}, t, { currentPhaseIndex: 0 });
   var _isLiga0 = !!(window._isLigaFormat && window._isLigaFormat(f0));
-  var _isMonarchDaPraia = (f0.format === 'Rei/Rainha da Praia');
+  var _isMonarchDaPraia = window._isMonarchFormat(f0);
   var _hasGroups0 = Array.isArray(f0.groups) && f0.groups.length > 0;
   try {
     if (_isMonarchDaPraia && typeof window._renderMonarchStage === 'function') return window._renderMonarchStage(f0, false, false, { suppressAutoAdvance: true });

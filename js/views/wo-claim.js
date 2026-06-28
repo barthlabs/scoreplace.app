@@ -58,7 +58,7 @@
     return !!(cu && typeof window._canManagePresence === 'function' && window._canManagePresence(t, cu));
   }
   function _isLiga(t) { return !!(window._isLigaFormat ? window._isLigaFormat(t) : (t && (t.format === 'Liga' || t.format === 'Ranking'))); }
-  function _isMonarchFmt(t) { return !!(t && (t.format === 'Rei/Rainha da Praia' || t.ligaRoundFormat === 'rei_rainha')); }
+  function _isMonarchFmt(t) { return !!(window._isMonarchFormat ? window._isMonarchFormat(t) : (t && (t.format === 'Rei/Rainha da Praia' || t.ligaRoundFormat === 'rei_rainha'))); }
 
   // ─── gating: multi-dia + jogadores lançam resultado ────────────────────────────
   function _ymd(dstr) {
