@@ -109,7 +109,53 @@
     return { groups: groups, waitNames: waitNames };
   }
 
-  var api = { buildGroupsCore: buildGroupsCore };
-  if (typeof window !== 'undefined') { window._drawCores = api; window._buildGroupsCore = buildGroupsCore; }
+  // ── REI/RAINHA DA PRAIA (monarch) — núcleo pool-based ───────────────────────
+  // Extração FIEL do branch "Rei/Rainha da Praia" de generateDrawFunction
+  // (tournaments-draw.js ~947-1009): shuffle → grupos de 4 (sobra → leftOut) → 3
+  // jogos de PARCEIRO ROTATIVO (AB/CD, AC/BD, AD/BC) pelo núcleo ÚNICO
+  // _buildMonarchGroup (a MESMA fonte das 3 pairings que a Liga Rei/Rainha e a
+  // Fase N usam) → wrapper de grupo da Fase 0 (rounds[0].matches +
+  // individualStandings). Recebe a lista de NOMES de jogadores (Rei/Rainha é
+  // INDIVIDUAL — sem duplas pré-formadas). A sobra volta como leftOut pro
+  // chamador avisar (igual ao legado, que só mostrava warning).
+  //
+  // opts: {
+  //   buildMonarchGroup(o)->{matches},   // window._buildMonarchGroup (fonte das 3 pairings)
+  //   groupName(i)->string,               // window._groupName
+  //   shuffle(arr)->arr (default Fisher-Yates), now (default Date.now())
+  // }
+  // → { groups:[{name,players[],rounds:[{round,status,matches[]}],individualStandings[]}], leftOut:[] }
+  function buildMonarchCore(names, opts) {
+    opts = opts || {};
+    var list = (names || []).slice();
+    var shuffle = opts.shuffle || _defaultShuffle;
+    var now = (typeof opts.now === 'number') ? opts.now : Date.now();
+    var buildGroup = opts.buildMonarchGroup;
+    var groupName = opts.groupName || function (i) { return 'Grupo ' + (i + 1); };
+
+    list = shuffle(list);
+    var nGroups = Math.floor(list.length / 4);
+    var leftOut = list.slice(nGroups * 4);
+
+    var groups = [];
+    for (var g = 0; g < nGroups; g++) {
+      var players = list.slice(g * 4, g * 4 + 4);
+      // Núcleo ÚNICO das 3 pairings (parceiro rotativo). Anexa group=gi (consumido
+      // por _checkGroupRoundComplete no save de resultado pra avançar a rodada) e
+      // tira o label "R1 …" (a Fase 0 do torneio puro nunca teve label de jogo).
+      var built = buildGroup({ roundNum: 1, roundIndex: 0, gi: g, players: players, ts: now });
+      var matches = (built.matches || []).map(function (m) { m.group = g; delete m.label; return m; });
+      groups.push({
+        name: groupName(g),
+        players: players,
+        rounds: [{ round: 1, status: 'active', matches: matches }],
+        individualStandings: players.map(function (n) { return { name: n, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, played: 0 }; })
+      });
+    }
+    return { groups: groups, leftOut: leftOut };
+  }
+
+  var api = { buildGroupsCore: buildGroupsCore, buildMonarchCore: buildMonarchCore };
+  if (typeof window !== 'undefined') { window._drawCores = api; window._buildGroupsCore = buildGroupsCore; window._buildMonarchCore = buildMonarchCore; }
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

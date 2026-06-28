@@ -948,41 +948,27 @@ window.generateDrawFunction = function (tId) {
         let participants = Array.isArray(t.participants) ? [...t.participants] : Object.values(t.participants || {});
         const getName = (p) => typeof p === 'string' ? p : (p.displayName || p.name || '');
 
-        // Shuffle
-        for (let i = participants.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [participants[i], participants[j]] = [participants[j], participants[i]];
-        }
-
         if (participants.length < 4) {
             showAlertDialog(_t('monarch.minParticipantsTitle'), _t('monarch.minParticipants'), null, { type: 'warning' });
             return;
         }
 
-        const numGroups = Math.floor(participants.length / 4);
-        const remainder = participants.length % 4;
-        const groups = [];
-        const ts = Date.now();
+        // v4.0.26 (motor canônico): grupos de Rei/Rainha pelo NÚCLEO ÚNICO
+        // window._buildMonarchCore (draw-cores.js) — shuffle → grupos de 4 → 3 jogos
+        // de PARCEIRO ROTATIVO pelo _buildMonarchGroup (a MESMA fonte de pairings da
+        // Liga Rei/Rainha e da Fase N). A Fase 0 não monta mais os pares inline; a
+        // sobra volta como leftOut (mesmo aviso de antes). Comportamento idêntico
+        // (paridade: tests/draw-cores + tests/phase0-monarch).
+        const _monNames = participants.map(getName);
+        const _monCore = window._buildMonarchCore(_monNames, {
+            buildMonarchGroup: window._buildMonarchGroup,
+            groupName: window._groupName
+        });
+        const groups = _monCore.groups;
+        const numGroups = groups.length;
+        const remainder = _monCore.leftOut.length;
 
-        for (let g = 0; g < numGroups; g++) {
-            const players = [getName(participants[g*4]), getName(participants[g*4+1]), getName(participants[g*4+2]), getName(participants[g*4+3])];
-            const [A, B, C, D] = players;
-            groups.push({
-                name: window._groupName(g),
-                players: players,
-                rounds: [{
-                    round: 1, status: 'active',
-                    matches: [
-                        { id: 'monarch-g'+g+'-m0-'+ts, team1:[A,B], team2:[C,D], p1:A+' / '+B, p2:C+' / '+D, scoreP1:null, scoreP2:null, winner:null, group:g, matchIndex:0, isMonarch:true },
-                        { id: 'monarch-g'+g+'-m1-'+ts, team1:[A,C], team2:[B,D], p1:A+' / '+C, p2:B+' / '+D, scoreP1:null, scoreP2:null, winner:null, group:g, matchIndex:1, isMonarch:true },
-                        { id: 'monarch-g'+g+'-m2-'+ts, team1:[A,D], team2:[B,C], p1:A+' / '+D, p2:B+' / '+C, scoreP1:null, scoreP2:null, winner:null, group:g, matchIndex:2, isMonarch:true }
-                    ]
-                }],
-                individualStandings: players.map(function(n) { return { name:n, wins:0, losses:0, pointsFor:0, pointsAgainst:0, played:0 }; })
-            });
-        }
-
-        // Remainder players join last group (5-player group with more rotations) or show warning
+        // Sobra (não fechou grupo de 4): fica de fora com aviso (legado mantido).
         if (remainder > 0) {
             showNotification(_t('draw.warning'), _t('tdraw.monarchWarningMsg', { n: remainder }), 'warning');
         }

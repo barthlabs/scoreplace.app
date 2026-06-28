@@ -15,6 +15,7 @@ const SUITES = [
   'tests/phase-lifecycle.test.js',
   'tests/elim-seed.test.js',
   'tests/phase0-elim.test.js',
+  'tests/phase0-monarch.test.js',
   'js/views/phases-engine.test.js',
   'js/views/phase-generators.test.js',
   'js/views/team-formation.test.js',
