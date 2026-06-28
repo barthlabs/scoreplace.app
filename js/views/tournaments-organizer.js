@@ -884,7 +884,7 @@ window._contactOrgButtonHtml = function(t, opts) {
   var full = opts.fullWidth ? 'width:100%;' : '';
   var mt = (opts.marginTop != null) ? opts.marginTop : '10px';
   var html = '<button type="button" class="sp-contact-org-btn hover-lift" data-contact-org-uid="' + uid + '" ' +
-    'onclick="event.stopPropagation();window._contactOrganizer(\'' + tId + '\')" ' +
+    'onclick="event.stopPropagation();window._contactOrganizerDirect(\'' + tId + '\')" ' +
     'style="' + full + 'margin-top:' + mt + ';display:inline-flex;align-items:center;justify-content:center;gap:8px;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.38);border-radius:10px;padding:9px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;transition:background 0.15s,border-color 0.15s,color 0.15s;">' +
     '<span class="sp-contact-org-ic" style="display:inline-flex;align-items:center;">💬</span>' +
     '<span class="sp-contact-org-lb">Falar com o organizador</span></button>';
@@ -929,7 +929,103 @@ window._hydrateContactOrgButtons = async function(root) {
   }
 };
 
-// Entry point — resolve o contato do organizador e abre o diálogo.
+// Resolve o canal de contato do organizador a partir do torneio + perfil (já
+// carregado). SÍNCRONO — não faz I/O. Fonte única usada pelo caminho direto e
+// pelo diálogo de fallback. Ver v4.0.37 sobre a montagem internacional do número.
+window._resolveOrgContact = function(t, profile) {
+  var orgName = t.organizerName || (profile && profile.displayName) ||
+                (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador';
+  var phoneDigits = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
+  var email = (profile && profile.email) || t.organizerEmail || '';
+  var useWhatsApp = phoneDigits.length >= 10;
+  var phoneFull = '';
+  if (useWhatsApp) {
+    var cc = (profile && profile.phoneCountry ? String(profile.phoneCountry).replace(/\D/g, '') : '') || '55';
+    var _e164 = (typeof window._normalizePhoneE164 === 'function')
+      ? window._normalizePhoneE164(profile.phone, cc) : '';
+    phoneFull = _e164 ? _e164.replace(/\D/g, '') : (phoneDigits.length >= (cc.length + 10) ? phoneDigits : (cc + phoneDigits));
+  }
+  return { orgName: orgName, phoneDigits: phoneDigits, email: email, useWhatsApp: useWhatsApp, phoneFull: phoneFull };
+};
+
+// Mensagem pré-preenchida (saudação + nome do remetente + torneio). Sem I/O.
+window._buildOrgGreeting = function(t, orgName) {
+  var cu = window.AppStore.currentUser;
+  var senderName = (cu && (cu.displayName || cu.name)) || '';
+  var firstName = String(orgName || '').split(/[\s@]/)[0] || '';
+  return 'Olá' + (firstName ? ' ' + firstName : '') + '! ' +
+    (senderName ? 'Sou ' + senderName + ', participante' : 'Sou participante') +
+    ' do torneio "' + (t.name || '') + '" no scoreplace.app. ';
+};
+
+// Avisa o organizador na plataforma (in-app) → criador + co-organizadores ativos.
+// Assíncrono — SEMPRE chamado DEPOIS de abrir o canal externo (os awaits aqui
+// não podem mais bloquear a navegação). skipWhatsApp no caminho wa.me evita
+// duplicar (o wa.me já entrega).
+window._dispatchOrgPlatformNotification = async function(t, fullMsg, useWhatsApp) {
+  var cu = window.AppStore.currentUser;
+  var senderName = (cu && (cu.displayName || cu.name)) || 'Um participante';
+  var skipOpt = useWhatsApp ? { skipWhatsApp: true } : true;
+  var targets = [];
+  if (t.creatorUid) targets.push({ uid: t.creatorUid, email: t.organizerEmail || '' });
+  (Array.isArray(t.coHosts) ? t.coHosts : []).forEach(function(ch){ if (ch.status === 'active') targets.push({ uid: ch.uid || '', email: ch.email || '' }); });
+  if (targets.length === 0 && t.organizerEmail) targets.push({ uid: '', email: t.organizerEmail });
+  var seen = {};
+  for (var i = 0; i < targets.length; i++) {
+    var o = targets[i]; var uid = o.uid;
+    if (!uid && o.email && window.FirestoreDB && window.FirestoreDB.db) {
+      try { var snap = await window.FirestoreDB.db.collection('users').where('email', '==', o.email).limit(1).get(); if (!snap.empty) uid = snap.docs[0].id; } catch (e) {}
+    }
+    if (uid && !seen[uid]) {
+      seen[uid] = true;
+      try {
+        await window._sendUserNotification(uid, {
+          type: 'player_to_organizer', level: 'fundamental',
+          tournamentId: String(t.id), tournamentName: t.name || 'torneio',
+          message: fullMsg, fromName: senderName
+        }, skipOpt);
+      } catch (e) {}
+    }
+  }
+};
+
+// v4.0.41 — Entry point do botão "Falar com o organizador". Abre o WhatsApp
+// DIRETO (sem a tela intermediária do app), com a mensagem já pré-preenchida —
+// o usuário só envia. O perfil do org já foi cacheado por _hydrateContactOrgButtons
+// na renderização, então a resolução do número é SÍNCRONA e o wa.me abre dentro
+// do gesto de clique (essencial pro iOS). Casos de fallback (perfil ainda não
+// cacheado, ou org sem telefone/e-mail) caem no _contactOrganizer (diálogo).
+window._contactOrganizerDirect = function(tId) {
+  var t = window._findTournamentById(tId);
+  if (!t) { if (typeof showNotification !== 'undefined') showNotification('Torneio não encontrado', '', 'error'); return; }
+  var cache = window._spOrgProfileCache = window._spOrgProfileCache || {};
+  var cached = t.creatorUid && Object.prototype.hasOwnProperty.call(cache, t.creatorUid);
+  // Perfil ainda não carregado → não dá pra abrir o WhatsApp sincronamente (o
+  // await perderia o gesto). Cai no resolvedor assíncrono (diálogo) como rede de
+  // segurança. Na prática o botão já hidratou no render, então isto é raro.
+  if (!cached) return window._contactOrganizer(tId);
+  var info = window._resolveOrgContact(t, cache[t.creatorUid]);
+  // Sem canal externo (org só tem conta in-app) → diálogo/notificação tradicional.
+  if (!info.useWhatsApp && !(info.email && info.email.indexOf('@') !== -1)) {
+    return window._contactOrganizer(tId);
+  }
+  var msg = window._buildOrgGreeting(t, info.orgName);
+  // Abre o canal externo SINCRONAMENTE (dentro do gesto).
+  try {
+    if (info.useWhatsApp && info.phoneFull) {
+      window._openExternalUrl('https://wa.me/' + info.phoneFull + '?text=' + encodeURIComponent(msg));
+    } else {
+      var subject = encodeURIComponent('Torneio: ' + (t.name || ''));
+      window._openExternalUrl('mailto:' + info.email + '?subject=' + subject + '&body=' + encodeURIComponent(msg));
+    }
+  } catch (e) {}
+  // Avisa o org na plataforma (assíncrono, depois de abrir o canal externo).
+  try { window._dispatchOrgPlatformNotification(t, msg, info.useWhatsApp); } catch (e) {}
+};
+
+// Entry point assíncrono (FALLBACK) — resolve o contato do organizador e abre o
+// diálogo de digitação. Usado quando o perfil ainda não está cacheado ou quando
+// o org só tem contato in-app. O caminho normal é _contactOrganizerDirect.
 window._contactOrganizer = async function(tId) {
   // v2.8.29: busca tb na descoberta pública (torneio não inscrito) — antes só
   // AppStore.tournaments → "Torneio não encontrado" pra quem descobre o torneio.
@@ -953,33 +1049,14 @@ window._contactOrganizer = async function(tId) {
     } catch (e) { profile = null; }
   }
 
-  var orgName = t.organizerName || (profile && profile.displayName) ||
-                (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador';
-  var phoneDigits = (profile && profile.phone) ? String(profile.phone).replace(/\D/g, '') : '';
-  var email = (profile && profile.email) || t.organizerEmail || '';
-  // v4.0.36: ver _hydrateContactOrgButtons — contato direto não é gated por
-  // notifyWhatsApp (que rege só notificações automáticas). Org com número → WhatsApp.
-  var useWhatsApp = phoneDigits.length >= 10;
-  var phoneFull = '';
-  if (useWhatsApp) {
-    var cc = (profile && profile.phoneCountry ? String(profile.phoneCountry).replace(/\D/g, '') : '') || '55';
-    // v4.0.37: monta o número via _normalizePhoneE164 (helper canônico) em vez de
-    // um heurístico por comprimento (>=12). O app NÃO é só BR — phoneCountry pode
-    // ser '1' (EUA), '44' etc. O heurístico antigo duplicava o DDI em países de
-    // código curto: '+12015551234' (cc=1) virava '112015551234'. O normalizador
-    // remove o DDI se já presente e re-aplica, certo pra qualquer país. Já vem
-    // com DDI; tiramos o '+' pro formato do wa.me (só dígitos).
-    var _e164 = (typeof window._normalizePhoneE164 === 'function')
-      ? window._normalizePhoneE164(profile.phone, cc) : '';
-    phoneFull = _e164 ? _e164.replace(/\D/g, '') : (phoneDigits.length >= (cc.length + 10) ? phoneDigits : (cc + phoneDigits));
-  }
-  if (!useWhatsApp && !(email && email.indexOf('@') !== -1) && !t.creatorUid) {
+  var info = window._resolveOrgContact(t, profile);
+  if (!info.useWhatsApp && !(info.email && info.email.indexOf('@') !== -1) && !t.creatorUid) {
     if (typeof showNotification !== 'undefined') {
       showNotification('Contato indisponível', 'O organizador ainda não cadastrou telefone ou e-mail de contato.', 'info');
     }
     return;
   }
-  window._pendingContactOrg = { tId: String(tId), useWhatsApp: useWhatsApp, phoneFull: phoneFull, email: email, orgName: orgName };
+  window._pendingContactOrg = { tId: String(tId), useWhatsApp: info.useWhatsApp, phoneFull: info.phoneFull, email: info.email, orgName: info.orgName };
   window._openContactOrgDialog(tId);
 };
 
@@ -995,12 +1072,7 @@ window._openContactOrgDialog = function(tId) {
 
   var useWhatsApp = !!pend.useWhatsApp;
   var hasEmail = !!(pend.email && pend.email.indexOf('@') !== -1);
-  var cu = window.AppStore.currentUser;
-  var senderName = (cu && (cu.displayName || cu.name)) || '';
-  var firstName = String(pend.orgName || '').split(/[\s@]/)[0] || '';
-  var greet = 'Olá' + (firstName ? ' ' + firstName : '') + '! ' +
-    (senderName ? 'Sou ' + senderName + ', participante' : 'Sou participante') +
-    ' do torneio "' + (t.name || '') + '" no scoreplace.app. ';
+  var greet = window._buildOrgGreeting(t, pend.orgName);
 
   var channelNote = useWhatsApp ? 'Vai pela plataforma e abre o WhatsApp do organizador (com cópia por e-mail).' :
                     hasEmail ? 'Vai pela plataforma e abre seu e-mail pro organizador.' :
@@ -1044,8 +1116,6 @@ window._submitContactOrg = async function(tId) {
     if (typeof showAlertDialog !== 'undefined') showAlertDialog('Mensagem vazia', 'Escreva uma mensagem antes de enviar.', null, { type: 'warning' });
     return;
   }
-  var cu = window.AppStore.currentUser;
-  var senderName = (cu && (cu.displayName || cu.name)) || 'Um participante';
   var btn = document.querySelector('#modal-msg-org-' + tId + ' .sp-send-org');
   if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerHTML = 'Enviando…'; }
 
@@ -1077,34 +1147,9 @@ window._submitContactOrg = async function(tId) {
       'success');
   }
 
-  // Plataforma (in-app) SEMPRE → criador + co-organizadores ativos. No caminho
-  // WhatsApp, manda cópia por e-mail mas pula o auto-WhatsApp (o wa.me entrega).
-  // No caminho e-mail/plataforma, só in-app (o mailto entrega o e-mail). Roda
-  // DEPOIS de abrir o canal externo — os awaits aqui não podem mais bloquear a
-  // navegação porque ela já aconteceu.
-  var skipOpt = pend.useWhatsApp ? { skipWhatsApp: true } : true;
-  var targets = [];
-  if (t.creatorUid) targets.push({ uid: t.creatorUid, email: t.organizerEmail || '' });
-  (Array.isArray(t.coHosts) ? t.coHosts : []).forEach(function(ch){ if (ch.status === 'active') targets.push({ uid: ch.uid || '', email: ch.email || '' }); });
-  if (targets.length === 0 && t.organizerEmail) targets.push({ uid: '', email: t.organizerEmail });
-
-  var seen = {};
-  for (var i = 0; i < targets.length; i++) {
-    var o = targets[i]; var uid = o.uid;
-    if (!uid && o.email && window.FirestoreDB && window.FirestoreDB.db) {
-      try { var snap = await window.FirestoreDB.db.collection('users').where('email', '==', o.email).limit(1).get(); if (!snap.empty) uid = snap.docs[0].id; } catch (e) {}
-    }
-    if (uid && !seen[uid]) {
-      seen[uid] = true;
-      try {
-        await window._sendUserNotification(uid, {
-          type: 'player_to_organizer', level: 'fundamental',
-          tournamentId: String(t.id), tournamentName: t.name || 'torneio',
-          message: fullMsg, fromName: senderName
-        }, skipOpt);
-      } catch (e) {}
-    }
-  }
+  // Plataforma (in-app) SEMPRE → criador + co-organizadores ativos. Roda DEPOIS
+  // de abrir o canal externo — os awaits aqui não bloqueiam mais a navegação.
+  await window._dispatchOrgPlatformNotification(t, fullMsg, pend.useWhatsApp);
 };
 
 // ─── Save as Template ─────────────────────────────────────────────────────
