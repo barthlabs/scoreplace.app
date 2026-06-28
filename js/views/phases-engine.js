@@ -703,6 +703,26 @@
   //  • Fase N  → pool já ranqueado pela transição: sem embaralhar (semente preservada).
   // Categorias: o chamador separa o pool por categoria e chama 1× por categoria (cada
   // chamada tagueia matches com cfg.category). Liga incremental devolve {incrementalLeague}.
+  // Gera a chave de eliminação (1 linha) a partir de um pool já ordenado. Honra a
+  // resolução de não-potência-de-2 da cfg (bye/playin → genTierBracket; dupla via flag).
+  function _genElimFromPool(pool, cfg, idPrefix) {
+    var _res = (cfg && cfg.bracketResolution) || 'bye';
+    var _third = cfg ? (cfg.thirdPlace !== false) : true;
+    var dupla = !!(cfg && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))));
+    if (pool.length === 1) {
+      // 1 inscrito → campeão por BYE (preserva o legado da Fase 0).
+      return { matches: [{ id: idPrefix + '-bye', round: 1, p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true }] };
+    }
+    if (dupla) {
+      // Dupla Eliminatória: a R1 do upper sai do núcleo; o lower é montado por
+      // _buildDoubleElimBracket (lê t.matches) → sinaliza needsDoubleElim pro chamador.
+      var up = genTierBracket(pool, 'upper', idPrefix + '-upper', _res, false);
+      up.needsDoubleElim = true;
+      return up;
+    }
+    return genTierBracket(pool, undefined, idPrefix, _res, _third);
+  }
+
   function generatePhase(pool, cfg, ctx) {
     ctx = ctx || {};
     var idPrefix = ctx.idPrefix || 'gp';
@@ -712,23 +732,37 @@
       pool = _shufflePool(pool);
       pool = _seedEnrollmentPool(pool, cfg, ctx);
     }
+    var fmt = classifyPhaseFormat(cfg);
+    var monarch = isMonarchDraw(cfg);
     var built;
-    if (isMonarchDraw(cfg)) {
+    if (monarch) {
       built = genMonarchFromPool(pool, cfg, idPrefix);
+    } else if (fmt === 'groups') {
+      built = genGroupsFromPool(pool, cfg, idPrefix);
+    } else if (fmt === 'league') {
+      // Cadência = eixo da cfg (mesma lógica do buildPhaseLeagueStage, p/ identidade):
+      // 'incremental' → rodada-a-rodada (o chamador gera a 1ª rodada via _generateNextRound).
+      if (cfg && cfg.ligaCadence === 'incremental') { built = { matches: [], players: pool.map(function (p) { return p.displayName; }), pool: pool, incrementalLeague: true }; }
+      else { built = genLeagueFromPool(pool, cfg, idPrefix); }
     } else {
-      switch (classifyPhaseFormat(cfg)) {
-        case 'groups': built = genGroupsFromPool(pool, cfg, idPrefix); break;
-        case 'league':
-          // Cadência = eixo da cfg (mesma lógica do buildPhaseLeagueStage, p/ identidade):
-          // 'incremental' → rodada-a-rodada (pool; o chamador gera a 1ª rodada via
-          // _generateNextRound). Caso contrário (incl. 'round_robin'/ausente) → estático.
-          if (cfg && cfg.ligaCadence === 'incremental') { built = { matches: [], players: pool.map(function (p) { return p.displayName; }), pool: pool, incrementalLeague: true }; }
-          else { built = genLeagueFromPool(pool, cfg, idPrefix); }
-          break;
-        default:
-          var _res = (cfg && cfg.bracketResolution) || 'bye';
-          var _third = cfg ? (cfg.thirdPlace !== false) : true;
-          built = genTierBracket(pool, undefined, idPrefix, _res, _third);
+      // Eliminatória: split por CATEGORIA (cada categoria = chave independente). Sem
+      // categorias → 1 chave. O split é um EIXO da fase (cfg.categories), não código de
+      // posição. Cada chave tagueia seus matches com a categoria.
+      var cats = (cfg && Array.isArray(cfg.categories) && cfg.categories.length) ? cfg.categories : null;
+      if (cats && ctx && typeof ctx.catOf === 'function') {
+        var allM = [], needsDE = false;
+        cats.forEach(function (cat, ci) {
+          var catPool = pool.filter(function (e) { return String(ctx.catOf(e) || '') === String(cat); });
+          if (!catPool.length) return;
+          var b = _genElimFromPool(catPool, cfg, idPrefix + '-c' + ci);
+          (b.matches || []).forEach(function (m) { m.category = cat; });
+          allM = allM.concat(b.matches || []);
+          if (b.needsDoubleElim) needsDE = true;
+        });
+        built = { matches: allM };
+        if (needsDE) built.needsDoubleElim = true;
+      } else {
+        built = _genElimFromPool(pool, cfg, idPrefix);
       }
     }
     if (cfg && cfg.category != null) (built.matches || []).forEach(function (m) { if (m.category == null) m.category = cfg.category; });
