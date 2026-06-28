@@ -1141,6 +1141,14 @@
     // (slim: displayName + uid) + opponentHistory/sitOutHistory (acumulam por rodada) +
     // lastAutoDrawAt (dedup do auto-draw, por fase). O cliente (advanceMultiPhase →
     // _phaseGenNextLeagueRound) gera a 1ª rodada logo após, escrevendo em slot.rounds.
+    return storePhase(t, nextIdx, built);
+  }
+
+  // STORAGE ÚNICO de uma fase (qualquer índice, inclusive 0): grava o resultado do
+  // gerador (built) em t na shape taggeada (matches com phaseIndex) OU em
+  // t.phaseRounds[idx] (Liga incremental). É o MESMO armazenamento pra Fase 0
+  // (generateDrawFunction) e Fase N (materializeNextPhase) — "tudo é fase N".
+  function storePhase(t, idx, built) {
     if (built.incrementalLeague) {
       var _slim = (built.pool || []).map(function (e) {
         var nm = e.displayName || e.name;
@@ -1149,14 +1157,14 @@
         return o;
       });
       t.phaseRounds = t.phaseRounds || {};
-      t.phaseRounds[nextIdx] = { rounds: [], opponentHistory: {}, sitOutHistory: {}, pool: _slim };
-      t.currentPhaseIndex = nextIdx;
-      t.currentStage = 'phase' + nextIdx;
-      t._phaseMaterialized = nextIdx;
-      return { ok: true, matches: [], built: built, incrementalLeague: true, phaseIndex: nextIdx };
+      t.phaseRounds[idx] = { rounds: [], opponentHistory: {}, sitOutHistory: {}, pool: _slim };
+      t.currentPhaseIndex = idx;
+      t.currentStage = 'phase' + idx;
+      t._phaseMaterialized = idx;
+      return { ok: true, matches: [], built: built, incrementalLeague: true, phaseIndex: idx };
     }
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
-    built.matches.forEach(function (m) { m.phaseIndex = nextIdx; if (m.category === undefined) m.category = null; });
+    built.matches.forEach(function (m) { m.phaseIndex = idx; if (m.category === undefined) m.category = null; });
     t.matches = (t.matches || []).concat(built.matches);
     // v2.7.25: resolução 'standby' → os cortados vão pra lista de espera (reusa a
     // infra existente: aparecem no painel de Lista de Espera + servem pra W.O.).
@@ -1167,9 +1175,9 @@
       built.waitlist.forEach(function (tm) { var nm = tm && (tm.displayName || tm.name); if (nm && !_have[nm]) { _sb.push(nm); _have[nm] = 1; } });
       t.standbyParticipants = _sb;
     }
-    t.currentPhaseIndex = nextIdx;
-    t.currentStage = 'phase' + nextIdx;
-    t._phaseMaterialized = nextIdx;
+    t.currentPhaseIndex = idx;
+    t.currentStage = 'phase' + idx;
+    t._phaseMaterialized = idx;
     return { ok: true, matches: built.matches, built: built };
   }
 
@@ -1304,6 +1312,7 @@
     buildPhaseMonarchStage: buildPhaseMonarchStage,
     buildPhaseLeagueStage: buildPhaseLeagueStage,
     generatePhase: generatePhase,
+    storePhase: storePhase,
     genGroupsFromPool: genGroupsFromPool,
     genMonarchFromPool: genMonarchFromPool,
     genLeagueFromPool: genLeagueFromPool,
