@@ -784,9 +784,14 @@
       sec.options.forEach(function (o, oi) {
         var yesV = optYes[oi], noV = optNo[oi];
         var isMaj = (oi === majIdx);
+        // v4.0.x: vencedora = box verde; demais opções ganham box que ALTERNA por
+        // seção — 1ª seção (si=0) âmbar, 2ª (si=1) azul, 3ª âmbar, 4ª azul…
+        var altStyle = (si % 2 === 0)
+          ? 'border:2px solid rgba(245,158,11,0.55);background:rgba(245,158,11,0.07);'   // âmbar (seções pares)
+          : 'border:2px solid rgba(59,130,246,0.55);background:rgba(59,130,246,0.08);';  // azul (seções ímpares)
         var wrapStyle = isMaj
           ? 'margin-bottom:11px;border:2px solid rgba(16,185,129,0.65);background:rgba(16,185,129,0.08);border-radius:10px;padding:8px 10px;'
-          : 'margin-bottom:11px;';
+          : 'margin-bottom:11px;' + altStyle + 'border-radius:10px;padding:8px 10px;';
         var countLabel = sec.multiSelect
           ? ('<span style="color:#34d399;font-weight:700;">✅ ' + yesV.length + '</span> <span style="color:#f87171;font-weight:700;">· 🚫 ' + noV.length + '</span>')
           : ('<span style="color:var(--text-muted);font-weight:600;">· ' + yesV.length + '</span>');
