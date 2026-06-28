@@ -24,8 +24,15 @@ function openModal(modalId) {
   if (modal) {
     // v0.17.92: ao abrir modal-login, cancela timer de signout pendente
     // (deferred 2.5s do auth.js) que mataria o modal antes do user clicar.
-    if (modalId === 'modal-login' && typeof window._cancelPendingSignout === 'function') {
-      window._cancelPendingSignout();
+    if (modalId === 'modal-login') {
+      if (typeof window._cancelPendingSignout === 'function') window._cancelPendingSignout();
+      // v4.0.35: SEMPRE limpa as travas de "em andamento" ao (re)abrir o login.
+      // BUG: se uma tentativa anterior deixou `_entrarInFlight`/`_phoneLoginInFlight`
+      // presos em true, o botão Entrar ficava mudo pra sempre. Abrir o modal é o
+      // momento natural pra zerar isso.
+      window._entrarInFlight = false;
+      window._phoneLoginInFlight = false;
+      if (window._entrarWatchdog) { clearTimeout(window._entrarWatchdog); window._entrarWatchdog = null; }
     }
     modal.classList.add('active');
     // Scroll para o topo do conteúdo do modal

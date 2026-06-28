@@ -1493,7 +1493,8 @@ window._resetEntrarUI = function() {
   var btn = document.getElementById('btn-entrar');
   if (btn) btn.textContent = 'Entrar';
   window._entrarRegisterMode = false;
-  window._entrarInFlight = false;
+  if (typeof window._entrarSetInFlight === 'function') window._entrarSetInFlight(false);
+  else window._entrarInFlight = false;
   window._entrarStatus('');
   var step = document.getElementById('phone-step-code');
   if (step) step.style.display = 'none';
@@ -1646,6 +1647,27 @@ window._entrarShowGoogleSuggestion = function(provider) {
   }
 };
 
+// v4.0.35: recuperação por CELULAR cai no acesso por WhatsApp. BUG reportado
+// (Adriano, conta só-celular): "Esqueci minha senha" mostrava "Não deu pra confirmar
+// agora. Verifique sua conexão…" mesmo com 5G — a mensagem era um fallback errado,
+// porque o reset NATIVO do Firebase só sabe mandar e-mail e a conta não tem e-mail
+// real. Em vez disso, pra celular disparamos o fluxo de acesso por WhatsApp (link
+// mágico + SMS): a pessoa entra pelo link do WhatsApp e depois define uma senha nova
+// no perfil. É o caminho mais confiável pra quem não usa e-mail.
+window._entrarPhoneRecoveryFallback = function(raw) {
+  var country = (document.getElementById('login-identifier-country') || {}).value || '55';
+  var e164 = window._entrarPhoneE164(raw, country);
+  var localDigits = (typeof window._phoneLocalDigits === 'function')
+    ? window._phoneLocalDigits(e164, country)
+    : String(e164 || '').replace(/\D/g, '');
+  var hp = document.getElementById('login-phone');
+  var hc = document.getElementById('login-phone-country');
+  if (hp) hp.value = localDigits;
+  if (hc) hc.value = country;
+  window._entrarStatus('📱 Pra esse número, vamos te mandar um <b>acesso pelo WhatsApp</b> — toque no link pra entrar e depois defina uma senha nova no seu perfil.', 'info');
+  if (typeof handlePhoneLogin === 'function') handlePhoneLogin();
+};
+
 // "Esqueci minha senha": dispara o reset SEM precisar errar a senha antes. Checa
 // se a conta EXISTE primeiro (o app já assume enumeração — distingue entrar de
 // criar conta), pra dar a mensagem certa: sem conta → criar; Google sem senha →
@@ -1696,7 +1718,10 @@ window._entrarForgotPassword = function() {
     // Se a pessoa consegue abrir o app, esse caminho funciona. Garante que o link
     // sai mesmo se o dispatch rico (PT + ?pr=) falhar.
     var _nativeEmailReset = function() {
-      if (mode === 'phone' || !window.firebase || !firebase.auth) {
+      // Celular: o reset nativo do Firebase só manda e-mail, e conta só-celular não
+      // tem e-mail real. Vai pro acesso por WhatsApp (entra e troca a senha depois).
+      if (mode === 'phone') { window._entrarPhoneRecoveryFallback(raw); return; }
+      if (!window.firebase || !firebase.auth) {
         window._entrarStatus('⚠️ Não deu pra confirmar agora. Verifique sua conexão e toque de novo em "Esqueci minha senha".', 'warning');
         return;
       }
@@ -1776,6 +1801,26 @@ window._entrarDoRegister = function(mode, raw, password) {
   }
 };
 
+// v4.0.35: trava de "em andamento" com watchdog. BUG reportado (Adriano): clicar
+// em Entrar e "nada acontece, completamente silencioso". Causa: `_entrarInFlight`
+// ficava preso em true (promessa do Firebase que não resolveu, ou chamada dupla no
+// iOS) e TODO clique seguinte caía no `if (_entrarInFlight) return;` do topo —
+// silêncio permanente até recarregar. Agora toda vez que ligamos a trava, armamos
+// um watchdog que a desliga sozinho em 25s com uma mensagem, então o botão nunca
+// fica morto pra sempre.
+window._entrarSetInFlight = function(on) {
+  window._entrarInFlight = !!on;
+  if (window._entrarWatchdog) { clearTimeout(window._entrarWatchdog); window._entrarWatchdog = null; }
+  if (on) {
+    window._entrarWatchdog = setTimeout(function() {
+      if (!window._entrarInFlight) return;
+      window._entrarInFlight = false;
+      window._entrarWatchdog = null;
+      try { window._entrarStatus('⚠️ A conexão demorou demais pra responder. Toque em <b>Entrar</b> de novo.', 'warning'); } catch (_e) {}
+    }, 25000);
+  }
+};
+
 // O botão Entrar — máquina de estados única.
 window._handleEntrar = function() {
   if (window._entrarInFlight) return;
@@ -1791,16 +1836,20 @@ window._handleEntrar = function() {
   if (window._entrarRegisterMode) { window._entrarDoRegister(mode, raw, pw); return; }
 
   // Tentativa de login.
-  window._entrarInFlight = true;
+  window._entrarSetInFlight(true);
   window._entrarStatus('Entrando…', 'info');
   var target = (mode === 'email')
     ? raw.toLowerCase()
     : window._entrarSyntheticEmail(window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55'));
-  if (!target) { window._entrarInFlight = false; window._entrarStatus('Número de celular inválido.', 'warning'); return; }
+  if (!target) { window._entrarSetInFlight(false); window._entrarStatus('Número de celular inválido.', 'warning'); return; }
 
+  // v4.0.35: try/catch defensivo — se o SDK lançar de forma SÍNCRONA (Firebase não
+  // pronto, estado corrompido), o .then/.catch nunca anexa e a trava vazaria. O
+  // catch garante que destravamos e damos feedback em vez de silêncio.
+  try {
   firebase.auth().signInWithEmailAndPassword(target, pw)
     .then(function(result) {
-      window._entrarInFlight = false;
+      window._entrarSetInFlight(false);
       var user = result.user;
       if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
         var prof = { authProvider: (mode === 'phone') ? 'phone+password' : 'password', updatedAt: new Date().toISOString() };
@@ -1814,7 +1863,7 @@ window._handleEntrar = function() {
       if (modal) modal.classList.remove('active');
     })
     .catch(function(error) {
-      window._entrarInFlight = false;
+      window._entrarSetInFlight(false);
       var code = (error && error.code) || '';
       var loginFail = (code === 'auth/wrong-password' || code === 'auth/invalid-credential' ||
         code === 'auth/user-not-found' || code === 'auth/invalid-login-credentials');
@@ -1860,11 +1909,11 @@ window._handleEntrar = function() {
       if (mode === 'phone') {
         var _e164try = window._entrarPhoneE164(raw, (document.getElementById('login-identifier-country') || {}).value || '55');
         if (_e164try) {
-          window._entrarInFlight = true;
+          window._entrarSetInFlight(true);
           window._entrarStatus('Entrando…', 'info');
           window._entrarPhonePasswordLogin(_e164try, pw).then(function(done) {
             if (done) return; // logou via custom token; onAuthStateChanged cuida do resto
-            window._entrarInFlight = false;
+            window._entrarSetInFlight(false);
             _entrarDisambiguate();
           });
           return;
@@ -1872,6 +1921,11 @@ window._handleEntrar = function() {
       }
       _entrarDisambiguate();
     });
+  } catch (e) {
+    window._entrarSetInFlight(false);
+    window._error && window._error('[handleEntrar] throw síncrono:', e && (e.message || e));
+    window._entrarStatus('⚠️ Não foi possível iniciar o login agora. Recarregue a página e tente de novo.', 'error');
+  }
 };
 
 // Login por celular uid-first: chama a Cloud Function que resolve a conta pelo
@@ -1886,7 +1940,7 @@ window._entrarPhonePasswordLogin = function(e164, pw) {
       var d = (res && res.data) || {};
       if (d.ok && d.token) {
         return firebase.auth().signInWithCustomToken(d.token).then(function() {
-          window._entrarInFlight = false;
+          window._entrarSetInFlight(false);
           window._entrarStatus('');
           var modal = document.getElementById('modal-login');
           if (modal) modal.classList.remove('active');
@@ -2189,133 +2243,105 @@ function handlePhoneLogin() {
   if (window._phoneLoginInFlight) return;
   window._phoneLoginInFlight = true;
 
-  // v1.3.76-beta: mover container pro body ANTES de qualquer operação de
-  // reCAPTCHA. Isso garante que o iframe do reCAPTCHA não fica clipado
-  // por overflow:hidden do modal. Substitui o guard recaptchaContainer
-  // antigo (que só verificava existência, não localização no DOM).
+  // ── v4.0.35: WhatsApp PRIMEIRO, SMS como canal secundário (e sem travar) ────
+  // O reCAPTCHA do SMS quebra com frequência (especialmente no iOS Safari) e
+  // deixava o usuário preso: o passo de código só aparecia DEPOIS do SMS dar certo,
+  // então quando o reCAPTCHA falhava, a pessoa via só um erro e ficava sem caminho.
+  // Agora o link de acesso pelo WhatsApp é disparado ANTES do SMS e o passo de
+  // confirmação aparece NA HORA — a pessoa entra pelo link do WhatsApp mesmo que o
+  // SMS/reCAPTCHA falhe. O SMS roda depois, em segundo plano, e a sua falha vira só
+  // uma nota discreta (sem toast assustador) porque o WhatsApp é o caminho primário.
+  window._waMagicLinkResult = null;
+  _showPhoneVerificationStep();
+  var _smsNote0 = document.getElementById('phone-step-sms-note');
+  if (_smsNote0) _smsNote0.innerHTML = '';
+  var _waStatus0 = document.getElementById('phone-step-wa-status');
+  if (_waStatus0) _waStatus0.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando link pelo WhatsApp…</span>';
+  showNotification('📱 Acesso a caminho', 'Enviamos um link pelo WhatsApp pra ' + phone + '. Toque nele pra entrar — ou digite o código que chega por SMS.', 'info');
+
+  // WhatsApp magic link — não depende de reCAPTCHA nem de SMS.
+  (function() {
+    var WA_FN_URL = 'https://us-central1-scoreplace-app.cloudfunctions.net/sendWhatsAppMagicLink';
+    fetch(WA_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: { phone: phone } })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(body) {
+      var d = body && body.result;
+      window._log('[WA magic link] resultado:', JSON.stringify(d));
+      window._waMagicLinkResult = d;
+      var ws = document.getElementById('phone-step-wa-status');
+      if (!ws) return;
+      if (d && d.ok) {
+        ws.innerHTML = '<span style="color:#10b981;font-size:0.74rem;font-weight:700;">✅ Link enviado pelo WhatsApp — toque nele pra entrar.</span>';
+      } else {
+        var reason = (d && d.reason) || 'unknown';
+        ws.innerHTML = (reason === 'user-not-found')
+          ? '<span style="color:var(--text-muted);font-size:0.72rem;">Número novo por aqui — confirme pelo código do SMS abaixo.</span>'
+          : '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora (' + reason + ') — use o código do SMS abaixo.</span>';
+      }
+    })
+    .catch(function(err) {
+      window._warn('[WA magic link] fetch falhou:', err && err.message);
+      var ws = document.getElementById('phone-step-wa-status');
+      if (ws) ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
+    });
+  })();
+
+  // ── SMS (canal secundário) ─────────────────────────────────────────────────
+  // v1.3.76-beta: container pro body ANTES de qualquer operação de reCAPTCHA pra
+  // o iframe não ficar clipado por overflow:hidden do modal.
   _ensureRecaptchaInBody();
-
-  // Show loading
-  showNotification(_t('auth.verifying'), _t('auth.sendingSms', {phone: phone}), 'info');
-
-  // v1.1.5-beta: SEMPRE reset+recreate o verifier antes de cada tentativa.
-  // Sentry SCOREPLACE-WEB-D: reuse causava 'reCAPTCHA has already been
-  // rendered in this element' quando user fez logoff → login de novo →
-  // verify() interno chama recaptcha.render() que falha pq elemento já
-  // tinha render anterior. Reset garante DOM limpo + nova instância.
+  // v1.1.5-beta: SEMPRE reset+recreate o verifier (reuse causava 'reCAPTCHA has
+  // already been rendered in this element' após logoff→login).
   _resetPhoneRecaptcha();
-  window._phoneRecaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-    size: 'invisible',
-    callback: function() {
-      // reCAPTCHA solved — will proceed with phone sign-in
-    },
-    'expired-callback': function() {
-      showNotification(_t('auth.recaptchaExpired'), _t('auth.tryAgain'), 'warning');
-      _resetPhoneRecaptcha();
-    }
-  });
+  try {
+    window._phoneRecaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+      size: 'invisible',
+      callback: function() {},
+      'expired-callback': function() { _resetPhoneRecaptcha(); }
+    });
+  } catch (e) {
+    // reCAPTCHA nem inicializa (navegador hostil) — sem problema: o WhatsApp já foi.
+    window._phoneLoginInFlight = false;
+    window._warn && window._warn('[phoneLogin] reCAPTCHA init falhou:', e && (e.message || e));
+    var _n0 = document.getElementById('phone-step-sms-note');
+    if (_n0) _n0.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">⚠️ SMS indisponível neste navegador — entre pelo link do WhatsApp acima.</span>';
+    return;
+  }
 
-  // v1.3.76-beta: chamar render() explicitamente ANTES de signInWithPhoneNumber.
-  // No iOS Safari, o render tardio (dentro de signInWithPhoneNumber) falha
-  // porque iOS exige que a interação com reCAPTCHA seja iniciada dentro da
-  // janela de gesto do usuário. render() pré-warms o widget no contexto do
-  // clique, e signInWithPhoneNumber reutiliza o iframe já ancorado.
+  // v1.3.76-beta: render() explícito ANTES de signInWithPhoneNumber (iOS exige
+  // que a interação com reCAPTCHA comece dentro da janela de gesto do usuário).
   window._phoneRecaptchaVerifier.render()
     .then(function() {
-      // v1.3.89-beta: WhatsApp magic link dispara em PARALELO com o SMS,
-      // imediatamente após reCAPTCHA render() — não depende do SMS ter sucesso.
-      // Se SMS falhar por rate-limit, o WA já foi enviado antes do erro.
-      // Guardamos o resultado em window._waMagicLinkResult para o catch usar.
-      window._waMagicLinkResult = null;
-      (function() {
-        var waStatus = document.getElementById('phone-step-wa-status');
-        if (waStatus) waStatus.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Verificando WhatsApp...</span>';
-        var WA_FN_URL = 'https://us-central1-scoreplace-app.cloudfunctions.net/sendWhatsAppMagicLink';
-        fetch(WA_FN_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: { phone: phone } })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(body) {
-          var d = body && body.result;
-          window._log('[WA magic link] resultado:', JSON.stringify(d));
-          window._waMagicLinkResult = d;
-          var ws = document.getElementById('phone-step-wa-status');
-          if (!ws) return;
-          if (d && d.ok) {
-            ws.innerHTML = '<span style="color:#10b981;font-size:0.72rem;">✅ Link enviado pelo WhatsApp também.</span>';
-          } else {
-            var reason = (d && d.reason) || 'unknown';
-            ws.innerHTML = reason === 'user-not-found' ? '' :
-              '<span style="color:var(--text-muted);font-size:0.72rem;">ℹ️ WA: ' + reason + '</span>';
-          }
-        })
-        .catch(function(err) {
-          window._warn('[WA magic link] fetch falhou:', err && err.message);
-          var ws = document.getElementById('phone-step-wa-status');
-          if (ws) ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">ℹ️ WA: rede</span>';
-        });
-      })();
-
       return firebase.auth().signInWithPhoneNumber(phone, window._phoneRecaptchaVerifier);
     })
     .then(function(confirmationResult) {
       window._phoneLoginInFlight = false;
       window._phoneConfirmationResult = confirmationResult;
-      // Show verification code input
-      _showPhoneVerificationStep();
-      showNotification(_t('auth.codeSent'), _t('auth.codeSentMsg', {phone: phone}), 'success');
+      var n = document.getElementById('phone-step-sms-note');
+      if (n) n.innerHTML = '<span style="color:#10b981;font-size:0.72rem;">✅ Código enviado por SMS — digite acima.</span>';
     })
     .catch(function(error) {
-      window._error('Phone sign-in error:', error);
-      // v1.3.75-beta: envia error.message ao Sentry (além do code) para
-      // diagnosticar casos onde error.code é undefined (erros JS nativos,
-      // reCAPTCHA iOS Safari, etc).
+      window._error('Phone sign-in (SMS) error:', error);
       window._phoneLoginInFlight = false;
       if (typeof window._captureException === 'function') {
-        window._captureException(error, {
-          area: 'phoneLogin',
-          code: error && error.code,
-          message: error && error.message
-        });
+        window._captureException(error, { area: 'phoneLogin', code: error && error.code, message: error && error.message });
       }
       _resetPhoneRecaptcha();
-      // v1.0.17-beta: mensagens específicas + surface error.code pra debug.
-      // Bug reportado: "SMS não mandou pra ninguém". Sem error.code visível,
-      // impossível diagnosticar (provider não habilitado, quota, formato,
-      // reCAPTCHA, etc). Sugere fallback (Link Mágico) em todos os casos.
-      // v1.3.75-beta: error.code === undefined (código: unknown) pode
-      // indicar falha do reCAPTCHA invisível no iOS Safari ou erro JS
-      // nativo. Inclui error.message no toast para diagnóstico. Também
-      // cobre auth/internal-error que Firebase retorna em falhas de
-      // reCAPTCHA não mapeadas.
-      // v1.3.89-beta: se SMS falhou mas WA foi enviado com sucesso, mensagem
-      // de erro menciona o link do WhatsApp como alternativa imediata.
-      var waOk = window._waMagicLinkResult && window._waMagicLinkResult.ok;
+      // SMS é secundário: NÃO mostramos toast de erro (o WhatsApp já foi e é o
+      // caminho principal). Só uma nota inline discreta — o passo + link do WhatsApp
+      // continuam na tela, então o usuário nunca fica sem saída.
       var code = (error && error.code) || 'unknown';
-      var rawMsg = (error && error.message) || '';
-      var waSuffix = waOk ? '\n\n💬 Mas o link de acesso foi enviado pelo WhatsApp — verifique suas mensagens.' : '';
-      var msg;
-      if (code === 'auth/invalid-phone-number') {
-        msg = 'Número inválido. Confira o DDI + DDD + número (ex: +55 11 99999-8888).';
-      } else if (code === 'auth/too-many-requests') {
-        msg = waOk
-          ? 'Muitas tentativas de SMS. Mas o link de acesso já foi enviado pelo WhatsApp — clique nele para entrar.'
-          : 'Muitas tentativas. Aguarde 30 minutos. Ou use Link Mágico por E-mail.';
-      } else if (code === 'auth/operation-not-allowed') {
-        msg = 'Login por SMS não está habilitado nesta conta Firebase. Reporte: scoreplace.app@gmail.com\n\nUse Link Mágico por E-mail enquanto isso.';
-      } else if (code === 'auth/captcha-check-failed' || code === 'auth/internal-error') {
-        msg = 'Verificação reCAPTCHA falhou. Recarregue a página e tente de novo. Ou use Link Mágico.' + (rawMsg ? '\n\n(' + rawMsg.substring(0, 120) + ')' : '');
-      } else if (code === 'auth/quota-exceeded') {
-        msg = 'Cota diária de SMS Firebase esgotada (limite free tier). Use Link Mágico por E-mail.' + waSuffix;
-      } else if (code === 'auth/network-request-failed') {
-        msg = 'Sem conexão estável com Firebase. Tente Wi-Fi ou outra rede. Ou use Link Mágico.';
-      } else {
-        // Inclui rawMsg para diagnóstico quando error.code é undefined
-        msg = 'Não foi possível enviar SMS. Use Link Mágico por E-mail.\n\n(código: ' + code + (rawMsg ? ' — ' + rawMsg.substring(0, 120) : '') + ')' + waSuffix;
-      }
-      showNotification('SMS — falha', msg, 'error');
+      var smsMsg;
+      if (code === 'auth/invalid-phone-number') smsMsg = '⚠️ Número inválido pro SMS. Confira o DDI + DDD + número.';
+      else if (code === 'auth/too-many-requests') smsMsg = 'ℹ️ Muitas tentativas de SMS — use o link do WhatsApp acima.';
+      else if (code === 'auth/operation-not-allowed') smsMsg = 'ℹ️ SMS desabilitado nesta conta — use o link do WhatsApp acima.';
+      else smsMsg = 'ℹ️ SMS indisponível agora — use o link do WhatsApp acima.';
+      var note = document.getElementById('phone-step-sms-note');
+      if (note) note.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">' + smsMsg + '</span>';
     });
 }
 
@@ -5260,6 +5286,7 @@ function setupLoginModal() {
               '</div>' +
             '</form>' +
             '<div id="phone-step-wa-status" style="text-align:center;margin-top:4px;min-height:1em;"></div>' +
+            '<div id="phone-step-sms-note" style="text-align:center;margin-top:2px;min-height:1em;"></div>' +
             '<div style="text-align:center;margin-top:4px;">' +
               '<a href="#" onclick="event.preventDefault();_resetPhoneLoginUI();handlePhoneLogin();" style="color:var(--text-muted);font-size:0.72rem;">Reenviar</a>' +
               '<span style="color:var(--text-muted);font-size:0.72rem;margin:0 6px;">|</span>' +
