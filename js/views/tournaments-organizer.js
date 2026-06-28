@@ -963,8 +963,15 @@ window._contactOrganizer = async function(tId) {
   var phoneFull = '';
   if (useWhatsApp) {
     var cc = (profile && profile.phoneCountry ? String(profile.phoneCountry).replace(/\D/g, '') : '') || '55';
-    // Telefone canônico já vem com DDI (>=12 díg). Sem DDI (legado, ~11) → prefixa.
-    phoneFull = phoneDigits.length >= 12 ? phoneDigits : (cc + phoneDigits);
+    // v4.0.37: monta o número via _normalizePhoneE164 (helper canônico) em vez de
+    // um heurístico por comprimento (>=12). O app NÃO é só BR — phoneCountry pode
+    // ser '1' (EUA), '44' etc. O heurístico antigo duplicava o DDI em países de
+    // código curto: '+12015551234' (cc=1) virava '112015551234'. O normalizador
+    // remove o DDI se já presente e re-aplica, certo pra qualquer país. Já vem
+    // com DDI; tiramos o '+' pro formato do wa.me (só dígitos).
+    var _e164 = (typeof window._normalizePhoneE164 === 'function')
+      ? window._normalizePhoneE164(profile.phone, cc) : '';
+    phoneFull = _e164 ? _e164.replace(/\D/g, '') : (phoneDigits.length >= (cc.length + 10) ? phoneDigits : (cc + phoneDigits));
   }
   if (!useWhatsApp && !(email && email.indexOf('@') !== -1) && !t.creatorUid) {
     if (typeof showNotification !== 'undefined') {
