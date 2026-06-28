@@ -1308,7 +1308,20 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
     grandCols = bucket(function(m) { return m.bracket === 'grand'; });
   }
 
-  let deGlobalNum = 0;
+  // Numeração CANÔNICA intercalada por rodada: Chave Superior R1, Chave Inferior R1,
+  // Superior R2, Inferior R2… (e segue; a Inferior tem mais rodadas → continua sozinha
+  // ao fim). A Grande Final é o último número. Atribui m._gameNum ANTES de renderizar,
+  // pra que cada seção use o número global certo (não a ordem de render da seção).
+  (function _assignGameNums() {
+    var n = 0;
+    var maxR = 0;
+    upperCols.concat(lowerCols).forEach(function (c) { if (c.round > maxR) maxR = c.round; });
+    for (var r = 1; r <= maxR; r++) {
+      upperCols.filter(function (c) { return c.round === r; }).forEach(function (c) { (c.matches || []).forEach(function (m) { m._gameNum = ++n; }); });
+      lowerCols.filter(function (c) { return c.round === r; }).forEach(function (c) { (c.matches || []).forEach(function (m) { m._gameNum = ++n; }); });
+    }
+    grandCols.forEach(function (c) { (c.matches || []).forEach(function (m) { m._gameNum = ++n; }); });
+  })();
   const renderSection = (cols, title, color) => {
     if (!cols || !cols.length) return '';
     const colsHtml = cols.map(function(col) {
@@ -1316,7 +1329,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
       return `
       <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">
         <h5 style="color:${color};font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ${color};padding-left:8px;">${col.label || (col.round < 0 ? (Math.abs(col.round) > 1 ? _t('bracket.repechageN', {n: Math.abs(col.round)}) : _t('bracket.repechage')) : _t('bracket.round', {n: col.round}))}</h5>
-        ${matches.map(m => { deGlobalNum++; return renderMatchCard(m, canEnterResult, t.id, deGlobalNum); }).join('')}
+        ${matches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
       </div>`;
     }).join('');
     return `
@@ -1360,12 +1373,12 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   // v3.1.21: canônico — lista de espera logo APÓS as chaves e ANTES da classificação geral.
   return `
     <div>
-      ${renderSection(upperCols, 'Chaveamento Superior', '#10b981')}
-      ${renderSection(lowerCols, 'Chaveamento Inferior', '#f59e0b')}
+      ${renderSection(upperCols, 'Chave Superior', '#10b981')}
+      ${renderSection(lowerCols, 'Chave Inferior', '#f59e0b')}
       ${grandMatches.length ? `
         <div style="margin-top:1rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">
           <h4 style="color:#fbbf24;font-size:0.8rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:1rem;border-left:3px solid #fbbf24;padding-left:10px;">🏆 ${_t('bracket.grandFinal')}</h4>
-          <div style="max-width:280px;">${grandMatches.map(m => { deGlobalNum++; return renderMatchCard(m, canEnterResult, t.id, deGlobalNum); }).join('')}</div>
+          <div style="max-width:280px;">${grandMatches.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}</div>
         </div>` : ''}
       ${standbyHtml || ''}
       ${_deClassifHtml}
@@ -1385,6 +1398,13 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   var curPhase = (_viewPhaseIdx != null) ? _viewPhaseIdx : _realCur;
   var phaseCfg = (t.phases && t.phases[curPhase]) || {};
   var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === curPhase; });
+
+  // Dupla Eliminatória: layout DEDICADO (Chaveamento Superior/Inferior + Grande Final +
+  // Grande 3º). _renderPhaseBracket é a ÚNICA entrada de render — delega no renderer
+  // específico da dupla (que tem a estrutura certa, não tiers genéricos "Chave 1/2/3").
+  if (pm.some(function (m) { return m.bracket === 'upper' || m.bracket === 'lower' || m.bracket === 'grand'; })) {
+    return renderDoubleElimBracket(t, canEnterResult, standbyHtml);
+  }
 
   // v2.8.87: infere p1FromBye/p2FromBye (display) p/ chaves já sorteadas sem o flag —
   // o vencedor de um jogo BYE (rodada r) leva a tag âmbar SÓ na rodada r+1 (some quando

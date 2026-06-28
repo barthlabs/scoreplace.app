@@ -959,18 +959,13 @@ window.generateDrawFunction = function (tId) {
         if (!_r0 || !_r0.ok) { showNotification(_t('draw.warning'), _t('tdraw.drawDone'), 'warning'); return; }
         // Dupla Eliminatória: monta upper R2+ / lower / grande final a partir da R1 (lê
         // t.matches) e tagueia tudo na fase 0. Mesmo _buildDoubleElimBracket do legado.
+        // Dupla Eliminatória CLÁSSICA: _buildDoubleElimBracket monta upper R2+/lower/grande
+        // final a partir da R1 (perdedor da superior CAI pra inferior; 3º = perdedor da
+        // final inferior, SEM jogo de 3º). O render usa o layout dedicado
+        // (renderDoubleElimBracket: Chave Superior/Inferior + Grande Final).
         if (_built0.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {
             window._buildDoubleElimBracket(t);
-            (t.matches || []).forEach(function (m) {
-                if (m.phaseIndex == null) m.phaseIndex = 0;
-                // Rótulos das linhas da dupla (o render único mostra por tier — sem rótulo
-                // sairia "CHAVE 1/2/3"). Vencedores / Perdedores / Grande Final.
-                if (!m.tierLabel) {
-                    if (m.bracket === 'upper') m.tierLabel = 'Chave dos Vencedores';
-                    else if (m.bracket === 'lower') m.tierLabel = 'Chave dos Perdedores';
-                    else if (m.bracket === 'grand' || m.bracket === 'grandfinal') m.tierLabel = 'Grande Final';
-                }
-            });
+            (t.matches || []).forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
         }
         t._canonicalDraw = true; t.status = 'active';
         window.AppStore.logAction(tId, 'Sorteio Realizado — ' + t.format + ' (motor canônico)');
