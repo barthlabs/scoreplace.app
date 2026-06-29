@@ -840,9 +840,10 @@ function renderDashboard(container) {
                 var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
                 var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
                 var _rgb = _cm[_ligaEv.color] || '139,92,246';
-                var _ctColor = _pReadBg ? _pReadFg : (window._semanticTextForTheme ? window._semanticTextForTheme(_ligaEv.color, _isLight) : _ligaEv.color); // tarja theme-aware; claro sem tarja → cor escura
+                var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+                var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
                 return _toggleRowDash +
-                  '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
+                  '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +
                   '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ';">' + _ligaEv.label + '</span>' +
                   '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
@@ -868,8 +869,9 @@ function renderDashboard(container) {
               var _next = _events[0];
               var _countdownText = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _next.color === '#f59e0b' ? '245,158,11' : _next.color === '#10b981' ? '16,185,129' : '139,92,246';
-              var _ctColor2 = _pReadBg ? _pReadFg : (window._semanticTextForTheme ? window._semanticTextForTheme(_next.color, _isLight) : _next.color); // tarja theme-aware; claro sem tarja → cor escura
-              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb2 + ',0.1)')) + ';border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
+              var _rbCt2 = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+              var _ctColor2 = _rbCt2.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
+              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt2.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ';">' + _next.label + '</span>' +
                 '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
