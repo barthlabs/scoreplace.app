@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.48-beta';
+window.SCOREPLACE_VERSION = '4.0.49-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -24,6 +24,17 @@ window._formatDisplayName = function (fmt) {
   if (fmt === 'Liga' || fmt === 'Ranking') return 'Pontos Corridos';
   if (fmt === 'Fase de Grupos + Eliminatórias') return 'Fase de Grupos';
   return fmt;
+};
+
+// Rótulo do TIPO do torneio pra EXIBIÇÃO (cards, pílulas, títulos, badges). Rei/Rainha é MODO
+// de sorteio (drawMode), NÃO formato → mostra "Rei/Rainha" via _isMonarchFormat; senão o nome do
+// formato. As telas usam SEMPRE _formatLabel(t) (com o objeto t), nunca _formatDisplayName(t.format)
+// cru — senão torneios Rei/Rainha (que são formato de grupos + drawMode='rei_rainha') aparecem
+// errado como "Fase de Grupos". Legado (format='Rei/Rainha da Praia') também cai certo aqui.
+window._formatLabel = function (t) {
+  if (!t) return '';
+  if (window._isMonarchFormat && window._isMonarchFormat(t)) return 'Rei/Rainha';
+  return window._formatDisplayName(t.format) || t.format || '';
 };
 
 // ─── Foto do local (Google Places) — re-busca FRESCA por placeId (v4.0.14) ───

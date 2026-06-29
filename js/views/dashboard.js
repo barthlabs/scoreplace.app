@@ -43,7 +43,7 @@ window._buildAnalyticsSection = function _buildAnalyticsSection(organizados) {
   // By format
   var formatCounts = {};
   organizados.forEach(function(tour) {
-    var f = (window._formatDisplayName ? window._formatDisplayName(tour.format) : tour.format) || t('common.other');
+    var f = (window._formatLabel ? window._formatLabel(tour) : tour.format) || t('common.other');
     formatCounts[f] = (formatCounts[f] || 0) + 1;
   });
 
@@ -927,7 +927,7 @@ function renderDashboard(container) {
                ${(typeof window._buildTournamentConfigBox === 'function')
                  ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: false })
                  : `<div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
-                  <div><strong>${_t('dashboard.labelFormat')}:</strong> ${window._formatDisplayName ? window._formatDisplayName(t.format) : t.format}</div>
+                  <div><strong>${_t('dashboard.labelFormat')}:</strong> ${window._formatLabel ? window._formatLabel(t) : t.format}</div>
                   <div><strong>${_t('dashboard.labelAccess')}:</strong> ${publicText}</div>
                </div>`}
             </div>
@@ -1878,7 +1878,7 @@ function renderDashboard(container) {
       } else if (_ngT && _ngT.format) {
         // Fase única: o "nome da fase" é o próprio formato (rótulo de exibição —
         // 'Liga'→'Pontos Corridos', 'Fase de Grupos + Eliminatórias'→'Fase de Grupos').
-        var _fmtN = (typeof window._formatDisplayName === 'function') ? window._formatDisplayName(_ngT.format) : _ngT.format;
+        var _fmtN = (typeof window._formatLabel === 'function') ? window._formatLabel(_ngT) : _ngT.format;
         if (_fmtN) _meta.push(_fmtN);
       }
       if (_ngM.tierLabel) _meta.push(String(_ngM.tierLabel).trim());
@@ -2447,7 +2447,7 @@ function renderDashboard(container) {
             '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (isFav ? '❤️ ' : '') + window._safeHtml(t.name) + '</div>' +
             '<div class="compact-details" style="font-size:0.7rem;color:var(--text-muted);display:flex;gap:8px;margin-top:2px;flex-wrap:wrap;">' +
               '<span>' + (t.sport || '—') + '</span>' +
-              '<span>' + ((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '—') + '</span>' +
+              '<span>' + ((window._formatLabel ? window._formatLabel(t) : t.format) || '—') + '</span>' +
               (dateStr ? '<span>' + dateStr + '</span>' : '') +
             '</div>' +
           '</div>' +

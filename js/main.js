@@ -1608,7 +1608,7 @@ window.renderHelpPage = function (container) {
         '<span style="font-size:1.2rem;">' + sportIcon + '</span>' +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-weight:600;font-size:0.85rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(tpl.name) + '</div>' +
-          '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml((window._formatDisplayName ? window._formatDisplayName(tpl.format) : tpl.format) || '') + '</div>' +
+          '<div style="font-size:0.75rem;color:var(--text-muted);">' + window._safeHtml((window._formatLabel ? window._formatLabel(tpl) : tpl.format) || '') + '</div>' +
         '</div>' +
         '<button class="btn btn-micro btn-danger-ghost" onclick="event.stopPropagation();window._qcDeleteTemplate(\'' + window._safeHtml(tpl._id || String(i)) + '\')" title="Apagar">✕</button>' +
       '</div>';
@@ -2174,7 +2174,7 @@ window._log("scoreplace.app v" + (window.SCOREPLACE_VERSION || '?') + " Iniciali
           '<span style="font-size:1.1rem;">🏅</span>' +
           '<div style="flex:1;overflow:hidden;">' +
           '<div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sh(t.name) + '</div>' +
-          '<div style="font-size:0.7rem;color:var(--text-muted);">' + _sh((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '') + ' — ' + _sh(t.sport || '') + '</div>' +
+          '<div style="font-size:0.7rem;color:var(--text-muted);">' + _sh((window._formatLabel ? window._formatLabel(t) : t.format) || '') + ' — ' + _sh(t.sport || '') + '</div>' +
           '</div>' +
           '<span style="font-size:0.65rem;color:var(--text-muted);">' + status + '</span>' +
           '</div>';

@@ -5817,7 +5817,10 @@ function setupCreateTournamentModal() {
         var format;
         var monarchIncompatible = formatValue === 'liga' || formatValue === 'grupos_mata';
         if (drawModeValue === 'rei_rainha' && !monarchIncompatible) {
-          format = 'Rei/Rainha da Praia';
+          // Rei/Rainha NÃO é formato: é MODO de sorteio (drawMode='rei_rainha', setado abaixo) numa
+          // FASE DE GRUPOS (parceiro rotativo). Grava como Grupos + Eliminatória; o drawMode é a fonte
+          // da verdade (window._isMonarchFormat). [project_rei_rainha_is_drawmode_not_format]
+          format = 'Fase de Grupos + Eliminatórias';
         } else {
           format = formatMap[formatValue] || 'Eliminatórias Simples';
         }
@@ -7766,7 +7769,8 @@ window._saveCurrentFormAsTemplate = function() {
   var drawModeValue = get('draw-mode');
   var formatMap = { liga:'Liga', suico:'Suíço Clássico', elim_simples:'Eliminatórias Simples', elim_dupla:'Dupla Eliminatória', grupos_mata:'Fase de Grupos + Eliminatórias' };
   var format;
-  if (drawModeValue === 'rei_rainha' && formatValue !== 'liga') format = 'Rei/Rainha da Praia';
+  // Rei/Rainha é MODO (drawMode), não formato → template grava Grupos + Eliminatória + drawMode.
+  if (drawModeValue === 'rei_rainha' && formatValue !== 'liga') format = 'Fase de Grupos + Eliminatórias';
   else format = formatMap[formatValue] || 'Eliminatórias Simples';
   var genderCats = (get('tourn-gender-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
   var skillCats = (get('tourn-skill-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
