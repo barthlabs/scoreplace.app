@@ -555,9 +555,11 @@ window._buildCategoryCountHtml = function(t) {
     rows.forEach(function(row) {
         html += '<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">';
         row.cats.forEach(function(cat) {
-            html += '<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);padding:3px 8px;border-radius:10px;">' +
-                '<span style="font-size:0.65rem;font-weight:600;color:#818cf8;">' + cat.display + '</span>' +
-                '<span style="font-size:0.75rem;font-weight:800;color:var(--text-bright,#e2e8f0);">' + cat.count + '</span>' +
+            // v4.0.54: fundo OPACO + blur — a pílula fica sobre a foto de capa; fundo
+            // translúcido deixava a foto vazar e o label indigo ilegível.
+            html += '<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(15,23,42,0.85);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid rgba(129,140,248,0.5);padding:3px 9px;border-radius:10px;">' +
+                '<span style="font-size:0.65rem;font-weight:700;color:#c7cdfb;">' + cat.display + '</span>' +
+                '<span style="font-size:0.75rem;font-weight:800;color:#ffffff;">' + cat.count + '</span>' +
                 '</div>';
         });
         html += '</div>';
@@ -769,25 +771,28 @@ window._buildTimeEstimation = function(t) {
 
   // Montar HTML
   var courtsLabel = courts > 1 ? _t('cat.nCourtsLabel', {n: courts}) : _t('cat.oneCourtLabel');
-  var html = '<div style="margin-top: 8px; padding: 10px 14px; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 12px;">';
-  html += '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">';
+  // v4.0.54: fundo OPACO + blur — a caixa fica sobre a foto de capa do torneio
+  // (dashboard e detalhe). Fundo translúcido (0.08) deixava a foto vazar e o texto
+  // cinza ilegível. Backdrop sólido garante contraste em QUALQUER foto/tema.
+  var html = '<div style="margin-top: 8px; padding: 10px 14px; background: rgba(15,23,42,0.92); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border: 1px solid rgba(129,140,248,0.45); border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.35);">';
+  html += '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">';
   html += '<span style="font-size:1.1rem;">⏱️</span>';
-  html += '<span style="font-size:0.8rem; font-weight:700; color:#a5b4fc; text-transform:uppercase; letter-spacing:0.5px;">' + _t('cat.estimatedDuration') + '</span>';
-  html += '<span style="font-size:0.65rem; color:var(--text-muted); opacity:0.7;">(' + gameDur + 'min/partida · ' + courtsLabel + ')</span>';
+  html += '<span style="font-size:0.8rem; font-weight:800; color:#c7cdfb; text-transform:uppercase; letter-spacing:0.5px;">' + _t('cat.estimatedDuration') + '</span>';
+  html += '<span style="font-size:0.65rem; color:#cbd5e1;">(' + gameDur + 'min/partida · ' + courtsLabel + ')</span>';
   html += '</div>';
 
   html += '<div style="display:flex; flex-direction:column; gap:4px;">';
   rows.forEach(function(r) {
-    var bg = r.highlight ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.03)';
-    var border = r.highlight ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(255,255,255,0.05)';
-    var labelColor = r.highlight ? '#60a5fa' : 'var(--text-muted)';
-    var durColor = r.highlight ? '#e2e8f0' : 'rgba(255,255,255,0.7)';
+    var bg = r.highlight ? 'rgba(59,130,246,0.22)' : 'rgba(255,255,255,0.07)';
+    var border = r.highlight ? '1px solid rgba(96,165,250,0.55)' : '1px solid rgba(255,255,255,0.1)';
+    var labelColor = r.highlight ? '#93c5fd' : '#e2e8f0';
+    var durColor = r.highlight ? '#ffffff' : '#f1f5f9';
     html += '<div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:' + bg + '; border:' + border + '; border-radius:8px; flex-wrap:wrap;">';
-    html += '<span style="font-size:0.78rem; font-weight:600; color:' + labelColor + '; min-width:110px;">' + r.label + '</span>';
-    html += '<span style="font-size:0.78rem; color:var(--text-muted); opacity:0.6;">' + r.matches + ' ' + _t('cat.matchesSuffix') + '</span>';
-    html += '<span style="font-size:0.85rem; font-weight:700; color:' + durColor + '; margin-left:auto;">' + r.duration + '</span>';
+    html += '<span style="font-size:0.78rem; font-weight:700; color:' + labelColor + '; min-width:110px;">' + r.label + '</span>';
+    html += '<span style="font-size:0.78rem; color:#aab4c5;">' + r.matches + ' ' + _t('cat.matchesSuffix') + '</span>';
+    html += '<span style="font-size:0.85rem; font-weight:800; color:' + durColor + '; margin-left:auto;">' + r.duration + '</span>';
     if (r.endTime) {
-      html += '<span style="font-size:0.72rem; color:#a5b4fc; opacity:0.8;">' + _t('cat.endTimePrefix') + r.endTime + '</span>';
+      html += '<span style="font-size:0.72rem; font-weight:600; color:#bcc6f9;">' + _t('cat.endTimePrefix') + r.endTime + '</span>';
     }
     html += '</div>';
   });
