@@ -1509,6 +1509,13 @@ function renderParticipants(container, tournamentId) {
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
   const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
 
+  // v4.0.63: modo "Ajuste manual" — chegou aqui pelo painel de solos sem dupla,
+  // ANTES do sorteio. Nesse caso os SEM-DUPLA vão pro TOPO e as duplas formadas
+  // abaixo (foco em quem falta parear). Só pra duplas NÃO sorteadas.
+  var _hasDrawP = !!((Array.isArray(t.matches) && t.matches.length) || (Array.isArray(t.rounds) && t.rounds.length) || (Array.isArray(t.groups) && t.groups.length));
+  var _soloPairMode = false;
+  try { _soloPairMode = isOrg && !_hasDrawP && !!sessionStorage.getItem('sp_soloPairHint_' + t.id); } catch (e) {}
+
   let individualCount = 0;
   parts.forEach(p => {
     const pStr = window._pName(p);
@@ -1519,8 +1526,14 @@ function renderParticipants(container, tournamentId) {
     }
   });
 
-  // Ordenar: Times primeiro, depois individuais
+  // Ordenar: modo Ajuste manual → SEM-DUPLA no topo (estrutura, não '/'); senão Times primeiro.
   parts.sort((a, b) => {
+    if (_soloPairMode) {
+      const aTeam = !!window._entryTeamMembers(a), bTeam = !!window._entryTeamMembers(b);
+      if (!aTeam && bTeam) return -1; // sem dupla antes
+      if (aTeam && !bTeam) return 1;  // dupla depois
+      return 0;
+    }
     const nameA = window._pName(a);
     const nameB = window._pName(b);
     const isTeamA = nameA.includes('/');
@@ -2495,7 +2508,7 @@ function renderParticipants(container, tournamentId) {
   // soltar (handleDropTeam). Some sozinho quando todos pareiam; ✕ dispensa.
   var soloPairBanner = '';
   try {
-    if (isOrg && sessionStorage.getItem('sp_soloPairHint_' + t.id)) {
+    if (_soloPairMode) {
       var _curSolos = (typeof window._listSoloEntries === 'function') ? window._listSoloEntries(t) : [];
       if (_curSolos.length > 0) {
         var _spNames = _curSolos.map(function (p) { return window._safeHtml((typeof p === 'string') ? p : (p.displayName || p.name || '')); }).join(', ');
