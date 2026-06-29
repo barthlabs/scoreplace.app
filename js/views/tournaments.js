@@ -1051,6 +1051,22 @@ function renderTournaments(container, tournamentId = null) {
         var _startDraw = function() {
             // Auto-mover solos para waitlist em torneios de duplas
             var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+            // v4.0.53: solos sem dupla → resolução CONSCIENTE antes do sorteio
+            // (Ajuste manual / Lista de espera / Exclusão), em vez de mover pra
+            // waitlist em silêncio. One-shot: o painel seta _soloResolved e re-chama
+            // este handler; aqui consumimos a flag e seguimos o sorteio.
+            if (t && t._soloResolved) {
+                delete t._soloResolved;
+            } else if (t) {
+                var _eMode = t.enrollmentMode || t.enrollment || 'individual';
+                var _tSz = parseInt(t.teamSize) || 1;
+                if ((_eMode === 'time' || _eMode === 'misto') && _tSz === 2 &&
+                    typeof window._listSoloEntries === 'function' && typeof window._showSoloResolutionPanel === 'function' &&
+                    window._listSoloEntries(t).length > 0) {
+                    window._showSoloResolutionPanel(tId, isAberto);
+                    return;
+                }
+            }
             // v2.1.64: modo "Times Montados" SEM nenhum time formado (ex.: só
             // jogadores individuais). Não adianta abrir o painel de potência de 2
             // (que mostraria "0 times"). Avisa que os times precisam ser montados
