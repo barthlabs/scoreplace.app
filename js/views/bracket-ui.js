@@ -10114,15 +10114,9 @@ window._openCasualMatch = function(restoreOpts) {
 
   // Casual default config per sport (overrides _sportScoringDefaults for casual).
   // deuceRule: game-level 40-40 → AD rule (tennis/padel only).
-  // twoPointAdvantage: set-level — when true, a set cannot end without a 2-game
-  // lead; at (g-1)-(g-1) ties it either prorroga or goes to tiebreak (tieRule).
-  var _casualDefaults = {
-    'Beach Tennis':  { type:'sets', setsToWin:1, gamesPerSet:6, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'tennis', deuceRule:false, twoPointAdvantage:true, tieRule:'ask' },
-    'Pickleball':    { type:'sets', setsToWin:1, gamesPerSet:11, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'numeric', deuceRule:false, twoPointAdvantage:true, tieRule:'extend' },
-    'Tênis':         { type:'sets', setsToWin:2, gamesPerSet:6, tiebreakEnabled:true, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:true, superTiebreakPoints:10, countingType:'tennis', deuceRule:true, twoPointAdvantage:true, tieRule:'tiebreak' },
-    'Tênis de Mesa': { type:'sets', setsToWin:3, gamesPerSet:11, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'numeric', deuceRule:false, twoPointAdvantage:true, tieRule:'extend' },
-    'Padel':         { type:'sets', setsToWin:2, gamesPerSet:6, tiebreakEnabled:true, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:true, superTiebreakPoints:10, countingType:'tennis', deuceRule:true, twoPointAdvantage:true, tieRule:'tiebreak' }
-  };
+  // DERIVADO da FONTE ÚNICA window.SPORT_RULES (js/views/sport-rules.js). Regra muda? Muda LÁ.
+  // Projeção casual: advantageRule→deuceRule + twoPointAdvantage + tieRule (comportamento de empate).
+  var _casualDefaults = window._casualScoringDefaultsMap();
 
   function _getConfig() {
     // v1.7.1-beta: defaults usados como base — prefs armazenadas sem 'type'
@@ -10147,6 +10141,14 @@ window._openCasualMatch = function(restoreOpts) {
         var merged = {}, k;
         for (k in _defaults) { if (Object.prototype.hasOwnProperty.call(_defaults, k)) merged[k] = _defaults[k]; }
         for (k in stored)   { if (Object.prototype.hasOwnProperty.call(stored,   k)) merged[k] = stored[k];   }
+        // Vantagem (deuce/AD), ganhar-por-2 (twoPointAdvantage) e comportamento de EMPATE
+        // (tieRule/tiebreakEnabled) são REGRA DA MODALIDADE — não escolha do usuário. Força do
+        // default do esporte, ignorando prefs antigas (toggles removidos da UI). A decisão de
+        // tie-break é tomada EM QUADRA (botão do placar ao vivo no empate), não na config.
+        merged.deuceRule = _defaults.deuceRule;
+        merged.twoPointAdvantage = _defaults.twoPointAdvantage !== false;
+        merged.tieRule = _defaults.tieRule;
+        merged.tiebreakEnabled = _defaults.tiebreakEnabled;
         return merged;
       }
     } catch(e) {}
@@ -11522,23 +11524,9 @@ window._openCasualMatch = function(restoreOpts) {
               '<button onclick="window._casualSetCfg(\'countingType\',\'numeric\')" style="padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;border:1px solid ' + (cfg.countingType !== 'tennis' ? '#818cf8' : 'rgba(255,255,255,0.12)') + ';background:' + (cfg.countingType !== 'tennis' ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.04)') + ';color:' + (cfg.countingType !== 'tennis' ? '#818cf8' : 'var(--text-muted)') + ';">1-2-3</button>' +
             '</div>' +
           '</div>' +
-          // AD toggle (game-level deuce — 40-40 → AD)
-          '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-            '<span style="font-size:0.82rem;color:var(--text-bright);">' + _t('casual.deuce') + '</span>' +
-            '<label class="toggle-switch" style="--toggle-on-bg:#818cf8;"><input type="checkbox" ' + (cfg.deuceRule ? 'checked' : '') + ' onchange="window._casualSetCfg(\'deuceRule\',this.checked)"><span class="toggle-slider"></span></label>' +
-          '</div>' +
-          // 2-point advantage (set-level — set doesn't end 5-6; prorroga/tiebreak at tied g-1)
-          '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-            '<span style="font-size:0.82rem;color:var(--text-bright);">' + _t('casual.advantage') + '</span>' +
-            '<label class="toggle-switch" style="--toggle-on-bg:#818cf8;"><input type="checkbox" ' + (cfg.twoPointAdvantage !== false ? 'checked' : '') + ' onchange="window._casualSetCfg(\'twoPointAdvantage\',this.checked)"><span class="toggle-slider"></span></label>' +
-          '</div>' +
-          // Tie-break toggle — only relevant when twoPointAdvantage is on
-          (cfg.twoPointAdvantage !== false ?
-          '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-            '<span style="font-size:0.82rem;color:var(--text-bright);">Tie-break</span>' +
-            '<label class="toggle-switch" style="--toggle-on-bg:#818cf8;"><input type="checkbox" ' + (cfg.tieRule === 'tiebreak' || cfg.tiebreakEnabled ? 'checked' : '') + ' onchange="window._casualSetCfg(\'tieRule\',this.checked?\'tiebreak\':\'ask\');window._casualSetCfg(\'tiebreakEnabled\',this.checked)"><span class="toggle-slider"></span></label>' +
-          '</div>'
-          : '') +
+          // Vantagem (AD), ganhar-por-2 e o comportamento de EMPATE (tie-break) são REGRA DA
+          // MODALIDADE — SEM toggle aqui. A decisão de tie-break é tomada EM QUADRA, no botão do
+          // placar ao vivo quando dá empate (5-5 / 6-6 / 7-7…). Não se decide antes na config.
         '</div>' +
       '</div>';
   };

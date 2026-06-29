@@ -45,7 +45,17 @@
       if (d < bestDist) { best = p; bestDist = d; }
     });
     if (!best || bestDist > MATCH_RADIUS_M) return null;
-    return { location: best, distance: Math.round(bestDist) };
+    // v4.x: preferido guarda o nome em `label` (não `name`) e a long. em `lng`/`lon`.
+    // Normaliza p/ um shape único (com `name`) — senão buildPayload grava venueName vazio
+    // e o match por nome do plano/check-in (_myVenueState) NUNCA casa (regredia pro pop-up).
+    var loc = {
+      lat: best.lat,
+      lng: (best.lng != null ? best.lng : best.lon),
+      lon: (best.lon != null ? best.lon : best.lng),
+      placeId: best.placeId || '',
+      name: best.name || best.label || ''
+    };
+    return { location: loc, distance: Math.round(bestDist) };
   }
 
   // Already handled this venue today? Key is date + placeId so user who
@@ -84,9 +94,35 @@
     return '';
   }
 
-  // Build the presence payload identical to manual check-in.
-  function buildPayload(cu, location, sport) {
+  // Todas as modalidades preferidas do usuário (normalizadas).
+  function preferredSportsAll(cu) {
+    var pref = cu && cu.preferredSports;
+    if (!pref) return [];
+    return String(pref).split(/[,;]/).map(function(s) { return window.PresenceDB.normalizeSport(s); }).filter(Boolean);
+  }
+  // ÚLTIMA config de check-in (modalidades + janela = horário de saída) — salva por
+  // PresenceDB.savePresence. "Mantém o que o usuário costuma usar" ao confirmar a presença.
+  function lastPresenceCfg(cu) {
+    try {
+      var raw = localStorage.getItem('scoreplace_presence_lastcfg_' + cu.uid);
+      if (!raw) return null;
+      var c = JSON.parse(raw);
+      var sports = Array.isArray(c.sports) ? c.sports.map(window.PresenceDB.normalizeSport).filter(Boolean) : [];
+      return { sports: sports, windowMs: Number(c.windowMs) || window.PresenceDB.CHECKIN_WINDOW_MS };
+    } catch (e) { return null; }
+  }
+  // Config a aplicar no check-in automático: ÚLTIMA usada; senão modalidades preferidas + janela padrão.
+  function resolveCfg(cu) {
+    var last = lastPresenceCfg(cu);
+    if (last && last.sports.length) return last;
+    return { sports: preferredSportsAll(cu), windowMs: window.PresenceDB.CHECKIN_WINDOW_MS };
+  }
+
+  // Build the presence payload identical to manual check-in. cfg = { sports:[], windowMs }.
+  function buildPayload(cu, location, cfg) {
     var now = Date.now();
+    var sports = (cfg && Array.isArray(cfg.sports)) ? cfg.sports : [];
+    var windowMs = (cfg && cfg.windowMs) || window.PresenceDB.CHECKIN_WINDOW_MS;
     return {
       uid: cu.uid,
       email_lower: (cu.email || '').toLowerCase(),
@@ -96,16 +132,11 @@
       venueName: location.name || '',
       venueLat: Number(location.lat) || null,
       venueLon: (location.lng != null ? Number(location.lng) : (location.lon != null ? Number(location.lon) : null)),
-      sport: sport, // mantido p/ fallback de leitura/dedup (savePresence lê d.sport)
-      // v3.0.x: o check-in automático gravava SÓ `sport` (string) e nunca o array
-      // `sports[]`. A query de exibição (PresenceDB.loadForVenueSportDay) usa
-      // `.where('sports','array-contains', normalizeSport(sport))` → o check-in por GPS
-      // ficava INVISÍVEL em "Agora no local"/gráfico. Grava normalizado, igual aos
-      // writers canônicos (presence.js:1005, venues.js:3896).
-      sports: sport ? [window.PresenceDB.normalizeSport(sport)].filter(Boolean) : [],
+      sport: sports[0] || '', // fallback de leitura/dedup (savePresence lê d.sport)
+      sports: sports,         // array normalizado (query de exibição usa array-contains)
       type: 'checkin',
       startsAt: now,
-      endsAt: now + window.PresenceDB.CHECKIN_WINDOW_MS,
+      endsAt: now + windowMs,
       dayKey: window.PresenceDB.dayKey(new Date(now)),
       visibility: cu.presenceVisibility || 'friends',
       cancelled: false,
@@ -114,29 +145,32 @@
     };
   }
 
-  function autoRegister(cu, location, sport) {
-    var payload = buildPayload(cu, location, sport);
+  function autoRegister(cu, location, cfg) {
+    var payload = buildPayload(cu, location, cfg);
+    var label = (cfg && cfg.sports && cfg.sports.length) ? cfg.sports.join('/') : '';
     window.PresenceDB.savePresence(payload).then(function() {
       if (window.showNotification) {
-        window.showNotification('📍 Check-in automático', 'Registrado em ' + (location.name || 'local') + ' — ' + sport + '. Amigos já podem ver.', 'success');
+        window.showNotification('📍 Check-in automático', 'Registrado em ' + (location.name || 'local') + (label ? ' — ' + label : '') + '. Amigos já podem ver.', 'success');
       }
     }).catch(function(e) {
       window._warn('Auto check-in falhou:', e);
     });
   }
 
-  function suggest(cu, location, sport) {
+  function suggest(cu, location, cfg) {
     var place = location.name || 'um local conhecido';
-    var msg = sport
-      ? 'Parece que você chegou em <b>' + place + '</b>. Confirmar sua presença em <b>' + sport + '</b>? Seus amigos poderão ver que você está no local.'
-      : 'Parece que você chegou em <b>' + place + '</b>. Confirmar sua presença? Seus amigos poderão ver que você está no local.';
+    var sports = (cfg && cfg.sports) || [];
+    var label = sports.join('/');
+    var msg = label
+      ? 'Parece que você chegou em <b>' + place + '</b>. Está para jogar <b>' + label + '</b>? Confirmando, seus amigos poderão ver que você está no local.'
+      : 'Parece que você chegou em <b>' + place + '</b>. Está para jogar? Confirmando, seus amigos poderão ver que você está no local.';
     if (typeof window.showConfirmDialog !== 'function') return;
     window.showConfirmDialog(
       '📍 Você está aqui?',
       msg,
       function() {
-        if (sport) {
-          autoRegister(cu, location, sport);
+        if (sports.length) {
+          autoRegister(cu, location, cfg); // mantém modalidades + horário de saída da última vez
         } else {
           // No preferred sport — drop into the manual view pre-filled with this venue.
           try {
@@ -174,21 +208,27 @@
     var nm = _normName(location.name);
     var _todayKey = (typeof window.PresenceDB.dayKey === 'function') ? window.PresenceDB.dayKey(new Date()) : null;
     window.PresenceDB.loadMyActive(cu.uid).then(function(list) {
-      var ci = false, pl = false;
+      var ci = false, pl = false, planSports = [], planWindowMs = 0;
+      var W = 2 * 60 * 60 * 1000, nowMs = Date.now();
       (list || []).forEach(function(d) {
         if (!d) return;
         var hit = (d.placeId && d.placeId === key) || (nm && d.venueName && _normName(d.venueName) === nm);
         if (!hit) return;
-        // v2.8.58: um PLANO só conta como "ida programada" se for de HOJE. Antes
-        // qualquer plano futuro (ex.: torneio daqui a 9 dias) marcava planned=true →
-        // estando no local hoje, o GPS fazia check-in direto e NÃO mostrava o pop-up
-        // de "você está aqui?". Plano de outro dia é ignorado aqui.
+        // v4.x: um PLANO só conta como "ida PRO HORÁRIO" se o horário planejado está dentro
+        // de ±2h de agora (margem pra frente e pra trás). Fora dessa janela (ou plano de outro
+        // dia), trata como SEM plano → cai no pop-up "Você está aqui?". Com plano no horário,
+        // o check-in é DIRETO usando as modalidades + horário de saída DO PRÓPRIO PLANO.
         if (d.type === 'planned') {
-          var _planKey = d.dayKey || (d.startsAt ? (typeof window.PresenceDB.dayKey === 'function' ? window.PresenceDB.dayKey(new Date(d.startsAt)) : null) : null);
-          if (!_todayKey || !_planKey || _planKey === _todayKey) pl = true;
+          var ps = d.startsAt || 0, pe = d.endsAt || ps;
+          var inWindow = ps ? (nowMs >= (ps - W) && nowMs <= (pe + W)) : true;
+          if (inWindow) {
+            pl = true;
+            planSports = Array.isArray(d.sports) ? d.sports.slice() : (d.sport ? [d.sport] : []);
+            planWindowMs = (d.endsAt && d.startsAt) ? (d.endsAt - d.startsAt) : 0;
+          }
         } else ci = true;
       });
-      cb({ checkedIn: ci, planned: pl });
+      cb({ checkedIn: ci, planned: pl, planSports: planSports, planWindowMs: planWindowMs });
     }).catch(function() { cb({ checkedIn: false, planned: false }); });
   }
 
@@ -314,7 +354,7 @@
   };
 
   // Public entry point — called by auth.js after simulateLoginSuccess.
-  window._presenceGeoCheck = function() {
+  window._presenceGeoCheck = function(opts) {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu || !cu.uid) return;
 
@@ -340,15 +380,22 @@
       if (match) {
         if (alreadyHandled(match.location.placeId)) return;
         markHandled(match.location.placeId);
-        var sport = firstPreferredSport(cu);
-        // v2.8.30: NÃO faz mais check-in silencioso. Decide pelo estado do usuário
-        // NESTE local: já presente → nada; IDA PROGRAMADA (plan) → check-in direto
-        // (já planejou jogar); senão → PERGUNTA (pop-up confirma/cancela), pra
-        // qualquer usuário com o local como preferido.
+        var cfg = resolveCfg(cu); // últimas modalidades + horário de saída (ou preferidas)
+        // NÃO faz check-in silencioso. Decide pelo estado do usuário NESTE local:
+        //  • já presente → nada;
+        //  • TEM plano de ida pro HORÁRIO (±2h) → presença DIRETA, sem perguntar, com as
+        //    modalidades + horário de saída DO PLANO (fallback: última config / preferidas);
+        //  • SEM plano pro horário → PERGUNTA "Você está aqui?" (confirma/cancela; cancelar = nada).
         _myVenueState(cu, match.location, function(state) {
           if (state.checkedIn) return;
-          if (state.planned && sport) { autoRegister(cu, match.location, sport); return; }
-          suggest(cu, match.location, sport);
+          if (state.planned) {
+            var planCfg = {
+              sports: (state.planSports && state.planSports.length) ? state.planSports : cfg.sports,
+              windowMs: state.planWindowMs || cfg.windowMs
+            };
+            if (planCfg.sports.length) { autoRegister(cu, match.location, planCfg); return; }
+          }
+          suggest(cu, match.location, cfg);
         });
         return; // num preferido → não roda o #3 (não faz sentido sugerir o que já é)
       }
@@ -357,39 +404,74 @@
     }
 
     // v1.8.42-beta: cache compartilhado com venues.js (scoreplace_gps_cache).
-    // Se coords frescas existem (< 10 min), usar sem pedir GPS.
-    // Se não, pedir GPS uma única vez por sessão (sessionStorage _gpsRequested).
     var _GPS_CACHE_KEY = 'scoreplace_gps_cache';
     var _GPS_CACHE_TTL = 10 * 60 * 1000;
     var _GPS_SESSION_KEY = '_gpsRequested';
+    var _fresh = !!(opts && opts.fresh); // ABERTURA/RETOMADA: quer posição NOVA, ignora o cache
 
-    try {
-      var _raw = localStorage.getItem(_GPS_CACHE_KEY);
-      if (_raw) {
-        var _cached = JSON.parse(_raw);
-        if (_cached && _cached.lat && _cached.lng && (Date.now() - _cached.ts) < _GPS_CACHE_TTL) {
-          _doGeoCheck(_cached.lat, _cached.lng);
-          return;
+    // Login (não-fresh): se há coords frescas no cache (<10min), usa sem buscar GPS.
+    if (!_fresh) {
+      try {
+        var _raw = localStorage.getItem(_GPS_CACHE_KEY);
+        if (_raw) {
+          var _cached = JSON.parse(_raw);
+          if (_cached && _cached.lat && _cached.lng && (Date.now() - _cached.ts) < _GPS_CACHE_TTL) {
+            _doGeoCheck(_cached.lat, _cached.lng);
+            return;
+          }
         }
-      }
-    } catch(e) {}
+      } catch (e) {}
+    }
 
-    // v2.8.31: sem cache de GPS — só PEDE permissão se há preferidos com coords (#2).
-    // O #3 (local frequente) nunca dispara um prompt novo: ele aproveita só o GPS
-    // já concedido (cache acima, populado por #2 ou pela tela de locais).
+    // Só busca GPS se há preferidos com coords (#2). #3 (frequente) só usa o cache acima.
     if (withCoords.length === 0) return;
 
-    // Já pediu nesta sessão → não re-pede (evita segundo dialog)
-    try { if (sessionStorage.getItem(_GPS_SESSION_KEY)) return; } catch(e) {}
-    try { sessionStorage.setItem(_GPS_SESSION_KEY, '1'); } catch(e) {}
+    function _fetchPos() {
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        var lat = pos.coords.latitude, lng = pos.coords.longitude;
+        try { localStorage.setItem(_GPS_CACHE_KEY, JSON.stringify({ lat: lat, lng: lng, ts: Date.now() })); } catch (e) {}
+        _doGeoCheck(lat, lng);
+      }, function(err) {
+        window._log('[PresenceGeo] geolocation skipped:', err && err.message);
+      }, { timeout: 8000, maximumAge: _fresh ? 30 * 1000 : 5 * 60 * 1000 });
+    }
 
-    navigator.geolocation.getCurrentPosition(function(pos) {
-      var lat = pos.coords.latitude;
-      var lng = pos.coords.longitude;
-      try { localStorage.setItem(_GPS_CACHE_KEY, JSON.stringify({ lat: lat, lng: lng, ts: Date.now() })); } catch(e) {}
-      _doGeoCheck(lat, lng);
-    }, function(err) {
-      window._log('[PresenceGeo] geolocation skipped:', err && err.message);
-    }, { timeout: 8000, maximumAge: 5 * 60 * 1000 });
+    function _onceThenFetch() {
+      try { if (sessionStorage.getItem(_GPS_SESSION_KEY)) return; sessionStorage.setItem(_GPS_SESSION_KEY, '1'); } catch (e) {}
+      _fetchPos();
+    }
+    // Permissão JÁ concedida → busca posição a CADA abertura/retomada SEM prompt (é isso que
+    // faz "chegar no clube e abrir o app" voltar a funcionar). Permissão ainda 'prompt' →
+    // pede 1x por sessão no login; numa retomada não força dialog. 'denied' → nada.
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then(function(st) {
+        if (st.state === 'granted') { _fetchPos(); return; }
+        if (st.state === 'denied') return;
+        if (_fresh) return;
+        _onceThenFetch();
+      }).catch(function() { _onceThenFetch(); });
+    } else {
+      _onceThenFetch();
+    }
   };
+
+  // v4.x HOTFIX: roda o check ao ABRIR/RETOMAR o app — não só no login. Antes só o login
+  // (auth.js, no setTimeout pós-login) disparava; quem chega no clube já está logado e só
+  // traz o app pra frente (resume) → o login NÃO re-dispara → o GPS nunca rodava nesse
+  // momento ("não funcionou pra ninguém"). visibilitychange/pageshow/focus disparam (throttle
+  // 90s) buscando posição fresca quando a permissão já foi concedida.
+  var _lastGeoResume = 0;
+  function _geoOnResume() {
+    if (Date.now() - _lastGeoResume < 90 * 1000) return;
+    _lastGeoResume = Date.now();
+    if (window._log) window._log('[PresenceGeo] resume check');
+    if (typeof window._presenceGeoCheck === 'function') {
+      try { window._presenceGeoCheck({ fresh: true }); } catch (e) {}
+    }
+  }
+  try {
+    document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'visible') _geoOnResume(); });
+    window.addEventListener('pageshow', _geoOnResume);
+    window.addEventListener('focus', _geoOnResume);
+  } catch (e) {}
 })();

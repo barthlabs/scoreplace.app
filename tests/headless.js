@@ -58,6 +58,7 @@ function load(rel) {
 }
 
 // Ordem importa (mesma do index.html / draw-core.js): utils → categorias → model → logic
+load('sport-rules.js');             // window.SPORT_RULES — fonte única das regras das modalidades
 load('tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
 load('tournaments-categories.js');  // _displayCategoryName, _getParticipantCategories, _participantInCategory
 load('bracket-model.js');           // _appendCanonicalColumn

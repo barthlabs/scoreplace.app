@@ -86,6 +86,15 @@ window.PresenceDB = {
     clean.createdAt = clean.createdAt || Date.now();
     if (!clean.dayKey) clean.dayKey = this.dayKey(new Date(clean.startsAt || Date.now()));
 
+    // v4.x: lembra a ÚLTIMA config de check-in (modalidades + janela = horário de saída),
+    // reusada pelo check-in automático por GPS (presence-geo.js) ao confirmar "Você está aqui?".
+    try {
+      if (clean.type === 'checkin' && clean.uid) {
+        var _w = (clean.endsAt && clean.startsAt) ? (clean.endsAt - clean.startsAt) : this.CHECKIN_WINDOW_MS;
+        localStorage.setItem('scoreplace_presence_lastcfg_' + clean.uid, JSON.stringify({ sports: Array.isArray(clean.sports) ? clean.sports : [], windowMs: _w }));
+      }
+    } catch (e) {}
+
     var key = this._makeInflightKey(clean);
     if (key && this._inflight[key]) {
       window._log('[PresenceDB] dedup in-flight: reusando promise para', key);

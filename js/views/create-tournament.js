@@ -1,19 +1,8 @@
 // ── Game Set Match Scoring Defaults by Sport ──
-window._sportScoringDefaults = {
-  'Beach Tennis':  { type:'sets', setsToWin:1, gamesPerSet:6, tiebreakEnabled:true, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'tennis', advantageRule:false },
-  'Pickleball':    { type:'sets', setsToWin:1, gamesPerSet:11, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'numeric', advantageRule:false },
-  'Tênis':         { type:'sets', setsToWin:2, gamesPerSet:6, tiebreakEnabled:true, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:true, superTiebreakPoints:10, countingType:'tennis', advantageRule:true },
-  'Tênis de Mesa': { type:'sets', setsToWin:3, gamesPerSet:11, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'numeric', advantageRule:false },
-  'Padel':         { type:'sets', setsToWin:2, gamesPerSet:6, tiebreakEnabled:true, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:true, superTiebreakPoints:10, countingType:'tennis', advantageRule:false },
-  // Vôlei de Praia (FIVB 2026): best of 3, 21 pts nos sets 1/2, 15 no tie-break,
-  // sempre com 2 pontos de vantagem. Cada ponto = 1 rally (numeric counting),
-  // sem tiebreak interno (o set é uma corrida direta com margem de 2).
-  'Vôlei de Praia': { type:'sets', setsToWin:2, gamesPerSet:21, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:true, superTiebreakPoints:15, countingType:'numeric', advantageRule:true },
-  // Futevôlei (regra oficial 2025): best of 3, 18 pts nos sets 1/2, 15 no
-  // tie-break, também com 2 pontos de vantagem. Mesma lógica rally-point.
-  'Futevôlei':     { type:'sets', setsToWin:2, gamesPerSet:18, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:true, superTiebreakPoints:15, countingType:'numeric', advantageRule:true },
-  '_default':      { type:'simple', setsToWin:1, gamesPerSet:1, tiebreakEnabled:false, tiebreakPoints:7, tiebreakMargin:2, superTiebreak:false, superTiebreakPoints:10, countingType:'numeric', advantageRule:false }
-};
+// DERIVADO da FONTE ÚNICA window.SPORT_RULES (js/views/sport-rules.js, carregado antes deste).
+// Regra de uma modalidade mudou/estava errada? Mude LÁ, num lugar só — propaga pra cá (torneio)
+// e pro _casualDefaults (casual). Dependência fixa (sem fallback): se não carregou, estoura.
+window._sportScoringDefaults = window._sportScoringDefaultsMap();
 
 function setupCreateTournamentModal() {
   // ═══ RENDER CANÔNICA DE CONFIG DE FASE (v2.6.61) — definida ANTES do template ═══
@@ -1213,11 +1202,8 @@ function setupCreateTournamentModal() {
     }
   }
 
-  const _sportTeamDefaults = {
-    'Beach Tennis': 2, 'Pickleball': 2, 'Tênis': 1, 'Tênis de Mesa': 1, 'Padel': 2,
-    // Vôlei de Praia e Futevôlei são SEMPRE dupla vs dupla (regra oficial).
-    'Vôlei de Praia': 2, 'Futevôlei': 2
-  };
+  // Tamanho de time por modalidade — DERIVADO da fonte única window.SPORT_RULES.
+  const _sportTeamDefaults = window._sportTeamDefaultsMap();
 
   // ── Sport Button Selection ──
   window._selectSport = function(btn) {
@@ -5965,7 +5951,8 @@ function setupCreateTournamentModal() {
             superTiebreak: document.getElementById('gsm-superTiebreak').value === 'true',
             superTiebreakPoints: parseInt(document.getElementById('gsm-superTiebreakPoints').value) || 10,
             countingType: document.getElementById('gsm-countingType').value || 'numeric',
-            advantageRule: document.getElementById('gsm-advantageRule').value === 'true',
+            // Vantagem (deuce) = derivada do esporte (só Tênis), nunca escolha manual.
+            advantageRule: (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : (document.getElementById('gsm-advantageRule').value === 'true'),
             fixedSet: document.getElementById('gsm-fixedSet').value === 'true',
             fixedSetGames: parseInt(document.getElementById('gsm-fixedSetGames').value) || 6
           },
@@ -6767,8 +6754,10 @@ window._gsmBuildDescFromValues = function(s, g, tb, tbP, stb, stbP) {
 };
 
 // Which sports lock noAd (no advantage)
-window._gsmNoAdLocked = { 'Beach Tennis': true, 'Padel': true, 'Pickleball': true, 'Tênis de Mesa': true };
-window._gsmAdvantageDefault = { 'Tênis': true };
+// DERIVADOS da fonte única window.SPORT_RULES: AD só onde advantageRule é true (Tênis);
+// "no-ad travado" = todas as modalidades sem vantagem. Mude a regra em sport-rules.js.
+window._gsmNoAdLocked = window._gsmNoAdLockedMap();
+window._gsmAdvantageDefault = window._gsmAdvantageDefaultMap();
 
 // Currently selected preset
 window._gsmSelectedPreset = 'set1';
@@ -6842,40 +6831,21 @@ window._gsmGetAdvantageForSport = function() {
   var sportEl = document.getElementById('select-sport');
   if (!sportEl) return false;
   var sport = sportEl.options[sportEl.selectedIndex] ? sportEl.options[sportEl.selectedIndex].text.replace(/^[^\w\u00C0-\u024F]+/u, '').trim() : '';
+  // Vantagem (deuce 40-40) é DERIVADA DO ESPORTE — não é mais escolha manual.
+  // Só o Tênis tem AD (window._gsmAdvantageDefault); esportes travados e todos os
+  // demais = sem vantagem. (O "ganhar por 2" do vôlei/futevôlei é set-level, outra coisa.)
   if (window._gsmNoAdLocked[sport]) return false;
-  if (window._gsmAdvantageDefault[sport]) return true;
-  // Check toggle state
-  var toggle = document.getElementById('gsm-advantage-toggle');
-  return toggle ? toggle.checked : false;
+  return !!window._gsmAdvantageDefault[sport];
 };
 
 // Update advantage UI based on sport
 window._gsmUpdateAdvantageUI = function() {
-  var sportEl = document.getElementById('select-sport');
+  // Vantagem (deuce 40-40) deixou de ser escolha manual \u2014 deriva do esporte (s\u00F3 T\u00EAnis).
+  // A se\u00E7\u00E3o do toggle fica SEMPRE oculta; aqui s\u00F3 sincronizamos o campo oculto que o save l\u00EA.
   var section = document.getElementById('gsm-advantage-section');
-  if (!sportEl || !section) return;
-  var sport = sportEl.options[sportEl.selectedIndex] ? sportEl.options[sportEl.selectedIndex].text.replace(/^[^\w\u00C0-\u024F]+/u, '').trim() : '';
-  var locked = !!window._gsmNoAdLocked[sport];
-  var toggle = document.getElementById('gsm-advantage-toggle');
-
-  if (locked) {
-    section.style.display = 'none';
-    if (toggle) toggle.checked = false;
-    document.getElementById('gsm-advantageRule').value = 'false';
-  } else {
-    section.style.display = 'block';
-    if (toggle) {
-      var advDefault = !!window._gsmAdvantageDefault[sport];
-      var currentVal = document.getElementById('gsm-advantageRule').value === 'true';
-      // Only set default if no explicit user choice
-      if (!window._gsmAdvantageUserSet) {
-        toggle.checked = advDefault;
-        document.getElementById('gsm-advantageRule').value = advDefault ? 'true' : 'false';
-      } else {
-        toggle.checked = currentVal;
-      }
-    }
-  }
+  if (section) section.style.display = 'none';
+  var hidden = document.getElementById('gsm-advantageRule');
+  if (hidden) hidden.value = window._gsmGetAdvantageForSport() ? 'true' : 'false';
 };
 
 window._gsmAdvantageChanged = function() {
@@ -6896,7 +6866,7 @@ window._gsmUpdateMainSummary = function() {
   var stbOn = document.getElementById('gsm-superTiebreak').value === 'true';
   var stbPts = document.getElementById('gsm-superTiebreakPoints').value || '10';
   var counting = document.getElementById('gsm-countingType').value;
-  var advOn = document.getElementById('gsm-advantageRule').value === 'true';
+  var advOn = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : (document.getElementById('gsm-advantageRule').value === 'true');
   var tbMargin = parseInt(document.getElementById('gsm-tiebreakMargin').value) || 2;
   var fsOn = document.getElementById('gsm-fixedSet').value === 'true';
   var fsGames = parseInt(document.getElementById('gsm-fixedSetGames').value) || 6;
@@ -7019,11 +6989,7 @@ window._openGSMConfig = function(targetPhase) {
           '<div class="toggle-row-label"><span style="font-size:0.82rem;">Games fixos</span><br><span id="gsm-fixedset-desc" style="font-size:0.68rem;color:var(--text-muted);">Disputa de ' + gamesPerSet + ' games fixos (quem vence mais ganha)</span></div>' +
           '<label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-cfg-fixedSet" ' + (fixedSet ? 'checked' : '') + ' onchange="window._gsmToggleFixedSet()"><span class="toggle-slider"></span></label>' +
         '</div>' +
-        // Advantage
-        '<div id="gsm-advantage-row" class="toggle-row" style="padding:6px 0;">' +
-          '<div class="toggle-row-label"><span style="font-size:0.82rem;">Regra de vantagem (40-40)</span></div>' +
-          '<label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-cfg-advantage" ' + (advantage ? 'checked' : '') + ' onchange="window._gsmUpdateSummary()"><span class="toggle-slider"></span></label>' +
-        '</div>' +
+        // Vantagem (deuce 40-40): NÃO é escolha manual — derivada do esporte (só Tênis). Sem toggle.
         // Tiebreak
         '<div id="gsm-tb-section" style="border-top:1px solid var(--border-color);padding-top:1rem;">' +
           '<div class="toggle-row" style="padding:6px 0;margin-bottom:8px;">' +
@@ -7113,7 +7079,7 @@ window._gsmUpdateSummary = function() {
   var stbOn = document.getElementById('gsm-cfg-superTb') ? document.getElementById('gsm-cfg-superTb').checked : false;
   var stbPts = parseInt(document.getElementById('gsm-cfg-stbPoints').value) || 10;
   var counting = document.getElementById('gsm-countingType').value;
-  var advOn = document.getElementById('gsm-cfg-advantage') ? document.getElementById('gsm-cfg-advantage').checked : false;
+  var advOn = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false;
 
   // Show/hide super tiebreak section based on sets
   var stbSection = document.getElementById('gsm-super-tb-section');
@@ -7197,7 +7163,7 @@ window._gsmSaveConfig = function() {
         superTiebreak: _c('gsm-cfg-superTb'),
         superTiebreakPoints: parseInt(_g('gsm-cfg-stbPoints', '10'), 10) || 10,
         countingType: 'tennis',
-        advantageRule: _c('gsm-cfg-advantage'),
+        advantageRule: (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false,
         fixedSet: _fs,
         fixedSetGames: _fs ? _gms : 6
       };
@@ -7221,7 +7187,7 @@ window._gsmSaveConfig = function() {
   var tbMargin = document.getElementById('gsm-cfg-tbMargin') ? document.getElementById('gsm-cfg-tbMargin').value : '2';
   var stbOn = document.getElementById('gsm-cfg-superTb') ? document.getElementById('gsm-cfg-superTb').checked : false;
   var stbPts = document.getElementById('gsm-cfg-stbPoints') ? document.getElementById('gsm-cfg-stbPoints').value : '10';
-  var advantage = document.getElementById('gsm-cfg-advantage') ? document.getElementById('gsm-cfg-advantage').checked : false;
+  var advantage = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false;
 
   document.getElementById('gsm-setsToWin').value = sets;
   document.getElementById('gsm-gamesPerSet').value = games;
@@ -7254,7 +7220,7 @@ window._gsmSaveConfig = function() {
         superTiebreak: document.getElementById('gsm-superTiebreak').value,
         superTiebreakPoints: document.getElementById('gsm-superTiebreakPoints').value,
         countingType: document.getElementById('gsm-countingType').value,
-        advantageRule: document.getElementById('gsm-advantageRule').value,
+        advantageRule: ((typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : (document.getElementById('gsm-advantageRule').value === 'true')) ? 'true' : 'false',
         fixedSet: document.getElementById('gsm-fixedSet').value,
         fixedSetGames: document.getElementById('gsm-fixedSetGames').value
       };
@@ -7329,6 +7295,9 @@ window._onSportChange = function() {
   // PARA ESSA modalidade (quadras são por modalidade — não se joga beach tennis
   // em quadra de tênis). Só roda se já há um local selecionado.
   if (typeof window._refreshVenueCourtsForSport === 'function') { try { window._refreshVenueCourtsForSport(); } catch (e) {} }
+
+  // Garante que o campo oculto da vantagem fica coerente com o esporte (deriva — só Tênis).
+  if (typeof window._gsmUpdateAdvantageUI === 'function') window._gsmUpdateAdvantageUI();
 };
 
 // ─── Pre-fill form from a saved template ──────────────────────────────────
@@ -7792,7 +7761,7 @@ window._saveCurrentFormAsTemplate = function() {
     superTiebreak: get('gsm-superTiebreak') === 'true',
     superTiebreakPoints: parseInt(get('gsm-superTiebreakPoints')) || 10,
     countingType: get('gsm-countingType') || 'numeric',
-    advantageRule: get('gsm-advantageRule') === 'true',
+    advantageRule: (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : (get('gsm-advantageRule') === 'true'),
     fixedSet: get('gsm-fixedSet') === 'true',
     fixedSetGames: parseInt(get('gsm-fixedSetGames')) || 6
   };
