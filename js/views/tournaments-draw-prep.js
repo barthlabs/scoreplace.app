@@ -732,6 +732,41 @@ window.showUnifiedResolutionPanel = function(tId) {
         window._unifiedExcludedKeys = [];
     }
 
+    // ── v4.0.52: estimativa de tempo POR OPÇÃO (dinâmica) + seleção→confirmar ──
+    // Espelha o cálculo do antigo _showPhaseResolutionPanel (que o dono aprovou):
+    // nº de jogos por solução × duração × quadras. O clique numa opção SELECIONA
+    // (atualiza a estimativa); o Confirmar no topo APLICA. Isso unifica o padrão
+    // do painel de fase aqui, pra depois apagar o legado sem regressão.
+    window._unifiedSel = null; // re-seleciona o recomendado a cada abertura
+    var _uDur = parseInt(t.gameDuration) || 30;
+    var _uCourts = parseInt(t.courtCount) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 2;
+    var _uIsDouble = (t.format || '').indexOf('Dupla') !== -1;
+    var _uGamesFor = function(key) {
+        var s = info.effectiveTeams, lo = info.loP2, hi = info.hiP2, base;
+        if (!s || s <= 1) return null;
+        if ((s & (s - 1)) === 0) base = s - 1;                                  // já é potência de 2
+        else if (key === 'bye') base = s - 1;                                    // chave de hi com folgas
+        else if (key === 'playin') base = Math.floor(s / 2) + (lo - 1) + (s % 2);// repescagem (mais jogos)
+        else if (key === 'reopen') base = hi - 1;                                // enche até hi
+        else if (key === 'standby' || key === 'exclusion') base = lo - 1;        // cai pra lo
+        else if (key === 'swiss') { var r = Math.max(1, Math.ceil(Math.log(Math.max(2, s)) / Math.log(2))); base = r * Math.floor(s / 2); }
+        else return null;                                                        // dissolve/poll: sem estimativa direta
+        // dupla elim ≈ dobro - 1; NÃO se aplica ao Suíço (troca o formato).
+        if (_uIsDouble && base > 0 && key !== 'swiss') base = 2 * base - 1;
+        return base;
+    };
+    var _uFmtMin = function(m) { var h = Math.floor(m / 60), mm = m % 60; return h > 0 ? (h + 'h' + (mm ? ' ' + mm + 'm' : '')) : (mm + 'm'); };
+    window._unifiedEstData = {};
+    ['reopen','bye','playin','standby','exclusion','swiss','dissolve','poll'].forEach(function(k){
+        var g = _uGamesFor(k);
+        if (g == null) { window._unifiedEstData[k] = null; return; }
+        var mins = Math.ceil(g / Math.max(1, _uCourts)) * _uDur;
+        window._unifiedEstData[k] = { games: g, mins: mins, fmt: _uFmtMin(mins) };
+    });
+    window._unifiedCourts = _uCourts;
+    window._unifiedDur = _uDur;
+    window._unifiedTId = tIdSafe;
+
     // Render function (allows re-rendering on exclude)
     window._renderUnifiedOptions = function(excludedKeys) {
         excludedKeys = excludedKeys || [];
@@ -835,6 +870,12 @@ window.showUnifiedResolutionPanel = function(tId) {
             }
         });
 
+        // v4.0.52: seleção default = recomendado (maior Nash). Mantém a escolha do
+        // usuário enquanto a opção continuar ativa; senão recai no recomendado.
+        if (!window._unifiedSel || excludedKeys.indexOf(window._unifiedSel) !== -1 || !activeOptions.some(function(o){ return o.key === window._unifiedSel; })) {
+            window._unifiedSel = bestKey;
+        }
+
         // Sort by Nash score descending (highest recommendation first)
         activeOptions.sort(function(a, b) {
             return (scores[b.key] || 0) - (scores[a.key] || 0);
@@ -854,12 +895,19 @@ window.showUnifiedResolutionPanel = function(tId) {
             topRow += canExclude ? '<span style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.25);color:#94a3b8;font-size:0.7rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all 0.2s;" title="' + _t('predraw.excludeOptionTitle') + '" onclick="event.stopPropagation();window._excludeUnifiedOption(\'' + o.key + '\')" onmouseover="this.style.background=\'rgba(239,68,68,0.3)\';this.style.color=\'#fca5a5\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.color=\'#94a3b8\'">✕</span>' : '';
             topRow += '</div>';
 
-            html += '<button style="background:' + c.bg + ';border:2px solid ' + c.border + ';box-shadow:' + c.glow + ';border-radius:16px;padding:12px 16px;cursor:pointer;transition:all 0.25s;text-align:center;color:#e2e8f0;display:flex;flex-direction:column;gap:6px;overflow:hidden;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.filter=\'brightness(1.12)\'" onmouseout="this.style.transform=\'\';this.style.filter=\'\'" onclick="window._handleUnifiedOption(\'' + tIdSafe + '\', \'' + o.key + '\')">' +
+            // v4.0.52: estimativa de tempo POR opção (dinâmica, dados do torneio + local)
+            var _ed = window._unifiedEstData && window._unifiedEstData[o.key];
+            var _estPill = _ed
+                ? '<span style="display:inline-block;padding:3px 10px;border-radius:8px;font-size:0.65rem;font-weight:800;background:rgba(16,185,129,0.16);color:#6ee7b7;">⏱️ ~' + _ed.fmt + '</span>'
+                : '';
+            var _selOn = (window._unifiedSel === o.key);
+            // clique SELECIONA (não aplica); o Confirmar no topo aplica.
+            html += '<button id="unif-opt-' + o.key + '" data-ukey="' + o.key + '" style="background:' + c.bg + ';border:2px solid ' + c.border + ';box-shadow:' + c.glow + ';outline:' + (_selOn ? '3px solid #fbbf24' : 'none') + ';outline-offset:1px;border-radius:16px;padding:12px 16px;cursor:pointer;transition:all 0.25s;text-align:center;color:#e2e8f0;display:flex;flex-direction:column;gap:6px;overflow:hidden;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.filter=\'brightness(1.12)\'" onmouseout="this.style.transform=\'\';this.style.filter=\'\'" onclick="window._selectUnifiedOption(\'' + o.key + '\')">' +
                 topRow +
                 '<div style="font-size:1.8rem;line-height:1;">' + o.icon + '</div>' +
                 '<div style="font-weight:800;font-size:0.95rem;color:#fff;">' + o.title + '</div>' +
                 '<div style="font-size:0.75rem;color:rgba(255,255,255,0.65);line-height:1.4;">' + o.desc + '</div>' +
-                '<div style="margin-top:auto;padding-top:6px;"><span style="display:inline-block;padding:3px 10px;border-radius:8px;font-size:0.65rem;font-weight:800;background:' + c.pillBg + ';color:' + c.pill + ';">Nash ' + pct + '%</span></div>' +
+                '<div style="margin-top:auto;padding-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;"><span style="display:inline-block;padding:3px 10px;border-radius:8px;font-size:0.65rem;font-weight:800;background:' + c.pillBg + ';color:' + c.pill + ';">Nash ' + pct + '%</span>' + _estPill + '</div>' +
             '</button>';
         });
 
@@ -893,9 +941,20 @@ window.showUnifiedResolutionPanel = function(tId) {
         if (grid) grid.innerHTML = window._renderUnifiedOptions(window._unifiedExcludedKeys);
     };
 
+    // v4.0.52: clique numa opção SELECIONA (destaca + estimativa já visível no card).
+    // Não aplica — o Confirmar no topo é que dispara _handleUnifiedOption.
+    window._selectUnifiedOption = function(key) {
+        window._unifiedSel = key;
+        var btns = document.querySelectorAll('#unified-options-grid [data-ukey]');
+        for (var i = 0; i < btns.length; i++) {
+            btns[i].style.outline = (btns[i].getAttribute('data-ukey') === key) ? '3px solid #fbbf24' : 'none';
+        }
+    };
+
     window._handleUnifiedOption = function(tId, option) {
         const t = window._findTournamentById(tId);
         if (!t) return;
+        if (!option) { if (typeof showNotification === 'function') showNotification(_t('predraw.adjustTitle'), _t('predraw.selectStrategy'), 'info'); return; }
 
         // Remove panel
         const panel = document.getElementById('unified-resolution-panel');
@@ -982,7 +1041,10 @@ window.showUnifiedResolutionPanel = function(tId) {
                     '<p style="margin:2px 0 0;color:#fde68a;font-size:0.75rem;opacity:0.9;">' + _t('predraw.detectedPrefix') + issuesText + '</p>' +
                 '</div>' +
             '</div>' +
-            '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:8px 20px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\';this.style.borderColor=\'rgba(254,243,199,0.5)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.borderColor=\'rgba(254,243,199,0.3)\'">' + _t('predraw.cancelBtn') + '</button>' +
+            '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+                '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:8px 18px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\'">' + _t('predraw.cancelBtn') + '</button>' +
+                '<button onclick="window._handleUnifiedOption(\'' + tIdSafe + '\', window._unifiedSel)" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:8px 22px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;box-shadow:0 6px 16px rgba(34,197,94,0.35);" onmouseover="this.style.filter=\'brightness(1.1)\'" onmouseout="this.style.filter=\'\'">' + _t('predraw.confirmBtn') + '</button>' +
+            '</div>' +
         '</div>' +
         // Scrollable content
         '<div style="overflow-y:auto;flex:1;">' +
