@@ -551,13 +551,15 @@ window._buildCategoryCountHtml = function(t) {
 
     if (rows.length === 0) return '';
 
+    // v4.0.55: mesma tarja de leitura das caixas irmãs (window._photoReadBox).
+    var _catRb = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.40)', border: 'rgba(255,255,255,0.10)' };
     var html = '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;">';
     rows.forEach(function(row) {
         html += '<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">';
         row.cats.forEach(function(cat) {
             // v4.0.54: fundo OPACO + blur — a pílula fica sobre a foto de capa; fundo
             // translúcido deixava a foto vazar e o label indigo ilegível.
-            html += '<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(15,23,42,0.85);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid rgba(129,140,248,0.5);padding:3px 9px;border-radius:10px;">' +
+            html += '<div style="display:inline-flex;align-items:center;gap:4px;background:' + _catRb.bg + ';backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid ' + _catRb.border + ';padding:3px 9px;border-radius:10px;">' +
                 '<span style="font-size:0.65rem;font-weight:700;color:#c7cdfb;">' + cat.display + '</span>' +
                 '<span style="font-size:0.75rem;font-weight:800;color:#ffffff;">' + cat.count + '</span>' +
                 '</div>';
@@ -771,10 +773,12 @@ window._buildTimeEstimation = function(t) {
 
   // Montar HTML
   var courtsLabel = courts > 1 ? _t('cat.nCourtsLabel', {n: courts}) : _t('cat.oneCourtLabel');
-  // v4.0.54: fundo OPACO + blur — a caixa fica sobre a foto de capa do torneio
-  // (dashboard e detalhe). Fundo translúcido (0.08) deixava a foto vazar e o texto
-  // cinza ilegível. Backdrop sólido garante contraste em QUALQUER foto/tema.
-  var html = '<div style="margin-top: 8px; padding: 10px 14px; background: rgba(15,23,42,0.92); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border: 1px solid rgba(129,140,248,0.45); border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.35);">';
+  // v4.0.55: usa a MESMA tarja de leitura das caixas irmãs (local, datas) — o
+  // helper canônico window._photoReadBox() (tema-aware: escuro=rgba(0,0,0,0.40),
+  // claro=rgba(30,41,59,0.72)) + blur. Antes (v4.0.54) eu pus um escuro próprio
+  // (0.92) que ficou MAIS escuro que os demais box. Agora fica idêntico.
+  var _estRb = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.40)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.10)' };
+  var html = '<div style="margin-top: 8px; padding: 10px 14px; background: ' + _estRb.bg + '; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid ' + _estRb.border + '; border-radius: 12px;">';
   html += '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">';
   html += '<span style="font-size:1.1rem;">⏱️</span>';
   html += '<span style="font-size:0.8rem; font-weight:800; color:#c7cdfb; text-transform:uppercase; letter-spacing:0.5px;">' + _t('cat.estimatedDuration') + '</span>';
