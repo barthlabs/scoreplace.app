@@ -1177,15 +1177,23 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
     ov.id = 'solo-resolution-panel';
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:1rem;';
     ov.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:95%;max-width:560px;max-height:90vh;overflow-y:auto;border-radius:24px;border:1px solid rgba(251,191,36,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);">' +
-        '<div style="position:sticky;top:0;z-index:2;background:linear-gradient(135deg,#78350f,#b45309);padding:14px 1.5rem;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,0.1);">' +
-            '<div style="display:flex;align-items:center;gap:10px;min-width:0;"><span style="font-size:1.4rem;">⚠️</span><div style="min-width:0;"><h3 style="margin:0;color:#fef3c7;font-size:1.05rem;font-weight:900;">' + solos.length + ' sem dupla</h3><p style="margin:2px 0 0;color:#fde68a;font-size:0.74rem;opacity:0.9;">Escolha e confirme</p></div></div>' +
-            '<div style="display:flex;gap:8px;flex-shrink:0;">' +
-                '<button onclick="window._soloCancel()" style="background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:8px 16px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.cancelBtn') + '</button>' +
-                '<button onclick="window._soloConfirm(\'' + tIdSafe + '\', ' + ab + ')" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:8px 20px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;white-space:nowrap;box-shadow:0 6px 16px rgba(34,197,94,0.35);">' + _t('predraw.confirmBtn') + '</button>' +
+        '<div style="position:sticky;top:0;z-index:2;background:linear-gradient(135deg,#78350f,#b45309);padding:14px 1.5rem 16px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid rgba(255,255,255,0.1);">' +
+            // título (linha própria, sem botões competindo → "N sem dupla" não quebra)
+            '<div style="display:flex;align-items:center;gap:11px;">' +
+                '<span style="font-size:1.5rem;flex-shrink:0;line-height:1;">⚠️</span>' +
+                '<div style="min-width:0;flex:1;">' +
+                    '<h3 style="margin:0;color:#fef3c7;font-size:1.15rem;font-weight:900;line-height:1.15;white-space:nowrap;">' + solos.length + ' sem dupla</h3>' +
+                    '<p style="margin:2px 0 0;color:#fde68a;font-size:0.78rem;opacity:0.92;">Escolha uma opção abaixo e confirme</p>' +
+                '</div>' +
+            '</div>' +
+            // botões ABAIXO do título, MESMA altura/largura (box-sizing + min-height + borda iguais; flex:1)
+            '<div style="display:flex;gap:10px;">' +
+                '<button onclick="window._soloCancel()" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);color:#fef3c7;border:2px solid rgba(254,243,199,0.35);border-radius:12px;font-weight:700;font-size:0.92rem;line-height:1;cursor:pointer;">' + _t('predraw.cancelBtn') + '</button>' +
+                '<button onclick="window._soloConfirm(\'' + tIdSafe + '\', ' + ab + ')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);border-radius:12px;font-weight:800;font-size:0.92rem;line-height:1;cursor:pointer;box-shadow:0 6px 16px rgba(34,197,94,0.35);">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
         '<div style="padding:1.25rem 1.5rem;">' +
-            '<p style="margin:0 0 8px;font-size:0.85rem;color:var(--text-main,#cbd5e1);line-height:1.5;">Estes participantes <b>não formaram dupla</b>. Sem par, não entram direto no chaveamento. Escolha e confirme no topo:</p>' +
+            '<p style="margin:0 0 8px;font-size:0.85rem;color:var(--text-main,#cbd5e1);line-height:1.5;">Estes participantes <b>não formaram dupla</b>. Sem par, não entram direto no chaveamento. Selecione uma opção e confirme:</p>' +
             '<div style="display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 18px;">' + chips + '</div>' +
             '<div style="display:flex;flex-direction:column;gap:10px;">' +
                 opt('manual', '🧩', 'Ajuste manual', 'Abre a página de inscritos pra você formar as duplas arrastando um sobre o outro (vendo as duplas atuais e os sem par).', '#818cf8') +
