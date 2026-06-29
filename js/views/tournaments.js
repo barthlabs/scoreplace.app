@@ -2362,7 +2362,7 @@ function renderTournaments(container, tournamentId = null) {
                 // "Atualizado em..." acima (compartilhada entre lista e detalhe).
                 // v2.6.21: em tarja escura (_pReadBg) o texto é CLARO (contraste);
                 // sem tarja, usa a cor semântica sobre o tint claro.
-                var _ctColor = _pReadBg ? _pReadFg : _ligaEvent.color;
+                var _ctColor = _pReadBg ? _pReadFg : (window._semanticTextForTheme ? window._semanticTextForTheme(_ligaEvent.color, _isLight) : _ligaEvent.color);
                 return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb + ',0.1)')) + ';border:1px solid rgba(' + _rgb + ',0.3);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEvent.icon + '</span>' +
                   '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ';">' + _ligaEvent.label + '</span>' +
@@ -2391,7 +2391,7 @@ function renderTournaments(container, tournamentId = null) {
               var _countdownText2 = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _colorMap2[_next.color] || '139,92,246';
               // v2.6.21: tarja escura → texto claro; sem tarja → cor semântica.
-              var _ctColor2 = _pReadBg ? _pReadFg : _next.color;
+              var _ctColor2 = _pReadBg ? _pReadFg : (window._semanticTextForTheme ? window._semanticTextForTheme(_next.color, _isLight) : _next.color);
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + (_pReadBg || ('rgba(' + _rgb2 + ',0.1)')) + ';border:1px solid rgba(' + _rgb2 + ',0.3);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ';">' + _next.label + '</span>' +

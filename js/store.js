@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.55-beta';
+window.SCOREPLACE_VERSION = '4.0.56-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3034,6 +3034,22 @@ window._photoReadBox = function () {
     return light
         ? { bg: 'rgba(30,41,59,0.72)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' }
         : { bg: 'rgba(0,0,0,0.40)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.10)' };
+};
+
+// v4.0.56: cor de texto semântica legível por tema. As cores semânticas dos
+// countdowns (🏁 início verde, ⏰ âmbar, 🏆 roxo) são calibradas pra fundo ESCURO.
+// No tema CLARO sem tarja elas somem (texto claro sobre card claro). Aqui devolvem
+// uma variante ESCURA no claro; no escuro, a cor original (que já funciona).
+// Canônico — usado por todos os countdowns (dashboard + detalhe, liga + eventos).
+window._semanticTextForTheme = function (color, isLight) {
+    if (!isLight) return color;
+    var darkMap = {
+        '#10b981': '#047857', '#34d399': '#047857', // verde (início)
+        '#f59e0b': '#b45309', '#fbbf24': '#b45309', // âmbar (prazo)
+        '#8b5cf6': '#6d28d9', '#a78bfa': '#6d28d9', // roxo (fim)
+        '#3b82f6': '#1d4ed8', '#60a5fa': '#1d4ed8'  // azul
+    };
+    return darkMap[color] || '#1f2937';
 };
 
 // v2.7.86: MODO COMPACTO no arrastar-soltar (mesclar / formar dupla / co-organizador).
