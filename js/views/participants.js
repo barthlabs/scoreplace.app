@@ -1513,8 +1513,10 @@ function renderParticipants(container, tournamentId) {
   // ANTES do sorteio. Nesse caso os SEM-DUPLA vão pro TOPO e as duplas formadas
   // abaixo (foco em quem falta parear). Só pra duplas NÃO sorteadas.
   var _hasDrawP = !!((Array.isArray(t.matches) && t.matches.length) || (Array.isArray(t.rounds) && t.rounds.length) || (Array.isArray(t.groups) && t.groups.length));
-  var _soloPairMode = false;
-  try { _soloPairMode = isOrg && !_hasDrawP && !!sessionStorage.getItem('sp_soloPairHint_' + t.id); } catch (e) {}
+  // v4.0.64: gatilho robusto — variável de window (primária) OU sessionStorage (backup).
+  var _soloHintOn = (String(window._soloPairTid || '') === String(t.id));
+  try { if (!_soloHintOn && sessionStorage.getItem('sp_soloPairHint_' + t.id)) _soloHintOn = true; } catch (e) {}
+  var _soloPairMode = isOrg && !_hasDrawP && _soloHintOn;
 
   let individualCount = 0;
   parts.forEach(p => {
@@ -2516,10 +2518,11 @@ function renderParticipants(container, tournamentId) {
         soloPairBanner = '<div id="solo-pair-banner" style="display:flex;gap:10px;align-items:flex-start;background:rgba(129,140,248,0.14);border:1px solid rgba(129,140,248,0.5);border-radius:14px;padding:12px 14px;margin:10px 0;">' +
           '<span style="font-size:1.3rem;flex-shrink:0;">🧩</span>' +
           '<div style="flex:1;min-width:0;font-size:0.85rem;color:var(--text-bright,#e2e8f0);line-height:1.5;"><b>Forme as duplas dos sem par.</b> Arraste um participante sobre o outro pra formar a dupla. Depois volte ao torneio e clique em Sortear.<div style="margin-top:4px;font-size:0.78rem;color:#c7cdfb;">Sem dupla: ' + _spNames + '</div></div>' +
-          '<button onclick="sessionStorage.removeItem(\'sp_soloPairHint_' + _spIdSafe + '\');var e=document.getElementById(\'solo-pair-banner\');if(e)e.remove();" title="Dispensar" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;font-weight:900;cursor:pointer;flex-shrink:0;line-height:1;">✕</button>' +
+          '<button onclick="window._soloPairTid=null;try{sessionStorage.removeItem(\'sp_soloPairHint_' + _spIdSafe + '\')}catch(e){};var el=document.getElementById(\'solo-pair-banner\');if(el)el.remove();" title="Dispensar" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;font-weight:900;cursor:pointer;flex-shrink:0;line-height:1;">✕</button>' +
         '</div>';
       } else {
-        sessionStorage.removeItem('sp_soloPairHint_' + t.id);
+        window._soloPairTid = null;
+        try { sessionStorage.removeItem('sp_soloPairHint_' + t.id); } catch (e2) {}
       }
     }
   } catch (_e) {}

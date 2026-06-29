@@ -1224,6 +1224,9 @@ window._soloConfirm = function (tId, isAberto) {
 window._soloManualPairPage = function (tId) {
     var a = document.getElementById('solo-resolution-panel'); if (a) a.remove();
     document.body.style.overflow = '';
+    // v4.0.64: gatilho ROBUSTO — variável de window (sobrevive à navegação por hash,
+    // imune a falhas de sessionStorage no PWA do iOS) + sessionStorage como backup.
+    window._soloPairTid = String(tId);
     try {
         var t = window._findTournamentById(tId);
         var solos = t ? window._listSoloEntries(t).map(window._soloNameOf) : [];
