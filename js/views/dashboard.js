@@ -845,8 +845,8 @@ function renderDashboard(container) {
                 return _toggleRowDash +
                   '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +
-                  '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ';">' + _ligaEv.label + '</span>' +
-                  '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
+                  '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">' + _ligaEv.label + '</span>' +
+                  '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
                 '</div>';
               }
 
@@ -873,8 +873,8 @@ function renderDashboard(container) {
               var _ctColor2 = _rbCt2.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt2.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
-                '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ';">' + _next.label + '</span>' +
-                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ';font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
+                '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ' !important;">' + _next.label + '</span>' +
+                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
               '</div>';
             })()}
 
