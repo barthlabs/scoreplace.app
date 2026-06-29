@@ -1159,11 +1159,14 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
     var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
     var tIdSafe = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var ab = isAberto ? 'true' : 'false';
+    window._soloSel = 'manual'; // pré-seleciona Ajuste manual
     var chips = solos.map(function (p) {
         return '<span style="display:inline-block;background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);color:#fde68a;border-radius:999px;padding:5px 12px;font-size:0.82rem;font-weight:600;">' + esc(window._soloNameOf(p)) + '</span>';
     }).join(' ');
-    var opt = function (icon, title, desc, onclick, accent) {
-        return '<button onclick="' + onclick + '" style="text-align:left;background:rgba(255,255,255,0.04);border:2px solid ' + accent + '55;border-radius:14px;padding:14px 16px;cursor:pointer;color:#e2e8f0;transition:all 0.2s;display:flex;gap:12px;align-items:flex-start;" onmouseover="this.style.background=\'rgba(255,255,255,0.08)\';this.style.borderColor=\'' + accent + '\'" onmouseout="this.style.background=\'rgba(255,255,255,0.04)\';this.style.borderColor=\'' + accent + '55\'">' +
+    // opções SELECIONÁVEIS (clique destaca; o Confirmar no topo aplica)
+    var opt = function (key, icon, title, desc, accent) {
+        var on = (window._soloSel === key);
+        return '<button id="solo-opt-' + key + '" data-solokey="' + key + '" onclick="window._soloSelect(\'' + key + '\')" style="text-align:left;background:rgba(255,255,255,0.04);border:2px solid ' + accent + '55;outline:' + (on ? '3px solid #fbbf24' : 'none') + ';outline-offset:1px;border-radius:14px;padding:14px 16px;cursor:pointer;color:#e2e8f0;transition:all 0.2s;display:flex;gap:12px;align-items:flex-start;" onmouseover="this.style.background=\'rgba(255,255,255,0.08)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.04)\'">' +
             '<span style="font-size:1.6rem;line-height:1;flex-shrink:0;">' + icon + '</span>' +
             '<span><span style="display:block;font-weight:800;font-size:0.95rem;color:#fff;">' + title + '</span>' +
             '<span style="display:block;font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:3px;line-height:1.4;">' + desc + '</span></span>' +
@@ -1174,108 +1177,51 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
     ov.id = 'solo-resolution-panel';
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:1rem;';
     ov.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:95%;max-width:560px;max-height:90vh;overflow-y:auto;border-radius:24px;border:1px solid rgba(251,191,36,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);">' +
-        '<div style="position:sticky;top:0;z-index:2;background:linear-gradient(135deg,#78350f,#b45309);padding:14px 1.5rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);">' +
-            '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:1.4rem;">⚠️</span><div><h3 style="margin:0;color:#fef3c7;font-size:1.05rem;font-weight:900;">' + solos.length + ' sem dupla</h3><p style="margin:2px 0 0;color:#fde68a;font-size:0.74rem;opacity:0.9;">Decida antes de sortear</p></div></div>' +
-            '<button onclick="window._soloCancel()" style="background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:8px 18px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;">' + _t('predraw.cancelBtn') + '</button>' +
+        '<div style="position:sticky;top:0;z-index:2;background:linear-gradient(135deg,#78350f,#b45309);padding:14px 1.5rem;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,0.1);">' +
+            '<div style="display:flex;align-items:center;gap:10px;min-width:0;"><span style="font-size:1.4rem;">⚠️</span><div style="min-width:0;"><h3 style="margin:0;color:#fef3c7;font-size:1.05rem;font-weight:900;">' + solos.length + ' sem dupla</h3><p style="margin:2px 0 0;color:#fde68a;font-size:0.74rem;opacity:0.9;">Escolha e confirme</p></div></div>' +
+            '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+                '<button onclick="window._soloCancel()" style="background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:8px 16px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.cancelBtn') + '</button>' +
+                '<button onclick="window._soloConfirm(\'' + tIdSafe + '\', ' + ab + ')" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:8px 20px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;white-space:nowrap;box-shadow:0 6px 16px rgba(34,197,94,0.35);">' + _t('predraw.confirmBtn') + '</button>' +
+            '</div>' +
         '</div>' +
         '<div style="padding:1.25rem 1.5rem;">' +
-            '<p style="margin:0 0 8px;font-size:0.85rem;color:var(--text-main,#cbd5e1);line-height:1.5;">Estes participantes <b>não formaram dupla</b>. Sem par, não entram direto no chaveamento. Escolha o que fazer:</p>' +
+            '<p style="margin:0 0 8px;font-size:0.85rem;color:var(--text-main,#cbd5e1);line-height:1.5;">Estes participantes <b>não formaram dupla</b>. Sem par, não entram direto no chaveamento. Escolha e confirme no topo:</p>' +
             '<div style="display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 18px;">' + chips + '</div>' +
             '<div style="display:flex;flex-direction:column;gap:10px;">' +
-                opt('🧩', 'Ajuste manual', 'Forme as duplas você mesmo, juntando os participantes na mão.', 'window._showSoloManualPair(\'' + tIdSafe + '\', ' + ab + ')', '#818cf8') +
-                opt('⏱️', 'Lista de espera', 'Vão pra lista de espera — não jogam a chave, mas ficam disponíveis pra substituir num W.O.', 'window._soloResolveWaitlist(\'' + tIdSafe + '\', ' + ab + ')', '#22d3ee') +
-                opt('🚫', 'Excluir do sorteio', 'Removidos do torneio. Não entram na chave nem na lista de espera.', 'window._soloResolveExclude(\'' + tIdSafe + '\', ' + ab + ')', '#f87171') +
+                opt('manual', '🧩', 'Ajuste manual', 'Abre a página de inscritos pra você formar as duplas arrastando um sobre o outro (vendo as duplas atuais e os sem par).', '#818cf8') +
+                opt('waitlist', '⏱️', 'Lista de espera', 'Vão pra lista de espera — não jogam a chave, mas ficam disponíveis pra substituir num W.O.', '#22d3ee') +
+                opt('exclude', '🚫', 'Excluir do sorteio', 'Removidos do torneio. Não entram na chave nem na lista de espera.', '#f87171') +
             '</div>' +
         '</div>' +
     '</div>';
     document.body.appendChild(ov);
     document.body.style.overflow = 'hidden';
 };
-window._renderSoloManualPair = function () {
-    var st = window._soloPairState; if (!st) return;
-    var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
-    var soloChips = st.remaining.length ? st.remaining.map(function (p, i) {
-        var on = (st.sel === i);
-        return '<button onclick="window._soloPairPick(' + i + ')" style="background:' + (on ? 'rgba(129,140,248,0.25)' : 'rgba(255,255,255,0.05)') + ';border:2px solid ' + (on ? '#818cf8' : 'rgba(255,255,255,0.12)') + ';color:#e2e8f0;border-radius:999px;padding:7px 14px;font-size:0.85rem;font-weight:600;cursor:pointer;">' + esc(window._soloNameOf(p)) + '</button>';
-    }).join(' ') : '<span style="color:var(--text-muted,#94a3b8);font-size:0.82rem;">Todos pareados ✓</span>';
-    var pairRows = st.pairs.length ? st.pairs.map(function (pr, i) {
-        return '<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:12px;padding:8px 12px;"><span style="font-size:0.88rem;color:#e2e8f0;font-weight:600;">' + esc(window._soloNameOf(pr[0])) + ' <span style="color:#6ee7b7;">/</span> ' + esc(window._soloNameOf(pr[1])) + '</span><button onclick="window._soloPairUndo(' + i + ')" style="background:none;border:none;color:#f87171;font-size:1rem;font-weight:900;cursor:pointer;">✕</button></div>';
-    }).join('') : '<span style="color:var(--text-muted,#94a3b8);font-size:0.8rem;">Nenhuma dupla formada ainda.</span>';
-    var leftover = st.remaining.length;
-    var slot = document.getElementById('solo-pair-body');
-    if (slot) slot.innerHTML =
-        '<p style="margin:0 0 8px;font-size:0.8rem;color:var(--text-muted,#94a3b8);">Toque em <b>dois</b> participantes pra formar uma dupla.</p>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;">' + soloChips + '</div>' +
-        '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;color:#6ee7b7;font-weight:700;margin-bottom:6px;">Duplas formadas (' + st.pairs.length + ')</div>' +
-        '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">' + pairRows + '</div>' +
-        (leftover > 0 ? '<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:9px 12px;font-size:0.78rem;color:#fde68a;">Sobra <b>' + leftover + '</b> sem dupla. Ao confirmar, ' + (leftover === 1 ? 'ele vai' : 'eles vão') + ' pra <b>lista de espera</b>.</div>' : '');
-};
-window._showSoloManualPair = function (tId, isAberto) {
-    var t = window._findTournamentById(tId); if (!t) return;
-    var tIdSafe = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    window._soloPairState = { tId: tId, isAberto: !!isAberto, remaining: window._listSoloEntries(t).slice(), pairs: [], sel: null };
-    var a = document.getElementById('solo-resolution-panel'); if (a) a.remove();
-    var old = document.getElementById('solo-manual-pair-panel'); if (old) old.remove();
-    var ov = document.createElement('div');
-    ov.id = 'solo-manual-pair-panel';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:1rem;';
-    ov.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:95%;max-width:560px;max-height:90vh;overflow-y:auto;border-radius:24px;border:1px solid rgba(129,140,248,0.3);box-shadow:0 40px 120px rgba(0,0,0,0.8);">' +
-        '<div style="position:sticky;top:0;z-index:2;background:linear-gradient(135deg,#312e81,#4f46e5);padding:14px 1.5rem;display:flex;justify-content:space-between;align-items:center;">' +
-            '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:1.4rem;">🧩</span><h3 style="margin:0;color:#e0e7ff;font-size:1.05rem;font-weight:900;">Formar duplas</h3></div>' +
-            '<div style="display:flex;gap:8px;">' +
-                '<button onclick="window._showSoloResolutionPanel(\'' + tIdSafe + '\', ' + (isAberto ? 'true' : 'false') + ')" style="background:rgba(0,0,0,0.25);color:#e0e7ff;border:2px solid rgba(224,231,255,0.3);padding:8px 16px;border-radius:12px;font-weight:700;font-size:0.82rem;cursor:pointer;">Voltar</button>' +
-                '<button onclick="window._soloPairConfirm()" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;padding:8px 20px;border-radius:12px;font-weight:800;font-size:0.82rem;cursor:pointer;box-shadow:0 6px 16px rgba(34,197,94,0.35);">' + _t('predraw.confirmBtn') + '</button>' +
-            '</div>' +
-        '</div>' +
-        '<div id="solo-pair-body" style="padding:1.25rem 1.5rem;"></div>' +
-    '</div>';
-    document.body.appendChild(ov);
-    document.body.style.overflow = 'hidden';
-    window._renderSoloManualPair();
-};
-window._soloPairPick = function (i) {
-    var st = window._soloPairState; if (!st) return;
-    if (st.sel === null) { st.sel = i; }
-    else if (st.sel === i) { st.sel = null; }
-    else {
-        var a = st.remaining[st.sel], b = st.remaining[i];
-        st.pairs.push([a, b]);
-        var hi = Math.max(st.sel, i), lo = Math.min(st.sel, i);
-        st.remaining.splice(hi, 1); st.remaining.splice(lo, 1);
-        st.sel = null;
+window._soloSelect = function (key) {
+    window._soloSel = key;
+    var btns = document.querySelectorAll('#solo-resolution-panel [data-solokey]');
+    for (var i = 0; i < btns.length; i++) {
+        btns[i].style.outline = (btns[i].getAttribute('data-solokey') === key) ? '3px solid #fbbf24' : 'none';
     }
-    window._renderSoloManualPair();
 };
-window._soloPairUndo = function (i) {
-    var st = window._soloPairState; if (!st) return;
-    var pr = st.pairs.splice(i, 1)[0];
-    if (pr) { st.remaining.push(pr[0]); st.remaining.push(pr[1]); }
-    st.sel = null;
-    window._renderSoloManualPair();
+window._soloConfirm = function (tId, isAberto) {
+    var key = window._soloSel || 'manual';
+    if (key === 'manual') window._soloManualPairPage(tId);
+    else if (key === 'waitlist') window._soloResolveWaitlist(tId, isAberto);
+    else if (key === 'exclude') window._soloResolveExclude(tId, isAberto);
 };
-window._soloPairConfirm = function () {
-    var st = window._soloPairState; if (!st) return;
-    var t = window._findTournamentById(st.tId); if (!t) return;
-    if (st.pairs.length === 0) { if (typeof showNotification === 'function') showNotification('🧩 Nenhuma dupla', 'Forme ao menos uma dupla ou use Voltar.', 'info'); return; }
-    var mkPair = function (a, b) {
-        var an = window._soloNameOf(a), bn = window._soloNameOf(b);
-        var ao = (typeof a === 'object') ? a : { name: an, displayName: an };
-        var bo = (typeof b === 'object') ? b : { name: bn, displayName: bn };
-        return { displayName: an + ' / ' + bn, name: an + ' / ' + bn,
-            p1Name: an, p1Uid: ao.uid || '', p1Email: ao.email || '', p1Photo: ao.photoURL || ao.photo || '',
-            p2Name: bn, p2Uid: bo.uid || '', p2Email: bo.email || '', p2Photo: bo.photoURL || bo.photo || '',
-            participants: [ao, bo] };
-    };
-    var pairedNames = {};
-    st.pairs.forEach(function (pr) { pairedNames[window._soloNameOf(pr[0])] = true; pairedNames[window._soloNameOf(pr[1])] = true; });
-    var parts = Array.isArray(t.participants) ? t.participants : [];
-    var kept = parts.filter(function (p) { return !pairedNames[window._soloNameOf(p)]; });
-    st.pairs.forEach(function (pr) { kept.push(mkPair(pr[0], pr[1])); });
-    t.participants = kept;
-    try { window.AppStore.logAction(st.tId, st.pairs.length + ' dupla(s) formada(s) manualmente (' + st.remaining.length + ' restante(s) → lista de espera)'); } catch (_e) {}
-    var tId = st.tId, ab = st.isAberto;
-    window._soloPairState = null;
-    window._soloContinueDraw(tId, ab); // sobra (ainda solo) cai na lista de espera no re-call
+// Ajuste manual = leva pra PÁGINA de inscritos, onde o organizador forma as duplas
+// arrastando um participante sobre o outro (handleDropTeam, drag-drop já existente).
+// Deixa um "hint" pra página mostrar um banner com quem está sem par.
+window._soloManualPairPage = function (tId) {
+    var a = document.getElementById('solo-resolution-panel'); if (a) a.remove();
+    document.body.style.overflow = '';
+    try {
+        var t = window._findTournamentById(tId);
+        var solos = t ? window._listSoloEntries(t).map(window._soloNameOf) : [];
+        sessionStorage.setItem('sp_soloPairHint_' + tId, JSON.stringify(solos));
+    } catch (_e) {}
+    window.location.hash = '#participants/' + tId;
 };
 
 window.checkIncompleteTeams = function (t) {

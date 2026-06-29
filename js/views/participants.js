@@ -2490,6 +2490,26 @@ function renderParticipants(container, tournamentId) {
     ? window._inscritosBar(t, parts.length > 1)
     : '';
 
+  // v4.0.57: banner-guia quando o organizador chega aqui via "Ajuste manual" do
+  // painel de solos sem dupla. Mostra quem está sem par + instrução de arrastar-
+  // soltar (handleDropTeam). Some sozinho quando todos pareiam; ✕ dispensa.
+  var soloPairBanner = '';
+  try {
+    if (isOrg && sessionStorage.getItem('sp_soloPairHint_' + t.id)) {
+      var _curSolos = (typeof window._listSoloEntries === 'function') ? window._listSoloEntries(t) : [];
+      if (_curSolos.length > 0) {
+        var _spNames = _curSolos.map(function (p) { return window._safeHtml((typeof p === 'string') ? p : (p.displayName || p.name || '')); }).join(', ');
+        var _spIdSafe = String(t.id).replace(/'/g, "\\'");
+        soloPairBanner = '<div id="solo-pair-banner" style="display:flex;gap:10px;align-items:flex-start;background:rgba(129,140,248,0.14);border:1px solid rgba(129,140,248,0.5);border-radius:14px;padding:12px 14px;margin:10px 0;">' +
+          '<span style="font-size:1.3rem;flex-shrink:0;">🧩</span>' +
+          '<div style="flex:1;min-width:0;font-size:0.85rem;color:var(--text-bright,#e2e8f0);line-height:1.5;"><b>Forme as duplas dos sem par.</b> Arraste um participante sobre o outro pra formar a dupla. Depois volte ao torneio e clique em Sortear.<div style="margin-top:4px;font-size:0.78rem;color:#c7cdfb;">Sem dupla: ' + _spNames + '</div></div>' +
+          '<button onclick="sessionStorage.removeItem(\'sp_soloPairHint_' + _spIdSafe + '\');var e=document.getElementById(\'solo-pair-banner\');if(e)e.remove();" title="Dispensar" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;font-weight:900;cursor:pointer;flex-shrink:0;line-height:1;">✕</button>' +
+        '</div>';
+      } else {
+        sessionStorage.removeItem('sp_soloPairHint_' + t.id);
+      }
+    }
+  } catch (_e) {}
   container.innerHTML = `
     ${(typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
@@ -2507,6 +2527,7 @@ function renderParticipants(container, tournamentId) {
           belowHtml: (checkInControls || rollCallControls)
         })
       : ''}
+    ${soloPairBanner}
     ${rollCallBanner}
     ${startBanner}
     ${startedBadge}
