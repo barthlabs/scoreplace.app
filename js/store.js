@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.61-beta';
+window.SCOREPLACE_VERSION = '4.0.62-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -4248,8 +4248,9 @@ window._toggleHidden = function(tId, event) {
   if (idx === -1) list.push(id); else list.splice(idx, 1);
   var payload = JSON.stringify(list);
   window._hiddenReadKeys().forEach(function(k) { try { localStorage.setItem(k, payload); } catch (e) {} });
-  // v2.8.45: re-render preservando o scroll (não pula a tela).
-  if (typeof window._dashRerender === 'function') { window._dashRerender(); return; }
+  // v4.0.62: ocultar/desocultar → re-render COMPACTO (junta o conteúdo, sem o
+  // spacer de keep-room que deixava "tela preta" até a seção de ocultados).
+  if (typeof window._dashRerender === 'function') { window._dashRerender({ compact: true }); return; }
   var c = document.getElementById('view-container');
   if (c && typeof window.renderDashboard === 'function') window.renderDashboard(c);
 };

@@ -3150,10 +3150,29 @@ function renderDashboard(container) {
 // e restaura — inclusive num requestAnimationFrame (a altura pode mudar após o
 // layout assentar). Todo clique que re-renderiza a dashboard (filtros, busca,
 // toggle, ocultar) deve usar isto em vez de chamar renderDashboard direto.
-window._dashRerender = function() {
+window._dashRerender = function(opts) {
+  opts = opts || {};
   var c = document.getElementById('view-container');
   if (!c || typeof window.renderDashboard !== 'function') return;
   var y = window.pageYOffset || window.scrollY || 0;
+  // v4.0.62: modo COMPACTO (ocultar/desocultar) — a lista encurta e o conteúdo deve
+  // JUNTAR, sem o spacer de keep-room (que deixava "tela preta" até os ocultados).
+  // Em vez de prender o scroll, CLAMPA pro novo tamanho do conteúdo.
+  if (opts.compact) {
+    try { var _mvC = document.getElementById('dashboard-presences-widget'); if (_mvC && _mvC.innerHTML) window._dashMovementCache = _mvC.innerHTML; } catch (e0) {}
+    window.renderDashboard(c);
+    var _sp = document.getElementById('sp-sticky-spacer'); if (_sp) _sp.style.height = '0px';
+    var _clamp = function () {
+      try {
+        var doc = document.scrollingElement || document.documentElement;
+        var maxY = Math.max(0, doc.scrollHeight - window.innerHeight);
+        window.scrollTo(0, Math.min(y, maxY));
+      } catch (e1) {}
+    };
+    _clamp();
+    try { requestAnimationFrame(_clamp); } catch (e2) {}
+    return;
+  }
   // v2.8.85: captura o HTML JÁ HIDRATADO da seção "Movimento nos seus locais"
   // antes de re-renderizar (toggle Lista/filtro/ocultar). renderDashboard re-injeta
   // esse cache no slot, e o sig guard em _hydrateFriendsPresenceWidget pula a
