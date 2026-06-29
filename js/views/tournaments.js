@@ -3500,7 +3500,7 @@ function renderTournaments(container, tournamentId = null) {
                 : '';
               // Modo duplas pré-sorteio: Sem Dupla (solos arrastáveis + duplas pendentes âmbar) + Duplas formadas
               participantsHtml = `
-                <div class="mt-5 mb-4">
+                <div id="sp-inscritos-pairing" class="mt-5 mb-4">
                   <h3 style="margin-bottom:1.2rem;font-size:1.1rem;color:var(--text-bright);border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     👥 Inscritos <span style="font-size:0.8rem;background:rgba(255,255,255,0.1);padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">${individualCountParts}</span>
                   </h3>

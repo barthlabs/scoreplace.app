@@ -1509,15 +1509,6 @@ function renderParticipants(container, tournamentId) {
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
   const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
 
-  // v4.0.63: modo "Ajuste manual" — chegou aqui pelo painel de solos sem dupla,
-  // ANTES do sorteio. Nesse caso os SEM-DUPLA vão pro TOPO e as duplas formadas
-  // abaixo (foco em quem falta parear). Só pra duplas NÃO sorteadas.
-  var _hasDrawP = !!((Array.isArray(t.matches) && t.matches.length) || (Array.isArray(t.rounds) && t.rounds.length) || (Array.isArray(t.groups) && t.groups.length));
-  // v4.0.64: gatilho robusto — variável de window (primária) OU sessionStorage (backup).
-  var _soloHintOn = (String(window._soloPairTid || '') === String(t.id));
-  try { if (!_soloHintOn && sessionStorage.getItem('sp_soloPairHint_' + t.id)) _soloHintOn = true; } catch (e) {}
-  var _soloPairMode = isOrg && !_hasDrawP && _soloHintOn;
-
   let individualCount = 0;
   parts.forEach(p => {
     const pStr = window._pName(p);
@@ -1528,14 +1519,8 @@ function renderParticipants(container, tournamentId) {
     }
   });
 
-  // Ordenar: modo Ajuste manual → SEM-DUPLA no topo (estrutura, não '/'); senão Times primeiro.
+  // Ordenar: Times primeiro, depois individuais
   parts.sort((a, b) => {
-    if (_soloPairMode) {
-      const aTeam = !!window._entryTeamMembers(a), bTeam = !!window._entryTeamMembers(b);
-      if (!aTeam && bTeam) return -1; // sem dupla antes
-      if (aTeam && !bTeam) return 1;  // dupla depois
-      return 0;
-    }
     const nameA = window._pName(a);
     const nameB = window._pName(b);
     const isTeamA = nameA.includes('/');
@@ -2505,27 +2490,6 @@ function renderParticipants(container, tournamentId) {
     ? window._inscritosBar(t, parts.length > 1)
     : '';
 
-  // v4.0.57: banner-guia quando o organizador chega aqui via "Ajuste manual" do
-  // painel de solos sem dupla. Mostra quem está sem par + instrução de arrastar-
-  // soltar (handleDropTeam). Some sozinho quando todos pareiam; ✕ dispensa.
-  var soloPairBanner = '';
-  try {
-    if (_soloPairMode) {
-      var _curSolos = (typeof window._listSoloEntries === 'function') ? window._listSoloEntries(t) : [];
-      if (_curSolos.length > 0) {
-        var _spNames = _curSolos.map(function (p) { return window._safeHtml((typeof p === 'string') ? p : (p.displayName || p.name || '')); }).join(', ');
-        var _spIdSafe = String(t.id).replace(/'/g, "\\'");
-        soloPairBanner = '<div id="solo-pair-banner" style="display:flex;gap:10px;align-items:flex-start;background:rgba(129,140,248,0.14);border:1px solid rgba(129,140,248,0.5);border-radius:14px;padding:12px 14px;margin:10px 0;">' +
-          '<span style="font-size:1.3rem;flex-shrink:0;">🧩</span>' +
-          '<div style="flex:1;min-width:0;font-size:0.85rem;color:var(--text-bright,#e2e8f0);line-height:1.5;"><b>Forme as duplas dos sem par.</b> Arraste um participante sobre o outro pra formar a dupla. Depois volte ao torneio e clique em Sortear.<div style="margin-top:4px;font-size:0.78rem;color:#c7cdfb;">Sem dupla: ' + _spNames + '</div></div>' +
-          '<button onclick="window._soloPairTid=null;try{sessionStorage.removeItem(\'sp_soloPairHint_' + _spIdSafe + '\')}catch(e){};var el=document.getElementById(\'solo-pair-banner\');if(el)el.remove();" title="Dispensar" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;font-weight:900;cursor:pointer;flex-shrink:0;line-height:1;">✕</button>' +
-        '</div>';
-      } else {
-        window._soloPairTid = null;
-        try { sessionStorage.removeItem('sp_soloPairHint_' + t.id); } catch (e2) {}
-      }
-    }
-  } catch (_e) {}
   container.innerHTML = `
     ${(typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
@@ -2543,7 +2507,6 @@ function renderParticipants(container, tournamentId) {
           belowHtml: (checkInControls || rollCallControls)
         })
       : ''}
-    ${soloPairBanner}
     ${rollCallBanner}
     ${startBanner}
     ${startedBadge}

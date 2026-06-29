@@ -1221,18 +1221,24 @@ window._soloConfirm = function (tId, isAberto) {
 // Ajuste manual = leva pra PÁGINA de inscritos, onde o organizador forma as duplas
 // arrastando um participante sobre o outro (handleDropTeam, drag-drop já existente).
 // Deixa um "hint" pra página mostrar um banner com quem está sem par.
+// v4.0.65: CANÔNICO — a tela de formar duplas manualmente é a seção "Inscritos"
+// (duplas pré-sorteio) do DETALHE do torneio: 🙋 Sem dupla (em cima, arrastáveis) +
+// 👫 Duplas formadas (abaixo) + Desfazer. NÃO existe mais um segundo caminho via
+// #participants. "Ajuste manual" só FECHA o painel e ROLA até essa seção (ou navega
+// pro detalhe e rola após render, se vier de outra tela).
 window._soloManualPairPage = function (tId) {
     var a = document.getElementById('solo-resolution-panel'); if (a) a.remove();
     document.body.style.overflow = '';
-    // v4.0.64: gatilho ROBUSTO — variável de window (sobrevive à navegação por hash,
-    // imune a falhas de sessionStorage no PWA do iOS) + sessionStorage como backup.
-    window._soloPairTid = String(tId);
-    try {
-        var t = window._findTournamentById(tId);
-        var solos = t ? window._listSoloEntries(t).map(window._soloNameOf) : [];
-        sessionStorage.setItem('sp_soloPairHint_' + tId, JSON.stringify(solos));
-    } catch (_e) {}
-    window.location.hash = '#participants/' + tId;
+    var _scroll = function () {
+        var el = document.getElementById('sp-inscritos-pairing');
+        if (!el) return false;
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { try { el.scrollIntoView(); } catch (e2) {} }
+        return true;
+    };
+    if (_scroll()) return;
+    // não está no detalhe (ou ainda não renderizou) → navega e tenta rolar após o render
+    if ((window.location.hash || '').indexOf('#tournaments/' + tId) !== 0) window.location.hash = '#tournaments/' + tId;
+    var _n = 0, _iv = setInterval(function () { _n++; if (_scroll() || _n > 25) clearInterval(_iv); }, 120);
 };
 
 window.checkIncompleteTeams = function (t) {
