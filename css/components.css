@@ -30,6 +30,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   margin: 0 !important;
   padding: 0 !important;
 }
+/* ══ CANÔNICO (v4.0.51) — DATA/HORA NUNCA TRUNCAM O VALOR ════════════════════════
+   O <input type=date/time> tem largura intrínseca = valor + ícone nativo. Quando o
+   layout aperta o width abaixo disso, o valor é CORTADO ("23:00"→"23", "22/07/2026"→...).
+   `min-width` garante o PISO do conteúdo e VENCE qualquer `width` inline menor — o browser
+   usa max(width, min-width). Logo, conserta TODOS os inputs de data/hora do app de uma vez,
+   sem precisar mexer em cada style inline. Regra única, canônica.
+   ⚠️ NUNCA setar `width` fixo menor que isso num input de data/hora; se faltar espaço na
+   linha, é o CONTAINER que se adapta (flex-wrap / reduzir a data, não cortar a hora). */
+input[type="time"] { min-width: 5.75rem !important; }  /* "23:00" + ícone de relógio */
+input[type="date"] { min-width: 8.5rem !important; }   /* "dd/mm/aaaa" + ícone de calendário */
 /* "Repetir a cada [N] dias" (número) e a tag "≈ N rodadas" acompanham a mesma
    altura pra alinhar na linha do agendamento de sorteios. */
 #liga-draw-interval, #liga-rounds-tag {

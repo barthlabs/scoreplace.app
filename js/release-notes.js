@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.50-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.51-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Junho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🗓️ Campos de data e hora não cortam mais o valor:</b> os campos de <b>horário</b> (ex.: nas datas da fase) eram estreitos demais e <b>cortavam</b> o horário (mostravam "23" em vez de "23:00"). Agora todo campo de data/hora do app tem <b>largura suficiente</b> pra mostrar o valor inteiro — corrigido de uma vez, em todo lugar.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.50-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📍 Check-in automático por GPS voltou a funcionar:</b> ao <b>chegar num local preferido e abrir o app</b>, sua presença é registrada de novo. Se você já tinha um <b>plano de ida pra aquele horário</b> (margem de ±2h), entra <b>direto</b>, sem perguntar, com as suas modalidades e horário de saída. Sem plano, o app <b>pergunta</b> "Você está aqui?" (confirma/cancela), lembrando suas últimas configurações.</li>' +
         '<li><b>🎾 Pontuação dos esportes mais certa e automática:</b> a <b>vantagem (deuce, 40-40)</b> agora segue a <b>regra de cada modalidade</b> — vale só no Tênis; nos demais é desligada (Padel usa ponto de ouro). O <b>"ganhar por 2"</b> também é automático por esporte (nos pontos do vôlei de praia/pickleball/futevôlei; no tie-break do beach tennis). Tiramos os botões que confundiam — agora é tudo pela regra oficial.</li>' +
