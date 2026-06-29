@@ -1158,7 +1158,24 @@ window._renderTournamentProgress = function(t) {
   var _id = String((t && t.id) || '').replace(/"/g, '&quot;');
   // v2.1.52: classe (não id) — o box pode existir em vários cards da dashboard
   // E no detalhe ao mesmo tempo; o ticker atualiza todas as instâncias.
-  return '<div class="info-box" style="margin-top:1rem;"><div class="tourn-progress-live" data-tid="' + _id + '">' + window._buildProgressInner(t) + '</div></div>';
+  // v4.0.60: SOBRE FOTO DE CAPA a seção inteira recebe a tarja de leitura
+  // (window._photoReadBox, tema-aware) + texto CLARO com !important na div viva —
+  // senão o header "Progresso"/contagens (que herdam a cor) somem sobre a foto.
+  // Os textos coloridos (azul/roxo/verde/vermelho) já são legíveis sobre escuro.
+  // !important vence a inversão de cor do tema claro (css/style.css).
+  var _hasPhoto = !!(t && (t.coverPhotoData || t.venuePhotoUrl));
+  var _rb = (_hasPhoto && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
+  var _wrapStyle = _rb
+    ? 'margin-top:1rem;padding:14px 16px;border-radius:14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid ' + _rb.border + ';'
+    : 'margin-top:1rem;';
+  // Sobre foto: a CSS do tema claro INVERTE os hex claros de _buildProgressInner
+  // (#60a5fa→#1d4ed8 etc.) pra escuro → ilegível na tarja escura. Em vez de caçar
+  // cada cor, força TODO o texto da seção pra cor clara (fg) com !important via
+  // <style> escopado (vence a inversão por ordem de origem). As BARRAS (background)
+  // mantêm as cores semânticas (verde/azul/vermelho). Vale nos 2 temas.
+  var _cssId = String((t && t.id) || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  var _scoped = _rb ? '<style>.tourn-progress-live[data-tid="' + _cssId + '"] *{color:' + _rb.fg + ' !important;}</style>' : '';
+  return '<div class="info-box" style="' + _wrapStyle + '">' + _scoped + '<div class="tourn-progress-live" data-tid="' + _cssId + '">' + window._buildProgressInner(t) + '</div></div>';
 };
 window._progressTick = function() {
   var els = document.querySelectorAll('.tourn-progress-live');
