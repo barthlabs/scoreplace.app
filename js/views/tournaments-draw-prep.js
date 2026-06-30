@@ -766,18 +766,22 @@ window.showUnifiedResolutionPanel = function(tId) {
     window._unifiedCourts = _uCourts;
     window._unifiedDur = _uDur;
     window._unifiedTId = tIdSafe;
-    // v4.0.66: resumo por opção (o que ela faz NESTE caso) — mostrado no detalhe
-    // ao clicar/selecionar, junto da estimativa de tempo da fase.
+    // v4.0.68: resumo por opção = TÍTULO (nome da opção) + passos (processo → chave).
+    // A estimativa de tempo vem do _unifiedEstData. Mostrado no detalhe sticky ao
+    // selecionar. Formato pedido pelo dono (ex. Play-in).
     var _uUnit = info.isTeam ? 'times' : 'participantes';
+    var _uUnit1 = info.isTeam ? 'time' : 'participante';
+    var _uG = Math.floor(info.effectiveTeams / 2);
+    var _nBL = Math.max(0, info.loP2 - _uG), _nMiss = info.missing, _nExc = info.excess;
     window._unifiedSummary = {
-        reopen:    'Reabrir inscrições até completar a chave de ' + info.hiP2 + ' ' + _uUnit + ' (faltam ' + info.missing + ').',
-        bye:       'Chave de ' + info.hiP2 + ' — os ' + info.missing + ' melhores folgam (BYE) a 1ª rodada.',
-        playin:    'Todos jogam a 1ª rodada; os últimos disputam a vaga (repescagem) → chave de ' + info.loP2 + '.',
-        standby:   'Os ' + info.excess + ' últimos vão pra lista de espera → chave de ' + info.loP2 + ' (ficam disponíveis pra um W.O.).',
-        exclusion: 'Corta os ' + info.excess + ' últimos → chave de ' + info.loP2 + '.',
-        swiss:     'Troca pro formato Suíço — todos jogam várias rodadas, sem eliminação direta.',
-        dissolve:  'Desfaz os times incompletos em jogadores individuais e re-sorteia.',
-        poll:      'Cria uma enquete pros participantes votarem na solução.'
+        reopen:    { title: _t('predraw.optReopenTitle'),    lines: [(_nMiss === 1 ? 'Espera mais 1 ' + _uUnit1 + ' se inscrever' : 'Espera mais ' + _nMiss + ' ' + _uUnit + ' se inscreverem'), 'Chave de ' + info.hiP2 + ' (potência de 2)'] },
+        bye:       { title: _t('predraw.optByeTitle'),       lines: ['Chave de ' + info.hiP2, (_nMiss === 1 ? 'O melhor folga (BYE) a 1ª rodada' : 'Os ' + _nMiss + ' melhores folgam (BYE) a 1ª rodada'), 'Os demais jogam a 1ª rodada normal'] },
+        playin:    { title: _t('predraw.optPlayinTitle'),    lines: ['Todos disputam a 1ª rodada', (_nBL === 0 ? 'Os vencedores passam à 2ª rodada' : (_nBL === 1 ? 'Vencedores + o melhor derrotado passam à 2ª rodada' : 'Vencedores + os ' + _nBL + ' melhores derrotados passam à 2ª rodada')), 'Chave de ' + info.loP2] },
+        standby:   { title: _t('predraw.optStandbyTitle'),   lines: ['Chave de ' + info.loP2 + ' (potência de 2)', (_nExc === 1 ? 'O último vai pra lista de espera' : 'Os ' + _nExc + ' últimos vão pra lista de espera'), 'Disponíveis pra substituir num W.O.'] },
+        exclusion: { title: _t('predraw.optExclusionTitle'), lines: ['Chave de ' + info.loP2, (_nExc === 1 ? 'O último é removido do torneio' : 'Os ' + _nExc + ' últimos são removidos do torneio')] },
+        swiss:     { title: _t('predraw.optSwissTitle'),     lines: ['Troca pro formato Suíço', 'Todos jogam várias rodadas, sem eliminação direta', 'Classificação por pontos'] },
+        dissolve:  { title: _t('predraw.optDissolveTitle'),  lines: ['Desfaz os times incompletos em jogadores individuais', 'Re-sorteia as duplas'] },
+        poll:      { title: _t('predraw.optPollTitle'),      lines: ['Cria uma enquete pros participantes', 'Eles votam na solução a aplicar'] }
     };
 
     // Render function (allows re-rendering on exclude)
@@ -969,12 +973,18 @@ window.showUnifiedResolutionPanel = function(tId) {
     window._updateUnifiedDetail = function() {
         var el = document.getElementById('unified-detail'); if (!el) return;
         var key = window._unifiedSel;
-        var summ = (window._unifiedSummary && window._unifiedSummary[key]) || '';
+        var d = (window._unifiedSummary && window._unifiedSummary[key]) || null;
         var ed = window._unifiedEstData && window._unifiedEstData[key];
         var estLine = ed
-            ? '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:#6ee7b7;font-size:0.95rem;">⏱️ ~' + ed.fmt + '</span><span style="opacity:0.8;font-size:0.72rem;color:#e2e8f0;">(' + ed.games + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>'
-            : '<div style="margin-top:8px;font-size:0.76rem;color:#e2e8f0;opacity:0.8;">⏱️ A estimativa depende da configuração após esta opção.</div>';
-        el.innerHTML = '<div style="font-size:0.86rem;color:#fef3c7;line-height:1.5;font-weight:600;">' + summ + '</div>' + estLine;
+            ? '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:#6ee7b7;font-size:0.95rem;">⏱️ ~' + ed.fmt + '</span><span style="opacity:0.8;font-size:0.72rem;color:#e2e8f0;">(' + ed.games + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>'
+            : '<div style="margin-top:7px;font-size:0.76rem;color:#e2e8f0;opacity:0.8;">⏱️ A estimativa depende da configuração após esta opção.</div>';
+        // NOME da opção no topo + passos (processo → chave) + estimativa
+        var title = d ? d.title : '';
+        var linesHtml = (d && d.lines) ? d.lines.map(function(l, i) { return (i > 0 ? '<span style="opacity:0.4;margin:0 5px;">→</span>' : '') + l; }).join('') : '';
+        el.innerHTML =
+            '<div style="font-weight:900;color:#fbbf24;font-size:0.92rem;margin-bottom:4px;">' + title + '</div>' +
+            '<div style="font-size:0.78rem;color:#fef3c7;line-height:1.55;">' + linesHtml + '</div>' +
+            estLine;
     };
 
     window._handleUnifiedOption = function(tId, option) {
