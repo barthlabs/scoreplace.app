@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.73-beta';
+window.SCOREPLACE_VERSION = '4.0.74-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -879,12 +879,9 @@ window._softRefreshView = function() {
   }
 
   // 1. If any modal is open or user is typing, defer — retry in 500ms
-  // v1.0.62-beta: simulation-panel adicionado ao safe-list. Bug reportado:
-  // user clicou Suíço no painel de resolução de potência de 2 (40 inscritos
-  // em torneio Eliminatório), painel de config de rodadas Suíço apareceu
-  // mas sumiu — soft refresh derrubou. Mesma classe de bug da v0.15.89,
-  // só que pra um overlay diferente. Também adicionei incomplete-teams-panel
-  // que aparece em fluxos paralelos.
+  // Overlays de fluxos de sorteio entram no safe-list pra não serem derrubados por um
+  // soft refresh (snapshot do Firestore → initRouter → _dismissAllOverlays).
+  // v4.0.74: simulation-panel saiu daqui — a 2ª tela de simulação foi removida.
   var openModal = document.querySelector('.modal-overlay.active') ||
                   document.getElementById('qr-modal-overlay') ||
                   document.getElementById('player-stats-overlay') ||
@@ -901,7 +898,6 @@ window._softRefreshView = function() {
                   document.getElementById('phase-res-panel') ||
                   document.getElementById('vagas-draw-panel') ||
                   document.getElementById('removal-subchoice-panel') ||
-                  document.getElementById('simulation-panel') ||
                   document.getElementById('incomplete-teams-panel') ||
                   document.getElementById('flyer-print-overlay') ||
                   // v2.7.96: diálogos padrão (confirm/alert/input). Sem isto, em torneio

@@ -3383,7 +3383,6 @@ window._confirmP2Resolution = function (tId, option) {
     window.AppStore.logAction(tId, actionMsg);
     window.AppStore.sync();
 
-    if (document.getElementById('simulation-panel')) document.getElementById('simulation-panel').remove();
     if (document.getElementById('p2-resolution-panel')) document.getElementById('p2-resolution-panel').remove();
     if (document.getElementById('unified-resolution-panel')) document.getElementById('unified-resolution-panel').remove();
     document.body.style.overflow = '';
