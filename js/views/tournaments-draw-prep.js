@@ -990,10 +990,11 @@ window.showUnifiedResolutionPanel = function(tId) {
             var _stepBtn = 'width:38px;height:38px;border-radius:10px;border:2px solid rgba(254,243,199,0.4);background:rgba(0,0,0,0.3);color:#fef3c7;font-size:1.4rem;font-weight:900;cursor:pointer;line-height:1;flex-shrink:0;';
             el.innerHTML =
                 '<div style="font-weight:900;color:#fbbf24;font-size:0.92rem;margin-bottom:7px;">' + ((window._unifiedSummary && window._unifiedSummary.swiss) ? window._unifiedSummary.swiss.title : 'Formato Suíço') + '</div>' +
-                '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">' +
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
                     '<button onclick="window._unifiedSwissStep(-1)" title="Menos uma rodada" style="' + _stepBtn + '">−</button>' +
-                    '<div style="min-width:104px;text-align:center;"><span style="font-size:1.6rem;font-weight:950;color:#fff;">' + _sx + '</span> <span style="font-size:0.82rem;color:#fde68a;">' + _rw + '</span></div>' +
+                    '<div style="min-width:52px;height:38px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border:2px solid rgba(254,243,199,0.3);border-radius:10px;"><span style="font-size:1.5rem;font-weight:950;color:#fff;line-height:1;">' + _sx + '</span></div>' +
                     '<button onclick="window._unifiedSwissStep(1)" title="Mais uma rodada" style="' + _stepBtn + '">+</button>' +
+                    '<span style="font-size:0.92rem;color:#fde68a;font-weight:600;margin-left:2px;">' + _rw + '</span>' +
                 '</div>' +
                 '<div style="font-size:0.8rem;color:#fef3c7;line-height:1.55;">' + _sx + ' ' + _rw + ' de Suíço para classificar para as eliminatórias <b>(chave de ' + (window._unifiedSwissLo || '?') + ')</b></div>' +
                 '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:#6ee7b7;font-size:0.95rem;">⏱️ ~' + _sf + '</span><span style="opacity:0.8;font-size:0.72rem;color:#e2e8f0;">(' + _sg + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>';
@@ -1040,9 +1041,11 @@ window.showUnifiedResolutionPanel = function(tId) {
         } else if (option === 'standby' || option === 'exclusion') {
             window._showRemovalSubChoice(tId, option, info);
         } else if (option === 'swiss') {
-            // v4.0.70: guarda o nº de rodadas escolhido + a chave de corte (loP2) pro motor.
-            t.swissCutRounds = window._unifiedSwissRounds || null;
-            t.swissCutTo = window._unifiedSwissLo || null;
+            // v4.0.71: LIGA O MOTOR — o gerador de Suíço (tournaments-draw.js:1075) lê
+            // t.swissRounds como o nº de rodadas; o corte pra potência inferior (loP2)
+            // é automático (p2TargetCount) e a transição Suíço→eliminatória já existe
+            // (bracket-logic.js:1521). Basta passar o X escolhido no stepper.
+            if (window._unifiedSwissRounds) t.swissRounds = window._unifiedSwissRounds;
             window.showResolutionSimulationPanel(tId, 'swiss');
         } else if (option === 'dissolve') {
             window.showDissolveTeamsPanel(tId);
