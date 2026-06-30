@@ -1318,10 +1318,6 @@ window.checkIncompleteTeams = function (t) {
     };
 };
 
-window.showIncompleteTeamsPanel = function (tId) {
-    // Redirect to unified resolution panel
-    window.showUnifiedResolutionPanel(tId);
-};
 
 
 // Handler for incomplete teams resolution options

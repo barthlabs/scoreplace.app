@@ -289,9 +289,6 @@ function initRouter() {
           window.location.hash = '#tournaments/' + (parts[2] || '');
         }
         break;
-      case 'pre-draw':
-        renderPreDraw(viewContainer, cleanParam);
-        break;
       case 'bracket':
         // v2.0.8: a página de chaveamento standalone foi removida. Toda
         // referência a #bracket/:id redireciona pro DETALHE do torneio

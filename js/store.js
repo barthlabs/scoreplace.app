@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.79-beta';
+window.SCOREPLACE_VERSION = '4.0.80-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -4502,7 +4502,7 @@ window.AppStore = {
           if (_removedIds.length) {
             try {
               var _hp = (window.location.hash || '').replace('#', '').split('/');
-              var _tourViews = ['tournaments', 'bracket', 'participants', 'rules', 'pre-draw', 'analise', 'categorias'];
+              var _tourViews = ['tournaments', 'bracket', 'participants', 'rules', 'analise', 'categorias'];
               if (_tourViews.indexOf(_hp[0]) !== -1 && _hp[1] && _removedIds.indexOf(String(_hp[1])) !== -1) {
                 if (typeof showNotification === 'function') {
                   showNotification('Torneio removido', 'Esse torneio não está mais disponível (foi removido pelo organizador).', 'warning');

@@ -219,7 +219,6 @@
     // ═══════════════════════════════════════════════════════════════════════════
     // PRE-DRAW
     // ═══════════════════════════════════════════════════════════════════════════
-    { id: 'predraw-confirm-draw', selector: '[onclick*="_runPreDrawConfirm"]', text: 'Confirme o sorteio! O chaveamento será gerado com base nas configurações definidas.', context: 'tournament-detail', priority: 9, position: 'top' },
     { id: 'predraw-rename-cat', selector: '[onclick*="_renameCat"]', text: 'Renomeie esta categoria antes do sorteio.', context: 'tournament-detail', priority: 3, position: 'top' },
     { id: 'predraw-merge-cat', selector: '[onclick*="_mergeCat"]', text: 'Mescle duas categorias em uma só (ex: quando poucas inscrições em uma categoria).', context: 'tournament-detail', priority: 4, position: 'top' },
 
