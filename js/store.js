@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.83-beta';
+window.SCOREPLACE_VERSION = '4.0.84-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -2615,6 +2615,29 @@ window._pName = function(p, fallback) {
   // indivíduo: nome pelo uid (ao vivo); displayName/name/email/phone só fallback
   var raw = R(p.uid, p.displayName || p.name || p.email || (p.phone ? String(p.phone) : '')) || fb;
   return _pNameDisplay(raw) || fb;
+};
+
+// v4.0.84: resolve a STRING de lado de partida (m.p1/m.p2 = "A / B" GRAVADA no draw) pro nome
+// AO VIVO. As partidas guardam o nome do momento do sorteio; aqui achamos a ENTRADA cujo nome
+// guardado bate com a string e devolvemos _pName(entrada) (uid→perfil). Assim o bracket também
+// puxa do perfil — nada de string velha. BYE/TBD/FOLGA/informal-não-achado → mantém a string.
+window._resolveSideLive = function (t, sideStr) {
+  if (!t || typeof sideStr !== 'string') return sideStr || '';
+  var s = sideStr.trim();
+  if (!s || s === 'TBD' || s === 'BYE' || s === 'FOLGA' || s === 'A definir') return sideStr;
+  var pools = [t.participants, t.standbyParticipants, t.waitlist];
+  for (var pi = 0; pi < pools.length; pi++) {
+    var arr = pools[pi];
+    if (!Array.isArray(arr)) continue;
+    for (var i = 0; i < arr.length; i++) {
+      var p = arr[i];
+      if (!p || typeof p !== 'object') continue;
+      if (String(p.displayName || '').trim() === s) return window._pName(p);
+      if (String(p.name || '').trim() === s) return window._pName(p);
+      if (p.p1Name && p.p2Name && (String(p.p1Name).trim() + ' / ' + String(p.p2Name).trim()) === s) return window._pName(p);
+    }
+  }
+  return sideStr; // informal / não achado → mantém a string como está
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
