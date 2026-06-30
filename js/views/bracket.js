@@ -2004,13 +2004,17 @@ async function _preloadPlayerPhotos(tournament) {
     if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(nm)) return; // telefone/genérico não vira nome
     if (window._profileNameByUid[u] !== nm) { window._profileNameByUid[u] = nm; _cacheChanged = true; }
   }
+  // pools que aparecem em listas (inscritos + espera) — todos hidratam do perfil
+  var _pools = [participants];
+  if (Array.isArray(tournament.standbyParticipants)) _pools.push(tournament.standbyParticipants);
+  if (Array.isArray(tournament.waitlist)) _pools.push(tournament.waitlist);
   // 1 leitura por uid ÚNICO (top-level + slots p1/p2 + sub-participants) — popula foto + nome
   var _uidsToLoad = {};
-  participants.forEach(function(p) {
+  _pools.forEach(function(arr) { arr.forEach(function(p) {
     if (typeof p !== 'object') return;
     [p.uid, p.p1Uid, p.p2Uid].forEach(function(u) { if (u) _uidsToLoad[u] = 1; });
     if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s && s.uid) _uidsToLoad[s.uid] = 1; });
-  });
+  }); });
   Object.keys(_uidsToLoad).forEach(function(uid) {
     promises.push(
       window.FirestoreDB.db.collection('users').doc(uid).get()
@@ -2051,9 +2055,25 @@ async function _preloadPlayerPhotos(tournament) {
 
   await Promise.all(promises);
 
-  // Cache populado → re-render leve pra mostrar os nomes AO VIVO (idempotente: 2ª passada o
-  // cache já bate → _cacheChanged=false → sem re-render → sem loop). NUNCA grava no torneio.
-  if (_cacheChanged && typeof window._softRefreshView === 'function') {
+  // HIDRATA (EM MEMÓRIA, SEM SALVAR) o nome do perfil pelo uid em TODOS os pools → toda tela que
+  // lê p1Name/p2Name/displayName DIRETO mostra o nome AO VIVO de uma vez (não depende de cada
+  // tela chamar resolvedor — fim do piecemeal). NÃO é self-heal: ZERO saveTournament; a cada
+  // load re-hidrata do perfil. Identidade = uid; o nome guardado é só cache transitório da visão.
+  var _c = window._profileNameByUid, _hy = false;
+  function _setIf(obj, key, val) { if (val && obj[key] !== val) { obj[key] = val; _hy = true; } }
+  _pools.forEach(function(arr) { arr.forEach(function(p) {
+    if (typeof p !== 'object') return;
+    if (p.p1Uid && _c[p.p1Uid]) _setIf(p, 'p1Name', _c[p.p1Uid]);
+    if (p.p2Uid && _c[p.p2Uid]) _setIf(p, 'p2Name', _c[p.p2Uid]);
+    if (Array.isArray(p.participants)) p.participants.forEach(function(s) {
+      if (s && typeof s === 'object' && s.uid && _c[s.uid]) { _setIf(s, 'displayName', _c[s.uid]); _setIf(s, 'name', _c[s.uid]); }
+    });
+    if (p.p1Name && p.p2Name) { _setIf(p, 'displayName', p.p1Name + ' / ' + p.p2Name); }
+    else if (p.uid && _c[p.uid]) { _setIf(p, 'displayName', _c[p.uid]); _setIf(p, 'name', _c[p.uid]); }
+  }); });
+
+  // re-render se cache ou hidratação mudaram algo (idempotente: 2ª passada nada muda → sem loop)
+  if ((_cacheChanged || _hy) && typeof window._softRefreshView === 'function') {
     try { window._softRefreshView(); } catch (e) {}
   }
 }
