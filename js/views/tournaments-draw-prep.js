@@ -1084,11 +1084,13 @@ window.showUnifiedResolutionPanel = function(tId) {
             '@keyframes modalFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }' +
             '@media (max-width:640px) { #unified-options-grid { grid-template-columns: 1fr 1fr !important; } } @media (max-width:400px) { #unified-options-grid { grid-template-columns: 1fr !important; } }' +
         '</style>' +
-        '<div style="padding:2rem 2.5rem 2.5rem;">' +
+        // v4.0.67: detalhe (resumo + estimativa) STICKY — cola no cabeçalho ao rolar,
+        // SEMPRE visível, SEM vazamento (bg OPACO + full-width). Mesmo comportamento da
+        // barra de filtros/busca canônica. Fica fora da seção com padding pra encostar.
+        '<div id="unified-detail" style="position:sticky;top:0;z-index:6;background:#1f2433;border-bottom:1px solid rgba(251,191,36,0.32);box-shadow:0 6px 14px rgba(0,0,0,0.4);padding:11px 2.5rem;"></div>' +
+        '<div style="padding:1.25rem 2.5rem 2.5rem;">' +
             '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;font-weight:700;">' + _t('predraw.selectStrategy') + '</h4>' +
             '<p style="margin:0 0 1rem;font-size:0.7rem;color:#64748b;line-height:1.5;">' + _t('predraw.nashColorLegend') + '</p>' +
-            // v4.0.66: detalhe da opção selecionada (resumo + estimativa de tempo da fase)
-            '<div id="unified-detail" style="background:rgba(0,0,0,0.28);border:1px solid rgba(251,191,36,0.35);border-radius:14px;padding:12px 14px;margin-bottom:1.25rem;"></div>' +
             '<div id="unified-options-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">' +
                 window._renderUnifiedOptions([]) +
             '</div>' +
