@@ -409,15 +409,18 @@ function _computeStandings(t, category) {
 
   const allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   allP.forEach(p => {
-    // v4.0.75: dupla PRÉ-FORMADA (p1Name+p2Name, ou participants[] com 2) é UM competidor,
-    // nomeado "p1 / p2". Sem isto, o displayName dessas duplas vem só com o p1Name e o
-    // Suíço/standings quebra o par em "single" (bug casais). Inline (sem window.*) pra
-    // valer também no Cloud Function autoDraw. Liga usa indivíduos → cai no displayName.
-    const name = (typeof p === 'string') ? p
-      : (p.p1Name && p.p2Name) ? (p.p1Name + ' / ' + p.p2Name)
-      : (Array.isArray(p.participants) && p.participants.length > 1)
-        ? p.participants.map(function (x) { return (typeof x === 'string') ? x : (x.displayName || x.name || ''); }).filter(Boolean).join(' / ')
-        : (p.displayName || p.name || '');
+    // v4.0.76: nome de EXIBIÇÃO canônico (_entryDisplayName, derivado da estrutura) — a
+    // dupla pré-formada vira a label "p1 / p2", mas a IDENTIDADE é uid (resolvida na borda
+    // por _userTeamInMatch achando ESTA entrada pelo mesmo nome canônico → p1Uid/p2Uid).
+    // Sem isto, o displayName dessas duplas vinha só com o p1 e o Suíço quebrava em "single".
+    // Inline de fallback pra valer no autoDraw CF (sem store.js). Liga=indivíduos→displayName.
+    const name = (typeof window._entryDisplayName === 'function')
+      ? window._entryDisplayName(p)
+      : ((typeof p === 'string') ? p
+        : (p.p1Name && p.p2Name) ? (p.p1Name + ' / ' + p.p2Name)
+        : (Array.isArray(p.participants) && p.participants.length > 1)
+          ? p.participants.map(function (x) { return (typeof x === 'string') ? x : (x.displayName || x.name || ''); }).filter(Boolean).join(' / ')
+          : (p.displayName || p.name || ''));
     // If filtering by category, only include participants in that category (supports multi-cat)
     if (category) {
       if (typeof p === 'object' && window._participantInCategory) {

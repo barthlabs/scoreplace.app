@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.75-beta';
+window.SCOREPLACE_VERSION = '4.0.76-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -4281,6 +4281,20 @@ window._entryTeamMembers = function (p) {
     return [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''];
   }
   return null;
+};
+
+// Nome de EXIBIÇÃO canônico de uma entrada (o "nome de domínio" amigável). É o ÚNICO
+// lugar onde a "/" aparece numa entrada de dupla — e é SÓ display, derivado da ESTRUTURA
+// (slots/participants[]) via _entryTeamMembers, nunca o contrário. A IDENTIDADE continua
+// sendo o uid (p1Uid/p2Uid). Usado pela classificação e pela busca de entrada nas bordas,
+// pra que o lado da partida ("A / B") resolva de volta pra MESMA entrada → uid.
+// Ver [[project_dupla_entry_structural_not_slash]] e [[project_uid_audit_sweep]].
+window._entryDisplayName = function (p) {
+  if (p == null) return '';
+  if (typeof p === 'string') return p;
+  var mem = window._entryTeamMembers(p);
+  if (mem && mem.length > 1) return mem.join(' / ');
+  return p.displayName || p.name || '';
 };
 
 window._findTournamentById = function (tId) {

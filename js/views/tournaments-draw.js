@@ -1050,14 +1050,12 @@ window.generateDrawFunction = function (tId) {
 
     // 2. Handle Swiss/Classificatória — classification phase before elimination
     if (t.p2Resolution === 'swiss') {
-        // v4.0.75: o Suíço/Liga é baseado em NOME. Pra DUPLAS, o nome tem que ser
-        // "p1 / p2" (estrutura), não o displayName — que nessas duplas vem só com o
-        // p1Name, quebrando o par em "single". Usa _entryTeamMembers pra preservar a dupla.
+        // v4.0.76: nome de EXIBIÇÃO canônico (_entryDisplayName) — dupla pré-formada vira a
+        // label "p1 / p2" (derivada da estrutura), mas a IDENTIDADE é uid. Fonte única do nome.
         var _swissNames = participants.map(function(p) {
-            if (typeof p === 'string') return p;
-            var _mem = (typeof window._entryTeamMembers === 'function') ? window._entryTeamMembers(p) : null;
-            if (_mem && _mem.length > 1) return _mem.join(' / ');
-            return p.displayName || p.name || '';
+            return (typeof window._entryDisplayName === 'function')
+                ? window._entryDisplayName(p)
+                : (typeof p === 'string' ? p : (p.displayName || p.name || ''));
         });
         // Shuffle
         for (var _si = _swissNames.length - 1; _si > 0; _si--) {

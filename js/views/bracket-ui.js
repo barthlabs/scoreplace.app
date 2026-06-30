@@ -369,7 +369,11 @@ function _userTeamInMatch(t, m, user) {
     for (var j = 0; j < parts.length; j++) {
       var p = parts[j];
       var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-      if (pName === sideStr) { pp = p; break; }
+      // v4.0.76: casa também pelo nome canônico da entrada ("p1 / p2" — _entryDisplayName).
+      // O lado da partida de dupla é "A / B", mas o displayName da entrada pode ser só o p1;
+      // sem isto a entrada não era achada e caía no fallback de substring (nome, não uid).
+      var pCanon = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(p) : pName;
+      if (pName === sideStr || pCanon === sideStr) { pp = p; break; }
     }
     if (pp && typeof pp === 'object') {
       if (user.uid && pp.uid && pp.uid === user.uid) return true;
