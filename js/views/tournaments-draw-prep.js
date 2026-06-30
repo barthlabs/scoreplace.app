@@ -749,13 +749,20 @@ window.showUnifiedResolutionPanel = function(tId) {
         else if (key === 'playin') base = Math.floor(s / 2) + (lo - 1) + (s % 2);// repescagem (mais jogos)
         else if (key === 'reopen') base = hi - 1;                                // enche até hi
         else if (key === 'standby' || key === 'exclusion') base = lo - 1;        // cai pra lo
-        else if (key === 'swiss') { var r = Math.max(1, Math.ceil(Math.log(Math.max(2, s)) / Math.log(2))); base = r * Math.floor(s / 2); }
+        else if (key === 'swiss') { base = (window._unifiedSwissRounds || 3) * Math.floor(s / 2) + (window._unifiedSwissElim || 0); } // X rodadas de suíço + eliminatória de loP2
         else return null;                                                        // dissolve/poll: sem estimativa direta
-        // dupla elim ≈ dobro - 1; NÃO se aplica ao Suíço (troca o formato).
+        // dupla elim ≈ dobro - 1; NÃO ao Suíço (a eliminatória do Suíço já entra em _unifiedSwissElim).
         if (_uIsDouble && base > 0 && key !== 'swiss') base = 2 * base - 1;
         return base;
     };
     var _uFmtMin = function(m) { var h = Math.floor(m / 60), mm = m % 60; return h > 0 ? (h + 'h' + (mm ? ' ' + mm + 'm' : '')) : (mm + 'm'); };
+    // v4.0.70: Suíço = X RODADAS de suíço → classifica pra ELIMINATÓRIA (chave de loP2).
+    // X escolhido pelo organizador (stepper − / + no detalhe); o tempo recalcula ao vivo.
+    window._unifiedSwissHalf = Math.floor(info.effectiveTeams / 2);
+    window._unifiedSwissElim = (function () { var e = info.loP2 - 1; if (_uIsDouble && e > 0) e = 2 * e - 1; return Math.max(0, e); })();
+    window._unifiedSwissLo = info.loP2;
+    window._unifiedSwissRounds = Math.max(2, Math.ceil(Math.log(Math.max(2, info.effectiveTeams)) / Math.log(2)));
+    window._unifiedFmtMin = _uFmtMin;
     window._unifiedEstData = {};
     ['reopen','bye','playin','standby','exclusion','swiss','dissolve','poll'].forEach(function(k){
         var g = _uGamesFor(k);
@@ -973,6 +980,25 @@ window.showUnifiedResolutionPanel = function(tId) {
     window._updateUnifiedDetail = function() {
         var el = document.getElementById('unified-detail'); if (!el) return;
         var key = window._unifiedSel;
+        // SUÍÇO: stepper de X RODADAS (− esquerda / + direita) + texto + estimativa AO VIVO
+        if (key === 'swiss') {
+            var _sx = window._unifiedSwissRounds || 3;
+            var _sg = _sx * (window._unifiedSwissHalf || 0) + (window._unifiedSwissElim || 0);
+            var _sm = Math.ceil(_sg / Math.max(1, window._unifiedCourts)) * window._unifiedDur;
+            var _sf = window._unifiedFmtMin ? window._unifiedFmtMin(_sm) : (Math.round(_sm / 60) + 'h');
+            var _rw = _sx > 1 ? 'rodadas' : 'rodada';
+            var _stepBtn = 'width:38px;height:38px;border-radius:10px;border:2px solid rgba(254,243,199,0.4);background:rgba(0,0,0,0.3);color:#fef3c7;font-size:1.4rem;font-weight:900;cursor:pointer;line-height:1;flex-shrink:0;';
+            el.innerHTML =
+                '<div style="font-weight:900;color:#fbbf24;font-size:0.92rem;margin-bottom:7px;">' + ((window._unifiedSummary && window._unifiedSummary.swiss) ? window._unifiedSummary.swiss.title : 'Formato Suíço') + '</div>' +
+                '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">' +
+                    '<button onclick="window._unifiedSwissStep(-1)" title="Menos uma rodada" style="' + _stepBtn + '">−</button>' +
+                    '<div style="min-width:104px;text-align:center;"><span style="font-size:1.6rem;font-weight:950;color:#fff;">' + _sx + '</span> <span style="font-size:0.82rem;color:#fde68a;">' + _rw + '</span></div>' +
+                    '<button onclick="window._unifiedSwissStep(1)" title="Mais uma rodada" style="' + _stepBtn + '">+</button>' +
+                '</div>' +
+                '<div style="font-size:0.8rem;color:#fef3c7;line-height:1.55;">' + _sx + ' ' + _rw + ' de Suíço para classificar para as eliminatórias <b>(chave de ' + (window._unifiedSwissLo || '?') + ')</b></div>' +
+                '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:#6ee7b7;font-size:0.95rem;">⏱️ ~' + _sf + '</span><span style="opacity:0.8;font-size:0.72rem;color:#e2e8f0;">(' + _sg + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>';
+            return;
+        }
         var d = (window._unifiedSummary && window._unifiedSummary[key]) || null;
         var ed = window._unifiedEstData && window._unifiedEstData[key];
         var estLine = ed
@@ -985,6 +1011,13 @@ window.showUnifiedResolutionPanel = function(tId) {
             '<div style="font-weight:900;color:#fbbf24;font-size:0.92rem;margin-bottom:4px;">' + title + '</div>' +
             '<div style="font-size:0.78rem;color:#fef3c7;line-height:1.55;">' + linesHtml + '</div>' +
             estLine;
+    };
+    // v4.0.70: − / + do nº de rodadas do Suíço; recalcula o detalhe + estimativa.
+    window._unifiedSwissStep = function(delta) {
+        var x = (window._unifiedSwissRounds || 3) + delta;
+        if (x < 1) x = 1; if (x > 20) x = 20;
+        window._unifiedSwissRounds = x;
+        if (typeof window._updateUnifiedDetail === 'function') window._updateUnifiedDetail();
     };
 
     window._handleUnifiedOption = function(tId, option) {
@@ -1007,6 +1040,9 @@ window.showUnifiedResolutionPanel = function(tId) {
         } else if (option === 'standby' || option === 'exclusion') {
             window._showRemovalSubChoice(tId, option, info);
         } else if (option === 'swiss') {
+            // v4.0.70: guarda o nº de rodadas escolhido + a chave de corte (loP2) pro motor.
+            t.swissCutRounds = window._unifiedSwissRounds || null;
+            t.swissCutTo = window._unifiedSwissLo || null;
             window.showResolutionSimulationPanel(tId, 'swiss');
         } else if (option === 'dissolve') {
             window.showDissolveTeamsPanel(tId);
