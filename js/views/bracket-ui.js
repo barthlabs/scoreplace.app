@@ -391,8 +391,11 @@ function _userTeamInMatch(t, m, user) {
     return false;
   };
   if (m.isMonarch) {
-    if (Array.isArray(m.team1) && m.team1.some(function(nm) { return nm === (user.displayName || '') || (user.email && nm === user.email); })) return 1;
-    if (Array.isArray(m.team2) && m.team2.some(function(nm) { return nm === (user.displayName || '') || (user.email && nm === user.email); })) return 2;
+    // v4.0.77: Rei/Rainha — cada membro do time é um INDIVÍDUO (parceiro rotativo). Resolve
+    // por UID via checkSide (acha o participante pelo nome → checa p.uid/p1Uid/p2Uid), não
+    // por displayName/email solto. Cobre o 3º modo de fase de dupla junto com formada/sorteada.
+    if (Array.isArray(m.team1) && m.team1.some(function(nm) { return checkSide(nm); })) return 1;
+    if (Array.isArray(m.team2) && m.team2.some(function(nm) { return checkSide(nm); })) return 2;
   }
   if (checkSide(m.p1)) return 1;
   if (checkSide(m.p2)) return 2;
