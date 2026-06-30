@@ -1031,22 +1031,21 @@ window.showUnifiedResolutionPanel = function(tId) {
         if (panel) panel.remove();
         document.body.style.overflow = '';
 
-        // Handle option
+        // Handle option — v4.0.72: bye / play-in / Suíço APLICAM DIRETO via
+        // _confirmP2Resolution, SEM a 2ª tela de simulação (a 1ª tela já tem resumo +
+        // estimativa + o nº de rodadas do Suíço). Standby/exclusão seguem no sub-painel.
         if (option === 'reopen') {
             window._showReopenPanel(tId, info);
-        } else if (option === 'bye') {
-            window.showResolutionSimulationPanel(tId, 'bye');
-        } else if (option === 'playin') {
-            window.showResolutionSimulationPanel(tId, 'playin');
+        } else if (option === 'bye' || option === 'playin') {
+            window._confirmP2Resolution(tId, option);
         } else if (option === 'standby' || option === 'exclusion') {
             window._showRemovalSubChoice(tId, option, info);
         } else if (option === 'swiss') {
-            // v4.0.71: LIGA O MOTOR — o gerador de Suíço (tournaments-draw.js:1075) lê
-            // t.swissRounds como o nº de rodadas; o corte pra potência inferior (loP2)
-            // é automático (p2TargetCount) e a transição Suíço→eliminatória já existe
-            // (bracket-logic.js:1521). Basta passar o X escolhido no stepper.
-            if (window._unifiedSwissRounds) t.swissRounds = window._unifiedSwissRounds;
-            window.showResolutionSimulationPanel(tId, 'swiss');
+            // X rodadas escolhido no stepper → t.swissRounds (+ _swissSelectedRounds que
+            // o _confirmP2Resolution lê). O corte pra loP2 (p2TargetCount) é automático e
+            // a transição Suíço→eliminatória já existe (bracket-logic.js).
+            if (window._unifiedSwissRounds) { t.swissRounds = window._unifiedSwissRounds; window._swissSelectedRounds = window._unifiedSwissRounds; }
+            window._confirmP2Resolution(tId, 'swiss');
         } else if (option === 'dissolve') {
             window.showDissolveTeamsPanel(tId);
         } else if (option === 'poll') {
