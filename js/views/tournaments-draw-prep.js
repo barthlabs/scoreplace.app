@@ -766,6 +766,19 @@ window.showUnifiedResolutionPanel = function(tId) {
     window._unifiedCourts = _uCourts;
     window._unifiedDur = _uDur;
     window._unifiedTId = tIdSafe;
+    // v4.0.66: resumo por opção (o que ela faz NESTE caso) — mostrado no detalhe
+    // ao clicar/selecionar, junto da estimativa de tempo da fase.
+    var _uUnit = info.isTeam ? 'times' : 'participantes';
+    window._unifiedSummary = {
+        reopen:    'Reabrir inscrições até completar a chave de ' + info.hiP2 + ' ' + _uUnit + ' (faltam ' + info.missing + ').',
+        bye:       'Chave de ' + info.hiP2 + ' — os ' + info.missing + ' melhores folgam (BYE) a 1ª rodada.',
+        playin:    'Todos jogam a 1ª rodada; os últimos disputam a vaga (repescagem) → chave de ' + info.loP2 + '.',
+        standby:   'Os ' + info.excess + ' últimos vão pra lista de espera → chave de ' + info.loP2 + ' (ficam disponíveis pra um W.O.).',
+        exclusion: 'Corta os ' + info.excess + ' últimos → chave de ' + info.loP2 + '.',
+        swiss:     'Troca pro formato Suíço — todos jogam várias rodadas, sem eliminação direta.',
+        dissolve:  'Desfaz os times incompletos em jogadores individuais e re-sorteia.',
+        poll:      'Cria uma enquete pros participantes votarem na solução.'
+    };
 
     // Render function (allows re-rendering on exclude)
     window._renderUnifiedOptions = function(excludedKeys) {
@@ -949,6 +962,19 @@ window.showUnifiedResolutionPanel = function(tId) {
         for (var i = 0; i < btns.length; i++) {
             btns[i].style.outline = (btns[i].getAttribute('data-ukey') === key) ? '3px solid #fbbf24' : 'none';
         }
+        if (typeof window._updateUnifiedDetail === 'function') window._updateUnifiedDetail();
+    };
+    // v4.0.66: detalhe da opção SELECIONADA — resumo (o que faz neste caso) +
+    // estimativa de tempo da fase. Atualiza a cada clique numa opção.
+    window._updateUnifiedDetail = function() {
+        var el = document.getElementById('unified-detail'); if (!el) return;
+        var key = window._unifiedSel;
+        var summ = (window._unifiedSummary && window._unifiedSummary[key]) || '';
+        var ed = window._unifiedEstData && window._unifiedEstData[key];
+        var estLine = ed
+            ? '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:#6ee7b7;font-size:0.95rem;">⏱️ ~' + ed.fmt + '</span><span style="opacity:0.8;font-size:0.72rem;color:#e2e8f0;">(' + ed.games + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>'
+            : '<div style="margin-top:8px;font-size:0.76rem;color:#e2e8f0;opacity:0.8;">⏱️ A estimativa depende da configuração após esta opção.</div>';
+        el.innerHTML = '<div style="font-size:0.86rem;color:#fef3c7;line-height:1.5;font-weight:600;">' + summ + '</div>' + estLine;
     };
 
     window._handleUnifiedOption = function(tId, option) {
@@ -1011,39 +1037,40 @@ window.showUnifiedResolutionPanel = function(tId) {
     var _missingCount = info.hiP2 - info.effectiveTeams;
     var _unitLabel = info.isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts');
 
-    gaugeHtml = '<div style="display:flex;align-items:center;justify-content:center;gap:1rem;background:rgba(0,0,0,0.3);padding:1.25rem;border-radius:24px;border:1px solid rgba(255,255,255,0.05);flex-wrap:wrap;">' +
-        '<div style="text-align:center;min-width:80px;">' +
-        '<div style="font-size:0.65rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:700;">' + _t('predraw.gaugeInferior') + '</div>' +
-        '<div style="font-size:1.8rem;font-weight:900;color:#4ade80;line-height:1;">' + info.loP2 + '</div>' +
-        '<div style="font-size:0.7rem;color:#86efac;margin-top:2px;">' + _loSub + '</div>' +
-        '<div style="font-size:0.65rem;color:#f87171;margin-top:4px;font-weight:700;">' + _t('predraw.gaugeOver', {n: _excessCount, unit: _unitLabel}) + '</div>' +
+    // v4.0.66: 3 BOXES — inferior (esq, menor) · ATUAIS (centro, destaque) · superior (dir, menor)
+    gaugeHtml = '<div style="display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:8px;align-items:stretch;">' +
+        '<div style="background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.35);border-radius:16px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;justify-content:center;">' +
+            '<div style="font-size:0.56rem;color:#86efac;text-transform:uppercase;letter-spacing:0.4px;font-weight:700;">' + _t('predraw.gaugeInferior') + '</div>' +
+            '<div style="font-size:1.5rem;font-weight:900;color:#4ade80;line-height:1.15;">' + info.loP2 + '</div>' +
+            '<div style="font-size:0.6rem;color:#86efac;">' + _loSub + '</div>' +
+            '<div style="font-size:0.56rem;color:#f87171;margin-top:3px;font-weight:700;">' + _t('predraw.gaugeOver', {n: _excessCount, unit: _unitLabel}) + '</div>' +
         '</div>' +
-        '<div style="text-align:center;min-width:100px;padding:0 0.5rem;">' +
-        '<div style="font-size:2.5rem;font-weight:950;color:#fbbf24;line-height:1;">' + info.effectiveTeams + '</div>' +
-        '<div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;font-weight:800;margin-top:2px;">' + _centerLabel + '</div>' +
-        (info.isTeam ? '<div style="font-size:0.65rem;color:#fde68a;margin-top:1px;">' + _centerSub + '</div>' : '') +
+        '<div style="background:rgba(251,191,36,0.15);border:2px solid rgba(251,191,36,0.55);border-radius:16px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;justify-content:center;box-shadow:0 0 18px rgba(251,191,36,0.18);">' +
+            '<div style="font-size:2.6rem;font-weight:950;color:#fbbf24;line-height:1;">' + info.effectiveTeams + '</div>' +
+            '<div style="font-size:0.62rem;color:#fde68a;text-transform:uppercase;font-weight:800;margin-top:2px;letter-spacing:0.4px;">' + _centerLabel + '</div>' +
+            (info.isTeam ? '<div style="font-size:0.58rem;color:#fde68a;opacity:0.85;">' + _centerSub + '</div>' : '') +
         '</div>' +
-        '<div style="text-align:center;min-width:80px;">' +
-        '<div style="font-size:0.65rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:700;">' + _t('predraw.gaugeSuperior') + '</div>' +
-        '<div style="font-size:1.8rem;font-weight:900;color:#60a5fa;line-height:1;">' + info.hiP2 + '</div>' +
-        '<div style="font-size:0.7rem;color:#93c5fd;margin-top:2px;">' + _hiSub + '</div>' +
-        '<div style="font-size:0.65rem;color:#38bdf8;margin-top:4px;font-weight:700;">' + _t('predraw.gaugeMissing', {n: _missingCount, unit: _unitLabel}) + '</div>' +
+        '<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.35);border-radius:16px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;justify-content:center;">' +
+            '<div style="font-size:0.56rem;color:#93c5fd;text-transform:uppercase;letter-spacing:0.4px;font-weight:700;">' + _t('predraw.gaugeSuperior') + '</div>' +
+            '<div style="font-size:1.5rem;font-weight:900;color:#60a5fa;line-height:1.15;">' + info.hiP2 + '</div>' +
+            '<div style="font-size:0.6rem;color:#93c5fd;">' + _hiSub + '</div>' +
+            '<div style="font-size:0.56rem;color:#38bdf8;margin-top:3px;font-weight:700;">' + _t('predraw.gaugeMissing', {n: _missingCount, unit: _unitLabel}) + '</div>' +
         '</div>' +
-        '</div>';
+    '</div>';
 
     overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:800px;border-radius:32px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);display:flex;flex-direction:column;max-height:90vh;">' +
         // Sticky top bar with cancel button
-        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:12px 1.5rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:12px 1.5rem;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:12px;">' +
-                '<span style="font-size:1.5rem;">⚙️</span>' +
-                '<div>' +
+                '<span style="font-size:1.5rem;flex-shrink:0;">⚙️</span>' +
+                '<div style="min-width:0;">' +
                     '<h3 style="margin:0;color:#fef3c7;font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">' + _t('predraw.adjustTitle') + '</h3>' +
                     '<p style="margin:2px 0 0;color:#fde68a;font-size:0.75rem;opacity:0.9;">' + _t('predraw.detectedPrefix') + issuesText + '</p>' +
                 '</div>' +
             '</div>' +
-            '<div style="display:flex;gap:8px;flex-shrink:0;">' +
-                '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:8px 18px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\'">' + _t('predraw.cancelBtn') + '</button>' +
-                '<button onclick="window._handleUnifiedOption(\'' + tIdSafe + '\', window._unifiedSel)" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:8px 22px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;box-shadow:0 6px 16px rgba(34,197,94,0.35);" onmouseover="this.style.filter=\'brightness(1.1)\'" onmouseout="this.style.filter=\'\'">' + _t('predraw.confirmBtn') + '</button>' +
+            '<div style="display:flex;gap:8px;">' +
+                '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="flex:1;background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:9px 14px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\'">' + _t('predraw.cancelBtn') + '</button>' +
+                '<button onclick="window._handleUnifiedOption(\'' + tIdSafe + '\', window._unifiedSel)" style="flex:2;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:9px 14px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;transition:all 0.2s;box-shadow:0 6px 16px rgba(34,197,94,0.35);" onmouseover="this.style.filter=\'brightness(1.1)\'" onmouseout="this.style.filter=\'\'">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
         // Scrollable content
@@ -1059,7 +1086,9 @@ window.showUnifiedResolutionPanel = function(tId) {
         '</style>' +
         '<div style="padding:2rem 2.5rem 2.5rem;">' +
             '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;font-weight:700;">' + _t('predraw.selectStrategy') + '</h4>' +
-            '<p style="margin:0 0 1.5rem;font-size:0.7rem;color:#64748b;line-height:1.5;">' + _t('predraw.nashColorLegend') + '</p>' +
+            '<p style="margin:0 0 1rem;font-size:0.7rem;color:#64748b;line-height:1.5;">' + _t('predraw.nashColorLegend') + '</p>' +
+            // v4.0.66: detalhe da opção selecionada (resumo + estimativa de tempo da fase)
+            '<div id="unified-detail" style="background:rgba(0,0,0,0.28);border:1px solid rgba(251,191,36,0.35);border-radius:14px;padding:12px 14px;margin-bottom:1.25rem;"></div>' +
             '<div id="unified-options-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">' +
                 window._renderUnifiedOptions([]) +
             '</div>' +
@@ -1068,6 +1097,7 @@ window.showUnifiedResolutionPanel = function(tId) {
     '</div>';
 
     document.body.appendChild(overlay);
+    if (typeof window._updateUnifiedDetail === 'function') window._updateUnifiedDetail(); // mostra o recomendado já selecionado
 };
 
 window._showReopenPanel = function(tId, info) {
