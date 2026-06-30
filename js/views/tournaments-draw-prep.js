@@ -1150,42 +1150,6 @@ window.showUnifiedResolutionPanel = function(tId) {
     if (typeof window._updateUnifiedDetail === 'function') window._updateUnifiedDetail(); // mostra o recomendado já selecionado
 };
 
-window._showReopenPanel = function(tId, info) {
-    const t = window._findTournamentById(tId);
-    if (!t) return;
-
-    const existing = document.getElementById('reopen-panel');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'reopen-panel';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
-
-    const currentLabel = info.isTeam
-        ? _t('predraw.reopenTopTeamsCur', {n: info.effectiveTeams, p: (info.effectiveTeams * info.teamSize)})
-        : _t('predraw.reopenTopPartsCur', {n: info.effectiveTeams});
-    const needLabel = info.isTeam
-        ? _t('predraw.reopenTopTeamsMiss', {n: info.missing, p: info.missingParticipants})
-        : _t('predraw.reopenTopPartsMiss', {n: info.missing});
-
-    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:600px;border-radius:24px;border:1px solid rgba(59,130,246,0.3);box-shadow:0 30px 100px rgba(0,0,0,0.7);overflow:hidden;animation:modalFadeIn 0.3s ease-out;">' +
-        '<div style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%);padding:1.5rem 2rem;">' +
-            '<div style="display:flex;align-items:center;gap:15px;">' +
-                '<span style="font-size:2.5rem;">↩️</span>' +
-                '<div>' +
-                    '<h3 style="margin:0;color:#dbeafe;font-size:1.25rem;font-weight:800;">' + _t('predraw.p2PollReopenTitle') + '</h3>' +
-                    '<p style="margin:4px 0 0;color:#bfdbfe;font-size:0.9rem;">' + currentLabel + '<br>' + needLabel + '</p>' +
-                '</div>' +
-            '</div>' +
-        '</div>' +
-        '<div style="padding:1.5rem 2rem;">' +
-            '<p style="margin:0 0 1rem;font-size:0.85rem;color:#cbd5e1;line-height:1.6;">' + _t('predraw.reopenInstruction', {n: info.hiP2, unit: (info.isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts'))}) + '</p>' +
-            '<button onclick="window._cancelUnifiedPanel(\'' + String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;padding:12px 24px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;width:100%;">' + _t('predraw.reopenBackToTournament') + '</button>' +
-        '</div>' +
-    '</div>';
-
-    document.body.appendChild(overlay);
-};
 
 // ============ END UNIFIED RESOLUTION PANEL ============
 
