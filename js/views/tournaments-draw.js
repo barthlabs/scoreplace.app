@@ -875,7 +875,7 @@ window.generateDrawFunction = function (tId) {
     if (!isElim && !isGruposFmt && !isSuicoOrLiga && !t.oddResolution && typeof window.checkOddEntries === 'function') {
         const oddInfo = window.checkOddEntries(t);
         if (oddInfo.isOdd) {
-            window.showOddEntriesPanel(tId);
+            window.showUnifiedResolutionPanel(tId);
             return;
         }
     }

@@ -1563,10 +1563,6 @@ window.checkOddEntries = function (t) {
     };
 };
 
-window.showOddEntriesPanel = function (tId) {
-    // Redirect to unified resolution panel
-    window.showUnifiedResolutionPanel(tId);
-};
 
 window._handleOddOption = function (tId, option) {
     var t = window._findTournamentById(tId);
