@@ -559,7 +559,11 @@ function _sideBelongsToUser(t, sideStr, user) {
   for (var j = 0; j < parts.length; j++) {
     var p = parts[j];
     var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-    if (pName === sideStr) { pp = p; break; }
+    // v4.0.78: casa também pelo nome canônico ("p1 / p2" — _entryDisplayName), igual ao
+    // _userTeamInMatch (4.0.76). Sem isto, dupla formada (displayName = só o p1) não era
+    // achada quando o lado é "A / B" → caía no fallback de nome/split, não no uid.
+    var pCanon = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(p) : pName;
+    if (pName === sideStr || pCanon === sideStr) { pp = p; break; }
   }
   if (pp && typeof pp === 'object') {
     if (user.uid) {
