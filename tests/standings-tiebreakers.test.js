@@ -180,5 +180,27 @@ function liga(parts, matches, extra) {
   ok(idx(s, 'A') < idx(s, 'B'), '[fallback] lista vazia usa default → confronto resolve (A>B)');
 })();
 
+// ── 9. DUPLA pré-formada = UM competidor "p1 / p2" (trava do bug casais, v4.0.75) ──
+// Identidade = uid nas bordas; na camada da classificação a dupla é UMA chave única
+// "p1Name / p2Name" (não o displayName, que nessas duplas vem só com o p1Name). Sem isto,
+// o Suíço/Liga de duplas quebra o par em "single" (só o p1 pontua, o parceiro some). Ver
+// project_uid_audit_sweep (Parte 8) + project_dupla_entry_structural_not_slash.
+(function () {
+  // duplas no SHAPE do casais real: displayName = só o p1Name; p1Name/p2Name nos slots.
+  const t = liga(
+    [
+      { displayName: 'Ana', name: 'Ana', p1Name: 'Ana', p1Uid: 'u-ana', p2Name: 'Bia', p2Uid: 'u-bia' },
+      { displayName: 'Cris', name: 'Cris', p1Name: 'Cris', p1Uid: 'u-cris', p2Name: 'Duda', p2Uid: 'u-duda' },
+    ],
+    [{ p1: 'Ana / Bia', p2: 'Cris / Duda', winner: 'Ana / Bia', scoreP1: 6, scoreP2: 3 }]
+  );
+  const s = W._computeStandings(t);
+  ok(s.length === 2, '[dupla] 2 competidores (1 por dupla, não 1 por pessoa)');
+  ok(!!row(s, 'Ana / Bia') && !!row(s, 'Cris / Duda'), '[dupla] nomeadas "p1 / p2"');
+  ok(!row(s, 'Ana') && !row(s, 'Cris'), '[dupla] NÃO vira "single" (só o p1Name)');
+  ok(row(s, 'Ana / Bia').points === 3 && row(s, 'Ana / Bia').wins === 1, '[dupla] vitória pontua a DUPLA');
+  ok(row(s, 'Cris / Duda').losses === 1, '[dupla] derrota cai na outra DUPLA');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' standings-tiebreakers: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
