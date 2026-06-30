@@ -1994,53 +1994,33 @@ async function _preloadPlayerPhotos(tournament) {
   // renomeia o perfil depois, o torneio fica com nome velho → 2 pessoas distintas
   // apareciam com o MESMO nome velho (falsa duplicata) e colapsavam no ranking.
   // Aqui usamos o mesmo doc.get() que já buscamos pra foto — zero leitura extra.
-  var _nameRefresh = [];
-  var _slotRefresh = [];
-  // v4.0.82: re-deriva o NOME DE CADA SLOT de dupla do perfil do pXUid (identidade = uid;
-  // nome guardado é só cache que se auto-cura). Conserta drift como p1Name="Maira" num slot
-  // cujo p1Uid é do Paulo. Ver [[project_dupla_entry_structural_not_slash]].
+  // v4.0.83: NÃO grava nome no torneio. Popula o cache GLOBAL uid→nome-do-perfil (ao vivo);
+  // todo display resolve dele via _displayNameForUid/_entryDisplayName. Identidade = uid; nome
+  // puxado do perfil sempre. SEM self-heal, SEM saveTournament. Ver [[project_uid_audit_sweep]].
+  window._profileNameByUid = window._profileNameByUid || {};
+  var _cacheChanged = false;
+  function _cacheName(u, nm) {
+    if (!u || !nm) return;
+    if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(nm)) return; // telefone/genérico não vira nome
+    if (window._profileNameByUid[u] !== nm) { window._profileNameByUid[u] = nm; _cacheChanged = true; }
+  }
+  // 1 leitura por uid ÚNICO (top-level + slots p1/p2 + sub-participants) — popula foto + nome
+  var _uidsToLoad = {};
   participants.forEach(function(p) {
     if (typeof p !== 'object') return;
-    [['p1Uid', 'p1Name'], ['p2Uid', 'p2Name']].forEach(function(slot) {
-      var su = p[slot[0]]; if (!su) return;
-      promises.push(
-        window.FirestoreDB.db.collection('users').doc(su).get()
-          .then(function(doc) {
-            if (!doc.exists) return;
-            var fresh = ((doc.data() || {}).displayName || '').trim();
-            var cur = (p[slot[1]] || '').trim();
-            if (fresh && fresh !== cur
-                && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(fresh))) {
-              _slotRefresh.push({ p: p, key: slot[1], name: fresh });
-            }
-          })
-          .catch(function() {})
-      );
-    });
+    [p.uid, p.p1Uid, p.p2Uid].forEach(function(u) { if (u) _uidsToLoad[u] = 1; });
+    if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s && s.uid) _uidsToLoad[s.uid] = 1; });
   });
-  participants.forEach(function(p) {
-    if (typeof p !== 'object') return;
-    var uid  = p.uid || '';
-    if (!uid) return;
+  Object.keys(_uidsToLoad).forEach(function(uid) {
     promises.push(
       window.FirestoreDB.db.collection('users').doc(uid).get()
         .then(function(doc) {
           if (!doc.exists) return;
           var data = doc.data() || {};
-          // foto (cada pessoa sob o SEU displayName real; nunca o uid de um preenche o outro)
-          if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1) {
-            var realName = (data.displayName || '').trim().toLowerCase();
-            if (realName) window._playerPhotoCache[realName] = data.photoURL;
-          }
-          // refresh do nome — só INDIVÍDUOS; DUPLA é detectada pela ESTRUTURA
-          // (_entryTeamMembers, não por " / " no nome) e tratada pelo slot-refresh abaixo,
-          // que re-deriva p1Name/p2Name de p1Uid/p2Uid. Ignora nome-genérico/telefone.
-          var freshName = (data.displayName || '').trim();
-          var cached = (p.displayName || p.name || '').trim();
-          var _isDupla = (typeof window._entryTeamMembers === 'function') && !!window._entryTeamMembers(p);
-          if (freshName && freshName !== cached && cached.indexOf(' / ') === -1 && !_isDupla
-              && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(freshName))) {
-            _nameRefresh.push({ p: p, name: freshName, email: data.email || '' });
+          var nm = (data.displayName || '').trim();
+          _cacheName(uid, nm);
+          if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1 && nm) {
+            window._playerPhotoCache[nm.toLowerCase()] = data.photoURL;
           }
         })
         .catch(function() {})
@@ -2071,32 +2051,10 @@ async function _preloadPlayerPhotos(tournament) {
 
   await Promise.all(promises);
 
-  // v2.6.105/v4.0.82: aplica nomes (indivíduos + slots de dupla) + recomputa o displayName
-  // da dupla = "p1Name / p2Name" (derivado dos slots já curados) + salva + re-render leve se
-  // algo mudou. Idempotente: na próxima passada os nomes já batem → nada muda → sem loop.
-  var _changed = 0;
-  _nameRefresh.forEach(function(r) {
-    var cur = (r.p.displayName || r.p.name || '').trim();
-    if (cur !== r.name) {
-      r.p.displayName = r.name; r.p.name = r.name;
-      if (r.email && !r.p.email) r.p.email = r.email;
-      _changed++;
-    }
-  });
-  _slotRefresh.forEach(function(r) {
-    if ((r.p[r.key] || '').trim() !== r.name) { r.p[r.key] = r.name; _changed++; }
-  });
-  participants.forEach(function(p) {
-    if (typeof p !== 'object') return;
-    var mem = (typeof window._entryTeamMembers === 'function') ? window._entryTeamMembers(p) : null;
-    if (mem && mem.length > 1) {
-      var dn = mem.join(' / ');
-      if ((p.displayName || '').trim() !== dn) { p.displayName = dn; p.name = dn; _changed++; }
-    }
-  });
-  if (_changed && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-    try { await window.FirestoreDB.saveTournament(tournament); } catch (e) {}
-    try { if (typeof window._softRefreshView === 'function') window._softRefreshView(); } catch (e) {}
+  // Cache populado → re-render leve pra mostrar os nomes AO VIVO (idempotente: 2ª passada o
+  // cache já bate → _cacheChanged=false → sem re-render → sem loop). NUNCA grava no torneio.
+  if (_cacheChanged && typeof window._softRefreshView === 'function') {
+    try { window._softRefreshView(); } catch (e) {}
   }
 }
 

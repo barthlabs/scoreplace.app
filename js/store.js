@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.82-beta';
+window.SCOREPLACE_VERSION = '4.0.83-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -2594,20 +2594,26 @@ window._pName = function(p, fallback) {
   var fb = (fallback !== undefined && fallback !== null) ? fallback : '';
   if (!p) return fb;
   if (typeof p === 'string') return _pNameDisplay(p) || fb;
-  // v2.7.98: dupla ESTRUTURAL (p1Name && p2Name) cujo displayName é só o nome do p1
-  // (ex.: "Kelly Barth", sem "/") → mostra os DOIS membros. Sem isto, toda tela que
-  // usa _pName (lista de inscritos #participants, notificações, contagens por "/")
-  // escondia o parceiro (p2) e contava a dupla como 1. Canoniza o nome em 1 lugar só.
-  if (p.p1Name && p.p2Name) {
-    var _dn = String(p.displayName || p.name || '');
-    if (_dn.indexOf('/') === -1) {
-      return (_pNameDisplay(p.p1Name) || p.p1Name) + ' / ' + (_pNameDisplay(p.p2Name) || p.p2Name);
-    }
+  // v4.0.83: IDENTIDADE = uid; nome PUXADO do perfil AO VIVO via _displayNameForUid (cache
+  // uid→nome populado a cada carga). pXName/displayName guardado é APENAS fallback (informal
+  // sem conta, ou cache ainda frio). Sem self-heal. Canoniza o nome de TODO o programa aqui
+  // (50+ sites usam _pName). Ver [[project_uid_audit_sweep]] / diretriz "nada de pname".
+  var R = window._displayNameForUid || function(u, s){ return s || ''; };
+  // dupla ESTRUTURAL (slots p1/p2): nome de CADA membro pelo SEU uid
+  if (p.p1Uid || p.p2Uid || (p.p1Name && p.p2Name)) {
+    var n1 = R(p.p1Uid, p.p1Name), n2 = R(p.p2Uid, p.p2Name);
+    if (n1 && n2) return (_pNameDisplay(n1) || n1) + ' / ' + (_pNameDisplay(n2) || n2);
   }
-  // Prioridade: displayName > name > email > phone (todos passam por _pNameDisplay)
-  var raw = p.displayName || p.name || p.email
-         || (p.phone ? String(p.phone) : '')
-         || fb;
+  // sub-array participants[] (cada um pelo seu uid)
+  if (Array.isArray(p.participants) && p.participants.length > 1) {
+    return p.participants.map(function(s){
+      if (typeof s === 'string') return _pNameDisplay(s) || s;
+      var nm = R(s && s.uid, s && (s.displayName || s.name));
+      return _pNameDisplay(nm) || nm;
+    }).filter(Boolean).join(' / ');
+  }
+  // indivíduo: nome pelo uid (ao vivo); displayName/name/email/phone só fallback
+  var raw = R(p.uid, p.displayName || p.name || p.email || (p.phone ? String(p.phone) : '')) || fb;
   return _pNameDisplay(raw) || fb;
 };
 
@@ -4283,18 +4289,38 @@ window._entryTeamMembers = function (p) {
   return null;
 };
 
-// Nome de EXIBIÇÃO canônico de uma entrada (o "nome de domínio" amigável). É o ÚNICO
-// lugar onde a "/" aparece numa entrada de dupla — e é SÓ display, derivado da ESTRUTURA
-// (slots/participants[]) via _entryTeamMembers, nunca o contrário. A IDENTIDADE continua
-// sendo o uid (p1Uid/p2Uid). Usado pela classificação e pela busca de entrada nas bordas,
-// pra que o lado da partida ("A / B") resolva de volta pra MESMA entrada → uid.
-// Ver [[project_dupla_entry_structural_not_slash]] e [[project_uid_audit_sweep]].
+// ─── IDENTIDADE = uid; NOME = puxado do perfil AO VIVO (sem guardar, sem self-heal) ──────
+// Diretriz do dono (jun/2026): "o usuário se inscreve e o uid fica vinculado ao torneio. nada
+// de pname, name, email, celular. juntou em dupla é uid+uid. carregar torneio pra visualizar:
+// puxa pelo perfil dos uid inscritos. atualizou perfil? fica certo sempre. NADA de self-heal."
+// → Cache uid→displayName populado a cada carga de torneio (_preloadPlayerPhotos). TODO display
+// resolve daqui. O pXName guardado é APENAS fallback pra jogador INFORMAL (sem conta/uid) ou
+// enquanto o cache ainda não carregou. Nunca regravamos nome no torneio.
+window._profileNameByUid = window._profileNameByUid || {};
+// resolve um uid pro nome do perfil (ao vivo); storedName/uid só fallback (informal/cache frio).
+window._displayNameForUid = function (uid, storedName) {
+  if (uid && window._profileNameByUid[uid]) return window._profileNameByUid[uid];
+  return storedName || uid || '';
+};
+// Nome de EXIBIÇÃO canônico de uma entrada. Resolve CADA pessoa pelo SEU uid (perfil ao vivo);
+// "/" é só junção de display de uma dupla. Identidade nunca é o nome guardado.
 window._entryDisplayName = function (p) {
   if (p == null) return '';
   if (typeof p === 'string') return p;
-  var mem = window._entryTeamMembers(p);
-  if (mem && mem.length > 1) return mem.join(' / ');
-  return p.displayName || p.name || '';
+  var R = window._displayNameForUid;
+  // dupla por slots p1/p2 (estrutura) → "nome(p1Uid) / nome(p2Uid)"
+  if (p.p1Uid || p.p2Uid || (p.p1Name && p.p2Name)) {
+    var n1 = R(p.p1Uid, p.p1Name), n2 = R(p.p2Uid, p.p2Name);
+    if (n1 && n2) return n1 + ' / ' + n2;
+  }
+  // sub-array participants[] (cada um pelo seu uid)
+  if (Array.isArray(p.participants) && p.participants.length > 1) {
+    return p.participants.map(function (s) {
+      return (typeof s === 'string') ? s : R(s && s.uid, s && (s.displayName || s.name));
+    }).filter(Boolean).join(' / ');
+  }
+  // indivíduo
+  return R(p.uid, p.displayName || p.name);
 };
 
 window._findTournamentById = function (tId) {
