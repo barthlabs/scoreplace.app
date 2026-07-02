@@ -5,8 +5,9 @@
  * (tournaments-draw.js) num sandbox headless e confere que o sorteio grava o STORAGE
  * NATIVO multi-rodada: t.rounds[0].monarchGroups (grupos de 4 com 3 jogos rotativos
  * AB/CD, AC/BD, AD/BC), ligaRoundFormat='rei_rainha', NADA no modelo antigo (t.matches
- * monarch / t.groups), e o avanço lê via prevPhaseGroups. Cobre o format legado
- * ('Rei/Rainha da Praia') e o canônico novo (Liga + drawMode rei_rainha).
+ * monarch / t.groups), e o avanço lê via prevPhaseGroups. Rei/Rainha é detectado SÓ por
+ * drawMode/ligaRoundFormat='rei_rainha' — o format string 'Rei/Rainha da Praia' foi APAGADO
+ * (campanha kill-monarch-format, jul/2026): monarch nunca é formato.
  */
 const { window, load } = require('./headless.js');
 
@@ -86,16 +87,16 @@ function checkStructure(label, t, nGroups, nPlayers) {
   ok(Object.keys(conserved).length === nPlayers, label + ': todos os ' + nPlayers + ' conservados');
 }
 
-// ── format legado 'Rei/Rainha da Praia' (compat: torneio antigo sorteado pós-campanha) ──
+// ── detecta por ligaRoundFormat='rei_rainha' SEM drawMode explícito ──
 (function () {
-  var t = runDraw(mkT(8, { format: 'Rei/Rainha da Praia' }));
-  checkStructure('legado 8', t, 2, 8);
+  var t = runDraw(mkT(8, { format: 'Liga', ligaRoundFormat: 'rei_rainha', drawManual: true }));
+  checkStructure('RR via ligaRoundFormat 8', t, 2, 8);
 })();
 
 // ── 12 jogadores → 3 grupos (9 jogos) ────────────────────────────────────────
 (function () {
-  var t = runDraw(mkT(12, { format: 'Rei/Rainha da Praia' }));
-  checkStructure('legado 12', t, 3, 12);
+  var t = runDraw(mkT(12, { format: 'Liga', drawMode: 'rei_rainha', ligaRoundFormat: 'rei_rainha', drawManual: true }));
+  checkStructure('RR 12', t, 3, 12);
 })();
 
 // ── shape canônico NOVO: Liga + drawMode='rei_rainha' (o que o create grava hoje) ──

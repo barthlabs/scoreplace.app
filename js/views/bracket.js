@@ -440,16 +440,10 @@ function renderBracket(container, tournamentId, isInline) {
     // If stage is elimination, fall through to bracket rendering below
   }
 
-  // ── Rei/Rainha (MODO de sorteio) — caminho legado de t.groups nativo ──────
-  // (o canônico, t.matches taggeado, renderiza acima via _renderPhaseBracket.)
-  var isMonarch = window._isMonarchFormat(t);
-  if (isMonarch && t.groups && t.groups.length > 0) {
-    if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + _renderMonarchStage(t, isOrg, canEnterResult) + standbyHtml;
-      _applyMyMatchesFilter();
-      return;
-    }
-  }
+  // Rei/Rainha NÃO é formato de fase (campanha kill-monarch-format, jul/2026): é MODO de sorteio
+  // que roda em Pontos Corridos (ligaRoundFormat='rei_rainha') → renderiza acima via isLiga →
+  // renderStandings (lê t.rounds[].monarchGroups), ou via _renderPhaseBracket numa Fase N. O antigo
+  // estágio standalone (t.groups nativo + auto-advance pra eliminatória) foi APAGADO daqui.
 
   // ── Sem matches ────────────────────────────────────────────────────────────
   if ((!t.matches || t.matches.length === 0) && !hasContent) {
@@ -2949,7 +2943,6 @@ window._monGroupArrivedBtn = function (t, matches, groupDone) {
 function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   var _t = window._t || function(k) { return k; };
   var html = '';
-  var allGroupsDone = true;
 
   // Source subgroups from the unified adapter when available. The adapter
   // emits phase==='monarch' with subgroups [{name, players, matches}] for
@@ -3002,7 +2995,6 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // Cards: só os jogos de verdade (o marcador W.O. vira pílula no cabeçalho).
     var matches = (sg.matches || []).filter(function(m) { return !(m.isSitOut && m.sitOutReason === 'wo'); });
     var groupDone = matches.length > 0 && matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
-    if (!groupDone) allGroupsDone = false;
 
     // Standings table — no crown; qualified rows still highlighted via CLASSIF badge
     var classified = window._phaseClassifiedCount(t, standings.length);
@@ -3085,22 +3077,11 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     '</div>';
   });
 
-  // Auto-advance to elimination when all groups are done.
-  // v3.1.6: quando reusado por uma FASE POSTERIOR rei/rainha (opts.suppressAutoAdvance),
-  // o motor de fases (renderBracket) já mostra o banner "próxima fase" e cuida da
-  // transição — não disparar o auto-advance Fase-0→eliminatória embutido aqui.
-  if (allGroupsDone && !(opts && opts.suppressAutoAdvance)) {
-    html += '<div style="text-align:center;margin-top:1.5rem;padding:1rem;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:12px;">' +
-      '<div style="font-size:1.2rem;font-weight:700;color:#fbbf24;">👑 ' + _t('monarch.groupsComplete') + '</div>' +
-      '<div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">' + _t('monarch.advancingQualified') + '</div>' +
-    '</div>';
-    // Trigger auto-advance after render
-    setTimeout(function() {
-      if (typeof window._advanceMonarchToElimination === 'function') {
-        window._advanceMonarchToElimination(String(t.id));
-      }
-    }, 600);
-  }
+  // Rei/Rainha só existe como MODO de sorteio dentro do motor de fases (Pontos Corridos +
+  // ligaRoundFormat='rei_rainha'). A transição pra próxima fase (ex.: eliminatória) é do motor
+  // de empilhamento de fases (renderBracket mostra o banner "próxima fase"). O antigo auto-advance
+  // Fase-0→eliminatória embutido aqui (t.groups + _advanceMonarchToElimination) foi APAGADO na
+  // campanha kill-monarch-format — o `groupDone` por grupo segue só como badge/borda do grupo.
 
   return html;
 }

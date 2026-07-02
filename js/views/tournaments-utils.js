@@ -7,11 +7,12 @@ window._isLigaFormat = window._isLigaFormat || function(t) {
 
 // Rei/Rainha é MODO de sorteio/chaveamento (parceiro rotativo), NÃO um formato de fase.
 // A fonte da verdade é t.drawMode === 'rei_rainha' (ou ligaRoundFormat='rei_rainha' p/ Liga
-// Rei/Rainha). O string legado t.format === 'Rei/Rainha da Praia' é só FALLBACK de compat pra
-// torneios antigos (criados antes do drawMode virar a fonte). Toda LÓGICA/display que precisa
-// saber "é Rei/Rainha?" usa este helper — nunca compara t.format direto.
+// Rei/Rainha) — nunca t.format. O antigo string t.format === 'Rei/Rainha da Praia' foi APAGADO
+// da campanha kill-monarch-format (jul/2026): monarch NÃO é formato, é modo de sorteio que roda
+// no motor de fases via Pontos Corridos + ligaRoundFormat='rei_rainha'. Toda LÓGICA/display que
+// precisa saber "é Rei/Rainha?" usa este helper — nunca compara t.format direto.
 window._isMonarchFormat = window._isMonarchFormat || function(t) {
-    return !!(t && (t.drawMode === 'rei_rainha' || t.ligaRoundFormat === 'rei_rainha' || t.format === 'Rei/Rainha da Praia'));
+    return !!(t && (t.drawMode === 'rei_rainha' || t.ligaRoundFormat === 'rei_rainha'));
 };
 
 // ── Merge Participants: mesclar dois participantes (organizer, após sorteio) ──
@@ -752,7 +753,9 @@ function _materializedPhaseGames(t, phaseIdx) {
     // numa rodada como piso de segurança. Grupos/Rei-Rainha da fase 0 seguem contando o real.
     var _cfg0 = (t.phases && t.phases[0]) || {};
     var _fmt0 = String(_cfg0.format || _cfg0.formatCode || '').toLowerCase();
-    var _isMon0 = _cfg0.reiRainha === true || _cfg0.drawMode === 'rei_rainha' || /rei|rainha/.test(_fmt0);
+    // Rei/Rainha = MODO de sorteio (reiRainha/drawMode), nunca formato — não lê o format string
+    // (regex apagada na campanha kill-monarch-format, jul/2026).
+    var _isMon0 = _cfg0.reiRainha === true || _cfg0.drawMode === 'rei_rainha';
     var _isLg0 = (_cfg0.formatCode === 'liga') || /liga|su[ií]ç|ranking|pontos/.test(_fmt0);
     if (_isLg0 && !_isMon0) {
       var _rounds0 = parseInt(_cfg0.rounds, 10) || parseInt(t.swissRounds, 10) || 1;

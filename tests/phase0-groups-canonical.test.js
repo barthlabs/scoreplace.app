@@ -46,7 +46,9 @@ function decideAll(t) {
 
 // ── MODO Rei/Rainha na fase 0 → rota league (t.rounds nativo), avanço por INDIVÍDUO ──
 (function () {
-  var cfg0 = { name: 'Rei/Rainha', format: 'Rei/Rainha da Praia', formatCode: 'grupos_mata', drawMode: 'rei_rainha', reiRainha: true, source: { type: 'enrollment' } };
+  // MODO Rei/Rainha (drawMode/reiRainha) sobre uma fase configurada como grupos → o modo tem
+  // precedência e roteia pra league incremental. NÃO usa format string — monarch não é formato.
+  var cfg0 = { name: 'Rei/Rainha', format: 'Fase de Grupos + Eliminatórias', formatCode: 'grupos_mata', drawMode: 'rei_rainha', reiRainha: true, source: { type: 'enrollment' } };
   var t = { id: 'm', phases: [cfg0, ELIM_CFG], currentPhaseIndex: 0, participants: pool(8) };
   // Campanha kill-monarch-format: monarch NÃO passa por storePhase — generatePhase
   // aplica direto em t (rota league incremental, t.rounds[].monarchGroups nativo).

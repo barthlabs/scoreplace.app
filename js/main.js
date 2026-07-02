@@ -252,7 +252,7 @@ function setupHelpModal() {
           '</ul>' +
         '</div>' +
         '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:12px;">' +
-          '<p style="margin:0;"><b>👑 Rei/Rainha da Praia</b> — Modo de sorteio especial: grupos de 4 jogadores com parceiros rotativos (AB vs CD, AC vs BD, AD vs BC). Pontuação individual. Top 1 ou 2 de cada grupo avançam para eliminatória até coroar o Rei/Rainha. Pode ser usado na Liga também (toggle "Formato da rodada").</p>' +
+          '<p style="margin:0;"><b>👑 Rei/Rainha da Praia</b> — Modo de sorteio (não é formato): grupos de 4 jogadores com parceiros rotativos (AB vs CD, AC vs BD, AD vs BC) e pontuação individual, dentro de uma fase de Pontos Corridos. Quem vence os 3 jogos do grupo fica invicto e ganha a coroa. Para coroar por eliminatória, adicione uma fase eliminatória no construtor de fases — a transição é do motor de fases.</p>' +
         '</div>'
     },
     {

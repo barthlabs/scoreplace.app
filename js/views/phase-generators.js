@@ -36,7 +36,9 @@
     return 'elim';
   };
   var isMonarchDraw = (E && E.isMonarchDraw) || function (cfg) {
-    return !!(cfg && (cfg.reiRainha === true || cfg.drawMode === 'rei_rainha' || /rei|rainha|monarch/i.test(String(cfg.format || cfg.formatCode || ''))));
+    // Rei/Rainha = MODO de sorteio (reiRainha/drawMode), nunca formato — detecção NÃO lê o
+    // format string (regex apagada na campanha kill-monarch-format, jul/2026).
+    return !!(cfg && (cfg.reiRainha === true || cfg.drawMode === 'rei_rainha'));
   };
 
   // ── normalizePhases — t.phases uniforme em RUNTIME (nunca persiste) ─────────

@@ -124,12 +124,16 @@ window._computeMonarchStandings = function(group, t, category) {
   });
 
   // PONTOS AVANÇADOS: quando o torneio usa advancedScoring, o total avançado por jogador
-  // (participação/vitória/games/TB) vira a métrica de classificação — a MESMA de toda a
-  // Liga. _calcAdvancedPoints já sabe varrer jogos Rei/Rainha (isMonarch, team1/team2).
+  // (participação/vitória/games/TB) vira a métrica de classificação DESTE grupo.
+  // v4.3.13: passa `matches` (só os jogos DESTE grupo, da fase classificatória) como
+  // escopo — senão _calcAdvancedPoints varria TODAS as fases e os jogos da eliminatória
+  // (que nem tem PA na config) vazavam na tabela do grupo. Bug: contava 4 jogos onde a
+  // classificatória só tem 3 → a PA da tabela mudava DEPOIS da fase 1 e divergia do
+  // pareamento (congelado na transição). Agora congela no fim da fase 1.
   var _adv = !!(t && t.advancedScoring && t.advancedScoring.enabled && typeof window._calcAdvancedPoints === 'function');
   if (_adv) {
     Object.keys(stats).forEach(function(k) {
-      stats[k].points = window._calcAdvancedPoints(t, k, category || null).total;
+      stats[k].points = window._calcAdvancedPoints(t, k, category || null, matches).total;
     });
   }
 
@@ -223,7 +227,7 @@ function _woAdvPenalty(t) {
 }
 window._woAdvPenalty = _woAdvPenalty;
 
-function _calcAdvancedPoints(t, playerName, category) {
+function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
   if (!t || !t.advancedScoring || !t.advancedScoring.enabled || !playerName) {
     return { total: 0, breakdown: [] };
   }
@@ -261,7 +265,14 @@ function _calcAdvancedPoints(t, playerName, category) {
   // v2.3.3: format-agnostic — varre TODAS as partidas do torneio (eliminatórias,
   // grupos, rounds de Liga/Suíço, Rei/Rainha) via coletor canônico, em vez de só
   // t.rounds. Assim Pontos Avançados funciona em qualquer tipo de torneio.
-  var _allMatches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : null;
+  // v4.3.13: matchesOverride ESCOPA o cálculo a um conjunto de jogos (ex.: a tabela de
+  // classificação de um GRUPO Rei/Rainha da Fase 1 passa só os jogos daquele grupo). Sem
+  // isso, o coletor global varria TODAS as fases → os jogos da Fase 2 vazavam na PA da
+  // tabela da Fase 1 (bug: inflava a PA e mudava a ordem exibida vs. o pareamento congelado
+  // na transição). Sem override, comportamento global de sempre (métrica do torneio todo).
+  var _allMatches = Array.isArray(matchesOverride)
+    ? matchesOverride.slice()
+    : ((typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : null);
   if (!_allMatches) {
     _allMatches = [];
     (t.rounds || []).forEach(function(round) { (round.matches || []).forEach(function(mm) { _allMatches.push(mm); }); });
@@ -713,8 +724,14 @@ function _computeStandings(t, category) {
   // a compensação de folga (média das rodadas jogadas), calculada dentro de
   // _calcAdvancedPoints — então os avançados não precisam de ajuste extra aqui.
   if (t.advancedScoring && t.advancedScoring.enabled && typeof _calcAdvancedPoints === 'function') {
+    // v4.3.14: escopa a PA aos jogos DESTA fase — os MESMOS de t.rounds que já contamos
+    // pra V/saldo acima. Sem isto, o coletor global de _calcAdvancedPoints varria também
+    // as fases seguintes (eliminatória vive em t.matches) e a classificação da fase
+    // anterior MUDAVA depois de avançar. Congela a fase: nada da fase seguinte a altera.
+    var _phaseMatches = [];
+    (t.rounds || []).forEach(function(r){ (r.matches || []).forEach(function(m){ if (m) _phaseMatches.push(m); }); });
     standings.forEach(function(s) {
-      s.advancedPoints = _calcAdvancedPoints(t, s.name, category).total;
+      s.advancedPoints = _calcAdvancedPoints(t, s.name, category, _phaseMatches).total;
     });
   }
 

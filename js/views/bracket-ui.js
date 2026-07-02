@@ -3602,80 +3602,10 @@ window._advanceToElimination = function (tId) {
   _rerenderBracket(tId);
 };
 
-// ─── Advance Monarch to Elimination ──────────────────────────────────────────
-window._advanceMonarchToElimination = function(tId) {
-  var t = window._findTournamentById(tId);
-  if (!t || !t.groups) return;
-  // Liga uses Rei/Rainha as round format only — no elimination phase
-  if (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) return;
-  // Idempotent: don't re-advance if already in elimination
-  if (t.currentStage === 'elimination' || (t.matches && t.matches.length > 0)) return;
-
-  var _maxGroupRows = t.groups.reduce(function(mx, g) {
-    var st = window._computeMonarchStandings(g, t, g.category || null);
-    return Math.max(mx, (st && st.length) || 0);
-  }, 0);
-  var classified = window._phaseClassifiedCount(t, _maxGroupRows) || 1;
-  var qualifiedPlayers = [];
-
-  t.groups.forEach(function(g) {
-    var standings = window._computeMonarchStandings(g, t, g.category || null);
-    for (var i = 0; i < Math.min(classified, standings.length); i++) {
-      qualifiedPlayers.push(standings[i].name);
-    }
-  });
-
-  if (qualifiedPlayers.length < 2) {
-    showAlertDialog(_t('bui.tooFewAdvanceTitle'), _t('bui.tooFewAdvanceMsg'), null, { type: 'warning' });
-    return;
-  }
-
-  // Cross-seed: alternate from different groups
-  var seeded = [];
-  var maxPerGroup = classified;
-  for (var rank = 0; rank < maxPerGroup; rank++) {
-    t.groups.forEach(function(g) {
-      var standings = window._computeMonarchStandings(g, t, g.category || null);
-      if (standings[rank]) seeded.push(standings[rank].name);
-    });
-  }
-
-  // Generate elimination bracket
-  t.currentStage = 'elimination';
-  t.matches = [];
-  var ts = Date.now();
-  var matchCounter = 0;
-
-  // Pad to power of 2 with BYEs
-  var n = seeded.length;
-  var pow = 1;
-  while (pow < n) pow *= 2;
-
-  var r1 = [];
-  for (var i = 0; i < pow / 2; i++) {
-    var p1 = seeded[i] || 'BYE';
-    var p2 = seeded[pow - 1 - i] || 'BYE';
-    var isBye = p1 === 'BYE' || p2 === 'BYE';
-    var m = {
-      id: 'match-' + ts + '-' + (matchCounter++),
-      round: 1, p1: p1, p2: p2,
-      winner: isBye ? (p1 === 'BYE' ? p2 : p1) : null,
-      isBye: isBye
-    };
-    r1.push(m);
-    window._appendCanonicalColumn(t, { phase: 'elim', round: 1, matches: [m] });
-  }
-
-  // Build next rounds
-  if (typeof window._buildNextMatchLinks === 'function') {
-    window._buildNextMatchLinks(t, r1, ts, matchCounter);
-  }
-
-  t.elimThirdPlace = true;
-  window.AppStore.syncImmediate(tId);
-  showNotification(_t('bui.knockoutPhase'), _t('bui.knockoutPhaseMsg', {n: seeded.length}), 'success');
-  _rerenderBracket(tId);
-};
+// Rei/Rainha NÃO é formato de fase: o antigo _advanceMonarchToElimination (avanço standalone
+// Fase-0 monarch → eliminatória, exigia t.groups nativo) foi APAGADO na campanha
+// kill-monarch-format (jul/2026). O avanço de fase agora é 100% do motor de empilhamento de
+// fases (_advanceMultiPhase) — Rei/Rainha é só ligaRoundFormat de uma fase Pontos Corridos.
 
 // ─── Live Scoring Overlay (full-screen, point-by-point) ─────────────────────
 // Opens when player clicks "📡 Ao Vivo" on their own match card.

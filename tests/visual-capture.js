@@ -17,7 +17,7 @@ const FORMATS = [
   { key: 'grupos', label: 'Fase de Grupos', format: 'Fase de Grupos + Eliminatórias', n: 16, extra: {} },
   { key: 'liga', label: 'Liga', format: 'Liga', n: 8, extra: { ligaRoundFormat: 'padrao' } },
   { key: 'suico', label: 'Suíço', format: 'Suíço Clássico', n: 8, extra: { classifyFormat: 'swiss', currentStage: 'swiss', swissRounds: 3 } },
-  { key: 'monarch', label: 'Rei/Rainha', format: 'Rei/Rainha da Praia', n: 8, extra: { drawMode: 'rei_rainha' } },
+  { key: 'monarch', label: 'Rei/Rainha', format: 'Liga', n: 8, extra: { drawMode: 'rei_rainha', ligaRoundFormat: 'rei_rainha', drawManual: true } },
 ];
 
 (async () => {

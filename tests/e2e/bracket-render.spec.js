@@ -179,22 +179,45 @@ test.describe('Layout mobile — sem vazamento horizontal (navegador real)', () 
 
 test.describe('Rei/Rainha render (navegador real)', () => {
   test('grupos, standings individuais e COROA do invicto visíveis no DOM', async ({ page }) => {
-    // KNOWN ISSUE (débito visível, não apagado): este teste exercita o render LEGADO
-    // _renderMonarchStage com o shape legado format='Rei/Rainha da Praia'. O monarch canônico
-    // hoje guarda jogos em t.rounds[].monarchGroups (não t.matches) e renderiza via renderStandings
-    // (rota Liga), não _renderMonarchStage — então este render legado quebra (TypeError). Reescrever
-    // pra rota canônica faz parte da campanha kill-monarch-format (validação dono + prod pendente).
-    // O fluxo REAL do monarch já é coberto verde em tournament-flow.spec.js (format='Liga'+rei_rainha).
-    test.fixme(true, 'render monarch legado (_renderMonarchStage) — migrar pra rota canônica na campanha kill-monarch-format');
+    // Rei/Rainha é MODO de sorteio, não formato: o SHAPE CANÔNICO que o app produz é
+    // format='Liga' + ligaRoundFormat='rei_rainha', com os jogos em t.rounds[].monarchGroups
+    // (via _generateNextRound — MESMO gerador do app, cliente e Cloud Function). NÃO o shape
+    // legado format='Rei/Rainha da Praia' + t.matches. O antigo teste montava esse shape legado
+    // com renderViaEngine (t.matches/t.groups SEM t.rounds) e por isso _renderMonarchStage
+    // quebrava — a culpa era do SHAPE, não do renderer.
+    //
+    // Renderizamos por _renderMonarchStage, que É o renderer canônico do estágio Rei/Rainha:
+    // ele lê as subgroups via _getUnifiedRounds (t.rounds[].monarchGroups) e é o mesmo caminho
+    // que renderBracket usa no dispatch monarch e que _renderPhaseBracket reusa numa Fase N
+    // Rei/Rainha. A COROA do invicto vive AQUI (por grupo) — renderStandings só a mostra quando
+    // multi-fase (per-group standings). Forçamos um invicto por grupo: team1 (m.p1) vence os 3
+    // jogos, então o 1º jogador de cada grupo fica 3V/0D → ganha a coroa.
     await page.goto('/', { waitUntil: 'load' });
-    const info = await renderViaEngine(page, 'Rei/Rainha da Praia', { drawMode: 'rei_rainha' }, 8, '_renderMonarchStage');
-    expect(info.groups).toBe(2);
+    const info = await page.evaluate(() => {
+      const parts = []; for (let i = 0; i < 8; i++) parts.push({ displayName: 'J' + i, name: 'J' + i, uid: 'u' + i });
+      const t = { id: 'E2E', name: 'RR E2E', format: 'Liga', teamSize: 1, participants: parts, rounds: [], matches: [], currentPhaseIndex: 0, status: 'active', drawMode: 'rei_rainha', ligaRoundFormat: 'rei_rainha' };
+      window._generateNextRound(t);   // 8 jogadores → 1 rodada, 2 grupos de 4, 3 jogos por grupo
+      const r = t.rounds[t.rounds.length - 1];
+      // team1 vence SEMPRE → o A de cada grupo (parceiro nos 3 jogos) fica invicto (3V/0D)
+      (r.monarchGroups || []).forEach(function (g) {
+        (g.matches || []).forEach(function (m) { if (m.isMonarch && m.team1 && m.team2) { m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = 3; } });
+      });
+      window.AppStore.tournaments = [t];
+      window._currentBracketTournament = t;
+      const st = window._computeStandings(t);
+      document.getElementById('view-container').innerHTML = window._renderMonarchStage(t, false, false, { suppressAutoAdvance: true });
+      return { rounds: t.rounds.length, groups: (r.monarchGroups || []).length, nStandings: st.length };
+    });
+    expect(info.rounds).toBe(1);
+    expect(info.groups).toBe(2);          // 8 jogadores → 2 grupos de 4
+    expect(info.nStandings).toBe(8);      // classificação INDIVIDUAL: 8 pessoas (Rei/Rainha é individual)
 
     const vc = page.locator('#view-container');
-    await expect(vc.locator('table').first()).toBeVisible();       // tabela de classificação renderiza
+    await expect(vc.locator('table').first()).toBeVisible();       // tabela de classificação do grupo renderiza
+    await expect(vc).toContainText('Grupo');                       // os grupos aparecem ("R1 Grupo A/B")
     // COROA do invicto = SVG com aria-label "Rei invicto"/"Rainha invicta"
     const crown = page.locator('#view-container svg[aria-label*="invict"]').first();
-    await expect(crown).toBeVisible();                              // coroa VISÍVEL no browser real
+    await expect(crown).toBeVisible();                             // coroa VISÍVEL no browser real
     const box = await crown.boundingBox();
     expect(box && box.width, 'coroa tem tamanho real').toBeGreaterThan(5);
   });

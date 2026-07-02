@@ -1,6 +1,7 @@
-/* Rei/Rainha da Praia — saída OBSERVÁVEL (grupos de 4, parceiros rotativos, standings
- * individuais renderizados, coroa do invicto). Rei/Rainha é MODO de sorteio, não formato
- * (project_rei_rainha_is_drawmode_not_format) — sorteado pelo motor canônico via
+/* Rei/Rainha — saída OBSERVÁVEL (grupos de 4, parceiros rotativos, standings individuais
+ * renderizados, coroa do invicto). Rei/Rainha é MODO de sorteio, NÃO formato
+ * (project_rei_rainha_is_drawmode_not_format) — o shape é o CANÔNICO que o create grava:
+ * format='Liga' + ligaRoundFormat/drawMode='rei_rainha'. Sorteado pelo motor canônico via
  * generateDrawFunction REAL; render por _renderMonarchStage REAL.
  */
 const H = require('./render-harness');
@@ -22,7 +23,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
 
 // ---------- 1. ESTRUTURA: grupos de 4, 3 jogos, PARCEIROS ROTATIVOS (AB/CD, AC/BD, AD/BC) ----------
 (function () {
-  const t = buildViaDraw('Rei/Rainha da Praia', 8);
+  const t = buildViaDraw('Liga', 8, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true });
   ok(t._canonicalDraw === true, 'sorteado pelo motor canônico (_canonicalDraw)');
   ok(W._isMonarchFormat(t) === true, '_isMonarchFormat(t) = true (é MODO, detectado)');
   const ms = monMatches(t);
@@ -53,7 +54,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
 // como todo formato (fim do campo legado por-fase). Fixture: fase 0 rei/rainha
 // com uma fase 1 puxando os 2 melhores de cada grupo (Rei+Vice).
 (function () {
-  const t = hydrateMonarchGroups(buildViaDraw('Rei/Rainha da Praia', 8));
+  const t = hydrateMonarchGroups(buildViaDraw('Liga', 8, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true }));
   t.currentPhaseIndex = 0;
   t.phases = [
     { name: 'Rei/Rainha' },
@@ -67,7 +68,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
 
 // ---------- 3. COROA DO INVICTO: standings individuais + coroa quando alguém vence tudo ----------
 (function () {
-  const t = hydrateMonarchGroups(buildViaDraw('Rei/Rainha da Praia', 8));
+  const t = hydrateMonarchGroups(buildViaDraw('Liga', 8, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true }));
   simulate(t); // winner=p1 sempre → em cada grupo um jogador fica invicto (parceiro rotativo)
   const st = W._computeMonarchStandings({ players: t.groups[0].players, matches: t.groups[0].matches });
   ok(st.length === 4, 'standings do grupo = 4 jogadores');
@@ -80,7 +81,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
 (function () {
   let sweepFail = 0;
   [8, 12, 16].forEach(function (n) {
-    const t = buildViaDraw('Rei/Rainha da Praia', n);
+    const t = buildViaDraw('Liga', n, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true });
     const ms = monMatches(t);
     const groups = {};
     ms.forEach(function (m) { (groups[m.monarchGroup] = groups[m.monarchGroup] || []).push(m); });
@@ -95,7 +96,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
 // Regressão: o botão sumia porque gateava em _participantsSelfPresence (resultEntry). Presença
 // é ORTOGONAL a quem lança placar → sempre visível pro jogador do grupo (toggle Cheguei/Presente).
 (function () {
-  const t = hydrateMonarchGroups(buildViaDraw('Rei/Rainha da Praia', 8));
+  const t = hydrateMonarchGroups(buildViaDraw('Liga', 8, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true }));
   const p0 = t.groups[0].players[0];
   const prevUser = W.AppStore.currentUser;
   W.AppStore.currentUser = { uid: 'u-cheguei', displayName: p0, email: 'p0@x.z' };
@@ -116,7 +117,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
 // Com o motor de pontos avançados ligado, o total avançado vira a métrica de classificação
 // (participação/vitória/games/TB) — a MESMA da Liga — e a coluna "Pts" mostra isso.
 (function () {
-  const t = hydrateMonarchGroups(buildViaDraw('Rei/Rainha da Praia', 8));
+  const t = hydrateMonarchGroups(buildViaDraw('Liga', 8, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true }));
   t.advancedScoring = { enabled: true, applyLiveScoring: false, categories: {
     participation: { enabled: true, value: '150' }, match_won: { enabled: true, value: '150' },
     game_won: { enabled: true, value: '50' }, game_lost: { enabled: true, value: '-20' },
@@ -136,7 +137,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
 
 // ---------- 7. GRUPO DO VISITANTE NO TOPO: cada usuário vê o próprio grupo em 1º ----------
 (function () {
-  const t = hydrateMonarchGroups(buildViaDraw('Rei/Rainha da Praia', 8));
+  const t = hydrateMonarchGroups(buildViaDraw('Liga', 8, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true }));
   const gB = t.groups[1], meB = gB.players[0];
   const prev = W.AppStore.currentUser;
   W.AppStore.currentUser = { uid: 'u-top', displayName: meB, email: 'top@x.z' };

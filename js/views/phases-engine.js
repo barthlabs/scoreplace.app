@@ -631,7 +631,10 @@
   // modo de sorteio monarca. Os _phaseIs* abaixo são wrappers (compat) sobre estas.
   function isMonarchDraw(cfg) {
     if (!cfg) return false;
-    return cfg.reiRainha === true || cfg.drawMode === 'rei_rainha' || /rei|rainha|monarch/i.test(String(cfg.format || cfg.formatCode || ''));
+    // Rei/Rainha é MODO de sorteio, NUNCA formato: detecta SÓ por reiRainha/drawMode. O antigo
+    // fallback por regex no cfg.format ('Rei/Rainha da Praia') foi APAGADO na campanha
+    // kill-monarch-format (jul/2026) — nenhuma detecção lê o format string.
+    return cfg.reiRainha === true || cfg.drawMode === 'rei_rainha';
   }
   function classifyPhaseFormat(cfg) {
     if (!cfg) return 'elim';

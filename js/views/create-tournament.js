@@ -5037,10 +5037,6 @@ function setupCreateTournamentModal() {
       drawModeVal = 'rei_rainha';
     }
     else if (t.format === 'Fase de Grupos + Eliminatórias') fmtValue = 'grupos_mata';
-    else if (t.format === 'Rei/Rainha da Praia') {
-      fmtValue = 'elim_simples'; // Rei/Rainha defaults to single elimination knockout
-      drawModeVal = 'rei_rainha';
-    }
     // Liga draw mode
     if (fmtValue === 'liga' && t.ligaDrawMode === 'round_robin') {
       drawModeVal = 'round_robin';
@@ -5671,8 +5667,10 @@ function setupCreateTournamentModal() {
     var dm = document.getElementById('draw-mode');
     var gc = document.getElementById('grupos-count');
     var inv = { 'Liga': 'liga', 'Suíço Clássico': 'suico', 'Eliminatórias Simples': 'elim_simples', 'Dupla Eliminatória': 'elim_dupla', 'Fase de Grupos + Eliminatórias': 'grupos_mata' };
-    if (t.format === 'Rei/Rainha da Praia' ||
-        (t.format === 'Fase de Grupos + Eliminatórias' && t.drawMode === 'rei_rainha')) {
+    if (t.format === 'Fase de Grupos + Eliminatórias' && t.drawMode === 'rei_rainha') {
+      // Modelo antigo do monarch standalone (pré-campanha kill-monarch-format): Grupos+Elim +
+      // drawMode rei_rainha. Mapeia pra seleção standalone (elim + 👑). O antigo format
+      // 'Rei/Rainha da Praia' foi apagado — monarch nunca mais é um format.
       if (sel) sel.value = 'elim_simples';
       if (dm) dm.value = 'rei_rainha';
     } else {

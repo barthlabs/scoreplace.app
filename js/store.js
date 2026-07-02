@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.3.17-beta';
+window.SCOREPLACE_VERSION = '4.3.18-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -42,7 +42,7 @@ window._formatDisplayName = function (fmt) {
 // de sorteio (drawMode), NÃO formato → mostra "Rei/Rainha" via _isMonarchFormat; senão o nome do
 // formato. As telas usam SEMPRE _formatLabel(t) (com o objeto t), nunca _formatDisplayName(t.format)
 // cru — senão torneios Rei/Rainha (que são formato de grupos + drawMode='rei_rainha') aparecem
-// errado como "Fase de Grupos". Legado (format='Rei/Rainha da Praia') também cai certo aqui.
+// errado como "Fase de Grupos". Rei/Rainha é MODO (drawMode/ligaRoundFormat), nunca formato.
 window._formatLabel = function (t) {
   if (!t) return '';
   if (window._isMonarchFormat && window._isMonarchFormat(t)) return 'Rei/Rainha';

@@ -167,11 +167,11 @@
         desc: sr + ' rodada' + (sr !== 1 ? 's' : '') + ' × ~' + sper + ' jogos = ' + stotal + ' jogos.' };
     }
 
-    // ── REI/RAINHA DA PRAIA (formato standalone) ────────────────────────────
+    // ── REI/RAINHA DA PRAIA (MODO de sorteio de Pontos Corridos, não formato) ──
     if (isMonarchFmt) {
       var rg = Math.floor(n / 4), rgames = rg * 3, rem2 = n % 4, gem0 = Math.max(0, rg - 1);
       var tot0 = rgames + gem0;
-      return { format: 'Rei/Rainha da Praia', matches: tot0, color: '#fbbf24',
+      return { format: 'Rei/Rainha', matches: tot0, color: '#fbbf24',
         durationMin: Math.ceil(tot0 / courts) * gameDur,
         desc: rg + ' grupo' + (rg !== 1 ? 's' : '') + ' de 4 (' + rgames + ' jogos)' + (rem2 ? ' (+' + rem2 + ' sobra' + (rem2 !== 1 ? 's' : '') + ')' : '') + ' + final.' };
     }
