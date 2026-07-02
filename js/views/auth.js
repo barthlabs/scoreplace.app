@@ -1061,6 +1061,20 @@ function handleGoogleLogin() {
     return;
   }
 
+  // ─── NATIVO (Capacitor iOS/Android) ──────────────────────────────────────
+  // v4.3.20: no app nativo, signInWithPopup é BLOQUEADO no WKWebView e o
+  // signInWithRedirect é instável (origem capacitor://localhost quebra o
+  // handler de redirect do Firebase JS SDK). A rota nativa usa o plugin
+  // @capacitor-firebase/authentication (Google Sign-In nativo) → obtém o
+  // idToken → firebase.auth().signInWithCredential no JS SDK (fonte única de
+  // verdade da sessão). NÃO depende de e-mail (resolve os "emails chatos"
+  // Hotmail/Outlook) nem de reCAPTCHA. Gate por _isNativeAuthAvailable(); na
+  // WEB isso é SEMPRE false → o fluxo popup/redirect abaixo fica INTOCADO.
+  if (typeof _isNativeAuthAvailable === 'function' && _isNativeAuthAvailable()) {
+    _handleGoogleLoginNative();
+    return;
+  }
+
   // Real Firebase authentication
   if (!authProvider) {
     showNotification(_t('auth.error'), _t('auth.firebaseError'), 'error');
@@ -1218,6 +1232,113 @@ function handleGoogleLogin() {
       }
     });
 }
+
+// ─── Login nativo (Capacitor) ────────────────────────────────────────────────
+// v4.3.20: detecta se o app está rodando nativo (iOS/Android via Capacitor) E
+// se o plugin @capacitor-firebase/authentication está registrado no bridge.
+// Só então usamos a rota nativa de Google Sign-In. Na WEB, window.Capacitor é
+// undefined → sempre false → o fluxo web (popup/redirect) nunca é alterado.
+function _isNativeAuthAvailable() {
+  try {
+    var C = window.Capacitor;
+    return !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()
+      && C.Plugins && C.Plugins.FirebaseAuthentication
+      && typeof C.Plugins.FirebaseAuthentication.signInWithGoogle === 'function');
+  } catch (e) { return false; }
+}
+window._isNativeAuthAvailable = _isNativeAuthAvailable;
+
+// Google Sign-In NATIVO → credencial → JS SDK. Mantém a MESMA arquitetura da
+// web: o JS SDK é a fonte de verdade da sessão (Firestore, listeners, perfil).
+// O plugin roda com skipNativeAuth:true (ver capacitor.config.json), então
+// signInWithGoogle() só devolve a credencial e NÃO cria sessão nativa paralela.
+function _handleGoogleLoginNative() {
+  var FA = window.Capacitor.Plugins.FirebaseAuthentication;
+  showNotification(_t('auth.connecting'), _t('auth.connectingMsg'), 'info');
+  window._log('[scoreplace-auth] Native Google Sign-In starting…');
+
+  FA.signInWithGoogle().then(function (result) {
+    var cred = result && result.credential;
+    var idToken = cred && cred.idToken;
+    var accessToken = cred && cred.accessToken;
+    if (!idToken) {
+      throw new Error('native-google-no-idtoken');
+    }
+    window._log('[scoreplace-auth] Native Google credential obtido; assinando no JS SDK…');
+    var gcred = firebase.auth.GoogleAuthProvider.credential(idToken, accessToken || null);
+    return firebase.auth().signInWithCredential(gcred).then(function (userCred) {
+      return { userCred: userCred, accessToken: accessToken };
+    });
+  }).then(function (bundle) {
+    var user = bundle.userCred && bundle.userCred.user;
+    if (!user) { throw new Error('native-google-no-user'); }
+    window._log('[scoreplace-auth] Native login success:', { uid: user.uid, email: user.email });
+
+    // Fecha o modal imediatamente (paridade com o popup web).
+    _forceCloseLoginModal();
+    showNotification(_t('auth.loginDone'), _t('auth.welcomeName', { greeting: window._welcomeWord(user), name: user.displayName }), 'success');
+
+    // Persiste provider + nome/foto no primeiro login (igual à web).
+    if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
+      window.FirestoreDB.saveUserProfile(user.uid, {
+        authProvider: 'google.com',
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || ''
+      }).catch(function () {});
+    }
+
+    // People API: detecta foto real vs monograma (não-fatal). Reusa o
+    // accessToken devolvido pelo plugin nativo (mesma lógica da web).
+    try {
+      var _googleAccessToken = bundle.accessToken;
+      if (_googleAccessToken && user.uid) {
+        fetch('https://people.googleapis.com/v1/people/me?personFields=photos', {
+          headers: { 'Authorization': 'Bearer ' + _googleAccessToken }
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !Array.isArray(data.photos) || data.photos.length === 0) return;
+            var primary = data.photos.find(function (p) { return p.metadata && p.metadata.primary; }) || data.photos[0];
+            var hasReal = !primary['default'];
+            if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+              window.FirestoreDB.saveUserProfile(user.uid, { hasGooglePhotoReal: hasReal }).catch(function () {});
+            }
+            if (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid === user.uid) {
+              window.AppStore.currentUser.hasGooglePhotoReal = hasReal;
+            }
+          }).catch(function () {});
+      }
+    } catch (_peopleErr) {}
+
+    try {
+      localStorage.setItem('scoreplace_authCache', JSON.stringify({
+        uid: user.uid, email: user.email,
+        displayName: user.displayName, photoURL: user.photoURL,
+        authProvider: 'google.com'
+      }));
+    } catch (e) {}
+
+    simulateLoginSuccess({
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL
+    });
+  }).catch(function (error) {
+    window._error('[scoreplace-auth] Native Google Sign-In error:', error);
+    if (typeof window._captureException === 'function') {
+      window._captureException(error, { area: 'googleLoginNative', code: error && (error.code || error.message) });
+    }
+    // Cancelamento do usuário no picker nativo não é erro.
+    var code = (error && (error.code || error.message)) || 'unknown';
+    if (/cancel|closed|1\.\s*canceled|SIGN_IN_CANCELLED/i.test(String(code))) {
+      return;
+    }
+    showNotification(_t('auth.googleError'),
+      'Não foi possível entrar com Google. Tente novamente, ou use celular/e-mail acima.\n\n(código: ' + code + ')',
+      'error');
+  });
+}
+window._handleGoogleLoginNative = _handleGoogleLoginNative;
 
 // ─── Account linking helper ─────────────────────────────────────────────────
 // When user tries to sign in with a provider but already has an account with
