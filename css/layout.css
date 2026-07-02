@@ -123,6 +123,20 @@ html.sp-native .topbar {
 html.sp-native .main-content {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px));
 }
+/* v4.3.20: modal de login (e outros full-screen) no app NATIVO encavalava o
+   título "Entrar no scoreplace" no relógio/ilha. No mobile o .modal é full-screen
+   (position:fixed;top:0 em responsive.css) e o .modal-header é sticky no topo.
+   DIAGNOSTICADO no simulador: env(safe-area-inset-top) volta 0 no WKWebView pra
+   este contexto (fixed) — por isso um PISO fixo (50px) garante o afastamento;
+   max() usa o inset REAL quando o device o reporta (telas com ilha ~59px). Empurra
+   só o CONTEÚDO do header (o modal segue cobrindo a tela toda, sem a topbar vazar).
+   Inerte na WEB (sem .sp-native). */
+html.sp-native .modal-overlay.active .modal {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+html.sp-native .modal-overlay.active .modal-header {
+  padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+}
 
 .page-title {
   display: flex;
