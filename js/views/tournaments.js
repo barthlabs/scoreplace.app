@@ -57,24 +57,54 @@ window.splitParticipantFunction = function (tId, participantName) {
         _t('tourn.splitTeamMsg'),
         () => {
             const t = window._findTournamentById(tId);
-            if (t && t.participants) {
-                let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-                var idx = arr.findIndex(function(p) { return window._pName(p) === participantName; });
-                if (idx === -1) return;
-                const pStr = window._pName(arr[idx]);
-                if (pStr.includes('/')) {
-                    const parts = pStr.split('/').map(s => s.trim());
-                    arr.splice(idx, 1);
-                    arr.splice(idx, 0, ...parts);
-                    t.participants = arr;
-                    if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
-                    else if (typeof window.AppStore.sync === 'function') window.AppStore.sync();
-                    const container = document.getElementById('view-container');
-                    if (container) {
-                        if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
-                        else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
-                    }
+            if (!t || !t.participants) return;
+            let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+            var idx = arr.findIndex(function(p) { return window._pName(p) === participantName; });
+            if (idx === -1) return;
+            var entry = arr[idx];
+            // IDENTIDADE = uid. Desfaz a dupla pela ESTRUTURA (slots p1/p2 ou participants[]),
+            // NUNCA pela barra do nome. Cada pessoa vira um slot próprio carregando o SEU uid —
+            // nome/email são só fallback (o perfil é puxado ao vivo pelo uid). Ver
+            // project_dupla_entry_structural_not_slash + project_uid_primary_identity.
+            var slots = [];
+            var mkSlot = function(uid, name, email) {
+                var o = {};
+                if (uid) o.uid = uid;                                 // identidade primária
+                if (name) { o.name = name; o.displayName = name; }    // fallback (informal/cache frio)
+                if (email) o.email = email;
+                return (o.uid || o.name) ? o : null;
+            };
+            if (entry && typeof entry === 'object' && Array.isArray(entry.participants) && entry.participants.length) {
+                entry.participants.forEach(function(s) {
+                    if (s && typeof s === 'object') { var o = mkSlot(s.uid, s.displayName || s.name, s.email); if (o) slots.push(o); }
+                    else if (s) { var o2 = mkSlot(null, String(s), null); if (o2) slots.push(o2); }
+                });
+            } else if (entry && typeof entry === 'object' && (entry.p1Uid || entry.p2Uid || (entry.p1Name && entry.p2Name))) {
+                var s1 = mkSlot(entry.p1Uid, entry.p1Name, entry.p1Email);
+                var s2 = mkSlot(entry.p2Uid, entry.p2Name, entry.p2Email);
+                if (s1) slots.push(s1);
+                if (s2) slots.push(s2);
+            } else {
+                return; // não é dupla/time — nada a desfazer
+            }
+            if (slots.length < 2) return;
+            arr.splice(idx, 1);
+            Array.prototype.splice.apply(arr, [idx, 0].concat(slots));
+            t.participants = arr;
+            // limpa a memória de origem da dupla desfeita (evita "formada" fantasma no teamOrigins)
+            try {
+                if (t.teamOrigins && typeof t.teamOrigins === 'object') {
+                    delete t.teamOrigins[participantName];
+                    var _lbl = window._entryDisplayName ? window._entryDisplayName(entry) : null;
+                    if (_lbl) delete t.teamOrigins[_lbl];
                 }
+            } catch (_e) {}
+            if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+            else if (typeof window.AppStore.sync === 'function') window.AppStore.sync();
+            const container = document.getElementById('view-container');
+            if (container) {
+                if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
+                else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
             }
         },
         null,

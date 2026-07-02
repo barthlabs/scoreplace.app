@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.51-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.86-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👫 Desfazer dupla não perde mais o parceiro:</b> ao usar o <b>✂️</b> pra separar uma dupla na lista de inscritos, cada pessoa volta a aparecer como <b>inscrito individual com o cadastro certo</b>. Antes, em alguns casos, o parceiro <b>sumia da lista</b> ao separar — corrigido.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.51-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🗓️ Campos de data e hora não cortam mais o valor:</b> os campos de <b>horário</b> (ex.: nas datas da fase) eram estreitos demais e <b>cortavam</b> o horário (mostravam "23" em vez de "23:00"). Agora todo campo de data/hora do app tem <b>largura suficiente</b> pra mostrar o valor inteiro — corrigido de uma vez, em todo lugar.</li>' +
       '</ul>' +
