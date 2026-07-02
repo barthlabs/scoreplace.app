@@ -18,8 +18,11 @@ test.describe('Navegação pública (sem login)', () => {
     // Logado, mostra a hero box do dashboard.
     // Em qualquer cenário: view-container não fica vazio.
     await expect(page.locator('#view-container')).toBeVisible();
-    const innerText = await page.locator('#view-container').innerText();
-    expect(innerText.length).toBeGreaterThan(20);
+    // render é async (boot loader + auth resolve + router) — espera o conteúdo aterrissar
+    // em vez de ler innerText no mesmo tick da navegação (evita flake por timing).
+    await expect
+      .poll(async () => (await page.locator('#view-container').innerText()).length, { timeout: 10000 })
+      .toBeGreaterThan(20);
   });
 
   test('rota inválida #foo-bar não trava o app', async ({ page }) => {
@@ -135,12 +138,13 @@ test.describe('Observability + version', () => {
 test.describe('Resilience', () => {
   test('reload preserva tema escolhido', async ({ page }) => {
     await page.goto('/');
+    // v2.6.27: só 2 temas válidos (dark/light) — sunset/ocean removidos. Usa 'light'.
     await page.evaluate(() => {
-      localStorage.setItem('scoreplace_theme', 'sunset');
+      localStorage.setItem('scoreplace_theme', 'light');
     });
     await page.reload();
     const theme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
-    expect(theme).toBe('sunset');
+    expect(theme).toBe('light');
   });
 
   test('versão deployada bate com release-notes.js', async ({ page }) => {

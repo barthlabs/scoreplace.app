@@ -70,7 +70,11 @@ const FORMATS = [
     assert: (h) => { expect(h).toMatch(/Classifica/i); expect(h).toMatch(/<table|<td/); expect(h).not.toMatch(/Chave Superior/); } },
   { key: 'suico', label: 'Suíço', format: 'Suíço Clássico', teamSize: 1, n: 8, extra: { classifyFormat: 'swiss', currentStage: 'swiss', swissRounds: 3 },
     assert: (h) => { expect(h).toMatch(/Classifica/i); expect(h).toMatch(/<table|<td/); expect(h).not.toMatch(/Chave Superior/); } },
-  { key: 'monarch', label: 'Rei/Rainha', format: 'Rei/Rainha da Praia', teamSize: 1, n: 8, extra: { drawMode: 'rei_rainha' },
+  // Rei/Rainha é MODO de sorteio, não formato — o create grava format='Liga' + drawMode='rei_rainha'
+  // (ver phase0-monarch.test.js e project_rei_rainha_is_drawmode_not_format). O shape legado
+  // format='Rei/Rainha da Praia' sorteia canônico mas NÃO renderiza (cai fora do dispatch de
+  // renderBracket: não é isLiga, sem t.matches, sem t.groups). Testar o shape que o app produz.
+  { key: 'monarch', label: 'Rei/Rainha', format: 'Liga', teamSize: 1, n: 8, extra: { drawMode: 'rei_rainha', ligaRoundFormat: 'rei_rainha', drawManual: true },
     assert: (h) => { expect((h.match(/Grupo [A-Z0-9]/g) || []).length).toBeGreaterThanOrEqual(2); expect(h).not.toMatch(/Chave Superior/); } },
 ];
 

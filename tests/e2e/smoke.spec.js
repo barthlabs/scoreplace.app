@@ -39,9 +39,11 @@ test.describe('Smoke — landing/dashboard sem login', () => {
     await expect(helpModal).toBeVisible();
     await expect(helpModal.locator('h2:has-text("Central de Ajuda")')).toBeVisible();
 
-    // Seção "Sobre" abre por default
+    // Seção "Instalar o app" abre por default (v1.0.24 — main.js query 'instalar-app').
+    const defaultOpen = helpModal.locator('.help-section[data-help-id="instalar-app"]');
+    await expect(defaultOpen).toHaveClass(/open/);
+    // "Sobre" existe e traz a identidade do app (não precisa estar aberta pra ter o texto).
     const aboutSection = helpModal.locator('.help-section[data-help-id="about"]');
-    await expect(aboutSection).toHaveClass(/open/);
     await expect(aboutSection).toContainText(/scoreplace\.app/i);
 
     // Notas de versões: placeholder existe (oculto pq .help-body fica display:none
