@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.3.16-beta';
+window.SCOREPLACE_VERSION = '4.3.17-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -6548,7 +6548,7 @@ window._renderClassifBlock = function (t, clMap, opts) {
 };
 
 // pódio de UMA linha (winner/loser da final da linha + 3º da linha). '' se não há final.
-window._linePodiumHtml = function (t, lineMatches, title) {
+window._linePodiumHtml = function (t, lineMatches, title, color) {
   if (typeof window._buildPodiumHtml !== 'function') return '';
   var nonThird = (lineMatches || []).filter(function (m) { return !m.isThirdPlace && (m.bracket || '') !== 'thirdplace'; });
   var rs = nonThird.map(function (m) { return m.round == null ? 1 : m.round; });
@@ -6560,7 +6560,7 @@ window._linePodiumHtml = function (t, lineMatches, title) {
   if (p2 === 'TBD' || p2 === 'BYE') p2 = null;
   var tp = (lineMatches || []).filter(function (m) { return (m.isThirdPlace || (m.bracket || '') === 'thirdplace') && m.winner; })[0];
   var p3 = tp ? tp.winner : null;
-  return window._buildPodiumHtml(p1, p2, p3, null, null, null, { title: title });
+  return window._buildPodiumHtml(p1, p2, p3, null, null, null, { title: title, titleColor: color });
 };
 
 // FUNÇÃO CANÔNICA: pódio(s) + classificação(ões). Usada na página do torneio (encerrado).
@@ -6606,9 +6606,9 @@ window._renderPodiumsAndClassif = function (t) {
     var out = tierKeys.map(function (bk, i) {
       var lm = fpMatches.filter(function (m) { return (m.bracket || 'main') === bk; });
       var title = (lm[0] && lm[0].tierLabel) ? lm[0].tierLabel : (defLbl[bk] || ('Linha ' + (i + 1)));
-      var pod = window._linePodiumHtml(t, lm, title);
-      if (!pod) return '';
       var color = tierColors[bk] || palette[i % palette.length];
+      var pod = window._linePodiumHtml(t, lm, title, color);
+      if (!pod) return '';
       var cls = window._renderClassifBlock(t, window._classifMapFromMatches(t, lm), { label: '📊 Classificação · ' + title, color: color, open: false });
       return '<div style="margin-bottom:1.25rem;">' + pod + cls + '</div>';
     }).join('');

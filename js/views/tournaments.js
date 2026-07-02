@@ -427,7 +427,7 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
     ? ('<div style="display:flex;gap:1rem;justify-content:center;align-items:flex-start;">' + second + third + '</div>')
     : '';
   var html = '<div style="text-align:center;margin:0 0 1.25rem 0;padding:1.5rem 1.25rem;background:linear-gradient(135deg,rgba(15,23,42,0.9),rgba(30,41,59,0.86));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(251,191,36,0.45);border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,0.35);">' +
-    '<div style="font-size:1.35rem;font-weight:700;margin-bottom:1.1rem;color:#fff;">' + _sh(title) + '</div>' +
+    '<div style="font-size:1.35rem;font-weight:700;margin-bottom:1.1rem;color:' + (opts.titleColor || '#fff') + ';">' + _sh(title) + '</div>' +
     '<div style="text-align:center;margin-bottom:1.1rem;">' +
       '<div style="font-size:3rem;line-height:1;">🥇</div>' +
       _block(p1, '#fbbf24', '800', 32, 23, 11, 64) +

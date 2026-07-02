@@ -9,7 +9,14 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.16-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.17-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎨 Cada chave com sua cor no pódio:</b> nos torneios com <b>chaves paralelas</b> (Ouro, Prata, Bronze…), o <b>título de cada pódio</b> agora aparece na <b>cor da chave</b> — num relance você sabe de qual disputa é aquele campeão.</li>' +
+        '<li><b>🟨 Cartão do jogo marca a chave:</b> os cards de partida ganham uma <b>faixa colorida à esquerda</b> na cor da chave, pra identificar rapidinho a qual linha cada jogo pertence.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.16-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🧊 A fase anterior agora "congela" ao avançar:</b> quando o torneio passa pra próxima fase, os <b>resultados, placares e a classificação</b> da fase anterior ficam <b>fixos</b> — nada que acontece na fase seguinte muda mais o que já aconteceu. (Antes, jogos da eliminatória podiam alterar a pontuação da fase de classificação.)</li>' +
         '<li><b>🥇 Construtor de fases — opção BYE:</b> quando a fase tem <b>chaves independentes</b> (ex.: Ouro e Prata), o organizador pode escolher <b>BYE</b> pra fechar a potência de 2 de cada chave — não só a repescagem.</li>' +
