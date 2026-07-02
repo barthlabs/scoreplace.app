@@ -4,6 +4,7 @@
 *.bak
 outputs/
 functions/node_modules/
+functions/.secret.local
 extensions/
 
 # E2E / dev tooling
@@ -21,10 +22,18 @@ functions-autodraw/node_modules/
 .firebase/
 firebase-debug.log
 firebase-debug*.log
+# Emulador Firestore (testes de concorrência — npm run test:concurrency)
+firestore-debug.log
+firestore-debug*.log
+ui-debug.log
 
 # Artefatos/documentos locais de trabalho (não fazem parte do app)
 AUDIT-codigo-morto.md
 dicas-coachmarks-scoreplace.pdf
+Custos do Projeto - scoreplace.app/
 
 # WhatsApp VPS — .env real nunca commitado (o .env.vps.example sim)
 infra/whatsapp/.env
+
+# Planilha de cobertura de testes (local, nao versionar)
+docs/testes-cobertura-*

@@ -74,10 +74,17 @@ check('Fase de Grupos (8, 2 grupos)', mkPool(8),
   { formatCode: 'grupos_mata', gruposCount: 2, fixedPairs: false, source: {} },
   function (prev) { return E.buildPhaseGroupStage(prev, { formatCode: 'grupos_mata', gruposCount: 2, fixedPairs: false, source: {} }, csId, 'x'); });
 
-// ── Rei/Rainha (8 → 2 grupos de 4) — modo de sorteio, não formato ──
+// ── Rei/Rainha (modo de sorteio, não formato) — SEMPRE rota league INCREMENTAL ──
+// (campanha kill-monarch-format): generatePhase e a Fase N devolvem o MESMO marcador
+// de pool incremental; as rodadas (grupos de 4 rotativos) são geradas depois pelo
+// motor único _generateNextRound/_phaseGenNextLeagueRound.
 check('Rei/Rainha (8)', mkPool(8),
   { formatCode: 'grupos_mata', reiRainha: true, source: {} },
-  function (prev) { return E.buildPhaseMonarchStage(prev, { formatCode: 'grupos_mata', reiRainha: true, source: {} }, csId, 'x'); });
+  function (prev) { return E.buildPhaseLeagueStage(prev, { formatCode: 'grupos_mata', reiRainha: true, fixedPairs: false, ligaCadence: 'incremental', source: {} }, csId, 'x'); });
+(function () {
+  var b = E.generatePhase(mkPool(8), { formatCode: 'grupos_mata', reiRainha: true, source: {} }, { idPrefix: 'x' });
+  ok(b && b.incrementalLeague === true && (b.pool || []).length === 8, 'Rei/Rainha — generatePhase devolve pool incremental (rota league)');
+})();
 
 // ── Pontos Corridos / Liga estático (5) ──
 check('Pontos Corridos (5)', mkPool(5),

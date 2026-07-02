@@ -227,6 +227,121 @@ window.renderInvitePage = function(container) {
     if (window._coach && typeof window._coach.startInviteTour === 'function') window._coach.startInviteTour();
 };
 
+// ─── FASE B: página leve de UM jogo (project_match_result_docs) ──────────────
+// Deep-link #match/:tId/:matchId → renderiza o jogo lendo SÓ o subdoc
+// (tournaments/{tId}/results/{matchId}), SEM carregar o torneio inteiro. É o
+// consumidor real do isolamento de leitura da linha 4.1: o subdoc já carrega o
+// contexto de exibição denormalizado (p1/p2/tournamentName/roundLabel + placar).
+window._matchUrl = function(tId, matchId) {
+  return (window.SCOREPLACE_URL || 'https://scoreplace.app') + '/#match/' + encodeURIComponent(tId) + '/' + encodeURIComponent(matchId);
+};
+
+// Formata o placar a partir do subdoc (sets "6-4 3-6(5)" ou numérico "6 × 4").
+window._faseBScoreStr = function(result) {
+  if (!result) return '';
+  if (Array.isArray(result.sets) && result.sets.length) {
+    return result.sets.map(function(s) {
+      s = s || {};
+      var base = (s.gamesP1 != null ? s.gamesP1 : '?') + '-' + (s.gamesP2 != null ? s.gamesP2 : '?');
+      if (s.tiebreak && (s.tiebreak.pointsP1 != null || s.tiebreak.pointsP2 != null)) {
+        base += '(' + (s.tiebreak.pointsP1 != null ? s.tiebreak.pointsP1 : '') + ')';
+      }
+      return base;
+    }).join(' ');
+  }
+  if (result.scoreP1 != null && result.scoreP2 != null) return result.scoreP1 + ' × ' + result.scoreP2;
+  return '';
+};
+
+// PURA: monta o card de um jogo a partir do subdoc. Sem DOM/async → testável.
+window._buildFaseBMatchCardHtml = function(result, tId) {
+  var esc = function(s) { return window._safeHtml ? window._safeHtml(s) : String(s == null ? '' : s); };
+  result = result || {};
+  var p1 = result.p1 || 'A definir';
+  var p2 = result.p2 || 'A definir';
+  var tName = result.tournamentName || 'Torneio';
+  var rLabel = result.roundLabel || '';
+  var scoreStr = window._faseBScoreStr(result);
+  var isDraw = !!(result.draw || result.winner === 'draw');
+  var isWo = result.wo === true;
+  var hasWinner = !!(result.winner && !isDraw);
+  var pending = result.pendingResult;
+
+  // status + destaque de vencedor
+  var status, statusColor;
+  if (isWo) { status = '⚠️ W.O. — ' + esc(result.winner) + ' avança'; statusColor = '#f59e0b'; }
+  else if (hasWinner) { status = '✅ Vencedor: ' + esc(result.winner); statusColor = '#4ade80'; }
+  else if (isDraw) { status = '🤝 Empate'; statusColor = '#94a3b8'; }
+  else if (pending) {
+    var ps = (pending.scoreP1 != null ? pending.scoreP1 + ' × ' + pending.scoreP2 : '');
+    status = '⏳ Aguardando aprovação' + (ps ? ' (' + esc(ps) + ')' : ''); statusColor = '#fbbf24';
+  } else { status = '🕐 Jogo ainda não disputado'; statusColor = '#94a3b8'; }
+
+  var woAbsentSide = result.woAbsentSide; // 'p1' | 'p2'
+  function _side(name, sideKey) {
+    var isWinner = hasWinner && result.winner === name;
+    var isAbsent = isWo && woAbsentSide === sideKey;
+    var bg = isWinner ? 'rgba(16,185,129,0.12)' : 'transparent';
+    var bd = isWinner ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(255,255,255,0.08)';
+    var col = isAbsent ? 'var(--text-muted,#94a3b8)' : 'var(--text-bright)';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:10px;background:' + bg + ';border:' + bd + ';">' +
+      '<span style="font-weight:700;font-size:0.95rem;color:' + col + ';' + (isAbsent ? 'text-decoration:line-through;' : '') + '">' + (isWinner ? '🏆 ' : '') + esc(name) + (isAbsent ? ' <span style="font-size:0.72rem;opacity:0.8;">(ausente)</span>' : '') + '</span>' +
+      '</div>';
+  }
+
+  var scoreBlock = scoreStr
+    ? '<div style="text-align:center;font-size:1.3rem;font-weight:900;color:var(--text-bright);margin:10px 0;letter-spacing:0.02em;">' + esc(scoreStr) + '</div>'
+    : '';
+
+  return '<div style="max-width:460px;margin:0 auto;padding:1rem;">' +
+    '<div style="text-align:center;margin-bottom:6px;font-size:0.82rem;color:var(--text-muted,#94a3b8);font-weight:600;">📋 ' + esc(tName) + (rLabel ? ' · ' + esc(rLabel) : '') + '</div>' +
+    '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:16px;padding:16px;">' +
+      _side(p1, 'p1') + scoreBlock + _side(p2, 'p2') +
+      '<div style="text-align:center;margin-top:12px;font-size:0.85rem;font-weight:700;color:' + statusColor + ';">' + status + '</div>' +
+    '</div>' +
+    '<div style="text-align:center;margin-top:14px;">' +
+      '<a href="#tournaments/' + esc(String(tId)) + '" style="display:inline-block;font-size:0.85rem;font-weight:700;color:#818cf8;text-decoration:none;padding:8px 16px;border:1px solid rgba(129,140,248,0.35);border-radius:10px;">Ir para o torneio →</a>' +
+    '</div>' +
+    '</div>';
+};
+
+// Page-route: carrega o subdoc (leitura ISOLADA) e renderiza. Estados: carregando,
+// não-encontrado, ok. Segue o padrão centralizado (_renderBackHeader + container).
+window.renderMatchPage = function(container, tId, matchId) {
+  var backHref = tId ? ('#tournaments/' + tId) : '#dashboard';
+  var hdr = typeof window._renderBackHeader === 'function'
+    ? window._renderBackHeader({
+        href: backHref,
+        label: (_t && _t('btn.back')) || 'Voltar',
+        middleHtml: '<span style="font-size:0.88rem;font-weight:700;color:var(--text-bright);">⚔️ Resultado do jogo</span>'
+      })
+    : '<div></div>';
+  var loading = '<div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted,#94a3b8);font-size:0.9rem;">Carregando o jogo…</div>';
+  container.innerHTML = hdr + '<div id="fase-b-match-body">' + loading + '</div>';
+  if (typeof window._reflowChrome === 'function') window._reflowChrome();
+
+  if (!tId || !matchId || !window.FirestoreDB || typeof window.FirestoreDB.loadMatchResult !== 'function') {
+    var body0 = document.getElementById('fase-b-match-body');
+    if (body0) body0.innerHTML = '<div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted,#94a3b8);">Jogo não encontrado.</div>';
+    return;
+  }
+  window.FirestoreDB.loadMatchResult(tId, matchId).then(function(result) {
+    var body = document.getElementById('fase-b-match-body');
+    if (!body) return; // navegou pra fora enquanto carregava
+    if (!result) {
+      body.innerHTML = '<div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted,#94a3b8);">' +
+        'Este jogo ainda não tem ficha própria.' +
+        '<div style="margin-top:12px;"><a href="#tournaments/' + (window._safeHtml ? window._safeHtml(String(tId)) : tId) + '" style="color:#818cf8;font-weight:700;text-decoration:none;">Abrir o torneio →</a></div></div>';
+      return;
+    }
+    body.innerHTML = window._buildFaseBMatchCardHtml(result, tId);
+  }).catch(function(e) {
+    var body = document.getElementById('fase-b-match-body');
+    if (body) body.innerHTML = '<div style="text-align:center;padding:2.5rem 1rem;color:#ef4444;">Erro ao carregar o jogo.</div>';
+    if (window._error) window._error('renderMatchPage', e);
+  });
+};
+
 window._downloadAppInviteQR = function() {
     var img = document.getElementById('qr-code-img');
     if (!img) return;

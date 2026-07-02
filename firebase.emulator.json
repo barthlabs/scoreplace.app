@@ -1,0 +1,11 @@
+{
+  "//": "Config DEDICADA ao emulador Firestore dos testes de concorrência. NÃO usar pra deploy (prod = git push HEAD:main). Rodada via: npm run test:concurrency",
+  "firestore": {
+    "rules": "tests/concurrency/firestore.allow.rules"
+  },
+  "emulators": {
+    "firestore": { "port": 8080 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}

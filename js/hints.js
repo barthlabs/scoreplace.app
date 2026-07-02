@@ -123,7 +123,6 @@
     { id: 'ct-max-participants', selector: '#tourn-max-participants', text: 'Limite de participantes. Deixe vazio para sem limite.', context: 'create-tournament', priority: 4, position: 'bottom' },
     { id: 'ct-auto-close', selector: '#tourn-auto-close', text: 'Fecha inscrições automaticamente quando atingir o limite de participantes (potência de 2).', context: 'create-tournament', priority: 3, position: 'bottom' },
     { id: 'ct-time-estimates', selector: '#tourn-game-duration', text: 'Duração da partida em minutos. Usado para calcular a duração total estimada do torneio.', context: 'create-tournament', priority: 4, position: 'bottom' },
-    { id: 'ct-monarch-classified', selector: '.monarch-cls-btn', text: 'Quantos jogadores avançam de cada grupo Rei/Rainha para a fase eliminatória: 1 (só o melhor) ou 2.', context: 'create-tournament', priority: 5, position: 'bottom' },
     { id: 'ct-groups-config', selector: '#grupos-count', text: 'Número de grupos e classificados por grupo na fase de grupos.', context: 'create-tournament', priority: 5, position: 'bottom' },
     { id: 'ct-swiss-rounds', selector: '#suico-rounds', text: 'Número de rodadas no formato Suíço. Recomendado: log₂ do número de participantes (ex: 8 jogadores = 3 rodadas).', context: 'create-tournament', priority: 5, position: 'bottom' },
     { id: 'ct-wo-scope', selector: '[onclick*="_selectWOScope"]', text: 'W.O. Individual: só o jogador ausente perde. W.O. do Time: todo o time é eliminado por uma ausência.', context: 'create-tournament', priority: 3, position: 'bottom' },

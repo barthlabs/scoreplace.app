@@ -1851,6 +1851,8 @@ window._translations['pt'] = {
   'create.advGameLostDesc': 'Desconto por cada game cedido ao adversário.',
   'create.advTiebreakPoint': 'Ponto em tie-break',
   'create.advTiebreakPointDesc': 'Pontos marcados no tie-break do set.',
+  'create.advWoPenalty': 'Punição por W.O.',
+  'create.advWoPenaltyDesc': 'Pontos por levar W.O. numa rodada (valor negativo pune; desative pra não punir).',
   'create.advKillingPoint': 'Killing point (40-40)',
   'create.advKillingPointDesc': 'Pontos vencidos em situação de empate decisivo.',
   'create.advPointScored': 'Ponto feito',

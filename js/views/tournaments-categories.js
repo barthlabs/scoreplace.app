@@ -1095,7 +1095,7 @@ window.renderCategoryManagerPage = function(container, tId) {
             '<button class="btn btn-outline btn-sm hover-lift" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;font-size:0.8rem;" onclick="window._catManagerRender();"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Voltar</button>' +
             '</div>' +
             '<div style="padding:0 1.5rem 1.5rem;">' +
-            '<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">' + catParticipants.length + ' inscrito' + (catParticipants.length !== 1 ? 's' : '') + '</div>' +
+            '<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">' + (function(){ var _ppl = window._peopleInList ? window._peopleInList(catParticipants) : catParticipants.length; return _ppl + ' inscrito' + (_ppl !== 1 ? 's' : ''); })() + '</div>' +
             '<div style="display:flex;flex-direction:column;gap:8px;">' + pCardsHtml + '</div>' +
             '</div>' +
             '</div></div>';

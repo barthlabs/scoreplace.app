@@ -15,6 +15,10 @@ window.AppStore = {
   logAction: function () {},
   getTournament: function () { return _curT; },
   syncImmediate: function () { return { then: function (cb) { cb && cb(); return { catch: function () {} }; } }; },
+  // Blindagem: _commitInitialDraw usa commitDrawTx. Este é um teste do MOTOR (asserção
+  // sobre a chave no `t` local, já mutada otimisticamente), não de persistência — a
+  // prova de corrida vive em tests/concurrency (emulador). Stub thenable no-op.
+  commitDrawTx: function () { return { then: function (cb) { cb && cb(); return { catch: function () {} }; } }; },
 };
 window._notifyDrawPersonalized = function () {};
 window.showAlertDialog = function () {};

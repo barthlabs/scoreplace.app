@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.0.85-beta';
+window.SCOREPLACE_VERSION = '4.3.2-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -11,9 +11,21 @@ window._autoKeepScroll = function() {
   if (window._inRouterRender) return;
   var y = window.pageYOffset || window.scrollY || 0;
   if (!y) return; // já no topo: nada a restaurar
-  var restore = function() { try { window.scrollTo(0, y); } catch (e) {} };
-  try { requestAnimationFrame(restore); } catch (e) {}
-  try { setTimeout(restore, 0); } catch (e) {}
+  // Trava a altura do container durante o swap (documento não encurta → o browser
+  // não clampa o scroll no meio do render). Solta no rAF/timeout.
+  var vc = document.getElementById('view-container');
+  var prevMin = vc ? vc.style.minHeight : '';
+  try { if (vc && vc.offsetHeight > 0) vc.style.minHeight = vc.offsetHeight + 'px'; } catch (e) {}
+  var restore = function() {
+    try { window.scrollTo({ top: y, left: 0, behavior: 'instant' }); }
+    catch (e) { try { window.scrollTo(0, y); } catch (e2) {} }
+  };
+  // Microtask = roda no FIM da task atual (o render síncrono já completou), ANTES do
+  // paint — nenhum frame pinta com o scroll errado ("pulinho" de 1 linha que o rAF
+  // sozinho deixava). rAF + timeout repetem por segurança e soltam a trava.
+  try { Promise.resolve().then(restore); } catch (e) {}
+  try { requestAnimationFrame(function () { restore(); if (vc) vc.style.minHeight = prevMin; }); } catch (e) {}
+  try { setTimeout(function () { restore(); if (vc) vc.style.minHeight = prevMin; }, 0); } catch (e) {}
 };
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
@@ -357,7 +369,7 @@ window._ensureBootOverlay = function() {
     if (!document.getElementById('scoreplace-ball-keyframes')) {
       var st = document.createElement('style');
       st.id = 'scoreplace-ball-keyframes';
-      st.textContent = '@keyframes scoreplace-ball-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}@keyframes scoreplace-ball-pulse{0%,100%{filter:drop-shadow(0 0 0 transparent)}50%{filter:drop-shadow(0 0 12px rgba(212,244,60,0.6))}}';
+      st.textContent = '@keyframes scoreplace-ball-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}@keyframes scoreplace-ball-pulse{0%,100%{filter:drop-shadow(0 0 0 transparent)}50%{filter:drop-shadow(0 0 12px rgba(212,244,60,0.6))}}@keyframes sp-rich-bar{0%{left:-42%}100%{left:100%}}';
       (document.head || host).appendChild(st);
     }
     var ballSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%"><defs><radialGradient id="spjbball" cx="37%" cy="31%" r="80%"><stop offset="0" stop-color="#EFEA57"/><stop offset="46%" stop-color="#D2E000"/><stop offset="86%" stop-color="#A6C614"/><stop offset="100%" stop-color="#8CA811"/></radialGradient><clipPath id="spjbclip"><circle cx="24" cy="24" r="22"/></clipPath></defs><circle cx="24" cy="24" r="22" fill="url(#spjbball)"/><g clip-path="url(#spjbclip)"><path d="M24,-3 C58,18 -10,30 24,51" fill="none" stroke="#7a9410" stroke-width="3.4" opacity="0.4"/><path d="M24,-3 C58,18 -10,30 24,51" fill="none" stroke="#fff" stroke-width="2.6" opacity="0.97"/></g></svg>';
@@ -372,7 +384,12 @@ window._ensureBootOverlay = function() {
         '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;">scoreplace<span style="color:#fbbf24">.app</span></span>' +
       '</div>' +
       '<div aria-hidden="true" style="width:3rem;height:3rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite;">' + ballSvg + '</div>' +
-      '<div style="font-size:.78rem;color:#64748b;">Carregando…</div>';
+      '<div style="font-size:.78rem;color:#64748b;">Carregando…</div>' +
+      // v4.1.23: barra 3D laranja indeterminada (mesma da tela rica) — este fallback não pode
+      // mais aparecer "pobre" (só bola) quando o boot inline sumiu.
+      '<div aria-hidden="true" style="position:relative;width:300px;max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;margin-top:4px;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
+        '<div style="position:absolute;top:2px;bottom:2px;width:42%;border-radius:999px;animation:sp-rich-bar 1.05s ease-in-out infinite;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
+      '</div>';
     host.appendChild(ov);
     var _tick = function() {
       if (window._bootReady === true) {
@@ -895,7 +912,6 @@ window._softRefreshView = function() {
                   document.getElementById('unified-resolution-panel') ||
                   document.getElementById('groups-config-panel') ||
                   document.getElementById('remainder-resolution-panel') ||
-                  document.getElementById('phase-res-panel') ||
                   document.getElementById('vagas-draw-panel') ||
                   document.getElementById('removal-subchoice-panel') ||
                   document.getElementById('incomplete-teams-panel') ||
@@ -943,8 +959,26 @@ window._softRefreshView = function() {
   // 4. Set soft-refresh flag so router skips scroll-to-top and fade animation
   window._isSoftRefresh = true;
 
+  // 4b. TRAVA a altura do container durante o swap. Sem isso o documento ENCURTA por
+  // um instante (innerHTML trocado + reflow forçado no meio do render) → o browser
+  // CLAMPA o scroll e PINTA 1 frame deslocado antes do restore (que era só no rAF)
+  // = "pulinho pra cima e pra baixo" a cada clique que salvava, em toda tela.
+  // Regra do dono: scroll FIXO e ESTÁVEL em re-render, sempre, em todas as telas.
+  var _vcSoft = document.getElementById('view-container');
+  var _vcSoftMinH = _vcSoft ? _vcSoft.style.minHeight : '';
+  try { if (_vcSoft && _vcSoft.offsetHeight > 0) _vcSoft.style.minHeight = _vcSoft.offsetHeight + 'px'; } catch (e) {}
+
   // 5. Re-render current view via router
   if (typeof initRouter === 'function') initRouter();
+
+  // 5b. Restaura SÍNCRONO (mesma task, ANTES do próximo paint) — nenhum frame chega
+  // a pintar com o scroll errado. O rAF abaixo REPETE o restore (views com miolo
+  // async) e só então solta a trava de altura.
+  var _softRestore = function () {
+    try { window.scrollTo({ top: scrollY, left: 0, behavior: 'instant' }); }
+    catch (e) { try { window.scrollTo(0, scrollY); } catch (e2) {} }
+  };
+  _softRestore();
 
   // v1.8.86: se o participante está no detalhe de um torneio que acabou de ter
   // o sorteio realizado (agora tem matches/rounds), redirecionar para o bracket.
@@ -1003,9 +1037,10 @@ window._softRefreshView = function() {
     }
   } catch(_e) {}
 
-  // 6. Restore scroll position after render
+  // 6. Repete o restore após o paint (miolo async) + solta a trava de altura.
   requestAnimationFrame(function() {
-    window.scrollTo({ top: scrollY, behavior: 'instant' });
+    _softRestore();
+    if (_vcSoft) _vcSoft.style.minHeight = _vcSoftMinH;
     window._isSoftRefresh = false;
   });
 };
@@ -1332,59 +1367,11 @@ window._TENNIS_BALL_SVG = function(size) {
   '</svg>';
 };
 
-// ─── Global loading spinner — bola de tênis girando fixed no topo da viewport ────────
-// v0.17.94: helper reutilizável pra qualquer operação async que demora.
-// Stack-based — múltiplas chamadas .show() exigem mesmo número de .hide()
-// pra sumir. Usar `window._loadingSpinner.show('Carregando perfil…')`
-// ou simplesmente `window._loadingSpinner.show()`.
-window._loadingSpinner = (function() {
-  var _refCount = 0;
-  var _id = 'scoreplace-global-loader';
-  var _styleId = 'scoreplace-global-loader-style';
-
-  function _ensureStyle() {
-    if (document.getElementById(_styleId)) return;
-    var style = document.createElement('style');
-    style.id = _styleId;
-    style.textContent =
-      '@keyframes sp-loader-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }' +
-      '@keyframes sp-loader-pulse { 0%,100% { filter: drop-shadow(0 0 0 transparent); } 50% { filter: drop-shadow(0 0 10px rgba(212,244,60,0.7)); } }' +
-      '#' + _id + ' { position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:99999; display:flex; align-items:center; gap:8px; padding:6px 14px; background:rgba(15,23,42,0.92); border:1px solid rgba(212,244,60,0.3); border-radius:999px; backdrop-filter:blur(8px); pointer-events:none; box-shadow:0 4px 20px rgba(0,0,0,0.4); }' +
-      '#' + _id + ' .ball { font-size:1.1rem; display:inline-block; animation: sp-loader-spin 1.2s linear infinite, sp-loader-pulse 1.6s ease-in-out infinite; }' +
-      '#' + _id + ' .label { color:#e2e8f0; font-size:0.78rem; font-weight:600; white-space:nowrap; }';
-    document.head.appendChild(style);
-  }
-
-  return {
-    show: function(label) {
-      _refCount++;
-      _ensureStyle();
-      var el = document.getElementById(_id);
-      if (!el) {
-        el = document.createElement('div');
-        el.id = _id;
-        el.setAttribute('aria-live', 'polite');
-        el.setAttribute('role', 'status');
-        document.body.appendChild(el);
-      }
-      el.innerHTML = '<span class="ball" style="line-height:1;">' + window._TENNIS_BALL_SVG('1.1rem') + '</span><span class="label">' +
-        (label ? String(label).replace(/[<>]/g, '') : 'Carregando…') + '</span>';
-    },
-    hide: function() {
-      _refCount = Math.max(0, _refCount - 1);
-      if (_refCount === 0) {
-        var el = document.getElementById(_id);
-        if (el && el.parentNode) el.parentNode.removeChild(el);
-      }
-    },
-    // Reset force — usado em casos extremos (erro grave, logout).
-    reset: function() {
-      _refCount = 0;
-      var el = document.getElementById(_id);
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-    }
-  };
-})();
+// v4.1.16: `_loadingSpinner` (pílula de spinner no topo) REMOVIDO — era código morto
+// (zero chamadas .show()) e uma "tela de carregamento" a mais. Fonte ÚNICA de loading
+// full-screen = `window._showLoading` (tela rica: bola + barra + texto). Shim inerte
+// pra não quebrar se algum caller residual aparecer (só delega/no-op).
+window._loadingSpinner = { show: function(m){ if (window._showLoading) window._showLoading(m); }, hide: function(){ if (window._hideLoading) window._hideLoading(); }, reset: function(){ if (window._hideLoading) window._hideLoading(); } };
 
 // v1.3.26-beta: helper canônico pra renderizar bloco "🎾 Carregando…"
 // dentro de uma área (view container, modal, slot). Emite o MESMO emoji
@@ -1403,16 +1390,26 @@ window._renderBallLoader = function(label, opts) {
     style.id = 'scoreplace-ball-keyframes';
     style.textContent =
       '@keyframes scoreplace-ball-spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }' +
-      '@keyframes scoreplace-ball-pulse { 0%,100% { filter: drop-shadow(0 0 0 transparent);} 50% { filter: drop-shadow(0 0 12px rgba(212,244,60,0.6));} }';
+      '@keyframes scoreplace-ball-pulse { 0%,100% { filter: drop-shadow(0 0 0 transparent);} 50% { filter: drop-shadow(0 0 12px rgba(212,244,60,0.6));} }' +
+      '@keyframes sp-rich-bar{0%{left:-42%}100%{left:100%}}';
     document.head.appendChild(style);
   }
   var size = opts.size || '3rem';
   var minHeight = opts.minHeight || '40vh';
   var safeLabel = label ? String(label).replace(/[<>]/g, '') : 'Carregando…';
+  // v4.1.23: opts.bar → mostra a MESMA barra 3D laranja indeterminada do boot loader /
+  // _showLoading (tela RICA única). Ligado nos contextos FULL-SCREEN (router auth, boot
+  // fallback); slots inline de card seguem sem barra (opts.bar ausente).
+  var barHtml = opts.bar
+    ? '<div aria-hidden="true" style="position:relative;width:300px;max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;margin:0.9rem auto 0;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
+        '<div style="position:absolute;top:2px;bottom:2px;width:42%;border-radius:999px;animation:sp-rich-bar 1.05s ease-in-out infinite;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
+      '</div>'
+    : '';
   return '<div class="scoreplace-ball-loader" style="display:flex;justify-content:center;align-items:center;min-height:' + minHeight + ';">' +
     '<div style="text-align:center;">' +
       '<div aria-hidden="true" style="width:' + size + ';height:' + size + ';margin-bottom:0.85rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite;">' + window._TENNIS_BALL_SVG(size) + '</div>' +
       '<div role="status" aria-live="polite" style="color:var(--text-muted, #9ca3af);font-size:0.88rem;font-weight:600;">' + safeLabel + '</div>' +
+      barHtml +
     '</div>' +
   '</div>';
 };
@@ -2617,6 +2614,24 @@ window._pName = function(p, fallback) {
   return _pNameDisplay(raw) || fb;
 };
 
+// POOL DE STANDBY CANÔNICO (project_concurrency_safe_saves / canonização W.O.) —
+// merge de `standbyParticipants` + `waitlist` dedupado por NOME. Fonte ÚNICA da lista
+// bruta de substitutos possíveis (o caller ordena depois por callPolicy present/locked).
+// Antes esse merge estava copiado IDÊNTICO em 3 lugares (_processWoSubstitutions,
+// _autoSubstituteWO, _declareAbsent). NÃO inclui monarchWaitlist nem ordena — isso é
+// responsabilidade do `_getWaitlist` (bracket.js), que é a fonte RICA pro painel de
+// espera; aqui é só o pool bruto de W.O./substituição.
+window._getStandbyPool = function (t) {
+  if (!t) return [];
+  var getName = function (p) { return window._pName(p); };
+  var sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
+  var wl = Array.isArray(t.waitlist) ? t.waitlist : [];
+  var spNames = new Set(sp.map(getName));
+  var pool = sp.slice();
+  wl.forEach(function (w) { var wn = getName(w); if (wn && !spNames.has(wn)) pool.push(w); });
+  return pool;
+};
+
 // v4.0.84: resolve a STRING de lado de partida (m.p1/m.p2 = "A / B" GRAVADA no draw) pro nome
 // AO VIVO. As partidas guardam o nome do momento do sorteio; aqui achamos a ENTRADA cujo nome
 // guardado bate com a string e devolvemos _pName(entrada) (uid→perfil). Assim o bracket também
@@ -3738,6 +3753,81 @@ window._safeHtml = function(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 
+// ── Loader GLOBAL (v4.0.88) — "enquanto não entregar a informação, carregando… sempre" ──
+// Padrão canônico do app: TODA ação que processa antes de entregar uma tela deve chamar
+// window._showLoading(msg) no clique. O loader some SOZINHO quando o resultado chega:
+//   • um painel/diálogo/overlay de resultado entra no DOM (MutationObserver) — exclui toasts;
+//   • OU navegação (hashchange) leva pra outra tela (ex.: sorteio → #bracket);
+//   • OU _hideLoading() explícito; OU timeout de segurança (nunca trava).
+// CRÍTICO: o soft-refresh dos detalhes (re-render do #view-container durante um save async)
+// NÃO esconde o loader — ele não troca hash nem adiciona overlay de alto z — então o usuário
+// vê "carregando…" durante o "pensando" em vez da tela de detalhes piscando (bug reportado).
+window._showLoading = function (msg) {
+  try {
+    var ov = document.getElementById('sp-global-loading');
+    if (ov) {
+      var lbl0 = ov.querySelector('[data-load-msg]');
+      if (lbl0) lbl0.textContent = msg || 'Carregando…';
+      return;
+    }
+    // TELA RICA ÚNICA (v4.1.16): mesma identidade do boot loader (index.html) — bola 🎾
+    // SVG girando + BARRA laranja 3D (indeterminada, deslizando) + texto que muda. Toda
+    // tela de "processando" (sorteio etc.) usa ISTO. Keyframes injetadas uma vez.
+    if (!document.getElementById('sp-rich-loader-kf')) {
+      var _kf = document.createElement('style');
+      _kf.id = 'sp-rich-loader-kf';
+      _kf.textContent = '@keyframes scoreplace-ball-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}' +
+        '@keyframes sp-rich-bar{0%{left:-42%}100%{left:100%}}';
+      document.head.appendChild(_kf);
+    }
+    var _ball = (typeof window._TENNIS_BALL_SVG === 'function') ? window._TENNIS_BALL_SVG('4rem') : '🎾';
+    ov = document.createElement('div');
+    ov.id = 'sp-global-loading';
+    ov.setAttribute('role', 'status');
+    ov.setAttribute('aria-live', 'polite');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100050;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(15,23,42,0.92);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+    ov.innerHTML =
+      '<div aria-hidden="true" style="width:4rem;height:4rem;line-height:1;display:inline-block;animation:scoreplace-ball-spin 1.2s linear infinite;">' + _ball + '</div>' +
+      '<div data-load-msg style="color:#e2e8f0;font-size:1rem;font-weight:800;text-align:center;padding:0 24px;">' + window._safeHtml(msg || 'Carregando…') + '</div>' +
+      // barra 3D laranja (mesma pílula do boot loader) com preenchimento INDETERMINADO
+      '<div aria-hidden="true" style="position:relative;width:300px;max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
+        '<div style="position:absolute;top:2px;bottom:2px;width:42%;border-radius:999px;animation:sp-rich-bar 1.05s ease-in-out infinite;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    // auto-dismiss: some quando um painel/diálogo/overlay de RESULTADO entra no body.
+    if (typeof MutationObserver === 'function') {
+      var obs = new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var added = muts[i].addedNodes || [];
+          for (var j = 0; j < added.length; j++) {
+            var n = added[j];
+            if (!n || n.nodeType !== 1) continue;
+            var id = n.id || '';
+            if (id === 'sp-global-loading' || id === 'toast-container') continue; // o próprio loader e toasts não contam
+            var zi = 0;
+            try { zi = parseInt((n.style && n.style.zIndex) || (window.getComputedStyle ? window.getComputedStyle(n).zIndex : 0)) || 0; } catch (e) {}
+            if (/panel|overlay|dialog|modal|review|sheet/.test(id.toLowerCase()) || zi >= 9000) { window._hideLoading(); return; }
+          }
+        }
+      });
+      obs.observe(document.body, { childList: true });
+      window._spLoadingObs = obs;
+    }
+    window._spLoadingTimer = setTimeout(function () { window._hideLoading(); }, 15000); // backstop: nunca trava
+  } catch (e) { if (window._error) window._error('[showLoading]', e); }
+};
+window._hideLoading = function () {
+  try {
+    if (window._spLoadingObs) { try { window._spLoadingObs.disconnect(); } catch (e) {} window._spLoadingObs = null; }
+    if (window._spLoadingTimer) { clearTimeout(window._spLoadingTimer); window._spLoadingTimer = null; }
+    var ov = document.getElementById('sp-global-loading');
+    if (ov) ov.remove();
+  } catch (e) {}
+};
+// Navegação real (hashchange) = chegou outra tela → esconde o loader. NÃO dispara no
+// soft-refresh (mesma hash), então o loader sobrevive ao "pensando" dos detalhes.
+try { window.addEventListener('hashchange', function () { if (window._hideLoading) window._hideLoading(); }); } catch (e) {}
+
 // v3.1.60: abre URL EXTERNA de forma confiável — especialmente no iOS PWA (standalone).
 // O `window.open(url, '_blank', 'noopener')` no iOS cria uma ABA INTERMEDIÁRIA EM BRANCO
 // no navegador in-app: o usuário vai ao Google Maps e, ao tocar em "voltar", cai numa
@@ -4010,17 +4100,132 @@ window._fitTwoLineNames = function(root) {
 window._spinButton = function(btn, label) {
   if (!btn || btn.getAttribute('data-spinning') === '1') return;
   var original = btn.innerHTML;
+  var _oFilter = btn.style.filter, _oCursor = btn.style.cursor, _oOpacity = btn.style.opacity;
   btn.setAttribute('data-spinning', '1');
   btn.disabled = true;
+  // v4.1.12: enquanto processa, o botão fica CINZA (desatura a cor) + spinner + texto —
+  // feedback inequívoco no PRÓPRIO botão (pedido do dono no "Sortear": "sorteando…" e o
+  // botão fica cinza). Vale pra todos os spin-buttons (sortear/salvar/registrar…).
+  btn.style.filter = 'grayscale(0.9) brightness(0.82)';
+  btn.style.cursor = 'wait';
+  btn.style.opacity = '0.85';
   var txt = label || '';
   btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>' + (txt ? window._safeHtml(txt) : '');
   setTimeout(function() {
     if (btn && btn.getAttribute('data-spinning') === '1' && document.body.contains(btn)) {
       btn.innerHTML = original;
       btn.disabled = false;
+      btn.style.filter = _oFilter; btn.style.cursor = _oCursor; btn.style.opacity = _oOpacity;
       btn.removeAttribute('data-spinning');
     }
   }, 8000);
+};
+
+// v4.1.14: SPIN do botão SORTEAR — o cinza "Sorteando…" PERSISTE até aparecer a
+// primeira tela de solução (resto/pow2/sem-dupla/grupos/…) OU o sorteio navegar pro
+// bracket. Diferente do _spinButton genérico (reverte em 8s): aqui o fim é o EVENTO
+// (painel de solução no DOM via MutationObserver, ou hashchange), com backstop de 20s.
+// Pedido do dono: "o botão cinza sorteando deve ficar até que apareça a primeira solução".
+// _drawingTid: id do torneio cujo Sortear está EM ANDAMENTO (client-only, NUNCA salvo).
+// O RENDER do botão Sortear checa isto → mesmo que o detalhe re-renderize (onSnapshot /
+// save async) ANTES do painel de solução, o botão sai cinza "Sorteando…" (não reverte
+// pra "Sortear"). Limpo em _drawBtnDone (painel/navegação/backstop) + cancelar/sortear.
+window._drawingTid = null;
+window._drawBusyBtn = null;
+window._drawBtnDone = function() {
+  window._drawingTid = null;
+  var s = window._drawBusyBtn;
+  if (!s) return;
+  window._drawBusyBtn = null;
+  try { if (s.obs) s.obs.disconnect(); } catch (e) {}
+  try { window.removeEventListener('hashchange', window._drawBtnDone); } catch (e) {}
+  if (s.timer) { clearTimeout(s.timer); s.timer = null; }
+  var b = s.btn;
+  if (b && b.getAttribute('data-spinning') === '1' && document.body.contains(b)) {
+    b.innerHTML = s.original; b.disabled = false;
+    b.style.filter = s.f; b.style.cursor = s.c; b.style.opacity = s.o;
+    b.removeAttribute('data-spinning');
+  }
+};
+window._drawBtnBusy = function(btn, tId) {
+  if (tId != null) window._drawingTid = String(tId); // render mostra cinza mesmo se re-renderizar
+  if (!btn || btn.getAttribute('data-spinning') === '1') return;
+  if (window._drawBusyBtn) window._drawBusyBtn = null; // solta um anterior órfão (sem limpar _drawingTid)
+  var s = { btn: btn, original: btn.innerHTML, f: btn.style.filter, c: btn.style.cursor, o: btn.style.opacity, obs: null, timer: null };
+  btn.setAttribute('data-spinning', '1');
+  btn.disabled = true;
+  btn.style.filter = 'grayscale(0.9) brightness(0.82)';
+  btn.style.cursor = 'wait';
+  btn.style.opacity = '0.85';
+  btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>Sorteando…';
+  window._drawBusyBtn = s;
+  // Fim = primeira tela de solução no DOM (qualquer painel da cadeia de sorteio).
+  var _PANELS = /resolution-panel|groups-config-panel|reopen-panel|final-review-panel|presence-draw-choice|solo-manual-pair-panel|removal-subchoice-panel/;
+  if (typeof MutationObserver === 'function') {
+    s.obs = new MutationObserver(function(muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var a = muts[i].addedNodes || [];
+        for (var j = 0; j < a.length; j++) {
+          var n = a[j];
+          if (n && n.nodeType === 1 && _PANELS.test(n.id || '')) { window._drawBtnDone(); return; }
+        }
+      }
+    });
+    try { s.obs.observe(document.body, { childList: true }); } catch (e) {}
+  }
+  window.addEventListener('hashchange', window._drawBtnDone);
+  s.timer = setTimeout(window._drawBtnDone, 20000); // backstop: nunca trava
+};
+
+// v4.1.18: MESMA UX do Sortear pro botão Reabrir/Encerrar Inscrições. _togglingRegTid
+// (client-only, NUNCA salvo) mantém o botão cinza "Reabrindo…"/"Encerrando…" mesmo que o
+// detalhe re-renderize antes de concluir. FIM = 1ª tela de decisão (confirm/alert/painel
+// de resolução) OU o refresh pós-save (que chama _regBtnDone) OU backstop 20s.
+window._togglingRegTid = null;
+window._regBusyBtn = null;
+window._regBtnDone = function() {
+  window._togglingRegTid = null;
+  var s = window._regBusyBtn;
+  if (!s) return;
+  window._regBusyBtn = null;
+  try { if (s.obs) s.obs.disconnect(); } catch (e) {}
+  try { window.removeEventListener('hashchange', window._regBtnDone); } catch (e) {}
+  if (s.timer) { clearTimeout(s.timer); s.timer = null; }
+  var b = s.btn;
+  if (b && b.getAttribute('data-spinning') === '1' && document.body.contains(b)) {
+    b.innerHTML = s.original; b.disabled = false;
+    b.style.filter = s.f; b.style.cursor = s.c; b.style.opacity = s.o;
+    b.removeAttribute('data-spinning');
+  }
+};
+window._regBtnBusy = function(btn, tId, label) {
+  if (tId != null) window._togglingRegTid = String(tId); // render mostra cinza mesmo se re-renderizar
+  if (!btn || btn.getAttribute('data-spinning') === '1') return;
+  if (window._regBusyBtn) window._regBusyBtn = null;
+  var s = { btn: btn, original: btn.innerHTML, f: btn.style.filter, c: btn.style.cursor, o: btn.style.opacity, obs: null, timer: null };
+  btn.setAttribute('data-spinning', '1');
+  btn.disabled = true;
+  btn.style.filter = 'grayscale(0.9) brightness(0.82)';
+  btn.style.cursor = 'wait';
+  btn.style.opacity = '0.85';
+  btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>' + (label || 'Processando…');
+  window._regBusyBtn = s;
+  // Fim = 1ª tela de decisão (confirm/alert de reabrir, ou painel de resolução ao encerrar).
+  var _DONE = /resolution-panel|groups-config-panel|vagas-draw-panel|custom-confirm-dialog|custom-alert-dialog/;
+  if (typeof MutationObserver === 'function') {
+    s.obs = new MutationObserver(function(muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var a = muts[i].addedNodes || [];
+        for (var j = 0; j < a.length; j++) {
+          var n = a[j];
+          if (n && n.nodeType === 1 && _DONE.test(n.id || '')) { window._regBtnDone(); return; }
+        }
+      }
+    });
+    try { s.obs.observe(document.body, { childList: true }); } catch (e) {}
+  }
+  window.addEventListener('hashchange', window._regBtnDone);
+  s.timer = setTimeout(window._regBtnDone, 20000); // backstop: nunca trava
 };
 
 // Auto-close tournaments whose registration deadline has passed
@@ -4312,6 +4517,19 @@ window._entryTeamMembers = function (p) {
   return null;
 };
 
+// ⚠️ CANÔNICO — quantas PESSOAS numa LISTA de entradas (solo=1, dupla=2, time=nº de
+// membros). Pra contagem de inscritos do TORNEIO inteiro use window._countCompetitors(t)
+// (deduplica + soma espera). Este é pra SUBLISTAS (ex.: inscritos de UMA categoria).
+// NUNCA mostrar `arr.length` como "N inscritos" — dupla é 1 entrada mas 2 pessoas.
+// Ver project_count_people_not_entries.
+window._peopleInList = function (arr) {
+  if (!Array.isArray(arr)) return 0;
+  return arr.reduce(function (s, p) {
+    var m = window._entryTeamMembers ? window._entryTeamMembers(p) : null;
+    return s + (m && m.length ? m.length : 1);
+  }, 0);
+};
+
 // ─── IDENTIDADE = uid; NOME = puxado do perfil AO VIVO (sem guardar, sem self-heal) ──────
 // Diretriz do dono (jun/2026): "o usuário se inscreve e o uid fica vinculado ao torneio. nada
 // de pname, name, email, celular. juntou em dupla é uid+uid. carregar torneio pra visualizar:
@@ -4487,6 +4705,283 @@ window.AppStore = {
       }
       return false;
     }
+  },
+
+  // ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) ──────────────
+  // Persiste uma mutação de torneio ATOMICAMENTE, via transação. Substitui o
+  // syncImmediate (que grava o doc INTEIRO da `t` local em memória via merge, e
+  // por isso perde write quando dois caminhos concorrem — o último sobrescreve o
+  // outro com valores velhos). Aqui `mutatorFn` é RE-APLICADO sobre o estado
+  // FRESCO lido dentro da transação, então nenhum write concorrente se perde. A
+  // `t` local já costuma ter sido mutada otimisticamente pelo chamador (UI imediata);
+  // o onSnapshot reconcilia o estado autoritativo, igual ao syncImmediate. NÃO faz
+  // fallback pra syncImmediate em erro (reintroduziria o lost-update) — só reporta.
+  // É o primitivo reusável pela campanha inteira de blindagem.
+  async commitTournamentTx(tournamentId, mutatorFn) {
+    if (!window.FirestoreDB || typeof window.FirestoreDB.mutateTournament !== 'function') {
+      window._error('commitTournamentTx: mutateTournament indisponível');
+      return false;
+    }
+    var _t = this.tournaments.find(function (tour) { return String(tour.id) === String(tournamentId); });
+    try {
+      await window.FirestoreDB.mutateTournament(tournamentId, function (freshT) {
+        // O mutator pode ABORTAR retornando `false` (ex.: guarda de idempotência —
+        // outro caminho já aplicou a mudança no fresco). Nesse caso NÃO gravamos
+        // (mutateTournament vê o `false` e não faz o set). Propagamos o `false`
+        // pra frente pra não tocar updatedAt de um doc que não vamos escrever.
+        if (mutatorFn(freshT) === false) return false;
+        freshT.updatedAt = new Date().toISOString();
+      });
+      if (_t) _t.updatedAt = new Date().toISOString();
+      this._saveToCache();
+      return true;
+    } catch (err) {
+      window._error('commitTournamentTx: FALHOU ao salvar ' + tournamentId, err);
+      if (typeof window._captureException === 'function') {
+        window._captureException(err, { area: 'commitTournamentTx', tournamentId: tournamentId, code: err && err.code });
+      }
+      var _diagMsg = '';
+      try {
+        var _code = (err && err.code) || '';
+        var _msg = (err && err.message) || String(err);
+        _diagMsg = (_code ? '[' + _code + '] ' : '') + _msg.substring(0, 200);
+        window._lastSaveError = { tournamentId: tournamentId, code: _code, message: _msg, at: new Date().toISOString() };
+      } catch (e3) { _diagMsg = String(err); }
+      if (typeof showNotification === 'function') {
+        showNotification(window._t('store.saveError'), _diagMsg, 'error');
+      }
+      return false;
+    }
+  },
+
+  // ── PORTÃO ÚNICO DE ESCRITA SEGURA (project_concurrency_safe_saves) ─────────
+  // A forma CANÔNICA de mudar+gravar um torneio: "mudou algo → já gravou seguro
+  // contra corrida", por construção. Aplica `mutatorFn` (1) no objeto LOCAL (UI
+  // otimista imediata) e (2) ATOMICAMENTE sobre o estado FRESCO via commitTournamentTx
+  // (transação que re-executa em conflito). O onSnapshot reconcilia o autoritativo.
+  // TODO write de torneio deve passar por AQUI — NUNCA saveTournament(doc inteiro) /
+  // syncImmediate / set(merge) cru (esses são o anti-padrão de lost-update).
+  // `mutatorFn(t)` deve expressar a MUDANÇA (setar campo, mexer numa lista, avançar
+  // fase), porque é re-executada sobre o estado fresco. Pra "adicionar à lista" ou
+  // "somar +1", prefira arrayUnion/increment (atômicos nativos) dentro do mutator.
+  // `logMessage` (opcional) vira entrada de histórico persistida na transação.
+  async mutate(tournamentId, mutatorFn, logMessage) {
+    var _t = this.tournaments.find(function (tour) { return String(tour.id) === String(tournamentId); });
+    if (_t) { try { mutatorFn(_t); } catch (e) { window._error('mutate: mutator local falhou', e); } }
+    return this.commitTournamentTx(tournamentId, function (freshT) {
+      mutatorFn(freshT);
+      if (logMessage) {
+        if (!Array.isArray(freshT.history)) freshT.history = [];
+        freshT.history.push({ date: new Date().toISOString(), message: logMessage });
+      }
+    });
+  },
+
+  // Persiste um RESULTADO de partida (caminho não-deferido de _saveResultInline)
+  // re-aplicando window._applyResultToTournament sobre o estado fresco. `logMessage`
+  // (opcional) é anexado ao freshT.history DENTRO da transação — o logAction local
+  // do chamador é só pro estado imediato; a persistência do histórico é aqui (senão
+  // a entrada some, já que o save é re-aplicado no fresco, não no doc local inteiro).
+  async commitResultTx(tournamentId, matchId, payload, logMessage) {
+    var r = await this.commitTournamentTx(tournamentId, function (freshT) {
+      window._applyResultToTournament(freshT, matchId, payload);
+      if (logMessage) {
+        if (!Array.isArray(freshT.history)) freshT.history = [];
+        freshT.history.push({ date: new Date().toISOString(), message: logMessage });
+      }
+    });
+    // 4.1 DUAL-WRITE (project_match_result_docs, inc 3a): espelha o resultado no doc
+    // do jogo (tournaments/{id}/results/{matchId}). ADDITIVE — o doc do torneio segue
+    // autoritativo na leitura; a virada pra subdoc-only é a Fase B. Best-effort: falha
+    // aqui NUNCA derruba o save principal (o resultado já persistiu no doc do torneio).
+    try { await this._dualWriteMatchResult(tournamentId, matchId); } catch (e) { if (window._error) window._error('dualWriteMatchResult', e); }
+    return r;
+  },
+
+  // Espelha os campos de resultado do match LOCAL (já aplicado otimista pelo caller)
+  // no doc de resultado próprio do jogo. ESPELHO COMPLETO: o subdoc passa a refletir
+  // EXATAMENTE os campos de resultado do match — presente+definido → grava; ausente
+  // ou undefined → REMOVE do subdoc (cobre refazer/reset/contestar, que apagam ou
+  // trocam campos; senão o subdoc guardaria um vencedor/placar velho). Seed do
+  // playerUids se ainda não veio (caminho de confiança = org/sorteio).
+  async _dualWriteMatchResult(tournamentId, matchId) {
+    var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
+    if (!t) return;
+    var m = (typeof window._findMatch === 'function') ? window._findMatch(t, matchId) : null;
+    if (!m) {
+      var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+      for (var i = 0; i < all.length; i++) { if (all[i] && String(all[i].id) === String(matchId)) { m = all[i]; break; } }
+    }
+    if (!m) return;
+    var puids = this._matchPlayerUids(t, m);
+    var self = this;
+    await this.commitMatchResult(tournamentId, matchId, function (res) {
+      self._matchResultFields.forEach(function (k) {
+        if (Object.prototype.hasOwnProperty.call(m, k) && m[k] !== undefined) res[k] = m[k];
+        else delete res[k];
+      });
+      if (puids.length && !(res.playerUids && res.playerUids.length)) res.playerUids = puids;
+    }, { silent: true });
+    // 4.1 RE-SEED NO AVANÇO (inc 3a): se este jogo DECIDIU um vencedor, o
+    // _advanceWinner já rearranjou o p1/p2 dos jogos DOWNSTREAM (próximo/chave
+    // inferior/perdedor) na ESTRUTURA local → o roster (playerUids) do subdoc
+    // deles ficou velho. Re-semeia o roster de cada um a partir da estrutura
+    // ATUAL. Só admin consegue mexer em playerUids (regra) → org/local funciona;
+    // mata-mata disparado por PARTICIPANTE toma permission-denied silencioso e
+    // fica pra CF do inc 3b (caminho de confiança). Best-effort.
+    if (m.winner) {
+      var downstream = [];
+      [m.nextMatchId, m.loserMatchId, m.loserNextMatchId].forEach(function (id) {
+        if (id != null && id !== '' && downstream.indexOf(String(id)) === -1) downstream.push(String(id));
+      });
+      for (var i = 0; i < downstream.length; i++) {
+        try { await this.reseedMatchRoster(tournamentId, downstream[i]); } catch (e) {}
+      }
+    }
+  },
+
+  // Re-escreve SÓ o playerUids (roster) de um jogo a partir da ESTRUTURA atual,
+  // FORÇANDO overwrite (o dual-write só semeia quando vazio; aqui o slot TBD virou
+  // um jogador de verdade no avanço, então precisa sobrescrever). Preserva os demais
+  // campos do subdoc (set-sem-merge reescreve o `res` fresco, mexendo só em playerUids).
+  // Admin-only na regra (best-effort silencioso; participant-driven fica pra CF).
+  async reseedMatchRoster(tournamentId, matchId) {
+    var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
+    if (!t) return;
+    var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+    var m = null;
+    for (var i = 0; i < all.length; i++) { if (all[i] && String(all[i].id) === String(matchId)) { m = all[i]; break; } }
+    if (!m) return;
+    var puids = this._matchPlayerUids(t, m);
+    await this.commitMatchResult(tournamentId, String(matchId), function (res) {
+      res.playerUids = puids; // roster do jogo (admin-only na regra)
+    }, { silent: true });
+  },
+
+  // Persiste o SORTEIO INICIAL (a transição enrollment→bracket, generateDrawFunction).
+  // Caso ESPECIAL da campanha: a chave é gerada UMA vez local com SHUFFLE aleatório —
+  // re-gerar sobre o fresco daria OUTRA chave. Então NÃO re-executamos o sorteio no
+  // fresco; aplicamos o DELTA já computado (`changed` = campos que o sorteio mudou,
+  // `deleted` = campos que removeu), preservando qualquer edição concorrente aos demais
+  // campos do doc fresco. Guarda de IDEMPOTÊNCIA: se um sorteio CONCORRENTE já virou este
+  // torneio (que estava sem chave) em bracket ativo, ABORTA — não clobbera a chave dele
+  // com a nossa (evita duplo-sorteio de dois organizadores clicando "Sortear" juntos).
+  // project_concurrency_safe_saves. `opts.newHistory` é anexado (append, preserva
+  // entradas concorrentes) em vez de clobbar t.history inteiro pelo diff.
+  async commitDrawTx(tournamentId, changed, deleted, opts) {
+    return this.commitTournamentTx(tournamentId, function (freshT) {
+      // Mesma função PURA usada pelo teste de concorrência no emulador (bracket-logic.js).
+      return window._applyDrawDeltaToTournament(freshT, changed, deleted, opts);
+    });
+  },
+
+  // ── PLACAR POR JOGO EM DOC PRÓPRIO (project_match_result_docs, linha 4.1) ──────
+  // Camada store sobre FirestoreDB.mutateMatchResult. Cada jogo grava seu resultado
+  // no doc tournaments/{tId}/results/{matchId} → escrever placares de jogos DIFERENTES
+  // nunca disputa (isolamento). A trava contra corrida DENTRO do jogo é a transação.
+  // INERTE até o incremento 3 (nenhum path de resultado grava subdoc ainda) → pros
+  // torneios atuais t._results fica vazio e o overlay é no-op (zero mudança).
+
+  // Campos de RESULTADO que vivem no subdoc (o resto do match = ESTRUTURA, fica no
+  // doc do torneio). Sobrepõe esses campos do subdoc no objeto match da estrutura.
+  _matchResultFields: ['scoreP1', 'scoreP2', 'winner', 'draw', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'resultAt', 'startedAt', 'pendingResult', 'wo', 'woAbsent', 'woAbsentSide'],
+  _overlayResultOnMatch: function (m, result) {
+    if (!m || !result || typeof result !== 'object') return;
+    var F = this._matchResultFields;
+    for (var i = 0; i < F.length; i++) { if (Object.prototype.hasOwnProperty.call(result, F[i])) m[F[i]] = result[F[i]]; }
+  },
+
+  // Hidrata t._results da subcoleção `results` e sobrepõe nos objetos match da
+  // estrutura. Chamar ao entrar no bracket/detalhe (wiring vem no inc 2b/3).
+  async hydrateMatchResults(tournamentId) {
+    var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
+    if (!t || !window.FirestoreDB || typeof window.FirestoreDB.loadMatchResults !== 'function') return;
+    try {
+      var map = await window.FirestoreDB.loadMatchResults(tournamentId);
+      t._results = map || {};
+      var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+      var self = this;
+      all.forEach(function (m) { if (m && m.id != null && t._results[m.id]) self._overlayResultOnMatch(m, t._results[m.id]); });
+      this._saveToCache();
+    } catch (e) { if (window._error) window._error('hydrateMatchResults ' + tournamentId, e); }
+  },
+
+  // Grava o resultado de UM jogo no doc próprio (transação, sem lost-update) +
+  // aplicação otimista local (t._results[matchId] + overlay no match). `mutatorFn`
+  // é re-executado sobre o subdoc fresco na transação (idempotente/retry-safe).
+  // `opts.silent` = NÃO mostra toast de erro ao usuário (para os writes best-effort
+  // do dual-write/seed: o doc do torneio é autoritativo, uma falha aqui é inofensiva
+  // — ex.: torneio legado sem roster semeado → participante toma permission-denied
+  // no subdoc; não pode virar toast "Erro ao salvar" já que o save real deu certo).
+  async commitMatchResult(tournamentId, matchId, mutatorFn, opts) {
+    var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
+    if (t) {
+      if (!t._results) t._results = {};
+      if (!t._results[matchId]) t._results[matchId] = { matchId: String(matchId) };
+      try { mutatorFn(t._results[matchId]); } catch (e) { if (window._error) window._error('commitMatchResult local', e); }
+      var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+      for (var i = 0; i < all.length; i++) { if (all[i] && String(all[i].id) === String(matchId)) { this._overlayResultOnMatch(all[i], t._results[matchId]); break; } }
+    }
+    if (!window.FirestoreDB || typeof window.FirestoreDB.mutateMatchResult !== 'function') return false;
+    try {
+      await window.FirestoreDB.mutateMatchResult(tournamentId, matchId, mutatorFn);
+      this._saveToCache();
+      return true;
+    } catch (e) {
+      if (window._error) window._error('commitMatchResult FALHOU ' + tournamentId + '/' + matchId, e);
+      if (!(opts && opts.silent) && typeof showNotification === 'function') { try { showNotification(window._t('store.saveError'), (e && (e.code || e.message)) || '', 'error'); } catch (e2) {} }
+      return false;
+    }
+  },
+
+  // Resolve os UIDS dos dois lados de um jogo (p1/p2, incluindo dupla "A / B") →
+  // usado como `playerUids` do doc de resultado (a regra do Firestore libera a
+  // escrita do participante DAQUELE jogo por este roster). Caminho de confiança:
+  // quem escreve o roster é o SORTEIO/AVANÇO (admin), nunca o participante.
+  _matchPlayerUids: function (t, m) {
+    if (!t || !m) return [];
+    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    var _uidsOf = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
+    var seen = {};
+    ['p1', 'p2'].forEach(function (side) {
+      var entry = m[side];
+      if (!entry || entry === 'TBD' || entry === 'BYE') return;
+      // 1) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
+      var p = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === entry; });
+      if (p) { _uidsOf(p).forEach(function (u) { if (u) seen[u] = 1; }); return; }
+      // 2) fallback: dupla cujo slot mostra "A / B" mas cada membro é participante solo
+      var members = entry.indexOf('/') !== -1 ? entry.split('/').map(function (n) { return n.trim(); }) : [entry];
+      members.forEach(function (nm) {
+        var mp = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === nm; });
+        if (mp) _uidsOf(mp).forEach(function (u) { if (u) seen[u] = 1; });
+      });
+    });
+    return Object.keys(seen);
+  },
+
+  // Semeia os docs de resultado (subcoleção results) a partir da ESTRUTURA atual:
+  // pra cada jogo, grava { playerUids, + campos de resultado que já existirem no
+  // match }. Roda como ADMIN (organizador) — é o caminho de confiança que seta o
+  // roster. Chamada após o sorteio e no avanço (o próximo jogo ganha os uids novos).
+  // Best-effort por jogo (uma falha não derruba os outros).
+  async seedMatchResultDocs(tournamentId) {
+    var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
+    if (!t) return { ok: false, reason: 'no-tournament' };
+    var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+    var self = this, count = 0, failed = 0;
+    for (var i = 0; i < all.length; i++) {
+      var m = all[i];
+      if (!m || m.id == null || m.id === '') continue;
+      var puids = this._matchPlayerUids(t, m);
+      var applied = await this.commitMatchResult(tournamentId, String(m.id), (function (mm, pu) {
+        return function (res) {
+          self._matchResultFields.forEach(function (k) { if (Object.prototype.hasOwnProperty.call(mm, k)) res[k] = mm[k]; });
+          res.playerUids = pu; // roster do jogo (admin-only na regra)
+        };
+      })(m, puids), { silent: true });
+      if (applied) count++; else failed++;
+    }
+    return { ok: failed === 0, count: count, failed: failed };
   },
 
   // Start real-time listener — auto-updates tournaments on any Firestore change
@@ -6078,6 +6573,30 @@ window._renderPodiumsAndClassif = function (t) {
     : (Array.isArray(t.matches) ? t.matches : []);
   var tierKeys = window._classifTierKeys(fpMatches);
   var hasGF = (fp.grandFinal !== false) && fpMatches.some(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner && !m.isBye; });
+
+  // ── DUPLA ELIMINATÓRIA → UM pódio + UMA classificação (nunca "Linha 1/2/3"). A Chave
+  //    Superior e a Inferior CONVERGEM na Grande Final: é um ranking só. Ordem canônica (dono):
+  //    1º venc. Grande Final, 2º perd. Grande Final, 3º perd. da Final da Chave Inferior, e daí
+  //    pra trás pela rodada/chave onde caiu + desempate. Reusa _updateDuplaElimClassification
+  //    (mesma lógica do bracket), escopada aos matches DESTA fase (fpMatches). Preempta o
+  //    caminho por-linha ANTES dele rodar — por isso nunca aparece "Linha N" na dupla elim.
+  var _deHasGrand = fpMatches.some(function (m) { return (m.bracket || '') === 'grand'; });
+  var _deHasLower = fpMatches.some(function (m) { return (m.bracket || '') === 'lower'; });
+  if (_deHasGrand && _deHasLower && typeof window._updateDuplaElimClassification === 'function') {
+    var _deFaux = { matches: fpMatches, tiebreakers: t && t.tiebreakers, swissEliminated: t && t.swissEliminated, swissStandings: t && t.swissStandings };
+    try { window._updateDuplaElimClassification(_deFaux); } catch (e) {}
+    var _deMap = _deFaux.classification || {};
+    var _deGF = fpMatches.filter(function (m) { return (m.bracket || '') === 'grand' && m.winner && m.winner !== 'draw' && !m.isBye; })[0];
+    var _dePod = '';
+    if (_deGF && typeof window._buildPodiumHtml === 'function') {
+      var _d1 = _deGF.winner, _d2 = (_deGF.winner === _deGF.p1) ? _deGF.p2 : _deGF.p1;
+      if (_d2 === 'TBD' || _d2 === 'BYE') _d2 = null;
+      var _d3 = Object.keys(_deMap).filter(function (n) { return _deMap[n] === 3; })[0] || null; // 3º = perdedor da Final Inferior
+      _dePod = window._buildPodiumHtml(_d1, _d2, _d3);
+    }
+    var _deCls = Object.keys(_deMap).length ? window._renderClassifBlock(t, _deMap, { label: '📊 Classificação geral', color: '#fbbf24', open: false }) : '';
+    if (_dePod || _deCls) return _dePod + _deCls;
+  }
 
   // ── LINHAS SEPARADAS (2+ sem grande final) → pódio + classificação POR LINHA ──
   if (tierKeys.length >= 2 && !hasGF) {

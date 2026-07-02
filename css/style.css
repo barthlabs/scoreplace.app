@@ -458,6 +458,15 @@ html {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Scroll FIXO e ESTÁVEL em re-render (regra do dono): o app restaura o scroll
+ * explicitamente (soft-refresh/_autoKeepScroll/_rerenderBracket). O scroll
+ * anchoring NATIVO do browser ajusta o scroll por conta própria quando o DOM
+ * acima do viewport muda → briga com os restores e gera "pulinho" de ~1 linha
+ * a cada clique que re-renderiza. Desligado: só o app mexe no scroll. */
+html {
+  overflow-anchor: none;
+}
+
 body, .topbar, .card {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }

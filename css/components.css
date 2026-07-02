@@ -462,6 +462,10 @@ button[style*="linear-gradient"]:not(.btn):active {
 .btn-whatsapp  { background: #25D366; }
 .btn-whatsapp:hover { background: #1da851; box-shadow: 0 4px 14px rgba(37,211,102,0.35); }
 
+/* Placar AO VIVO — LARANJA (v4.1.20), distinto do vermelho do W.O. e do âmbar do Sortear. */
+.btn-live      { background: #f97316; color: #fff; }
+.btn-live:hover    { background: #ea580c; box-shadow: 0 4px 14px rgba(249,115,22,0.35); }
+
 /* --- Variantes Secundárias (SÓLIDAS — usam variáveis de tema) --- */
 .btn-secondary {
   background: var(--btn-secondary-bg, #1e3a5f);

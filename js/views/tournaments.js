@@ -1,6 +1,62 @@
 // Dynamically update stat-boxes after participant/waitlist changes
 var _t = window._t || function(k) { return k; };
 
+// v4.0.90 — CORE de placeholders no TOP-LEVEL (carrega sempre, não no lazy-init de
+// renderTournaments) pra a page-route #participantes/<tId> funcionar inclusive em
+// deep-link/cold-load. Recebe a quantidade direto (sem prompt). Fonte ÚNICA usada pelo
+// botão legado (addPlaceholdersFunction) E pela página consolidada. onDone opcional.
+window._addPlaceholdersCore = function (id, qtd, onDone) {
+    qtd = parseInt(qtd, 10);
+    if (isNaN(qtd) || qtd <= 0) { showNotification('Número inválido', 'Informe um número maior que zero.', 'warning'); return; }
+    if (qtd > 200) qtd = 200;
+    var t = window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === id.toString(); });
+    if (!t) return;
+    if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
+    var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
+    // coleta TODOS os nomes individuais já usados (inclusive embutidos em duplas e jogos)
+    // e numera a partir do MAIOR número existente — evita recriar "Jogador 19" duplicado.
+    var existingNames = {};
+    var _addName = function (n) {
+        if (!n) return;
+        String(n).split(' / ').forEach(function (part) { var pn = part.trim(); if (pn) existingNames[pn] = true; });
+    };
+    (t.participants || []).concat(t.standbyParticipants || [], t.waitlist || []).forEach(function (p) {
+        _addName(typeof p === 'string' ? p : (p && (p.displayName || p.name)));
+    });
+    var _allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+    (_allM || []).forEach(function (m) { if (m) { _addName(m.p1); _addName(m.p2); } });
+    var maxNum = 0;
+    Object.keys(existingNames).forEach(function (nm) {
+        var mt = nm.match(/^(?:Jogador|Placeholder)\s+(\d+)$/i);
+        if (mt) { var v = parseInt(mt[1], 10); if (v > maxNum) maxNum = v; }
+    });
+    var made = [];
+    var k = maxNum;
+    for (var i = 0; i < qtd; i++) {
+        var numStr, nm;
+        do { k++; numStr = String(k).padStart(2, '0'); nm = 'Jogador ' + numStr; } while (existingNames[nm]);
+        existingNames[nm] = true;
+        made.push({ name: nm, displayName: nm, email: 'jogador' + numStr + '@scoreplace.app', uid: 'jog_' + numStr + '_' + Date.now() + '_' + i, isPlaceholder: true });
+    }
+    var dest;
+    if (hasDraw) {
+        if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+        t.standbyParticipants = t.standbyParticipants.concat(made);
+        dest = 'lista de espera';
+    } else {
+        t.participants = t.participants.concat(made);
+        dest = 'inscritos';
+    }
+    if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
+    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t).then(function () {
+            showNotification('Placeholders adicionados', qtd + ' placeholder(s) em ' + dest + '.', 'success');
+        }).catch(function (err) { if (window._error) window._error('Erro ao salvar placeholders:', err); showNotification('Erro', 'Não foi possível salvar.', 'error'); });
+    }
+    if (typeof onDone === 'function') { onDone(); }
+    else { var container = document.getElementById('view-container'); if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); } }
+};
+
 // v2.7.32: handlers de ação do inscrito (remover/split) definidos no NÍVEL DO MÓDULO
 // — antes só eram criados dentro de renderTournaments, então abrir a página de
 // Inscritos DIRETO (reload / rota direta, sem passar pelo detalhe) deixava
@@ -57,24 +113,54 @@ window.splitParticipantFunction = function (tId, participantName) {
         _t('tourn.splitTeamMsg'),
         () => {
             const t = window._findTournamentById(tId);
-            if (t && t.participants) {
-                let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-                var idx = arr.findIndex(function(p) { return window._pName(p) === participantName; });
-                if (idx === -1) return;
-                const pStr = window._pName(arr[idx]);
-                if (pStr.includes('/')) {
-                    const parts = pStr.split('/').map(s => s.trim());
-                    arr.splice(idx, 1);
-                    arr.splice(idx, 0, ...parts);
-                    t.participants = arr;
-                    if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
-                    else if (typeof window.AppStore.sync === 'function') window.AppStore.sync();
-                    const container = document.getElementById('view-container');
-                    if (container) {
-                        if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
-                        else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
-                    }
+            if (!t || !t.participants) return;
+            let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+            var idx = arr.findIndex(function(p) { return window._pName(p) === participantName; });
+            if (idx === -1) return;
+            var entry = arr[idx];
+            // IDENTIDADE = uid. Desfaz a dupla pela ESTRUTURA (slots p1/p2 ou participants[]),
+            // NUNCA pela barra do nome. Cada pessoa vira um slot próprio carregando o SEU uid —
+            // nome/email são só fallback (o perfil é puxado ao vivo pelo uid). Ver
+            // project_dupla_entry_structural_not_slash + project_uid_primary_identity.
+            var slots = [];
+            var mkSlot = function(uid, name, email) {
+                var o = {};
+                if (uid) o.uid = uid;                                 // identidade primária
+                if (name) { o.name = name; o.displayName = name; }    // fallback (informal/cache frio)
+                if (email) o.email = email;
+                return (o.uid || o.name) ? o : null;
+            };
+            if (entry && typeof entry === 'object' && Array.isArray(entry.participants) && entry.participants.length) {
+                entry.participants.forEach(function(s) {
+                    if (s && typeof s === 'object') { var o = mkSlot(s.uid, s.displayName || s.name, s.email); if (o) slots.push(o); }
+                    else if (s) { var o2 = mkSlot(null, String(s), null); if (o2) slots.push(o2); }
+                });
+            } else if (entry && typeof entry === 'object' && (entry.p1Uid || entry.p2Uid || (entry.p1Name && entry.p2Name))) {
+                var s1 = mkSlot(entry.p1Uid, entry.p1Name, entry.p1Email);
+                var s2 = mkSlot(entry.p2Uid, entry.p2Name, entry.p2Email);
+                if (s1) slots.push(s1);
+                if (s2) slots.push(s2);
+            } else {
+                return; // não é dupla/time — nada a desfazer
+            }
+            if (slots.length < 2) return;
+            arr.splice(idx, 1);
+            Array.prototype.splice.apply(arr, [idx, 0].concat(slots));
+            t.participants = arr;
+            // limpa a memória de origem da dupla desfeita (evita "formada" fantasma no teamOrigins)
+            try {
+                if (t.teamOrigins && typeof t.teamOrigins === 'object') {
+                    delete t.teamOrigins[participantName];
+                    var _lbl = window._entryDisplayName ? window._entryDisplayName(entry) : null;
+                    if (_lbl) delete t.teamOrigins[_lbl];
                 }
+            } catch (_e) {}
+            if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+            else if (typeof window.AppStore.sync === 'function') window.AppStore.sync();
+            const container = document.getElementById('view-container');
+            if (container) {
+                if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
+                else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
             }
         },
         null,
@@ -327,20 +413,20 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
     '<div style="flex:1;text-align:center;min-width:0;margin-top:-4px;">' +
       '<div style="font-size:2rem;line-height:1;">🥈</div>' +
       _block(p2, '#cbd5e1', '700', 24, 17, 9, 52) +
-      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">' + _sh(sub2) + '</div>' +
+      '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:3px;">' + _sh(sub2) + '</div>' +
     '</div>'
   ) : '';
   var third = p3 ? (
     '<div style="flex:1;text-align:center;min-width:0;margin-top:18px;">' +
       '<div style="font-size:1.7rem;line-height:1;">🥉</div>' +
       _block(p3, '#cd7f32', '700', 24, 16, 9, 50) +
-      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">' + _sh(sub3) + '</div>' +
+      '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:3px;">' + _sh(sub3) + '</div>' +
     '</div>'
   ) : '';
   var bottomRow = (second || third)
     ? ('<div style="display:flex;gap:1rem;justify-content:center;align-items:flex-start;">' + second + third + '</div>')
     : '';
-  var html = '<div style="text-align:center;margin:0 0 1.25rem 0;padding:1.5rem 1.25rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:16px;">' +
+  var html = '<div style="text-align:center;margin:0 0 1.25rem 0;padding:1.5rem 1.25rem;background:linear-gradient(135deg,rgba(15,23,42,0.9),rgba(30,41,59,0.86));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(251,191,36,0.45);border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,0.35);">' +
     '<div style="font-size:1.35rem;font-weight:700;margin-bottom:1.1rem;color:#fff;">' + _sh(title) + '</div>' +
     '<div style="text-align:center;margin-bottom:1.1rem;">' +
       '<div style="font-size:3rem;line-height:1;">🥇</div>' +
@@ -1046,9 +1132,16 @@ function renderTournaments(container, tournamentId = null) {
         });
     };
 
-    window._handleSortearClick = function (tId, isAberto) {
+    // v4.0.100: skipGates = re-entrada (ex.: o painel sem-dupla resolveu e re-chama o
+    // handler) — PULA o gate "Encerrar Inscrições?" / escolha de presença, que já foram
+    // mostrados na 1ª passada. Sem isso, o diálogo aparecia 2× (Sortear + confirmar espera).
+    window._handleSortearClick = function (tId, isAberto, skipGates) {
         window._lastActiveTournamentId = tId;
         var _startDraw = function() {
+            // v4.0.88: "carregando…" enquanto o sorteio processa (save async + diagnóstico)
+            // até a tela de resultado (sem-dupla / resto / pow2 / chave) chegar. Some sozinho
+            // via MutationObserver/hashchange (ver _showLoading no store.js).
+            if (typeof window._showLoading === 'function') window._showLoading('Preparando sorteio…');
             // Auto-mover solos para waitlist em torneios de duplas
             var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
             // v4.0.53: solos sem dupla → resolução CONSCIENTE antes do sorteio
@@ -1124,11 +1217,11 @@ function renderTournaments(container, tournamentId = null) {
         // diálogo "encerrar prematuramente"; sorteia direto SEM setar 'closed'.
         var _tSort = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
         var _lateMode = !!(_tSort && (_tSort.lateEnrollment === 'standby' || _tSort.lateEnrollment === 'expand'));
-        if (isAberto && _lateMode) {
+        if (!skipGates && isAberto && _lateMode) {
             // v2.2.39: inscrições seguem abertas após o sorteio — perguntar se
             // sorteia com todos (antes da chamada) ou só entre os presentes.
             window._showPresenceDrawChoice(tId, _startDraw);
-        } else if (isAberto) {
+        } else if (!skipGates && isAberto) {
             showConfirmDialog(
                 _t('org.closeRegConfirmTitle'),
                 _t('org.closeRegConfirmMsg'),
@@ -1136,6 +1229,10 @@ function renderTournaments(container, tournamentId = null) {
                     const t = window._findTournamentById(tId);
                     if (t) {
                         t.status = 'closed';
+                        // config "Fechadas": fecha as inscrições ENQUANTO decide o sorteio,
+                        // mas marca pra REABRIR se o organizador cancelar sem sortear
+                        // (_cancelDrawResolution reabre; _commitInitialDraw limpa ao sortear).
+                        t._reopenIfDrawCancelled = true;
                         if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
                             window.FirestoreDB.saveTournament(t).then(function() {
                                 _startDraw();
@@ -1149,7 +1246,9 @@ function renderTournaments(container, tournamentId = null) {
                         }
                     }
                 },
-                null,
+                // "Manter Aberto" (cancelar o confirm): restaura o botão Sortear (tira o
+                // cinza "Sorteando…") — não há painel de solução por vir.
+                function() { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); },
                 { type: 'warning', confirmText: _t('btn.finishAndDraw'), cancelText: _t('btn.keepOpen') }
             );
         } else {
@@ -1339,56 +1438,7 @@ function renderTournaments(container, tournamentId = null) {
             if (raw === null) return;
             var qtd = parseInt(raw, 10);
             if (isNaN(qtd) || qtd <= 0) { showNotification('Número inválido', 'Informe um número maior que zero.', 'warning'); return; }
-            if (qtd > 200) qtd = 200;
-            var t = window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === id.toString(); });
-            if (!t) return;
-            if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
-            var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-            // v2.1.34: coleta TODOS os nomes individuais já usados — inclusive os
-            // embutidos em duplas ("Placeholder 19 / Placeholder 08") e nos jogos do
-            // bracket — e numera a partir do MAIOR número existente. Antes o contador
-            // por length quebrava quando placeholders viravam duplas (o nome individual
-            // sumia das listas), recriando "Placeholder 19" em levas diferentes.
-            var existingNames = {};
-            var _addName = function (n) {
-                if (!n) return;
-                String(n).split(' / ').forEach(function (part) { var pn = part.trim(); if (pn) existingNames[pn] = true; });
-            };
-            (t.participants || []).concat(t.standbyParticipants || [], t.waitlist || []).forEach(function (p) {
-                _addName(typeof p === 'string' ? p : (p && (p.displayName || p.name)));
-            });
-            var _allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
-            (_allM || []).forEach(function (m) { if (m) { _addName(m.p1); _addName(m.p2); } });
-            var maxNum = 0;
-            Object.keys(existingNames).forEach(function (nm) {
-                var mt = nm.match(/^(?:Jogador|Placeholder)\s+(\d+)$/i);
-                if (mt) { var v = parseInt(mt[1], 10); if (v > maxNum) maxNum = v; }
-            });
-            var made = [];
-            var k = maxNum;
-            for (var i = 0; i < qtd; i++) {
-                var numStr, nm;
-                do { k++; numStr = String(k).padStart(2, '0'); nm = 'Jogador ' + numStr; } while (existingNames[nm]);
-                existingNames[nm] = true;
-                made.push({ name: nm, displayName: nm, email: 'jogador' + numStr + '@scoreplace.app', uid: 'jog_' + numStr + '_' + Date.now() + '_' + i, isPlaceholder: true });
-            }
-            var dest;
-            if (hasDraw) {
-                if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-                t.standbyParticipants = t.standbyParticipants.concat(made);
-                dest = 'lista de espera';
-            } else {
-                t.participants = t.participants.concat(made);
-                dest = 'inscritos';
-            }
-            if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
-            if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-                window.FirestoreDB.saveTournament(t).then(function () {
-                    showNotification('Placeholders adicionados', qtd + ' placeholder(s) em ' + dest + '.', 'success');
-                }).catch(function (err) { if (window._error) window._error('Erro ao salvar placeholders:', err); showNotification('Erro', 'Não foi possível salvar.', 'error'); });
-            }
-            var container = document.getElementById('view-container');
-            if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); }
+            window._addPlaceholdersCore(id, qtd); // core definido no top-level do módulo (v4.0.90)
         };
         window.addPlaceholdersFunctionSetup = true;
     }
@@ -1611,7 +1661,7 @@ function renderTournaments(container, tournamentId = null) {
         else if (t.enrollmentMode === 'time') enrollmentText = _t('enroll.modeTeam');
         else if (t.enrollmentMode === 'misto') enrollmentText = _t('enroll.modeMixed');
 
-        const sortearOnClick = `event.stopPropagation(); window._handleSortearClick('${t.id}', ${isAberto})`;
+        const sortearOnClick = `event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._handleSortearClick('${t.id}', ${isAberto})`;
 
         let isParticipating = false;
         if (t.participants && window.AppStore.currentUser) {
@@ -1893,10 +1943,11 @@ function renderTournaments(container, tournamentId = null) {
         // addPlaceholdersFunction já roteiam pra lista de espera quando o sorteio
         // já saiu. +Time continua só antes do sorteio (o fluxo de time não trata
         // lista de espera).
+        // v4.0.90: "+ Participante" e "Placeholders" consolidados na page-route
+        // #participantes/<tId> (campo nome + Adicionar · campo placeholders + Adicionar).
         const addParticipantBtns = isOrg ? `
-             ${((allowsIndividual || isDoublesMode) && isAberto) ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.addParticipantFunction('${t.id}')">👤 + Participante</button>` : ''}
+             ${isAberto ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.location.hash='#participantes/${t.id}'">👤 + Participante</button>` : ''}
              ${((allowsTeams && !isDoublesMode) && !sorteioRealizado) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
-             ${isAberto ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window.addPlaceholdersFunction('${t.id}')">➕ Placeholders</button>` : ''}
         ` : '';
 
         // Categorias button removed — category management is now inline in "Inscritos Confirmados"
@@ -1926,7 +1977,14 @@ function renderTournaments(container, tournamentId = null) {
         // v2.1.0: mostra o botão Encerrar/Reabrir também APÓS o sorteio quando as
         // inscrições tardias estão ativas (lateEnrollManaged) — é o único jeito de
         // fechar as inscrições nesse modo (o sorteio não fecha).
-        const toggleRegBtn = ((!hasDraw || lateEnrollManaged) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${t.status === 'closed' ? 'btn-success' : 'btn-danger'} hover-lift" onclick="event.stopPropagation(); window.toggleRegistrationStatus('${t.id}')">${t.status === 'closed' ? '✅ ' + _t('org.reopenRegistration') : '🛑 ' + _t('org.closeRegistration')}</button>` : '';
+        let toggleRegBtn = ((!hasDraw || lateEnrollManaged) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${t.status === 'closed' ? 'btn-success' : 'btn-danger'} hover-lift" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${t.status === 'closed' ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${t.status === 'closed' ? '✅ ' + _t('org.reopenRegistration') : '🛑 ' + _t('org.closeRegistration')}</button>` : '';
+        // v4.1.18: Reabrir/Encerrar EM ANDAMENTO deste torneio → botão cinza "Reabrindo…"/
+        // "Encerrando…" (mesma UX do Sortear) mesmo se o detalhe re-renderizar antes de
+        // concluir. Limpo em _regBtnDone (dialog/painel/refresh/backstop).
+        if (window._togglingRegTid && String(window._togglingRegTid) === String(t.id) && toggleRegBtn) {
+            const _regBusyLabel = t.status === 'closed' ? 'Reabrindo…' : 'Encerrando…';
+            toggleRegBtn = `<button class="btn btn-secondary" disabled style="filter:grayscale(0.9) brightness(0.82);opacity:0.85;cursor:wait;"><span class="btn-spinner" aria-hidden="true"></span>${_regBusyLabel}</button>`;
+        }
 
         // v0.16.55: Liga com sorteio automático (drawManual !== true) nunca mostra
         // botão Sortear nas ferramentas — o auto-draw cuida de tudo.
@@ -1947,14 +2005,28 @@ function renderTournaments(container, tournamentId = null) {
                 // não agendado pro futuro). Mostra o botão COM confirmação de que o
                 // torneio é de sorteio automático. Vale pra todo organizador (não dev).
                 if (t.status !== 'finished') {
-                    var _adManualLbl = hasDraw ? '🎲 Próxima Rodada (manual)' : '🎲 Sortear agora (manual)';
-                    sortearBtn = `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
+                    // DUAS ações distintas, ambas disponíveis:
+                    //  • "Rodada Extra (manual)" → gera mais UMA rodada nos moldes da fase
+                    //    (fica na fase atual; adia a próxima). Vale mesmo sem rodada programada.
+                    //  • "Avançar de Fase" → sorteia a PRÓXIMA fase (dispara o painel unificado).
+                    //    Só quando a fase atual está completa e existe próxima fase.
+                    var _adManualLbl = hasDraw ? '🎲 Rodada Extra (manual)' : '🎲 Sortear agora (manual)';
+                    var _manualBtn = `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
+                    var _phaseCanAdvance = window._isMultiPhase && window._isMultiPhase(t) &&
+                        window._phasesPhaseComplete && window._phasesPhaseComplete(t) &&
+                        ((t.currentPhaseIndex || 0) + 1) < ((t.phases || []).length);
+                    var _advBtn = '';
+                    if (_phaseCanAdvance) {
+                        var _nextPhNm = window._safeHtml(((t.phases[(t.currentPhaseIndex || 0) + 1] || {}).name) || 'próxima fase');
+                        _advBtn = `<button class="btn btn-success hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._advanceMultiPhase('${t.id}')" title="Sorteia ${_nextPhNm} pela classificação e configuração do torneio">⏭️ Avançar de Fase</button>`;
+                    }
+                    sortearBtn = _advBtn + _manualBtn;
                 }
             } else if (isLigaFormat && t.drawManual) {
-                sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window.generateDrawFunction('${t.id}')">🎲 Sortear</button>` : '';
+                sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window.generateDrawFunction('${t.id}')">🎲 Sortear</button>` : '';
                 sortearAberto = (t.status !== 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="${sortearOnClick}">🎲 Sortear</button>` : '';
                 if (hasDraw) {
-                    sortearBtn = `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window.generateDrawFunction('${t.id}')">🎲 Próxima Rodada</button>`;
+                    sortearBtn = `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window.generateDrawFunction('${t.id}')">🎲 Próxima Rodada</button>`;
                 }
             } else {
                 // v1.0.96-beta: status='closed' agora roteia via _handleSortearClick(false)
@@ -1963,8 +2035,16 @@ function renderTournaments(container, tournamentId = null) {
                 // quando user havia cancelado antes — sorteava com defaults silenciosos.
                 // User: 'quando coloquei para sortear depois de ter cancelado ele sorteou
                 // direto sem me perguntar novamente a formação dos grupos.'
-                sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._handleSortearClick('${t.id}', false)">🎲 Sortear</button>` : '';
+                sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._handleSortearClick('${t.id}', false)">🎲 Sortear</button>` : '';
                 sortearAberto = (t.status !== 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="${sortearOnClick}">🎲 Sortear</button>` : '';
+            }
+            // v4.1.14: Sorteio EM ANDAMENTO deste torneio → o botão fica cinza "Sorteando…"
+            // mesmo se o detalhe re-renderizar (save async / onSnapshot) ANTES do painel de
+            // solução (resto/pow2/sem-dupla) aparecer — não reverte pra "Sortear".
+            if (window._drawingTid && String(window._drawingTid) === String(t.id)) {
+                const _busyBtn = `<button class="btn btn-warning" disabled style="filter:grayscale(0.9) brightness(0.82);opacity:0.85;cursor:wait;"><span class="btn-spinner" aria-hidden="true"></span>Sorteando…</button>`;
+                if (sortearBtn) sortearBtn = _busyBtn;
+                if (sortearAberto) sortearAberto = _busyBtn;
             }
         }
 
@@ -2032,7 +2112,7 @@ function renderTournaments(container, tournamentId = null) {
             if (isOrg) {
                 // Botão "Iniciar Torneio" — SÓ aparece após sorteio realizado, antes de iniciar
                 // Ao clicar: inicia o torneio E navega para o chaveamento
-                const startTournamentBanner = (hasDraw && !tournamentStarted) ? `
+                const startTournamentBanner = (hasDraw && !tournamentStarted && !(window._hasAnyMatchResult && window._hasAnyMatchResult(t))) ? `
                   <div style="margin-top:1.5rem;padding:20px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.1));border:2px solid rgba(16,185,129,0.4);border-radius:16px;text-align:center;">
                       <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:12px;">Sorteio realizado. Inicie o torneio para habilitar a chamada de presença.</p>
                       <button class="btn btn-success btn-cta hover-lift" onclick="event.stopPropagation(); window._startTournament('${t.id}'); window.location.hash='#bracket/${t.id}';">
@@ -2040,11 +2120,9 @@ function renderTournaments(container, tournamentId = null) {
                       </button>
                   </div>` : '';
 
-                const startedBadge = tournamentStarted ? `
-                  <div style="margin-top:1rem;display:flex;align-items:center;gap:8px;justify-content:center;">
-                      <span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block;animation:pulse 2s infinite;"></span>
-                      <span style="font-size:0.85rem;font-weight:700;color:#4ade80;">Torneio em andamento</span>
-                  </div>` : '';
+                // v4.1.x: o status "Torneio em andamento" agora vive no TOPO-CENTRO do box de
+                // progresso (window._buildProgressInner) — não duplica aqui. Ver tournaments-utils.
+                const startedBadge = '';
 
                 // Contagem regressiva de sorteio automático (Suíço com auto-draw; Liga usa o countdown com ticker na seção de eventos)
                 let autoDrawCountdownHtml = '';
@@ -2464,15 +2542,17 @@ function renderTournaments(container, tournamentId = null) {
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
                 ${!isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
-                ${t.status !== 'closed' ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window._sendOrgCommunication('${t.id}')">📢 ${_t('org.communicate')}</button>` : ''}
-                <button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window._openCommunicationsPanel('${t.id}')">📊 Comunicados</button>
+                <button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.location.hash='#comunicados/${t.id}'">📢 Comunicados</button>
                 ${addParticipantBtns}
                 ${/* v1.9.98: CSV removido daqui — já está no grid de ações geral do organizador (Regras/Inscritos/Imprimir/CSV/Modo TV). Evita duplicação. */ ''}
                 ${isOrg ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window._saveAsTemplate('${t.id}')">💾 ${window._t ? window._t('btn.saveTemplate') : 'Salvar como Template'}</button>` : ''}
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
                 ${isOrg ? `<button class="btn btn-tool-indigo hover-lift" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
-                ${(isOrg && hasDraw && !isFinished) ? `<button class="btn btn-tool-green hover-lift" onclick="event.stopPropagation(); window._schOpenOrganizer('${t.id}')">📅 Combinar jogos</button>` : ''}
+                ${/* v4.1.24: "📅 Combinar jogos" REMOVIDO das Ferramentas do Organizador — NÃO é
+                      ferramenta de organizador. Combinar horário é ação de PARTICIPANTE (mesmo que
+                      ele seja o organizador), feita a partir do próprio JOGO no chaveamento
+                      (_schCardChip / _schGroupChip no bracket). Ver pedido do dono. */ ''}
                 ${_arbitrosBtn}
                 ${toggleRegBtn}
                 ${sortearBtn}

@@ -32,9 +32,19 @@ window._groupDisplayName = window._groupDisplayName || function (grp, i) {
 };
 
 // ── Monarch (Rei/Rainha) individual standings per group ──
-window._computeMonarchStandings = function(group) {
+// v4.1.70: recebe `t` + `category` → aplica PONTOS AVANÇADOS (advancedScoring) quando
+// ligado, igual à Liga. Sem `t` (chamadas de teste/legado) mantém o comportamento antigo
+// (ordena por vitórias). O `points` avançado, quando existe, é a métrica PRIMÁRIA de
+// classificação — e a MESMA usada pela transição/pareamento por performance.
+window._computeMonarchStandings = function(group, t, category) {
   var stats = {};
+  // Jogador X (ghost/convidado de W.O.) NÃO entra na classificação (pedido do dono):
+  // ele só existe pra completar os jogos (chaves). O uid real — inclusive quem levou
+  // W.O. — sempre aparece. Ghosts vêm de t.ligaGhosts (quando t disponível).
+  var _ghostSet = (t && Array.isArray(t.ligaGhosts)) ? t.ligaGhosts : [];
+  var _isGhostMon = function (n) { return n && _ghostSet.indexOf(n) !== -1; };
   (group.players || []).forEach(function(name) {
+    if (_isGhostMon(name)) return; // ghost fora da classificação
     stats[name] = {
       name: name, wins: 0, losses: 0, played: 0,
       pointsFor: 0, pointsAgainst: 0,
@@ -45,6 +55,19 @@ window._computeMonarchStandings = function(group) {
   });
 
   var matches = (group.rounds && group.rounds[0]) ? group.rounds[0].matches : (group.matches || []);
+  // DEDUP por id: o mesmo jogo pode aparecer 2× no array do grupo (cópias stale da
+  // substituição de W.O. / re-sorteio). Sem dedup, vitórias/games/saldo eram contados
+  // em dobro — MESMO bug do _calcAdvancedPoints (por isso a coluna V divergia do PA).
+  (function () {
+    var _seen = {}, _out = [];
+    (matches || []).forEach(function (m) {
+      if (!m) return;
+      var k = (m.id != null) ? String(m.id) : null;
+      if (k != null) { if (_seen[k]) return; _seen[k] = 1; }
+      _out.push(m);
+    });
+    matches = _out;
+  })();
   matches.forEach(function(m) {
     if (!m.winner || !m.team1 || !m.team2) return;
     var s1 = parseInt(m.scoreP1) || 0;
@@ -100,10 +123,21 @@ window._computeMonarchStandings = function(group) {
     stats[k].winRate = stats[k].played > 0 ? stats[k].wins / stats[k].played : 0;
   });
 
+  // PONTOS AVANÇADOS: quando o torneio usa advancedScoring, o total avançado por jogador
+  // (participação/vitória/games/TB) vira a métrica de classificação — a MESMA de toda a
+  // Liga. _calcAdvancedPoints já sabe varrer jogos Rei/Rainha (isMonarch, team1/team2).
+  var _adv = !!(t && t.advancedScoring && t.advancedScoring.enabled && typeof window._calcAdvancedPoints === 'function');
+  if (_adv) {
+    Object.keys(stats).forEach(function(k) {
+      stats[k].points = window._calcAdvancedPoints(t, k, category || null).total;
+    });
+  }
+
   // Tiebreaker order (desc unless noted):
-  // 1. wins  2. setsDiff  3. setsWon  4. gamesDiff  5. gamesWon
-  // 6. tiebreaksDiff  7. tiebreaksWon  8. pointsDiff  9. pointsFor  10. winRate  11. played (asc)
+  // 0. PONTOS AVANÇADOS (quando ligado)  1. wins  2. setsDiff  3. setsWon  4. gamesDiff
+  // 5. gamesWon  6. tiebreaksDiff  7. tiebreaksWon  8. pointsDiff  9. pointsFor  10. winRate  11. played (asc)
   return Object.values(stats).sort(function(a, b) {
+    if (_adv && (b.points || 0) !== (a.points || 0)) return (b.points || 0) - (a.points || 0);
     if (b.wins !== a.wins) return b.wins - a.wins;
     var aSetD = a.setsWon - a.setsLost, bSetD = b.setsWon - b.setsLost;
     if (bSetD !== aSetD) return bSetD - aSetD;
@@ -151,13 +185,13 @@ function _playerRoundStats(t, playerName, category) {
   // a rodada NÃO entra na média). satOutCompensable exclui as inativas.
   var played = 0, satOut = 0, satOutCompensable = 0;
   (t.rounds || []).forEach(function(round) {
-    var didPlay = false, didSit = false, sitInactive = false;
+    var didPlay = false, didSit = false, sitInactive = false, tookWo = false;
     (round.matches || []).forEach(function(m) {
       if (category && m.category !== category) return;
       // v2.4.30: 'wo' (levou W.O. na rodada) = 0 pts, igual a 'inactive' — NÃO
       // compensável (não entra na média de folga). Só 'remainder' (sobrou do
       // sorteio) recebe a média.
-      if (m.isSitOut) { if (m.p1 === playerName) { didSit = true; if (m.sitOutReason === 'inactive' || m.sitOutReason === 'wo') sitInactive = true; } return; }
+      if (m.isSitOut) { if (m.p1 === playerName) { didSit = true; if (m.sitOutReason === 'inactive' || m.sitOutReason === 'wo') { sitInactive = true; if (m.sitOutReason === 'wo') tookWo = true; } } return; }
       if (m.isBye || !m.winner) return;
       if (m.isMonarch && Array.isArray(m.team1) && Array.isArray(m.team2)) {
         if (m.team1.indexOf(playerName) !== -1 || m.team2.indexOf(playerName) !== -1) didPlay = true;
@@ -165,12 +199,29 @@ function _playerRoundStats(t, playerName, category) {
         didPlay = true;
       }
     });
-    if (didPlay) played++;
+    // W.O. tem PRECEDÊNCIA sobre jogos fantasma: se o jogador levou W.O. na rodada,
+    // ela NÃO conta como jogada (não entra na média) mesmo que o nome dele tenha
+    // sobrado em jogos stale no doc. Blindagem do mesmo bug do -100→+1560.
+    if (tookWo) { satOut++; }
+    else if (didPlay) played++;
     else if (didSit) { satOut++; if (!sitInactive) satOutCompensable++; }
   });
   return { played: played, satOut: satOut, satOutCompensable: satOutCompensable };
 }
 window._playerRoundStats = _playerRoundStats;
+
+// Punição de W.O. nos Pontos Avançados — FONTE ÚNICA (motor + diálogos + render).
+// Configurável pelo organizador (linha "Punição por W.O." na Pontuação Avançada):
+//  • PA desligado → 0 (sem punição);
+//  • linha nunca configurada (torneio antigo) → default -100 (regra do dono);
+//  • linha desativada → 0; valor alterado → o valor do organizador.
+function _woAdvPenalty(t) {
+  if (!t || !t.advancedScoring || !t.advancedScoring.enabled) return 0;
+  var c = (t.advancedScoring.categories || {}).wo_penalty;
+  if (c === undefined) return -100;
+  return (c && c.enabled) ? (parseInt(c.value, 10) || 0) : 0;
+}
+window._woAdvPenalty = _woAdvPenalty;
 
 function _calcAdvancedPoints(t, playerName, category) {
   if (!t || !t.advancedScoring || !t.advancedScoring.enabled || !playerName) {
@@ -215,9 +266,34 @@ function _calcAdvancedPoints(t, playerName, category) {
     _allMatches = [];
     (t.rounds || []).forEach(function(round) { (round.matches || []).forEach(function(mm) { _allMatches.push(mm); }); });
   }
+  // DEDUP por id: o mesmo jogo pode aparecer em mais de um container (t.rounds[].matches
+  // + t.groups + phaseRounds + cópias stale de substituição/re-sorteio). Sem dedup, os
+  // games/vitórias do jogador eram contados 2× (bug: games perdidos inflados). Mantém a
+  // 1ª ocorrência de cada id; jogos sem id (raro) passam sem dedup.
+  var _seenMid = {};
+  _allMatches = _allMatches.filter(function (m) {
+    if (!m) return false;
+    var k = (m.id != null) ? String(m.id) : null;
+    if (k == null) return true;
+    if (_seenMid[k]) return false;
+    _seenMid[k] = 1; return true;
+  });
+  // Rodadas em que o jogador LEVOU W.O.: ele NÃO jogou (foi substituído). NENHUM jogo
+  // dessas rodadas pontua pra ele — só a punição de W.O. Blindagem contra jogos
+  // "fantasma" com o nome dele que sobraram no doc após a substituição (a substituição
+  // reescreve os slots em uma cópia, mas cópias stale podem restar e o _collectAllMatches
+  // as vê). Sem isto, um W.O. somava participação/vitória/games (bug: -100 virava +1560).
+  var _woRounds = {};
+  _allMatches.forEach(function (m) {
+    if (m && m.isSitOut && m.sitOutReason === 'wo' && (!category || m.category === category) &&
+        (m.p1 === playerName || _playerInSide(m.p1, playerName))) {
+      _woRounds[m.round || m.roundNumber || 0] = true;
+    }
+  });
   _allMatches.forEach(function(m) {
       if (category && m.category !== category) return;
       if (m.isBye || !m.winner || m.isSitOut) return;
+      if (_woRounds[m.round || m.roundNumber || 0]) return; // rodada de W.O. → não jogou, não pontua
 
       var isMonarch = m.isMonarch && Array.isArray(m.team1) && Array.isArray(m.team2);
       var side1 = isMonarch ? m.team1 : m.p1;
@@ -331,6 +407,30 @@ function _calcAdvancedPoints(t, playerName, category) {
     }
   }
 
+  // W.O. PENALIZA nos Pontos Avançados (regra do dono, jul/2026): valor CONFIGURÁVEL
+  // pelo organizador na linha "Punição por W.O." da Pontuação Avançada — default -100
+  // quando o torneio nunca configurou; 0 quando a linha foi desativada. O marcador
+  // canônico é o sit-out com sitOutReason 'wo' (p1 = ausente). Aplicado DEPOIS da
+  // compensação de folga (não contamina a média) e FORA do floor per-match (o floor
+  // protege placar de jogo; o W.O. é penalidade deliberada). Vale no grupo e na
+  // geral — ambos somam via _calcAdvancedPoints.
+  var _woUnit = _woAdvPenalty(t);
+  if (_woUnit) {
+    var _woCount = 0;
+    _allMatches.forEach(function (m) {
+      if (m && m.isSitOut && m.sitOutReason === 'wo' && m.p1 === playerName && (!category || m.category === category)) _woCount++;
+    });
+    if (_woCount > 0) {
+      var _woPen = _woCount * _woUnit;
+      breakdown.push({
+        round: 0, opponent: '', isWoPenalty: true, won: false, draw: false,
+        items: [{ key: 'wo_penalty', count: _woCount, unit: _woUnit, value: _woPen }],
+        total: _woPen
+      });
+      total += _woPen;
+    }
+  }
+
   return { total: total, breakdown: breakdown };
 }
 window._calcAdvancedPoints = _calcAdvancedPoints;
@@ -344,7 +444,9 @@ function _computeAvgAdvancedPerRound(t, playerName, category) {
   if (!rs.played) return 0;
   var full = _calcAdvancedPoints(t, playerName, category);
   var comp = 0;
-  (full.breakdown || []).forEach(function(b) { if (b && b.isSitOutComp) comp += (b.total || 0); });
+  // remove compensação de folga E a penalidade de W.O. — nenhuma das duas é "rodada
+  // jogada" e ambas contaminariam a média que baseia a própria compensação.
+  (full.breakdown || []).forEach(function(b) { if (b && (b.isSitOutComp || b.isWoPenalty)) comp += (b.total || 0); });
   return Math.round((full.total - comp) / rs.played);
 }
 window._computeAvgAdvancedPerRound = _computeAvgAdvancedPerRound;
@@ -409,7 +511,18 @@ function _computeStandings(t, category) {
 
   const allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   allP.forEach(p => {
-    const name = typeof p === 'string' ? p : (p.displayName || p.name || '');
+    // v4.0.76: nome de EXIBIÇÃO canônico (_entryDisplayName, derivado da estrutura) — a
+    // dupla pré-formada vira a label "p1 / p2", mas a IDENTIDADE é uid (resolvida na borda
+    // por _userTeamInMatch achando ESTA entrada pelo mesmo nome canônico → p1Uid/p2Uid).
+    // Sem isto, o displayName dessas duplas vinha só com o p1 e o Suíço quebrava em "single".
+    // Inline de fallback pra valer no autoDraw CF (sem store.js). Liga=indivíduos→displayName.
+    const name = (typeof window._entryDisplayName === 'function')
+      ? window._entryDisplayName(p)
+      : ((typeof p === 'string') ? p
+        : (p.p1Name && p.p2Name) ? (p.p1Name + ' / ' + p.p2Name)
+        : (Array.isArray(p.participants) && p.participants.length > 1)
+          ? p.participants.map(function (x) { return (typeof x === 'string') ? x : (x.displayName || x.name || ''); }).filter(Boolean).join(' / ')
+          : (p.displayName || p.name || ''));
     // If filtering by category, only include participants in that category (supports multi-cat)
     if (category) {
       if (typeof p === 'object' && window._participantInCategory) {
@@ -905,13 +1018,12 @@ function _advanceWinner(t, completedMatch) {
   if (completedMatch.isRepechageR1 && t.repechageConfig) {
     _assignRepechageLosers(t);
   }
-  // v2.7.69: REPESCAGEM DO CONSTRUTOR DE FASES (diferente da repescagem de
-  // eliminatória acima). Quando uma partida isPhaseRepR1 fecha, resolve os melhores
-  // perdedores da R1 daquela chave → preenche os slots de repescagem + o jogo de
-  // repescagem. _resolveRepechage é idempotente (só age quando todos os R1 da chave
-  // têm vencedor e ainda há slot pendente).
-  if (completedMatch.isPhaseRepR1 && typeof window !== 'undefined' && typeof window._resolveRepechage === 'function') {
-    try { window._resolveRepechage(t, completedMatch.bracket); } catch (e) {}
+  // REPESCAGEM (mecanismo ÚNICO — single-elim E dupla-elim): qualquer jogo fechado pode
+  // completar a rodada-fonte de uma vaga de repescagem (melhor derrotado sobe p/ a chave,
+  // cai na inferior no dupla, ou repesca num merge/battle ímpar) → _resolveRepFills preenche
+  // TODAS as vagas (repFill) cujas fontes já fecharam. Idempotente. feedback_resolution_one_logic.
+  if (typeof window !== 'undefined' && typeof window._resolveRepFills === 'function') {
+    try { window._resolveRepFills(t); } catch (e) {}
   }
   // Repechage: when repechage match completes, check if ALL done → advance best loser
   if (completedMatch.isRepechage && t.repechageConfig && t.repechageConfig.bestLoserCount > 0) {
@@ -2085,7 +2197,114 @@ window._autoApprovePendingResults = function(t) {
 // no match que disparou o close (auto-close após save/approve). Sem ele,
 // _rerenderBracket fazia fallback pra "primeiro card visível" → scroll
 // jumpava após aprovações.
-window._closeRound = function (tId, roundIdx, anchorMatchId) {
+// ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) — SORTEIO INICIAL ──
+// Mutação PURA que aplica o DELTA do sorteio inicial (já computado por diff em
+// _commitInitialDraw) sobre o doc FRESCO, dentro de commitTournamentTx. O sorteio
+// gera a chave UMA vez com shuffle aleatório → NÃO re-executamos no fresco (daria
+// outra chave); aplicamos os campos que mudaram/foram deletados. Guarda de
+// IDEMPOTÊNCIA: se um sorteio CONCORRENTE já virou este torneio (que estava sem
+// chave) em bracket ativo, retorna `false` pra ABORTAR — não clobbera a chave dele
+// (evita duplo-sorteio de dois organizadores). `newHistory` é ANEXADO (append
+// preserva entradas concorrentes). Função ÚNICA usada por commitDrawTx (produção) E
+// pelo teste de concorrência no emulador (mesmo código sob corrida real).
+window._applyDrawDeltaToTournament = function (freshT, changed, deleted, opts) {
+  opts = opts || {};
+  var freshHasBracket = (Array.isArray(freshT.matches) && freshT.matches.length > 0) ||
+                        (Array.isArray(freshT.rounds) && freshT.rounds.length > 0);
+  if (!opts.preHadBracket && freshHasBracket && freshT.status === 'active') {
+    return false; // sorteio concorrente já produziu a chave — não sobrescrever
+  }
+  var ch = changed || {};
+  Object.keys(ch).forEach(function (kk) { freshT[kk] = ch[kk]; });
+  (deleted || []).forEach(function (kk) { delete freshT[kk]; });
+  if (Array.isArray(opts.newHistory) && opts.newHistory.length) {
+    if (!Array.isArray(freshT.history)) freshT.history = [];
+    freshT.history = freshT.history.concat(opts.newHistory);
+  }
+  return undefined; // segue o commit
+};
+
+// ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) — save #2 ──────
+// Mutação PURA de fechar rodada NÃO-transição: fecha a rodada, recalcula standings
+// e decide o próximo passo — gera a próxima rodada (Liga/Suíço), encerra (Suíço puro
+// no fim) ou nada (Liga com sorteio agendado). NÃO faz a transição Suíço→elim
+// (retorna 'transition' pro chamador tratar — isso é o generateDrawFunction, item #3)
+// nem side-effects (notificações/render). Rodada DENTRO de commitTournamentTx sobre o
+// estado FRESCO. Idempotente: só gera a próxima se ainda não existir (retry/concorrência).
+// Retorna: 'transition' | 'pureSwissFinish' | 'ligaScheduled' | 'nextRound' | null.
+window._applyRoundCloseToTournament = function (t, roundIdx) {
+  var round = (t.rounds || [])[roundIdx];
+  if (!round) return null;
+  round.status = 'complete';
+  if (!round.completedAt) round.completedAt = Date.now();
+  t.standings = _computeStandings(t);
+
+  var isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
+  var maxRounds = t.swissRounds || 99;
+  var isSwissClassification = t.p2Resolution === 'swiss' && t.currentStage === 'swiss';
+
+  if (isSuico && t.rounds.length >= maxRounds) {
+    if (isSwissClassification && t.p2TargetCount) return 'transition'; // #3 (generateDrawFunction)
+    t.status = 'finished';
+    return 'pureSwissFinish';
+  }
+  if (typeof window._isLigaAutoDraw === 'function' && window._isLigaAutoDraw(t)) return 'ligaScheduled';
+  // Gera a próxima rodada só se ainda não existe uma após esta (idempotência).
+  if (t.rounds.length <= roundIdx + 1) _generateNextRound(t);
+  return 'nextRound';
+};
+
+// Mutação PURA da TRANSIÇÃO Suíço→eliminatória: guarda swissStandings/RoundsData,
+// vira currentStage='elimination', filtra os classificados, e monta a chave pelo
+// motor canônico (buildPhaseBrackets, seed 1×N pela classificação). Rodada DENTRO
+// de commitTournamentTx sobre o estado FRESCO. Retorna o nº de classificados.
+window._applySwissEliminationTransition = function (t, roundIdx) {
+  var _finalStandings = _computeStandings(t);
+  var _targetCount = t.p2TargetCount;
+  var _advancedNames = _finalStandings.slice(0, _targetCount).map(function (s) { return s.name; });
+  t.swissStandings = _finalStandings;
+  t.swissRoundsData = (t.rounds || []).slice();
+  t.currentStage = 'elimination';
+  t.classifyFormat = null;
+  t.rounds = [];
+  var _allParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  var _advancedParts = [];
+  _advancedNames.forEach(function (name) {
+    var found = _allParts.find(function (p) { var pn = typeof p === 'string' ? p : (p.displayName || p.name || ''); return pn === name; });
+    if (found) _advancedParts.push(found);
+  });
+  t.swissEliminated = _allParts.filter(function (p) { var pn = typeof p === 'string' ? p : (p.displayName || p.name || ''); return _advancedNames.indexOf(pn) === -1; });
+  t.participants = _advancedParts;
+  t.p2Resolution = 'bye';
+  var _tsE = parseInt(t.teamSize, 10) || 1;
+  var _rankedPool = _advancedParts.map(function (p) {
+    var nm = (typeof p === 'string') ? p : (p.displayName || p.name || '');
+    var o = { name: nm, displayName: nm };
+    if (p && typeof p === 'object') {
+      if (p.uid) o.uid = p.uid;
+      if (p.email) o.email = p.email;
+      if (p.photoURL) o.photoURL = p.photoURL;
+      if (p.p1Name) { o.p1Name = p.p1Name; o.p2Name = p.p2Name; if (p.p1Uid) o.p1Uid = p.p1Uid; if (p.p2Uid) o.p2Uid = p.p2Uid; o.fixedPair = true; }
+    }
+    return o;
+  });
+  var _elimCfg = {
+    source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 999, label: '' }], scope: 'overall', rankingBasis: (_tsE > 1 ? 'team' : 'individual') },
+    pairingStrategy: 'seed', bracketResolution: 'bye', fixedPairs: false, grandFinal: false, thirdPlace: t.thirdPlace !== false
+  };
+  var _built = window._phasesEngine.buildPhaseBrackets([{ standings: _rankedPool }], _elimCfg, function (g) { return g.standings || []; }, 'swelim-' + roundIdx);
+  _built.matches.forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; if (m.category === undefined) m.category = null; });
+  t.matches = _built.matches;
+  t._canonicalDraw = true;
+  return _targetCount;
+};
+
+// resultCtx (opcional) = { matchId, payload } do jogo que DISPAROU o auto-close.
+// No auto-close vindo de _saveResultInline o resultado do último jogo é DEFERIDO
+// (não persistido) — então a transação precisa re-aplicá-lo ANTES de fechar, senão
+// o fresco não tem o vencedor e a rodada parece incompleta. Fecho manual não passa
+// resultCtx (os resultados já estão persistidos via commitResultTx).
+window._closeRound = function (tId, roundIdx, anchorMatchId, resultCtx) {
   const t = window._findTournamentById(tId);
   if (!t) return;
   const round = (t.rounds || [])[roundIdx];
@@ -2103,16 +2322,16 @@ window._closeRound = function (tId, roundIdx, anchorMatchId) {
     showConfirmDialog(
       _t('bui.incompleteRound'),
       _t('bui.incompleteRoundMsg', {n: unfinished.length}),
-      () => _doCloseRound(t, tId, roundIdx, anchorMatchId),
+      () => _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx),
       null,
       { type: 'warning', confirmText: _t('btn.finishAnyway'), cancelText: _t('btn.back') }
     );
     return;
   }
-  _doCloseRound(t, tId, roundIdx, anchorMatchId);
+  _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx);
 };
 
-function _doCloseRound(t, tId, roundIdx, anchorMatchId) {
+function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
   // Guard: only close the most recent round. A stale call (from a duplicate
   // auto-close path, e.g. _saveResultInline + render-time safety net both
   // dispatching for the same round) would otherwise advance the next-round
@@ -2133,45 +2352,23 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId) {
   if (isSuico && t.rounds.length >= maxRounds) {
     // Swiss-as-classification: transition to elimination phase
     if (isSwissClassification && t.p2TargetCount) {
-      var _finalStandings = _computeStandings(t);
       var _targetCount = t.p2TargetCount;
-      var _advancedNames = _finalStandings.slice(0, _targetCount).map(function(s) { return s.name; });
-
-      // Store Swiss results for reference
-      t.swissStandings = _finalStandings;
-      t.swissRoundsData = t.rounds.slice();
-
-      // Clear Swiss state, transition to elimination
-      t.currentStage = 'elimination';
-      delete t.classifyFormat;
-      t.rounds = [];
-
-      // Update participants to only include advanced players (preserve objects)
-      var _allParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-      var _advancedParts = [];
-      _advancedNames.forEach(function(name) {
-        var found = _allParts.find(function(p) {
-          var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-          return pName === name;
-        });
-        if (found) _advancedParts.push(found);
+      // Mutação LOCAL otimista (UI + notificações imediatas).
+      window._applySwissEliminationTransition(t, roundIdx);
+      var _swLog = 'Suíço encerrado — ' + _targetCount + ' classificado(s) pra eliminatória';
+      window.AppStore.logAction(tId, _swLog);
+      // BLINDAGEM (Fase B): persiste a transição ATOMICAMENTE. Re-aplica o resultado
+      // DEFERIDO do último jogo do suíço (resultCtx) + a transição sobre o estado FRESCO,
+      // em transação. Substitui o syncImmediate do doc inteiro (que a corrida das quartas
+      // do Suíço→elim clobbava). project_concurrency_safe_saves.
+      window.AppStore.commitTournamentTx(tId, function (freshT) {
+        if (resultCtx && resultCtx.matchId && typeof window._applyResultToTournament === 'function') {
+          window._applyResultToTournament(freshT, resultCtx.matchId, resultCtx.payload || {});
+        }
+        window._applySwissEliminationTransition(freshT, roundIdx);
+        if (!Array.isArray(freshT.history)) freshT.history = [];
+        freshT.history.push({ date: new Date().toISOString(), message: _swLog });
       });
-      // Save eliminated players for reference
-      t.swissEliminated = _allParts.filter(function(p) {
-        var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        return _advancedNames.indexOf(pName) === -1;
-      });
-      t.participants = _advancedParts;
-
-      // Generate elimination bracket with the advanced players
-      if (typeof window.generateDrawFunction === 'function') {
-        // Temporarily disable p2Resolution to avoid re-entering Swiss
-        var _savedP2 = t.p2Resolution;
-        t.p2Resolution = 'bye'; // now power-of-2 is guaranteed
-        window.AppStore.syncImmediate(tId).then(function() {
-          window.generateDrawFunction(tId);
-        });
-      }
 
       showNotification(_t('bui.swissFinished'), _t('bui.swissFinishedMsg', { n: _targetCount, format: t.format || 'Eliminatórias' }), 'success');
       if (typeof window._notifyTournamentParticipants === 'function') {
@@ -2225,8 +2422,21 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId) {
     }
   }
 
-  window.AppStore.logAction(tId, `Rodada ${roundIdx + 1} encerrada`);
-  window.AppStore.syncImmediate(tId);
+  var _closeLogMsg = `Rodada ${roundIdx + 1} encerrada`;
+  window.AppStore.logAction(tId, _closeLogMsg);
+  // BLINDAGEM (save #2): persiste o fecho de rodada ATOMICAMENTE, re-aplicando o
+  // resultado que disparou o auto-close (deferido, não persistido) + o fecho + a
+  // geração da próxima rodada sobre o estado FRESCO. Substitui o syncImmediate do
+  // doc inteiro (que perdia write quando um echo do result-save chegava depois).
+  // Só o caminho NÃO-transição chega aqui (a transição Suíço→elim retorna antes).
+  window.AppStore.commitTournamentTx(tId, function (freshT) {
+    if (resultCtx && resultCtx.matchId && typeof window._applyResultToTournament === 'function') {
+      window._applyResultToTournament(freshT, resultCtx.matchId, resultCtx.payload || {});
+    }
+    window._applyRoundCloseToTournament(freshT, roundIdx);
+    if (!Array.isArray(freshT.history)) freshT.history = [];
+    freshT.history.push({ date: new Date().toISOString(), message: _closeLogMsg });
+  });
   // Notify Liga round via WhatsApp (fire-and-forget, only for Liga/Suíço formats)
   _notifyLigaRoundWhatsApp(t, t.rounds ? t.rounds.length - 1 : 0);
   if (typeof window._rerenderBracket === 'function') {
@@ -2947,6 +3157,33 @@ window._healMonarchRemainderToWaitlist = function (t) {
   return changed;
 };
 
+// Rei/Rainha é MODO INDIVIDUAL (parceiro rotativo): entrada-TIME (casal/dupla pré-formada)
+// é DECOMPOSTA nos MEMBROS — cada PESSOA é um jogador do sorteio (fix Confra; sem isto o
+// gerador juntava 2 duplas num "time de 4"). Decomposição ESTRUTURAL (participants[]/
+// p1Name+p2Name — nunca split de "/" no nome, ver project_dupla_entry_structural_not_slash).
+// Mora na FUNÇÃO (não no render) pra valer no cliente, na Rodada Extra e no autoDraw da CF.
+function _monarchIndividuals(t, names) {
+  var byLabel = {};
+  (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {})).forEach(function (p) {
+    if (!p || typeof p !== 'object') return;
+    var mem = null;
+    if (Array.isArray(p.participants) && p.participants.length > 1) {
+      mem = p.participants.map(function (x) { return (typeof x === 'string') ? x : (x && (x.displayName || x.name)) || ''; }).filter(Boolean);
+    } else if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+      mem = [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''].filter(Boolean);
+    }
+    if (!mem || mem.length < 2) return;
+    var label = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(p)
+      : ((p.p1Name && p.p2Name) ? (p.p1Name + ' / ' + p.p2Name) : (p.displayName || p.name || mem.join(' / ')));
+    if (label) byLabel[label] = mem;
+  });
+  var seen = {}, out = [];
+  (names || []).forEach(function (nm) {
+    (byLabel[nm] || [nm]).forEach(function (one) { if (one && !seen[one]) { seen[one] = 1; out.push(one); } });
+  });
+  return out;
+}
+
 window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category, _rn) {
   var standings = _computeStandings(t, category);
   var allPlayers = standings.map(function(s) { return s.name; });
@@ -2960,6 +3197,8 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     players = allPlayers.filter(function(name) { return activeNames[name]; });
     inactiveSitOuts = allPlayers.filter(function(name) { return !activeNames[name]; });
   }
+  // decompõe entradas-time nos indivíduos (após o filtro de ativos, que é por entrada)
+  players = _monarchIndividuals(t, players);
 
   if (players.length < 2) {
     window._warn('[bracket-logic] Not enough active players for Rei/Rainha round:', players.length);
@@ -3110,6 +3349,27 @@ function _generateNextRoundForPlayers(t, category, _rn) {
   }
 
   var allPlayersSwiss = standings.map(s => s.name);
+  // v4.1.17 (regra do dono): num Suíço/Liga, o conjunto de participantes é FIXO — só os
+  // CONFRONTOS mudam. (a) Quem está na LISTA DE ESPERA / standby NUNCA entra no sorteio
+  // dos confrontos (só via W.O. explícito). (b) Num torneio de DUPLAS (teamSize>1) do
+  // formato Suíço de duplas FORMADAS (não Rei/Rainha, que usa indivíduos), só ENTRADAS de
+  // dupla ("A / B") jogam — um SOLO nunca é pareado (antes um solo que ficou em
+  // t.participants jogava SOZINHO contra uma dupla).
+  var _waitSet = {};
+  [t.waitlist, t.standbyParticipants].forEach(function (arr) {
+    (Array.isArray(arr) ? arr : []).forEach(function (e) {
+      var raw = (typeof e === 'string') ? e : ((e && (e.displayName || e.name)) || '');
+      if (raw) _waitSet[raw] = 1;
+      var disp = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(e) : raw;
+      if (disp) _waitSet[disp] = 1;
+    });
+  });
+  var _teamsTourney = (parseInt(t.teamSize, 10) || 1) > 1;
+  allPlayersSwiss = allPlayersSwiss.filter(function (n) {
+    if (_waitSet[n]) return false;                                                  // espera nunca entra
+    if (!_isLigaFmtHere && _teamsTourney && String(n).indexOf(' / ') === -1) return false; // dupla obrigatória (Suíço de duplas)
+    return true;
+  });
   // Liga: filter out inactive players
   const players = (_isLigaFmtHere && activeNamesSwiss)
     ? allPlayersSwiss.filter(function(n) { return activeNamesSwiss[n]; })
@@ -3280,9 +3540,13 @@ function _phaseGenNextLeagueRound(t, phaseIdx) {
   // _generateNextRound formar grupos de 4 rotativos a cada rodada (igual Fase 0); senão
   // duplas simples. Chamamos o DISPATCHER _generateNextRound (não o gerador simples
   // direto) pra honrar o modo de sorteio do jeito canônico — o mesmo motor da 1ª fase.
+  var _cfgMonarch = (cfg.reiRainha === true || cfg.drawMode === 'rei_rainha');
   var faux = {
     id: t.id, format: 'Liga', ligaDrawMode: 'standard',
-    ligaRoundFormat: cfg.reiRainha ? 'rei_rainha' : 'standard',
+    ligaRoundFormat: _cfgMonarch ? 'rei_rainha' : 'standard',
+    // Rei/Rainha: formação dos grupos de 4 honra o eixo da FASE (cfg.groupsBy:
+    // 'sorteio'|'ranking'); fallback pro top-level e pro default do gerador ('ranking').
+    reiRainhaGroupsBy: cfg.groupsBy || t.reiRainhaGroupsBy || 'ranking',
     participants: st.pool.slice(),
     rounds: st.rounds, matches: [],
     combinedCategories: [], skillCategories: [],

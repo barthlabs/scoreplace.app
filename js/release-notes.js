@@ -9,7 +9,16 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.51-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Junho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.2-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>👫 Duplas e times sempre vinculados ao perfil certo:</b> ao inscrever ou parear uma dupla, cada pessoa que <b>tem conta</b> passa a ser vinculada pelo <b>cadastro dela</b> (e não só pelo nome digitado). Se houver duas pessoas com o mesmo nome, o app <b>pergunta qual é</b>. E ao <b>desfazer uma dupla</b>, ninguém some mais da lista.</li>' +
+        '<li><b>🧩 Construtor de fases:</b> monte torneios com <b>várias fases</b> (ex.: fase de grupos e depois mata-mata) com o mesmo motor de sorteio e classificação.</li>' +
+        '<li><b>📊 Enquete do organizador:</b> crie enquetes pros inscritos direto no torneio pra combinar datas, formato e o que mais precisar.</li>' +
+        '<li><b>🎾 Sorteio, W.O., placar e regras das modalidades mais consistentes,</b> além de melhorias de estabilidade em todo o app.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v4.0.51-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(29 de Junho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🗓️ Campos de data e hora não cortam mais o valor:</b> os campos de <b>horário</b> (ex.: nas datas da fase) eram estreitos demais e <b>cortavam</b> o horário (mostravam "23" em vez de "23:00"). Agora todo campo de data/hora do app tem <b>largura suficiente</b> pra mostrar o valor inteiro — corrigido de uma vez, em todo lugar.</li>' +
       '</ul>' +

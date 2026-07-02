@@ -4,7 +4,7 @@
  * REAL compartilhado (window._roundRobinSchedule via harness).
  */
 const { window: W } = require('./headless.js');
-const { buildGroupsCore, buildMonarchCore } = require('../js/views/draw-cores.js');
+const { buildGroupsCore } = require('../js/views/draw-cores.js');
 
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -65,32 +65,18 @@ function membersAll(res) {
   ok(all.length === 4 && new Set(all).size === 4, '4: conservação com categoria');
 })();
 
-// ── 5. Rei/Rainha (monarch): grupos de 4, 3 pairings rotativas, conservação ───
-const monBase = { buildMonarchGroup: W._buildMonarchGroup, groupName: (i) => 'Grupo ' + String.fromCharCode(65 + i), shuffle: ID, now: NOW };
+// ── 5. Rei/Rainha (monarch): o núcleo das 3 pairings rotativas é _buildMonarchGroup ──
+// (buildMonarchCore foi removido — campanha kill-monarch-format: monarch roda no motor
+// league incremental; o núcleo ÚNICO das pairings continua sendo _buildMonarchGroup.)
 (function () {
-  const r = buildMonarchCore(names(8), monBase); // P0..P7 → 2 grupos de 4 (shuffle=id)
-  ok(r.groups.length === 2 && r.leftOut.length === 0, '5: 8 jogadores → 2 grupos, sem sobra');
-  const g0 = r.groups[0];
-  eq(g0.players, ['P0', 'P1', 'P2', 'P3'], '5: grupo A = primeiros 4');
-  ok(g0.name === 'Grupo A' && g0.rounds.length === 1 && g0.rounds[0].status === 'active', '5: wrapper Fase 0 (name/rounds/status)');
-  const ms = g0.rounds[0].matches;
+  const g0 = W._buildMonarchGroup({ roundNum: 1, roundIndex: 0, gi: 0, players: ['P0', 'P1', 'P2', 'P3'], ts: NOW });
+  const ms = g0.matches;
   ok(ms.length === 3, '5: 3 jogos por grupo');
-  // parceiro rotativo: AB/CD, AC/BD, AD/BC
   eq(ms.map((m) => [m.team1.join(''), m.team2.join('')]),
     [['P0P1', 'P2P3'], ['P0P2', 'P1P3'], ['P0P3', 'P1P2']], '5: pairings rotativas AB/CD, AC/BD, AD/BC');
   ok(ms[0].p1 === 'P0 / P1' && ms[0].p2 === 'P2 / P3', '5: p1/p2 com " / "');
-  ok(ms.every((m) => m.group === 0 && m.isMonarch && m.winner === null), '5: m.group=0 (consumido no save) + isMonarch');
-  ok(ms.every((m) => m.label === undefined), '5: sem label (paridade com o legado da Fase 0)');
-  ok(g0.individualStandings.length === 4 && g0.individualStandings[0].name === 'P0', '5: individualStandings dos 4');
-  const allMon = r.groups.reduce((a, g) => a.concat(g.players), []).concat(r.leftOut);
-  ok(allMon.length === 8 && new Set(allMon).size === 8, '5: conservação — 8 jogadores, sem duplicata');
-})();
-
-// ── 6. Sobra (9 → 2 grupos + 1 leftOut) ──────────────────────────────────────
-(function () {
-  const r = buildMonarchCore(names(9), monBase);
-  ok(r.groups.length === 2, '6: 9 jogadores → 2 grupos de 4');
-  eq(r.leftOut, ['P8'], '6: sobra (P8) volta como leftOut (aviso no chamador)');
+  ok(ms.every((m) => m.isMonarch && m.monarchGroup === 0 && m.winner === null), '5: isMonarch + monarchGroup');
+  eq(g0.players, ['P0', 'P1', 'P2', 'P3'], '5: grupo conserva os 4 jogadores');
 })();
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' draw-cores: ' + pass + ' asserts ok, ' + fail + ' falharam');

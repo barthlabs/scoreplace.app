@@ -1,0 +1,12 @@
+rules_version = '2';
+// Regras PERMISSIVAS — uso EXCLUSIVO do emulador nos testes de concorrência.
+// O objetivo desses testes é provar que nenhum write se perde na CAMADA DE DADOS
+// (saveTournament / applyMatchResult / transações), não a enforcement de rules —
+// essa é validada em outro lugar. NUNCA usar em produção.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

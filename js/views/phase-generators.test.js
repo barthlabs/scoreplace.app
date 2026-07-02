@@ -70,10 +70,13 @@ var srcAll = { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 999 }] };
   var cfg = { name: 'G', formatCode: 'grupos_mata', gruposCount: 2, fixedPairs: false, source: srcAll };
   eq(P.generatePhase(prevG, cfg, ctx('x')), E.buildPhaseGroupStage(prevG, cfg, cs, 'x'), 'paridade groups');
 })();
-// rei/rainha (groups + reiRainha → buildPhaseMonarchStage)
+// rei/rainha (MODO → rota league INCREMENTAL; campanha kill-monarch-format)
 (function () {
   var cfg = { name: 'M', format: 'liga', reiRainha: true, source: srcAll };
-  eq(P.generatePhase(prevG, cfg, ctx('x')), E.buildPhaseMonarchStage(prevG, cfg, cs, 'x'), 'paridade rei/rainha');
+  var want = E.buildPhaseLeagueStage(prevG, Object.assign({}, cfg, { fixedPairs: false, ligaCadence: 'incremental' }), cs, 'x');
+  var got = P.generatePhase(prevG, cfg, ctx('x'));
+  eq(got, want, 'paridade rei/rainha (league incremental)');
+  ok(got && got.incrementalLeague === true, 'rei/rainha devolve pool incremental');
 })();
 // league
 (function () {

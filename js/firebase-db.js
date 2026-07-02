@@ -285,6 +285,145 @@ window.FirestoreDB = {
     await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
   },
 
+  // ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) ──────────────
+  // Primitivo transacional GENÉRICO para todo read-modify-write de alto risco.
+  // Substitui o anti-padrão "mutar t local + saveTournament(merge doc inteiro)"
+  // (propenso a lost-update: 2 caminhos/usuários leem, cada um grava tudo, o
+  // último sobrescreve o outro com valores velhos).
+  //
+  // Como funciona / porque é seguro:
+  //  1. runTransaction lê o doc FRESCO dentro da transação.
+  //  2. `mutatorFn(freshData)` aplica a mutação NO estado fresco (in place).
+  //  3. Grava o doc inteiro fresco+mutado via txn.set (SEM merge). Dentro de uma
+  //     transação isso é clobber-free: se outro cliente commitou entre a leitura
+  //     e o commit, o Firestore ABORTA e RE-EXECUTA a transação — re-lê o estado
+  //     JÁ com a mudança do outro e re-aplica a nossa por cima. Nenhum write se perde.
+  //
+  // mutatorFn(data): muta `data` in place. Retorne `false` pra ABORTAR sem gravar
+  // (ex.: pré-condição falhou). Qualquer outro retorno grava. Campos denormalizados
+  // (memberEmails/memberUids/adminEmails/adminUids/nextDrawAt) são recomputados
+  // aqui pra manter paridade com saveTournament.
+  //
+  // Retorna { aborted:boolean, data:object } — data = estado autoritativo pós-commit
+  // (ou o lido, se abortou), pra o chamador sincronizar o AppStore local.
+  async mutateTournament(tournamentId, mutatorFn, options) {
+    if (!this.ensureDb()) throw new Error('Firestore not initialized');
+    var ref = this.db.collection('tournaments').doc(String(tournamentId));
+    var self = this;
+    return this.db.runTransaction(async function (transaction) {
+      var doc = await transaction.get(ref);
+      if (!doc.exists) throw new Error('Tournament not found: ' + tournamentId);
+      var data = doc.data();
+      var out = mutatorFn(data);
+      if (out === false) return { aborted: true, data: data };
+      // Recomputa denormalizados a partir do estado FINAL (mesmos helpers do save).
+      // NUNCA ENCOLHE (union com o valor já no doc fresco) — mesma blindagem do
+      // saveTournament: um uid/email que só existe no denormalizado (co-host por
+      // path que não popula participants) não pode sumir e derrubar o listener
+      // `array-contains` de quem depende dele. Ver saveTournament (v1.8.96/1.9.84).
+      var _union = function (prev, next) {
+        var p = Array.isArray(prev) ? prev : [];
+        var n = Array.isArray(next) ? next : [];
+        return Array.from(new Set(p.concat(n)));
+      };
+      data.memberEmails = _union(data.memberEmails, self._computeMemberEmails(data));
+      data.adminEmails  = self._computeAdminEmails(data);
+      data.adminUids    = self._computeAdminUids(data);
+      data.memberUids   = _union(data.memberUids, self._computeMemberUids(data));
+      try {
+        if (typeof window !== 'undefined' && typeof window._nextOwedDrawMs === 'function') {
+          var owed = window._nextOwedDrawMs(data);
+          if (typeof owed === 'number') data.nextDrawAt = owed;
+          else delete data.nextDrawAt;
+        }
+      } catch (_ndErr) { /* otimização; nunca derruba a transação */ }
+      var clean = self._cleanUndefined(data);
+      transaction.set(ref, clean); // set (sem merge) DENTRO da txn = clobber-free
+      return { aborted: false, data: clean };
+    });
+  },
+
+  // ── PLACAR POR JOGO EM DOC PRÓPRIO (project_match_result_docs, linha 4.1) ──────
+  // Cada JOGO tem seu resultado/consenso num doc próprio:
+  //   tournaments/{tId}/results/{matchId}
+  // Por quê: escrever o placar do jogo A e o do jogo B são docs DIFERENTES →
+  // NUNCA disputam entre si (isolamento, escala — o modelo das presenças/places).
+  // A trava contra corrida DENTRO de um mesmo jogo (dois participantes/org lançando
+  // ao mesmo tempo) é mantida pela TRANSAÇÃO neste doc: runTransaction lê fresco,
+  // aplica, grava; conflito → aborta+re-executa → nenhum write se perde. Dividir +
+  // manter a segurança, exatamente como o dono pediu.
+  //
+  // O doc guarda SÓ o estado MUTÁVEL do resultado (scoreP1/P2, winner, draw, sets,
+  // setsWonP1/P2, totalGamesP1/P2, fixedSet, resultAt, startedAt, pendingResult,
+  // wo, woAbsentSide, ...). A ESTRUTURA da chave (p1/p2, nextMatchId, fase) fica no
+  // doc do torneio — a hidratação de leitura mescla o resultado no match p/ render.
+  //
+  // mutatorFn(result): muta `result` in place. Retorne `false` pra ABORTAR sem gravar.
+  // Retorna { aborted, data } — data = estado autoritativo pós-commit.
+  async mutateMatchResult(tournamentId, matchId, mutatorFn) {
+    if (!this.ensureDb()) throw new Error('Firestore not initialized');
+    if (matchId == null || matchId === '') throw new Error('mutateMatchResult: matchId vazio');
+    var ref = this.db.collection('tournaments').doc(String(tournamentId))
+      .collection('results').doc(String(matchId));
+    var self = this;
+    return this.db.runTransaction(async function (transaction) {
+      var doc = await transaction.get(ref);
+      var data = doc.exists ? doc.data() : { matchId: String(matchId), tournamentId: String(tournamentId) };
+      var out = mutatorFn(data);
+      if (out === false) return { aborted: true, data: data };
+      data.matchId = String(matchId);
+      data.updatedAt = new Date().toISOString();
+      var clean = self._cleanUndefined(data);
+      transaction.set(ref, clean); // set (sem merge) DENTRO da txn = clobber-free
+      return { aborted: false, data: clean };
+    });
+  },
+
+  // Lê TODOS os docs de resultado de um torneio (subcoleção results). Retorna um
+  // mapa { [matchId]: resultData } pra hidratação de leitura (merge nos matches).
+  async loadMatchResults(tournamentId) {
+    if (!this.ensureDb()) return {};
+    var snap = await this.db.collection('tournaments').doc(String(tournamentId))
+      .collection('results').get();
+    var out = {};
+    snap.forEach(function (d) { out[d.id] = d.data(); });
+    return out;
+  },
+
+  // ── FASE B: leitura ISOLADA do subdoc de resultado (project_match_result_docs) ──
+  // Lê UM doc de resultado (tournaments/{tId}/results/{matchId}) sem carregar o
+  // torneio inteiro. Retorna o dado do jogo ou null.
+  async loadMatchResult(tournamentId, matchId) {
+    if (!this.ensureDb()) return null;
+    if (matchId == null || matchId === '') return null;
+    var d = await this.db.collection('tournaments').doc(String(tournamentId))
+      .collection('results').doc(String(matchId)).get();
+    return d.exists ? d.data() : null;
+  },
+
+  // Lê TODOS os jogos de um usuário ACROSS todos os torneios numa ÚNICA query
+  // collectionGroup (`results` where playerUids array-contains uid), sem carregar
+  // NENHUM doc de torneio — o benefício de isolamento da leitura da linha 4.1.
+  // Cada item traz `tournamentId` (campo do subdoc) + `matchId` + resultado.
+  // Requer o índice collectionGroup `results` (playerUids CONTAINS, updatedAt DESC).
+  async loadMyMatchResults(uid, opts) {
+    if (!this.ensureDb() || !uid) return [];
+    var q = this.db.collectionGroup('results').where('playerUids', 'array-contains', uid);
+    try { q = q.orderBy('updatedAt', 'desc'); } catch (e) {}
+    if (opts && opts.limit) q = q.limit(opts.limit);
+    var snap = await q.get();
+    var out = [];
+    snap.forEach(function (d) {
+      var data = d.data() || {};
+      // tournamentId costuma vir no subdoc (mirror/seed); fallback = doc pai.
+      if (!data.tournamentId && d.ref && d.ref.parent && d.ref.parent.parent) {
+        data.tournamentId = d.ref.parent.parent.id;
+      }
+      out.push(data);
+    });
+    return out;
+  },
+
   // Atomic enrollment — uses Firestore transaction to prevent race conditions
   // where concurrent enrollments overwrite each other's participants array
   async enrollParticipant(tournamentId, participantObj, extraUpdates) {
@@ -799,6 +938,38 @@ window.FirestoreDB = {
     } catch (e) {
       if (window._warn) window._warn('[isDisplayNameTaken] consulta falhou (fail-open):', e);
       return null;
+    }
+  },
+
+  // Resolve um NOME DIGITADO → a(s) conta(s) que têm EXATAMENTE esse displayName.
+  // IDENTIDADE = uid: usado no enroll/pareamento pra nunca gravar um titular de
+  // conta só por nome (a classe de bug que sumiu o Adriano). Nomes são únicos entre
+  // uids (resolveUniqueDisplayName), então normalmente 0 ou 1; 2+ é resíduo legado.
+  // Ignora contas mescladas (mergedInto) e nomes "não-amigáveis" (dupla "A / B",
+  // email, telefone, placeholder) — esses não são nome de pessoa. Retorna:
+  //   { status:'none' }                      → sem conta (participante informal)
+  //   { status:'unique', uid, profile }      → 1 conta
+  //   { status:'ambiguous', candidates:[…] } → 2+ homônimos (perguntar qual)
+  // Fail-open: erro de consulta devolve 'none' (grava informal, não bloqueia).
+  async resolveNameToAccounts(name) {
+    if (!name || !this.db) return { status: 'none' };
+    var q = String(name).trim().toLowerCase();
+    if (!q || q.indexOf(' / ') !== -1) return { status: 'none' };
+    if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(name)) return { status: 'none' };
+    try {
+      var snap = await this.db.collection('users').where('displayName_lower', '==', q).limit(8).get();
+      var cands = [];
+      snap.forEach(function (doc) {
+        var d = doc.data() || {};
+        if (d.mergedInto) return;
+        cands.push({ uid: doc.id, displayName: d.displayName || name, email: d.email || '', phone: d.phone || '', photoURL: d.photoURL || '' });
+      });
+      if (cands.length === 0) return { status: 'none' };
+      if (cands.length === 1) return { status: 'unique', uid: cands[0].uid, profile: cands[0] };
+      return { status: 'ambiguous', candidates: cands };
+    } catch (e) {
+      if (window._warn) window._warn('[resolveNameToAccounts] fail-open:', e);
+      return { status: 'none' };
     }
   },
 

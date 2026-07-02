@@ -116,7 +116,7 @@ var csId = function (gr) { return gr.standings; };
 // Prova que a cadência rodada-a-rodada vale também pro modo Rei/Rainha (não é formato).
 (function () {
   var lcfg = { name: 'Temporada R/R', formatCode: 'liga', ligaCadence: 'incremental', reiRainha: true,
-    monarchClassified: 1, source: srcAll };
+    source: srcAll };
   var t = {
     id: 'tBrick4RR', phases: [{ name: 'F0' }, lcfg], currentPhaseIndex: 0,
     groups: [{ name: 'G', players: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'], matches: [] }],

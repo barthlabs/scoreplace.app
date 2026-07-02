@@ -205,7 +205,7 @@ function initRouter() {
           viewContainer.innerHTML = window._bootInProgress
             ? ''
             : ((typeof window._renderBallLoader === 'function')
-              ? window._renderBallLoader('Carregando…', { minHeight: '60vh' })
+              ? window._renderBallLoader('Carregando…', { minHeight: '60vh', bar: true })
               : '<div style="text-align:center;padding:60vh 0 0;">Carregando…</div>');
           _firstRoute = false;
           return;
@@ -220,7 +220,7 @@ function initRouter() {
         viewContainer.innerHTML = window._bootInProgress
           ? ''
           : ((typeof window._renderBallLoader === 'function')
-            ? window._renderBallLoader('Carregando…', { minHeight: '60vh' })
+            ? window._renderBallLoader('Carregando…', { minHeight: '60vh', bar: true })
             : '<div style="text-align:center;padding:60vh 0 0;">Carregando…</div>');
         clearTimeout(window._authNoCacheFallback);
         window._authNoCacheFallback = setTimeout(function() {
@@ -301,6 +301,16 @@ function initRouter() {
           window.location.hash = '#dashboard';
         }
         break;
+      case 'match':
+        // FASE B (project_match_result_docs): #match/:tId/:matchId → tela leve de
+        // UM jogo, lendo só o subdoc results/{matchId} (sem carregar o torneio).
+        if (cleanParam && typeof window.renderMatchPage === 'function') {
+          var _mMatchId = (parts[2] || '').split('?')[0];
+          window.renderMatchPage(viewContainer, cleanParam, _mMatchId);
+        } else {
+          window.location.hash = '#dashboard';
+        }
+        break;
       case 'participants':
         renderParticipants(viewContainer, cleanParam);
         break;
@@ -369,6 +379,24 @@ function initRouter() {
         // v1.3.12-beta: Category Manager como page-route. Param é o tId.
         if (typeof window.renderCategoryManagerPage === 'function' && cleanParam) {
           window.renderCategoryManagerPage(viewContainer, cleanParam);
+        } else {
+          window.location.replace('#dashboard');
+          return;
+        }
+        break;
+      case 'comunicados':
+        // v4.0.90: "Comunicar Inscritos" + "Comunicados" consolidados. Param é o tId.
+        if (typeof window.renderComunicadosPage === 'function' && cleanParam) {
+          window.renderComunicadosPage(viewContainer, cleanParam);
+        } else {
+          window.location.replace('#dashboard');
+          return;
+        }
+        break;
+      case 'participantes':
+        // v4.0.90: "+ Participante" + "Placeholders" consolidados. Param é o tId.
+        if (typeof window.renderAddParticipantPage === 'function' && cleanParam) {
+          window.renderAddParticipantPage(viewContainer, cleanParam);
         } else {
           window.location.replace('#dashboard');
           return;

@@ -96,7 +96,10 @@ function membersAll(byDest, keys) {
 
   // positivo: todos os jogos com vencedor → avança (índice sobe pra 1)
   const tOk = { id: 'ok', currentPhaseIndex: 0, matches: [], groups: [grp(['A1', 'A2'], true), grp(['B1', 'B2'], true)], phases: JSON.parse(JSON.stringify(phases)) };
-  W.AppStore = { tournaments: [tOk] }; W.__alert = null;
+  // commitTournamentTx (blindagem): o harness provê o stub — aplica o mutator no
+  // torneio local (simula a persistência atômica); a re-materialização no fresco é
+  // idempotente (_phaseMaterialized) → no-op sobre o já-materializado.
+  W.AppStore = { tournaments: [tOk], commitTournamentTx: function (id, fn) { var t = this.tournaments.find(function (x) { return String(x.id) === String(id); }); if (t) fn(t); return Promise.resolve(true); } }; W.__alert = null;
   W._advanceMultiPhase('ok');
   ok(tOk.currentPhaseIndex === 1, 'F-pos: fase completa avança (índice→1) [veio ' + tOk.currentPhaseIndex + ']');
 })();

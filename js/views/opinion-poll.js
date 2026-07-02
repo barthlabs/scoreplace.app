@@ -455,14 +455,39 @@
     var canVote = _canVote(t) && !poll.closed;
     var secs = window._opSections(poll);
 
+    // WIZARD (sessão a sessão): enquanto o usuário está VOTANDO (fresh) ou EDITANDO uma
+    // seção, apresenta UMA pergunta por vez — escolhe → Confirmar → próxima → ... — pra
+    // deixar claro que há mais pra votar e ninguém deixar seções em branco. Os RESULTADOS
+    // (todas as seções juntas) seguem numa página só quando não há mais o que votar.
+    var _pending = canVote ? secs.filter(function (s) { return !_opHasVotedSection(poll, s.id, uid) || editSecId === s.id; }) : [];
+    var _wizSec = null, _wizIsEdit = false;
+    if (_pending.length) {
+      _wizSec = editSecId ? secs.filter(function (s) { return s.id === editSecId; })[0] : _pending[0];
+      _wizIsEdit = !!editSecId;
+    }
+    var _wizIdx = _wizSec ? secs.indexOf(_wizSec) : -1;
+
     var body = '';
     secs.forEach(function (sec, si) {
+      if (_wizSec && sec.id !== _wizSec.id) return; // WIZARD: só a seção do passo atual
       var voted = _opHasVotedSection(poll, sec.id, uid);
       var votingMode = canVote && (!voted || editSecId === sec.id);
       var showResults = poll.closed || voted || !poll.hideResultsUntilVote;
       var total = _opSectionVoters(poll, sec.id);
       var myChoices = _opGetVote(poll, uid, sec.id);
 
+      // WIZARD: progresso "Pergunta N de M" + barrinhas (verde=votada, roxo=atual).
+      if (_wizSec && sec.id === _wizSec.id) {
+        body += '<div style="margin-bottom:13px;">' +
+          '<div style="font-size:0.72rem;font-weight:800;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">' +
+            (_wizIsEdit ? '✏️ Alterando' : ('Pergunta ' + (_wizIdx + 1) + ' de ' + secs.length)) + '</div>' +
+          '<div style="display:flex;gap:5px;">' + secs.map(function (_s, _i) {
+            var done = _opHasVotedSection(poll, _s.id, uid);
+            var col = (_i === _wizIdx) ? '#8b5cf6' : (done ? '#34d399' : 'rgba(255,255,255,0.12)');
+            return '<div style="flex:1;height:5px;border-radius:3px;background:' + col + ';transition:background 0.3s;"></div>';
+          }).join('') + '</div>' +
+        '</div>';
+      }
       // v3.1.54: sem rótulo "SEÇÃO N" — a própria PERGUNTA em LARANJA + negrito separa
       // as perguntas (pedido do dono). Mesma fonte usada no editor.
       body += '<div id="op-vsec-' + _esc(sec.id) + '" style="margin-bottom:18px;scroll-margin-top:170px;' + (si > 0 ? 'padding-top:16px;border-top:1px solid var(--border-color);' : '') + '">' +
@@ -529,6 +554,10 @@
       // topo (window._opVoteAll). No modo EDIÇÃO de uma seção já votada, mantém só o
       // "Cancelar" pra abortar a alteração.
       if (votingMode) {
+        // WIZARD: Confirmar o passo → salva esta seção e avança pra próxima (ou finaliza).
+        var _isLastStep = _wizIsEdit || (_pending.length <= 1);
+        var _stepLabel = _wizIsEdit ? '✅ Salvar alteração' : (_isLastStep ? '✅ Confirmar e finalizar' : '✅ Confirmar e continuar →');
+        body += '<button type="button" onclick="window._opVoteStep(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\',\'' + _attr(sec.id) + '\',' + (_wizIsEdit ? 'true' : 'false') + ')" class="btn btn-shine" style="width:100%;margin-top:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:13px;font-size:0.96rem;">' + _stepLabel + '</button>';
         if (voted) {
           body += '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="width:100%;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:11px;padding:8px;font-size:0.8rem;margin-top:6px;">↩️ Cancelar alteração</button>';
         }
@@ -568,7 +597,8 @@
     var _hasVotingSecs = false;
     secs.forEach(function (s) { if (canVote && (!_opHasVotedSection(poll, s.id, uid) || editSecId === s.id)) _hasVotingSecs = true; });
     var _voteTop = '';
-    if (_hasVotingSecs) {
+    // WIZARD: o botão único "Confirmar voto(s)" do topo dá lugar ao "Confirmar" por passo.
+    if (_hasVotingSecs && !_wizSec) {
       var _voteLabel = (secs.length > 1) ? '✅ Confirmar votos' : '✅ Confirmar voto';
       _voteTop = '<div style="padding:10px 1rem;border-bottom:1px solid var(--border-color);background:var(--bg-card,#0f172a);">' +
         '<button type="button" onclick="window._opVoteAll(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;border:none;border-radius:11px;padding:12px;font-size:0.95rem;">' + _voteLabel + '</button>' +
@@ -674,6 +704,53 @@
       var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       if (typeof showNotification === 'function') showNotification('⚠️ Voto NÃO salvo', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
       try { console.error('[opinion-poll] voto-all rejeitado:', err); } catch (e) {}
+    });
+  };
+
+  // WIZARD: confirma UMA seção (o passo atual) e AVANÇA — re-renderiza; a seção salva
+  // deixa de estar pendente, então a próxima pendente vira o passo, ou (se acabou) os
+  // RESULTADOS de todas as seções aparecem. `isEdit` = alteração pontual de UMA seção
+  // (volta pros resultados, não avança pelo resto).
+  window._opVoteStep = function (tId, pollId, secId, isEdit) {
+    var t = _findT(tId); if (!t) return;
+    var poll = _findPoll(t, pollId); if (!poll || poll.closed) return;
+    var cu = _cu(); if (!cu || !cu.uid) { if (typeof showNotification === 'function') showNotification('Entre pra votar', 'Faça login pra votar na enquete.', 'warning'); return; }
+    if (!_canVote(t)) { if (typeof showNotification === 'function') showNotification('Só inscritos votam', 'Inscreva-se no torneio pra votar.', 'warning'); return; }
+    var sec = window._opSections(poll).find(function (s) { return s.id === secId; }); if (!sec) return;
+    // Lê a escolha do passo (mesma leitura de _opVoteAll: tri-estado multi ou radio único).
+    var yes = [], no = [];
+    if (sec.multiSelect) {
+      var secEl = document.getElementById('op-vsec-' + sec.id);
+      var rows = secEl ? secEl.querySelectorAll('[data-opt-row]') : [];
+      Array.prototype.forEach.call(rows, function (r) {
+        var st = r.getAttribute('data-vote'), oid = r.getAttribute('data-opt-id');
+        if (st === 'yes') yes.push(oid); else if (st === 'no') no.push(oid);
+      });
+      if (!yes.length && !no.length) { if (typeof showNotification === 'function') showNotification('Falta responder', 'Marque ✅ ou 🚫 antes de continuar.', 'warning'); return; }
+    } else {
+      var checked = [];
+      document.querySelectorAll('#op-vote-overlay input[name="op-choice-' + sec.id + '"]:checked').forEach(function (i) { checked.push(i.value); });
+      if (!checked.length) { if (typeof showNotification === 'function') showNotification('Escolha uma opção', 'Selecione antes de confirmar.', 'warning'); return; }
+      yes = [checked[0]];
+    }
+    var _prev = poll.votes && poll.votes[cu.uid];
+    var _prevClone = _prev == null ? undefined : (Array.isArray(_prev) ? _prev.slice() : JSON.parse(JSON.stringify(_prev)));
+    if (sec.multiSelect) _opSetVoteMulti(poll, cu.uid, sec.id, yes, no); else _opSetVote(poll, cu.uid, sec.id, yes);
+    _save(t).then(function () {
+      // Recalcula quantas seções ainda faltam (a atual já conta como votada agora).
+      var _left = window._opSections(poll).filter(function (s) { return !_opHasVotedSection(poll, s.id, cu.uid); }).length;
+      if (typeof showNotification === 'function') {
+        if (isEdit) showNotification('✓ Alteração salva', '', 'success');
+        else if (_left > 0) showNotification('✓ Registrado', 'Falta' + (_left > 1 ? 'm ' + _left + ' perguntas' : ' 1 pergunta') + '.', 'success');
+        else showNotification('✓ Tudo votado!', 'Obrigado — seus votos foram registrados.', 'success');
+      }
+      _renderVote(t, poll, null); // re-render: mostra o próximo passo OU os resultados
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }).catch(function (err) {
+      if (poll.votes) { if (_prevClone === undefined) { try { delete poll.votes[cu.uid]; } catch (e) {} } else poll.votes[cu.uid] = _prevClone; }
+      var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
+      if (typeof showNotification === 'function') showNotification('⚠️ Voto NÃO salvo', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
+      try { console.error('[opinion-poll] voto-step rejeitado:', err); } catch (e) {}
     });
   };
 

@@ -1839,6 +1839,8 @@ window._translations['en'] = {
   'create.advGameLostDesc': 'Deduction per game conceded to the opponent.',
   'create.advTiebreakPoint': 'Tie-break point',
   'create.advTiebreakPointDesc': 'Points scored in the set tie-break.',
+  'create.advWoPenalty': 'W.O. penalty',
+  'create.advWoPenaltyDesc': 'Points for taking a walkover in a round (negative punishes; disable for no penalty).',
   'create.advKillingPoint': 'Killing point (40-40)',
   'create.advKillingPointDesc': 'Points won at decisive tie-score situations.',
   'create.advPointScored': 'Point scored',

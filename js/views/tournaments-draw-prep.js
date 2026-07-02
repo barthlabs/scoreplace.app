@@ -268,7 +268,7 @@ window._showGroupsConfigPanel = function(tId) {
             // Cancelar + Sortear (verde) lado a lado, logo após o box do título.
             '<div style="flex-shrink:0;display:flex;gap:10px;padding:12px 1.5rem;background:var(--bg-card,#1e293b);border-bottom:1px solid rgba(255,255,255,0.08);">' +
                 '<button onclick="window._cancelGroupsConfig(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-muted,#cbd5e1);font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
-                '<button id="grp-panel-confirm-btn" onclick="window._grpPanelConfirm(\'' + tIdSafe + '\')" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">🎲 Sortear grupos</button>' +
+                '<button id="grp-panel-confirm-btn" onclick="window._drawBtnBusy&&window._drawBtnBusy(this); window._grpPanelConfirm(\'' + tIdSafe + '\')" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">🎲 Sortear grupos</button>' +
             '</div>' +
             '<div style="overflow-y:auto;flex:1;padding:1.5rem;">';
 
@@ -359,18 +359,8 @@ window._showGroupsConfigPanel = function(tId) {
         });
     };
 
-    window._cancelGroupsConfig = function(tId) {
-        var t = window._findTournamentById(tId);
-        if (t && t._suspendedByPanel) {
-            t.status = t._previousStatus || 'open';
-            delete t._suspendedByPanel;
-            delete t._previousStatus;
-            window.FirestoreDB.saveTournament(t);
-        }
-        var panel = document.getElementById('groups-config-panel');
-        if (panel) panel.remove();
-        document.body.style.overflow = '';
-    };
+    // Cancelar config de grupos = cancel canônico (reset total + detalhe limpo). v4.0.98
+    window._cancelGroupsConfig = function(tId) { window._cancelDrawResolution(tId); };
 
     overlay.innerHTML = renderPanel();
     document.body.appendChild(overlay);
@@ -485,18 +475,33 @@ window._showRemainderPanel = function(tId, info, t) {
     document.body.appendChild(overlay);
 };
 
-window._cancelRemainderPanel = function(tId) {
+// v4.0.98 — CANCEL CANÔNICO da cadeia de resolução do sorteio. Pedido do dono:
+// cancelar SEM completar o sorteio = ZERA TODAS as escolhas (sem-dupla/resto/pow2/
+// standby) e volta pro DETALHE LIMPO, como se Sortear não tivesse sido clicado — pra
+// re-escolher do zero (a situação pode mudar com outro nº de inscritos). Remove TODOS
+// os painéis da cadeia, limpa os flags runtime (_clearDrawRuntimeFlags) e re-renderiza
+// o detalhe. Restaura o status anterior antes de limpar (o helper zera _previousStatus).
+window._cancelDrawResolution = function(tId) {
+    if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); // limpa _drawingTid antes do re-render → botão volta a "Sortear"
     var t = window._findTournamentById(tId);
-    if (t && t._suspendedByPanel) {
-        t.status = t._previousStatus || 'open';
-        delete t._suspendedByPanel;
-        delete t._previousStatus;
-        window.FirestoreDB.saveTournament(t);
+    if (t) {
+        if (t._suspendedByPanel) t.status = t._previousStatus || 'open';
+        // config "Fechadas": o confirm "Encerrar e Sortear" fechou as inscrições p/ DECIDIR
+        // o sorteio (marcou _reopenIfDrawCancelled). Cancelar SEM sortear → REABRE. (Se o
+        // sorteio completar, _commitInitialDraw limpa a flag e as inscrições ficam fechadas.)
+        else if (t._reopenIfDrawCancelled) t.status = 'open';
+        if (typeof window._clearDrawRuntimeFlags === 'function') window._clearDrawRuntimeFlags(t);
+        if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
     }
-    var panel = document.getElementById('remainder-resolution-panel');
-    if (panel) panel.remove();
+    ['unified-resolution-panel','remainder-resolution-panel','removal-subchoice-panel','solo-resolution-panel','solo-manual-pair-panel','groups-config-panel','reopen-panel','p2-resolution-panel','final-review-panel'].forEach(function(id){ var el=document.getElementById(id); if(el) el.remove(); });
+    window._soloPairState = null;
     document.body.style.overflow = '';
+    var c = document.getElementById('view-container');
+    if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
 };
+
+// Cancelar o painel de resto = cancel canônico (reset total + detalhe limpo).
+window._cancelRemainderPanel = function(tId) { window._cancelDrawResolution(tId); };
 
 // Remainder panel: read "Sorteio Geral" toggle and dispatch directly to _executeRemoval.
 // Replaces the old two-step flow (remainder panel → sub-choice panel).
@@ -641,62 +646,90 @@ window._executeRemoval = function(tId, mode, method) {
 
 // ============ UNIFIED RESOLUTION PANEL (POWER-OF-2) ============
 
+// v4.x: transição de FASE (construtor). Converte as LINHAS da próxima fase (que não
+// fecham em potência de 2) num `info` no formato do _diagnoseAll, pra reusar EXATAMENTE
+// a mesma UI nativa (medidor + cards Nash). Linha REPRESENTATIVA = a maior linha com
+// size>1 que NÃO é potência de 2 (fallback: a maior linha). Uma escolha vale pra TODAS.
+window._phaseResToInfo = function(phaseCtx, t){
+    function _lo(s){ var lo=1; while(lo*2<=s) lo*=2; return lo; }
+    var sizes = (phaseCtx.lines||[]).map(function(l){return l.size||0;});
+    var nonPow2 = sizes.filter(function(s){return s>1 && (s&(s-1))!==0;});
+    var repr = nonPow2.length ? Math.max.apply(null,nonPow2) : Math.max.apply(null, sizes.concat([0]));
+    var lo=_lo(repr), hi=lo*2;
+    return { hasIssues:true, isPowerOf2:(repr&(repr-1))===0, isOdd:(repr%2)===1,
+      effectiveTeams:repr, loP2:lo, hiP2:hi, excess:Math.max(0,repr-lo), missing:Math.max(0,hi-repr),
+      remainder:0, incompleteTeams:[], isTeam:false, teamSize:1, totalRawParticipants:repr,
+      _isPhase:true, _lines:(phaseCtx.lines||[]), _nLines:(phaseCtx.lines||[]).length, _nextIdx:phaseCtx.nextIdx, _nextName:phaseCtx.nextName };
+};
+
 window.showUnifiedResolutionPanel = function(tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
 
-    // Swiss/Liga: skip power-of-2 and odd-number checks — these formats handle BYEs naturally
-    var _isSuicoOrLiga = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss' || (window._isLigaFormat && window._isLigaFormat(t));
-    if (_isSuicoOrLiga) {
-        window.showFinalReviewPanel(tId);
-        return;
-    }
+    // v4.x: transição de FASE (construtor) vs. resolução de INSCRIÇÃO. Quando há
+    // _phaseResInfo, o `info` vem das linhas da próxima fase (via _phaseResToInfo) e
+    // flui pro MESMO overlay nativo (medidor + #unified-options-grid). Fora disso, é a
+    // resolução da inscrição, que roteia Suíço/Liga/Grupos e diagnostica via _diagnoseAll.
+    var _phaseCtx = t._phaseResInfo || null;
+    var info;
+    var issuesText;
 
-    // Groups format: redirect to dedicated groups config panel
-    var _isGruposFmt = t.format === 'Fase de Grupos + Eliminatórias' || t.format === 'Grupos + Eliminatória' || t.format === 'Grupos + Mata-Mata' || (t.format || '').indexOf('Grupo') !== -1;
-    if (_isGruposFmt && typeof window._showGroupsConfigPanel === 'function') {
-        var _diagG = window._diagnoseAll(t);
-        // v3.0.x: a Fase de Grupos NÃO usa potência de 2. A sobra ímpar (quem não
-        // forma dupla) vai pra lista de espera no sorteio — não deve cair no painel
-        // de "resto/potência de 2" da eliminatória. Só caímos no painel padrão se
-        // houver TIMES INCOMPLETOS de verdade (duplas pré-formadas faltando membro).
-        if (_diagG.incompleteTeams.length === 0) {
-            window._showGroupsConfigPanel(tId);
+    if (!_phaseCtx) {
+        // Swiss/Liga: skip power-of-2 and odd-number checks — these formats handle BYEs naturally
+        var _isSuicoOrLiga = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss' || (window._isLigaFormat && window._isLigaFormat(t));
+        if (_isSuicoOrLiga) {
+            window.showFinalReviewPanel(tId);
             return;
         }
-    }
 
-    // Suspend enrollment while decision panel is open
-    if (t.status !== 'closed') {
-        t._previousStatus = t.status; // preserve original status for cancel
-        t.status = 'closed';
-        t._suspendedByPanel = true;
-        window.FirestoreDB.saveTournament(t);
-    }
+        // Groups format: redirect to dedicated groups config panel
+        var _isGruposFmt = t.format === 'Fase de Grupos + Eliminatórias' || t.format === 'Grupos + Eliminatória' || t.format === 'Grupos + Mata-Mata' || (t.format || '').indexOf('Grupo') !== -1;
+        if (_isGruposFmt && typeof window._showGroupsConfigPanel === 'function') {
+            var _diagG = window._diagnoseAll(t);
+            // v3.0.x: a Fase de Grupos NÃO usa potência de 2. A sobra ímpar (quem não
+            // forma dupla) vai pra lista de espera no sorteio — não deve cair no painel
+            // de "resto/potência de 2" da eliminatória. Só caímos no painel padrão se
+            // houver TIMES INCOMPLETOS de verdade (duplas pré-formadas faltando membro).
+            if (_diagG.incompleteTeams.length === 0) {
+                window._showGroupsConfigPanel(tId);
+                return;
+            }
+        }
 
-    const info = window._diagnoseAll(t);
-
-    // If no issues, proceed directly to actual draw (skip Final Review step)
-    if (!info.hasIssues) {
-        // Auto-restore enrollment
-        if (t._suspendedByPanel) {
-            t.status = t._previousStatus || 'open';
-            delete t._suspendedByPanel;
-            delete t._previousStatus;
+        // Suspend enrollment while decision panel is open
+        if (t.status !== 'closed') {
+            t._previousStatus = t.status; // preserve original status for cancel
+            t.status = 'closed';
+            t._suspendedByPanel = true;
             window.FirestoreDB.saveTournament(t);
         }
-        if (typeof window.generateDrawFunction === 'function') {
-            window.generateDrawFunction(tId);
-        } else {
-            window.showFinalReviewPanel(tId);
-        }
-        return;
-    }
 
-    // Remainder gets its own dedicated panel (different from power-of-2)
-    if (info.remainder > 0) {
-        window._showRemainderPanel(tId, info, t);
-        return;
+        info = window._diagnoseAll(t);
+
+        // If no issues, proceed directly to actual draw (skip Final Review step)
+        if (!info.hasIssues) {
+            // Auto-restore enrollment
+            if (t._suspendedByPanel) {
+                t.status = t._previousStatus || 'open';
+                delete t._suspendedByPanel;
+                delete t._previousStatus;
+                window.FirestoreDB.saveTournament(t);
+            }
+            if (typeof window.generateDrawFunction === 'function') {
+                window.generateDrawFunction(tId);
+            } else {
+                window.showFinalReviewPanel(tId);
+            }
+            return;
+        }
+
+        // Remainder gets its own dedicated panel (different from power-of-2)
+        if (info.remainder > 0) {
+            window._showRemainderPanel(tId, info, t);
+            return;
+        }
+    } else {
+        info = window._phaseResToInfo(_phaseCtx, t);
     }
 
     // Remove any existing panels
@@ -710,21 +743,24 @@ window.showUnifiedResolutionPanel = function(tId) {
     document.body.style.overflow = 'hidden';
 
     // Build issues description
-    let issuesList = [];
-    if (info.incompleteTeams.length > 0) {
-        issuesList.push(_t('predraw.issueIncompleteTeams', {n: info.incompleteTeams.length}));
+    if (!_phaseCtx) {
+        let issuesList = [];
+        if (info.incompleteTeams.length > 0) {
+            issuesList.push(_t('predraw.issueIncompleteTeams', {n: info.incompleteTeams.length}));
+        }
+        if (info.remainder > 0) {
+            issuesList.push(_t('predraw.issueRemainder', {n: info.remainder, s: info.remainder > 1 ? 's' : ''}));
+        }
+        if (info.isOdd && info.remainder === 0) {
+            issuesList.push(_t('predraw.issueOddUnits', {unit: info.isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts')}));
+        }
+        if (!info.isPowerOf2 && info.remainder === 0 && !info.isOdd) {
+            issuesList.push(_t('predraw.issueNotPow2'));
+        }
+        issuesText = issuesList.join(', ');
+    } else {
+        issuesText = 'As linhas (' + _phaseCtx.lines.map(function(l){return l.label+': '+l.size;}).join(' · ') + ') não fecham em potência de 2';
     }
-    if (info.remainder > 0) {
-        issuesList.push(_t('predraw.issueRemainder', {n: info.remainder, s: info.remainder > 1 ? 's' : ''}));
-    }
-    if (info.isOdd && info.remainder === 0) {
-        issuesList.push(_t('predraw.issueOddUnits', {unit: info.isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts')}));
-    }
-    if (!info.isPowerOf2 && info.remainder === 0 && !info.isOdd) {
-        issuesList.push(_t('predraw.issueNotPow2'));
-    }
-
-    const issuesText = issuesList.join(', ');
     const tIdSafe = String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
     // State for excluded options
@@ -733,10 +769,9 @@ window.showUnifiedResolutionPanel = function(tId) {
     }
 
     // ── v4.0.52: estimativa de tempo POR OPÇÃO (dinâmica) + seleção→confirmar ──
-    // Espelha o cálculo do antigo _showPhaseResolutionPanel (que o dono aprovou):
     // nº de jogos por solução × duração × quadras. O clique numa opção SELECIONA
-    // (atualiza a estimativa); o Confirmar no topo APLICA. Isso unifica o padrão
-    // do painel de fase aqui, pra depois apagar o legado sem regressão.
+    // (atualiza a estimativa); o Confirmar no topo APLICA. Vale tanto pra inscrição
+    // quanto pra transição de fase (info via _phaseResToInfo) — uma lógica só.
     window._unifiedSel = null; // re-seleciona o recomendado a cada abertura
     var _uDur = parseInt(t.gameDuration) || 30;
     var _uCourts = parseInt(t.courtCount) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 2;
@@ -746,13 +781,25 @@ window.showUnifiedResolutionPanel = function(tId) {
         if (!s || s <= 1) return null;
         if ((s & (s - 1)) === 0) base = s - 1;                                  // já é potência de 2
         else if (key === 'bye') base = s - 1;                                    // chave de hi com folgas
-        else if (key === 'playin') base = Math.floor(s / 2) + (lo - 1) + (s % 2);// repescagem (mais jogos)
+        else if (key === 'playin') {
+            if (_uIsDouble && typeof window._countRepechageDoubleElim === 'function') {
+                // Dupla Eliminatória c/ repescagem: NINGUÉM é eliminado na 1ª — todos os
+                // derrotados caem na chave inferior. O total = contador que espelha o sorteio
+                // real (_buildRepechageDoubleElim). Ex.: 14 duplas = 28 jogos.
+                base = window._countRepechageDoubleElim(s) || (Math.floor(s / 2) + (lo - 1) + (s % 2));
+            } else {
+                // Eliminação simples c/ play-in: repescagem (floor(s/2)) + chave de lo (lo-1).
+                base = Math.floor(s / 2) + (lo - 1) + (s % 2);
+            }
+        }
         else if (key === 'reopen') base = hi - 1;                                // enche até hi
         else if (key === 'standby' || key === 'exclusion') base = lo - 1;        // cai pra lo
         else if (key === 'swiss') { base = (window._unifiedSwissRounds || 3) * Math.floor(s / 2) + (window._unifiedSwissElim || 0); } // X rodadas de suíço + eliminatória de loP2
         else return null;                                                        // dissolve/poll: sem estimativa direta
-        // dupla elim ≈ dobro - 1; NÃO ao Suíço (a eliminatória do Suíço já entra em _unifiedSwissElim).
-        if (_uIsDouble && base > 0 && key !== 'swiss') base = 2 * base - 1;
+        // dupla elim ≈ dobro - 1; NÃO ao Suíço nem ao Play-in (ambos já contabilizados acima).
+        if (_uIsDouble && base > 0 && key !== 'swiss' && key !== 'playin') base = 2 * base - 1;
+        // fase: a MESMA estratégia roda em cada linha → multiplica pelo nº de linhas.
+        if (t._phaseResInfo && base != null) base = base * (t._phaseResInfo.lines.length || 1);
         return base;
     };
     var _uFmtMin = function(m) { var h = Math.floor(m / 60), mm = m % 60; return h > 0 ? (h + 'h' + (mm ? ' ' + mm + 'm' : '')) : (mm + 'm'); };
@@ -795,6 +842,13 @@ window.showUnifiedResolutionPanel = function(tId) {
     window._renderUnifiedOptions = function(excludedKeys) {
         excludedKeys = excludedKeys || [];
 
+        // v4.x fase: a próxima fase é Dupla Eliminatória? → oculta BYE (fluxo assimétrico).
+        var _phaseNextIsDupla = false;
+        if (t._phaseResInfo) {
+            var _pCfg = (t.phases && t._phaseResInfo.nextIdx != null) ? (t.phases[t._phaseResInfo.nextIdx] || {}) : {};
+            _phaseNextIsDupla = /dupla/i.test(String(_pCfg.format || '')) || _pCfg.formatCode === 'elim_dupla';
+        }
+
         // Dynamic descriptions based on context
         var _remLabel = info.remainder > 0 ? info.remainder + ' ' + (info.remainder > 1 ? _t('predraw.unitParticipants') : _t('predraw.unitParticipantSingular')) : '';
         var _excessLabel = info.excess > 0
@@ -824,8 +878,19 @@ window.showUnifiedResolutionPanel = function(tId) {
         // Filter options based on context
         // When there's remainder, show only remainder-specific options first
         var remainderKeys = ['standby', 'exclusion', 'reopen'];
+        // BYE não fecha a chave em Dupla Eliminatória fora de pow2 (o jogo-BYE não tem
+        // "perdedor" p/ dropar na chave inferior → fluxo assimétrico → vagas mortas). Repescagem
+        // (todos jogam), Exclusão e Lista de Espera (cortam pra pow2) resolvem. Enquanto o BYE-em-
+        // dupla não tiver algoritmo robusto, ocultamos a opção só nesse caso. feedback_resolution_one_logic.
+        var _isDuplaElim = ((t.format || '').indexOf('Dupla') !== -1) || (t.formatCode === 'elim_dupla');
         let activeOptions = allOptions.filter(function(o) {
             if (excludedKeys.indexOf(o.key) !== -1) return false;
+            if (t._phaseResInfo) {
+                if (['playin','standby','bye','exclusion'].indexOf(o.key) === -1) return false;
+                if (o.key === 'bye' && _phaseNextIsDupla) return false;
+                return true;
+            }
+            if (o.key === 'bye' && _isDuplaElim) return false;
             if (info.remainder > 0) return remainderKeys.indexOf(o.key) !== -1;
             return true;
         });
@@ -1026,6 +1091,19 @@ window.showUnifiedResolutionPanel = function(tId) {
         if (!t) return;
         if (!option) { if (typeof showNotification === 'function') showNotification(_t('predraw.adjustTitle'), _t('predraw.selectStrategy'), 'info'); return; }
 
+        // v4.x fase: grava a escolha na próxima fase e avança — UMA escolha vale pra
+        // todas as linhas. (Antes vivia num painel de fase separado, agora canônico aqui.)
+        if (t._phaseResInfo) {
+            var _pi = t._phaseResInfo;
+            var _idx = (_pi.nextIdx != null) ? _pi.nextIdx : ((t.currentPhaseIndex||0)+1);
+            if (t.phases && t.phases[_idx]) t.phases[_idx].bracketResolution = option;
+            delete t._phaseResInfo;
+            var _pp = document.getElementById('unified-resolution-panel'); if (_pp) _pp.remove();
+            document.body.style.overflow = '';
+            if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+            return;
+        }
+
         // Remove panel
         const panel = document.getElementById('unified-resolution-panel');
         if (panel) panel.remove();
@@ -1053,23 +1131,8 @@ window.showUnifiedResolutionPanel = function(tId) {
         }
     };
 
-    window._cancelUnifiedPanel = function(tId) {
-        const t = window._findTournamentById(tId);
-        if (!t) return;
-
-        // Restore enrollment to previous status
-        if (t._suspendedByPanel) {
-            t.status = t._previousStatus || 'open';
-            delete t._suspendedByPanel;
-            delete t._previousStatus;
-            window.FirestoreDB.saveTournament(t);
-        }
-
-        // Close panel
-        const panel = document.getElementById('unified-resolution-panel');
-        if (panel) panel.remove();
-        document.body.style.overflow = '';
-    };
+    // Cancelar o painel de pow2 = cancel canônico (reset total + detalhe limpo). v4.0.98
+    window._cancelUnifiedPanel = function(tId) { window._cancelDrawResolution(tId); };
 
     // Sub-choice panel for standby/exclusion (called from both remainder and unified panels)
     // NOTE: These are defined at IIFE scope so they work regardless of which panel invokes them.
@@ -1085,8 +1148,20 @@ window.showUnifiedResolutionPanel = function(tId) {
     var _missingCount = info.hiP2 - info.effectiveTeams;
     var _unitLabel = info.isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts');
 
+    // v4.2.3 (pedido do dono): NOMES DAS LINHAS acima do medidor de potência de 2 —
+    // cada linha numa row própria ("Ouro (25)", quebra, "Prata (25)"). Só em transição
+    // de fase (_phaseCtx com linhas nomeadas); na inscrição (sem linhas) não aparece.
+    var _linesHeader = '';
+    if (_phaseCtx && Array.isArray(_phaseCtx.lines) && _phaseCtx.lines.length) {
+        _linesHeader = '<div style="text-align:center;margin-bottom:14px;">' +
+            _phaseCtx.lines.map(function (l) {
+                return '<div style="font-size:1.05rem;font-weight:900;color:#fde68a;line-height:1.45;letter-spacing:-0.01em;">' + window._safeHtml(l.label) + ' (' + l.size + ')</div>';
+            }).join('') +
+        '</div>';
+    }
+
     // v4.0.66: 3 BOXES — inferior (esq, menor) · ATUAIS (centro, destaque) · superior (dir, menor)
-    gaugeHtml = '<div style="display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:8px;align-items:stretch;">' +
+    gaugeHtml = _linesHeader + '<div style="display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:8px;align-items:stretch;">' +
         '<div style="background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.35);border-radius:16px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;justify-content:center;">' +
             '<div style="font-size:0.56rem;color:#86efac;text-transform:uppercase;letter-spacing:0.4px;font-weight:700;">' + _t('predraw.gaugeInferior') + '</div>' +
             '<div style="font-size:1.5rem;font-weight:900;color:#4ade80;line-height:1.15;">' + info.loP2 + '</div>' +
@@ -1118,7 +1193,7 @@ window.showUnifiedResolutionPanel = function(tId) {
             '</div>' +
             '<div style="display:flex;gap:8px;">' +
                 '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="flex:1;background:rgba(0,0,0,0.25);color:#fef3c7;border:2px solid rgba(254,243,199,0.3);padding:9px 14px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\'">' + _t('predraw.cancelBtn') + '</button>' +
-                '<button onclick="window._handleUnifiedOption(\'' + tIdSafe + '\', window._unifiedSel)" style="flex:2;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:9px 14px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;transition:all 0.2s;box-shadow:0 6px 16px rgba(34,197,94,0.35);" onmouseover="this.style.filter=\'brightness(1.1)\'" onmouseout="this.style.filter=\'\'">' + _t('predraw.confirmBtn') + '</button>' +
+                '<button onclick="window._spinButton&&window._spinButton(this,\'Confirmando…\'); window._handleUnifiedOption(\'' + tIdSafe + '\', window._unifiedSel)" style="flex:2;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:9px 14px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;transition:all 0.2s;box-shadow:0 6px 16px rgba(34,197,94,0.35);" onmouseover="this.style.filter=\'brightness(1.1)\'" onmouseout="this.style.filter=\'\'">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
         // Scrollable content
@@ -1171,7 +1246,9 @@ window._soloContinueDraw = function (tId, isAberto) {
     var a = document.getElementById('solo-resolution-panel'); if (a) a.remove();
     var b = document.getElementById('solo-manual-pair-panel'); if (b) b.remove();
     document.body.style.overflow = '';
-    if (typeof window._handleSortearClick === 'function') window._handleSortearClick(tId, !!isAberto);
+    // skipGates=true: o gate "Encerrar Inscrições?" já foi mostrado quando o usuário
+    // clicou Sortear — não repetir ao confirmar a resolução dos sem-dupla. (v4.0.100)
+    if (typeof window._handleSortearClick === 'function') window._handleSortearClick(tId, !!isAberto, true);
 };
 window._soloCancel = function () {
     var a = document.getElementById('solo-resolution-panel'); if (a) a.remove();
@@ -1232,7 +1309,7 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
             '</div>' +
             // botões ABAIXO do título, MESMA altura/largura (box-sizing + min-height + borda iguais; flex:1)
             '<div style="display:flex;gap:10px;">' +
-                '<button onclick="window._soloCancel()" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);color:#fef3c7;border:2px solid rgba(254,243,199,0.35);border-radius:12px;font-weight:700;font-size:0.92rem;line-height:1;cursor:pointer;">' + _t('predraw.cancelBtn') + '</button>' +
+                '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);color:#fef3c7;border:2px solid rgba(254,243,199,0.35);border-radius:12px;font-weight:700;font-size:0.92rem;line-height:1;cursor:pointer;">' + _t('predraw.cancelBtn') + '</button>' +
                 '<button onclick="window._soloConfirm(\'' + tIdSafe + '\', ' + ab + ')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);border-radius:12px;font-weight:800;font-size:0.92rem;line-height:1;cursor:pointer;box-shadow:0 6px 16px rgba(34,197,94,0.35);">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
@@ -1674,155 +1751,6 @@ window._cancelPowerOf2Panel = function (tId) {
         if (container) renderTournaments(container, window.location.hash.split('/')[1]);
         showNotification(_t('draw.enrollRestored'), _t('draw.enrollRestoredMsg'), 'info');
     }
-};
-
-// ── v2.7.24: Resolução de potência de 2 nas CHAVES DE FASE (construtor) ───────
-// Painel DEDICADO de fase (NÃO mexe no showUnifiedResolutionPanel da inscrição).
-// Disparado por advanceMultiPhase quando uma linha não fecha em potência de 2.
-// Pergunta como resolver — UMA escolha pra todas as linhas — e grava em
-// phase.bracketResolution (o motor genTierBracket aplica). Opções viáveis numa
-// chave de entrantes FIXOS: Play-in, BYE, Exclusão.
-window._showPhaseResolutionPanel = function (tId) {
-    var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-    if (!t || !t._phaseResInfo) return;
-    var info = t._phaseResInfo;
-    var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
-    var tIdSafe = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    function pow2lo(s) { var lo = 1; while (lo * 2 <= s) lo *= 2; return lo; }
-    function descFor(optKey) {
-        return info.lines.map(function (l) {
-            var s = l.size; if (s <= 1 || (s & (s - 1)) === 0) return null;
-            var lo = pow2lo(s), hi = lo * 2, excess = s - lo, missing = hi - s, d;
-            if (optKey === 'bye') d = 'chave de ' + hi + ' (' + missing + ' folga' + (missing > 1 ? 's' : '') + ')';
-            else if (optKey === 'playin') {
-                // v2.8.11: repescagem real (espelha genTierBracket): TODOS jogam a R1;
-                // os g=floor(s/2) vencedores entram + (lo-g) melhores perdedores; se
-                // s é ímpar, 1 sobra e disputa um jogo de repescagem pela última vaga.
-                var g = Math.floor(s / 2), rep = lo - g, odd = (s % 2) === 1, direto = odd ? (rep - 1) : rep;
-                var partes = [g + ' vencem'];
-                if (direto > 0) partes.push(direto + (direto > 1 ? ' melhores perdedores' : ' melhor perdedor'));
-                if (odd) partes.push('1 repescagem');
-                d = 'todos jogam a 1ª rodada (' + g + ' jogo' + (g > 1 ? 's' : '') + (odd ? ', 1 sobra' : '') + ') → ' + partes.join(' + ') + ' → chave de ' + lo;
-            }
-            else if (optKey === 'standby') d = excess + ' pra lista de espera → chave de ' + lo;
-            else d = 'corta ' + excess + ' → chave de ' + lo;
-            return '<div style="margin-top:2px;"><b>' + esc(l.label) + '</b> (' + s + '): ' + d + '</div>';
-        }).filter(Boolean).join('');
-    }
-    var opts = [
-        { key: 'playin', icon: '🔁', title: 'Play-in (repescagem)', sub: 'Todos jogam — os últimos disputam a vaga.' },
-        { key: 'standby', icon: '⏱️', title: 'Lista de espera', sub: 'Os últimos ficam de espera (entram na chave abaixo) — disponíveis pra substituir num W.O.' },
-        { key: 'bye', icon: '🥇', title: 'BYE (folga p/ cabeças)', sub: 'Os melhores folgam a 1ª rodada até a potência acima.' },
-        { key: 'exclusion', icon: '🚫', title: 'Exclusão', sub: 'Corta os piores classificados até a potência abaixo.' }
-    ];
-    // v2.7.65: nº de jogos por solução (somando TODAS as linhas) → estimativa de tempo.
-    function gamesFor(optKey) {
-        var total = 0;
-        info.lines.forEach(function (l) {
-            var s = l.size; if (s <= 1) return;
-            if ((s & (s - 1)) === 0) { total += s - 1; return; } // já é potência de 2
-            var lo = pow2lo(s);
-            // v2.8.11: BYE = chave de hi com folgas → s-1 jogos. PLAY-IN (repescagem):
-            // TODOS jogam a R1 (floor(s/2) jogos) + chave de lo (lo-1) + 1 jogo de
-            // repescagem se s é ímpar → custa MAIS que o BYE. espera/exclusão = lo-1.
-            if (optKey === 'bye') total += s - 1;
-            else if (optKey === 'playin') total += Math.floor(s / 2) + (lo - 1) + (s % 2);
-            else total += lo - 1;
-        });
-        return total;
-    }
-    var _dur = parseInt(t.gameDuration) || 30;
-    var _courts = parseInt(t.courtCount) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 2;
-    window._phaseResCourts = _courts;
-    function fmtMin(m) { var h = Math.floor(m / 60), mm = m % 60; return h > 0 ? (h + 'h' + (mm ? ' ' + mm + 'm' : '')) : (mm + 'm'); }
-    // Equilíbrio de Nash por solução (mesma matriz de payoff do _computeNashRecommendation):
-    // justiça 45% · inclusão 35% · esforço 20%, cada um 0-10 → % = score*10.
-    var _nashPay = { 'playin': { f: 8, i: 10, e: 6 }, 'standby': { f: 6, i: 4, e: 9 }, 'bye': { f: 6, i: 10, e: 9 }, 'exclusion': { f: 3, i: 2, e: 10 } };
-    function nashPct(k) { var p = _nashPay[k]; return p ? Math.round((p.f * 0.45 + p.i * 0.35 + p.e * 0.20) * 10) : 0; }
-    // v2.7.66: apresenta as soluções em ordem decrescente de equilíbrio de Nash.
-    opts.sort(function (a, b) { return nashPct(b.key) - nashPct(a.key); });
-    var _bestKey = '', _bestPct = -1;
-    opts.forEach(function (o) { var p = nashPct(o.key); if (p > _bestPct) { _bestPct = p; _bestKey = o.key; } });
-    // estado p/ seleção dinâmica
-    window._phaseResTId = tIdSafe;
-    window._phaseResSel = _bestKey;
-    window._phaseResData = {};
-    opts.forEach(function (o) { var g = gamesFor(o.key); window._phaseResData[o.key] = { games: g, mins: Math.ceil(g / Math.max(1, _courts)) * _dur, label: o.title, fmt: fmtMin(Math.ceil(g / Math.max(1, _courts)) * _dur) }; });
-
-    function nashColor(pct) { return pct >= 80 ? '#6ee7b7' : pct >= 60 ? '#fde68a' : '#fca5a5'; }
-    var cards = opts.map(function (o) {
-        var pct = nashPct(o.key); var isRec = (o.key === _bestKey); var isSel = (o.key === window._phaseResSel);
-        return '<button id="phase-res-opt-' + o.key + '" data-key="' + o.key + '" onclick="window._phaseResSelect(\'' + o.key + '\')" style="text-align:left;background:' + (isSel ? 'rgba(99,102,241,0.16)' : 'rgba(255,255,255,0.04)') + ';border:2px solid ' + (isSel ? 'rgba(129,140,248,0.8)' : 'rgba(255,255,255,0.12)') + ';border-radius:14px;padding:12px 14px;cursor:pointer;color:#e2e8f0;transition:all 0.2s;">' +
-            // linha 1: nome (esq) + Nash (dir) — SEMPRE na mesma posição relativa ao nome
-            '<div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:0.92rem;">' +
-              '<span>' + o.icon + ' ' + o.title + '</span>' +
-              '<span style="margin-left:auto;flex-shrink:0;font-size:0.62rem;font-weight:800;color:' + nashColor(pct) + ';background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);padding:1px 7px;border-radius:6px;white-space:nowrap;" title="Equilíbrio de Nash — quanto maior, melhor o equilíbrio entre justiça, inclusão e esforço">⚖️ Nash ' + pct + '%</span>' +
-            '</div>' +
-            // linha 2: recomendado (só no de maior Nash), abaixo do nome, à esquerda
-            (isRec ? '<div style="margin-top:3px;"><span style="font-size:0.6rem;background:rgba(16,185,129,0.25);color:#6ee7b7;padding:1px 7px;border-radius:6px;">recomendado</span></div>' : '') +
-            '<div style="font-size:0.74rem;color:var(--text-muted);margin:5px 0 5px;">' + o.sub + '</div>' +
-            '<div style="font-size:0.72rem;color:#93c5fd;line-height:1.45;">' + descFor(o.key) + '</div>' +
-        '</button>';
-    }).join('');
-    var old = document.getElementById('phase-res-panel'); if (old) old.remove();
-    var ov = document.createElement('div');
-    ov.id = 'phase-res-panel';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:18px;';
-    var linesSummary = info.lines.map(function (l) { return esc(l.label) + ': ' + l.size; }).join(' · ');
-    var _selD = window._phaseResData[window._phaseResSel];
-    // v2.7.66: box VERDE de estimativa, STICKY (acompanha o scroll) e posicionado
-    // logo acima da solução clicada. Renderizado dentro do container das soluções
-    // (antes do card selecionado); _phaseResSelect o move pro card escolhido.
-    var estimateHtml = '<div id="phase-res-estimate" style="position:sticky;top:0;z-index:3;background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.5);border-radius:12px;padding:9px 12px;font-size:0.82rem;color:var(--text-bright);box-shadow:0 6px 14px rgba(0,0,0,0.3);">' +
-        '⏱️ <b>Estimativa</b>: <b id="phase-res-est-val" style="color:#6ee7b7;">~' + _selD.fmt + '</b> ' +
-        '<span id="phase-res-est-sub" style="opacity:0.78;font-size:0.74rem;">(' + _selD.games + ' jogos · ' + _courts + ' quadra' + (_courts > 1 ? 's' : '') + ' · ' + _dur + ' min/jogo)</span></div>';
-    // v2.7.67: as AÇÕES (Avançar/Cancelar) também acompanham a solução selecionada —
-    // ficam LOGO ABAIXO do card escolhido (sticky no rodapé), empurrando as demais
-    // soluções pra baixo e ficando sempre na tela.
-    var actionsHtml = '<div id="phase-res-actions" style="position:sticky;bottom:0;z-index:3;background:var(--bg-card,#1a1a2e);padding-top:8px;box-shadow:0 -8px 12px rgba(0,0,0,0.25);">' +
-        '<button onclick="window._applyPhaseResolution(\'' + tIdSafe + '\', window._phaseResSel)" class="btn btn-success" style="width:100%;">🏆 Avançar com esta solução</button>' +
-        '<button onclick="document.getElementById(\'phase-res-panel\').remove()" style="margin-top:8px;width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);border-radius:10px;padding:8px;font-weight:600;cursor:pointer;">Cancelar</button>' +
-    '</div>';
-    ov.innerHTML = '<div style="background:var(--bg-card,#1a1a2e);border:2px solid rgba(245,158,11,0.4);border-radius:18px;max-width:460px;width:100%;max-height:88vh;overflow-y:auto;padding:18px 18px 16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
-        '<div style="font-size:1.05rem;font-weight:800;color:#fbbf24;margin-bottom:4px;">⚖️ Resolver as chaves da ' + esc(info.nextName) + '</div>' +
-        '<div style="font-size:0.8rem;color:var(--text-main);line-height:1.4;margin-bottom:10px;">Alguma linha não fechou em potência de 2 (' + esc(linesSummary) + '). Escolha como resolver — vale pra <b>todas as linhas</b>:</div>' +
-        '<div style="display:flex;flex-direction:column;gap:8px;">' + estimateHtml + cards + actionsHtml + '</div>' +
-    '</div>';
-    document.body.appendChild(ov);
-    // posiciona estimativa (acima) e ações (abaixo) do card selecionado
-    if (typeof window._phaseResSelect === 'function') window._phaseResSelect(window._phaseResSel);
-};
-// v2.7.65: seleção dinâmica no painel de resolução — destaca o card e atualiza a
-// estimativa de tempo acima dos botões, sem aplicar (o "Avançar" aplica).
-window._phaseResSelect = function (key) {
-    window._phaseResSel = key;
-    ['playin', 'standby', 'bye', 'exclusion'].forEach(function (k) {
-        var el = document.getElementById('phase-res-opt-' + k); if (!el) return;
-        var on = (k === key);
-        el.style.background = on ? 'rgba(99,102,241,0.16)' : 'rgba(255,255,255,0.04)';
-        el.style.borderColor = on ? 'rgba(129,140,248,0.8)' : 'rgba(255,255,255,0.12)';
-    });
-    var d = window._phaseResData && window._phaseResData[key];
-    if (!d) return;
-    var v = document.getElementById('phase-res-est-val'); if (v) v.textContent = '~' + d.fmt;
-    var s = document.getElementById('phase-res-est-sub'); if (s) s.textContent = '(' + d.games + ' jogos · ' + (window._phaseResCourts || '?') + ' quadra' + ((window._phaseResCourts || 1) > 1 ? 's' : '') + ')';
-    // move o box verde pra ACIMA da solução clicada e as ações pra ABAIXO dela
-    // (ambos sticky → sempre na tela; empurra as demais soluções pra baixo).
-    var box = document.getElementById('phase-res-estimate');
-    var card = document.getElementById('phase-res-opt-' + key);
-    if (box && card && card.parentNode) card.parentNode.insertBefore(box, card);
-    var actions = document.getElementById('phase-res-actions');
-    if (actions && card && card.parentNode) card.parentNode.insertBefore(actions, card.nextSibling);
-};
-window._applyPhaseResolution = function (tId, option) {
-    var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-    if (!t) return;
-    var info = t._phaseResInfo;
-    var idx = info ? info.nextIdx : ((t.currentPhaseIndex || 0) + 1);
-    if (t.phases && t.phases[idx]) t.phases[idx].bracketResolution = option;
-    delete t._phaseResInfo;
-    var p = document.getElementById('phase-res-panel'); if (p) p.remove();
-    if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
 };
 
 // (Check-in functions moved to participants.js)
@@ -2704,6 +2632,11 @@ window._handleP2Option = function (tId, option) {
 
 // ─── Painel de Reabertura de Inscrições ───
 window._showReopenPanel = function (tId, info) {
+    info = info || {};
+    // v4.0.98: o painel lia info.count/info.hi, mas é chamado com o shape do _diagnoseAll
+    // (effectiveTeams/hiP2) → "undefined" na tela. Fallback tolerante aos dois shapes.
+    var _rpCount = (info.count != null) ? info.count : info.effectiveTeams;
+    var _rpHi = (info.hi != null) ? info.hi : info.hiP2;
     const overlay = document.createElement('div');
     overlay.id = 'reopen-panel';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:1rem;';
@@ -2721,11 +2654,11 @@ window._showReopenPanel = function (tId, info) {
                 <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:14px;padding:1.25rem;margin-bottom:1.25rem;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
                         <span style="color:#94a3b8;font-size:0.85rem;">${info.teamSize > 1 ? _t('predraw.reopenCurrentTeams') : _t('predraw.reopenCurrentParts')}</span>
-                        <span style="color:#f1f5f9;font-weight:700;font-size:1.1rem;">${info.count}</span>
+                        <span style="color:#f1f5f9;font-weight:700;font-size:1.1rem;">${_rpCount}</span>
                     </div>
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
                         <span style="color:#94a3b8;font-size:0.85rem;">${_t('predraw.reopenNextPow2')}</span>
-                        <span style="color:#3b82f6;font-weight:700;font-size:1.1rem;">${info.hi}</span>
+                        <span style="color:#3b82f6;font-weight:700;font-size:1.1rem;">${_rpHi}</span>
                     </div>
                     <div style="border-top:1px solid rgba(59,130,246,0.15);padding-top:0.75rem;display:flex;justify-content:space-between;align-items:center;">
                         <span style="color:#94a3b8;font-size:0.85rem;">${_t('predraw.reopenMissing')}</span>
@@ -2736,8 +2669,8 @@ window._showReopenPanel = function (tId, info) {
                 <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:1rem;" id="reopen-autoclose-label">
                     <div class="toggle-row" style="padding:0;">
                         <div class="toggle-row-label"><div>
-                            <div style="color:#e2e8f0;font-weight:600;font-size:0.95rem;">${_t('predraw.autoCloseLabel', {n: info.hi})}</div>
-                            <div style="color:#64748b;font-size:0.8rem;margin-top:4px;">${_t('predraw.autoCloseDesc', {n: info.hi})}</div>
+                            <div style="color:#e2e8f0;font-weight:600;font-size:0.95rem;">${_t('predraw.autoCloseLabel', {n: _rpHi})}</div>
+                            <div style="color:#64748b;font-size:0.8rem;margin-top:4px;">${_t('predraw.autoCloseDesc', {n: _rpHi})}</div>
                         </div></div>
                         <label class="toggle-switch"><input type="checkbox" id="reopen-autoclose-cb" checked><span class="toggle-slider"></span></label>
                     </div>
@@ -2745,8 +2678,8 @@ window._showReopenPanel = function (tId, info) {
             </div>
 
             <div style="padding:1.25rem 2.5rem 1.75rem;display:flex;gap:12px;justify-content:flex-end;background:rgba(0,0,0,0.1);border-top:1px solid rgba(255,255,255,0.05);border-radius:0 0 20px 20px;">
-                <button onclick="document.getElementById('reopen-panel').remove();document.body.style.overflow=''; var p2=document.getElementById('p2-resolution-panel'); if(p2) p2.style.display='flex';" style="background:transparent;color:#94a3b8;border:2px solid rgba(148,163,184,0.2);padding:10px 24px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;">${_t('predraw.reopenBack')}</button>
-                <button onclick="window._confirmReopen('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${info.hi})" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;border:none;padding:10px 28px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;box-shadow:0 4px 15px rgba(59,130,246,0.3);transition:all 0.2s;">${_t('predraw.reopenConfirm')}</button>
+                <button onclick="window._cancelDrawResolution('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:transparent;color:#94a3b8;border:2px solid rgba(148,163,184,0.2);padding:10px 24px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;">${_t('predraw.reopenBack')}</button>
+                <button onclick="window._confirmReopen('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${_rpHi})" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;border:none;padding:10px 28px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;box-shadow:0 4px 15px rgba(59,130,246,0.3);transition:all 0.2s;">${_t('predraw.reopenConfirm')}</button>
             </div>
         </div>
     `;
@@ -2846,23 +2779,37 @@ window.toggleRegistrationStatus = function (tId) {
     var t = window._findTournamentById(tId);
     if (!t) { return; }
 
-    // Helper: save tournament
+    // Blindagem v4.0.119: snapshot ANTES de qualquer mutação; no save, aplica o
+    // DELTA (campos mudados/removidos) sobre o doc FRESCO via portão — preserva
+    // edições concorrentes dos DEMAIS campos (ao contrário do saveTournament
+    // doc-inteiro). Histórico é APPEND (não clobbera entradas concorrentes).
+    var _preSnap = {}; try { _preSnap = JSON.parse(JSON.stringify(t)); } catch (e) {}
+    var _preHistLen = Array.isArray(_preSnap.history) ? _preSnap.history.length : 0;
     var _saveTournament = function(callback) {
-        if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-            window.FirestoreDB.saveTournament(t).then(function() {
-                if (callback) callback();
-            }).catch(function(err) {
-                window._error('[toggleRegistrationStatus] save error:', err);
-                if (callback) callback();
-                if (typeof showNotification === 'function') showNotification(_t('draw.savedLocally'), _t('draw.savedLocallyMsg'), 'warning');
-            });
-        } else {
-            try { window.AppStore.sync(); } catch(e) { window._error('sync error:', e); }
+        var changed = {}, deleted = [];
+        Object.keys(t).forEach(function (k) {
+            if (k === 'updatedAt' || k === 'history') return; // updatedAt = portão; history = append
+            if (JSON.stringify(t[k]) !== JSON.stringify(_preSnap[k])) changed[k] = t[k];
+        });
+        Object.keys(_preSnap).forEach(function (k) { if (k !== 'history' && !(k in t)) deleted.push(k); });
+        var newHist = Array.isArray(t.history) ? t.history.slice(_preHistLen) : [];
+        window.AppStore.commitTournamentTx(tId, function (ft) {
+            Object.keys(changed).forEach(function (k) { ft[k] = changed[k]; });
+            deleted.forEach(function (k) { try { delete ft[k]; } catch (e) { ft[k] = null; } });
+            if (newHist.length) { if (!Array.isArray(ft.history)) ft.history = []; ft.history = ft.history.concat(newHist); }
+        }).then(function () {
             if (callback) callback();
-        }
+        }).catch(function (err) {
+            window._error('[toggleRegistrationStatus] save error:', err);
+            if (callback) callback();
+            if (typeof showNotification === 'function') showNotification(_t('draw.savedLocally'), _t('draw.savedLocallyMsg'), 'warning');
+        });
     };
 
     var _refreshView = function() {
+        // v4.1.18: save concluído → solta o botão cinza "Reabrindo…"/"Encerrando…" ANTES do
+        // re-render, pra o render mostrar o botão já invertido (Encerrar↔Reabrir).
+        if (typeof window._regBtnDone === 'function') window._regBtnDone();
         var container = document.getElementById('view-container');
         if (container && typeof renderTournaments === 'function') {
             renderTournaments(container, String(tId));
@@ -2911,6 +2858,11 @@ window.toggleRegistrationStatus = function (tId) {
             // prazo em "Detalhes Avançados" do torneio.
             t.registrationLimit = null;
             delete t._pollSuspended;
+            // v4.0.86: reabrir volta às inscrições → limpa TODOS os flags RUNTIME de
+            // sorteio/jogo (mesma fonte única do reset) pra que o próximo sorteio re-rode
+            // o diagnóstico completo (sem-dupla → resto → pow2) em vez de curto-circuitar
+            // pro "Tudo Pronto" via classifyFormat/p2Resolution velhos.
+            if (typeof window._clearDrawRuntimeFlags === 'function') window._clearDrawRuntimeFlags(t);
             // Sorteio de Vagas: ao reabrir, limpa a seleção pra um futuro
             // fechamento re-sortear do zero (a lista de espera é promovida abaixo).
             if (t.enrollmentLimitMode === 'draw') { t.drawSelectionDone = false; t.waitlistOrder = null; }
@@ -3185,7 +3137,7 @@ window._showVagasDrawPanel = function (tId) {
             bodyMsg +
             '<div style="display:flex;gap:10px;margin-top:6px;">' +
                 '<button type="button" onclick="document.getElementById(\'vagas-draw-panel\').remove();document.body.style.overflow=\'\';" class="btn btn-secondary" style="flex:1;">Cancelar</button>' +
-                '<button type="button" onclick="window._runVagasDraw(\'' + String(tId).replace(/'/g, "\\'") + '\')" class="btn btn-primary" style="flex:2;">' + (allFit ? 'Encerrar e sortear chave' : '🎲 Sortear vagas') + '</button>' +
+                '<button type="button" onclick="window._drawBtnBusy&&window._drawBtnBusy(this); window._runVagasDraw(\'' + String(tId).replace(/'/g, "\\'") + '\')" class="btn btn-primary" style="flex:2;">' + (allFit ? 'Encerrar e sortear chave' : '🎲 Sortear vagas') + '</button>' +
             '</div>' +
         '</div>';
     document.body.appendChild(overlay);
@@ -3245,7 +3197,7 @@ window._runVagasDraw = function (tId) {
 
     // VIPs > vagas: todos os VIPs ficam (garantidos), nenhum não-VIP entra.
     if (kept.length === 0 && vipEntries.length > slots && typeof showNotification === 'function') {
-        showNotification('⚠️ VIPs excedem as vagas', vipEntries.length + ' VIP(s) para ' + slots + ' vaga(s) — todos os VIPs foram mantidos; a chave terá ' + t.participants.length + ' participantes.', 'warning');
+        showNotification('⚠️ VIPs excedem as vagas', vipEntries.length + ' VIP(s) para ' + slots + ' vaga(s) — todos os VIPs foram mantidos; a chave terá ' + (window._countCompetitors ? window._countCompetitors(t).people : t.participants.length) + ' participantes.', 'warning');
     }
 
     if (window.AppStore && window.AppStore.logAction) {
@@ -3277,6 +3229,25 @@ window._confirmP2Resolution = function (tId, option) {
     const t = window._findTournamentById(tId);
     if (!t) return;
     const info = window.checkPowerOf2(t);
+
+    // v4.1.x: DESMONTA o multifase Suíço quando o org troca de Suíço p/ OUTRA resolução.
+    // Escolher "Suíço" na resolução de pow2 monta t.phases=[Suíço classificatória, elim] +
+    // classifyFormat='swiss' (fase única vira multifase). Qualquer OUTRA escolha (bye/playin/
+    // exclusão/espera) tem que VOLTAR pra fase única — senão o phases fantasma fica grudado e
+    // o torneio parece multifase quebrado (contagem/início errados). Este painel é sempre de
+    // FASE ÚNICA (não é o construtor de fases), então limpar aqui é seguro. Regra do dono:
+    // "selecionou Suíço: multifase; selecionou outra coisa: fase única".
+    var _swissMP = (t.classifyFormat === 'swiss') || (t.currentStage === 'swiss') ||
+        (Array.isArray(t.phases) && t.phases.length > 1 && t.phases[0] &&
+         String(t.phases[0].format) === 'Suíço' && String(t.phases[0].formatCode) === 'liga');
+    if (option !== 'swiss' && _swissMP) {
+        t.phases = [{ name: t.format, format: t.format, source: { type: 'enrollment' } }];
+        t.currentPhaseIndex = 0;
+        t.classifyFormat = null;
+        if (t.currentStage === 'swiss') t.currentStage = null;
+        t.swissRounds = null;
+        t.rounds = []; delete t.standings;   // limpa a classificação Suíço residual
+    }
 
     let actionMsg = "";
     if (option === 'bye') {

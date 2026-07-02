@@ -136,6 +136,7 @@ function setupCreateTournamentModal() {
     h += row('game_won', 'create.advGameWon', 'create.advGameWonDesc', '50', true);
     h += row('game_lost', 'create.advGameLost', 'create.advGameLostDesc', '-20', true);
     h += row('tiebreak_point', 'create.advTiebreakPoint', 'create.advTiebreakPointDesc', '2', true);
+    h += row('wo_penalty', 'create.advWoPenalty', 'create.advWoPenaltyDesc', '-100', true);
     h += '</div>';
     h += '<p style="font-size:0.7rem; color:#f87171; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">' + T('create.advScoringGroupB') + '</p>';
     h += '<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; padding:6px 10px; background:rgba(248,113,113,0.06); border-radius:6px; border-left:2px solid #f87171;">ⓘ ' + T('create.advScoringGroupBWarn') + '</div>';
@@ -485,7 +486,6 @@ function setupCreateTournamentModal() {
                      e a linha de avanço REMOVIDOS daqui — são lógica de SUCESSÃO/transição
                      entre fases e serão redesenhados na configuração da transição. Inputs
                      ocultos mantidos só com defaults pra não quebrar save/estimativa/edição. -->
-                <input type="hidden" id="monarch-classified" value="1">
                 <input type="hidden" id="monarch-groupsby" value="sorteio">
               </div>
 
@@ -1720,13 +1720,13 @@ function setupCreateTournamentModal() {
     window._phasesUserTouched = true; // v3.0.x: o usuário mexeu nas fases de propósito
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
     var n = window._extraPhases.length + 2;
-    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: 2, scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', rankingType: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
+    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: 2, scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', rankingType: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
     window._renderPhases();
   };
   window._removePhase = function(i) { window._phasesUserTouched = true; if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
   window._setPhaseField = function(i, field, value) {
     var ph = window._extraPhases[i]; if (!ph) return;
-    if (['rounds', 'gruposCount', 'gruposClassified', 'monarchClassified'].indexOf(field) !== -1) value = Math.max(1, parseInt(value) || 1);
+    if (['rounds', 'gruposCount', 'gruposClassified'].indexOf(field) !== -1) value = Math.max(1, parseInt(value) || 1);
     if (field === 'reiRainha' || field === 'fixedPairs' || field === 'grandFinal') value = !!value;
     ph[field] = value;
     if (field === 'format') {
@@ -2008,7 +2008,6 @@ function setupCreateTournamentModal() {
       h += '</div>';
       if (ph.reiRainha) {
         h += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
-        h += '<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:3px;">Classificados/grupo</div><div style="display:flex;gap:6px;">' + _phBtn(i, 'monarchClassified', '1', '1', String(ph.monarchClassified || 1) === '1') + _phBtn(i, 'monarchClassified', '2', '2 (Rei+Vice)', String(ph.monarchClassified || 1) === '2') + '</div></div>';
         h += '<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:3px;">Formação dos grupos</div><div style="display:flex;gap:6px;">' + _phBtn(i, 'groupsBy', 'sorteio', '🎲 Sorteio', (ph.groupsBy || 'sorteio') === 'sorteio') + _phBtn(i, 'groupsBy', 'ranking', '📊 Ranking', ph.groupsBy === 'ranking') + '</div></div>';
         h += '</div>';
       }
@@ -2444,29 +2443,6 @@ function setupCreateTournamentModal() {
       lockRow.style.border = lock.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid rgba(255,255,255,0.08)';
       lockRow.style.background = lock.checked ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.03)';
     }
-  };
-
-  // ── Monarch Classified Selection ──
-  window._selectMonarchClassified = function(btn) {
-    var value = btn.getAttribute('data-value');
-    var btns = document.querySelectorAll('#monarch-classified-buttons .monarch-cls-btn');
-    btns.forEach(function(b) {
-      if (b.getAttribute('data-value') === value) {
-        b.classList.add('monarch-cls-active');
-        b.style.border = '2px solid #fbbf24';
-        b.style.background = 'rgba(251,191,36,0.15)';
-        b.style.color = '#fbbf24';
-        b.style.fontWeight = '600';
-      } else {
-        b.classList.remove('monarch-cls-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)';
-        b.style.background = 'rgba(255,255,255,0.06)';
-        b.style.color = 'var(--text-main)';
-        b.style.fontWeight = '500';
-      }
-    });
-    var hidden = document.getElementById('monarch-classified');
-    if (hidden) hidden.value = value;
   };
 
   // Formação dos grupos Rei/Rainha: 'sorteio' (aleatório) | 'ranking' (classificação).
@@ -3013,6 +2989,21 @@ function setupCreateTournamentModal() {
     }
     var rrCfg = document.getElementById('round-robin-fields');
     if (rrCfg) rrCfg.style.display = (isLiga && drawMode === 'round_robin') ? 'block' : 'none';
+
+    // Liga/Rei-Rainha (Pontos Corridos) usam parceiros ROTATIVOS — inscrição
+    // individual. Duplas MONTADAS são incompatíveis (3 duplas fixas se enfrentando
+    // = Fase de Grupos, não Liga/Rei-Rainha). Esconder o toggle "participantes
+    // formam duplas" e forçá-lo desligado enquanto o formato for Pontos Corridos.
+    // O guard equivalente no sorteio (tournaments-draw.js) bloqueia o caso residual.
+    var _mpCont = document.getElementById('manual-pairing-container');
+    if (_mpCont) _mpCont.style.display = isLiga ? 'none' : '';
+    if (isLiga) {
+      var _mpTglOff = document.getElementById('manual-pairing-toggle');
+      if (_mpTglOff && _mpTglOff.checked) {
+        _mpTglOff.checked = false;
+        if (typeof window._syncManualPairing === 'function') { try { window._syncManualPairing(); } catch (e) {} }
+      }
+    }
 
     // Sync Liga internal round format hidden field with global draw mode
     if (isLiga) {
@@ -4212,7 +4203,9 @@ function setupCreateTournamentModal() {
     var ageCats = o.ageCats || 0;
     var N = o.N || 0;
     var isReal = !!o.isReal;
-    var monarchCls = Math.max(o.monarchClassified || 1, 1);
+    // Classificados/grupo agora vêm da transição de fases (mapping.rankTo), não de
+    // um campo dedicado. Para a estimativa usamos 2 (Rei+Vice), o caso típico.
+    var monarchCls = 2;
     var gruposN = Math.max(o.gruposCount || 4, 1);
 
     // Jogos por RODADA de UMA sub-chave (categoria). Rodadas são sequenciais —
@@ -4346,7 +4339,7 @@ function setupCreateTournamentModal() {
       call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
       courts: iv('tourn-court-count', 1), fmt: gv('select-formato') || 'elim_simples', drawMode: gv('draw-mode') || 'sorteio',
       K: K, ageCats: ageCats, N: N, isReal: isReal,
-      monarchClassified: iv('monarch-classified', 1), gruposCount: iv('grupos-count', 4)
+      gruposCount: iv('grupos-count', 4)
     });
   };
 
@@ -4416,7 +4409,7 @@ function setupCreateTournamentModal() {
       call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
       courts: iv('tourn-court-count', 1), fmt: ph.format || 'elim_simples', drawMode: ph.reiRainha ? 'rei_rainha' : 'sorteio',
       K: K, ageCats: ageCats, N: ent.N, isReal: ent.isReal,
-      monarchClassified: ph.monarchClassified || 1, gruposCount: ph.gruposCount || 4
+      gruposCount: ph.gruposCount || 4
     });
   };
   // Atualiza as escadas de estimativa de todas as fases extras (sem re-render do card).
@@ -5039,6 +5032,14 @@ function setupCreateTournamentModal() {
     else if (t.format === 'Ranking') fmtValue = 'liga'; // Ranking unificado com Liga
     else if (t.format === 'Eliminatórias Simples') fmtValue = 'elim_simples';
     else if (t.format === 'Dupla Eliminatória') fmtValue = 'elim_dupla';
+    else if (t.format === 'Fase de Grupos + Eliminatórias' && t.drawMode === 'rei_rainha') {
+      // Modelo antigo do monarch standalone (pré-campanha kill-monarch-format): era
+      // gravado como Grupos+Elim + drawMode rei_rainha. Mapear pra seleção standalone
+      // (elim + 👑) — SEM isso, o form caía em grupos_mata, que esconde o botão 👑 e
+      // auto-trocava pra Sorteio, stripando o monarch silenciosamente no save.
+      fmtValue = 'elim_simples';
+      drawModeVal = 'rei_rainha';
+    }
     else if (t.format === 'Fase de Grupos + Eliminatórias') fmtValue = 'grupos_mata';
     else if (t.format === 'Rei/Rainha da Praia') {
       fmtValue = 'elim_simples'; // Rei/Rainha defaults to single elimination knockout
@@ -5054,10 +5055,6 @@ function setupCreateTournamentModal() {
     document.getElementById('draw-mode').value = drawModeVal;
     // Monarch config
     if (drawModeVal === 'rei_rainha') {
-      var _mcEl = document.getElementById('monarch-classified');
-      if (_mcEl) _mcEl.value = String(t.monarchClassified || 1);
-      var _mcBtn = document.querySelector('#monarch-classified-buttons .monarch-cls-btn[data-value="' + (t.monarchClassified || 1) + '"]');
-      if (_mcBtn) window._selectMonarchClassified(_mcBtn);
       var _gbVal = (t.reiRainhaGroupsBy === 'ranking') ? 'ranking' : 'sorteio';
       var _gbBtn = document.querySelector('#monarch-groupsby-buttons .monarch-gb-btn[data-value="' + _gbVal + '"]');
       if (_gbBtn && window._selectMonarchGroupsBy) window._selectMonarchGroupsBy(_gbBtn);
@@ -5388,7 +5385,6 @@ function setupCreateTournamentModal() {
           reiRainha: !!ph.reiRainha,
           rounds: parseInt(ph.rounds) || 1,
           drawMode: ph.drawMode || (ph.reiRainha ? 'rei_rainha' : 'sorteio'),
-          monarchClassified: parseInt(ph.monarchClassified) || 1,
           groupsBy: ph.groupsBy || 'sorteio',
           gruposCount: parseInt(ph.gruposCount) || 4,
           gruposClassified: parseInt(ph.gruposClassified) || 2,
@@ -5679,7 +5675,8 @@ function setupCreateTournamentModal() {
     var dm = document.getElementById('draw-mode');
     var gc = document.getElementById('grupos-count');
     var inv = { 'Liga': 'liga', 'Suíço Clássico': 'suico', 'Eliminatórias Simples': 'elim_simples', 'Dupla Eliminatória': 'elim_dupla', 'Fase de Grupos + Eliminatórias': 'grupos_mata' };
-    if (t.format === 'Rei/Rainha da Praia') {
+    if (t.format === 'Rei/Rainha da Praia' ||
+        (t.format === 'Fase de Grupos + Eliminatórias' && t.drawMode === 'rei_rainha')) {
       if (sel) sel.value = 'elim_simples';
       if (dm) dm.value = 'rei_rainha';
     } else {
@@ -5802,14 +5799,29 @@ function setupCreateTournamentModal() {
         //     (rotação de parceiros). Agora a save-handler é defensiva.
         var format;
         var monarchIncompatible = formatValue === 'liga' || formatValue === 'grupos_mata';
-        if (drawModeValue === 'rei_rainha' && !monarchIncompatible) {
-          // Rei/Rainha NÃO é formato: é MODO de sorteio (drawMode='rei_rainha', setado abaixo) numa
-          // FASE DE GRUPOS (parceiro rotativo). Grava como Grupos + Eliminatória; o drawMode é a fonte
-          // da verdade (window._isMonarchFormat). [project_rei_rainha_is_drawmode_not_format]
-          format = 'Fase de Grupos + Eliminatórias';
+        var isMonarchStandalone = drawModeValue === 'rei_rainha' && !monarchIncompatible;
+        if (isMonarchStandalone) {
+          // Rei/Rainha NÃO é formato: é MODO de sorteio do PONTOS CORRIDOS (parceiro
+          // rotativo, rodadas incrementais em t.rounds). Grava format='Liga' +
+          // ligaRoundFormat='rei_rainha' (campanha project_kill_monarch_format_campaign;
+          // antes gravava 'Fase de Grupos + Eliminatórias'). Torneio JÁ SORTEADO no modelo
+          // antigo NÃO migra no save — mantém o format gravado (compat de leitura: o render
+          // legado lê t.groups/t.matches) e evita o prompt de reconciliação de formato.
+          format = 'Liga';
+          if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+            var _tMonOld = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(editId); });
+            if (_tMonOld && _tMonOld.format !== 'Liga' &&
+                (typeof window._isMonarchFormat !== 'function' || window._isMonarchFormat(_tMonOld)) &&
+                typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(_tMonOld)) {
+              format = _tMonOld.format; // sorteado no modelo antigo → não migra
+            }
+          }
         } else {
           format = formatMap[formatValue] || 'Eliminatórias Simples';
         }
+        // true = monarch standalone gravando no modelo NOVO (Liga+rei_rainha) — liga os
+        // campos mínimos de Liga abaixo e protege-os da limpeza de "não-Liga".
+        var monarchAsLiga = isMonarchStandalone && format === 'Liga';
 
         // v2.4.16: reconciliação de FORMATO/grupos. Se o organizador trocou o
         // formato (ou a config de grupos) de um torneio JÁ SORTEADO, mostra
@@ -6061,7 +6073,7 @@ function setupCreateTournamentModal() {
         // Sem isso, ao editar um torneio que já foi Liga e mudar o formato,
         // drawFirstDate/drawIntervalDays etc. ficam no Firestore e o display
         // mostra "1º Sorteio" e "Intervalo" em torneios que não são mais Liga.
-        if (formatValue !== 'liga') {
+        if (formatValue !== 'liga' && !monarchAsLiga) {
           tourData.drawFirstDate = null;
           tourData.drawFirstTime = null;
           tourData.drawIntervalDays = null;
@@ -6105,10 +6117,21 @@ function setupCreateTournamentModal() {
           if (formatValue === 'liga') {
             tourData.ligaRoundFormat = 'rei_rainha';
             tourData.monarchAdvanceToElim = false;
-            tourData.monarchClassified = null;
+          } else if (monarchAsLiga) {
+            // Standalone (👑 com formato eliminatória no form): o torneio É Pontos Corridos
+            // + modo rei/rainha, mas o form não renderizou os campos de Liga → config mínima
+            // explícita: rodadas MANUAIS (Sortear + Rodada Extra; sem poller de auto-draw),
+            // sem temporada. A Eliminatória entra pelo preset de 2 fases abaixo
+            // (avanço via advanceMultiPhase — monarchAdvanceToElim legado fica false).
+            tourData.ligaRoundFormat = 'rei_rainha';
+            tourData.ligaDrawMode = 'standard';
+            tourData.drawManual = true;
+            tourData.drawFirstDate = null; tourData.drawFirstTime = null; tourData.drawIntervalDays = null;
+            tourData.temporada = false;
+            tourData.ligaOpenEnrollment = (((document.getElementById('late-enrollment') || {}).value || 'closed') !== 'closed');
+            tourData.monarchAdvanceToElim = false;
           } else {
-            tourData.monarchClassified = parseInt(document.getElementById('monarch-classified').value) || 1;
-            tourData.monarchAdvanceToElim = true; // advance to elimination
+            tourData.monarchAdvanceToElim = true; // legado (write-only; avanço real é multi-fase)
           }
         } else {
           tourData.drawMode = 'sorteio';
@@ -6129,14 +6152,15 @@ function setupCreateTournamentModal() {
           var _p1NameEl0 = document.getElementById('phase1-name');
           return {
             name: (_p1NameEl0 && _p1NameEl0.value.trim()) || 'Fase 1',
-            formatCode: formatValue,
+            // monarch standalone grava como Pontos Corridos (Liga+rei_rainha) — o
+            // formatCode da fase acompanha (o formato do form era só a seleção de UI).
+            formatCode: monarchAsLiga ? 'liga' : formatValue,
             format: format, // string canônica (ex.: 'Liga', 'Dupla Eliminatória')
             drawMode: tourData.drawMode || 'sorteio',
             reiRainha: tourData.drawMode === 'rei_rainha',
             rounds: parseInt(window._phase1Rounds) || 1,
             source: { type: 'enrollment' },
             fixedPairs: teamSizeVal > 1,
-            monarchClassified: parseInt(tourData.monarchClassified) || 1,
             groupsBy: tourData.reiRainhaGroupsBy || 'sorteio',
             gruposCount: parseInt(tourData.gruposCount) || 4,
             gruposClassified: parseInt(tourData.gruposClassified) || 2,
@@ -6169,10 +6193,10 @@ function setupCreateTournamentModal() {
         // _isMonarchPrev detecta monarch da Fase 0 em t.groups) → elim INDIVIDUAL nos dois.
         var _presetTwoPhase = (formatValue === 'grupos_mata') || (drawModeValue === 'rei_rainha' && formatValue !== 'liga');
         if (!editId && _extra.length === 0 && _presetTwoPhase) {
-          var _autoTopN = (drawModeValue === 'rei_rainha') ? (parseInt(tourData.monarchClassified, 10) || 2) : (parseInt(tourData.gruposClassified, 10) || 2);
+          var _autoTopN = (drawModeValue === 'rei_rainha') ? 2 : (parseInt(tourData.gruposClassified, 10) || 2);
           _extra = [{
             name: 'Eliminatória', format: 'elim_simples', reiRainha: false, rounds: 1,
-            monarchClassified: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2,
+            groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2,
             sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: _autoTopN,
             scope: 'per_group', fixedPairs: teamSizeVal > 1, pairingStrategy: 'top', grandFinal: true,
             woScope: tourData.woScope || 'individual', rankingType: 'individual',
@@ -6192,7 +6216,6 @@ function setupCreateTournamentModal() {
               format: (formatMap[ph.format] || ph.format),
               reiRainha: !!ph.reiRainha,
               drawMode: ph.reiRainha ? 'rei_rainha' : 'sorteio',
-              monarchClassified: parseInt(ph.monarchClassified) || 1,
               groupsBy: ph.groupsBy || 'sorteio',
               gruposCount: parseInt(ph.gruposCount) || 4,
               gruposClassified: parseInt(ph.gruposClassified) || 2,
@@ -7477,7 +7500,6 @@ window._prefillFromTemplate = function(tpl) {
     var _p1nEl = document.getElementById('phase1-name');
     if (_p1nEl) _p1nEl.value = tpl.phase1Name;
   }
-  if (tpl.monarchClassified != null) _setV('monarch-classified', tpl.monarchClassified);
   if (tpl.gruposCount != null) _setV('grupos-count', tpl.gruposCount);
   if (tpl.gruposClassified != null) _setV('grupos-classified', tpl.gruposClassified);
   if (tpl.gruposEqualOnly !== undefined) _setC('grupos-equal-only', tpl.gruposEqualOnly);
@@ -7525,6 +7547,47 @@ window._discardCreateTournament = function() {
 };
 
 // ─── Navigation helper + page renderer (v1.3.13-beta) ────────────────────
+// ── ANCORAGEM DE SCROLL DO CRIAR/EDITAR (invariante do dono) ──────────────────
+// REGRA: ao alterar QUALQUER configuração no criar/editar torneio, a tela NUNCA
+// pode pular/rolar/mudar de posição — o usuário não pode se perder. Os toggles
+// dão show/hide em seções acima do controle clicado, mudando a altura do documento
+// → o controle "salta". Solução geral (sem tocar handler por handler): um listener
+// em fase de CAPTURA registra a posição do controle ANTES dos handlers rodarem;
+// no rAF seguinte (após a mutação do DOM, ANTES do paint) compensa o scroll do
+// container pra manter o controle exatamente onde estava. Vale pra clique e change,
+// em modo modal (#modal-create-tournament) e page-route (#novo-torneio).
+(function _attachCreateFormScrollAnchor() {
+  if (typeof document === 'undefined' || window._createFormAnchorAttached) return;
+  window._createFormAnchorAttached = true;
+  function _scrollParent(el) {
+    for (var p = el && el.parentElement; p; p = p.parentElement) {
+      var oy = '';
+      try { oy = getComputedStyle(p).overflowY; } catch (e) {}
+      if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight + 1) return p;
+    }
+    return null; // null → usar window
+  }
+  function _onInteract(e) {
+    var form = document.getElementById('form-create-tournament');
+    if (!form || !e.target || !form.contains(e.target)) return;
+    var anchor = (e.target.closest && e.target.closest('button, label, .form-group, .toggle-switch, input, select, .formato-btn, .draw-mode-btn')) || e.target;
+    if (!anchor || !anchor.getBoundingClientRect) return;
+    var cont = _scrollParent(anchor);
+    var beforeTop = anchor.getBoundingClientRect().top;
+    // Captura roda ANTES dos onclick/onchange inline (bubble). O rAF roda DEPOIS
+    // deles mutarem o DOM e ANTES do paint → compensa sem flicker.
+    requestAnimationFrame(function () {
+      if (!document.body || !document.body.contains(anchor)) return;
+      var delta = anchor.getBoundingClientRect().top - beforeTop;
+      if (Math.abs(delta) < 1) return;
+      if (cont && cont.scrollBy) cont.scrollBy(0, delta);
+      else window.scrollBy(0, delta);
+    });
+  }
+  document.addEventListener('click', _onInteract, true);
+  document.addEventListener('change', _onInteract, true);
+})();
+
 // Padrão centralizado: criar/editar torneio é page-route #novo-torneio.
 // Topbar visível, hamburger funcional, URL bookmarkable.
 //
@@ -7738,8 +7801,9 @@ window._saveCurrentFormAsTemplate = function() {
   var drawModeValue = get('draw-mode');
   var formatMap = { liga:'Liga', suico:'Suíço Clássico', elim_simples:'Eliminatórias Simples', elim_dupla:'Dupla Eliminatória', grupos_mata:'Fase de Grupos + Eliminatórias' };
   var format;
-  // Rei/Rainha é MODO (drawMode), não formato → template grava Grupos + Eliminatória + drawMode.
-  if (drawModeValue === 'rei_rainha' && formatValue !== 'liga') format = 'Fase de Grupos + Eliminatórias';
+  // Rei/Rainha é MODO do Pontos Corridos (campanha kill-monarch-format) → template
+  // grava Liga + drawMode='rei_rainha' (mesma regra do save do torneio).
+  if (drawModeValue === 'rei_rainha' && formatValue !== 'liga') format = 'Liga';
   else format = formatMap[formatValue] || 'Eliminatórias Simples';
   var genderCats = (get('tourn-gender-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
   var skillCats = (get('tourn-skill-categories') || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
@@ -7826,7 +7890,6 @@ window._saveCurrentFormAsTemplate = function() {
       phase1Name: (function () { var el = document.getElementById('phase1-name'); return el ? el.value.trim() : ''; })(),
       phase1Rounds: parseInt(window._phase1Rounds) || 1,
       allowSelfDeactivation: (function () { var el = document.getElementById('liga-allow-self-deactivation'); return el ? !!el.checked : true; })(),
-      monarchClassified: parseInt(get('monarch-classified')) || 1,
       gruposCount: parseInt(get('grupos-count')) || 4,
       gruposClassified: parseInt(get('grupos-classified')) || 2,
       gruposEqualOnly: getChecked('grupos-equal-only'),

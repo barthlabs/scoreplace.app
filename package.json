@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node tests/run-unit.js",
     "test:unit": "node tests/run-unit.js",
+    "test:concurrency": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace \"node tests/concurrency/run.js\"",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
@@ -15,7 +16,8 @@
     "lighthouse": "lighthouse https://scoreplace.app/ --quiet --chrome-flags=\"--headless=new --no-sandbox --incognito\" --output=json --output=html --form-factor=mobile --screenEmulation.mobile=true --only-categories=performance,accessibility,best-practices,seo --max-wait-for-load=60000"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0"
+    "@playwright/test": "^1.49.0",
+    "firebase": "^12.15.0"
   },
   "engines": {
     "node": ">=20"

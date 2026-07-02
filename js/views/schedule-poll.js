@@ -341,8 +341,10 @@
       if (!_schUserIsPlayer(t, m, cu)) return '';
       var n = (m.schedule && Array.isArray(m.schedule.options)) ? m.schedule.options.length : 0;
       return '<div style="display:flex;justify-content:center;margin:8px 0 2px;">' +
-        '<button class="btn btn-shine hover-lift" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
-        'style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:11px;padding:8px 16px;font-weight:800;font-size:0.82rem;box-shadow:0 4px 14px rgba(16,185,129,0.4);">' +
+        // v4.1.25: volume + altura PADRÃO (mesmas classes dos botões do header do card):
+        // .btn dá o volume almofadado, .btn-shine o brilho, .btn-micro a altura padrão.
+        '<button class="btn btn-micro btn-shine hover-lift" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
+        'style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;">' +
         '📅 Combinar jogo' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:1px 7px;font-size:0.72rem;">' + n + '</span>' : '') +
         '</button></div>';
     } catch (e) { return ''; }
@@ -384,7 +386,9 @@
       if (!_schIsCurrentRoundMatch(t, m0)) return '';
       if (groupMatches.every(function (m) { return m.winner || m.isBye || m.isSitOut; })) return '';
       var n = (m0.schedule && Array.isArray(m0.schedule.options)) ? m0.schedule.options.length : 0;
-      return '<button type="button" class="btn btn-sm btn-shine hover-lift" onclick="' + open + '" style="display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:800;font-size:0.72rem;border-radius:8px;padding:4px 10px;box-shadow:0 3px 10px rgba(16,185,129,0.35);">📅 Combinar jogos' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:0 6px;font-size:0.66rem;">' + n + '</span>' : '') + '</button>';
+      // Azul via INLINE (não .btn-primary — responsive.css força .btn-primary a
+      // width:100% no mobile, o que estourava o tamanho e jogava o botão pra outra linha).
+      return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + open + '" style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;padding:4px 9px;line-height:1.05;text-align:center;">📅 Combinar<br>jogos' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:0 6px;font-size:0.66rem;">' + n + '</span>' : '') + '</button>';
     } catch (e) { return ''; }
   };
 

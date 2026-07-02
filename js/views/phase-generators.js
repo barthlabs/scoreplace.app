@@ -92,19 +92,21 @@
     return E.buildPhaseBrackets(prevGroups, cfg, (ctx && ctx.computeStandings), (ctx && ctx.idPrefix));
   }
   function genGroupsPhase(prevGroups, cfg, ctx) {
-    return isMonarchDraw(cfg)
-      ? E.buildPhaseMonarchStage(prevGroups, cfg, (ctx && ctx.computeStandings), (ctx && ctx.idPrefix))
-      : E.buildPhaseGroupStage(prevGroups, cfg, (ctx && ctx.computeStandings), (ctx && ctx.idPrefix));
+    return E.buildPhaseGroupStage(prevGroups, cfg, (ctx && ctx.computeStandings), (ctx && ctx.idPrefix));
   }
   function genLeaguePhase(prevGroups, cfg, ctx) {
     return E.buildPhaseLeagueStage(prevGroups, cfg, (ctx && ctx.computeStandings), (ctx && ctx.idPrefix));
   }
   // Despacho único. O MODO DE SORTEIO Rei/Rainha (ortogonal ao formato) tem
-  // precedência: estruturalmente produz grupos de 4 com parceiros rotativos
-  // (genGroupsPhase→monarca), independentemente do formato nominal. Senão, despacha
-  // pelo formato canônico. (Espelha a precedência do motor antigo: monarch > liga > groups > elim.)
+  // precedência e roda SEMPRE no motor league INCREMENTAL (pool → rodadas geradas por
+  // _phaseGenNextLeagueRound com ligaRoundFormat='rei_rainha'; fixedPairs=false pois o
+  // parceiro é ROTATIVO — pool de PESSOAS). O gerador monarch de rodada única foi
+  // removido (campanha project_kill_monarch_format_campaign). Senão, despacha pelo
+  // formato canônico.
   function generatePhase(prevGroups, cfg, ctx) {
-    if (isMonarchDraw(cfg)) return genGroupsPhase(prevGroups, cfg, ctx);
+    if (isMonarchDraw(cfg)) {
+      return genLeaguePhase(prevGroups, Object.assign({}, cfg, { fixedPairs: false, ligaCadence: 'incremental' }), ctx);
+    }
     switch (classifyPhaseFormat(cfg)) {
       case 'groups': return genGroupsPhase(prevGroups, cfg, ctx);
       case 'league': return genLeaguePhase(prevGroups, cfg, ctx);

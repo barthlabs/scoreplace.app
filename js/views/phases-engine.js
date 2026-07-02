@@ -267,8 +267,8 @@
     // vencedores entram na chave de T (=lo) como sementes ALTAS; as (T-g) vagas
     // restantes são preenchidas pelos MELHORES PERDEDORES (rankeados pela R1 +
     // critérios de desempate) como sementes BAIXAS. A escolha dos perdedores só dá
-    // pra fazer DEPOIS da R1 → os slots nascem como repDirect/repGame e são
-    // preenchidos por window._resolveRepechage quando a R1 fecha (no _advanceWinner).
+    // pra fazer DEPOIS da R1 → as vagas nascem como repFill (vaga de repescagem) e são
+    // preenchidas por window._resolveRepFills quando a R1 fecha (no _advanceWinner).
     if (!isPow2 && resolution === 'playin') {
       var T = lo;
       var g = Math.floor(n / 2);
@@ -288,10 +288,13 @@
         r1.push(rm); matches.push(rm);
       }
       // jogo de repescagem (se há satout): satout × (perdedor de rank directSpots), p2 preenchido depois.
+      // MECANISMO CANÔNICO ÚNICO: vaga de repescagem = descritor repFill (mesmo do dupla-elim),
+      // resolvido por _resolveRepFills quando a rodada-fonte fecha. Ver feedback_resolution_one_logic.
       var repGame = null;
       if (repGames === 1) {
         repGame = { id: mkId(), round: 0, bracket: bracketKey, isPhaseRepGame: true,
-          p1: satTeam.displayName, team1Obj: satTeam, p2: 'TBD', winner: null, repLoserRank: directSpots };
+          p1: satTeam.displayName, team1Obj: satTeam, p2: 'TBD', winner: null,
+          repFill: [{ slot: 'p2', srcBracket: bracketKey, srcRound: 0, rank: directSpots, tagRep: true }] };
         matches.push(repGame);
       }
       // entrantes da chave de T (semente 0..T-1): 0..g-1 vencedores R1; depois repescados.
@@ -304,7 +307,7 @@
         if (!ent) return;
         if (ent.fromR1) { ent.fromR1.nextMatchId = mGame.id; ent.fromR1.nextSlot = slot; }
         else if (ent.fromRepGame) { ent.fromRepGame.nextMatchId = mGame.id; ent.fromRepGame.nextSlot = slot; }
-        else if (ent.repDirect != null) { if (slot === 'p1') mGame.repDirectP1 = ent.repDirect; else mGame.repDirectP2 = ent.repDirect; }
+        else if (ent.repDirect != null) { (mGame.repFill = mGame.repFill || []).push({ slot: slot, srcBracket: bracketKey, srcRound: 0, rank: ent.repDirect, tagRep: true }); }
       }
       var totalRoundsR = Math.round(Math.log(T) / Math.log(2));
       var roundsMapR = {}; var rr1 = [];
@@ -420,6 +423,21 @@
     var rankingBasis = src.rankingBasis || 'individual'; // 'individual' | 'team' (keep)
 
     var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
+
+    // v4.1.29: DUPLA ELIMINATÓRIA CLÁSSICA como fase (pedido do dono: "escolhi dupla
+    // eliminatória e parece simples"). Linha ÚNICA ('main', sem Ouro/Prata) + formato dupla
+    // → gera SÓ a R1 do upper (pares na ordem semeada) + sinaliza needsDoubleElim; o upper
+    // R2+, o lower e a grande final são montados por _buildDoubleElimBracket (phase-aware),
+    // chamado no advanceMultiPhase após storePhase. (Duas linhas Ouro/Prata continua sendo
+    // a semântica de "chaves independentes que convergem" — só a linha única vira clássica.)
+    var _duplaClassic = !!(phaseCfg && (phaseCfg.formatCode === 'elim_dupla' || /dupla/i.test(String(phaseCfg.format || '')))) &&
+      byDest.main && !byDest.upper && !byDest.lower;
+    if (_duplaClassic) {
+      // Fonte única compartilhada com a Fase 0 (_genElimFromPool) — inclui a repescagem
+      // (playin) fora de potência de 2. Ver _duplaR1FromPool / project_dupla_elim_repechage.
+      var _deRes = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
+      return _duplaR1FromPool(byDest.main, _deRes, idPrefix);
+    }
 
     var allMatches = [];
     var tiers = {};
@@ -627,55 +645,15 @@
   }
   function _phaseIsMonarch(cfg) { return isMonarchDraw(cfg); }
 
-  // v3.1: REI/RAINHA como fase posterior. Forma o pool de classificados, distribui
-  // em grupos de 4 (serpentina) e gera os 3 jogos de parceiros rotativos por grupo
-  // (AB×CD, AC×BD, AD×BC) — classificação INDIVIDUAL. Sobra (pool % 4) fica de fora
-  // desta fase (registrado em .leftOut). Matches: { bracket:'monarch', isMonarch:true,
-  // team1:[A,B], team2:[C,D], p1:'A / B', p2:'C / D', groupIdx, groupName }.
-  function buildPhaseMonarchStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
-    idPrefix = idPrefix || 'phm';
-    // Rei/Rainha é INDIVIDUAL (parceiros rotativos) → fixedPairs sempre false na transição.
-    var cfgInd = phaseCfg ? Object.assign({}, phaseCfg, { fixedPairs: false }) : { fixedPairs: false };
-    return genMonarchFromPool(_poolFromPrev(prevGroups, cfgInd, computeStandings), phaseCfg, idPrefix);
-  }
-
-  // GERADOR pool-based de Rei/Rainha (modo de sorteio, não formato): grupos de 4 com
-  // parceiros rotativos (AB×CD, AC×BD, AD×BC), classificação INDIVIDUAL. Pool → estrutura.
-  function genMonarchFromPool(pool, phaseCfg, idPrefix) {
-    idPrefix = idPrefix || 'phm';
-    pool = pool || [];
-    var nGroups = Math.floor(pool.length / 4);
-    if (nGroups < 1) return { matches: [], groups: [], leftOut: pool.map(function (p) { return p.displayName; }) };
-    var used = pool.slice(0, nGroups * 4);
-    var leftOut = pool.slice(nGroups * 4).map(function (p) { return p.displayName; });
-
-    var groups = [];
-    for (var gi = 0; gi < nGroups; gi++) groups.push({ name: 'Grupo ' + String.fromCharCode(65 + gi), groupIdx: gi, players: [], objs: {}, matches: [] });
-    used.forEach(function (tm, i) {
-      var round = Math.floor(i / nGroups), pos = i % nGroups;
-      var gIdx = (round % 2 === 0) ? pos : (nGroups - 1 - pos);
-      groups[gIdx].players.push(tm.displayName);
-      groups[gIdx].objs[tm.displayName] = tm;
-    });
-
-    var counter = 0;
-    function mkId() { return idPrefix + '-' + (counter++); }
-    var allMatches = [];
-    groups.forEach(function (g) {
-      var P = g.players; // [A,B,C,D]
-      var pairs = [{ t1: [P[0], P[1]], t2: [P[2], P[3]] }, { t1: [P[0], P[2]], t2: [P[1], P[3]] }, { t1: [P[0], P[3]], t2: [P[1], P[2]] }];
-      pairs.forEach(function (pr, mi) {
-        var m = {
-          id: mkId(), round: 1, bracket: 'monarch', isMonarch: true, monarchGroup: g.groupIdx,
-          groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
-          team1: pr.t1.slice(), team2: pr.t2.slice(), p1: pr.t1.join(' / '), p2: pr.t2.join(' / '),
-          winner: null, scoreP1: null, scoreP2: null, label: g.name + ' • Jogo ' + (mi + 1)
-        };
-        g.matches.push(m); allMatches.push(m);
-      });
-    });
-    return { matches: allMatches, groups: groups, leftOut: leftOut };
-  }
+  // REI/RAINHA como fase (qualquer índice): NÃO tem gerador próprio — é MODO de
+  // sorteio do formato Pontos Corridos. Fase 0: generatePhase → ramo league →
+  // _generateNextRound com ligaRoundFormat='rei_rainha' (t.rounds[].monarchGroups).
+  // Fase N: materializeNextPhase → league incremental (pool em t.phaseRounds[idx]) →
+  // _phaseGenNextLeagueRound honra cfg.reiRainha. Os geradores de RODADA ÚNICA
+  // (buildPhaseMonarchStage/genMonarchFromPool) foram REMOVIDOS na campanha
+  // project_kill_monarch_format_campaign — a leitura dos dados ANTIGOS (matches
+  // bracket:'monarch' em t.matches) segue em prevPhaseGroups/bracketPhaseGroups
+  // (compat de torneios já sorteados em prod).
 
   // ── generatePhase — O GERADOR CANÔNICO ÚNICO (pool, cfg) → estrutura ──────────
   // Contrato project_unify_initial_phase_canonical: UM gerador recebe (pool, cfg) →
@@ -715,6 +693,70 @@
   // chamada tagueia matches com cfg.category). Liga incremental devolve {incrementalLeague}.
   // Gera a chave de eliminação (1 linha) a partir de um pool já ordenado. Honra a
   // resolução de não-potência-de-2 da cfg (bye/playin → genTierBracket; dupla via flag).
+  // ── DUPLA ELIMINATÓRIA: R1 do upper a partir de um pool semeado ──────────────
+  // Fonte ÚNICA usada tanto pela Fase 0 (inscrição → _genElimFromPool) quanto pela
+  // transição entre fases (buildPhaseBrackets → _duplaClassic). Antes eram 2 cópias
+  // que só faziam pareamento cru (n → n/2 jogos, BYE se ímpar) e IGNORAVAM o
+  // bracketResolution → fora de potência de 2 sobravam vagas mortas (p2=TBD que nunca
+  // preenchia) em toda rodada de contagem ímpar. Agora, com resolução 'playin'
+  // (repescagem): TODOS jogam uma rodada de repescagem (round 0, g=floor(n/2) jogos);
+  // os vencedores + os MELHORES DERROTADOS (rankeados por _resolveRepFills quando a R1
+  // fecha) completam a pow2 alvo (=pow2 acima dos vencedores) → chave-de-T que o
+  // _buildDoubleElimBracket monta como Dupla Eliminatória limpa. Retorna sempre
+  // { matches, needsDoubleElim:true }. Ver project_dupla_elim_repechage.
+  function _duplaR1FromPool(pool, resolution, idPrefix) {
+    pool = pool || [];
+    var n = pool.length;
+    var pow2 = n > 0 && (n & (n - 1)) === 0;
+    if (resolution === 'playin' && n > 2 && !pow2) {
+      // DUPLA ELIMINATÓRIA de verdade fora de pow2: TODOS jogam a repescagem R1 (round 0)
+      // e NINGUÉM é eliminado na 1ª rodada. Os g=floor(n/2) vencedores + os melhores
+      // derrotados sobem pra chave superior de T (=pow2 acima dos vencedores); os demais
+      // derrotados CAEM na chave inferior. O upper R2+, a chave inferior (com todos os
+      // derrotados) e a grande final são montados por _buildRepechageDoubleElim, que lê
+      // esta repescagem R1. Aqui só a R1 + os metadados. Ver project_dupla_elim_repechage.
+      var g = Math.floor(n / 2);
+      var hasSat = (n % 2) === 1;                          // n ímpar → 1 dupla fica de fora da R1
+      var satTeam = hasSat ? pool[n - 1] : null;
+      var playing = hasSat ? pool.slice(0, n - 1) : pool.slice();
+      var T = 1; while (T < g) T *= 2;                     // menor pow2 >= vencedores (=chave superior)
+      var repR1 = [];
+      for (var gi = 0; gi < g; gi++) {
+        var ra = playing[gi], rb = playing[playing.length - 1 - gi];
+        repR1.push({
+          id: idPrefix + '-rep' + gi, round: 0, bracket: 'upper', isPhaseRepR1: true,
+          p1: ra.displayName, p2: rb.displayName, team1Obj: ra, team2Obj: rb,
+          p1Seed: gi, p2Seed: (playing.length - 1 - gi), winner: null
+        });
+      }
+      return {
+        matches: repR1, needsRepechageDoubleElim: true,
+        repMeta: {
+          g: g, T: T, promote: (T - g), toLower: (g - (T - g)), n: n,
+          hasSat: hasSat, satName: satTeam ? satTeam.displayName : null, satObj: satTeam || null,
+          idPrefix: idPrefix
+        }
+      };
+    }
+    // Pareamento cru (bye/default). DÍVIDA CONHECIDA: p/ dupla-elim FORA de pow2 isto NÃO
+    // completa até a pow2 (14 → 7 jogos ímpares → vagas mortas no _buildDoubleElimBracket).
+    // BYE de verdade em dupla-elim é um problema difícil (fluxo assimétrico na chave inferior
+    // com muitos byes) — tentado e não ficou robusto p/ n grande. Enquanto isso, a resolução
+    // canônica/COMPLETA p/ dupla fora de pow2 é REPESCAGEM (playin). Ver feedback_resolution_one_logic.
+    var dms = [];
+    for (var i = 0; i < n; i += 2) {
+      var a = pool[i], b = (i + 1 < n) ? pool[i + 1] : null;
+      var bye = !b;
+      dms.push({
+        id: idPrefix + '-u' + (i / 2), round: 1, bracket: 'upper',
+        p1: a.displayName, p2: bye ? 'BYE (Avança Direto)' : b.displayName,
+        team1Obj: a, team2Obj: bye ? null : b,
+        winner: bye ? a.displayName : null, isBye: bye, scoreP1: null, scoreP2: null
+      });
+    }
+    return { matches: dms, needsDoubleElim: true };
+  }
+
   function _genElimFromPool(pool, cfg, idPrefix) {
     var _res = (cfg && cfg.bracketResolution) || 'bye';
     var _third = cfg ? (cfg.thirdPlace !== false) : true;
@@ -724,22 +766,11 @@
       return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: 'main', p1: pool[0].displayName, p2: 'BYE (Avança Direto)', winner: pool[0].displayName, isBye: true }] };
     }
     if (dupla) {
-      // Dupla Eliminatória: gera SÓ a R1 do upper (pares na ordem do pool semeado). O
-      // upper R2+, o lower e a grande final são montados por _buildDoubleElimBracket
-      // (lê t.matches round 1) → sinaliza needsDoubleElim pro chamador. (Não usa o
-      // genTierBracket completo, que duplicaria as rodadas que o _buildDoubleElimBracket faz.)
-      var dms = [];
-      for (var di = 0; di < pool.length; di += 2) {
-        var da = pool[di], db = (di + 1 < pool.length) ? pool[di + 1] : null;
-        var dbye = !db;
-        dms.push({
-          id: idPrefix + '-u' + (di / 2), round: 1, bracket: 'upper',
-          p1: da.displayName, p2: dbye ? 'BYE (Avança Direto)' : db.displayName,
-          team1Obj: da, team2Obj: dbye ? null : db,
-          winner: dbye ? da.displayName : null, isBye: dbye, scoreP1: null, scoreP2: null
-        });
-      }
-      return { matches: dms, needsDoubleElim: true };
+      // Dupla Eliminatória: gera a R1 do upper (com repescagem quando resolution='playin'
+      // e fora de pow2). O upper R2+, o lower e a grande final são montados por
+      // _buildDoubleElimBracket (lê t.matches round 1) → needsDoubleElim. Fonte única
+      // compartilhada com a transição entre fases (_duplaClassic).
+      return _duplaR1FromPool(pool, _res, idPrefix);
     }
     // Linha única = bracket 'main' (igual à Fase N) → _renderPhaseBracket renderiza por 1 render só.
     return genTierBracket(pool, 'main', idPrefix, _res, _third);
@@ -757,17 +788,19 @@
     var fmt = classifyPhaseFormat(cfg);
     var monarch = isMonarchDraw(cfg);
     var built;
-    if (monarch) {
-      built = genMonarchFromPool(pool, cfg, idPrefix);
-    } else if (fmt === 'groups') {
-      built = genGroupsFromPool(pool, cfg, idPrefix);
-    } else if (fmt === 'league') {
+    // Rei/Rainha é MODO, não formato — TODO monarch roda no motor league INCREMENTAL
+    // (t.rounds via _generateNextRound com ligaRoundFormat='rei_rainha'), inclusive as
+    // cfgs legadas 'Rei/Rainha da Praia'/grupos_mata+rei_rainha. Multi-rodada → Rodada
+    // Extra funciona em qualquer monarch. O gerador de RODADA ÚNICA (genMonarchFromPool
+    // → t.matches) foi REMOVIDO (campanha project_kill_monarch_format_campaign).
+    if (monarch || fmt === 'league') {
       // FASE 0 (inscrição): a 1ª rodada da Liga/Suíço é gerada pelo MESMO motor
       // incremental _generateNextRound, escrevendo o STORAGE NATIVO (t.rounds/t.standings).
       // Preserva categorias, equilíbrio, temporada e o autoDraw da Cloud Function (que
       // leem t.rounds). É o mesmo gerador da Fase N (lá via _phaseGenNextLeagueRound).
       if (enroll && ctx.t && typeof window !== 'undefined' && typeof window._generateNextRound === 'function') {
         var LT = ctx.t;
+        if (monarch) LT.ligaRoundFormat = 'rei_rainha';
         LT.standings = pool.map(function (p) {
           var nm = p.displayName || p.name || '';
           var e = { name: nm, points: 0, wins: 0, losses: 0, pointsDiff: 0, played: 0 };
@@ -782,25 +815,43 @@
       }
       // Cadência = eixo da cfg (mesma lógica do buildPhaseLeagueStage, p/ identidade):
       // 'incremental' → rodada-a-rodada (o chamador gera a 1ª rodada via _generateNextRound).
-      if (cfg && cfg.ligaCadence === 'incremental') { built = { matches: [], players: pool.map(function (p) { return p.displayName; }), pool: pool, incrementalLeague: true }; }
+      // Monarch é SEMPRE incremental (grupos de 4 rotativos rodada a rodada) — nunca o
+      // round-robin estático de individuais.
+      if (monarch || (cfg && cfg.ligaCadence === 'incremental')) { built = { matches: [], players: pool.map(function (p) { return p.displayName; }), pool: pool, incrementalLeague: true }; }
       else { built = genLeagueFromPool(pool, cfg, idPrefix); }
+    } else if (fmt === 'groups') {
+      built = genGroupsFromPool(pool, cfg, idPrefix);
     } else {
       // Eliminatória: split por CATEGORIA (cada categoria = chave independente). Sem
       // categorias → 1 chave. O split é um EIXO da fase (cfg.categories), não código de
       // posição. Cada chave tagueia seus matches com a categoria.
       var cats = (cfg && Array.isArray(cfg.categories) && cfg.categories.length) ? cfg.categories : null;
       if (cats && ctx && typeof ctx.catOf === 'function') {
-        var allM = [], needsDE = false;
+        var allM = [], needsDE = false, repMetas = [];
         cats.forEach(function (cat, ci) {
           var catPool = pool.filter(function (e) { return String(ctx.catOf(e) || '') === String(cat); });
           if (!catPool.length) return;
           var b = _genElimFromPool(catPool, cfg, idPrefix + '-c' + ci);
-          (b.matches || []).forEach(function (m) { m.category = cat; });
+          (b.matches || []).forEach(function (m) {
+            m.category = cat;
+            // repFill do single-elim (genTierBracket) nasce sem categoria (não a conhece).
+            // Estampa aqui pra _resolveRepFills rankear os derrotados DAQUELA categoria.
+            if (Array.isArray(m.repFill)) m.repFill.forEach(function (s) { if (s.cat == null) s.cat = cat; });
+          });
           allM = allM.concat(b.matches || []);
           if (b.needsDoubleElim) needsDE = true;
+          // v4.1.x: PROPAGA a Dupla Eliminatória c/ repescagem (não-pow2). Antes o ramo de
+          // categorias descartava needsRepechageDoubleElim+repMeta → o builder nunca rodava e
+          // a chave saía incompleta (só a repescagem R1). Ver project_dupla_elim_repechage.
+          if (b.needsRepechageDoubleElim && b.repMeta) { b.repMeta.category = cat; repMetas.push(b.repMeta); }
         });
         built = { matches: allM };
         if (needsDE) built.needsDoubleElim = true;
+        if (repMetas.length) {
+          built.needsRepechageDoubleElim = true;
+          built.repMeta = repMetas[0];                 // caso comum: 1 categoria (ex.: Casais "Misto Obrig.")
+          if (repMetas.length > 1) built.repMetaByCat = repMetas; // multi-categoria: builder por categoria
+        }
       } else {
         built = _genElimFromPool(pool, cfg, idPrefix);
       }
@@ -1010,6 +1061,29 @@
     });
   }
 
+  // Classificatória LIGA/SUÍÇO na FASE 0: os jogos moram em t.rounds (storage nativo
+  // via _generateNextRound), NÃO taggeados bracket:'league' (isso é só fase 1+). Vira
+  // 1 grupo único com todos os jogadores + todos os jogos das rodadas — espelha o ramo
+  // 'league' de bracketPhaseGroups pra que a próxima fase (eliminatória) puxe do top N
+  // da classificação. Sem isso, prevPhaseGroups devolvia [] → phaseComplete=false (a
+  // eliminatória nunca gerava) + total de jogos não somava a eliminatória (100% precoce).
+  function _leagueGroupFromRounds(t) {
+    var cfg0 = (t.phases && t.phases[0]) || {};
+    if (isMonarchDraw(cfg0) || classifyPhaseFormat(cfg0) !== 'league') return [];
+    var allM = [], players = [], seen = {};
+    (t.rounds || []).forEach(function (r) {
+      (r && r.matches || []).forEach(function (m) {
+        if (!m || m.isSitOut) return;
+        allM.push(m);
+        [m.p1, m.p2].forEach(function (n) {
+          if (n && n !== 'BYE' && n !== 'TBD' && !/^BYE/i.test(n) && !seen[n]) { seen[n] = 1; players.push(n); }
+        });
+      });
+    });
+    if (!allM.length) return [];
+    return [{ name: cfg0.name || 'Classificatória', groupIdx: 0, players: players, matches: allM }];
+  }
+
   function prevPhaseGroups(t) {
     var rounds = t.rounds || [];
     for (var i = rounds.length - 1; i >= 0; i--) {
@@ -1018,7 +1092,10 @@
     }
     if (Array.isArray(t.groups) && t.groups.length) return t.groups;
     // Storage canônico: grupos/monarca da fase 0 moram em t.matches taggeado.
-    return _groupsFromTaggedMatches(t, 0);
+    var tagged = _groupsFromTaggedMatches(t, 0);
+    if (tagged.length) return tagged;
+    // Classificatória Liga/Suíço (fase 0) → 1 grupo único a partir de t.rounds.
+    return _leagueGroupFromRounds(t);
   }
 
   // A fase ATUAL está completa? (libera o avanço)
@@ -1032,12 +1109,30 @@
       //  • Grupos (Copa do Mundo): grupos vêm de t.groups (round-robin, sem rodadas).
       var groups = prevPhaseGroups(t);
       if (!groups.length) return false;
-      var isMonarch = (t.rounds || []).some(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
-      if (isMonarch) {
+      // As travas de nº-de-rodadas abaixo contam RODADAS em t.rounds (storage nativo da
+      // Liga/Suíço incremental). Quando a fase 0 é armazenada em MATCHES TAGGEADOS
+      // (t.matches, com t.rounds vazio — ex.: Liga Rei/Rainha de rodada única / round-robin
+      // sorteado de uma vez pela Confra), NÃO há t.rounds pra contar: pular as travas e ir
+      // direto pra "todos os jogos decididos". Sem isto, needL=1 vs playedL=0 travava a fase
+      // pra sempre (nunca avançava). Ver project_progress_end_multiphase / phaseComplete.
+      var _roundsBased = Array.isArray(t.rounds) && t.rounds.length > 0;
+      var isMonarch = _roundsBased && t.rounds.some(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
+      if (_roundsBased && isMonarch) {
         var cfg = t.phases[0] || {};
         var need = parseInt(cfg.rounds) || 1;
-        var monRounds = (t.rounds || []).filter(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
+        var monRounds = t.rounds.filter(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
         if (monRounds.length < need) return false;
+      }
+      // Classificatória Liga/Suíço (fase 0): só COMPLETA quando TODAS as rodadas
+      // configuradas foram geradas E decididas — senão a eliminatória geraria cedo,
+      // no meio do Suíço (mesmo espírito do check monarca acima e da Liga incremental).
+      var cfg0 = t.phases[0] || {};
+      if (_roundsBased && !isMonarch && classifyPhaseFormat(cfg0) === 'league') {
+        var needL = parseInt(cfg0.rounds) || parseInt(cfg0.swissRounds) || 1;
+        var playedL = t.rounds.filter(function (r) {
+          return r && Array.isArray(r.matches) && r.matches.some(function (m) { return !m.isSitOut; });
+        }).length;
+        if (playedL < needL) return false;
       }
       return groups.every(function (g) {
         var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
@@ -1258,22 +1353,19 @@
     var cfg = t.phases[nextIdx];
     // v3.1.15: roteamento por FORMATO (classifyPhaseFormat → league/groups/elim). O
     // modo de sorteio (Rei/Rainha) e a cadência (rodada a rodada / todos contra todos)
-    // são EIXOS ORTOGONAIS dentro do formato Pontos Corridos — NÃO um 4º formato. Por
-    // isso a decisão é FORMATO primeiro; só DENTRO de league o modo de sorteio escolhe
-    // a forma das rodadas:
-    //   • cadência incremental → pool (o cliente/cron geram rodada a rodada, honrando o
-    //     modo de sorteio via _generateNextRound); vale pra simples E Rei/Rainha.
-    //   • todos contra todos (estático) → Rei/Rainha = grupos de 4 rotativos
-    //     (buildPhaseMonarchStage); simples = round-robin (buildPhaseLeagueStage).
+    // são EIXOS ORTOGONAIS dentro do formato Pontos Corridos — NÃO um 4º formato.
+    // Rei/Rainha (MODO) é SEMPRE incremental: pool → t.phaseRounds[idx], rodadas
+    // geradas por _phaseGenNextLeagueRound (que honra cfg.reiRainha →
+    // ligaRoundFormat='rei_rainha'). fixedPairs=false: parceiro ROTATIVO = pool de
+    // PESSOAS. O gerador de RODADA ÚNICA (buildPhaseMonarchStage → genMonarchFromPool)
+    // foi REMOVIDO (campanha project_kill_monarch_format_campaign).
     var _id = idPrefix || ('ph' + nextIdx);
     var _fmt = classifyPhaseFormat(cfg);
+    var _mon = isMonarchDraw(cfg);
     var built;
-    if (_fmt === 'league') {
-      built = (cfg.ligaCadence === 'incremental')
-        ? buildPhaseLeagueStage(groups, cfg, cs, _id)            // devolve só o pool
-        : (isMonarchDraw(cfg)
-          ? buildPhaseMonarchStage(groups, cfg, cs, _id)
-          : buildPhaseLeagueStage(groups, cfg, cs, _id));
+    if (_mon || _fmt === 'league') {
+      var _cfgL = _mon ? Object.assign({}, cfg, { fixedPairs: false, ligaCadence: 'incremental' }) : cfg;
+      built = buildPhaseLeagueStage(groups, _cfgL, cs, _id);    // incremental devolve só o pool
     } else if (_fmt === 'groups') {
       built = buildPhaseGroupStage(groups, cfg, cs, _id);
     } else {
@@ -1363,7 +1455,9 @@
           // posterior) E g.rounds[].matches (Fase 0 standalone) → _computeMonarchStandings.
           if (typeof window._computeMonarchStandings !== 'function') return g.standings || [];
           var ms = (g.matches || []).concat((g.rounds || []).reduce(function (a, r) { return a.concat(r.matches || []); }, []));
-          return window._computeMonarchStandings({ players: g.players || [], matches: ms });
+          // v4.1.70: pareamento POR PERFORMANCE usa os MESMOS pontos da tela — passa `t`
+          // pra aplicar advancedScoring quando ligado (ordem = classificação exibida).
+          return window._computeMonarchStandings({ players: g.players || [], matches: ms }, t, g.category || null);
         }
       : function (g) { return _groupTeamStandings(g, _tbOpts); };
     // v2.7.24: se alguma LINHA da próxima fase NÃO for potência de 2 e o organizador
@@ -1383,13 +1477,13 @@
         // v3.1.23: quando uma linha não fecha em potência de 2, SEMPRE pergunta ao
         // organizador como resolver (Play-in/Repescagem · Lista de espera · BYE ·
         // Exclusão) — com o equilíbrio de Nash, o tempo estimado e o nº de partidas
-        // de cada uma (_showPhaseResolutionPanel). Vale pra QUALQUER origem (Grupos,
-        // Rei/Rainha, Pontos Corridos). Antes (v3.0.x) a transição de Grupos/Rei-Rainha
+        // de cada uma (showUnifiedResolutionPanel, ramo de fase). Vale pra QUALQUER origem
+        // (Grupos, Rei/Rainha, Pontos Corridos). Antes (v3.0.x) a transição de Grupos/Rei-Rainha
         // forçava play-in direto sem perguntar — pedido do dono: sempre perguntar.
         // Fallback só se o painel não existir: play-in (repescagem, mais inclusivo).
-        if (typeof window._showPhaseResolutionPanel === 'function') {
+        if (typeof window.showUnifiedResolutionPanel === 'function') {
           t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
-          window._showPhaseResolutionPanel(tId);
+          window.showUnifiedResolutionPanel(tId);
           return;
         }
         _nextCfg.bracketResolution = 'playin';
@@ -1400,13 +1494,51 @@
       if (window.showAlertDialog) window.showAlertDialog('Não foi possível avançar', 'Motivo: ' + res.error, null, { type: 'warning' });
       return;
     }
+    // v4.1.29: fase = Dupla Eliminatória clássica → monta upper R2+/lower/grande final a
+    // partir da R1 do upper que a materialização criou (phase-aware, tagueando phaseIndex).
+    if (res.built && res.built.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {
+      window._buildDoubleElimBracket(t, { phaseIndex: t.currentPhaseIndex });
+    }
+    if (res.built && res.built.needsRepechageDoubleElim && typeof window._buildRepechageDoubleElim === 'function') {
+      var _rm = (res.built.repMetaByCat && res.built.repMetaByCat.length) ? res.built.repMetaByCat : [res.built.repMeta];
+      _rm.forEach(function (mm) { window._buildRepechageDoubleElim(t, mm, { phaseIndex: t.currentPhaseIndex }); });
+    }
     // v3.1.13 (brick 4): Liga rodada a rodada — a fase entra sem partidas; gera a 1ª
     // rodada agora via o motor incremental (cliente). As seguintes saem da cadência
     // "encerrar rodada" (_phaseCloseLeagueRound).
     if (res.incrementalLeague && typeof window._phaseGenNextLeagueRound === 'function') {
       window._phaseGenNextLeagueRound(t, res.phaseIndex);
     }
-    if (AppStore.syncImmediate) AppStore.syncImmediate(tId);
+    // BLINDAGEM (Fase B): persiste o AVANÇO DE FASE atomicamente — re-materializa a
+    // próxima fase sobre o estado FRESCO (idempotente via _phaseMaterialized). Substitui
+    // o syncImmediate do doc inteiro, que a corrida (echo de result-save) podia clobbar.
+    // O `t` local já foi materializado acima (UI otimista). project_concurrency_safe_saves.
+    AppStore.commitTournamentTx(tId, function (freshT) {
+      var _idp = 'ph-' + tId + '-' + ((freshT.currentPhaseIndex || 0) + 1);
+      // CAUSA-RAIZ da repescagem virar BYE (25 times → 9 jogos + byes): o painel de
+      // resolução seta phaseCfg.bracketResolution='playin' SÓ no `t` LOCAL (memória,
+      // _handleUnifiedOption), sem persistir. Esta tx re-materializa no doc FRESCO do
+      // Firestore, que não tinha a escolha → caía no default 'bye'. Propaga a resolução
+      // (e o nº de rodadas do Suíço) do local pro fresco ANTES de materializar.
+      if (Array.isArray(t.phases) && Array.isArray(freshT.phases)) {
+        t.phases.forEach(function (ph, i) {
+          if (!ph || !freshT.phases[i]) return;
+          if (ph.bracketResolution) freshT.phases[i].bracketResolution = ph.bracketResolution;
+          if (ph.swissRounds) freshT.phases[i].swissRounds = ph.swissRounds;
+        });
+      }
+      var r = materializeNextPhase(freshT, cs, _idp);
+      if (r && r.ok && r.incrementalLeague && typeof window._phaseGenNextLeagueRound === 'function') {
+        window._phaseGenNextLeagueRound(freshT, r.phaseIndex);
+      }
+      if (r && r.ok && r.built && r.built.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {
+        window._buildDoubleElimBracket(freshT, { phaseIndex: freshT.currentPhaseIndex });
+      }
+      if (r && r.ok && r.built && r.built.needsRepechageDoubleElim && typeof window._buildRepechageDoubleElim === 'function') {
+        var _rm2 = (r.built.repMetaByCat && r.built.repMetaByCat.length) ? r.built.repMetaByCat : [r.built.repMeta];
+        _rm2.forEach(function (mm) { window._buildRepechageDoubleElim(freshT, mm, { phaseIndex: freshT.currentPhaseIndex }); });
+      }
+    });
     if (window._rerenderBracket) window._rerenderBracket(tId);
     // Notifica CADA participante do seu jogo na nova fase (app/push/e-mail/WhatsApp
     // 1:1), igual ao sorteio de rodada. Personalizado por uid (cada membro da dupla).
@@ -1418,51 +1550,58 @@
     if (window.showNotification) window.showNotification('Avançou para ' + nm, 'Chaves geradas a partir das colocações da fase anterior.', 'success');
   }
 
-  // v2.7.69: RESOLUÇÃO DA REPESCAGEM — chamada pelo _advanceWinner quando uma
-  // partida isRepechageR1 fecha. Rankeia os perdedores da R1 (saldo desc, score
-  // desc, semente da fase anterior asc como desempate) e preenche os slots de
-  // repescagem da chave de T (repDirectP1/P2) + o p2 do jogo de repescagem
-  // (loser × satout). Idempotente: só age quando TODOS os R1 da chave têm vencedor
-  // e ainda há slot pendente. Roda igual no cliente, no poller e na CF (vendor).
-  function resolveRepechage(t, bracketKey) {
-    if (!t || !bracketKey) return false;
+  // (resolveRepechage REMOVIDO — unificado em resolveRepFills. O playin single-elim e o
+  //  dupla-elim agora usam O MESMO mecanismo de vaga: repFill. feedback_resolution_one_logic.)
+
+  // ── resolveRepFills — RESOLVEDOR ÚNICO da REPESCAGEM (single-elim E dupla-elim) ─
+  // Cada vaga de repescagem é um descritor em m.repFill: { slot:'p1'|'p2',
+  // srcBracket, srcRound, rank } = "o k-ésimo melhor DERROTADO das partidas de
+  // (srcBracket, srcRound)". Quando TODAS as partidas-fonte têm vencedor, rankeia os
+  // derrotados (saldo desc, pontos desc, semente asc) e preenche a vaga. Idempotente
+  // (some o descritor ao preencher). Chamado pelo _advanceWinner a cada jogo fechado,
+  // então cascateia (a repescagem de uma rodada inferior só resolve quando ela fecha).
+  // Ver _buildRepechageDoubleElim / project_dupla_elim_repechage.
+  function resolveRepFills(t) {
+    if (!t) return false;
     var all = (typeof window !== 'undefined' && window._collectAllMatches) ? window._collectAllMatches(t)
       : (typeof _collectAllMatches === 'function' ? _collectAllMatches(t) : []);
-    var r1 = all.filter(function (m) { return m && m.isPhaseRepR1 && m.bracket === bracketKey; });
-    if (!r1.length) return false;
-    if (r1.some(function (m) { return !m.winner; })) return false;          // R1 ainda não fechou
-    var pending = all.filter(function (m) {
-      return m && m.bracket === bracketKey && (m.repDirectP1 != null || m.repDirectP2 != null ||
-        (m.isPhaseRepGame && m.repLoserRank != null));
-    });
-    if (!pending.length) return false;                                       // já resolvido
-    var losers = r1.map(function (m) {
-      var s1 = parseFloat(m.scoreP1) || 0, s2 = parseFloat(m.scoreP2) || 0;
-      var loserIsP1 = (m.winner !== m.p1);
-      return {
-        name: loserIsP1 ? m.p1 : m.p2,
-        obj: loserIsP1 ? m.team1Obj : m.team2Obj,
-        saldo: loserIsP1 ? (s1 - s2) : (s2 - s1),
-        score: loserIsP1 ? s1 : s2,
-        seed: (loserIsP1 ? m.p1Seed : m.p2Seed)
-      };
-    });
-    losers.forEach(function (l) { if (l.seed == null) l.seed = 9999; });
-    losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.seed - b.seed); });
+    var changed = false;
     all.forEach(function (m) {
-      if (!m || m.bracket !== bracketKey) return;
-      // v2.8.18: marca FromRepechage no slot preenchido por melhor-perdedor → tag âmbar REP
-      // (some quando o time avança por vitória; o flag fica só no slot de entrada na chave).
-      if (m.repDirectP1 != null && losers[m.repDirectP1]) { m.p1 = losers[m.repDirectP1].name; if (losers[m.repDirectP1].obj) m.team1Obj = losers[m.repDirectP1].obj; m.p1FromRepechage = true; delete m.repDirectP1; }
-      if (m.repDirectP2 != null && losers[m.repDirectP2]) { m.p2 = losers[m.repDirectP2].name; if (losers[m.repDirectP2].obj) m.team2Obj = losers[m.repDirectP2].obj; m.p2FromRepechage = true; delete m.repDirectP2; }
+      if (!m || !Array.isArray(m.repFill) || !m.repFill.length) return;
+      var keep = [];
+      m.repFill.forEach(function (slot) {
+        var src = all.filter(function (x) {
+          return x && x.bracket === slot.srcBracket && x.round === slot.srcRound &&
+            (slot.cat == null || x.category === slot.cat) &&
+            x.p1 && x.p1 !== 'TBD' && x.p2 && x.p2 !== 'TBD';
+        });
+        if (!src.length || src.some(function (x) { return !x.winner; })) { keep.push(slot); return; }
+        var losers = src.map(function (x) {
+          var s1 = parseFloat(x.scoreP1) || 0, s2 = parseFloat(x.scoreP2) || 0;
+          var lp1 = (x.winner !== x.p1);
+          return {
+            name: lp1 ? x.p1 : x.p2, obj: lp1 ? x.team1Obj : x.team2Obj,
+            saldo: lp1 ? (s1 - s2) : (s2 - s1), score: lp1 ? s1 : s2,
+            seed: (lp1 ? x.p1Seed : x.p2Seed)
+          };
+        }).filter(function (l) { return l.name && l.name !== 'BYE (Avança Direto)' && l.name !== 'TBD'; }); // BYE nunca é repescável
+        losers.forEach(function (l) { if (l.seed == null) l.seed = 9999; });
+        losers.sort(function (a, b) { return (b.saldo - a.saldo) || (b.score - a.score) || (a.seed - b.seed); });
+        var pick = losers[slot.rank];
+        if (pick && pick.name) {
+          m[slot.slot] = pick.name;
+          if (pick.obj) { if (slot.slot === 'p1') m.team1Obj = pick.obj; else m.team2Obj = pick.obj; }
+          // TAG REP só nas vagas que REPESCAM de verdade (derrotado promovido pra chave onde
+          // não cairia normalmente: chave superior no dupla / chave única no single-elim).
+          // Derrotado que cai na chave INFERIOR é fluxo normal da dupla eliminatória → SEM tag.
+          // Regra do dono. slot.tagRep marca as vagas que sobem.
+          if (slot.tagRep) { if (slot.slot === 'p1') m.p1FromRepechage = true; else m.p2FromRepechage = true; }
+          changed = true;
+        } else keep.push(slot);
+      });
+      m.repFill = keep;
     });
-    var repGame = all.filter(function (m) { return m && m.isPhaseRepGame && m.bracket === bracketKey; })[0];
-    if (repGame && repGame.repLoserRank != null && losers[repGame.repLoserRank]) {
-      repGame.p2 = losers[repGame.repLoserRank].name;
-      if (losers[repGame.repLoserRank].obj) repGame.team2Obj = losers[repGame.repLoserRank].obj;
-      delete repGame.repLoserRank;
-    }
-    return true;
+    return changed;
   }
 
   var api = {
@@ -1473,12 +1612,10 @@
     roundRobinSchedule: roundRobinSchedule,
     buildPhaseBrackets: buildPhaseBrackets,
     buildPhaseGroupStage: buildPhaseGroupStage,
-    buildPhaseMonarchStage: buildPhaseMonarchStage,
     buildPhaseLeagueStage: buildPhaseLeagueStage,
     generatePhase: generatePhase,
     storePhase: storePhase,
     genGroupsFromPool: genGroupsFromPool,
-    genMonarchFromPool: genMonarchFromPool,
     genLeagueFromPool: genLeagueFromPool,
     poolFromPrev: _poolFromPrev,
     classifyPhaseFormat: classifyPhaseFormat,
@@ -1494,7 +1631,7 @@
     pendingMatches: pendingMatches,
     materializeNextPhase: materializeNextPhase,
     groupTeamStandings: _groupTeamStandings,
-    resolveRepechage: resolveRepechage
+    resolveRepFills: resolveRepFills
   };
 
   // Exposição: browser (window) + node (module.exports) para teste headless.
@@ -1505,7 +1642,25 @@
     window._phasesPhaseComplete = phaseComplete;
     window._phasesPendingMatches = pendingMatches;
     window._advanceMultiPhase = advanceMultiPhase;
-    window._resolveRepechage = resolveRepechage;
+    window._resolveRepFills = resolveRepFills;
+    // v4.2.2 (pedido do dono): o AUTO-AVANÇO foi REMOVIDO — o organizador avança pelo
+    // botão "🏆 Avançar" (bracket.js), que chama _advanceMultiPhase direto. Esta função
+    // NÃO é mais disparada pelo render; fica exposta só por compat/idempotência (guardas
+    // de fase-completa + já-materializada + reentrância) caso algo externo ainda chame.
+    window._maybeAdvanceMultiPhase = function (tId) {
+      try {
+        var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+        if (!t || !isMultiPhase(t)) return;
+        var cur = t.currentPhaseIndex || 0;
+        if (cur + 1 >= (t.phases || []).length) return;          // sem próxima fase
+        if ((t._phaseMaterialized || 0) > cur) return;           // próxima já materializada
+        if (!phaseComplete(t)) return;                           // fase atual ainda não terminou
+        if (window._autoAdvancingPhaseId === String(tId)) return; // reentrância
+        window._autoAdvancingPhaseId = String(tId);
+        setTimeout(function () { if (window._autoAdvancingPhaseId === String(tId)) window._autoAdvancingPhaseId = null; }, 6000);
+        advanceMultiPhase(tId);
+      } catch (e) {}
+    };
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;

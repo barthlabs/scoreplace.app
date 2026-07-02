@@ -3,6 +3,66 @@
 (function() {
 var _t = window._t || function(k) { return k; };
 
+// ── IDENTIDADE = uid no enroll/pareamento ────────────────────────────────────
+// Fecha a classe de bug do parceiro/participante gravado só por NOME (o sumiço do
+// Adriano: dupla formada com p2Name mas p2Uid vazio). Regra do dono: quem TEM
+// conta entra pelo uid; só cai pra nome quem realmente não tem conta (informal).
+// Nome é único entre uids → normalmente resolve pra 0 (informal) ou 1 conta;
+// 2+ (homônimo legado) PERGUNTA qual, nunca grava às cegas. cb(uid|null).
+window._resolveEnrolleeUid = function (name, cb) {
+    cb = cb || function () {};
+    if (!name || !window.FirestoreDB || typeof window.FirestoreDB.resolveNameToAccounts !== 'function') { cb(null); return; }
+    window.FirestoreDB.resolveNameToAccounts(name).then(function (res) {
+        if (res && res.status === 'unique') { cb(res.uid || null); return; }
+        if (res && res.status === 'ambiguous') { window._pickHomonym(name, res.candidates, cb); return; }
+        cb(null); // none → sem conta (participante informal)
+    }).catch(function () { cb(null); });
+};
+
+// Resolve uma LISTA de nomes → lista de uids (mesma ordem; null p/ informal).
+// Encadeia pra que ambiguidades sejam perguntadas uma de cada vez.
+window._resolveEnrolleeUids = function (names, cb) {
+    cb = cb || function () {};
+    var out = [], i = 0;
+    (function next() {
+        if (i >= names.length) { cb(out); return; }
+        window._resolveEnrolleeUid(names[i], function (uid) { out.push(uid || null); i++; next(); });
+    })();
+};
+
+// Picker de homônimo: 2+ contas com o mesmo nome (resíduo legado). Mostra e-mail/
+// telefone mascarado; a pessoa escolhe qual, ou "sem conta" (informal). cb(uid|null).
+window._pickHomonym = function (name, candidates, cb) {
+    cb = cb || function () {};
+    var _mE = function (e) { e = String(e || ''); var at = e.indexOf('@'); return at < 1 ? e : (e[0] + '***' + e.slice(at)); };
+    var _mP = function (p) { p = String(p || ''); return p.length < 4 ? p : ('***' + p.slice(-4)); };
+    var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+    var ov = document.createElement('div');
+    ov.id = 'homonym-picker';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,0.72);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var rows = candidates.map(function (c, i) {
+        var sub = [c.email ? _mE(c.email) : '', c.phone ? _mP(c.phone) : ''].filter(Boolean).join(' · ') || 'sem contato';
+        return '<button type="button" data-hom="' + i + '" style="display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;border-radius:10px;border:1px solid var(--border-color,rgba(255,255,255,0.15));background:var(--bg-dark,#0f172a);color:var(--text-main,#e2e8f0);cursor:pointer;">' +
+            '<b>' + esc(c.displayName || name) + '</b><br><span style="font-size:0.8rem;color:var(--text-muted);">' + esc(sub) + '</span></button>';
+    }).join('');
+    ov.innerHTML = '<div style="background:var(--bg-card,#1e293b);border-radius:14px;padding:18px;max-width:420px;width:100%;">' +
+        '<div style="font-weight:800;margin-bottom:4px;">Qual "' + esc(name) + '"?</div>' +
+        '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px;">Há mais de uma conta com esse nome. Escolha a pessoa certa pra vincular pelo perfil (uid).</div>' +
+        rows +
+        '<button type="button" data-hom="none" style="display:block;width:100%;text-align:left;margin:10px 0 0;padding:10px 12px;border-radius:10px;border:1px dashed var(--border-color,rgba(255,255,255,0.2));background:transparent;color:var(--text-muted);cursor:pointer;">Nenhum destes — inscrever sem conta (informal)</button>' +
+    '</div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('[data-hom]') : null;
+        if (!btn) return; // clicar fora não fecha: a escolha é obrigatória
+        var v = btn.getAttribute('data-hom');
+        try { ov.remove(); } catch (_e) {}
+        if (v === 'none') { cb(null); return; }
+        var idx = parseInt(v, 10);
+        cb((candidates[idx] && candidates[idx].uid) || null);
+    });
+};
+
 // ── Eligibility helpers ──────────────────────────────────────────────────────
 
 // Parse "DD/MM/AAAA" birthDate → age in years (or null)
@@ -643,6 +703,26 @@ window.submitTeamEnroll = function (tId) {
         return;
     }
 
+    // ── IDENTIDADE = uid: resolve os nomes DIGITADOS de parceiros → conta ANTES
+    // de gravar. Parceiro escolhido no picker já traz dataset.partnerUid; nome
+    // digitado à mão passa por resolveNameToAccounts (pergunta se homônimo). Grava
+    // o uid no dataset e RE-ENTRA (o dataset.partnerResolved evita loop). Cobre o
+    // caminho normal E o de lista de espera (ambos leem .team-member-name-).
+    var _teamInputs = Array.prototype.slice.call(document.querySelectorAll('.team-member-name-' + tId));
+    var _pend = _teamInputs.filter(function (inp) {
+        return inp.value.trim() && !(inp.dataset && inp.dataset.partnerUid) && !(inp.dataset && inp.dataset.partnerResolved);
+    });
+    if (_pend.length) {
+        window._resolveEnrolleeUids(_pend.map(function (i) { return i.value.trim(); }), function (uids) {
+            _pend.forEach(function (inp, k) {
+                inp.dataset.partnerResolved = '1';
+                if (uids[k]) inp.dataset.partnerUid = uids[k];
+            });
+            window.submitTeamEnroll(tId);
+        });
+        return;
+    }
+
     // Verifica se as inscrições estão realmente abertas
     if (t.status === 'finished') {
         showAlertDialog(_t('enroll.tournamentFinished'), _t('enroll.tournamentFinishedMsg'), null, { type: 'warning' });
@@ -660,7 +740,15 @@ window.submitTeamEnroll = function (tId) {
             inputs2.forEach(function(inp) { var v = inp.value.trim(); if (!v) allOk = false; teamNames2.push(v); });
             if (!allOk) { showAlertDialog(_t('enroll.requiredFields'), _t('enroll.requiredFieldsMsg'), null, { type: 'warning' }); return; }
             var teamStr = teamNames2.join(' / ');
-            var partObj = { name: teamStr, email: user.email, displayName: teamStr, uid: user.uid };
+            // IDENTIDADE = uid: monta a dupla por slots (p1 = quem inscreve; parceiro
+            // pelo uid já resolvido no dataset), não só por nome — igual ao caminho normal.
+            var _sbP2Uid = (inputs2[0] && inputs2[0].dataset && inputs2[0].dataset.partnerUid) || '';
+            var partObj = {
+                name: teamStr, displayName: teamStr, uid: user.uid, ligaActive: true,
+                p1Name: teamNames2[0] || '', p1Uid: user.uid,
+                p2Name: teamNames2[1] || '', p2Uid: _sbP2Uid
+            };
+            if (user.email) partObj.email = user.email;
             _enrollToStandby(t, tId, partObj, function() {
                 var mod2 = document.getElementById('team-enroll-modal-' + tId);
                 if (mod2) mod2.style.display = 'none';
@@ -935,8 +1023,46 @@ window.addParticipantFunction = function (tId) {
         showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;
     }
-    // Overlay com autocomplete de amigos/usuários
+    // Overlay com autocomplete de amigos/usuários → delega ao core canônico.
     window._addParticipantWithAutocomplete(tId, _closedOrDrawn, function(pName, selectedUid, selectedPhoto) {
+        window._doAddParticipant(tId, pName, selectedUid, selectedPhoto);
+    });
+};
+
+// v4.0.90 — CORE canônico de "adicionar participante" (nome direto, sem overlay).
+// Fonte ÚNICA usada pelo overlay de autocomplete (addParticipantFunction) E pela página
+// consolidada "+ Participante" (#participantes/<tId>). onDone(opcional) roda no sucesso —
+// a página recarrega a lista; sem onDone, faz o refresh padrão da view do torneio.
+window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onDone, _resolved) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var _isLiga2 = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
+    var _ligaOpen2 = _isLiga2 && t.ligaOpenEnrollment !== false;
+    var _sorteio2 = (Array.isArray(t.matches) && t.matches.length > 0) ||
+                    (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+                    (Array.isArray(t.groups) && t.groups.length > 0);
+    var _closedOrDrawn = (t.status === 'closed' || t.status === 'finished' || _sorteio2) && !_ligaOpen2;
+    // Mesma regra do botão/overlay: torneio fechado SEM inscrição tardia bloqueia o add
+    // (consistência página ↔ overlay; evita "a página deixa, o botão não").
+    if (_closedOrDrawn && !_allowsLateEnrollment(t)) {
+        if (typeof showAlertDialog === 'function') showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
+        return;
+    }
+    // IDENTIDADE = uid: nome digitado à mão (sem uid do autocomplete) → resolve pra
+    // conta antes de gravar (pergunta se homônimo). _resolved evita loop quando o
+    // nome não tem conta (informal → grava por nome mesmo).
+    if (!selectedUid && !_resolved && pName && String(pName).trim()) {
+        window._resolveEnrolleeUid(String(pName).trim(), function (uid) {
+            window._doAddParticipant(tId, pName, uid || '', selectedPhoto, onDone, true);
+        });
+        return;
+    }
+    var _refresh = function () {
+        if (typeof onDone === 'function') { onDone(); return; }
+        var container = document.getElementById('view-container');
+        if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
+    };
+    {
         if (!pName || !pName.trim()) return;
             // Audit trail: quem adicionou manualmente e quando.
             // selfEnrolled=false distingue de inscrição própria (selfEnrolled=true).
@@ -953,10 +1079,7 @@ window.addParticipantFunction = function (tId) {
             if (selectedPhoto) participantObj.photoURL = selectedPhoto;
             // If late enrollment, add to standby instead
             if (_closedOrDrawn) {
-                _enrollToStandby(t, tId, participantObj, function() {
-                    var container = document.getElementById('view-container');
-                    if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
-                });
+                _enrollToStandby(t, tId, participantObj, function() { _refresh(); });
                 return;
             }
             // Use transactional enroll to prevent race conditions
@@ -964,7 +1087,7 @@ window.addParticipantFunction = function (tId) {
                 window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(result) {
                     if (result.capacityFull) {
                         if (typeof showNotification !== 'undefined') showNotification('Vagas esgotadas', 'As vagas acabaram — ' + pName.trim() + ' não foi inscrito.', 'error');
-                        var _vcCap3 = document.getElementById('view-container'); if (_vcCap3 && typeof renderTournaments === 'function') renderTournaments(_vcCap3, tId);
+                        _refresh();
                         return;
                     }
                     if (result.alreadyEnrolled) {
@@ -989,8 +1112,7 @@ window.addParticipantFunction = function (tId) {
                             if (_wlRes.formed > 0 && typeof showNotification !== 'undefined') showNotification('Novo grupo formado', _wlRes.formed + ' grupo(s) criado(s) a partir da lista de espera.', 'success');
                         }
                     } catch (_wlErr) { if (window._warn) window._warn('[monarch waitlist add]', _wlErr); }
-                    const container = document.getElementById('view-container');
-                    if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
+                    _refresh();
                 }).catch(function(err) {
                     window._warn('Add participant error:', err);
                     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.addError'), 'error');
@@ -1007,10 +1129,9 @@ window.addParticipantFunction = function (tId) {
                     }
                 } catch (_wlErr2) { if (window._warn) window._warn('[monarch waitlist add]', _wlErr2); }
                 window.FirestoreDB.saveTournament(t);
-                const container = document.getElementById('view-container');
-                if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
+                _refresh();
             }
-    });
+    }
 };
 
 window.addTeamFunction = function (tId) {

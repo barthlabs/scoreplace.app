@@ -345,7 +345,7 @@
       return acc.concat(sg.matches || []);
     }, []);
 
-    var isMonarchFormat = t.format === 'Rei/Rainha da Praia';
+    var isMonarchFormat = window._isMonarchFormat(t);
     return [{
       id: isMonarchFormat ? 'monarch-groups' : 'groups',
       phase: isMonarchFormat ? 'monarch' : 'groups',
@@ -506,6 +506,20 @@
     return out;
   };
 
+  // Algum resultado já lançado? (vencedor OU placar OU sets em qualquer jogo). Usado p/ omitir
+  // o botão "Iniciar Torneio": lançar resultado É iniciar o torneio (regra do dono). BYEs
+  // (isBye) não contam como "resultado lançado" (avançam automático no sorteio).
+  window._hasAnyMatchResult = function _hasAnyMatchResult(t) {
+    var all = window._collectAllMatches(t);
+    for (var i = 0; i < all.length; i++) {
+      var m = all[i];
+      if (!m || m.isBye) continue;
+      if (m.winner || m.scoreP1 != null || m.scoreP2 != null || (Array.isArray(m.sets) && m.sets.length) ||
+          (Array.isArray(m.team1Games) && m.team1Games.length)) return true;
+    }
+    return false;
+  };
+
   // ── Main entry ────────────────────────────────────────────────────────────
   window._getUnifiedRounds = function _getUnifiedRounds(t) {
     if (!t || typeof t !== 'object') {
@@ -527,7 +541,7 @@
     var hasGroups = Array.isArray(t.groups) && t.groups.length > 0;
 
     // Groups phase comes before the elim strip when currentStage === 'groups'.
-    if (hasGroups && (t.currentStage === 'groups' || t.format === 'Rei/Rainha da Praia')) {
+    if (hasGroups && (t.currentStage === 'groups' || window._isMonarchFormat(t))) {
       cols = cols.concat(_buildGroupsColumn(t));
     }
 

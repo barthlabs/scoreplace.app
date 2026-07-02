@@ -1021,330 +1021,6 @@ function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGames
 }
 
 
-// Auto-substitute: find first W.O. player in bracket and replace with first present standby
-window._autoSubstituteWO = function(tId, overrideReplacementName) {
-  var t = window._findTournamentById(tId);
-  if (!t) return;
-
-  var ab = t.absent || {};
-  var ci = t.checkedIn || {};
-  var getName = function(p) { return window._pName(p, '?'); };
-
-  // Merge standby sources (waitlist + standbyParticipants, deduplicated)
-  var _wl = Array.isArray(t.waitlist) ? t.waitlist : [];
-  var _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
-  var _spNames = new Set(_sp.map(function(p) { return getName(p); }));
-  var standby = _sp.slice();
-  _wl.forEach(function(w) { var wn = getName(w); if (wn && !_spNames.has(wn)) standby.push(w); });
-
-  // Pick replacement: specific override (manual pick) or first to check in
-  // (FIFO por timestamp de check-in — "primeiro que chega, primeiro que joga")
-  // v0.17.33: ordering por ci[name] timestamp em vez de ordem do array
-  // garante que quem marcou Presente PRIMEIRO seja substituído primeiro,
-  // independente de onde está no array de standby.
-  var nextPresent = null;
-  if (overrideReplacementName) {
-    nextPresent = standby.find(function(p) { return getName(p) === overrideReplacementName; });
-    if (nextPresent && !window._idMapHas(t, ci, nextPresent)) {
-      if (typeof showNotification === 'function') showNotification(_t('sub.noSubPresent'), _t('sub.noSubPresentMsg'), 'warning');
-      return;
-    }
-  }
-  if (!nextPresent) {
-    var presentInStandby = standby.filter(function(p) { return window._idMapHas(t, ci, p); });
-    presentInStandby.sort(function(a, b) {
-      return (window._idMapGet(t, ci, a) || 0) - (window._idMapGet(t, ci, b) || 0);
-    });
-    nextPresent = presentInStandby[0];
-  }
-  if (!nextPresent) {
-    if (typeof showNotification === 'function') showNotification(_t('sub.noSubPresent'), _t('sub.noSubPresentMsg'), 'warning');
-    return;
-  }
-  var replacementName = getName(nextPresent);
-
-  // Collect ALL undecided matches from every structure
-  var allMatches = (typeof window._collectAllMatches === 'function')
-    ? window._collectAllMatches(t)
-    : [];
-
-  // Find first W.O. match (player marked absent in undecided match)
-  var woMatch = null, woSlot = null, absentMemberName = null;
-  for (var i = 0; i < allMatches.length; i++) {
-    var m = allMatches[i];
-    if (m.winner || m.isBye) continue;
-    for (var si = 0; si < 2; si++) {
-      var slot = si === 0 ? 'p1' : 'p2';
-      var name = m[slot];
-      if (!name || name === 'TBD' || name === 'BYE') continue;
-      var members = name.includes(' / ') ? name.split(' / ').map(function(n) { return n.trim(); }) : [name];
-      var found = members.find(function(n) { return window._idMapHas(t, ab, n); });
-      if (found) { woMatch = m; woSlot = slot; absentMemberName = found; break; }
-    }
-    if (woMatch) break;
-  }
-
-  if (!woMatch) {
-    if (typeof showNotification === 'function') showNotification(_t('sub.noWO'), _t('sub.noWOMsg'), 'info');
-    return;
-  }
-
-  var oldEntry = woMatch[woSlot];
-  var isTeam = oldEntry.includes(' / ');
-  // v2.6.60: W.O. scope da FASE do match (fallback top-level).
-  var woScope = (typeof window._effectiveWoScope === 'function') ? window._effectiveWoScope(t, woMatch) : (t.woScope || 'individual');
-
-  if (isTeam && woScope === 'individual') {
-    // W.O. is individual — replace only the absent member, partner stays
-    var newMembers = oldEntry.split(' / ').map(function(n) { return n.trim() === absentMemberName ? replacementName : n.trim(); });
-    var newTeamName = newMembers.join(' / ');
-    var partnerName = oldEntry.split(' / ').map(function(n) { return n.trim(); }).find(function(n) { return n !== absentMemberName; }) || '';
-
-    showConfirmDialog(_t('bui.subWoTitle'),
-      '<div style="text-align:left;line-height:1.8;">' +
-        '<div><strong style="color:#ef4444;">W.O.:</strong> ' + window._safeHtml(absentMemberName) + '</div>' +
-        '<div><strong style="color:#60a5fa;">Parceiro:</strong> ' + window._safeHtml(partnerName) + ' <span style="color:#9ca3af;">(permanece)</span></div>' +
-        '<div><strong style="color:#4ade80;">Substituto:</strong> ' + window._safeHtml(replacementName) + '</div>' +
-        '<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;"><strong>Novo time:</strong> ' + window._safeHtml(newTeamName) + '</div>' +
-      '</div>',
-      function() {
-        // v1.0.86-beta: RE-FETCH t fresh from AppStore. Mesmo bug que v1.0.85
-        // arrumou em _declareAbsent — entre dialog-open e confirm, onSnapshot
-        // do Firestore pode ter substituído store.tournaments. Closure t
-        // ficaria detached e mutations seriam perdidas no syncImmediate.
-        // User: 'bot 01 tomou o lugar do bot15 mas bot10 também dei WO. bot05
-        // deveria ter tomado lugar mas não aconteceu' — segunda sub falhando.
-        var _tFresh = window.AppStore.tournaments.find(function(tour) {
-          return tour.id.toString() === tId.toString();
-        });
-        if (_tFresh) t = _tFresh;
-        // Re-find woMatch no t fresh — match data pode ter mudado
-        var _allFresh = (typeof window._collectAllMatches === 'function')
-          ? window._collectAllMatches(t)
-          : (Array.isArray(t.matches) ? t.matches.slice() : []);
-        // Tenta achar o match pelo team string oldEntry; se mudou, tenta pelo absentMemberName em ab
-        var _foundMatch = null, _foundSlot = null;
-        for (var _fi = 0; _fi < _allFresh.length; _fi++) {
-          var _fm = _allFresh[_fi];
-          if (!_fm || _fm.winner) continue;
-          if (_fm[woSlot] === oldEntry) { _foundMatch = _fm; _foundSlot = woSlot; break; }
-          // Fallback: scan p1/p2 pelo absent member
-          ['p1','p2'].forEach(function(s) {
-            if (_foundMatch) return;
-            var entry = _fm[s];
-            if (!entry || entry === 'TBD' || entry === 'BYE') return;
-            var members = entry.includes(' / ') ? entry.split(' / ').map(function(n){return n.trim();}) : [entry];
-            if (members.indexOf(absentMemberName) !== -1) { _foundMatch = _fm; _foundSlot = s; }
-          });
-          if (_foundMatch) break;
-        }
-        if (_foundMatch) {
-          woMatch = _foundMatch;
-          woSlot = _foundSlot;
-          oldEntry = woMatch[woSlot];
-          // Recompute newTeamName based on FRESH oldEntry
-          var _freshMembers = oldEntry.includes(' / ')
-            ? oldEntry.split(' / ').map(function(n){return n.trim() === absentMemberName ? replacementName : n.trim();})
-            : [replacementName];
-          newTeamName = _freshMembers.join(' / ');
-        }
-        allMatches = _allFresh;
-        // Re-derive ab/ci/standby/_wl from fresh t
-        ab = t.absent || {};
-        ci = t.checkedIn || {};
-        var _spF = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
-        var _wlF = Array.isArray(t.waitlist) ? t.waitlist : [];
-        var _spNamesF = new Set(_spF.map(function(p){return getName(p);}));
-        standby = _spF.slice();
-        _wlF.forEach(function(w){var wn=getName(w);if(wn&&!_spNamesF.has(wn))standby.push(w);});
-        _wl = _wlF;
-        // Update this match slot
-        woMatch[woSlot] = newTeamName;
-        // Update ALL match refs across all structures
-        allMatches.forEach(function(match) {
-          if (match.p1 === oldEntry) match.p1 = newTeamName;
-          if (match.p2 === oldEntry) match.p2 = newTeamName;
-          // Also update team1/team2 arrays (Rei/Rainha format)
-          if (Array.isArray(match.team1)) {
-            var ti = match.team1.indexOf(absentMemberName);
-            if (ti !== -1) match.team1[ti] = replacementName;
-          }
-          if (Array.isArray(match.team2)) {
-            var ti2 = match.team2.indexOf(absentMemberName);
-            if (ti2 !== -1) match.team2[ti2] = replacementName;
-          }
-        });
-        // Diagnóstico observável
-        try {
-          window._lastAutoSubstitute = {
-            version: window.SCOREPLACE_VERSION,
-            at: new Date().toISOString(),
-            absentMemberName: absentMemberName,
-            replacementName: replacementName,
-            oldEntry: oldEntry,
-            newTeamName: newTeamName,
-            woSlot: woSlot,
-            outcome: 'team_individual_sub_done',
-            matchAfter_p1: woMatch.p1,
-            matchAfter_p2: woMatch.p2
-          };
-        } catch (_e) {}
-        // Update participants list — replace old team entry with new team name
-        var partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-        var pi = partsArr.findIndex(function(p) { return getName(p) === oldEntry; });
-        if (pi !== -1) {
-          if (typeof partsArr[pi] === 'string') { partsArr[pi] = newTeamName; }
-          else {
-            partsArr[pi].displayName = newTeamName;
-            partsArr[pi].name = newTeamName;
-            // Atualiza p1Uid/p2Uid quando o membro substituído é o p1 ou p2 da dupla
-            // Garante individualidade: cada membro da dupla tem seu próprio UID
-            if (nextPresent && typeof nextPresent === 'object' && nextPresent.uid) {
-              if (partsArr[pi].p1Name === absentMemberName) {
-                partsArr[pi].p1Name = replacementName;
-                partsArr[pi].p1Uid = nextPresent.uid;
-              } else if (partsArr[pi].p2Name === absentMemberName) {
-                partsArr[pi].p2Name = replacementName;
-                partsArr[pi].p2Uid = nextPresent.uid;
-              }
-            }
-            // nested .participants[] (se existir) — replica substituição individual
-            if (Array.isArray(partsArr[pi].participants)) {
-              partsArr[pi].participants.forEach(function(sub) {
-                if (!sub || typeof sub !== 'object') return;
-                var sn = sub.displayName || sub.name || '';
-                if (sn === absentMemberName) {
-                  sub.displayName = replacementName;
-                  sub.name = replacementName;
-                  if (nextPresent && typeof nextPresent === 'object') {
-                    if (nextPresent.uid) sub.uid = nextPresent.uid;
-                    if (nextPresent.photoURL || nextPresent.photoUrl) sub.photoURL = nextPresent.photoURL || nextPresent.photoUrl;
-                    if (nextPresent.email) sub.email = nextPresent.email;
-                  }
-                }
-              });
-            }
-          }
-        }
-        // v1.0.78-beta: torneios em modo Individual com sorteio em duplas têm
-        // entradas POR INDIVIDUAL (não por team string). User: 'bot06 parou de
-        // ser mostrado entre bot05 e bot07' após assumir vaga via W.O.
-        // Causa: substituto vinha da waitlist, nunca tinha entry própria em
-        // t.participants. Findindex por team string não casava (entries são
-        // individuais). Fix: garante que substituto exista em t.participants
-        // como individual quando ele ainda não existe (mode Individual).
-        var _hasIndividualEntry = partsArr.some(function(p) { return getName(p) === replacementName; });
-        if (!_hasIndividualEntry) {
-          // Adiciona substituto como individual (preserva nextPresent object se houver dados)
-          partsArr.push(typeof nextPresent === 'string' ? replacementName : nextPresent);
-        }
-        t.participants = partsArr;
-        // Remove replacement from standby
-        t.standbyParticipants = standby.filter(function(p) { return getName(p) !== replacementName; });
-        t.waitlist = _wl.filter(function(w) { return getName(w) !== replacementName; });
-        // Clear W.O. from absent, mark replacement as checked in
-        window._idMapDel(t, ab, absentMemberName);
-        t.absent = ab;
-        window._idMapSet(t, ci, (typeof nextPresent === 'object' && nextPresent) ? nextPresent : replacementName, true);
-        t.checkedIn = ci;
-
-        // v0.17.34: track W.O. history pra mostrar o jogador W.O.'d como
-        // entrada solo nos inscritos com nota "Estava no Jogo N com X".
-        var _friendlyNumWO = (function() {
-          var idx = allMatches.indexOf(woMatch);
-          return idx >= 0 ? (idx + 1) : '?';
-        })();
-        // v3.0.78: woHistory uid-keyed (_woHistSet grava meta.name pro display robusto)
-        window._woHistSet(t, absentMemberName, {
-          originalTeam: oldEntry,
-          partner: partnerName,
-          matchNum: _friendlyNumWO,
-          replacedBy: replacementName,
-          timestamp: Date.now()
-        });
-
-        window.AppStore.logAction(tId, 'Substituição W.O.: ' + absentMemberName + ' → ' + replacementName + ' (parceiro: ' + partnerName + ')');
-        window.AppStore.syncImmediate(tId);
-        showNotification(_t('sub.done'), _t('sub.donePartnerMsg', {name: replacementName, absent: absentMemberName, partner: partnerName}), 'success');
-        var container = document.getElementById('view-container');
-        if (container && typeof renderParticipants === 'function') renderParticipants(container, tId);
-      }, null, { type: 'warning', confirmText: _t('bui.subWoConfirm'), cancelText: _t('btn.cancel') });
-  } else {
-    // Individual player — replace entire entry
-    showConfirmDialog(_t('bui.subWoTitle'),
-      '<div style="text-align:left;line-height:1.8;">' +
-        '<div><strong style="color:#ef4444;">W.O.:</strong> ' + window._safeHtml(absentMemberName) + '</div>' +
-        '<div><strong style="color:#4ade80;">Substituto:</strong> ' + window._safeHtml(replacementName) + '</div>' +
-      '</div>',
-      function() {
-        // v1.0.86-beta: RE-FETCH t fresh (mesmo fix que ind W.O. branch)
-        var _tFresh2 = window.AppStore.tournaments.find(function(tour) {
-          return tour.id.toString() === tId.toString();
-        });
-        if (_tFresh2) t = _tFresh2;
-        // Re-find match by absent player or oldEntry
-        var _allFresh2 = (typeof window._collectAllMatches === 'function')
-          ? window._collectAllMatches(t)
-          : (Array.isArray(t.matches) ? t.matches.slice() : []);
-        var _foundMatch2 = null, _foundSlot2 = null;
-        for (var _fi2 = 0; _fi2 < _allFresh2.length; _fi2++) {
-          var _fm2 = _allFresh2[_fi2];
-          if (!_fm2 || _fm2.winner) continue;
-          if (_fm2[woSlot] === oldEntry) { _foundMatch2 = _fm2; _foundSlot2 = woSlot; break; }
-          if (_fm2.p1 === absentMemberName || _fm2.p2 === absentMemberName) {
-            _foundMatch2 = _fm2;
-            _foundSlot2 = (_fm2.p1 === absentMemberName) ? 'p1' : 'p2';
-            break;
-          }
-        }
-        if (_foundMatch2) { woMatch = _foundMatch2; woSlot = _foundSlot2; oldEntry = woMatch[woSlot]; }
-        allMatches = _allFresh2;
-        ab = t.absent || {};
-        ci = t.checkedIn || {};
-        var _spF2 = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
-        var _wlF2 = Array.isArray(t.waitlist) ? t.waitlist : [];
-        var _spNamesF2 = new Set(_spF2.map(function(p){return getName(p);}));
-        standby = _spF2.slice();
-        _wlF2.forEach(function(w){var wn=getName(w);if(wn&&!_spNamesF2.has(wn))standby.push(w);});
-        _wl = _wlF2;
-
-        woMatch[woSlot] = replacementName;
-        // Update ALL match refs
-        allMatches.forEach(function(match) {
-          if (match.p1 === oldEntry) match.p1 = replacementName;
-          if (match.p2 === oldEntry) match.p2 = replacementName;
-        });
-        try {
-          window._lastAutoSubstitute = {
-            version: window.SCOREPLACE_VERSION, at: new Date().toISOString(),
-            outcome: 'individual_solo_sub_done', absentMemberName: absentMemberName,
-            replacementName: replacementName, oldEntry: oldEntry
-          };
-        } catch (_e) {}
-        // Update participants
-        var partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-        var pi = partsArr.findIndex(function(p) { return getName(p) === oldEntry; });
-        if (pi !== -1) partsArr.splice(pi, 1);
-        partsArr.push(typeof nextPresent === 'string' ? replacementName : nextPresent);
-        t.participants = partsArr;
-        // Remove from standby
-        t.standbyParticipants = standby.filter(function(p) { return getName(p) !== replacementName; });
-        t.waitlist = _wl.filter(function(w) { return getName(w) !== replacementName; });
-        // Clear W.O., mark replacement present
-        window._idMapDel(t, ab, absentMemberName);
-        t.absent = ab;
-        window._idMapSet(t, ci, (typeof nextPresent === 'object' && nextPresent) ? nextPresent : replacementName, true);
-        t.checkedIn = ci;
-
-        window.AppStore.logAction(tId, 'Substituição W.O.: ' + absentMemberName + ' → ' + replacementName);
-        window.AppStore.syncImmediate(tId);
-        showNotification(_t('sub.done'), _t('sub.doneMsg', {name: replacementName, absent: absentMemberName}), 'success');
-        var container = document.getElementById('view-container');
-        if (container && typeof renderParticipants === 'function') renderParticipants(container, tId);
-      }, null, { type: 'warning', confirmText: _t('bui.subWoConfirm'), cancelText: _t('btn.cancel') });
-  }
-};
-
 window._toggleBracketMode = function (tId) {
   window._bracketMirrorMode = !window._bracketMirrorMode;
   _rerenderBracket(tId);
@@ -1697,6 +1373,8 @@ window._saveSetResult = function(tId, matchId) {
     _propagateMatchUpdate(t, m);
     window.AppStore.logAction(tId, 'Resultado proposto (sets): ' + m.p1 + ' vs ' + m.p2 + ' — aguardando aprovação (' + m.pendingResult.proposedByName + ')');
     window.AppStore.syncImmediate(tId);
+    // 4.1 DUAL-WRITE: espelha a proposta (sets) no doc do jogo.
+    _dualWriteResult(tId, matchId);
     try { _notifyPendingApproval(t, m, m.pendingResult.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
     showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     _rerenderBracket(tId, matchId);
@@ -1760,6 +1438,9 @@ window._saveSetResult = function(tId, matchId) {
     const _names = side.includes(' / ') ? side.split(' / ').map(n => n.trim()).filter(Boolean) : [side];
     _names.forEach(nm => {
       // uid-first: resolve o nome do membro pro uid; nome só fallback.
+      // Lançar resultado MARCA presença (quem jogou está presente) — CORRETO (dono
+      // reafirmou 1-jul). O que NÃO pode é o SORTEIO marcar presença: o sorteio LIMPA
+      // checkedIn/absent (ver _commitInitialDraw / _clearDrawRuntimeFlags).
       if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
       window._idMapDel(t, t.absent, nm);
     });
@@ -1838,6 +1519,81 @@ function _finalizeRoundCardInPlace(t, m, tId, matchId) {
   card.outerHTML = html;
   return true;
 }
+
+// ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) ────────────────
+// Mutação PURA de "lançar resultado" num torneio dado. Espelha EXATAMENTE o bloco
+// de mutação de _saveResultInline (scores/sets/winner/draw/resultAt + advance OU
+// checkGroupComplete + auto check-in + propagate), SEM side effects (notif/trophy/
+// matchHistory/render) e SEM o caminho de fechar-última-rodada (esse defere ao
+// _closeRound e NÃO passa por aqui). É rodada DENTRO de FirestoreDB.mutateTournament,
+// sobre o estado FRESCO lido na transação — por isso a persistência do result-save
+// é atômica (nenhum write concorrente se perde). NÃO recomputa isRoundMatch-last:
+// o chamador (commitResultTx) só é invocado quando _deferSaveToTransition é false.
+// payload: { s1, s2, useSets, isFixedSet, isTiebreakEntry, tbP1, tbP2 }.
+// Retorna o match mutado (pra quem quiser ler winner), ou null se não achou.
+window._applyResultToTournament = function (t, matchId, payload) {
+  var m = window._findMatch(t, matchId);
+  if (!m) return null;
+  var s1 = payload.s1, s2 = payload.s2;
+  var useSets = !!payload.useSets, isFixedSet = !!payload.isFixedSet;
+  var isTiebreakEntry = !!payload.isTiebreakEntry, tbP1 = payload.tbP1, tbP2 = payload.tbP2;
+
+  var isGroupMatch = m.group !== undefined;
+  var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function (r) {
+    return (r.matches || []).some(function (rm) { return rm.id === matchId; });
+  }));
+  var allowDraw = isGroupMatch || isRoundMatch;
+
+  if (useSets) {
+    var setData = { gamesP1: s1, gamesP2: s2 };
+    if (isFixedSet) setData.fixedSet = true;
+    if (isTiebreakEntry) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
+    m.sets = [setData];
+    m.setsWonP1 = s1 > s2 ? 1 : 0;
+    m.setsWonP2 = s2 > s1 ? 1 : 0;
+    if (isFixedSet) m.fixedSet = true;
+    m.scoreP1 = s1; m.scoreP2 = s2;
+    m.totalGamesP1 = s1; m.totalGamesP2 = s2;
+  } else {
+    m.scoreP1 = s1; m.scoreP2 = s2;
+  }
+
+  if (s1 === s2 && allowDraw) {
+    m.winner = 'draw'; m.draw = true;
+  } else {
+    m.winner = s1 > s2 ? m.p1 : m.p2; m.draw = false;
+  }
+  m.resultAt = Date.now();
+  if (!m.startedAt) m.startedAt = m.resultAt;
+  if (m.pendingResult) delete m.pendingResult;
+
+  if (!isGroupMatch && !isRoundMatch) {
+    if (typeof window._advanceWinner === 'function') window._advanceWinner(t, m);
+  } else if (isGroupMatch) {
+    if (typeof window._checkGroupRoundComplete === 'function') window._checkGroupRoundComplete(t, m.group);
+  }
+  // isRoundMatch (Liga/Suíço): nenhuma mutação estrutural aqui — standings é
+  // recomputado no render; o fechamento de rodada é do _closeRound (deferido).
+
+  // Auto check-in: marca presença dos jogadores deste jogo (e limpa ausência).
+  if (!t.checkedIn) t.checkedIn = {};
+  if (!t.absent) t.absent = {};
+  [m.p1, m.p2].forEach(function (side) {
+    if (!side || side === 'TBD' || side === 'BYE') return;
+    var _names = side.indexOf(' / ') !== -1 ? side.split(' / ').map(function (n) { return n.trim(); }).filter(Boolean) : [side];
+    _names.forEach(function (nm) {
+      // Lançar resultado MARCA presença (quem jogou está presente) — CORRETO (dono
+      // reafirmou 1-jul). O que NÃO pode é o SORTEIO marcar presença: o sorteio LIMPA
+      // checkedIn/absent (ver _commitInitialDraw / _clearDrawRuntimeFlags).
+      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
+      window._idMapDel(t, t.absent, nm);
+    });
+  });
+  if (!t.tournamentStarted) t.tournamentStarted = Date.now();
+
+  if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(t, m);
+  return m;
+};
 
 window._saveResultInline = function (tId, matchId) {
   const t = window._findTournamentById(tId);
@@ -1943,8 +1699,21 @@ window._saveResultInline = function (tId, matchId) {
     }
     m.pendingResult = _pendingPayload;
     _propagateMatchUpdate(t, m);
-    window.AppStore.logAction(tId, 'Resultado proposto: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — aguardando aprovação (' + _pendingPayload.proposedByName + ')');
-    window.AppStore.syncImmediate(tId);
+    var _pendingLogMsg = 'Resultado proposto: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — aguardando aprovação (' + _pendingPayload.proposedByName + ')';
+    window.AppStore.logAction(tId, _pendingLogMsg);
+    // BLINDAGEM: persiste a proposta ATOMICAMENTE (re-aplica pendingResult no
+    // match fresco + histórico), em vez de syncImmediate do doc inteiro. project_concurrency_safe_saves.
+    window.AppStore.commitTournamentTx(tId, function (freshT) {
+      var fm = window._findMatch(freshT, matchId);
+      if (fm) {
+        fm.pendingResult = _pendingPayload;
+        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(freshT, fm);
+      }
+      if (!Array.isArray(freshT.history)) freshT.history = [];
+      freshT.history.push({ date: new Date().toISOString(), message: _pendingLogMsg });
+    });
+    // 4.1 DUAL-WRITE: espelha a proposta inicial (pendingResult) no doc do jogo.
+    _dualWriteResult(tId, matchId);
     try { _notifyPendingApproval(t, m, _pendingPayload.proposedByName); } catch (e) { window._error('[pendingApproval] notify failed', e); }
     showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     _rerenderBracket(tId, matchId);
@@ -1992,6 +1761,13 @@ window._saveResultInline = function (tId, matchId) {
   // scroll, sem colapsar "Demais jogos", sem mexer na classificação) enquanto
   // a rodada não está completa.
   var _inPlaceFinalize = false;
+  // v4.0.102: quando a ÚLTIMA rodada completa (o auto-close vai transicionar Suíço→elim
+  // ou encerrar), NÃO emitir o save intermediário deste result-save — ele grava o estado
+  // Suíço (rodada 'active') e, como saveTournament é merge:true assíncrono, pode COMMITAR
+  // DEPOIS do save da transição (via rede), sobrescrevendo currentStage/rounds/matches e
+  // deixando as quartas vazias. A transição (_doCloseRound → generateDrawFunction) é o
+  // save autoritativo (preserva os resultados em swissStandings/swissRoundsData).
+  var _deferSaveToTransition = false;
 
   if (!isGroupMatch && !isRoundMatch) {
     // Eliminatórias — vencedor avança
@@ -2013,10 +1789,21 @@ window._saveResultInline = function (tId, matchId) {
       var _isLast = _roundIdxAuto === (t.rounds.length - 1);
       if (_thisComplete && _isLast && _thisRound.status !== 'complete') {
         // Defer to close-round logic so Swiss/Liga dispatch & elim-transition run uniformly.
+        // v4.0.102: o save deste result-save é PULADO (ver _deferSaveToTransition) — o
+        // _closeRound faz o save autoritativo; evita a corrida que zerava as quartas.
+        _deferSaveToTransition = true;
         // v0.17.27: passa matchId pra preservar scroll no re-render disparado por _doCloseRound.
+        // BLINDAGEM (save #2): passa o resultCtx (matchId + payload) pra que a transação de
+        // fecho RE-APLIQUE o resultado deste último jogo sobre o estado fresco — ele foi
+        // DEFERIDO (não persistido por commitResultTx aqui), então sem isso o fresco não
+        // teria o vencedor e a rodada pareceria incompleta. project_concurrency_safe_saves.
+        var _closeResultCtx = { matchId: matchId, payload: {
+          s1: s1, s2: s2, useSets: useSets, isFixedSet: isFixedSet,
+          isTiebreakEntry: isTiebreakEntry, tbP1: tbP1, tbP2: tbP2
+        } };
         setTimeout(function() {
           if (typeof window._closeRound === 'function') {
-            window._closeRound(tId, _roundIdxAuto, matchId);
+            window._closeRound(tId, _roundIdxAuto, matchId, _closeResultCtx);
           }
         }, 0);
       } else if (!_thisComplete) {
@@ -2046,6 +1833,9 @@ window._saveResultInline = function (tId, matchId) {
     const _names = side.includes(' / ') ? side.split(' / ').map(n => n.trim()).filter(Boolean) : [side];
     _names.forEach(nm => {
       // uid-first: resolve o nome do membro pro uid; nome só fallback.
+      // Lançar resultado MARCA presença (quem jogou está presente) — CORRETO (dono
+      // reafirmou 1-jul). O que NÃO pode é o SORTEIO marcar presença: o sorteio LIMPA
+      // checkedIn/absent (ver _commitInitialDraw / _clearDrawRuntimeFlags).
       if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
       window._idMapDel(t, t.absent, nm);
     });
@@ -2074,8 +1864,21 @@ window._saveResultInline = function (tId, matchId) {
   }
 
   _propagateMatchUpdate(t, m);
-  window.AppStore.logAction(tId, `Resultado: ${m.p1} ${s1} × ${s2} ${m.p2}${m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner}`);
-  window.AppStore.syncImmediate(tId);
+  var _resultLogMsg = `Resultado: ${m.p1} ${s1} × ${s2} ${m.p2}${m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner}`;
+  window.AppStore.logAction(tId, _resultLogMsg);
+  // v4.0.102: pula o save intermediário quando a transição da última rodada vai gravar
+  // o estado autoritativo (evita a corrida de merge que zerava as quartas do Suíço→elim).
+  // BLINDAGEM: persiste o resultado ATOMICAMENTE (transação, re-aplica em dado fresco)
+  // em vez de syncImmediate (merge do doc inteiro, sujeito a lost-update quando 2
+  // lançamentos concorrem). A `t` local já foi mutada acima (UI otimista); commitResultTx
+  // re-aplica a MESMA mutação sobre o estado fresco + persiste a entrada de histórico.
+  // project_concurrency_safe_saves.
+  if (!_deferSaveToTransition) {
+    window.AppStore.commitResultTx(tId, matchId, {
+      s1: s1, s2: s2, useSets: useSets, isFixedSet: isFixedSet,
+      isTiebreakEntry: isTiebreakEntry, tbP1: tbP1, tbP2: tbP2
+    }, _resultLogMsg);
+  }
 
   // Persist a per-user matchHistory record so the player's Estatísticas
   // Detalhadas survive tournament deletion. Inline scoring has no pointLog,
@@ -2133,6 +1936,115 @@ window._saveResultInline = function (tId, matchId) {
 // do time adversário (uid bate com participante daquele lado); (b)
 // organizador/co-host. Usuário que propôs não pode aprovar a própria
 // proposta (UI esconde o botão pra ele).
+// ── Helpers compartilhados do consenso (placar + W.O.), extraídos v4.0.121 ──────
+// _isOpposingProposer: o usuário atual está no time ADVERSÁRIO ao proponente do
+// pendingResult? (usado por aprovar/contestar).
+function _isOpposingProposer(t, m, cu) {
+  if (!cu || !m || !m.pendingResult) return false;
+  var pr = m.pendingResult;
+  var proposerSide = (pr.proposedBy || pr.proposedByEmail) ? _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail }) : 0;
+  var userSide = _userTeamInMatch(t, m, cu);
+  return userSide > 0 && userSide !== proposerSide;
+}
+// _notifyOrgAndCoHosts: notifica o organizador (uid, ou resolvido por email/participante)
+// + co-organizadores ativos, com dedup. Escalação de disputa (placar e, futuramente, W.O.).
+function _notifyOrgAndCoHosts(t, notifData) {
+  if (typeof window._sendUserNotification !== 'function') return;
+  var seen = {};
+  var orgUid = t.creatorUid;
+  if (orgUid) { seen[orgUid] = true; window._sendUserNotification(orgUid, notifData); }
+  else {
+    var orgEmail = t.organizerEmail || t.creatorEmail;
+    var parts = Array.isArray(t.participants) ? t.participants : [];
+    var orgPart = parts.find(function(p){ return typeof p === 'object' && ((t.creatorUid && p.uid === t.creatorUid) || (orgEmail && p.email === orgEmail)); });
+    if (orgPart && orgPart.uid) { seen[orgPart.uid] = true; window._sendUserNotification(orgPart.uid, notifData); }
+  }
+  if (Array.isArray(t.coHosts)) {
+    t.coHosts.forEach(function(ch){ if (ch && ch.status === 'active' && ch.uid && !seen[ch.uid]) { seen[ch.uid] = true; window._sendUserNotification(ch.uid, notifData); } });
+  }
+}
+
+// Mutação PURA de aplicar um resultado APROVADO (pending → final) sobre o `t`
+// passado: aplica scores/sets/winner, auto check-in, delete pendingResult, e o
+// advance/checkGroupComplete conforme o contexto. Sem save. Retorna o contexto
+// (kind, deferred, roundIdx, s1/s2, winner) pro chamador decidir toast/defer/save.
+// Extraída de _approveResult na blindagem (v4.0.121).
+// 4.1 (project_match_result_docs, inc 3a): espelha o resultado do jogo (já aplicado
+// otimista no match LOCAL pelo caller) no doc próprio tournaments/{id}/results/{matchId}.
+// Fire-and-forget best-effort — a leitura ainda é autoritativa no doc do torneio, então
+// uma falha aqui NUNCA afeta o fluxo (a virada da leitura pro subdoc é a Fase B).
+function _dualWriteResult(tId, matchId) {
+  try {
+    if (window.AppStore && typeof window.AppStore._dualWriteMatchResult === 'function') {
+      var _p = window.AppStore._dualWriteMatchResult(tId, matchId);
+      if (_p && typeof _p.catch === 'function') _p.catch(function(){});
+    }
+  } catch (e) {}
+}
+
+window._applyApprovedResult = function(t, matchId, pr) {
+  var m = _findMatch(t, matchId);
+  if (!m) return { ok: false };
+  var _pr = pr || m.pendingResult;
+  if (!_pr) return { ok: false };
+  var s1 = _pr.scoreP1, s2 = _pr.scoreP2;
+  if (_pr.useSets && Array.isArray(_pr.sets)) {
+    m.sets = _pr.sets.slice();
+    m.setsWonP1 = _pr.setsWonP1 || 0;
+    m.setsWonP2 = _pr.setsWonP2 || 0;
+    if (_pr.isFixedSet) m.fixedSet = true;
+    m.scoreP1 = s1; m.scoreP2 = s2;
+    m.totalGamesP1 = _pr.totalGamesP1 != null ? _pr.totalGamesP1 : s1;
+    m.totalGamesP2 = _pr.totalGamesP2 != null ? _pr.totalGamesP2 : s2;
+  } else {
+    m.scoreP1 = s1; m.scoreP2 = s2;
+  }
+  m.winner = _pr.winner;
+  m.draw = !!_pr.draw;
+  m.resultAt = Date.now(); if (!m.startedAt) m.startedAt = m.resultAt;
+  delete m.pendingResult;
+  // Auto check-in pros participantes do match
+  if (!t.checkedIn) t.checkedIn = {};
+  if (!t.absent) t.absent = {};
+  [m.p1, m.p2].forEach(function(side) {
+    if (!side || side === 'TBD' || side === 'BYE') return;
+    var _names = side.indexOf(' / ') !== -1 ? side.split(' / ').map(function(n){ return n.trim(); }).filter(Boolean) : [side];
+    _names.forEach(function(nm) {
+      // Lançar resultado MARCA presença (quem jogou está presente) — CORRETO (dono
+      // reafirmou 1-jul). O que NÃO pode é o SORTEIO marcar presença: o sorteio LIMPA
+      // checkedIn/absent (ver _commitInitialDraw / _clearDrawRuntimeFlags).
+      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
+      window._idMapDel(t, t.absent, nm);
+    });
+  });
+  if (!t.tournamentStarted) t.tournamentStarted = Date.now();
+  var isGroupMatch = m.group !== undefined;
+  var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function(r) {
+    return (r.matches || []).some(function(rm) { return rm.id === matchId; });
+  }));
+  var ctx = { ok: true, s1: s1, s2: s2, winner: m.winner, draw: m.draw, kind: 'elim', deferred: false, roundIdx: -1, m: m };
+  if (!isGroupMatch && !isRoundMatch) {
+    if (typeof window._advanceWinner === 'function') window._advanceWinner(t, m);
+    ctx.kind = 'elim';
+  } else if (isRoundMatch) {
+    ctx.kind = 'round';
+    var ri = -1;
+    (t.rounds || []).forEach(function(r, idx) { (r.matches || []).forEach(function(rm) { if (rm.id === matchId) ri = idx; }); });
+    ctx.roundIdx = ri;
+    if (ri >= 0) {
+      var _tr = t.rounds[ri];
+      var _complete = (_tr.matches || []).every(function(rm) { return !!rm.winner; });
+      var _isLast = ri === (t.rounds.length - 1);
+      if (_complete && _isLast && _tr.status !== 'complete') ctx.deferred = true;
+    }
+  } else {
+    if (typeof window._checkGroupRoundComplete === 'function') window._checkGroupRoundComplete(t, m.group);
+    ctx.kind = 'group';
+  }
+  if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(t, m);
+  return ctx;
+};
+
 window._approveResult = function(tId, matchId) {
   var t = window._findTournamentById(tId);
   if (!t) return;
@@ -2144,92 +2056,46 @@ window._approveResult = function(tId, matchId) {
   var pr = m.pendingResult;
   var cu = window.AppStore && window.AppStore.currentUser;
   // Permission: org OR opposing team member
-  var canApprove = false;
-  if (cu) {
-    if (_isUserOrgOrCoHost(t, cu)) {
-      canApprove = true;
-    } else {
-      var userSide = _userTeamInMatch(t, m, cu);
-      // Determine proposer's side (might differ from approver)
-      var proposerSide = 0;
-      if (pr.proposedBy || pr.proposedByEmail) {
-        proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
-      }
-      if (userSide > 0 && userSide !== proposerSide) canApprove = true;
-    }
-  }
+  var canApprove = !!(cu && (_isUserOrgOrCoHost(t, cu) || _isOpposingProposer(t, m, cu)));
   if (!canApprove) {
     showNotification('Sem permissão', 'Só o time adversário ou o organizador pode aprovar.', 'warning');
     return;
   }
 
-  // Apply pending → final
-  var s1 = pr.scoreP1, s2 = pr.scoreP2;
-  if (pr.useSets && Array.isArray(pr.sets)) {
-    m.sets = pr.sets.slice();
-    m.setsWonP1 = pr.setsWonP1 || 0;
-    m.setsWonP2 = pr.setsWonP2 || 0;
-    if (pr.isFixedSet) m.fixedSet = true;
-    m.scoreP1 = s1;
-    m.scoreP2 = s2;
-    // Bug 4 fix: totalGames = sum of games across all sets, not sets-won count
-    m.totalGamesP1 = pr.totalGamesP1 != null ? pr.totalGamesP1 : s1;
-    m.totalGamesP2 = pr.totalGamesP2 != null ? pr.totalGamesP2 : s2;
+  // Aplica pending → final no LOCAL (UI otimista) via a mutação pura.
+  var _ctx = window._applyApprovedResult(t, matchId, pr);
+  if (!_ctx.ok) { showNotification('Sem proposta ativa', '', 'warning'); return; }
+  var s1 = _ctx.s1, s2 = _ctx.s2;
+  // Toast por contexto
+  if (_ctx.kind === 'elim') showNotification('✅ Resultado aprovado', m.winner + ' avança!', 'success');
+  else showNotification('✅ Resultado aprovado', _ctx.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: _ctx.winner}), 'success');
+
+  var _logMsg = 'Resultado aprovado: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + (m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner);
+  window.AppStore.logAction(tId, _logMsg);
+  if (_ctx.deferred) {
+    // BLINDAGEM (save #2): fecho da última rodada deferido pro _closeRound (transação
+    // atômica) — NÃO persiste aqui (senão grava a rodada ainda-aberta e sobrescreve o
+    // fecho pela rede). resultCtx re-aplica o resultado aprovado sobre o fresco.
+    var _approveResultCtx = { matchId: matchId, payload: {
+      s1: s1, s2: s2, useSets: !!pr.useSets, isFixedSet: !!pr.isFixedSet,
+      isTiebreakEntry: !!pr.isTiebreakEntry, tbP1: pr.tbP1, tbP2: pr.tbP2
+    } };
+    setTimeout(function() {
+      if (typeof window._closeRound === 'function') window._closeRound(tId, _ctx.roundIdx, matchId, _approveResultCtx);
+    }, 0);
   } else {
-    m.scoreP1 = s1;
-    m.scoreP2 = s2;
-  }
-  m.winner = pr.winner;
-  m.draw = !!pr.draw;
-  m.resultAt = Date.now(); if (!m.startedAt) m.startedAt = m.resultAt; // v2.3.17
-  delete m.pendingResult;
-
-  // Auto check-in pros participantes do match
-  if (!t.checkedIn) t.checkedIn = {};
-  if (!t.absent) t.absent = {};
-  [m.p1, m.p2].forEach(function(side) {
-    if (!side || side === 'TBD' || side === 'BYE') return;
-    var _names = side.indexOf(' / ') !== -1 ? side.split(' / ').map(function(n){ return n.trim(); }).filter(Boolean) : [side];
-    _names.forEach(function(nm) {
-      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
-      window._idMapDel(t, t.absent, nm);
+    // BLINDAGEM (v4.0.121): persiste ATÔMICO pelo portão — re-aplica a aprovação
+    // (via a mesma mutação pura, com o `pr` capturado) sobre o doc fresco.
+    window.AppStore.commitTournamentTx(tId, function (ft) {
+      window._applyApprovedResult(ft, matchId, pr);
+      if (!Array.isArray(ft.history)) ft.history = [];
+      ft.history.push({ date: new Date().toISOString(), message: _logMsg });
     });
-  });
-  if (!t.tournamentStarted) t.tournamentStarted = Date.now();
-
-  // Determine match context for advance/round logic
-  var isGroupMatch = m.group !== undefined;
-  var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function(r) {
-    return (r.matches || []).some(function(rm) { return rm.id === matchId; });
-  }));
-
-  if (!isGroupMatch && !isRoundMatch) {
-    _advanceWinner(t, m);
-    showNotification('✅ Resultado aprovado', m.winner + ' avança!', 'success');
-  } else if (isRoundMatch) {
-    showNotification('✅ Resultado aprovado', m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner}), 'success');
-    var _roundIdxAuto = -1;
-    (t.rounds || []).forEach(function(r, idx) {
-      (r.matches || []).forEach(function(rm) { if (rm.id === matchId) _roundIdxAuto = idx; });
-    });
-    if (_roundIdxAuto >= 0) {
-      var _thisRound = t.rounds[_roundIdxAuto];
-      var _thisComplete = (_thisRound.matches || []).every(function(rm) { return !!rm.winner; });
-      var _isLast = _roundIdxAuto === (t.rounds.length - 1);
-      if (_thisComplete && _isLast && _thisRound.status !== 'complete') {
-        setTimeout(function() {
-          if (typeof window._closeRound === 'function') window._closeRound(tId, _roundIdxAuto, matchId);
-        }, 0);
-      }
-    }
-  } else {
-    _checkGroupRoundComplete(t, m.group);
-    showNotification('✅ Resultado aprovado', m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner}), 'success');
   }
-
-  _propagateMatchUpdate(t, m);
-  window.AppStore.logAction(tId, 'Resultado aprovado: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + (m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner));
-  window.AppStore.syncImmediate(tId);
+  // 4.1 DUAL-WRITE (project_match_result_docs, inc 3a): espelha o resultado aprovado
+  // (já aplicado otimista no `m` local por _applyApprovedResult) no doc do jogo.
+  // Best-effort — nunca derruba o save principal.
+  _dualWriteResult(tId, matchId);
 
   // Notifica participantes do match (proposer + opposing team)
   // Bug 5 fix: choose persist function based on how the result was entered
@@ -2286,13 +2152,7 @@ window._contestResult = function(tId, matchId) {
   if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
 
   var pr = m.pendingResult;
-  var proposerSide = 0;
-  if (pr.proposedBy || pr.proposedByEmail) {
-    proposerSide = _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail });
-  }
-  var userSide = _userTeamInMatch(t, m, cu);
-  var isOpposing = userSide > 0 && userSide !== proposerSide;
-  if (!isOpposing) {
+  if (!_isOpposingProposer(t, m, cu)) {
     showNotification('Sem permissão', 'Só o time adversário pode contestar.', 'warning');
     return;
   }
@@ -2301,49 +2161,27 @@ window._contestResult = function(tId, matchId) {
     '❌ Contestar resultado',
     'O organizador será notificado para apurar e lançar o resultado definitivo. Confirma a contestação?',
     function() {
-      m.pendingResult.disputed = true;
-      m.pendingResult.disputedBy = cu.uid || null;
-      m.pendingResult.disputedByName = cu.displayName || cu.email || 'Jogador';
-      m.pendingResult.disputedAt = Date.now();
+      var _disputedByName = cu.displayName || cu.email || 'Jogador';
+      // BLINDAGEM (v4.0.121): marca a disputa ATÔMICO pelo portão (local + fresco).
+      window.AppStore.mutate(tId, function (ft) {
+        var fm = _findMatch(ft, matchId);
+        if (!fm || !fm.pendingResult) return;
+        fm.pendingResult.disputed = true;
+        fm.pendingResult.disputedBy = cu.uid || null;
+        fm.pendingResult.disputedByName = _disputedByName;
+        fm.pendingResult.disputedAt = Date.now();
+        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(ft, fm);
+      }, 'Resultado contestado por ' + (cu.displayName || cu.email) + ': ' + m.p1 + ' vs ' + m.p2);
+      // 4.1 DUAL-WRITE: espelha a disputa (pendingResult.disputed) no doc do jogo.
+      _dualWriteResult(tId, matchId);
 
-      _propagateMatchUpdate(t, m);
-      window.AppStore.logAction(tId, 'Resultado contestado por ' + (cu.displayName || cu.email) + ': ' + m.p1 + ' vs ' + m.p2);
-      window.AppStore.syncImmediate(tId);
-
-      if (typeof window._sendUserNotification === 'function') {
-        var scoreText = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
-        var notifOrg = {
-          type: 'match-disputed',
-          title: '🚨 Resultado em disputa',
-          message: m.p1 + ' vs ' + m.p2 + ' — placar ' + scoreText + ' contestado por ' + m.pendingResult.disputedByName + '. Intervenha para resolver.',
-          tournamentId: t.id,
-          tournamentName: t.name,
-          matchId: m.id,
-          level: 'fundamental',
-          timestamp: Date.now()
-        };
-        var _orgSeen = {};
-        var orgUid = t.creatorUid;
-        if (orgUid) {
-          _orgSeen[orgUid] = true;
-          window._sendUserNotification(orgUid, notifOrg);
-        } else {
-          var orgEmail = t.organizerEmail || t.creatorEmail;
-          var parts = Array.isArray(t.participants) ? t.participants : [];
-          var orgPart = parts.find(function(p) { return typeof p === 'object' && ((t.creatorUid && p.uid === t.creatorUid) || (orgEmail && p.email === orgEmail)); }); // v2.8.80: uid primeiro
-          if (orgPart && orgPart.uid) { _orgSeen[orgPart.uid] = true; window._sendUserNotification(orgPart.uid, notifOrg); }
-        }
-        // Notifica também co-organizadores ativos
-        if (Array.isArray(t.coHosts)) {
-          t.coHosts.forEach(function(ch) {
-            if (ch && ch.status === 'active' && ch.uid && !_orgSeen[ch.uid]) {
-              _orgSeen[ch.uid] = true;
-              window._sendUserNotification(ch.uid, notifOrg);
-            }
-          });
-        }
-      }
-
+      var scoreText = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
+      _notifyOrgAndCoHosts(t, {
+        type: 'match-disputed',
+        title: '🚨 Resultado em disputa',
+        message: m.p1 + ' vs ' + m.p2 + ' — placar ' + scoreText + ' contestado por ' + _disputedByName + '. Intervenha para resolver.',
+        tournamentId: t.id, tournamentName: t.name, matchId: m.id, level: 'fundamental', timestamp: Date.now()
+      });
       showNotification('❌ Contestação enviada', 'O organizador foi notificado para resolver o resultado.', 'success');
       _rerenderBracket(tId, matchId);
     }
@@ -2388,18 +2226,20 @@ window._organizerResetMatch = function(tId, matchId) {
     '🔄 Refazer partida',
     'Você está atuando como ORGANIZADOR. O placar voltará para 0×0 e a partida deverá ser jogada novamente. Os participantes serão notificados. Confirma?',
     function() {
-      // Limpa qualquer resultado/proposta/disputa
-      delete m.pendingResult;
-      delete m.winner;
-      delete m.draw;
-      delete m.scoreP1; delete m.scoreP2;
-      delete m.sets; delete m.setsWonP1; delete m.setsWonP2;
-      delete m.totalGamesP1; delete m.totalGamesP2;
-      delete m.fixedSet;
-
-      _propagateMatchUpdate(t, m);
-      window.AppStore.logAction(tId, 'Organizador refez a partida (placar zerado): ' + m.p1 + ' vs ' + m.p2);
-      window.AppStore.syncImmediate(tId);
+      // BLINDAGEM (v4.0.121): zera o resultado/proposta/disputa ATÔMICO pelo portão.
+      window.AppStore.mutate(tId, function (ft) {
+        var fm = _findMatch(ft, matchId);
+        if (!fm) return;
+        delete fm.pendingResult; delete fm.winner; delete fm.draw;
+        delete fm.scoreP1; delete fm.scoreP2;
+        delete fm.sets; delete fm.setsWonP1; delete fm.setsWonP2;
+        delete fm.totalGamesP1; delete fm.totalGamesP2;
+        delete fm.fixedSet;
+        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(ft, fm);
+      }, 'Organizador refez a partida (placar zerado): ' + m.p1 + ' vs ' + m.p2);
+      // 4.1 DUAL-WRITE: o match local foi ZERADO → o espelho completo REMOVE os
+      // campos de resultado do doc do jogo (senão o subdoc guardaria o placar velho).
+      _dualWriteResult(tId, matchId);
 
       _notifyMatchParticipants(t, m, {
         type: 'match-reset',
@@ -2660,7 +2500,7 @@ window._editPendingResult = function(tId, matchId) {
         scoreP1: _prevPending.scoreP1,
         scoreP2: _prevPending.scoreP2
       } : null);
-      m.pendingResult = {
+      var _counter = {
         kind: 'inline',
         proposedBy: cu.uid || null,
         proposedByEmail: cu.email || null,
@@ -2673,10 +2513,17 @@ window._editPendingResult = function(tId, matchId) {
         isCounterProposal: true,  // marca fase 2: time original verá Confirmar + Contestar
         originalProposal: _origProp
       };
-      _propagateMatchUpdate(t, m);
-      window.AppStore.logAction(tId, 'Contra-proposta: ' + m.p1 + ' ' + s1v + ' × ' + s2v + ' ' + m.p2 + ' por ' + (cu.displayName || cu.email));
-      window.AppStore.syncImmediate(tId);
-      try { _notifyPendingApproval(t, m, m.pendingResult.proposedByName); } catch(e2) {}
+      m.pendingResult = _counter; // local otimista
+      // BLINDAGEM (v4.0.121): grava a contra-proposta ATÔMICO pelo portão.
+      window.AppStore.mutate(tId, function (ft) {
+        var fm = _findMatch(ft, matchId);
+        if (!fm) return;
+        fm.pendingResult = _counter;
+        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(ft, fm);
+      }, 'Contra-proposta: ' + m.p1 + ' ' + s1v + ' × ' + s2v + ' ' + m.p2 + ' por ' + (cu.displayName || cu.email));
+      // 4.1 DUAL-WRITE: espelha a contra-proposta (novo pendingResult) no doc do jogo.
+      _dualWriteResult(tId, matchId);
+      try { _notifyPendingApproval(t, m, _counter.proposedByName); } catch(e2) {}
       showNotification('⏳ Contra-proposta enviada', 'O time adversário foi notificado para aprovar ou contestar.', 'success');
       window._suppressSoftRefresh = false;
       _rerenderBracket(tId, matchId);
@@ -2836,10 +2683,13 @@ window._shareMatchResult = function(tId, matchId) {
   text += '\n' + resultText;
   text += '\n📋 ' + (t.name || 'Torneio');
   if (t.sport) text += ' — ' + t.sport;
-  text += '\n\n🔗 ' + window._tournamentUrl(tId);
+  // FASE B: compartilha o deep-link do JOGO (#match/:tId/:matchId) — abre a tela
+  // leve que renderiza só aquele jogo (subdoc), sem carregar o torneio inteiro.
+  var _shareUrl = (typeof window._matchUrl === 'function') ? window._matchUrl(tId, matchId) : window._tournamentUrl(tId);
+  text += '\n\n🔗 ' + _shareUrl;
 
   if (navigator.share) {
-    navigator.share({ title: _t('bui.resultShareTitle', {name: t.name}), text: text, url: window._tournamentUrl(tId) }).catch(function() {});
+    navigator.share({ title: _t('bui.resultShareTitle', {name: t.name}), text: text, url: _shareUrl }).catch(function() {});
   } else {
     // Clipboard fallback
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -3070,7 +2920,8 @@ window._tvMode = function(tId) {
   hero += '<span>' + window._safeHtml(t.format || '') + '</span>';
   hero += '<span>•</span><span>' + window._safeHtml(t.sport || '') + '</span>';
   if (t.venue) hero += '<span>•</span><span>📍 ' + window._safeHtml(t.venue) + '</span>';
-  var partCount = typeof window._getCompetitors === 'function' ? window._getCompetitors(t).length : (Array.isArray(t.participants) ? t.participants.length : 0);
+  // CANÔNICO: PESSOAS inscritas (dupla=2), não entradas. Ver _countCompetitors.
+  var partCount = typeof window._countCompetitors === 'function' ? window._countCompetitors(t).people : (Array.isArray(t.participants) ? t.participants.length : 0);
   hero += '<span>•</span><span>👤 ' + partCount + ' inscritos</span>';
   hero += '</div></div></div>';
 
@@ -3078,6 +2929,11 @@ window._tvMode = function(tId) {
   var progHtml = '';
   if (typeof window._getTournamentProgress === 'function') {
     var prog = window._getTournamentProgress(t);
+    // Multi-fase: header do torneio INTEIRO (soma as fases), não só a fase atual.
+    if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentGamesPlan === 'function') {
+      var _gpBH = window._tournamentGamesPlan(t);
+      if (_gpBH && _gpBH.totalPlanned > 0) prog = { total: _gpBH.totalPlanned, completed: _gpBH.totalDone, pct: _gpBH.pct };
+    }
     if (prog.total > 0) {
       var barCol = prog.pct === 100 ? '#10b981' : (prog.pct > 50 ? '#3b82f6' : '#f59e0b');
       progHtml = '<div style="margin-top:20px;">';
@@ -3395,6 +3251,27 @@ window._showPlayerHistory = function(tId, playerName, filter) {
 };
 
 // ─── Advanced Points breakdown popup ─────────────────────────────────────────
+// ── Interação da coluna 💯 PA: MOBILE = toque-e-segure (long-press); DESKTOP = clique.
+// Abre _showAdvancedPointsBreakdown. Estado compartilhado + handlers inline (sobrevive
+// a re-render). Tap CURTO no mobile NÃO abre (evita abrir sem querer ao rolar a tabela).
+// _paCellHandlers (helper de string do RENDER) vive em bracket.js — carregado no
+// render-harness. Aqui ficam só os handlers de RUNTIME (disparados no toque/clique).
+window._paPress = window._paPress || { timer: null, touch: false };
+window._paTouchStart = function (tId, name, cat) {
+  window._paPress.touch = true;
+  clearTimeout(window._paPress.timer);
+  window._paPress.timer = setTimeout(function () {
+    if (typeof window._haptic === 'function') { try { window._haptic('medium'); } catch (e) {} }
+    window._showAdvancedPointsBreakdown(tId, name, cat);
+  }, 420);
+};
+window._paTouchCancel = function () { clearTimeout(window._paPress.timer); };
+window._paClick = function (tId, name, cat) {
+  // touch: o long-press já cuidou (tap curto não abre). mouse: clique abre.
+  if (window._paPress.touch) { window._paPress.touch = false; return; }
+  window._showAdvancedPointsBreakdown(tId, name, cat);
+};
+
 window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
   var t = window._findTournamentById(tId);
   if (!t || typeof window._calcAdvancedPoints !== 'function') return;
@@ -3408,7 +3285,8 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     killing_point: '💥 Killing point',
     point_scored: '➕ Ponto feito',
     floor: '⚓ Piso (mín. 0)',
-    sitout_avg: '🪑 Folga (média das rodadas jogadas)'
+    sitout_avg: '🪑 Folga (média das rodadas jogadas)',
+    wo_penalty: '🚫 Punição por W.O.'
   };
   // v2.4.26: matriz — linhas = categoria de pontos. Ordem de colunas pedida pelo
   // usuário: Categoria | Total | Média | rodadas em ordem DECRESCENTE (última
@@ -3424,8 +3302,10 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
   var catPlayedTotal = {};  // catKey -> total da categoria nas rodadas jogadas
   var playedRoundSet = {};
 
+  var _woPenaltyTotal = 0; // punição de W.O. — vira linha de resumo, não coluna de rodada
   result.breakdown.forEach(function(mb) {
     if (mb.isSitOutComp) return; // a folga vira coluna(s); ignora o lump aqui
+    if (mb.isWoPenalty) { _woPenaltyTotal += (mb.total || 0); return; } // W.O. = linha à parte
     var rk = mb.round || 0;
     playedRoundSet[rk] = true;
     roundTotalsPlayed[rk] = (roundTotalsPlayed[rk] || 0) + (mb.total || 0);
@@ -3478,6 +3358,24 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
   var catAvg = {};
   cats.forEach(function(k) { catAvg[k] = playedCount ? Math.round((catPlayedTotal[k] || 0) / playedCount) : 0; });
 
+  // v4.2.8 (pedido do dono): QUANTIDADE de itens por célula, ao lado do valor —
+  // ex.: "(3) +450" (3 participações), "(1) +150" (1 vitória). catPlayedCount = soma
+  // das contagens nas rodadas jogadas; média = por rodada jogada; total = jogadas + folgas.
+  var catPlayedCount = {};
+  cats.forEach(function(k) {
+    var c = 0;
+    Object.keys(playedRoundSet).forEach(function(rk) { c += (cellCount[k] && cellCount[k][rk]) || 0; });
+    catPlayedCount[k] = c;
+  });
+  var catAvgCount = {};
+  cats.forEach(function(k) { catAvgCount[k] = playedCount ? Math.round(catPlayedCount[k] / playedCount) : 0; });
+  var catTotalCount = {};
+  cats.forEach(function(k) { catTotalCount[k] = catPlayedCount[k] + catAvgCount[k] * folgaCount; });
+  var _cntPfx = function(n) {
+    if (!n) return '';
+    return '<span style="color:var(--text-muted);opacity:0.6;font-weight:600;font-size:0.72rem;">(' + n + ')</span> ';
+  };
+
   // Total por rodada de folga: distribui a compensação real (result.total menos
   // o que veio das rodadas jogadas) entre as colunas de folga, pra que o rodapé
   // some EXATAMENTE result.total (fonte autoritativa, igual à classificação).
@@ -3509,6 +3407,10 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     '<span style="font-size:1.4rem;font-weight:900;color:#fbbf24;">💯 ' + (result.total || 0) + '</span>' +
     '<span style="color:var(--text-muted);font-size:0.8rem;">pontos avançados · ' + _subParts.join(' · ') + '</span>' +
     '</div>';
+  // Punição de W.O. (quando houve): linha explícita — explica o desconto no total.
+  if (_woPenaltyTotal !== 0) {
+    summary += '<div style="margin:-4px 0 12px;padding:8px 12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:10px;font-size:0.82rem;color:#f87171;font-weight:700;">🚫 Punição por W.O.: ' + _woPenaltyTotal + ' <span style="opacity:0.75;font-weight:500;">(já incluído no total acima)</span></div>';
+  }
 
   var tableHtml;
   if (result.breakdown.length === 0 && folgaCount === 0 && inativoCount === 0) {
@@ -3545,17 +3447,17 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
       var catTotal = (catPlayedTotal[catKey] || 0) + (catAvg[catKey] || 0) * folgaCount;
       body += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">' +
         '<td style="' + _tdBase + 'text-align:left;color:var(--text-bright);' + _stkL + '">' + lbl + '</td>' +
-        '<td style="' + _tdBase + 'font-weight:800;color:var(--text-bright);">' + _fmtVal(catTotal) + '</td>' +
-        '<td style="' + _tdBase + 'opacity:0.85;" title="média por rodada jogada">' + _fmtVal(catAvg[catKey] || 0) + '</td>';
+        '<td style="' + _tdBase + 'font-weight:800;color:var(--text-bright);">' + _cntPfx(catTotalCount[catKey]) + _fmtVal(catTotal) + '</td>' +
+        '<td style="' + _tdBase + 'opacity:0.85;" title="média por rodada jogada">' + _cntPfx(catAvgCount[catKey]) + _fmtVal(catAvg[catKey] || 0) + '</td>';
       rounds.forEach(function(rk) {
         var st = roundStatus[rk];
         if (st === 'played') {
           var v = (cellVal[catKey] && cellVal[catKey][rk] != null) ? cellVal[catKey][rk] : null;
           var cnt = (cellCount[catKey] && cellCount[catKey][rk]) || 0;
           var ttl = (v != null && cnt) ? (' title="' + cnt + ' × ' + ((catUnit[catKey] >= 0 ? '+' : '') + catUnit[catKey]) + '"') : '';
-          body += '<td style="' + _tdBase + '"' + ttl + '>' + _fmtVal(v) + '</td>';
+          body += '<td style="' + _tdBase + '"' + ttl + '>' + _cntPfx(cnt) + _fmtVal(v) + '</td>';
         } else if (st === 'folga') {
-          body += '<td style="' + _tdBase + _bgFolga + '" title="Folga (sorteio) — média das rodadas jogadas"><span style="opacity:0.7;">' + _fmtVal(catAvg[catKey] || 0) + '</span></td>';
+          body += '<td style="' + _tdBase + _bgFolga + '" title="Folga (sorteio) — média das rodadas jogadas"><span style="opacity:0.7;">' + _cntPfx(catAvgCount[catKey]) + _fmtVal(catAvg[catKey] || 0) + '</span></td>';
         } else {
           body += '<td style="' + _tdBase + _bgInativo + '">' + _fmtZero + '</td>';
         }
@@ -3582,7 +3484,7 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
         '<b style="color:#f87171;">Inativo</b> (ficou de fora da rodada): zero em cada linha.' +
       '</div>';
   }
-  showAlertDialog('💯 Pontos Avançados — ' + playerName, summary + tableHtml, null, { type: 'info' });
+  showAlertDialog('💯 Pontos Avançados — ' + playerName, summary + tableHtml, null, { type: 'info', okText: '‹ Voltar' });
 };
 
 // ─── Advance from Groups to Elimination ─────────────────────────────────────
@@ -3709,11 +3611,15 @@ window._advanceMonarchToElimination = function(tId) {
   // Idempotent: don't re-advance if already in elimination
   if (t.currentStage === 'elimination' || (t.matches && t.matches.length > 0)) return;
 
-  var classified = t.monarchClassified || 1;
+  var _maxGroupRows = t.groups.reduce(function(mx, g) {
+    var st = window._computeMonarchStandings(g, t, g.category || null);
+    return Math.max(mx, (st && st.length) || 0);
+  }, 0);
+  var classified = window._phaseClassifiedCount(t, _maxGroupRows) || 1;
   var qualifiedPlayers = [];
 
   t.groups.forEach(function(g) {
-    var standings = window._computeMonarchStandings(g);
+    var standings = window._computeMonarchStandings(g, t, g.category || null);
     for (var i = 0; i < Math.min(classified, standings.length); i++) {
       qualifiedPlayers.push(standings[i].name);
     }
@@ -3729,7 +3635,7 @@ window._advanceMonarchToElimination = function(tId) {
   var maxPerGroup = classified;
   for (var rank = 0; rank < maxPerGroup; rank++) {
     t.groups.forEach(function(g) {
-      var standings = window._computeMonarchStandings(g);
+      var standings = window._computeMonarchStandings(g, t, g.category || null);
       if (standings[rank]) seeded.push(standings[rank].name);
     });
   }

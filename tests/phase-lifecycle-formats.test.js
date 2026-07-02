@@ -10,7 +10,7 @@
  *   • Grupos → Rei/Rainha  (modo de sorteio: grupos de 4 rotativos; bracket 'monarch')
  *   • Rei/Rainha → Eliminatória (origem com modo de sorteio Rei/Rainha; classif. individual)
  */
-const { E } = require('./headless.js');
+const { E, window: W } = require('./headless.js');
 
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -67,14 +67,23 @@ function gruposOrigin(n, nextCfg) {
 });
 
 // ── Grupos → Rei/Rainha (modo de sorteio) ──────────────────────────────────
+// Campanha kill-monarch-format: monarch na Fase N é rota league INCREMENTAL —
+// materializeNextPhase devolve o pool (t.phaseRounds[1]) e a rodada REAL (grupos de
+// 4 rotativos) é gerada pelo motor único via _phaseGenNextLeagueRound (que o
+// advanceMultiPhase chama). O teste dirige exatamente esse ciclo.
 [[8, 6], [12, 9]].forEach(([n, expMatches]) => {
   const tag = `[Grupos→ReiRainha n=${n}]`;
-  const t = gruposOrigin(n, { formatCode: 'liga', drawMode: 'rei_rainha' });
+  const t = gruposOrigin(n, { formatCode: 'liga', drawMode: 'rei_rainha', reiRainha: true });
   const r = E.materializeNextPhase(t, cs, 'gm');
-  ok(r.ok, tag + ' materializa');
-  const ms = phaseMatches(t);
-  ok(ms.length && ms.every((m) => m.bracket === 'monarch' && m.isMonarch), tag + ' todos bracket=monarch/isMonarch');
-  ok(ms.length === expMatches, tag + ' floor(n/4)×3 = ' + expMatches + ' jogos (parceiros rotativos)');
+  ok(r.ok && r.incrementalLeague === true, tag + ' materializa (rota league incremental)');
+  ok(t.phaseRounds && t.phaseRounds[1] && (t.phaseRounds[1].pool || []).length === n, tag + ' pool de ' + n + ' em t.phaseRounds[1]');
+  ok(W._phaseGenNextLeagueRound(t, 1) === true, tag + ' 1ª rodada gerada pelo motor único');
+  const st = t.phaseRounds[1];
+  const rd0 = (st.rounds && st.rounds[0]) || {};
+  const ms = (rd0.matches || []).filter((m) => !m.isSitOut);
+  ok(ms.length && ms.every((m) => m.isMonarch && (m.phaseIndex || 0) === 1), tag + ' todos isMonarch taggeados na fase 1');
+  ok(ms.length === expMatches, tag + ' floor(n/4)×3 = ' + expMatches + ' jogos (parceiros rotativos) [' + ms.length + ']');
+  ok((rd0.monarchGroups || []).length === n / 4, tag + ' monarchGroups: ' + (n / 4) + ' grupos de 4');
   ok(eqSet(realsOf(ms), names(n)), tag + ' conservação: todos os ' + n + ' (múltiplo de 4)');
 });
 

@@ -1417,6 +1417,9 @@ function renderDashboard(container) {
     var recentConfirmed = []; // últimas partidas com resultado confirmado
 
     participacoes.forEach(function(t) {
+      // v4.1.20: carimba a numeração GLOBAL "JOGO N" (fonte única, mesma do bracket) neste
+      // torneio → os cards de Meus Resultados leem `m._gameNum` e mostram o número certo.
+      try { if (typeof window._assignGlobalGameNumbers === 'function') window._assignGlobalGameNumbers(t); } catch (e) {}
       var matchSources = [];
       if (typeof window._collectAllMatches === 'function') {
         matchSources = window._collectAllMatches(t).slice();
@@ -1649,8 +1652,11 @@ function renderDashboard(container) {
       else if (faseLower.indexOf('oitava') !== -1 || faseLower.indexOf('rodada') !== -1 || faseLower.indexOf('grupo') !== -1) faseColor = '#818cf8';
       else if (faseLower.indexOf('final') !== -1) faseColor = '#fbbf24'; // ouro só pra Final real
 
-      // matchLabel — JOGO N do match ou fallback
-      var matchLabel = item.m.label || 'JOGO 1';
+      // matchLabel — JOGO N GLOBAL (fonte única _assignGlobalGameNumbers, igual ao bracket).
+      // Rei/Rainha segue pelo _monarchBoxLabel (numeração por grupo → global) mais abaixo.
+      var matchLabel = (item.m && !item.m.isMonarch && item.m._gameNum != null)
+        ? ('Jogo ' + item.m._gameNum)
+        : (item.m.label || 'JOGO 1');
       // v4.0.2: em Rei/Rainha o m.label é "Jogo N" POR GRUPO (sempre Jogo 1/2/3).
       // O número GLOBAL que o usuário vê no bracket (ex.: Jogo 73) vem do helper
       // canônico — outros grupos contam primeiro, o grupo do usuário vem depois.
@@ -1734,7 +1740,7 @@ function renderDashboard(container) {
         // v2.7.56: botões no PADRÃO do app (.btn + variante de cor + .btn-micro =
         // sólido, com volume almofadado), não mais etiqueta flat com estilo inline.
         var liveBtnHtml = (!pendingScores && canLaunch)
-          ? '<button class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">📡 Ao Vivo</button>'
+          ? '<button class="btn btn-live btn-micro" onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">📡 Ao Vivo</button>'
           : '';
         var confirmBtnHtml = (!pendingScores && canLaunch)
           ? '<button id="confirm-' + mId + '" class="btn btn-success btn-micro" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">✓ Confirmar</button>'
@@ -1747,7 +1753,7 @@ function renderDashboard(container) {
       // (mesma fonte/padding/raio, flat) só com a cor índigo — antes era .btn .btn-sm
       // (maior, com volume) e quebrava pra outra linha. Fica na MESMA linha dos outros
       // 2, FORA do #header-btns (que é reescrito in-place no fluxo de aprovação).
-      var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">Ir para Torneio →</button>';
+      var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;line-height:1.05;text-align:center;">Ir para<br>Torneio →</button>';
 
       return '<div style="min-width:300px;max-width:360px;display:flex;flex-direction:column;gap:0.6rem;">' +
         (opts.hideFaseHeader ? '' :
@@ -1760,7 +1766,7 @@ function renderDashboard(container) {
         '<div id="card-' + mId + '" style="background:' + cardBgStr + ';border:2px solid ' + cardBorderStr + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
             '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;display:inline-flex;align-items:center;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) + '</span>' +
-            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;">' +
+            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;margin-left:auto;">' +
               '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">' + finalHeaderBtns + '</div>' +
               goToBtn +
             '</div>' +
@@ -1857,7 +1863,7 @@ function renderDashboard(container) {
     noResult.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: true }); });
     upcoming.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: false }); });
     // ordena por rodada e, dentro da rodada, pelo nº do Jogo (o próximo a jogar primeiro)
-    var _jogoSeqU = function(m) { var mm = String(m.label || '').match(/Jogo\s*(\d+)/i); return mm ? Number(mm[1]) : 0; };
+    var _jogoSeqU = function(m) { if (m && m._gameNum != null) return Number(m._gameNum); var mm = String(m.label || '').match(/Jogo\s*(\d+)/i); return mm ? Number(mm[1]) : 0; };
     allUpcoming.sort(function(a, b) {
       var ra = (a.item.m.round || 0), rb = (b.item.m.round || 0);
       if (ra !== rb) return ra - rb;
@@ -1886,8 +1892,15 @@ function renderDashboard(container) {
       if (_ngM.tierLabel) _meta.push(String(_ngM.tierLabel).trim());
       // v4.0.2: a coroa fica SÓ ao lado do "JOGO N" (no card) — não repetir aqui.
       var _metaStr = _meta.join(' · ');
-      var _jgU = String(_ngM.label || '').match(/Jogo\s*\d+/i);
-      var _boxU = _jgU ? _jgU[0] : 'Jogo';
+      // v4.1.20: "JOGO N" GLOBAL (fonte única). Antes parseava _ngM.label — que muitas
+      // vezes não traz número → caía em "Jogo" pelado (bug reportado na dashboard).
+      var _boxU;
+      if (_ngM && !_ngM.isMonarch && _ngM._gameNum != null) {
+        _boxU = 'Jogo ' + _ngM._gameNum;
+      } else {
+        var _jgU = String(_ngM.label || '').match(/Jogo\s*\d+/i);
+        _boxU = _jgU ? _jgU[0] : 'Jogo';
+      }
 
       // v3.1.24: SEÇÃO SEPARADA, NÃO colapsável — renderizada ANTES de "Meus Últimos Resultados".
       _upHtml += '<div id="proximos-jogos-section" style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
@@ -1948,8 +1961,10 @@ function renderDashboard(container) {
           scoresHtml = _scoreDisplay(item.inP1 ? m2.scoreP1 : m2.scoreP2, item.inP1 ? m2.scoreP2 : m2.scoreP1);
         }
 
-        // mesmo estilo de coluna que _miniBracketCard
-        var matchLabel2 = m2.label || 'JOGO 1';
+        // mesmo estilo de coluna que _miniBracketCard — JOGO N GLOBAL (fonte única).
+        var matchLabel2 = (m2 && !m2.isMonarch && m2._gameNum != null)
+          ? ('Jogo ' + m2._gameNum)
+          : (m2.label || 'JOGO 1');
         var rowStyle2 = 'display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:4px;';
 
         var p1IsWinner = !m2.draw && m2.winner === m2.p1;
@@ -2431,7 +2446,8 @@ function renderDashboard(container) {
       else if (tournamentStarted) { statusText = _t('status.active'); statusColor = '#4ade80'; }
       else if (isClosed) { statusText = _t('status.closed'); statusColor = '#fca5a5'; }
       else { statusText = _t('status.open'); statusColor = '#60a5fa'; }
-      var pCount = typeof window._getCompetitors === 'function' ? window._getCompetitors(t).length : (Array.isArray(t.participants) ? t.participants.length : 0);
+      // CANÔNICO: PESSOAS inscritas (dupla=2), não entradas. Ver _countCompetitors.
+      var pCount = typeof window._countCompetitors === 'function' ? window._countCompetitors(t).people : (Array.isArray(t.participants) ? t.participants.length : 0);
       var prog = typeof window._getTournamentProgress === 'function' ? window._getTournamentProgress(t) : { pct: 0 };
       var dateStr = '';
       if (t.startDate) { try { dateStr = new Date(t.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }); } catch(e) {} }
@@ -2454,7 +2470,7 @@ function renderDashboard(container) {
             '</div>' +
           '</div>' +
           '<div class="compact-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
-            '<span style="font-size:0.7rem;color:var(--text-muted);">👥 ' + pCount + '</span>' +
+            '<span style="font-size:0.7rem;color:var(--text-muted);">👤 ' + pCount + '</span>' +
             (hasDraw && !isFinished ? '<span style="font-size:0.7rem;color:' + (prog.pct === 100 ? '#10b981' : '#f59e0b') + ';">' + prog.pct + '%</span>' : '') +
             '<span style="font-size:0.68rem;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(' + statusBadgeBgRgb + ',0.15);color:' + statusColor + ';white-space:nowrap;">' + statusText + '</span>' +
             (isOrg ? '<span style="font-size:0.65rem;padding:2px 6px;border-radius:4px;background:rgba(251,191,36,0.15);color:#fbbf24;">' + _t('auth.orgShort') + '</span>' : '') +

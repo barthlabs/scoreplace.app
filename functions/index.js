@@ -5755,3 +5755,149 @@ exports.syncDiscoveryFeed = onDocumentWritten(
     console.log(`[syncDiscoveryFeed] synced ${tid} status=${sa.status}`);
   }
 );
+
+// ─── syncMatchRosters (project_match_result_docs, inc 3b + espelho de resultado) ─
+// ESPELHO SERVER-AUTORITATIVO do subdoc de resultado por-jogo
+// (tournaments/{tId}/results/{matchId}) a partir do doc do torneio, com privilégio
+// de ADMIN. onWrite do doc do torneio → pra cada jogo cujo ESTADO ESPELHÁVEL mudou
+// (roster playerUids + campos de resultado: winner/score/sets/pending/wo/...),
+// reescreve o subdoc como CÓPIA FIEL do match (set SEM merge = remove campos que
+// sumiram, ex.: refazer/reverter/editar). Isso torna o subdoc uma fonte confiável
+// pra LEITURA independente de QUAL path mexeu no resultado no doc do torneio —
+// cobre de uma vez: mata-mata participant-driven (o cliente não pode escrever
+// playerUids pela regra), W.O., reverter W.O., editar resultado, placar ao vivo, e
+// os paths que já fazem dual-write no cliente (aqui vira idempotente). SÓ toca
+// subdoc que JÁ existe (semeado pelo sorteio/backfill) — não faz backfill de legado
+// (isso é a migração). NÃO re-dispara a si mesma (escreve em results/, não no doc do
+// torneio). Idempotente por assinatura (não reescreve se o espelho já bate).
+// Deploy: firebase deploy --only functions:syncMatchRosters
+const { collectMatches, subdocSignature, buildSeedDoc, buildMirrorDoc } = require("./match-roster");
+exports.syncMatchRosters = onDocumentWritten(
+  { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
+  async (event) => {
+    const tid = event.params.tid;
+    const after  = event.data.after.exists  ? (event.data.after.data()  || {}) : null;
+    const before = event.data.before.exists ? (event.data.before.data() || {}) : null;
+    if (!after) return; // torneio deletado — nada a sincronizar
+
+    // Assinatura (roster+resultado) de cada jogo ANTES → só processa os que mudaram.
+    const beforeSig = {};
+    collectMatches(before || {}).forEach((m) => {
+      if (m && m.id != null && m.id !== "") beforeSig[String(m.id)] = subdocSignature(buildSeedDoc(before, m));
+    });
+    const candidates = [];
+    const seenId = {};
+    collectMatches(after).forEach((m) => {
+      if (!m || m.id == null || m.id === "") return;
+      const id = String(m.id);
+      if (seenId[id]) return;
+      seenId[id] = true;
+      const sig = subdocSignature(buildSeedDoc(after, m));
+      if (beforeSig[id] !== sig) candidates.push({ id, m, sig });
+    });
+    if (!candidates.length) return; // nada mudou no espelho → barato, sai
+
+    const nowIso = new Date().toISOString();
+    const db = admin.firestore();
+    const resultsCol = db.collection("tournaments").doc(tid).collection("results");
+    let synced = 0;
+    for (const { id, m, sig } of candidates) {
+      try {
+        const ref = resultsCol.doc(id);
+        const snap = await ref.get();
+        if (!snap.exists) continue; // não semeado → é a migração que cuida, não backfill aqui
+        if (subdocSignature(snap.data()) === sig) continue; // espelho já bate → idempotente
+        await ref.set(buildMirrorDoc(after, m, tid, nowIso)); // set SEM merge = cópia fiel (trata deletes)
+        synced++;
+      } catch (e) {
+        console.error(`[syncMatchRosters] ${tid}/${id}:`, e);
+      }
+    }
+    if (synced) console.log(`[syncMatchRosters] ${tid}: ${synced} espelho(s) de resultado sincronizado(s)`);
+  }
+);
+
+// ─── backfillMatchResultDocs (project_match_result_docs, MIGRAÇÃO) ─────────────
+// Semeia os docs de resultado por-jogo (tournaments/{tId}/results/{matchId}) dos
+// torneios LEGADOS — os criados ANTES do wiring de seed-no-sorteio, que têm o placar
+// só no doc do torneio. Pra cada jogo SEM subdoc, cria { matchId, playerUids, +
+// campos de resultado atuais do match }. NÃO toca subdoc que já existe (idempotente
+// — a syncMatchRosters + o dual-write mantêm os existentes frescos). Roda com ADMIN
+// (bypassa a regra, pode semear playerUids). One-shot, seguro pra re-rodar.
+//   ?tid=<id>   → só um torneio (teste)
+//   ?dryRun=1   → conta o que criaria, NÃO escreve
+//   ?limit=<n>  → processa no máx n torneios (segurança)
+// Guarda: ?secret=<BACKFILL_SECRET> (secret setado via functions:secrets:set — NUNCA
+// hardcoded; os endpoints admin antigos vazaram segredo em repo público → 410).
+// Deploy: firebase deploy --only functions:backfillMatchResultDocs --project <proj>
+const BACKFILL_SECRET = defineSecret("BACKFILL_SECRET");
+exports.backfillMatchResultDocs = onRequest(
+  { region: "us-central1", timeoutSeconds: 540, memory: "512MiB", secrets: [BACKFILL_SECRET] },
+  async (req, res) => {
+    if (req.query.secret !== BACKFILL_SECRET.value()) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    const db = admin.firestore();
+    const dryRun = req.query.dryRun === "1" || req.query.dryRun === "true";
+    // force=1: além de criar os que faltam, REFRESCA (reescreve) os subdocs que já
+    // existem cujo espelho está desatualizado (ex.: ganhar os campos de exibição
+    // p1/p2/tournamentName/roundLabel novos). Usa a MESMA assinatura da CF pra só
+    // reescrever o que mudou (idempotente). Sem force = só cria os faltantes.
+    const force = req.query.force === "1" || req.query.force === "true";
+    const oneTid = req.query.tid ? String(req.query.tid) : null;
+    const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 0;
+
+    let docs;
+    if (oneTid) {
+      const s = await db.collection("tournaments").doc(oneTid).get();
+      docs = s.exists ? [s] : [];
+    } else {
+      const snap = await db.collection("tournaments").get();
+      docs = snap.docs;
+      if (limit > 0) docs = docs.slice(0, limit);
+    }
+
+    let tournaments = 0, withBracket = 0, created = 0, refreshed = 0, skipped = 0;
+    const errors = [];
+    for (const tdoc of docs) {
+      tournaments++;
+      const t = tdoc.data() || {};
+      const matches = collectMatches(t).filter((m) => m && m.id != null && m.id !== "");
+      if (!matches.length) continue; // sem chave (fase de inscrição) → nada a semear
+      withBracket++;
+      const resultsCol = db.collection("tournaments").doc(tdoc.id).collection("results");
+      // lê os subdocs já existentes de uma vez (evita N gets)
+      const existingSnap = await resultsCol.get();
+      const existingData = {};
+      existingSnap.docs.forEach((d) => { existingData[d.id] = d.data() || {}; });
+      const seen = new Set();
+      for (const m of matches) {
+        const id = String(m.id);
+        if (seen.has(id)) continue; // um match id só uma vez
+        seen.add(id);
+        const exists = Object.prototype.hasOwnProperty.call(existingData, id);
+        if (exists && !force) { skipped++; continue; } // já semeado → não clobbera
+        try {
+          if (exists) {
+            // force: só reescreve se o espelho mudou (idempotente por assinatura)
+            if (subdocSignature(existingData[id]) === subdocSignature(buildSeedDoc(t, m))) { skipped++; continue; }
+            if (dryRun) { refreshed++; continue; }
+            await resultsCol.doc(id).set(buildMirrorDoc(t, m, tdoc.id));
+            refreshed++;
+          } else {
+            if (dryRun) { created++; continue; }
+            const seed = buildSeedDoc(t, m);
+            seed.updatedAt = new Date().toISOString();
+            await resultsCol.doc(id).set(seed); // create (não existe) — set sem merge
+            created++;
+          }
+        } catch (e) {
+          errors.push({ tid: tdoc.id, matchId: id, err: String(e && e.message) });
+        }
+      }
+    }
+    console.log(`[backfillMatchResultDocs] dryRun=${dryRun} force=${force} tournaments=${tournaments} withBracket=${withBracket} created=${created} refreshed=${refreshed} skipped=${skipped} errors=${errors.length}`);
+    res.json({ ok: true, dryRun, force, tournaments, withBracket, created, refreshed, skipped, errors: errors.slice(0, 20) });
+  }
+);

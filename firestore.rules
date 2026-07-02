@@ -198,6 +198,37 @@ service cloud.firestore {
       // Delete: admins only.
       allow delete: if request.auth != null
         && (isTournamentAdmin(resource.data) || isTournamentAdminByUid(resource.data));
+
+      // ─── Resultado por JOGO em doc próprio (linha 4.1, project_match_result_docs) ───
+      // Cada jogo tem seu placar/consenso em tournaments/{id}/results/{matchId}.
+      // Escopo PER-JOGO: só os participantes DAQUELE jogo (ou o organizador) escrevem.
+      // O subdoc carrega `playerUids` = uids dos dois lados do jogo (definidos por
+      // caminho de confiança: o sorteio/avanço, que é admin). O participante do jogo
+      // pode gravar o RESULTADO se seu uid está em playerUids E sem alterar playerUids
+      // (não pode se auto-incluir). Admin (org/co-host) pode tudo (definir playerUids
+      // no sorteio, resolver disputa, refazer). Leitura = quem pode ler o torneio.
+      match /results/{matchId} {
+        function parentT() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        function isAdminOf(pt) { return isTournamentAdmin(pt) || isTournamentAdminByUid(pt); }
+        // `request.auth != null` PRIMEIRO no OR: curto-circuita sem o get() do
+        // parentT() → deixa a query collectionGroup de `results` (Fase B: ler os
+        // jogos de um uid sem carregar torneio) eficiente. Semântica idêntica à
+        // ordem anterior (authed já lia qualquer result subdoc); só evita 1 get()
+        // por doc na listagem. Público (sem auth) ainda cai no parentT().isPublic.
+        allow read: if (request.auth != null) || (parentT().isPublic == true);
+        // Create: só admin (o sorteio cria o doc do jogo já com playerUids).
+        allow create: if request.auth != null && isAdminOf(parentT());
+        // Update: admin OU participante DAQUELE jogo (uid em playerUids) que NÃO mexe
+        // no roster (playerUids imutável pra participante).
+        allow update: if request.auth != null && (
+          isAdminOf(parentT())
+          || ( (resource.data.playerUids is list) && (request.auth.uid in resource.data.playerUids)
+               && (request.resource.data.playerUids == resource.data.playerUids) )
+        );
+        allow delete: if request.auth != null && isAdminOf(parentT());
+      }
     }
 
     // ─── User profiles ───────────────────────────────────────────────────────

@@ -551,13 +551,17 @@ window._buildCategoryCountHtml = function(t) {
 
     if (rows.length === 0) return '';
 
+    // v4.0.55: mesma tarja de leitura das caixas irmãs (window._photoReadBox).
+    var _catRb = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.40)', border: 'rgba(255,255,255,0.10)' };
     var html = '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;">';
     rows.forEach(function(row) {
         html += '<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">';
         row.cats.forEach(function(cat) {
-            html += '<div style="display:inline-flex;align-items:center;gap:4px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);padding:3px 8px;border-radius:10px;">' +
-                '<span style="font-size:0.65rem;font-weight:600;color:#818cf8;">' + cat.display + '</span>' +
-                '<span style="font-size:0.75rem;font-weight:800;color:var(--text-bright,#e2e8f0);">' + cat.count + '</span>' +
+            // v4.0.54: fundo OPACO + blur — a pílula fica sobre a foto de capa; fundo
+            // translúcido deixava a foto vazar e o label indigo ilegível.
+            html += '<div style="display:inline-flex;align-items:center;gap:4px;background:' + _catRb.bg + ';backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid ' + _catRb.border + ';padding:3px 9px;border-radius:10px;">' +
+                '<span style="font-size:0.65rem;font-weight:700;color:#c7cdfb;">' + cat.display + '</span>' +
+                '<span style="font-size:0.75rem;font-weight:800;color:#ffffff;">' + cat.count + '</span>' +
                 '</div>';
         });
         html += '</div>';
@@ -769,25 +773,30 @@ window._buildTimeEstimation = function(t) {
 
   // Montar HTML
   var courtsLabel = courts > 1 ? _t('cat.nCourtsLabel', {n: courts}) : _t('cat.oneCourtLabel');
-  var html = '<div style="margin-top: 8px; padding: 10px 14px; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 12px;">';
-  html += '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">';
+  // v4.0.55: usa a MESMA tarja de leitura das caixas irmãs (local, datas) — o
+  // helper canônico window._photoReadBox() (tema-aware: escuro=rgba(0,0,0,0.40),
+  // claro=rgba(30,41,59,0.72)) + blur. Antes (v4.0.54) eu pus um escuro próprio
+  // (0.92) que ficou MAIS escuro que os demais box. Agora fica idêntico.
+  var _estRb = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.40)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.10)' };
+  var html = '<div style="margin-top: 8px; padding: 10px 14px; background: ' + _estRb.bg + '; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid ' + _estRb.border + '; border-radius: 12px;">';
+  html += '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">';
   html += '<span style="font-size:1.1rem;">⏱️</span>';
-  html += '<span style="font-size:0.8rem; font-weight:700; color:#a5b4fc; text-transform:uppercase; letter-spacing:0.5px;">' + _t('cat.estimatedDuration') + '</span>';
-  html += '<span style="font-size:0.65rem; color:var(--text-muted); opacity:0.7;">(' + gameDur + 'min/partida · ' + courtsLabel + ')</span>';
+  html += '<span style="font-size:0.8rem; font-weight:800; color:#c7cdfb; text-transform:uppercase; letter-spacing:0.5px;">' + _t('cat.estimatedDuration') + '</span>';
+  html += '<span style="font-size:0.65rem; color:#cbd5e1;">(' + gameDur + 'min/partida · ' + courtsLabel + ')</span>';
   html += '</div>';
 
   html += '<div style="display:flex; flex-direction:column; gap:4px;">';
   rows.forEach(function(r) {
-    var bg = r.highlight ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.03)';
-    var border = r.highlight ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(255,255,255,0.05)';
-    var labelColor = r.highlight ? '#60a5fa' : 'var(--text-muted)';
-    var durColor = r.highlight ? '#e2e8f0' : 'rgba(255,255,255,0.7)';
+    var bg = r.highlight ? 'rgba(59,130,246,0.22)' : 'rgba(255,255,255,0.07)';
+    var border = r.highlight ? '1px solid rgba(96,165,250,0.55)' : '1px solid rgba(255,255,255,0.1)';
+    var labelColor = r.highlight ? '#93c5fd' : '#e2e8f0';
+    var durColor = r.highlight ? '#ffffff' : '#f1f5f9';
     html += '<div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:' + bg + '; border:' + border + '; border-radius:8px; flex-wrap:wrap;">';
-    html += '<span style="font-size:0.78rem; font-weight:600; color:' + labelColor + '; min-width:110px;">' + r.label + '</span>';
-    html += '<span style="font-size:0.78rem; color:var(--text-muted); opacity:0.6;">' + r.matches + ' ' + _t('cat.matchesSuffix') + '</span>';
-    html += '<span style="font-size:0.85rem; font-weight:700; color:' + durColor + '; margin-left:auto;">' + r.duration + '</span>';
+    html += '<span style="font-size:0.78rem; font-weight:700; color:' + labelColor + '; min-width:110px;">' + r.label + '</span>';
+    html += '<span style="font-size:0.78rem; color:#aab4c5;">' + r.matches + ' ' + _t('cat.matchesSuffix') + '</span>';
+    html += '<span style="font-size:0.85rem; font-weight:800; color:' + durColor + '; margin-left:auto;">' + r.duration + '</span>';
     if (r.endTime) {
-      html += '<span style="font-size:0.72rem; color:#a5b4fc; opacity:0.8;">' + _t('cat.endTimePrefix') + r.endTime + '</span>';
+      html += '<span style="font-size:0.72rem; font-weight:600; color:#bcc6f9;">' + _t('cat.endTimePrefix') + r.endTime + '</span>';
     }
     html += '</div>';
   });
@@ -1086,7 +1095,7 @@ window.renderCategoryManagerPage = function(container, tId) {
             '<button class="btn btn-outline btn-sm hover-lift" style="display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:20px;font-size:0.8rem;" onclick="window._catManagerRender();"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Voltar</button>' +
             '</div>' +
             '<div style="padding:0 1.5rem 1.5rem;">' +
-            '<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">' + catParticipants.length + ' inscrito' + (catParticipants.length !== 1 ? 's' : '') + '</div>' +
+            '<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">' + (function(){ var _ppl = window._peopleInList ? window._peopleInList(catParticipants) : catParticipants.length; return _ppl + ' inscrito' + (_ppl !== 1 ? 's' : ''); })() + '</div>' +
             '<div style="display:flex;flex-direction:column;gap:8px;">' + pCardsHtml + '</div>' +
             '</div>' +
             '</div></div>';
@@ -1463,7 +1472,7 @@ function _attachCatManagerDragDrop(tId) {
         _touchClone.style.borderRadius = '12px';
         document.body.appendChild(_touchClone);
         target.style.opacity = '0.3';
-        if (navigator.vibrate) { try { navigator.vibrate(40); } catch (_v) {} }
+        if (window._haptic) window._haptic('medium');
     }
 
     function _onTouchStart(e) {

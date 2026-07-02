@@ -2,6 +2,43 @@
 (function() {
 var _t = window._t || function(k) { return k; };
 
+// v4.0.86 — FONTE ÚNICA dos flags RUNTIME de sorteio/jogo. Princípio do dono:
+// "resetar o status do torneio deveria resetar tudo menos os inscritos e duplas
+// formadas que não por sorteio". Estes campos são TODOS derivados de sorteio/jogo
+// (resolução escolhida em painel, estado de play, snapshots) — NUNCA config nem
+// inscrição. Confirmado por auditoria: nenhum é setado em create-tournament.js /
+// tournaments-enrollment.js (exceções de config como swissRounds/ligaRRSchedule-config
+// ficam de fora de propósito). Chamado por _clearTournamentDraw (reset) E pelo reabrir
+// inscrições (toggleRegistrationStatus) pra as duas listas NUNCA divergirem.
+// Ver memória project_draw_once_canonical_order.
+window._clearDrawRuntimeFlags = function (t) {
+  if (!t) return;
+  // CRÍTICO: saveTournament usa set({merge:true}) (firebase-db.js:285). `delete t[k]`
+  // vira `undefined` → _cleanUndefined o STRIPA → o merge PRESERVA o valor velho do
+  // banco (ex.: classifyFormat='swiss' fica grudado, o listener re-hidrata, e cai de
+  // novo no "Tudo Pronto"). Por isso atribuímos `null` (que _cleanUndefined MANTÉM):
+  // `set({classifyFormat:null},{merge:true})` SOBRESCREVE o 'swiss' por null no doc, e
+  // todos os consumidores comparam `=== 'swiss'`/truthy → null = limpo. Mesmo padrão
+  // que o resto de _clearTournamentDraw já usa (standings=null, rodadas=null…).
+  [
+    // resolução de potência de 2 / ímpar / falta-de-dupla (curto-circuitavam o painel)
+    'classifyFormat', 'p2Resolution', 'oddResolution', '_soloResolved',
+    'incompleteResolution', 'p2CrossSeed', 'p2TargetCount', 'gruposAdvanceTotal',
+    'hasRepechage', 'repechageConfig', 'standbyMode', 'standbyPick',
+    // suspensão de painel / estágio corrente
+    '_suspendedByPanel', '_previousStatus', 'currentStage', '_reopenIfDrawCancelled',
+    // Sorteio de Vagas + snapshots + flags internos do motor
+    'drawSelectionDone', 'waitlistOrder', 'preDrawEnrollees', 'pendingDraw',
+    '_drawBalanceMode', '_canonicalDraw', '_cleanupApplied', '_skipCatValidation',
+    // estado de PLAY derivado do sorteio (standings/eliminação/W.O./substituição)
+    'swissEliminated', 'swissRoundsData', 'swissStandings', 'classification',
+    'opponentHistory', 'woClaims', 'ligaSubInvites', 'ligaRRSchedule'
+    // NOTA: checkedIn/absent NÃO entram aqui — são mapas por-uid lidos com Object.keys
+    // sem guarda (participants.js:99/117) e _idMapSet vira no-op se o mapa for null
+    // (quebraria o próximo check-in). Não são o bug e nunca foram limpos no reset.
+  ].forEach(function (k) { t[k] = null; });
+};
+
 // v2.6.98 — limpa TODOS os artefatos de sorteio + estado do construtor de fases +
 // flags de encerramento, MANTENDO inscritos (t.participants/memberUids) e config
 // (t.phases, t.scoring, categorias, tiebreakers…). Base do re-sorteio e do reset.
@@ -61,10 +98,32 @@ window._clearTournamentDraw = function (t) {
   t.currentPhaseIndex = 0;
   t.currentStage = null;
   t._phaseMaterialized = 0;
+  // v4.3.1 — RESET COMPLETO (bug: "resetei mas voltou pra fase 2"). O storage das
+  // fases POSTERIORES (t.phaseRounds — rodadas de Liga incremental namespaced por fase)
+  // NÃO era limpo → _collectAllMatches ainda via os jogos da fase 2 → o torneio
+  // "voltava" pra fase 2. Limpa TODO o estado derivado do sorteio/fase.
+  // null (não {}) = merge-safe: set({merge:true}) SOBRESCREVE null, mas com {} as
+  // sub-chaves antigas (rodadas da fase 2) sobreviveriam. _collectAllMatches trata
+  // null como vazio. storePhase re-inicializa com {} quando precisar.
+  t.phaseRounds = null;
+  t.phaseLeagueState = null;
+  t._canonicalDraw = false;
+  try { delete t._phaseResInfo; } catch (e) { t._phaseResInfo = null; }
+  // PRESENÇA — "sem nenhuma presença marcada" (pedido do dono). O reset roda por
+  // commitTournamentTx (transaction.set SEM merge = overwrite total), então {} limpa.
+  t.checkedIn = {};
+  t.absent = {};
+  // W.O. — "sem nenhum wo". opponentHistory/woClaims/ligaSubInvites também são zerados
+  // (null, merge-safe) por _clearDrawRuntimeFlags logo abaixo; woHistory fica aqui.
+  t.woHistory = null;
   // v2.7.96: bracketResolution é decisão de RUNTIME (escolhida no painel de potência
   // de 2 ao avançar de fase), não config do construtor. Sem limpar, o re-avanço após
   // reset PULAVA o painel — "avancei e não veio a página de solução de potência de 2".
   if (Array.isArray(t.phases)) t.phases.forEach(function (ph) { if (ph && ph.bracketResolution != null) { try { delete ph.bracketResolution; } catch (e) { ph.bracketResolution = null; } } });
+  // v4.0.86: limpa TODOS os flags RUNTIME de sorteio/jogo (resolução de pow2/ímpar/
+  // falta-de-dupla, estado de play, snapshots). Sem isso, o re-sorteio curto-circuitava
+  // pro "Tudo Pronto" ("atingida via: swiss"), pulando sem-dupla e potência de 2.
+  window._clearDrawRuntimeFlags(t);
   // flags de encerramento / relógio
   if (t.status === 'finished') t.status = 'closed';
   t.finishedAt = null;
@@ -89,7 +148,8 @@ window._clearTournamentDraw = function (t) {
 window._resetTournamentToEnrollment = function (tId) {
   var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
   if (!t) return;
-  var n = (t.participants || []).length;
+  // CANÔNICO: PESSOAS (dupla=2), nunca entradas. Ver _countCompetitors / project_count_people_not_entries.
+  var n = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t).people : (t.participants || []).length;
   var _refresh = function () {
     var c = document.getElementById('view-container');
     if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
@@ -99,33 +159,27 @@ window._resetTournamentToEnrollment = function (tId) {
   showAlertDialog('🔄 Resetar para inscrições?',
     'Isto apaga TODO o sorteio, rodadas e fases e volta o torneio para "inscrições abertas". Os <strong>' + n + '</strong> inscritos são MANTIDOS.' + (_wasAuto ? ' O sorteio automático <strong>continua ligado</strong>; como a data programada já passou, ele é <strong>reagendado pra amanhã</strong> (ajuste no Editar) — ou use <strong>Sortear (manual)</strong> agora.' : '') + ' Não dá pra desfazer.',
     function () {
-      window._clearTournamentDraw(t);
-      t.status = 'open';
-      // v2.8.4: o reset MANTÉM o torneio como auto-draw (drawManual continua false → o
-      // botão segue "Sortear (manual)", a identidade de auto é preservada). Mas se a data
-      // programada já PASSOU, o auto re-sortearia na hora ("resetei e o tempo continua");
-      // então reagenda pro dia seguinte (mesmo horário) — futuro = não dispara agora.
-      // (v2.8.2 setava drawManual=true e virava "manual", o que estava errado.)
-      if (_wasAuto) {
-        try {
-          var _dfMs = new Date(t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')).getTime();
-          if (isNaN(_dfMs) || _dfMs <= Date.now()) {
-            var _d = new Date(); _d.setDate(_d.getDate() + 1);
-            t.drawFirstDate = _d.getFullYear() + '-' + ('0' + (_d.getMonth() + 1)).slice(-2) + '-' + ('0' + _d.getDate()).slice(-2);
-          }
-        } catch (e) {}
-      }
-      t.updatedAt = new Date().toISOString();
       var done = function () {
         if (typeof showNotification === 'function') showNotification('Torneio resetado', 'Voltou para inscrições abertas — ' + n + ' inscritos mantidos.' + (_wasAuto ? ' Sorteio automático reagendado pra amanhã.' : ''), 'success');
         _refresh();
       };
-      if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t).then(done).catch(function (err) { window._error && window._error('[resetToEnrollment] save error:', err); done(); });
-      } else {
-        try { window.AppStore.sync(); } catch (e) {}
-        done();
-      }
+      // Blindagem v4.0.119: reset ATÔMICO pelo portão AppStore.mutate. _clearTournamentDraw
+      // já é uma mutação PURA (muta o t passado, sem save) → aplica no doc fresco.
+      window.AppStore.mutate(tId, function (ft) {
+        window._clearTournamentDraw(ft);
+        ft.status = 'open';
+        // v2.8.4: mantém como auto-draw (drawManual continua false); se a data programada
+        // já passou, reagenda pro dia seguinte (futuro = não dispara agora).
+        if (_wasAuto) {
+          try {
+            var _dfMs = new Date(ft.drawFirstDate + 'T' + (ft.drawFirstTime || '19:00')).getTime();
+            if (isNaN(_dfMs) || _dfMs <= Date.now()) {
+              var _d = new Date(); _d.setDate(_d.getDate() + 1);
+              ft.drawFirstDate = _d.getFullYear() + '-' + ('0' + (_d.getMonth() + 1)).slice(-2) + '-' + ('0' + _d.getDate()).slice(-2);
+            }
+          } catch (e) {}
+        }
+      }).then(done).catch(function (err) { window._error && window._error('[resetToEnrollment] save error:', err); done(); });
     },
     { type: 'danger', confirmText: 'Sim, resetar', cancelText: 'Cancelar' }
   );
@@ -155,8 +209,11 @@ window._devSimulateCurrentPhase = function (tId) {
 
   var _run = function () {
     var now = Date.now();
-    // janela realista: início programado da rodada atual → agora
-    var startMs = now - 3 * 3600 * 1000;
+    // SIMULAR = "acabou de jogar agora" — janela CURTA (~1min/jogo, teto ~15min), NÃO 3h atrás.
+    // Antes era `now - 3h` fixo → a barra mostrava "início 3h atrás / 3h de duração" mesmo o
+    // usuário tendo simulado agorinha (parecia erro de fuso porque 3h = UTC-3). Liga com data
+    // programada ainda usa a data real (abaixo). Pedido do dono.
+    var startMs = now - Math.min(15 * 60000, Math.max(1, todo.length) * 60000);
     try {
       var ri = (Array.isArray(t.rounds) && t.rounds.length) ? t.rounds.length - 1 : 0;
       var fdStr = String(t.drawFirstDate || '').indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate ? (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')) : '');
@@ -192,6 +249,22 @@ window._devSimulateCurrentPhase = function (tId) {
         }
       });
     }
+    // Simular resultado É JOGAR: marca PRESENÇA dos jogadores (igual ao lançamento real, que
+    // passa por _applyResultToTournament) e registra o INÍCIO. Sem isso, a seção "prontos para
+    // chamar" (exige presença) e a barra (exige início) ficavam vazias após simular. (dono)
+    if (!t.checkedIn) t.checkedIn = {};
+    if (!t.absent) t.absent = {};
+    todo.forEach(function (m) {
+      [m.p1, m.p2].forEach(function (side) {
+        if (!side || side === 'TBD' || side === 'BYE') return;
+        var _nm = side.indexOf(' / ') !== -1 ? side.split(' / ').map(function (n) { return n.trim(); }).filter(Boolean) : [side];
+        _nm.forEach(function (nm) {
+          if (window._idMapHas && !window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, m.resultAt || now);
+          if (window._idMapDel) window._idMapDel(t, t.absent, nm);
+        });
+      });
+    });
+    if (!t.tournamentStarted) t.tournamentStarted = startMs;
     // avança vencedores em chaves eliminatórias (não-rodada, não-grupo)
     if (typeof window._advanceWinner === 'function') {
       todo.forEach(function (m) {
@@ -383,7 +456,14 @@ window._createExtraGamesFromWaitlist = function(t) {
     var _ci = t.checkedIn || {}, _ab = t.absent || {};
     pool = pool.filter(function(p){ return window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p); });
   }
-  if (pool.length < 4) return 0;
+  // v4.1.37: respeitar o teamSize. Torneio de DUPLAS (teamSize>1 ou modo time/misto)
+  // agrupa 4 solos tardios → 2 duplas formadas → 1 jogo. Torneio INDIVIDUAL (teamSize
+  // 1) pareia 2 solos tardios → 1 jogo solo-vs-solo (NUNCA formar dupla numa chave
+  // individual — decisão do dono 1-jul). O mínimo do pool muda: 4 (duplas) vs 2 (indiv).
+  var _teamSize = parseInt(t.teamSize) || 1;
+  var _isTeams = _teamSize > 1 || t.enrollmentMode === 'time' || t.enrollmentMode === 'misto';
+  var _minPool = _isTeams ? 4 : 2;
+  if (pool.length < _minPool) return 0;
   // v3.1.22: sorteia a ordem do pareamento dos entrantes (os jogos já criados ficam
   // inalterados). _plainShuffle é global (bracket-logic.js); fallback inline.
   if (typeof window._plainShuffle === 'function') { pool = window._plainShuffle(pool); }
@@ -393,29 +473,46 @@ window._createExtraGamesFromWaitlist = function(t) {
   if (!t.teamOrigins) t.teamOrigins = {};
   var ts = Date.now();
   var created = 0;
-  while (pool.length >= 4) {
-    var four = pool.splice(0, 4);
-    var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
-    var teams = (formed.participants || []).filter(function(x){ return x && (x.displayName || x.name || '').indexOf(' / ') !== -1; });
-    if (teams.length < 2) break;
-    var t1 = teams[0], t2 = teams[1];
-    var n1 = t1.displayName || t1.name, n2 = t2.displayName || t2.name;
-    // tardios viram INSCRITOS (duplas) — para aparecer na lista, marcar presença/W.O.
-    [t1, t2].forEach(function(tm){
-      var nm = tm.displayName || tm.name;
-      var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
-      if (!exists) t.participants.push(tm);
-      t.teamOrigins[nm] = 'formada';
-    });
-    // remove os 4 da espera
-    var used = four.map(_name);
-    var rm = function(arr){ return Array.isArray(arr) ? arr.filter(function(p){ return used.indexOf(_name(p)) === -1; }) : arr; };
-    t.standbyParticipants = rm(t.standbyParticipants);
-    t.waitlist = rm(t.waitlist);
+  var _rm = function(used, arr){ return Array.isArray(arr) ? arr.filter(function(p){ return used.indexOf(_name(p)) === -1; }) : arr; };
+  while (pool.length >= _minPool) {
+    var n1, n2, used;
+    if (_isTeams) {
+      var four = pool.splice(0, 4);
+      var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
+      var teams = (formed.participants || []).filter(function(x){ return x && (x.displayName || x.name || '').indexOf(' / ') !== -1; });
+      if (teams.length < 2) break;
+      var t1 = teams[0], t2 = teams[1];
+      n1 = t1.displayName || t1.name; n2 = t2.displayName || t2.name;
+      // tardios viram INSCRITOS (duplas) — para aparecer na lista, marcar presença/W.O.
+      [t1, t2].forEach(function(tm){
+        var nm = tm.displayName || tm.name;
+        var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
+        if (!exists) t.participants.push(tm);
+        t.teamOrigins[nm] = 'formada';
+      });
+      used = four.map(_name);
+    } else {
+      // INDIVIDUAL: 2 solos tardios → 1 jogo solo-vs-solo (sem formar dupla).
+      var two = pool.splice(0, 2);
+      var s1 = two[0], s2 = two[1];
+      n1 = _name(s1); n2 = _name(s2);
+      [s1, s2].forEach(function(sp){
+        var nm = _name(sp);
+        var exists = t.participants.some(function(p){ var n = (typeof p === 'string') ? p : (p.displayName || p.name || ''); return n === nm; });
+        if (!exists) t.participants.push(sp);
+      });
+      used = two.map(_name);
+    }
+    t.standbyParticipants = _rm(used, t.standbyParticipants);
+    t.waitlist = _rm(used, t.waitlist);
     // novo JOGO da rodada 1 (cor roxa via isExtra) — mesma apresentação dos demais
     t.matches.push({
       id: 'xr1-' + t.id + '-' + ts + '-' + created,
       round: 1, p1: n1, p2: n2, winner: null, isExtra: true,
+      // v4.1.36: carimbar fase+chave — o renderer canônico (_renderPhaseBracket →
+      // colsFor) filtra por m.bracket==='main' E o numerador global por phaseIndex.
+      // Sem isso, jogos tardios ficam invisíveis (sem card, sem "Jogo N").
+      phaseIndex: (t.currentPhaseIndex || 0), bracket: 'main',
       createdAt: new Date().toISOString()
     });
     if (window.AppStore && typeof window.AppStore.logAction === 'function') {
@@ -506,6 +603,16 @@ window._rebuildIntegratedBracket = function(t) {
   // se a R1 inteira já está decidida e há repescagem, preenche os melhores derrotados
   var allR1Done = r1.every(function(m){ return !!m.winner; });
   if (allR1Done && repechage > 0 && typeof _assignRepechageLosers === 'function') _assignRepechageLosers(t);
+  // v4.1.36: carimbar TODA a chave reconstruída com fase+chave. O renderer canônico
+  // (_renderPhaseBracket → colsFor) só pega matches com m.bracket==='main' e o
+  // numerador global só numera os da fase atual — os R2/R3 recriados aqui (e a R1
+  // extra preservada) nasciam sem esses campos → sumiam do render (só 2 de N cards).
+  var _cpi = (t.currentPhaseIndex || 0);
+  (t.matches || []).forEach(function(m){
+    if (!m) return;
+    if (m.phaseIndex == null) m.phaseIndex = _cpi;
+    if (m.bracket == null) m.bracket = 'main';
+  });
   if (typeof _maybeFinishElimination === 'function') _maybeFinishElimination(t);
   return true;
 };
@@ -724,7 +831,7 @@ window.showFinalReviewPanel = function (tId) {
 
             <!-- Sticky footer (always visible) -->
             <div style="padding:0.85rem 1.25rem;border-top:1px solid rgba(255,255,255,0.08);background:var(--bg-card,#1e293b);display:flex;flex-direction:column;gap:8px;flex-shrink:0;">
-                <button onclick="window.generateDrawFunction('${tIdSafe}')" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:white;border:none;padding:13px;border-radius:14px;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:0 8px 24px rgba(34,197,94,0.3);display:flex;align-items:center;justify-content:center;gap:8px;">
+                <button onclick="window._drawBtnBusy&&window._drawBtnBusy(this); window.generateDrawFunction('${tIdSafe}')" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:white;border:none;padding:13px;border-radius:14px;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:0 8px 24px rgba(34,197,94,0.3);display:flex;align-items:center;justify-content:center;gap:8px;">
                     <span>🎲</span> ${_t('tdraw.rollDrawNow')}
                 </button>
                 <button onclick="document.getElementById('final-review-panel').remove();document.body.style.overflow='';" style="background:rgba(255,255,255,0.05);color:#94a3b8;border:none;padding:10px;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;">
@@ -744,21 +851,72 @@ window.showFinalReviewPanel = function (tId) {
 window._confirmManualAutoDraw = function (tId) {
     var t = window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === tId.toString(); });
     if (!t) return;
-    // v2.8.3: multi-fase com a fase atual COMPLETA → "Sortear" AVANÇA pra próxima fase
-    // (abre o painel de potência de 2), NÃO re-sorteia a fase atual. Antes, generateDraw
-    // re-rodava o sorteio inicial e RESETAVA a fase 0 ("cliquei em sortear/próxima e ele
-    // resetou e refez o sorteio em vez de ir pra solução de potência de 2").
-    if (window._isMultiPhase && window._isMultiPhase(t) && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && ((t.currentPhaseIndex || 0) + 1) < ((t.phases || []).length)) {
-        if (typeof window._advanceMultiPhase === 'function') { window._advanceMultiPhase(tId); return; }
+    var _hasDraw = (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+        (Array.isArray(t.matches) && t.matches.length > 0) ||
+        (Array.isArray(t.groups) && t.groups.length > 0);
+    // SEM sorteio ainda → é o SORTEIO INICIAL (não "rodada extra").
+    if (!_hasDraw) {
+        if (typeof showConfirmDialog !== 'function') { window.generateDrawFunction(tId); return; }
+        showConfirmDialog('🎲 Sortear agora?', 'Fazer o sorteio inicial <b>manualmente</b> agora?', function () { if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId); }, null, { type: 'warning', confirmText: 'Sortear agora', cancelText: 'Cancelar' });
+        return;
     }
-    if (typeof showConfirmDialog !== 'function') { window.generateDrawFunction(tId); return; }
+    // v4.1.79: "Rodada Extra" NÃO avança de fase (quem avança é "Avançar de Fase" →
+    // _advanceMultiPhase) e NÃO re-sorteia (generateDrawFunction re-sortearia). Gera mais
+    // UMA rodada na FASE ATUAL via _generateExtraRound (a fase passa de N pra N+1 rodadas).
+    if (typeof showConfirmDialog !== 'function') { window._generateExtraRound(tId); return; }
+    var _isMP = window._isMultiPhase && window._isMultiPhase(t);
+    var _msg = _isMP
+        ? 'Isto gera <b>mais uma rodada</b> (rodada extra) na <b>fase atual</b> — no mesmo formato das outras rodadas dela. A próxima fase <b>fica adiada</b>: você precisa terminar esta rodada nova pra os resultados contarem na classificação. Confirmar?'
+        : 'Isto gera <b>mais uma rodada</b> no mesmo formato das anteriores. Confirmar?';
     showConfirmDialog(
-        '🎲 Sortear manualmente?',
-        'Este torneio está configurado para <b>sorteio automático</b>. Você quer fazer o sorteio <b>agora, manualmente</b>?<br><br>O sorteio automático continua valendo para as próximas rodadas.',
-        function () { if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId); },
+        '🎲 Gerar rodada extra?',
+        _msg,
+        function () { window._generateExtraRound(tId); },
         null,
-        { type: 'warning', confirmText: 'Sortear agora', cancelText: 'Cancelar' }
+        { type: 'warning', confirmText: 'Gerar rodada extra', cancelText: 'Cancelar' }
     );
+};
+
+// Gera UMA rodada extra na FASE ATUAL (Liga/Suíço/Rei-Rainha incremental) via o motor
+// canônico _generateNextRound (mesmo do fecho de rodada e do autoDraw) + persiste + navega.
+// Guarda: torneio no modelo ANTIGO (fase Rei/Rainha de rodada única em t.matches, t.rounds
+// vazio) NÃO pode ganhar rodada extra sem re-sortear — gerar em t.rounds criaria um storage
+// paralelo invisível. Nesse caso avisa pra re-sortear (o sorteio novo nasce league/multi-rodada).
+window._generateExtraRound = function (tId) {
+    var t = window._findTournamentById ? window._findTournamentById(tId) : (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
+    if (!t) return;
+    if (typeof window._generateNextRound !== 'function') { if (typeof showNotification === 'function') showNotification('Indisponível', 'Motor de rodadas não carregado.', 'warning'); return; }
+    var _cur = t.currentPhaseIndex || 0;
+    var _phaseMonarchInMatches = (t.rounds || []).length === 0 &&
+        (t.matches || []).some(function (m) { return m && m.isMonarch && (m.phaseIndex || 0) === _cur; });
+    if (_phaseMonarchInMatches) {
+        if (typeof showAlertDialog === 'function') showAlertDialog('Re-sorteie pra habilitar rodadas extras',
+            'Esta fase foi sorteada no modelo antigo (rodada única). Pra ter rodadas extras, <b>re-sorteie o torneio</b> — o novo sorteio nasce em Pontos Corridos multi-rodada e aí "Rodada Extra" funciona.', null, { type: 'warning' });
+        if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+        return;
+    }
+    var _before = (t.rounds || []).length;
+    try { window._generateNextRound(t); }
+    catch (e) { if (window._warn) window._warn('[extra-round] falhou', e); }
+    var _after = (t.rounds || []).length;
+    if (_after <= _before) {
+        if (typeof showNotification === 'function') showNotification('Rodada extra', 'Não foi possível gerar uma rodada extra pra esta fase.', 'warning');
+        if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+        return;
+    }
+    t.status = 'active';
+    var _newRound = t.rounds[_after - 1];
+    var _cnt = ((_newRound && _newRound.matches) || []).filter(function (m) { return !m.isSitOut; }).length;
+    window.AppStore.logAction(tId, 'Rodada extra ' + _after + ' gerada manualmente (' + _cnt + ' jogo(s))');
+    var _p = (window.AppStore && typeof window.AppStore.syncImmediate === 'function') ? window.AppStore.syncImmediate(tId) : null;
+    var _go = function () {
+        window.location.hash = '#bracket/' + tId;
+        setTimeout(function () {
+            if (typeof showNotification === 'function') showNotification('Rodada extra gerada', 'Rodada ' + _after + ' com ' + _cnt + ' jogo(s).', 'success');
+            if (typeof window._notifyDrawPersonalized === 'function') { try { window._notifyDrawPersonalized(t, tId, { type: 'new_round', roundIndex: _after - 1 }); } catch (e) {} }
+        }, 140);
+    };
+    if (_p && typeof _p.then === 'function') _p.then(_go); else _go();
 };
 
 // Monta a cfg da fase 0 (índice 0) a partir do torneio — a inscrição é a ENTRADA da
@@ -787,7 +945,10 @@ window._buildPhase0Cfg = function (t) {
         // só quando o organizador liga o toggle (gruposSeedVip → espalha pelos grupos).
         seedVip: (code === 'elim_simples' || code === 'elim_dupla') ? true : !!t.gruposSeedVip,
         seedCategory: !!t.gruposSeedCategory,
-        bracketResolution: t.p2Resolution || 'bye',
+        // BYE não fecha chave em Dupla Eliminatória fora de pow2 → coage p/ repescagem (playin).
+        // Inofensivo em pow2 (o dupla ignora a resolução lá). Rede de segurança p/ config legada
+        // salva como 'bye'. feedback_resolution_one_logic.
+        bracketResolution: ((t.p2Resolution || 'bye') === 'bye' && code === 'elim_dupla') ? 'playin' : (t.p2Resolution || 'bye'),
         thirdPlace: t.thirdPlace !== false,
         categories: (Array.isArray(t.combinedCategories) && t.combinedCategories.length) ? t.combinedCategories.slice() : null,
         source: { type: 'enrollment' }
@@ -796,9 +957,78 @@ window._buildPhase0Cfg = function (t) {
     return cfg;
 };
 
+// BLINDAGEM (Fase B) do SORTEIO INICIAL — project_concurrency_safe_saves.
+// A chave é gerada UMA vez local (com shuffle aleatório) → re-gerar no fresco daria
+// OUTRA chave. Então: diff top-level do `t` sorteado contra o snapshot `preDraw`
+// (pré-sorteio) → capturamos EXATAMENTE os campos que o sorteio mudou/deletou, e o
+// commitDrawTx re-aplica esse delta ATOMICAMENTE sobre o doc fresco (preservando
+// edições concorrentes aos demais campos, com guarda de duplo-sorteio). `history` e
+// `updatedAt` ficam FORA do diff: history é anexado (append preserva entradas
+// concorrentes), updatedAt é setado pelo commit. Auto-mantido: acompanha qualquer
+// campo novo que o sorteio venha a tocar, sem lista à mão.
+function _commitInitialDraw(tId, t, preDraw) {
+    // Sorteio COMPLETOU → não reabrir mais (config "Fechadas" fica fechada). Limpa a
+    // flag ANTES do diff pra ela não persistir no doc como `true` pendente.
+    if (t && t._reopenIfDrawCancelled) t._reopenIfDrawCancelled = null;
+    if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); // encerra o "Sorteando…" (caso não navegue, ex.: Liga)
+    var changed = {}, deleted = [], k, a, b;
+    for (k in t) {
+        if (!Object.prototype.hasOwnProperty.call(t, k)) continue;
+        if (k === 'history' || k === 'updatedAt') continue;
+        try { a = JSON.stringify(t[k]); } catch (e) { a = null; }
+        try { b = JSON.stringify(preDraw[k]); } catch (e2) { b = undefined; }
+        if (a !== b) { try { changed[k] = JSON.parse(a); } catch (e3) { changed[k] = t[k]; } }
+    }
+    for (k in preDraw) {
+        if (!Object.prototype.hasOwnProperty.call(preDraw, k)) continue;
+        if (!(k in t)) deleted.push(k);
+    }
+    var _preHistLen = Array.isArray(preDraw.history) ? preDraw.history.length : 0;
+    var _newHistory = Array.isArray(t.history) ? t.history.slice(_preHistLen) : [];
+    var _p = window.AppStore.commitDrawTx(tId, changed, deleted, {
+        preHadBracket: (Array.isArray(preDraw.matches) && preDraw.matches.length > 0) ||
+                       (Array.isArray(preDraw.rounds) && preDraw.rounds.length > 0),
+        newHistory: _newHistory
+    });
+    // 4.1 (project_match_result_docs, inc 3a): semeia os docs de resultado por jogo
+    // com playerUids — o SORTEIO roda como organizador (admin) = caminho de confiança
+    // que seta o roster. Best-effort/fire-and-forget: não bloqueia a navegação e uma
+    // falha aqui não afeta o sorteio (já persistido). Defensivo a stub não-promise.
+    var _seed = function () { try { if (window.AppStore && typeof window.AppStore.seedMatchResultDocs === 'function') window.AppStore.seedMatchResultDocs(tId); } catch (e) {} };
+    // fire-and-forget: seed roda APÓS o sorteio persistir, mas retorna-se o `_p`
+    // ORIGINAL (o caller encadeia a navegação nele) — não consome/quebra a cadeia.
+    if (_p && typeof _p.then === 'function') { try { _p.then(_seed); } catch (e) { _seed(); } }
+    else { _seed(); }
+    return _p;
+}
+
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
+
+    // v4.1.34 (decisão do dono): Liga (Pontos Corridos) e Rei/Rainha são formatos de
+    // PARCEIROS ROTATIVOS — inscrição INDIVIDUAL. Com DUPLAS JÁ FORMADAS o rotativo juntaria
+    // 2 duplas num "time de 4" (errado). "Duplas fixas jogando entre si é Fase de Grupos —
+    // então não tem Rei/Rainha (nem Liga) com duplas formadas." Bloqueia direcionando pra
+    // Fase de Grupos. (O Suíço de duplas NÃO cai aqui: é construtor com t.format=elim +
+    // classifyFormat='swiss', pareamento dupla-vs-dupla FIXO — _isLigaFormat=false.)
+    // Rei/Rainha (modo) é EXCEÇÃO ao bloqueio: o pool-prep DECOMPÕE entradas-time nos
+    // membros individuais (parceiro rotativo — fix Confra, ver _isMon0 abaixo). O bloqueio
+    // vale só pra Liga PADRÃO, onde dupla formada viraria "time de 4" no pareamento.
+    if (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t) &&
+        !(typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t))) {
+        var _hasFormedPair = (Array.isArray(t.participants) ? t.participants : []).some(function (p) {
+            return p && typeof p === 'object' && p.p1Name && p.p2Name;
+        });
+        if (_hasFormedPair) {
+            if (typeof showAlertDialog === 'function') showAlertDialog(
+                'Formato incompatível com duplas formadas',
+                'Liga (Pontos Corridos) e Rei/Rainha usam parceiros ROTATIVOS — inscrição individual. Para DUPLAS FIXAS jogando entre si, use o formato "Fase de Grupos".',
+                null, { type: 'warning' });
+            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            return;
+        }
+    }
 
     // ── Proteção contra re-sorteio acidental ────────────────────────
     var _hasExistingDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
@@ -850,6 +1080,10 @@ window.generateDrawFunction = function (tId) {
         return;
     }
 
+    // v4.0.97: "Sorteando…" enquanto a chave é gerada (parte lenta: save + geração +
+    // render). Some sozinho quando navega pro #bracket (hashchange) — ver _showLoading.
+    // Só aqui (após os guards de re-sorteio) pra não piscar quando há diálogo/painel antes.
+    if (typeof window._showLoading === 'function') window._showLoading('Sorteando…');
     // Store active tournament ID for views that need it
     window._lastActiveTournamentId = tId;
 
@@ -928,6 +1162,21 @@ window.generateDrawFunction = function (tId) {
         t.drawVisibility = 'public';
     }
 
+    // BLINDAGEM: snapshot do estado PRÉ-sorteio (aqui `t` ainda não tem chave — passamos
+    // todos os gates de validação/re-sorteio acima). Os 3 saves de sorteio abaixo trocam
+    // syncImmediate (merge doc inteiro, lost-update) por _commitInitialDraw (delta atômico
+    // sobre o fresco). Um snapshot só serve os 3 ramos. project_concurrency_safe_saves.
+    var _preDraw;
+    try { _preDraw = JSON.parse(JSON.stringify(t)); } catch (_e) { _preDraw = {}; }
+
+    // v4.1.30: o SORTEIO LIMPA a presença — "acabou de sortear, ninguém está presente"
+    // (dono). A partir daqui presença vem SÓ de: (a) lançar resultado = quem jogou está
+    // presente; (b) check-in explícito (toggle / "Cheguei"). As rodadas seguintes do Suíço
+    // (_generateNextRound) NÃO passam por aqui → a presença acumulada persiste entre rodadas.
+    // _preDraw já foi snapshotado com a presença antiga → o diff do _commitInitialDraw grava
+    // o {} limpo. Cobre 1º sorteio E re-sorteio (que arrastava presença de resultados velhos).
+    t.checkedIn = {}; t.absent = {};
+
     // ── MOTOR CANÔNICO: a primeira fase (índice 0) é desenhada pelo MESMO generatePhase das
     // fases seguintes. A INSCRIÇÃO é a entrada da fase. SEM switch por t.format: o FORMATO
     // (Eliminatória/Grupos/Liga), o MODO (Rei/Rainha) e os eixos (categoria, VIP, dupla,
@@ -937,13 +1186,25 @@ window.generateDrawFunction = function (tId) {
     // prevPhaseGroups). Só Play-in e Suíço-classificatório (escolhas de p2Resolution, NÃO
     // formatos) seguem nas suas resoluções abaixo.
     // (contrato project_unify_initial_phase_canonical — fim do caminho não-canônico da fase 0.)
-    if (t.p2Resolution !== 'swiss' && t.p2Resolution !== 'playin') {
+    // CANONIZAÇÃO (Fase A): play-in agora roda pelo MOTOR (`_buildPhase0Cfg` passa
+    // bracketResolution='playin' → generatePhase → genTierBracket resolution='playin',
+    // com isPhaseRepR1 + _resolveRepFills no _advanceWinner). Só 'swiss' segue no ramo
+    // próprio (round-gen incremental = vendor/cron, canonizado por último).
+    if (t.p2Resolution !== 'swiss') {
         var _E0 = window._phasesEngine;
         var _cfg0 = window._buildPhase0Cfg(t);
+        // Rei/Rainha é MODO INDIVIDUAL (parceiros ROTATIVOS), nunca duplas fixas — o pool é
+        // de PESSOAS. Sem esta trava, uma fase Rei/Rainha num torneio de dupla (teamSize>1
+        // ou inscrição misto/time) formava duplas e o gerador juntava 2 duplas num "time de
+        // 4" (bug reportado — Confra). Detecta pela cfg da fase 0 (mesma fonte do gerador) +
+        // _isMonarchFormat como rede. Ver project_rei_rainha_is_drawmode_not_format.
+        var _isMon0 = !!(_cfg0 && (_cfg0.reiRainha === true || _cfg0.drawMode === 'rei_rainha'))
+            || !!(window._isMonarchFormat && window._isMonarchFormat(t));
         // Formação de duplas (eixo da inscrição) quando teamSize > 1 — pool-prep, não chave.
-        var _ts0 = parseInt(t.teamSize, 10) || 1;
+        // NUNCA em Rei/Rainha (força individual).
+        var _ts0 = _isMon0 ? 1 : (parseInt(t.teamSize, 10) || 1);
         var _enr0 = t.enrollmentMode || t.enrollment || 'individual';
-        if ((_enr0 === 'time' || _enr0 === 'misto') && _ts0 < 2) _ts0 = 2;
+        if (!_isMon0 && (_enr0 === 'time' || _enr0 === 'misto') && _ts0 < 2) _ts0 = 2;
         if (_ts0 > 1) {
             if (!t.teamOrigins) t.teamOrigins = {};
             var _f0 = _formDoublesTeams(Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}), _ts0, t.teamOrigins, t._drawBalanceMode);
@@ -959,9 +1220,32 @@ window.generateDrawFunction = function (tId) {
         // taggeado, ou t.rounds/t.standings nativo no caso da Liga/Suíço).
         t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
         t.currentPhaseIndex = 0; delete t._phaseMaterialized;
-        var _pool0 = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}))
-            .filter(function (p) { return _ts0 <= 1 || !!window._entryTeamMembers(p) || (typeof p === 'object' && !p.p1Name && !Array.isArray(p.participants)); })
-            .map(function (p) { var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || '')); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
+        var _rawParts0 = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}));
+        var _pool0;
+        if (_isMon0) {
+            // Rei/Rainha: DECOMPÕE qualquer entrada-time (casais/misto pré-formados) nos seus
+            // membros individuais — o parceiro rotaciona, então cada PESSOA é uma entrada do
+            // pool. Cada uma carrega uid pra resolução de nome AO VIVO pelo perfil.
+            _pool0 = [];
+            _rawParts0.forEach(function (p) {
+                if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
+                    p.participants.forEach(function (s) {
+                        var nm = (s && (s.displayName || s.name)) || String(s || '');
+                        _pool0.push((s && typeof s === 'object') ? Object.assign({ displayName: nm }, s) : { displayName: nm });
+                    });
+                } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+                    _pool0.push({ displayName: p.p1Name || p.p1Uid || '', uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || p.gender });
+                    _pool0.push({ displayName: p.p2Name || p.p2Uid || '', uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || p.gender });
+                } else {
+                    var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || ''));
+                    _pool0.push((typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm });
+                }
+            });
+        } else {
+            _pool0 = _rawParts0
+                .filter(function (p) { return _ts0 <= 1 || !!window._entryTeamMembers(p) || (typeof p === 'object' && !p.p1Name && !Array.isArray(p.participants)); })
+                .map(function (p) { var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || '')); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
+        }
         var _built0 = _E0.generatePhase(_pool0, _cfg0, {
             t: t, idPrefix: 'p0-' + Date.now(),
             isVip: function (e) { return window._entryHasVip(t, e); },
@@ -976,12 +1260,15 @@ window.generateDrawFunction = function (tId) {
             var _lso = (t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return m.isSitOut; }).length;
             window.AppStore.logAction(tId, `Sorteio Realizado — ${t.format}: Rodada 1 gerada com ${_lrc} partida(s)` + (_lso ? ` e ${_lso} folga(s)` : '') + ' [motor canônico]');
             if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
-            showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: _lrc }), 'success');
-            if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
             window._lastActiveTournamentId = tId;
-            window.AppStore.syncImmediate(tId).then(function () {
+            // "Sorteando…" fica até persistir + navegar; toast só depois da chave na tela (pedido do dono).
+            _commitInitialDraw(tId, t, _preDraw).then(function () {
                 if (typeof _notifyLigaRoundWhatsApp === 'function') _notifyLigaRoundWhatsApp(t, 0);
                 window.location.hash = '#bracket/' + tId;
+                setTimeout(function () {
+                    showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: _lrc }), 'success');
+                    if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
+                }, 140);
             });
             return;
         }
@@ -995,13 +1282,29 @@ window.generateDrawFunction = function (tId) {
             window._buildDoubleElimBracket(t);
             (t.matches || []).forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
         }
+        // Dupla Eliminatória fora de pow2 c/ repescagem (não elimina na 1ª): monta upper de T
+        // + chave inferior com TODOS os derrotados + grande final. Ver project_dupla_elim_repechage.
+        if (_built0.needsRepechageDoubleElim && typeof window._buildRepechageDoubleElim === 'function') {
+            var _metas0 = (_built0.repMetaByCat && _built0.repMetaByCat.length) ? _built0.repMetaByCat : [_built0.repMeta];
+            _metas0.forEach(function (mm) { window._buildRepechageDoubleElim(t, mm); });
+            (t.matches || []).forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
+        }
         t._canonicalDraw = true; t.status = 'active';
         window.AppStore.logAction(tId, 'Sorteio Realizado — ' + t.format + ' (motor canônico)');
         if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
-        showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
-        if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
         window._lastActiveTournamentId = tId;
-        window.AppStore.syncImmediate(tId).then(function () { window.location.hash = '#bracket/' + tId; });
+        // "Sorteando…" fica na tela até o SORTEIO ESTAR PERSISTIDO E A CHAVE NAVEGADA. Só então
+        // o toast + a navegação (o _showLoading some no hashchange do #bracket). Antes o toast
+        // disparava ANTES do commit → "sorteio realizado" aparecia antes da chave. (pedido do dono)
+        _commitInitialDraw(tId, t, _preDraw).then(function () {
+            window.location.hash = '#bracket/' + tId;
+            // toast só DEPOIS do hashchange render a chave e o _showLoading sumir (hashchange é
+            // assíncrono; sem o delay o toast nasce sob o loader z-index 100050).
+            setTimeout(function () {
+                showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
+                if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
+            }, 140);
+        });
         return;
     }
 
@@ -1048,49 +1351,67 @@ window.generateDrawFunction = function (tId) {
 
     // 1. Shuffling agora é feito por categoria dentro do loop de geração de matches
 
-    // 2. Handle Swiss/Classificatória — classification phase before elimination
+    // 2. Suíço para pow2 = CONSTRUTOR DE FASES CANÔNICO (project_gold_silver_format).
+    // Escolher "Suíço" como resolução NÃO usa mais um estágio swiss ad-hoc (o antigo
+    // currentStage:'swiss'/p2Resolution:'swiss' + transição swiss→elim fora do motor —
+    // ELIMINADO). Em vez disso, monta 2 FASES: fase 0 = Suíço classificatória, fase 1 =
+    // a eliminatória original (puxando o top-N=pow2 inferior da classificação). O motor
+    // multifase resolve tudo (progresso, conclusão, avanço via "Avançar", geração das
+    // quartas). A geração da rodada Suíço (_generateNextRound) é a MESMA — o pareamento
+    // Suíço segue por classifyFormat:'swiss' (config do Suíço, NÃO é legado). O que some é
+    // só o gatilho da transição legada (isSwissClassification = p2Resolution && currentStage).
     if (t.p2Resolution === 'swiss') {
-        // v4.0.76: nome de EXIBIÇÃO canônico (_entryDisplayName) — dupla pré-formada vira a
-        // label "p1 / p2" (derivada da estrutura), mas a IDENTIDADE é uid. Fonte única do nome.
         var _swissNames = participants.map(function(p) {
             return (typeof window._entryDisplayName === 'function')
                 ? window._entryDisplayName(p)
                 : (typeof p === 'string' ? p : (p.displayName || p.name || ''));
         });
-        // Shuffle
         for (var _si = _swissNames.length - 1; _si > 0; _si--) {
             var _sj = Math.floor(Math.random() * (_si + 1));
             var _stmp = _swissNames[_si]; _swissNames[_si] = _swissNames[_sj]; _swissNames[_sj] = _stmp;
         }
-        // Initialize standings
+        var _swCount = _swissNames.length;
+        var _swLo = 1;
+        while (_swLo * 2 <= _swCount) _swLo *= 2;          // pow2 inferior = nº de classificados
+        var _swRounds = (t.swissRounds && t.swissRounds >= 1) ? t.swissRounds : Math.max(2, Math.ceil(Math.log2(_swCount)));
+
+        // A eliminatória original (t.format) vira a FASE 1. Duplas pré-formadas / individuais
+        // entram COMO ESTÃO (fixedPairs:false — não re-parear; o Suíço já jogou com essas
+        // entradas). O nome/scoring/W.O./resultEntry da elim são herdados via os resolvers
+        // _effective* (fallback top-level) — o cfg da fase 1 fica mínimo.
+        var _origFormat = t.format || 'Eliminatórias Simples';
+        t.phases = [
+            { name: (window._t ? window._t('predraw.optSwissTitle') : 'Classificatória'), formatCode: 'liga', format: 'Suíço', rounds: _swRounds, source: { type: 'enrollment' } },
+            { name: _origFormat, format: _origFormat, source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: _swLo }] }, fixedPairs: false }
+        ];
+        t.currentPhaseIndex = 0;
+        // t.format FICA como o formato original (a eliminatória) — a fase 0 Suíço é
+        // sinalizada por currentStage/classifyFormat:'swiss' (render da classificação +
+        // PAREAMENTO INDIVIDUAL no _generateNextRound). NÃO virar 'Liga': `_isLigaFormat`
+        // true dispararia o modo Liga=duplas-rotativas (Rei/Rainha) em vez do Suíço.
+        t.classifyFormat = 'swiss';   // pareamento Suíço individual + render da classificação
+        t.currentStage = 'swiss';     // render da classificação Suíço na fase 0
+        // Mata SÓ o gatilho da transição LEGADA (swiss→elim fora do motor): ele exige
+        // p2Resolution === 'swiss' && currentStage === 'swiss'. Zerando p2Resolution, a
+        // transição legada nunca dispara — quem avança é o motor multifase (Avançar).
+        t.p2Resolution = null;
+        t.p2TargetCount = null;
+        t.swissRounds = _swRounds;
+
         t.standings = _swissNames.map(function(name) {
             return { name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0 };
         });
         t.rounds = [];
         t.status = 'active';
-        t.currentStage = 'swiss';
-        t.classifyFormat = 'swiss';
-        // Calculate target: nearest power-of-2 below participant count
-        var _swCount = _swissNames.length;
-        var _swLo = 1;
-        while (_swLo * 2 <= _swCount) _swLo *= 2;
-        t.p2TargetCount = _swLo;
-        // Swiss rounds: use organizer-selected value if set, otherwise ceil(log2(participants))
-        if (!t.swissRounds || t.swissRounds < 2) {
-            t.swissRounds = Math.max(2, Math.ceil(Math.log2(_swCount)));
-        }
-        // Generate first Swiss round
-        _generateNextRound(t);
+        _generateNextRound(t);        // 1ª rodada Suíço (storage nativo t.rounds)
 
         var _swRoundMatches = (t.rounds[0] && t.rounds[0].matches || []).filter(function(m) { return !m.isSitOut; }).length;
         if (document.getElementById('final-review-panel')) document.getElementById('final-review-panel').remove(); document.body.style.overflow = '';
-        showNotification(_t('tdraw.swissStarted'), _t('tdraw.swissStartedMsg', { rounds: t.swissRounds, n: _swRoundMatches, lo: _swLo, format: t.format || 'Eliminatórias' }), 'success');
-        // Notify participants — personalized per recipient
+        showNotification(_t('tdraw.swissStarted'), _t('tdraw.swissStartedMsg', { rounds: _swRounds, n: _swRoundMatches, lo: _swLo, format: _origFormat }), 'success');
         if (typeof window._notifyDrawPersonalized === 'function') {
             window._notifyDrawPersonalized(t, tId);
         }
-        window.AppStore.syncImmediate(tId).then(function() {
-            // Notify Liga round via WhatsApp if this is a Liga/Suíço tournament (fire-and-forget)
+        _commitInitialDraw(tId, t, _preDraw).then(function() {
             if (typeof _notifyLigaRoundWhatsApp === 'function') {
                 _notifyLigaRoundWhatsApp(t, 0);
             }
@@ -1099,400 +1420,6 @@ window.generateDrawFunction = function (tId) {
         return;
     }
 
-    // 3. Handle Elimination (Simples/Dupla)
-    let matches = [];
-    const timestamp = Date.now();
-    const isDupla = t.format === 'Dupla Eliminatória';
-    const getName = (p) => typeof p === 'string' ? p : (p.displayName || p.name);
-
-    // ── Agrupar por categoria (se houver) ───────────────────────────
-    var _hasCats = Array.isArray(t.combinedCategories) && t.combinedCategories.length > 0;
-    var _catGroups = {};
-    if (_hasCats) {
-        // Build map: category → [participants]
-        t.combinedCategories.forEach(function(cat) { _catGroups[cat] = []; });
-        participants.forEach(function(p) {
-            var pCats = (typeof p === 'object') ? window._getParticipantCategories(p) : [];
-            if (pCats.length > 0) {
-                pCats.forEach(function(c) {
-                    if (_catGroups[c]) _catGroups[c].push(p);
-                });
-            } else {
-                // Participante sem categoria: incluir no primeiro grupo (fallback)
-                var firstCat = t.combinedCategories[0];
-                _catGroups[firstCat].push(p);
-            }
-        });
-        // Remove categorias vazias
-        t.combinedCategories.forEach(function(cat) {
-            if (_catGroups[cat].length === 0) delete _catGroups[cat];
-        });
-    } else {
-        _catGroups[''] = participants;
-    }
-
-    // ── Gerar chaveamento para cada categoria ───────────────────────
-    var _matchCounter = 0;
-    // v4.0.25 (motor canônico): true quando a Eliminatória Simples foi semeada pelo
-    // núcleo único genTierBracket (que já gera TODAS as rodadas + links). Nesse caso
-    // pulamos o _buildNextMatchLinks legado (geraria as R2+ de novo, agora redundante).
-    var _elimCoreBuilt = false;
-    Object.keys(_catGroups).forEach(function(catName, _catIdx) {
-        var catParticipants = _catGroups[catName];
-
-        // Shuffle dentro da categoria
-        if (!t.p2OrderedList) {
-            for (var si = catParticipants.length - 1; si > 0; si--) {
-                var sj = Math.floor(Math.random() * (si + 1));
-                var tmp = catParticipants[si];
-                catParticipants[si] = catParticipants[sj];
-                catParticipants[sj] = tmp;
-            }
-        }
-
-        // BYE handling por categoria — interleave for proper bracket distribution.
-        // v4.0.25 (motor canônico): SÓ a Dupla Eliminatória ainda usa este interleave
-        // manual (precisa dos placeholders 'BYE' na R1 pra _buildDoubleElimBracket). A
-        // Eliminatória SIMPLES passou a ser semeada pelo núcleo único genTierBracket
-        // (seed 1×N desde a R1, BYEs resolvidos internamente) — então pula este bloco.
-        if (isDupla && t.p2Resolution === 'bye') {
-            var catLen = catParticipants.length;
-            var catTarget = 1;
-            while (catTarget < catLen) catTarget *= 2;
-            var catByes = catTarget - catLen;
-            if (catByes > 0) {
-                // Split: players for real matches vs players who get BYEs
-                // realMatches = catTarget/2 - catByes = matches with 2 real players
-                // byeMatches = catByes = matches with 1 real + 1 BYE
-                var _realMatchCount = catTarget / 2 - catByes;
-                var _realMatchPlayers = _realMatchCount * 2; // these play each other
-                var _byePlayers = catByes; // these get auto-advance
-
-                var _rmGroup = catParticipants.slice(0, _realMatchPlayers);
-                var _byGroup = catParticipants.slice(_realMatchPlayers);
-
-                // VIP priority: move VIPs to BYE group so they auto-advance
-                var _vips = t.vips || {};
-                var _gn = function(p) { return typeof p === 'string' ? p : (p.displayName || p.name || ''); };
-                if (Object.keys(_vips).length > 0) {
-                    // Find VIPs in real match group and swap with non-VIPs in bye group
-                    for (var _vi2 = 0; _vi2 < _rmGroup.length; _vi2++) {
-                        if (window._entryHasVip(t, _rmGroup[_vi2])) {
-                            // Find a non-VIP in bye group to swap with
-                            for (var _bj = 0; _bj < _byGroup.length; _bj++) {
-                                if (!window._entryHasVip(t, _byGroup[_bj])) {
-                                    var _swpTmp = _rmGroup[_vi2];
-                                    _rmGroup[_vi2] = _byGroup[_bj];
-                                    _byGroup[_bj] = _swpTmp;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Build interleaved array: alternate [real pair, bye pair]
-                // This ensures R2 cross-seeding: each R2 match gets 1 R1 winner + 1 BYE winner
-                var _newArr = [];
-                var _rIdx = 0; // index into real match players (step 2)
-                var _bIdx = 0; // index into bye players
-                while (_rIdx < _rmGroup.length || _bIdx < _byGroup.length) {
-                    // Add a real match pair
-                    if (_rIdx < _rmGroup.length) {
-                        _newArr.push(_rmGroup[_rIdx++]);
-                        _newArr.push(_rmGroup[_rIdx++]);
-                    }
-                    // Add a BYE match pair
-                    if (_bIdx < _byGroup.length) {
-                        _newArr.push(_byGroup[_bIdx++]);
-                        _newArr.push('BYE (Avança Direto)');
-                    }
-                }
-                catParticipants = _newArr;
-            }
-        }
-
-        // ── Repescagem (true repechage): ALL play R1, losers get 2nd chance ──
-        // System: best R1 losers go to repechage. Repechage winners qualify.
-        // If odd spots needed: best repechage loser (by R1 score) also qualifies.
-        // NO BYEs — worst R1 loser(s) are eliminated immediately.
-        if (t.p2Resolution === 'playin') {
-            var catLen = catParticipants.length;
-            if (catLen >= 3) {
-                var r1MatchCount = Math.floor(catLen / 2);
-                var r1Winners = r1MatchCount;
-                var hasOddBye = (catLen % 2 !== 0);
-                if (hasOddBye) r1Winners++;
-
-                var r2Target = 1;
-                while (r2Target < r1Winners) r2Target *= 2;
-                var spotsFromRepechage = r2Target - r1Winners;
-
-                if (spotsFromRepechage > 0 && r1MatchCount > 0) {
-                    // ── Step 1: Generate R1 matches (ALL participants play) ──
-                    var r1MatchIds = [];
-                    for (var ri1 = 0; ri1 < catParticipants.length - 1; ri1 += 2) {
-                        var rp1 = catParticipants[ri1];
-                        var rp2 = catParticipants[ri1 + 1];
-                        var r1m = {
-                            id: 'match-r1-' + timestamp + '-' + _matchCounter,
-                            round: 1,
-                            bracket: isDupla ? 'upper' : undefined,
-                            p1: getName(rp1),
-                            p2: getName(rp2),
-                            winner: null,
-                            isRepechageR1: true
-                        };
-                        if (catName) r1m.category = catName;
-                        matches.push(r1m);
-                        r1MatchIds.push(r1m.id);
-                        _matchCounter++;
-                    }
-                    var byePlayer = null;
-                    if (hasOddBye) {
-                        byePlayer = getName(catParticipants[catParticipants.length - 1]);
-                    }
-
-                    // ── Step 2: SEM jogos de repescagem (v1.0.66 spec) ──
-                    // Algoritmo simplificado: os `spotsFromRepechage` melhores
-                    // derrotados da R1 vão DIRETO pro bracket por seleção
-                    // (menor margem de derrota). Sem partidas de repescagem.
-                    var r1Losers = r1MatchCount; // total losers from R1
-                    var repMatchCount = 0; // sem jogos de repescagem
-                    var repMatchIds = [];
-                    var bestLoserCount = spotsFromRepechage; // todos os spots vão direto pra bestloser
-                    var eliminatedCount = r1Losers - bestLoserCount; // worst losers eliminados
-
-                    // ── Step 3: Generate R2 matches ──
-                    var r2Slots = [];
-                    for (var rw = 0; rw < r1MatchIds.length; rw++) {
-                        r2Slots.push({ tbd: true, fromMatch: r1MatchIds[rw], type: 'r1winner' });
-                    }
-                    if (byePlayer) {
-                        r2Slots.push({ name: byePlayer, type: 'bye' });
-                    }
-                    // Best-loser slots → R2 (preenchidos após R1 completar via _assignRepechageLosers)
-                    var bestLoserR2Ids = [];
-                    for (var bl = 0; bl < bestLoserCount; bl++) {
-                        r2Slots.push({ tbd: true, type: 'bestloser' });
-                    }
-
-                    // v1.0.71-beta: pareamento sequencial. Vencedor 1 vs
-                    // Vencedor 2, Vencedor 3 vs Vencedor 4, ... Best losers
-                    // preenchem em sequência. BYE sempre na ÚLTIMA posição.
-                    var r2OrderedSlots = [];
-                    // R1 winners primeiro (na ordem dos jogos)
-                    r2Slots.forEach(function(s) {
-                        if (s.type === 'r1winner') r2OrderedSlots.push(s);
-                    });
-                    // Best losers / repqualifier no meio
-                    r2Slots.forEach(function(s) {
-                        if (s.type === 'bestloser' || s.type === 'repqualifier') r2OrderedSlots.push(s);
-                    });
-                    // BYE no FINAL (última posição absoluta)
-                    r2Slots.forEach(function(s) {
-                        if (s.type === 'bye') r2OrderedSlots.push(s);
-                    });
-                    var r2Pairs = [];
-                    for (var pIdx = 0; pIdx + 1 < r2OrderedSlots.length; pIdx += 2) {
-                        r2Pairs.push({ p1: r2OrderedSlots[pIdx], p2: r2OrderedSlots[pIdx + 1] });
-                    }
-
-                    // Generate R2 match objects
-                    for (var r2i = 0; r2i < r2Pairs.length; r2i++) {
-                        var rp = r2Pairs[r2i];
-                        var r2p1Name = rp.p1.name || 'TBD';
-                        var r2p2Name = rp.p2.name || 'TBD';
-                        var r2m = {
-                            id: 'match-r2-' + timestamp + '-' + _matchCounter,
-                            round: 2,
-                            bracket: isDupla ? 'upper' : undefined,
-                            p1: r2p1Name,
-                            p2: r2p2Name,
-                            winner: null
-                        };
-                        if (catName) r2m.category = catName;
-                        // v1.0.73-beta: marca AMBOS os slots quando p1 E p2
-                        // são bestloser (acontece quando há 2+ best losers no
-                        // final da ordem). Antes só um era marcado, deixando
-                        // o outro como "A definir" pra sempre.
-                        var _bestLoserSlots = [];
-                        if (rp.p1.type === 'bestloser') _bestLoserSlots.push('p1');
-                        if (rp.p2.type === 'bestloser') _bestLoserSlots.push('p2');
-                        if (_bestLoserSlots.length > 0) r2m.awaitsBestLoser = _bestLoserSlots.join(',');
-                        // v1.0.67-beta: mark slots that came from BYE — usado
-                        // pelo renderMatchCard pra exibir tag "BYE" só nesta
-                        // rodada (rodadas seguintes, vitórias normais não
-                        // sinalizam mais).
-                        if (rp.p1.type === 'bye') r2m.p1FromBye = true;
-                        if (rp.p2.type === 'bye') r2m.p2FromBye = true;
-                        matches.push(r2m);
-                        _matchCounter++;
-
-                        // Link sources → R2
-                        if (rp.p1.tbd && rp.p1.fromMatch) {
-                            var srcM1 = matches.find(function(m) { return m.id === rp.p1.fromMatch; });
-                            if (srcM1) { srcM1.nextMatchId = r2m.id; srcM1.nextSlot = 'p1'; }
-                        }
-                        if (rp.p2.tbd && rp.p2.fromMatch) {
-                            var srcM2 = matches.find(function(m) { return m.id === rp.p2.fromMatch; });
-                            if (srcM2) { srcM2.nextMatchId = r2m.id; srcM2.nextSlot = 'p2'; }
-                        }
-                        // Track best-loser R2 match IDs
-                        if (rp.p1.type === 'bestloser' || rp.p2.type === 'bestloser') {
-                            bestLoserR2Ids.push(r2m.id);
-                        }
-                    }
-
-                    // ── Step 4: Generate remaining rounds (R3+) ──
-                    var currentRoundMatches = r2Pairs.length;
-                    var roundNum = 3;
-                    var prevRoundR = matches.filter(function(m) { return m.round === 2 && (!catName || m.category === catName); });
-                    while (currentRoundMatches > 1) {
-                        var nextRoundCount = Math.floor(currentRoundMatches / 2);
-                        var nextRoundMatches = [];
-                        for (var nr = 0; nr < nextRoundCount; nr++) {
-                            var nrm = {
-                                id: 'match-r' + roundNum + '-' + timestamp + '-' + _matchCounter,
-                                round: roundNum,
-                                bracket: isDupla ? 'upper' : undefined,
-                                p1: 'TBD',
-                                p2: 'TBD',
-                                winner: null
-                            };
-                            if (catName) nrm.category = catName;
-                            matches.push(nrm);
-                            nextRoundMatches.push(nrm);
-                            _matchCounter++;
-                        }
-                        for (var lnk = 0; lnk < prevRoundR.length; lnk++) {
-                            var tgtNr = Math.floor(lnk / 2);
-                            var tgtSl = (lnk % 2 === 0) ? 'p1' : 'p2';
-                            if (tgtNr < nextRoundMatches.length) {
-                                prevRoundR[lnk].nextMatchId = nextRoundMatches[tgtNr].id;
-                                prevRoundR[lnk].nextSlot = tgtSl;
-                            }
-                        }
-                        prevRoundR = nextRoundMatches;
-                        currentRoundMatches = nextRoundCount;
-                        roundNum++;
-                    }
-
-                    // Store repechage config for bracket-logic.js advancement
-                    // v1.0.66-beta: repMatchIds vazio (sem jogos de repescagem),
-                    // todos os spots vão direto via bestLoser. repParticipants
-                    // mantido = 0 pra compat.
-                    t.repechageConfig = {
-                        r1MatchIds: r1MatchIds,
-                        repMatchIds: repMatchIds, // []
-                        repParticipants: 0,
-                        bestLoserCount: bestLoserCount,
-                        bestLoserR2Ids: bestLoserR2Ids,
-                        eliminatedCount: eliminatedCount,
-                        spotsFromRepechage: spotsFromRepechage,
-                        category: catName || ''
-                    };
-                    t.hasRepechage = true;
-                    return; // continue to next category via forEach callback
-                }
-            }
-        }
-
-        // ── Eliminatória simples pelo motor único (genTierBracket) ───────────────
-        // genTierBracket é o MESMO chaveamento usado em qualquer fase, em qualquer
-        // posição: semente 1×N honrada desde a R1, BYEs resolvidos no motor (cabeças
-        // folgam) e R2+ já ligadas via nextMatchId/nextSlot. A Dupla Eliminatória segue
-        // na geração própria da R1 logo abaixo (o _buildDoubleElimBracket consome essas
-        // R1 + os placeholders de BYE do interleave). O motor é dependência fixa do
-        // index.html — se não estiver lá, é bug que tem que estourar, não ser mascarado.
-        if (!isDupla) {
-            // Times na ordem do pool (shuffle já aplicado; p2OrderedList = ordem
-            // explícita do organizador). Cabeças VIP flutuam pro topo → recebem os BYEs
-            // (sementes altas), preservando o "VIP folga".
-            var _teams = catParticipants.map(function (p) { return { displayName: getName(p) }; });
-            if (!t.p2OrderedList && t.vips && Object.keys(t.vips).length > 0) {
-                var _vipT = [], _restT = [];
-                catParticipants.forEach(function (p, _pi) {
-                    (window._entryHasVip(t, p) ? _vipT : _restT).push(_teams[_pi]);
-                });
-                _teams = _vipT.concat(_restT);
-            }
-            if (_teams.length === 0) return; // categoria vazia → nada a chavear
-            if (_teams.length === 1) {
-                // 1 inscrito na categoria → campeão por BYE.
-                var _solo = { id: 'match-' + timestamp + '-' + _matchCounter, round: 1, p1: _teams[0].displayName, p2: 'BYE (Avança Direto)', winner: _teams[0].displayName, isBye: true };
-                if (catName) _solo.category = catName;
-                matches.push(_solo); _matchCounter++;
-                return;
-            }
-            // Resolução de não-potência-de-2 = 'bye' (cabeças folgam). 'playin'/'swiss'
-            // já trataram/retornaram acima.
-            var _built = window._phasesEngine.genTierBracket(_teams, undefined, 'e' + timestamp + '-c' + (_catIdx || 0), 'bye', false);
-            (_built.matches || []).forEach(function (m) {
-                delete m.team1Obj; delete m.team2Obj; // referência por NOME (paridade de shape com o legado)
-                if (catName) m.category = catName;
-                matches.push(m);
-            });
-            _elimCoreBuilt = true;
-            return; // próxima categoria
-        }
-
-        // Gerar a R1 da Dupla Eliminatória (alimenta o _buildDoubleElimBracket)
-        for (var mi = 0; mi < catParticipants.length; mi += 2) {
-            var p1 = catParticipants[mi];
-            var p2 = mi + 1 < catParticipants.length ? catParticipants[mi + 1] : 'BYE (Avança Direto)';
-            var p1Name = getName(p1);
-            var p2Name = getName(p2);
-            var isBye = p2Name === 'BYE (Avança Direto)';
-            var matchObj = {
-                id: 'match-' + timestamp + '-' + _matchCounter,
-                round: 1,
-                bracket: isDupla ? 'upper' : undefined,
-                p1: p1Name,
-                p2: p2Name,
-                winner: isBye ? p1Name : null,
-                isBye: isBye
-            };
-            if (catName) matchObj.category = catName;
-            matches.push(matchObj);
-            _matchCounter++;
-        }
-    });
-
-    t.matches = matches;
-    t.status = 'active';
-    t.currentStage = 'elimination';
-
-    // 4. Handle Repescagem (Incomplete Teams Lottery)
-    if (t.incompleteResolution === 'lottery_direct') {
-        window.AppStore.logAction(tId, 'Repescagem aplicada: times completados via sorteio');
-    }
-
-    // Build bracket structure with advancement links
-    if (isDupla) {
-        window._buildDoubleElimBracket(t);
-    } else if (!_elimCoreBuilt) {
-        // Eliminatória SIMPLES via núcleo (genTierBracket) já trouxe TODAS as rodadas
-        // ligadas — só o caminho legado/fallback precisa montar as R2+ aqui.
-        window._buildNextMatchLinks(t);
-    }
-
-    window.AppStore.logAction(tId, 'Sorteio Realizado e Chaveamento Gerado');
-
-    if (document.getElementById('final-review-panel')) document.getElementById('final-review-panel').remove(); document.body.style.overflow = '';
-
-    showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
-
-    // Notify all participants — personalized per recipient
-    if (typeof window._notifyDrawPersonalized === 'function') {
-        window._notifyDrawPersonalized(t, tId);
-    }
-
-    window._lastActiveTournamentId = tId;
-    // Save immediately — critical: draw MUST persist to Firestore before navigating
-    window.AppStore.syncImmediate(tId).then(function() {
-        window.location.hash = `#bracket/${tId}`;
-    });
 };
 
 // Build nextMatchId links for single elim bracket
@@ -1567,12 +1494,18 @@ window._buildNextMatchLinks = function (t) {
 };
 
 // ─── Build Double Elimination Bracket ───────────────────────────────
-window._buildDoubleElimBracket = function (t) {
+window._buildDoubleElimBracket = function (t, opts) {
     if (!t.matches || !t.matches.length) return;
     const ts = Date.now();
+    // v4.1.29: phase-aware. opts.phaseIndex → só olha a R1 do upper DAQUELA fase e tagueia
+    // TODOS os jogos novos (upper R2+/lower/grand) com phaseIndex (senão o render da fase,
+    // que filtra por phaseIndex, não os enxerga). Sem opts = fase única (comportamento antigo).
+    const _pi = (opts && opts.phaseIndex != null) ? opts.phaseIndex : null;
+    const _beforeIds = (_pi != null) ? {} : null;
+    if (_pi != null) t.matches.forEach(function (m) { if (m && m.id) _beforeIds[m.id] = 1; });
 
     // --- UPPER BRACKET: build rounds like single elim ---
-    const upperR1 = t.matches.filter(m => m.round === 1);
+    const upperR1 = t.matches.filter(m => m.round === 1 && (_pi == null || ((m.phaseIndex || 0) === _pi && (m.bracket === 'upper' || !m.bracket))));
     const totalUpperRounds = Math.ceil(Math.log2(upperR1.length * 2));
 
     // Create upper bracket shell rounds
@@ -1731,8 +1664,13 @@ window._buildDoubleElimBracket = function (t) {
         lastLowerRound[0].nextMatchId = grandFinal.id;
     }
 
+    // v4.1.29: tagueia TODOS os jogos novos (upper R2+/lower/grand) com o phaseIndex da fase.
+    if (_pi != null) {
+        t.matches.forEach(function (m) { if (m && !_beforeIds[m.id] && m.phaseIndex == null) m.phaseIndex = _pi; });
+    }
+
     // Auto-advance BYE winners in upper bracket
-    t.matches.filter(m => m.isBye && m.winner && m.bracket === 'upper').forEach(m => {
+    t.matches.filter(m => m.isBye && m.winner && m.bracket === 'upper' && (_pi == null || (m.phaseIndex || 0) === _pi)).forEach(m => {
         if (m.nextMatchId) {
             const next = t.matches.find(n => n.id === m.nextMatchId);
             if (next) {
@@ -1741,6 +1679,180 @@ window._buildDoubleElimBracket = function (t) {
             }
         }
     });
+};
+
+// ── DUPLA ELIMINATÓRIA fora de potência de 2, com REPESCAGEM (não elimina na 1ª) ──
+// Lê a repescagem R1 (round 0, isPhaseRepR1) que o _duplaR1FromPool criou e monta:
+//   • CHAVE SUPERIOR de T: R1 (T/2 jogos) = g vencedores da repescagem + os `promote`
+//     MELHORES derrotados que sobem (repFill); R2+ halving normal.
+//   • CHAVE INFERIOR: pré-rodada com os `toLower` derrotados que sobraram (todos jogam de
+//     novo — ninguém eliminado na 1ª) + rodadas de merge (absorve os perdedores do upper)
+//     e battle, com REPESCAGEM sempre que a contagem der ímpar (o melhor derrotado da
+//     rodada anterior entra em vez de dar BYE).
+//   • GRANDE FINAL: campeão superior × campeão inferior.
+// As vagas de repescagem são preenchidas por _resolveRepFills quando a rodada-fonte fecha.
+// Ver project_dupla_elim_repechage. meta = { g,T,promote,toLower,hasSat,satName,satObj,idPrefix }.
+window._buildRepechageDoubleElim = function (t, meta, opts) {
+    if (!t || !meta || !Array.isArray(t.matches)) return;
+    const _pi = (opts && opts.phaseIndex != null) ? opts.phaseIndex : null;
+    const ts = Date.now();
+    let cnt = 0;
+    const idp = meta.idPrefix || ('rde-' + ts);
+    const cat = (meta.category != null) ? meta.category : null;   // 1 chave por categoria
+    const mode = meta.mode || 'playin';                          // 'playin' (repescagem) | 'bye'
+    const BYE = 'BYE (Avança Direto)';
+
+    function M(bracket, round, extra) {
+        const m = Object.assign({ id: idp + '-' + bracket + '-r' + round + '-' + (cnt++) + '-' + ts, bracket, round, p1: 'TBD', p2: 'TBD', winner: null }, extra || {});
+        if (_pi != null) m.phaseIndex = _pi;
+        if (cat != null) m.category = cat;
+        if (typeof window._appendCanonicalColumn === 'function') {
+            window._appendCanonicalColumn(t, { phase: (bracket === 'grand' ? 'grandfinal' : 'elim'), bracket, round, matches: [m] });
+        } else { t.matches.push(m); }
+        return m;
+    }
+    let lround = 0;
+    function lowerRound(games) { lround++; const arr = []; for (let i = 0; i < games; i++) arr.push(M('lower', lround)); return arr; }
+    function slotsOf(arr) { const s = []; arr.forEach(m => { s.push({ m, s: 'p1' }); s.push({ m, s: 'p2' }); }); return s; }
+    // Contagem ímpar na inferior: modo 'bye' → vaga vira BYE (o adjacente avança livre, sem
+    // repescar); modo 'playin' → REPESCAGEM (melhor derrotado da rodada inferior anterior VOLTA
+    // — foi eliminado e retorna). tagRep:true → leva a TAG REP (é repescagem de verdade, ≠ da
+    // queda normal do upper pra inferior). Regra do dono (caso Fernando). Ver feedback_resolution_one_logic.
+    function fillOdd(sl, srcRound) {
+        if (mode === 'bye') { if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; }
+        else { (sl.m.repFill = sl.m.repFill || []).push({ slot: sl.s, srcBracket: 'lower', srcRound: srcRound, rank: 0, cat, tagRep: true }); }
+    }
+
+    // ---- CHAVE SUPERIOR + preparação da PRÉ-rodada inferior (por modo) ----
+    // Os DOIS modos convergem no MESMO motor de chave inferior (merge/battle + suavização
+    // de ímpar por repFill). O que difere é só COMO a chave superior nasce e quem cai na
+    // pré-rodada inferior. feedback_resolution_one_logic.
+    const upper = {};
+    let W, preGames, feedPre, mergeUppers, satout = null;
+
+    if (mode === 'bye') {
+        // ⚠️ WIP / ATUALMENTE INALCANÇÁVEL: BYE em dupla-elim fora de pow2 ainda NÃO é robusto
+        // (fluxo assimétrico na chave inferior com muitos byes → vagas mortas p/ n grande).
+        // _duplaR1FromPool NÃO emite mode:'bye' hoje → este ramo não roda. Mantido como base
+        // p/ o fix futuro (com referência de algoritmo). Resolução canônica atual = playin.
+        // Upper R1 já veio bye-preenchida (semeada, cabeças folgam) do _duplaR1FromPool.
+        const hi = meta.hi;
+        W = Math.round(Math.log(hi) / Math.log(2));
+        upper[1] = t.matches.filter(m => m && m.round === 1 && m.bracket === 'upper' && (cat == null || m.category === cat) && (_pi == null || (m.phaseIndex || 0) === _pi))
+            .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        for (let r = 2; r <= W; r++) {
+            upper[r] = [];
+            const pc = upper[r - 1].length / 2;
+            for (let j = 0; j < pc; j++) upper[r].push(M('upper', r));
+            upper[r - 1].forEach((pm, idx) => { const nm = upper[r][Math.floor(idx / 2)]; pm.nextMatchId = nm.id; pm.nextSlot = (idx % 2 === 0) ? 'p1' : 'p2'; });
+        }
+        // BYE da R1 auto-avança pra R2 já no sorteio (o jogo-BYE não dropa "perdedor").
+        upper[1].forEach(m => {
+            if (m.isBye && m.winner && m.nextMatchId) {
+                const nx = upper[2] && upper[2].filter(x => x.id === m.nextMatchId)[0];
+                if (nx) { if (m.nextSlot === 'p1') nx.p1 = m.winner; else if (m.nextSlot === 'p2') nx.p2 = m.winner; if (m.team1Obj) nx[m.nextSlot === 'p1' ? 'team1Obj' : 'team2Obj'] = m.team1Obj; }
+            }
+        });
+        const realLosers = upper[1].filter(m => !m.isBye);   // só jogos reais dropam pra inferior
+        preGames = Math.ceil(realLosers.length / 2);
+        feedPre = function (pre) {
+            const s = slotsOf(pre); let si = 0;
+            realLosers.forEach(um => { const sl = s[si++]; um.loserMatchId = sl.m.id; um.loserSlot = sl.s; });
+            for (; si < s.length; si++) { const sl = s[si]; if (sl.s === 'p1') sl.m.p1 = BYE; else sl.m.p2 = BYE; } // sobra ímpar → BYE inferior (auto-resolve)
+        };
+        mergeUppers = []; for (let r = 2; r <= W; r++) mergeUppers.push(upper[r]);
+    } else {
+        // playin (repescagem): repR1 (round 0) → chave de T (vencedores + melhores derrotados).
+        const g = meta.g, T = meta.T, promote = meta.promote, toLower = meta.toLower;
+        W = Math.round(Math.log(T) / Math.log(2));
+        const rep = t.matches.filter(m => m && m.isPhaseRepR1 && m.round === 0 && (cat == null || m.category === cat) && (_pi == null || (m.phaseIndex || 0) === _pi))
+            .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        upper[1] = [];
+        for (let i = 0; i < T / 2; i++) upper[1].push(M('upper', 1));
+        for (let e = 0; e < T; e++) {
+            const gm = upper[1][Math.floor(e / 2)], slot = (e % 2 === 0) ? 'p1' : 'p2';
+            if (e < g) { if (rep[e]) { rep[e].nextMatchId = gm.id; rep[e].nextSlot = slot; } }
+            else { (gm.repFill = gm.repFill || []).push({ slot, srcBracket: 'upper', srcRound: 0, rank: (e - g), cat, tagRep: true }); } // sobe pra chave superior → TAG REP
+        }
+        for (let r = 2; r <= W; r++) {
+            upper[r] = [];
+            const pc = upper[r - 1].length / 2;
+            for (let j = 0; j < pc; j++) upper[r].push(M('upper', r));
+            upper[r - 1].forEach((pm, idx) => { const nm = upper[r][Math.floor(idx / 2)]; pm.nextMatchId = nm.id; pm.nextSlot = (idx % 2 === 0) ? 'p1' : 'p2'; });
+        }
+        preGames = toLower / 2;
+        feedPre = function (pre) {
+            pre.forEach((m, i) => { m.repFill = [
+                { slot: 'p1', srcBracket: 'upper', srcRound: 0, rank: promote + 2 * i, cat },
+                { slot: 'p2', srcBracket: 'upper', srcRound: 0, rank: promote + 2 * i + 1, cat }
+            ]; });
+        };
+        mergeUppers = []; for (let r = 1; r <= W; r++) mergeUppers.push(upper[r]);
+        satout = (meta.hasSat && meta.satName) ? { name: meta.satName, obj: meta.satObj } : null;
+    }
+
+    // ---- CHAVE INFERIOR (motor ÚNICO) ----
+    let prevLower = lowerRound(preGames);
+    feedPre(prevLower);
+    let alive = prevLower.length;
+    const K = mergeUppers.length;
+    for (let w = 0; w < K; w++) {
+        const upLosers = mergeUppers[w];
+        const directNames = (w === 0 && satout) ? [satout] : [];
+        let entrants = alive + upLosers.length + directNames.length;
+        const repNeed = entrants % 2;
+        entrants += repNeed;
+        const merge = lowerRound(entrants / 2);
+        const s = slotsOf(merge); let si = 0;
+        prevLower.forEach(pm => { const sl = s[si++]; pm.nextMatchId = sl.m.id; pm.nextSlot = sl.s; });
+        upLosers.forEach(um => { const sl = s[si++]; um.loserMatchId = sl.m.id; um.loserSlot = sl.s; });
+        directNames.forEach(d => { const sl = s[si++]; if (sl.s === 'p1') { sl.m.p1 = d.name; if (d.obj) sl.m.team1Obj = d.obj; } else { sl.m.p2 = d.name; if (d.obj) sl.m.team2Obj = d.obj; } });
+        if (repNeed) fillOdd(s[si++], lround - 1);
+        prevLower = merge; alive = merge.length;
+    }
+    // battles finais: sem battle INTERCALADA entre merges (dono) — cada rodada absorve TODOS
+    // os vencedores da inferior + os perdedores da rodada superior correspondente. Só depois de
+    // consumir todas as rodadas superiores é que sobra >1 → reduz a 1 (última = FINAL da inferior).
+    // Pra 14: pré 3, merge 4, merge 3, merge 2 (semifinal), battle 1 (final) = 3-4-3-2-1.
+    while (alive > 1) {
+        let bent = alive; const brep = bent % 2; bent += brep;
+        const battle = lowerRound(bent / 2);
+        const bs = slotsOf(battle); let bsi = 0;
+        prevLower.forEach(pm => { const sl = bs[bsi++]; pm.nextMatchId = sl.m.id; pm.nextSlot = sl.s; });
+        if (brep) fillOdd(bs[bsi++], lround - 1);
+        prevLower = battle; alive = battle.length;
+    }
+
+    // ---- GRANDE FINAL ----
+    const gf = M('grand', W + 1, { label: 'Grande Final' });
+    if (upper[W] && upper[W][0]) { upper[W][0].nextMatchId = gf.id; upper[W][0].nextSlot = 'p1'; }
+    if (prevLower && prevLower[0]) { prevLower[0].nextMatchId = gf.id; prevLower[0].nextSlot = 'p2'; }
+
+    // resolve vagas repFill já decididas. Os BYEs inferiores (pré-rodada ímpar) auto-resolvem
+    // quando o derrotado real cai (loserMatchId → _autoResolveBye no _advanceWinner).
+    if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+};
+
+// Conta o total de jogos de uma Dupla Eliminatória com repescagem (n fora de pow2).
+// ESPELHA a cadência do _buildRepechageDoubleElim (aritmética pura, sem montar nada) —
+// usado pelas estimativas dos painéis de resolução pra o número prometido == o sorteio real.
+window._countRepechageDoubleElim = function (n) {
+    if (!(n > 2) || (n & (n - 1)) === 0) return null;
+    var g = Math.floor(n / 2), hasSat = (n % 2) === 1;
+    var T = 1; while (T < g) T *= 2;
+    var promote = T - g, toLower = g - promote;
+    var W = Math.round(Math.log(T) / Math.log(2));
+    var total = g;                                  // repescagem R1
+    var uc = T / 2; for (var r = 1; r <= W; r++) { total += uc; uc = Math.floor(uc / 2); } // upper = T-1
+    var alive = toLower / 2; total += alive;         // pré-rodada inferior
+    for (var w = 1; w <= W; w++) {
+        var upLose = T / Math.pow(2, w);
+        var ent = alive + upLose + ((w === 1 && hasSat) ? 1 : 0);
+        ent += ent % 2;
+        var merge = ent / 2; total += merge; alive = merge;
+    }
+    while (alive > 1) { var b = alive; b += b % 2; var battle = b / 2; total += battle; alive = battle; } // battle(s) final(is)
+    return total + 1;                                // grande final
 };
 
 // ========== Drag-and-drop handlers ==========

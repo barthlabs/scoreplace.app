@@ -46,11 +46,8 @@
     if (typeof window._findTournamentById === 'function') return window._findTournamentById(tId);
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
   }
-  function _save(t) {
-    try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) return Promise.resolve(window.FirestoreDB.saveTournament(t)); }
-    catch (e) { return Promise.reject(e); }
-    return Promise.reject(new Error('FirestoreDB indisponível'));
-  }
+  // (o _save doc-inteiro foi removido na v4.0.116 — wo-claim persiste TUDO pelo
+  //  portão AppStore.mutate/commitTournamentTx, ver _commit abaixo.)
   function _isOrg(t) { return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t)))); }
   function _canManage(t) {
     if (_isOrg(t)) return true;
@@ -176,16 +173,25 @@
       var canMng = _canManage(t);
       var claim = _activeClaimFor(t, ctx);
       var open = 'event.stopPropagation(); window._woOpenClaim(\'' + _attr(t.id) + '\',\'' + _attr(_ctxKey(ctx)) + '\')';
+      // v4.1.19: variante COMPACTA pro header do card (canônica) — botão "W.O." pequeno à
+      // esquerda do "Ao Vivo" em vez do "⚠️ Faltou alguém?" largo embaixo do card.
+      var _cpt = !!ctx.compact;
+      var _sz = _cpt ? 'btn-micro' : 'btn-sm';
+      var _fs = _cpt ? '0.68rem' : '0.72rem';
       if (claim) {
         var label, bg, col, bd;
-        if (claim.status === 'disputed') { label = '⚠️ W.O. contestado'; bg = 'rgba(239,68,68,0.14)'; col = '#f87171'; bd = 'rgba(239,68,68,0.45)'; }
-        else { label = '⏳ Falta apontada'; bg = 'rgba(251,191,36,0.14)'; col = '#fbbf24'; bd = 'rgba(251,191,36,0.45)'; }
-        return '<button type="button" class="btn btn-sm hover-lift" onclick="' + open + '" style="display:inline-flex;align-items:center;gap:5px;background:' + bg + ';border:1px solid ' + bd + ';color:' + col + ';font-weight:800;font-size:0.72rem;border-radius:8px;padding:4px 10px;">' + label + '</button>';
+        if (claim.status === 'disputed') { label = _cpt ? '⚠️ Contestado' : '⚠️ W.O. contestado'; bg = 'rgba(239,68,68,0.14)'; col = '#f87171'; bd = 'rgba(239,68,68,0.45)'; }
+        else { label = _cpt ? '⏳ Apontado' : '⏳ Falta apontada'; bg = 'rgba(251,191,36,0.14)'; col = '#fbbf24'; bd = 'rgba(251,191,36,0.45)'; }
+        return '<button type="button" class="btn ' + _sz + ' hover-lift" onclick="' + open + '" style="display:inline-flex;align-items:center;gap:5px;background:' + bg + ';border:1px solid ' + bd + ';color:' + col + ';font-weight:800;font-size:' + _fs + ';border-radius:8px;padding:' + (_cpt ? '3px 8px' : '4px 10px') + ';flex-shrink:0;">' + label + '</button>';
       }
       if (rc.done) return '';
       if (!iAmPlayer && !canMng) return '';
-      return window._woBtnHtml ? window._woBtnHtml(open, true, { label: '⚠️ Faltou alguém?', title: 'Algum jogador não pôde vir? Aponte a falta — o outro lado confirma.', size: 'btn-sm', fontSize: '0.72rem' })
-        : '<button type="button" class="btn btn-sm btn-danger" onclick="' + open + '" style="font-size:0.72rem;border-radius:8px;">⚠️ Faltou alguém?</button>';
+      // Label padrão "W.O." em TODAS as variantes (cosmético — pedido do dono; a
+      // larga dizia "⚠️ Faltou alguém?"). O fluxo canônico de confirmação cruzada
+      // (apontar → outro lado confirma/contesta) continua idêntico.
+      var _label = 'W.O.';
+      return window._woBtnHtml ? window._woBtnHtml(open, true, { label: _label, title: 'Algum jogador não pôde vir? Aponte a falta — o outro lado confirma.', size: _sz, fontSize: _fs })
+        : '<button type="button" class="btn ' + _sz + ' btn-danger" onclick="' + open + '" style="font-size:' + _fs + ';border-radius:8px;">' + _label + '</button>';
     } catch (e) { return ''; }
   };
 
@@ -237,28 +243,37 @@
       if (claim.status === 'disputed') {
         info += '<div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:12px;padding:12px;text-align:center;"><div style="font-weight:900;color:#f87171;">⚠️ Contestado</div><div style="font-size:0.82rem;color:var(--text-bright);margin-top:3px;">O organizador decide.</div></div>';
         if (iAmOrg) {
+          // Contestado: o organizador DECIDE — Reverter (azul, derruba o apontamento
+          // avisando todos) à esquerda de Aplicar W.O. (org.).
           actions = '<div style="display:flex;gap:8px;margin-top:14px;">' +
-            '<button type="button" onclick="window._woResolveDiscard(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:10px;padding:10px;">Descartar</button>' +
-            '<button type="button" onclick="window._woResolveApply(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Aplicar W.O.</button>' +
+            '<button type="button" onclick="window._woResolveDiscard(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.5);font-weight:800;border-radius:10px;padding:10px;">↩️ Reverter</button>' +
+            '<button type="button" onclick="window._woResolveApply(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Aplicar W.O. (org.)</button>' +
           '</div>';
         }
       } else if (iCanConfirm) {
+        // "Os demais" (o outro lado): Cancelar (NEGA o W.O. → vira contestado, o
+        // organizador decide) à esquerda + Confirmar à direita.
         actions = '<div style="display:flex;gap:8px;margin-top:14px;">' +
-          '<button type="button" onclick="window._woContest(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;border-radius:10px;padding:10px;">❌ Contestar</button>' +
-          '<button type="button" onclick="window._woConfirm(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">✅ Confirmar falta</button>' +
+          '<button type="button" onclick="window._woContest(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;border-radius:10px;padding:10px;">Cancelar</button>' +
+          '<button type="button" onclick="window._woConfirm(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">✅ Confirmar</button>' +
         '</div>';
       } else if (iAmDeclarer) {
         info += '<div style="margin-top:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">Aguardando o outro lado confirmar…</div>';
-        actions = '<button type="button" onclick="window._woCancel(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="width:100%;margin-top:12px;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:10px;padding:9px;">Cancelar aviso</button>';
       } else {
         info += '<div style="margin-top:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">Aguardando confirmação' + (confirmers.length ? '' : ' do organizador') + '…</div>';
       }
-      // organizador sempre pode aplicar/descartar mesmo em pending
-      if (iAmOrg && claim.status === 'pending') {
-        actions += '<div style="display:flex;gap:8px;margin-top:8px;">' +
-          '<button type="button" onclick="window._woCancel(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-weight:700;border-radius:10px;padding:9px;font-size:0.8rem;">Descartar</button>' +
-          '<button type="button" onclick="window._woResolveApply(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:9px;font-size:0.8rem;">Aplicar agora</button>' +
-        '</div>';
+      // Linha final (pending): Reverter (azul, SÓ de quem apontou — derruba o
+      // apontamento avisando todos) à esquerda de Aplicar agora (org.) — só o
+      // organizador aplica direto. SEM "Voltar" embaixo: o do cabeçalho basta.
+      if (claim.status === 'pending' && (iAmDeclarer || iAmOrg)) {
+        var _rowBtns = '';
+        if (iAmDeclarer) {
+          _rowBtns += '<button type="button" onclick="window._woCancel(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.5);font-weight:800;border-radius:10px;padding:9px;font-size:0.8rem;">↩️ Reverter</button>';
+        }
+        if (iAmOrg) {
+          _rowBtns += '<button type="button" onclick="window._woResolveApply(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:9px;font-size:0.8rem;">Aplicar agora (org.)</button>';
+        }
+        if (_rowBtns) actions += '<div style="display:flex;gap:8px;margin-top:' + (actions ? '8px' : '14px') + ';">' + _rowBtns + '</div>';
       }
       _overlay(_header('Falta apontada') + '<div style="padding:1.1rem;">' + info + actions + '</div>');
       return;
@@ -286,20 +301,45 @@
     return { type: 'wo-claim', tournamentId: String(t.id), tournamentName: t.name || '', title: title, message: message, level: 'fundamental', timestamp: Date.now() };
   }
 
-  // ─── save/revert (otimista, espelha _opVote / schedule-poll) ───────────────────
-  function _snap(t) { return JSON.stringify(_claims(t)); }
-  function _persist(t, prevJson, onOk) {
-    return _save(t).then(function () {
-      try { if (typeof onOk === 'function') onOk(); } catch (e) {}
-      if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(String(t.id)); } catch (e) {} }
+  // ─── save BLINDADO pelo portão AppStore.mutate (Fase-B da blindagem) ───────────
+  // Substitui o _persist antigo (saveTournament doc-inteiro = lost-update numa
+  // corrida). `mutatorFn(ft)` expressa a MUDANÇA e é re-executada sobre o doc
+  // FRESCO da transação (retorne false pra abortar/idempotência). onDone roda no
+  // fim (notify/overlay/toast) com o `ok` do save. NÃO pôr efeito interativo
+  // (ex.: _ligaPickFill, que abre diálogo) DENTRO do mutator — ele roda 2× (local
+  // + fresco); esses vão no onDone.
+  function _commit(tId, mutatorFn, onDone, loadingMsg) {
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'Portão de escrita indisponível.', 'error');
+      return Promise.resolve(false);
+    }
+    // Feedback IMEDIATO (feedback_global_loading_always) + trava anti-duplo-toque:
+    // a transação do portão demora e sem loader o usuário tocava 2×. Trava os botões
+    // do overlay e mostra o loader rico até o save terminar.
+    var _lockBtns = function (on) {
+      try {
+        var _ov = document.getElementById('wo-overlay');
+        if (_ov) _ov.querySelectorAll('button').forEach(function (b) {
+          b.disabled = on; b.style.opacity = on ? '0.55' : ''; b.style.pointerEvents = on ? 'none' : '';
+        });
+      } catch (e) {}
+    };
+    _lockBtns(true);
+    if (typeof window._showLoading === 'function') window._showLoading(loadingMsg || 'Processando…');
+    return window.AppStore.mutate(String(tId), mutatorFn).then(function (okSave) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
+      if (typeof onDone === 'function') { try { onDone(okSave); } catch (e) {} }
+      if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(String(tId)); } catch (e) {} }
       else if (typeof window._softRefreshView === 'function') window._softRefreshView();
-    }).catch(function (err) {
-      try { t.woClaims = JSON.parse(prevJson); } catch (e) {}
-      var msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
-      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'Não foi possível registrar (' + msg + ').', 'error');
-      try { console.error('[wo-claim] rejeitado:', err); } catch (e) {}
+      return okSave;
+    }, function (err) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
+      _lockBtns(false);
+      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', (err && err.message) || 'Tente de novo.', 'error');
+      return false;
     });
   }
+  function _isLigaGroup(t, c) { return c && c.scope === 'group' && (_isLiga(t) || _isMonarchFmt(t)); }
 
   // ─── ações ─────────────────────────────────────────────────────────────────────
   window._woDeclare = function (tId, ctxKey, absentName) {
@@ -308,7 +348,6 @@
     var rc = _resolveCtx(t, ctx); if (!rc) return;
     var cu = _cu(); if (!cu || !cu.uid) { if (typeof showNotification === 'function') showNotification('Entre para apontar', '', 'warning'); return; }
     if (_allCtxUids(t, rc).indexOf(cu.uid) === -1 && !_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só os jogadores', 'Só quem joga (ou o organizador) pode apontar.', 'warning'); return; }
-    var prev = _snap(t);
     var c = {
       id: 'wo_' + Date.now() + '_' + _rand(),
       scope: rc.scope,
@@ -318,13 +357,16 @@
     };
     if (rc.scope === 'match') { c.matchId = rc.matchId; }
     else { c.roundIndex = rc.roundIndex; c.groupName = rc.groupName; c.matchIds = rc.matches.map(function (m) { return m.id; }); c.players = rc.players; }
-    _claims(t).push(c);
-    // notifica quem pode confirmar (o outro lado) + organizador
     var conf = _confirmerUids(t, rc, c);
     var data = _notifData(t, '⚠️ Confirma a falta?', (c.byName || 'Alguém') + ' apontou que "' + absentName + '" faltou em "' + (t.name || '') + '". Confirme ou conteste.');
-    _notify(t, conf, data);
-    if (t.creatorUid && conf.indexOf(t.creatorUid) === -1) _notify(t, [t.creatorUid], data);
-    _persist(t, prev, function () { window._woOpenClaim(tId, ctxKey); });
+    _commit(tId, function (ft) {
+      var claims = _claims(ft);
+      if (!claims.some(function (x) { return x.id === c.id; })) claims.push(c); // idempotente por id
+    }, function () {
+      _notify(t, conf, data);
+      if (t.creatorUid && conf.indexOf(t.creatorUid) === -1) _notify(t, [t.creatorUid], data);
+      window._woOpenClaim(tId, ctxKey);
+    }, 'Registrando o apontamento…');
   };
 
   window._woConfirm = function (tId, claimId) {
@@ -334,12 +376,7 @@
     var cu = _cu(); if (!cu || !cu.uid) return;
     var canConfirm = _confirmerUids(t, rc, c).indexOf(cu.uid) !== -1 || _isOrg(t);
     if (!canConfirm) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o outro lado (ou o organizador) confirma.', 'warning'); return; }
-    var prev = _snap(t);
-    c.confirms[cu.uid] = true; c.status = 'applied'; c.resolvedAt = new Date().toISOString();
-    var applied = _applyClaim(t, c, rc);
-    if (!applied.ok) { try { t.woClaims = JSON.parse(prev); } catch (e) {} if (typeof showNotification === 'function') showNotification('Não aplicou', applied.reason || 'Tente pelo painel do organizador.', 'warning'); return; }
-    _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '". ' + (applied.note || '')));
-    _persist(t, prev, function () { window._woCloseOverlay(); if (typeof showNotification === 'function') showNotification('✅ W.O. aplicado', applied.note || '', 'success'); });
+    _applyClaimViaGate(tId, claimId, cu.uid, false);
   };
 
   window._woContest = function (tId, claimId) {
@@ -349,83 +386,123 @@
     var cu = _cu(); if (!cu || !cu.uid) return;
     var canConfirm = _confirmerUids(t, rc, c).indexOf(cu.uid) !== -1 || _isOrg(t);
     if (!canConfirm) return;
-    var prev = _snap(t);
-    c.status = 'disputed'; c.disputedByUid = cu.uid;
     var orgU = t.creatorUid ? [t.creatorUid] : [];
-    _notify(t, orgU, _notifData(t, '⚠️ W.O. contestado', 'A falta de "' + c.absentName + '" em "' + (t.name || '') + '" foi contestada. Você decide.'));
-    _persist(t, prev, function () { window._woOpenClaim(tId, _ctxKey(ctx)); });
+    var data = _notifData(t, '⚠️ W.O. contestado', 'A falta de "' + c.absentName + '" em "' + (t.name || '') + '" foi contestada. Você decide.');
+    _commit(tId, function (ft) {
+      var c2 = _claimById(ft, claimId); if (!c2 || c2.status !== 'pending') return false;
+      c2.status = 'disputed'; c2.disputedByUid = cu.uid;
+    }, function () { _notify(t, orgU, data); window._woOpenClaim(tId, _ctxKey(ctx)); }, 'Registrando a contestação…');
   };
+
+  // Envolvidos num claim (jogadores do contexto + ausente + organizador), menos o
+  // próprio ator — pro REVERTER avisar todo mundo que o apontamento caiu.
+  function _claimAudience(t, c, actorUid) {
+    var rc = _resolveCtx(t, _ctxFromClaim(c));
+    var uids = (rc ? _allCtxUids(t, rc) : []).concat(c.absentUids || []);
+    if (t.creatorUid) uids.push(t.creatorUid);
+    var seen = {};
+    return uids.filter(function (u) { if (!u || u === actorUid || seen[u]) return false; seen[u] = 1; return true; });
+  }
+  function _revertClaim(tId, claimId) {
+    var t = _findT(tId); if (!t) return;
+    var c = _claimById(t, claimId); if (!c) return;
+    var cu = _cu() || {};
+    var aud = _claimAudience(t, c, cu.uid);
+    var data = _notifData(t, '↩️ Apontamento de W.O. revertido',
+      'O apontamento de falta de "' + c.absentName + '" em "' + (t.name || '') + '" foi revertido por ' + (cu.displayName || 'alguém') + '. Nada mudou na chave.');
+    _commit(tId, function (ft) {
+      var c2 = _claimById(ft, claimId); if (!c2 || c2.status === 'cancelled') return false;
+      c2.status = 'cancelled'; c2.resolvedAt = new Date().toISOString();
+    }, function (okSave) {
+      if (okSave) {
+        _notify(t, aud, data);
+        if (typeof showNotification === 'function') showNotification('↩️ Apontamento revertido', 'Todos os envolvidos foram avisados.', 'success');
+      }
+      window._woCloseOverlay();
+    }, 'Revertendo o apontamento…');
+  }
 
   window._woCancel = function (tId, claimId) {
     var t = _findT(tId); if (!t) return;
     var c = _claimById(t, claimId); if (!c) return;
     var cu = _cu(); if (!cu) return;
     if (cu.uid !== c.byUid && !_canManage(t)) return;
-    var prev = _snap(t);
-    c.status = 'cancelled'; c.resolvedAt = new Date().toISOString();
-    _persist(t, prev, function () { window._woCloseOverlay(); });
+    _revertClaim(tId, claimId);
   };
 
   window._woResolveApply = function (tId, claimId) {
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
     var c = _claimById(t, claimId); if (!c || (c.status !== 'pending' && c.status !== 'disputed')) return;
     var ctx = _ctxFromClaim(c); var rc = _resolveCtx(t, ctx); if (!rc) return;
-    var prev = _snap(t);
-    c.status = 'applied'; c.resolvedAt = new Date().toISOString();
-    var applied = _applyClaim(t, c, rc);
-    if (!applied.ok) { try { t.woClaims = JSON.parse(prev); } catch (e) {} if (typeof showNotification === 'function') showNotification('Não aplicou', applied.reason || '', 'warning'); return; }
-    _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '".'));
-    _persist(t, prev, function () { window._woCloseOverlay(); if (typeof showNotification === 'function') showNotification('✅ W.O. aplicado', applied.note || '', 'success'); });
+    _applyClaimViaGate(tId, claimId, null, true);
   };
 
   window._woResolveDiscard = function (tId, claimId) {
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
-    var c = _claimById(t, claimId); if (!c) return;
-    var prev = _snap(t);
-    c.status = 'cancelled'; c.resolvedAt = new Date().toISOString();
-    _persist(t, prev, function () { window._woCloseOverlay(); });
+    _revertClaim(tId, claimId);
   };
 
-  // ─── APLICAÇÃO do W.O. por formato ─────────────────────────────────────────────
-  function _markAbsentUid(t, uids) {
-    if (!t.absent || typeof t.absent !== 'object') t.absent = {};
-    (uids || []).forEach(function (u) { if (u) t.absent[u] = true; });
+  // Aplica o W.O. de um claim ATOMICAMENTE pelo portão. `confirmerUid` (ou null p/
+  // resolução do org) marca confirms. `orgResolve` aceita claim pending OU disputed.
+  // Liga/Rei-Rainha (escopo grupo) é INTERATIVO (_ligaPickFill abre diálogo): a
+  // marcação do claim vai pelo portão e o picker abre no onDone (1× só, fora da txn).
+  function _applyClaimViaGate(tId, claimId, confirmerUid, orgResolve) {
+    var t = _findT(tId); if (!t) return;
+    var c = _claimById(t, claimId); if (!c) return;
+    var ligaGroup = _isLigaGroup(t, c);
+    var applied; // resultado da exec LOCAL (síncrona) do mutator, pra UI
+    _commit(tId, function (ft) {
+      var c2 = _claimById(ft, claimId); if (!c2) return false;
+      if (orgResolve) { if (c2.status !== 'pending' && c2.status !== 'disputed') return false; }
+      else if (c2.status !== 'pending') return false; // idempotência (já resolvido)
+      if (confirmerUid) { c2.confirms = c2.confirms || {}; c2.confirms[confirmerUid] = true; }
+      c2.status = 'applied'; c2.resolvedAt = new Date().toISOString();
+      if (ligaGroup) return; // aplicação real via _ligaPickFill (interativo, no onDone)
+      var rc2 = _resolveCtx(ft, _ctxFromClaim(c2)); if (!rc2) { if (applied === undefined) applied = { ok: false, reason: 'contexto perdido' }; return false; }
+      var ap = _applyClaim(ft, c2, rc2);
+      if (applied === undefined) applied = ap;
+      if (!ap.ok) { c2.status = orgResolve ? c2.status : 'pending'; if (confirmerUid) { try { delete c2.confirms[confirmerUid]; } catch (e) {} } return false; }
+    }, function () {
+      if (ligaGroup) {
+        _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '".'));
+        window._woCloseOverlay();
+        if (typeof window._ligaPickFill === 'function') window._ligaPickFill(String(t.id), c.roundIndex, c.groupName, c.absentName);
+        return;
+      }
+      if (applied && applied.ok) {
+        _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '". ' + (applied.note || '')));
+        window._woCloseOverlay();
+        if (typeof showNotification === 'function') showNotification('✅ W.O. aplicado', applied.note || '', 'success');
+      } else if (applied) {
+        if (typeof showNotification === 'function') showNotification('Não aplicou', applied.reason || (orgResolve ? '' : 'Tente pelo painel do organizador.'), 'warning');
+      }
+    }, 'Aplicando o W.O.…');
   }
+
+  // ─── APLICAÇÃO do W.O. — funil no motor único _applyWO (participants.js) ────────
   function _applyClaim(t, c, rc) {
     try {
-      if (rc.scope === 'group' && (_isLiga(t) || _isMonarchFmt(t))) {
-        // Liga / Rei-Rainha: delega pro fluxo existente (folga / Jogador X).
-        if (typeof window._ligaPickFill === 'function') {
-          window._ligaPickFill(String(t.id), c.roundIndex, c.groupName, c.absentName);
-          return { ok: true, note: 'Escolha o substituto (folga / Jogador X).' };
-        }
-        return { ok: false, reason: 'fluxo da Liga indisponível' };
-      }
-      // Eliminatória OU Fase de Grupos: tenta substituto da lista de espera.
-      var subbed = false;
-      var hasPool = (Array.isArray(t.standbyParticipants) && t.standbyParticipants.length) || (Array.isArray(t.waitlist) && t.waitlist.length);
-      if (hasPool && c.absentUids.length && typeof window._processWoSubstitutions === 'function') {
-        _markAbsentUid(t, c.absentUids);
-        var r = window._processWoSubstitutions(String(t.id));
-        subbed = !!(r && r.subCount > 0);
-        if (!subbed) { c.absentUids.forEach(function (u) { if (t.absent) delete t.absent[u]; }); } // sem sub → desfaz a marca
-      }
-      if (subbed) return { ok: true, note: 'Substituto da lista de espera entrou no lugar.' };
-
-      // Sem substituto → adversário(s) vence(m) por W.O.
-      var matches = rc.matches.filter(function (m) { return m && !m.winner; });
-      var n = 0;
-      matches.forEach(function (m) {
-        var p1IsAbsent = m.p1 === c.absentName, p2IsAbsent = m.p2 === c.absentName;
-        if (!p1IsAbsent && !p2IsAbsent) return;
-        m.winner = p1IsAbsent ? m.p2 : m.p1;
-        m.wo = true; m.woAbsent = c.absentName;
-        if (rc.scope === 'match' && typeof window._advanceWinner === 'function') { try { window._advanceWinner(t, m); } catch (e) {} }
-        n++;
+      // Motor ÚNICO de W.O. (participants.js) — funil canônico. O claim é o
+      // gatilho fino: já validou permissão/consenso; aqui só aplica. Sem lista
+      // não-vazia + ninguém presente, o claim ESCALA (o consenso já resolveu que
+      // faltou) — por isso noSubBehavior:'escalate' (o organizador usa 'wait').
+      if (typeof window._applyWO !== 'function') return { ok: false, reason: 'motor de W.O. indisponível' };
+      var r = window._applyWO(t, {
+        absentName: c.absentName,
+        absentUids: c.absentUids,
+        scope: rc.scope,
+        matches: rc.matches,
+        roundIndex: c.roundIndex,
+        groupName: c.groupName,
+        noSubBehavior: 'escalate'
       });
-      if (n === 0) return { ok: false, reason: 'jogo do ausente não encontrado' };
-      if (rc.scope === 'match' && typeof window._maybeFinishElimination === 'function') { try { window._maybeFinishElimination(t); } catch (e) {} }
-      return { ok: true, note: 'Adversário venceu por W.O.' };
+      if (!r || !r.ok) return { ok: false, reason: (r && r.reason) || 'não aplicou' };
+      var note = r.outcome === 'ligaDelegated' ? (r.note || 'Escolha o substituto (folga / Jogador X).')
+        : r.outcome === 'subbed' ? 'Substituto da lista de espera entrou no lugar.'
+        : r.outcome === 'woApplied' ? 'Adversário venceu por W.O.'
+        : r.outcome === 'waitedTBD' ? 'Ausência registrada — adversário ainda não definido.'
+        : '';
+      return { ok: true, note: note };
     } catch (e) {
       try { console.error('[wo-claim] apply falhou:', e); } catch (_e) {}
       return { ok: false, reason: (e && e.message) || 'erro ao aplicar' };

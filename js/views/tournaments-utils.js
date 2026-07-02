@@ -735,15 +735,42 @@ window._isMultiPhase = function (t) { return !!(t && Array.isArray(t.phases) && 
 
 // Jogos reais já materializados de uma fase (i=0 → t.rounds; i>0 → t.matches[phaseIndex]).
 function _materializedPhaseGames(t, phaseIdx) {
+  // v4.1.31: conta SLOTS de jogo, incluindo os TBD (rodadas futuras de uma chave — semis,
+  // final, chave inferior, grande final ainda "a definir"). Antes excluía TBD → uma chave
+  // de 8 (single 7 / dupla 14) contava só a 1ª rodada (4) → total do torneio subcontava
+  // (ex.: Suíço 21 + dupla-elim = 35, mas mostrava 25). BYE/folga NÃO são jogo → fora.
   function real(m) {
     if (!m || m.isBye || m.isSitOut) return false;
-    var p1 = m.p1 || '', p2 = m.p2 || '';
-    if (!p1 || !p2 || p1 === 'BYE' || p2 === 'BYE' || p1 === 'TBD' || p2 === 'TBD') return false;
+    if (m.p1 === 'BYE' || m.p2 === 'BYE') return false;
     return true;
   }
   if (phaseIdx === 0) {
+    // v4.1.31: fase 0 = classificatória Liga/Suíço (rodadas incrementais) → PLANEJA
+    // `rodadas × jogos-por-rodada` (não só as rodadas já geradas), pra o total do TORNEIO
+    // ficar ESTÁVEL durante a fase (antes crescia 21→28→35 conforme sorteava). Jogos-por-
+    // rodada = floor(nº de entradas / 2) (ex.: 14 duplas → 7); usa o maior nº real já visto
+    // numa rodada como piso de segurança. Grupos/Rei-Rainha da fase 0 seguem contando o real.
+    var _cfg0 = (t.phases && t.phases[0]) || {};
+    var _fmt0 = String(_cfg0.format || _cfg0.formatCode || '').toLowerCase();
+    var _isMon0 = _cfg0.reiRainha === true || _cfg0.drawMode === 'rei_rainha' || /rei|rainha/.test(_fmt0);
+    var _isLg0 = (_cfg0.formatCode === 'liga') || /liga|su[ií]ç|ranking|pontos/.test(_fmt0);
+    if (_isLg0 && !_isMon0) {
+      var _rounds0 = parseInt(_cfg0.rounds, 10) || parseInt(t.swissRounds, 10) || 1;
+      var _entries = Array.isArray(t.participants) ? t.participants.length : 0;
+      var _perRound = Math.floor(_entries / 2);
+      var _maxReal = 0;
+      (t.rounds || []).forEach(function (r) { var rc = (r.matches || []).filter(real).length; if (rc > _maxReal) _maxReal = rc; });
+      if (_maxReal > _perRound) _perRound = _maxReal;
+      if (_perRound < 1) _perRound = 1;
+      return _rounds0 * _perRound;
+    }
     var c = 0;
     (t.rounds || []).forEach(function (r) { (r.matches || []).forEach(function (m) { if (real(m)) c++; }); });
+    // v4.1.77: fase 0 sorteada pelo motor canônico (Rei/Rainha, Grupos) guarda os jogos
+    // em t.matches TAGGEADO com phaseIndex 0 — com t.rounds VAZIO. Conta esses também,
+    // senão o total do torneio subconta a fase 0 e a barra roxa (torneio inteiro) chega a
+    // 100% já na fase classificatória. Mesma raiz do phaseComplete (fase 0 em t.matches).
+    c += (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === 0 && real(m); }).length;
     return c;
   }
   // v3.1.16 (inc 8): Liga incremental de fase posterior conta jogos em phaseRounds[idx].
@@ -781,9 +808,14 @@ function _simulatePhaseGames(t, phaseIdx) {
   };
   try {
     var built = eng.buildPhaseBrackets(prevGroups, t.phases[phaseIdx], cs, 'plan-' + phaseIdx);
-    return (built.matches || []).filter(function (m) {
+    var _uc = (built.matches || []).filter(function (m) {
       return m && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE';
     }).length;
+    // v4.1.31: Dupla Eliminatória clássica → buildPhaseBrackets devolve só a R1 do upper
+    // (uc jogos) + needsDoubleElim. O TOTAL da dupla-elim de N entrantes (uc*2, pot2) é
+    // 2N−2 = 4*uc−2 (upper N−1 + lower N−2 + grande final 1). Sem isto contava só a R1.
+    if (built.needsDoubleElim && _uc > 0) return (4 * _uc) - 2;
+    return _uc;
   } catch (e) { if (window._warn) window._warn('[plan] sim falhou', e); return null; }
 }
 
@@ -844,10 +876,32 @@ window._tournamentScheduledWindow = function (t) {
 // HTML interno (recomputado a cada tick).
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
+  // Multi-fase (ex.: Suíço classificatória → eliminatória): o "N/N partidas" e a barra
+  // do header refletem o TORNEIO INTEIRO (soma TODAS as fases via _tournamentGamesPlan),
+  // não só a fase atual — senão a classificatória sozinha aparece 100% (bug reportado).
+  // Liga tem escopo-de-rodada próprio no ramo _isLiga abaixo (que re-sobrepõe este prog).
+  if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentGamesPlan === 'function') {
+    var _gpHead = window._tournamentGamesPlan(t);
+    if (_gpHead && _gpHead.totalPlanned > 0) {
+      prog = { total: _gpHead.totalPlanned, completed: _gpHead.totalDone, pct: _gpHead.pct };
+    }
+  }
   if (!prog.total) return '';
   var isFinished = t.status === 'finished' || !!t.finishedAt;
   var now = Date.now();
-  var actualStart = t.tournamentStarted ? (+t.tournamentStarted) : null;
+  // INÍCIO EFETIVO = tournamentStarted OU, na falta dele, o PRIMEIRO jogo jogado (menor
+  // startedAt/resultAt). Lançar resultado É iniciar → a barra não pode ficar em "aguardando
+  // início" quando já há placar na mesa. FIM EFETIVO = último jogo (maior resultAt); vira o
+  // fim real quando o torneio encerra. Assim início e fim ficam registrados a partir dos JOGOS.
+  var _allStampsG = [], _endStampsG = [];
+  ((typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || [])).forEach(function (m) {
+    if (!m || m.isBye || m.isSitOut) return;
+    if (m.startedAt) _allStampsG.push(+m.startedAt);
+    if (m.resultAt) { _allStampsG.push(+m.resultAt); _endStampsG.push(+m.resultAt); }
+  });
+  var _earliestGameMs = _allStampsG.length ? Math.min.apply(null, _allStampsG) : null;
+  var _latestGameMs = _endStampsG.length ? Math.max.apply(null, _endStampsG) : null;
+  var actualStart = t.tournamentStarted ? (+t.tournamentStarted) : _earliestGameMs;
   var schedStart = window._tProgParseMs(t.startDate);
   var plannedEnd = window._tProgParseMs(t.endDate);
   if (!plannedEnd) {
@@ -1039,7 +1093,15 @@ window._buildProgressInner = function(t) {
     '</div>';
   }
 
-  var head = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;">' +
+  // Status "Torneio em andamento" no TOPO e CENTRO do box (pedido do dono) — verde pulsando.
+  // Só no estado ATIVO; "encerrado" e "aguardando início" já têm indicadores próprios abaixo
+  // (evita duplicar). Substitui o badge separado que ficava embaixo (tournaments.js).
+  var _statusLine = (!isFinished && actualStart)
+    ? '<div style="text-align:center;margin-bottom:9px;font-size:0.85rem;font-weight:800;color:#4ade80;display:flex;align-items:center;justify-content:center;gap:7px;">' +
+        '<span style="width:9px;height:9px;border-radius:50%;background:#10b981;display:inline-block;flex-shrink:0;animation:pulse 2s infinite;"></span>Torneio em andamento</div>'
+    : '';
+  var head = _statusLine +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;">' +
     '<span style="font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;opacity:0.85;">' + _labelHead + '</span>' +
     '<span style="font-size:0.92rem;font-weight:800;">' + prog.completed + '/' + prog.total + (_isLiga ? ' jogos' : ' partidas') + ' (' + prog.pct + '%)</span>' +
   '</div>';
@@ -1099,14 +1161,23 @@ window._buildProgressInner = function(t) {
 
   var estEndMs;
   if (_roundEndReal) estEndMs = _roundEndReal;
-  else if (isFinished) estEndMs = (finishedMs != null ? finishedMs : now);
+  // FIM REAL do torneio encerrado = ÚLTIMO jogo jogado (maior resultAt); só cai no finishedAt/
+  // now se não houver jogo com resultado. Assim o fim mostra a hora/dia do jogo final, não a
+  // hora em que o status virou 'finished'.
+  else if (isFinished) estEndMs = (_latestGameMs != null ? _latestGameMs : (finishedMs != null ? finishedMs : now));
   else if (!_notStarted && progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
   else estEndMs = plannedEnd;
 
   var _endLabel = _roundEndReal ? 'final real' : (isFinished ? 'final real' : 'final estimado');
   var _elapsedLabel = (_roundEndReal || isFinished) ? 'durou' : 'decorrido';
-  // mostra DATA quando início e fim caem em dias diferentes
-  var _multiDay = !_notStarted && (_date(actualStart) !== _date(estEndMs));
+  // mostra DATA (dia) na linha REAL quando: (a) início e fim reais caem em dias diferentes, OU
+  // (b) o dia REAL dos jogos difere do dia PROGRAMADO (ex.: jogado hoje, programado p/ 25/07) —
+  // aí o horário sozinho engana. Pedido do dono.
+  var _multiDay = !_notStarted && (
+    _date(actualStart) !== _date(estEndMs) ||
+    (schedStart && _date(actualStart) !== _date(schedStart)) ||
+    (schedStart && _date(estEndMs) !== _date(schedStart))
+  );
 
   var _timeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
   var _lblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';

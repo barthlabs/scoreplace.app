@@ -67,6 +67,7 @@ Os formatos são **4**: Eliminatória Simples · Dupla Eliminatória · Grupos �
 | **categorias na TRANSIÇÃO** (`generatePhase` split de Eliminatória por categoria: N chaves independentes, sem pareamento cruzado, seeding 1×N por categoria, categorias desiguais, 3º por categoria, sem-categoria=1 chave) | ✅ 17 asserts | tests/category-transition.test.js |
 | **dupla-eliminatória** (4/8): topologia upper+lower+grande final, loser-drop (upper→lower via loserMatchId, upper final→lower final), ciclo de vida completo → 1 campeão + ZERO órfãos | ✅ 16 asserts | tests/double-elim.test.js |
 | **Gate de aprovação de resultado** (`_resultNeedsApproval`): resultEntry (players/all/array/organizer) × papel (participante/org/fora) × adversário (uid/TBD/BYE/informal) × disputa | ✅ 13 asserts | tests/result-approval-gate.test.js |
+| **Agendamento de sorteio — MATH** (`_owedDrawSlotMs` núcleo puro + `_nextOwedDrawMs` gates): slot devido fica <= now enquanto pendente, dedup por lastFired/lastAutoDrawAt; intervalo<1 = sorteio único; só Liga/Ranking auto (não-manual, com data, não-encerrado); cap por temporada (endDate) | ✅ 22 asserts | tests/draw-schedule.test.js |
 | Orquestração 4 fases do resultado (notify/contest/approve) — acoplada a AppStore/Firestore/DOM | ⬜ FALTA (camada 2 / Playwright) | — |
 | **E2E logado** (DOM/Firestore/render — onde moram os bugs de "abriu e não funcionou") | ⬜ FALTA (precisa emulador) | — |
 

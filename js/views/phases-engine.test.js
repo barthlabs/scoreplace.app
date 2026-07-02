@@ -448,9 +448,9 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   eq([src(oit[0].id, 'p1'), src(oit[0].id, 'p2')], [1, 2], 'oitavas[0] = vencedor jogo1 × vencedor jogo2');
   eq([src(oit[1].id, 'p1'), src(oit[1].id, 'p2')], [3, 4], 'oitavas[1] = vencedor jogo3 × vencedor jogo4');
   eq([src(oit[5].id, 'p1'), src(oit[5].id, 'p2')], [11, 12], 'oitavas[5] = vencedor jogo11 × vencedor jogo12');
-  // últimas 2 oitavas: sem vencedor ligado (só repescados via repDirectP1/P2)
+  // últimas 2 oitavas: sem vencedor ligado (só repescados via repFill — mecanismo único)
   eq([src(oit[6].id, 'p1'), src(oit[6].id, 'p2')], [null, null], 'oitavas[6] = repescados (sem vencedor)');
-  ok(oit[6].repDirectP1 != null && oit[6].repDirectP2 != null, 'oitavas[6] preenchida por 2 melhores perdedores');
+  ok(Array.isArray(oit[6].repFill) && oit[6].repFill.length === 2, 'oitavas[6] preenchida por 2 melhores perdedores (repFill)');
 })();
 
 // ── v3.1: FASE DE GRUPOS como fase posterior ───────────────────────────────
@@ -553,41 +553,41 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(!eng.phaseIsMonarch({ format: 'liga' }), 'phaseIsMonarch: liga sem reiRainha não é monarch');
   ok(!eng.phaseIsGroups({ reiRainha: true, formatCode: 'grupos_mata' }), 'phaseIsGroups: reiRainha tem precedência (não é grupos)');
 
-  // 8 classificados → 2 grupos de 4, 3 jogos (parceiros rotativos) cada = 6.
+  // Campanha kill-monarch-format: monarch NÃO tem gerador de rodada única — é rota
+  // league INCREMENTAL (pool → rodadas via _generateNextRound/_phaseGenNextLeagueRound).
   var prevG = [{ name: 'Classif', standings: [] }];
   for (var i = 1; i <= 8; i++) prevG[0].standings.push({ name: 'P' + i, uid: 'u' + i });
   var csId = function (g) { return g.standings; };
   var mcfg = { name: 'Rei/Rainha Final', format: 'liga', reiRainha: true,
     source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 999 }] } };
-  var built = eng.buildPhaseMonarchStage(prevG, mcfg, csId, 'tm');
-  eq(built.groups.length, 2, 'monarch: 2 grupos de 4');
-  eq(built.matches.length, 6, 'monarch: 3 jogos × 2 grupos = 6');
-  ok(built.matches.every(function (m) { return m.bracket === 'monarch' && m.isMonarch && m.team1.length === 2 && m.team2.length === 2; }), 'monarch: bracket/isMonarch/duplas 2x2');
-  // parceiros rotativos no grupo A: cada jogador joga com cada um dos outros 3
-  var gA = built.matches.filter(function (m) { return m.groupIdx === 0; });
-  eq(gA.length, 3, 'monarch grupo A: 3 jogos');
-  // sobra: 10 classificados → 2 grupos (8 usados) + 2 de fora
-  var prev10 = [{ name: 'C', standings: [] }];
-  for (var j = 1; j <= 10; j++) prev10[0].standings.push({ name: 'Q' + j });
-  var b10 = eng.buildPhaseMonarchStage(prev10, mcfg, function (g) { return g.standings; }, 'tm2');
-  eq(b10.groups.length, 2, 'monarch 10: 2 grupos (8 usados)');
-  eq(b10.leftOut.length, 2, 'monarch 10: 2 jogadores de fora');
+  ok(typeof eng.buildPhaseMonarchStage === 'undefined' && typeof eng.genMonarchFromPool === 'undefined',
+    'monarch: geradores de rodada única REMOVIDOS do motor');
+  var bInc = eng.generatePhase(prevG[0].standings.map(function (s) { return { displayName: s.name, uid: s.uid }; }), mcfg, { idPrefix: 'tm' });
+  ok(bInc && bInc.incrementalLeague === true && (bInc.pool || []).length === 8, 'monarch: generatePhase → pool incremental (rota league)');
 
-  // feed-forward: simula jogos (time1 sempre vence) → standings individual.
-  built.matches.forEach(function (m) { m.phaseIndex = 1; m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = 2; });
-  var t = { phases: [{}, mcfg], matches: built.matches };
+  // feed-forward COMPAT: jogos monarch do modelo antigo (t.matches taggeado) ainda
+  // são lidos por bracketPhaseGroups (torneios já sorteados em prod).
+  var oldMs = [];
+  [['P1','P2','P3','P4'], ['P5','P6','P7','P8']].forEach(function (P, gi) {
+    [{ t1: [P[0], P[1]], t2: [P[2], P[3]] }, { t1: [P[0], P[2]], t2: [P[1], P[3]] }, { t1: [P[0], P[3]], t2: [P[1], P[2]] }].forEach(function (pr, mi) {
+      oldMs.push({ id: 'om' + gi + mi, phaseIndex: 1, round: 1, bracket: 'monarch', isMonarch: true,
+        monarchGroup: gi, groupIdx: gi, team1: pr.t1.slice(), team2: pr.t2.slice(),
+        p1: pr.t1.join(' / '), p2: pr.t2.join(' / '), winner: pr.t1.join(' / '), scoreP1: 6, scoreP2: 2 });
+    });
+  });
+  var t = { phases: [{}, mcfg], matches: oldMs };
   var fed = eng.bracketPhaseGroups(t, 1);
-  eq(fed.length, 2, 'monarch feed-forward: 2 grupos com standings');
+  eq(fed.length, 2, 'monarch feed-forward (compat modelo antigo): 2 grupos com standings');
   eq(fed[0].standings.length, 4, 'monarch feed: 4 jogadores por grupo');
 
-  // materialize HONRA rei_rainha (gera jogos monarch, não chave).
+  // materialize roteia monarch pra INCREMENTAL (pool em t.phaseRounds, sem jogos prontos).
   var t2 = { phases: [{ name: 'F0' }, mcfg], currentPhaseIndex: 0,
     groups: [{ name: 'G', players: ['P1','P2','P3','P4','P5','P6','P7','P8'], matches: [] }] };
   var cs0 = function (g) { return (g.players || []).map(function (n) { return { name: n, displayName: n }; }); };
   var res = eng.materializeNextPhase(t2, cs0, 'm');
-  ok(res.ok, 'materialize monarch: ok');
-  var pm = t2.matches.filter(function (m) { return (m.phaseIndex || 0) === 1; });
-  ok(pm.length === 6 && pm.every(function (m) { return m.bracket === 'monarch'; }), 'materialize: gerou 6 jogos REI/RAINHA (não chave)');
+  ok(res.ok && res.incrementalLeague === true, 'materialize monarch: ok (rota incremental)');
+  ok(t2.phaseRounds && t2.phaseRounds[1] && (t2.phaseRounds[1].pool || []).length === 8, 'materialize: pool de 8 em t.phaseRounds[1] (rodadas geradas pelo motor único)');
+  ok((t2.matches || []).filter(function (m) { return (m.phaseIndex || 0) === 1; }).length === 0, 'materialize: NADA no modelo antigo (t.matches)');
 })();
 
 // ── v3.1: LIGA (Pontos Corridos) como fase posterior ───────────────────────
