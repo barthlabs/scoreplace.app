@@ -1710,12 +1710,8 @@ function setupCreateTournamentModal() {
       return m;
     });
   };
-  // Destinos de uma fase. `defaultLabel` é só a sugestão — o organizador renomeia
-  // a trilha (Ouro/Prata/A/B/…) livremente; o nome digitado vive em mapping[i].label.
-  function _phaseDests(format) {
-    if (format === 'elim_dupla') return [ { key: 'upper', icon: '🥇', defaultLabel: 'Ouro' }, { key: 'lower', icon: '🥈', defaultLabel: 'Prata' } ];
-    return [ { key: 'main', icon: '🏆', defaultLabel: 'Classificados que avançam' } ];
-  }
+  // (removido v4.3.3: _phaseDests tinha rótulos "Ouro"/"Prata" hardcoded e zero callers —
+  //  o nome de cada linha é 100% do organizador via mapping[i].label. Sem defaults de nome.)
   window._addPhase = function() {
     window._phasesUserTouched = true; // v3.0.x: o usuário mexeu nas fases de propósito
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];

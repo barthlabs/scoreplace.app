@@ -827,10 +827,20 @@ window.showUnifiedResolutionPanel = function(tId) {
     var _uUnit1 = info.isTeam ? 'time' : 'participante';
     var _uG = Math.floor(info.effectiveTeams / 2);
     var _nBL = Math.max(0, info.loP2 - _uG), _nMiss = info.missing, _nExc = info.excess;
+    // Repescagem — texto SIMPLIFICADO (a lógica EXATA vive em genTierBracket/phases-engine
+    // e não muda). _piRep = repSpots = T − ⌊n/2⌋ = quantas pessoas que seriam desclassificadas
+    // na 1ª rodada CONTINUAM (repescadas) pra completar a chave de T (potência de 2 abaixo).
+    // Ex.: 25 → T=16, ⌊25/2⌋=12 → 4 repescados. Só mostramos esse número; o detalhe do jogo
+    // extra (quem enfrenta quem) fica implícito. Muda sozinho conforme o nº de classificados.
+    var _piT = info.loP2, _piRep = Math.max(1, _piT - Math.floor(info.effectiveTeams / 2));
+    var _piRepLine = (_piRep === 1)
+        ? 'O melhor repescado joga novamente'
+        : ('Os ' + _piRep + ' melhores repescados jogam novamente');
+    var _piLines = ['Todos jogam a 1ª rodada', _piRepLine, 'Chave de ' + _piT];
     window._unifiedSummary = {
         reopen:    { title: _t('predraw.optReopenTitle'),    lines: [(_nMiss === 1 ? 'Espera mais 1 ' + _uUnit1 + ' se inscrever' : 'Espera mais ' + _nMiss + ' ' + _uUnit + ' se inscreverem'), 'Chave de ' + info.hiP2 + ' (potência de 2)'] },
         bye:       { title: _t('predraw.optByeTitle'),       lines: ['Chave de ' + info.hiP2, (_nMiss === 1 ? 'O melhor folga (BYE) a 1ª rodada' : 'Os ' + _nMiss + ' melhores folgam (BYE) a 1ª rodada'), 'Os demais jogam a 1ª rodada normal'] },
-        playin:    { title: _t('predraw.optPlayinTitle'),    lines: ['Todos disputam a 1ª rodada', (_nBL <= 0 ? 'Os vencedores passam para a 2ª rodada' : (_nBL === 1 ? 'Vencedores e 1 melhor derrotado passam para a 2ª rodada' : 'Vencedores e ' + _nBL + ' melhores derrotados passam para a 2ª rodada')), 'Chave de ' + info.loP2] },
+        playin:    { title: _t('predraw.optPlayinTitle'),    lines: _piLines },
         standby:   { title: _t('predraw.optStandbyTitle'),   lines: ['Chave de ' + info.loP2 + ' (potência de 2)', (_nExc === 1 ? 'O último vai pra lista de espera' : 'Os ' + _nExc + ' últimos vão pra lista de espera'), 'Disponíveis pra substituir num W.O.'] },
         exclusion: { title: _t('predraw.optExclusionTitle'), lines: ['Chave de ' + info.loP2, (_nExc === 1 ? 'O último é removido do torneio' : 'Os ' + _nExc + ' últimos são removidos do torneio')] },
         swiss:     { title: _t('predraw.optSwissTitle'),     lines: ['Troca pro formato Suíço', 'Todos jogam várias rodadas, sem eliminação direta', 'Classificação por pontos'] },
@@ -842,11 +852,20 @@ window.showUnifiedResolutionPanel = function(tId) {
     window._renderUnifiedOptions = function(excludedKeys) {
         excludedKeys = excludedKeys || [];
 
-        // v4.x fase: a próxima fase é Dupla Eliminatória? → oculta BYE (fluxo assimétrico).
+        // v4.x fase: o BYE SÓ é problemático na DUPLA ELIMINATÓRIA CLÁSSICA — que exige
+        // uma LINHA ÚNICA ('main'), onde a chave inferior é CONECTADA (o jogo-BYE não tem
+        // "perdedor" pra dropar → vagas mortas → fluxo assimétrico). Nº de linhas (1/2/4)
+        // é ORTOGONAL ao formato: com 2 ou 4 linhas, cada uma é uma eliminatória simples
+        // INDEPENDENTE (com ou sem grande final unindo os campeões) e o BYE resolve a
+        // potência de 2 de CADA linha normalmente (genTierBracket resolution 'bye'). Então
+        // só escondemos o BYE quando é dupla clássica = 1 linha só. Espelha _duplaClassic em
+        // phases-engine (byDest.main, sem linhas paralelas). feedback_resolution_one_logic.
         var _phaseNextIsDupla = false;
         if (t._phaseResInfo) {
             var _pCfg = (t.phases && t._phaseResInfo.nextIdx != null) ? (t.phases[t._phaseResInfo.nextIdx] || {}) : {};
-            _phaseNextIsDupla = /dupla/i.test(String(_pCfg.format || '')) || _pCfg.formatCode === 'elim_dupla';
+            var _isDuplaFmt = /dupla/i.test(String(_pCfg.format || '')) || _pCfg.formatCode === 'elim_dupla';
+            var _isMultiLine = (t._phaseResInfo.lines || []).length >= 2;
+            _phaseNextIsDupla = _isDuplaFmt && !_isMultiLine;
         }
 
         // Dynamic descriptions based on context

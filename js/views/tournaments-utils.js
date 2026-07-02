@@ -873,6 +873,64 @@ window._tournamentScheduledWindow = function (t) {
   };
 };
 
+// v4.3.8: progresso da RODADA ATUAL da fase POSTERIOR (chaves em t.matches, phaseIndex>=1).
+// Agrupa os jogos da fase por `round` (as trilhas paralelas — ex.: Ouro/Prata — somam no
+// mesmo round). Rodada atual = a 1ª (ordenada) com jogo pendente; se todas prontas, a última.
+// roundNum = índice sequencial da rodada dentro da fase (1-based). BYE/sit-out não contam.
+window._phaseCurrentRoundProgress = function(t) {
+  var _cp = (t && t.currentPhaseIndex) || 0;
+  if (!t || _cp < 1 || !Array.isArray(t.matches)) return null;
+  var _isBye = window._isByeMatch || function(m){ return !!(m && m.isBye); };
+  var pm = t.matches.filter(function(m){ return m && (m.phaseIndex || 0) === _cp && !_isBye(m) && !m.isSitOut; });
+  if (!pm.length) return null;
+  var byRound = {};
+  pm.forEach(function(m){ var r = (m.round == null ? 1 : m.round); (byRound[r] = byRound[r] || []).push(m); });
+  var rounds = Object.keys(byRound).map(Number).sort(function(a, b){ return a - b; });
+  var curR = null, gi;
+  for (gi = 0; gi < rounds.length; gi++) {
+    var g = byRound[rounds[gi]];
+    if (g.filter(function(m){ return m.winner; }).length < g.length) { curR = rounds[gi]; break; }
+  }
+  if (curR == null) curR = rounds[rounds.length - 1];
+  var cur = byRound[curR];
+  var total = cur.length, done = cur.filter(function(m){ return m.winner; }).length;
+  var starts = [], ends = [];
+  cur.forEach(function(m){ if (m.startedAt) starts.push(+m.startedAt); if (m.resultAt) ends.push(+m.resultAt); });
+  var _idx = rounds.indexOf(curR);
+  // v4.3.16: NOME FUNCIONAL da rodada (Oitavas/Quartas/Semifinais/Final/3º lugar), por
+  // ANALOGIA à nomeação das colunas do bracket — mas contando jogos POR TRILHA (Ouro/Prata
+  // somam no mesmo round, então dividimos pelo nº de trilhas). Jogo de 3º lugar não conta
+  // como "avanço". Só padrão (1/2/4/8 por trilha) recebe nome; senão "Rodada N".
+  var _t2 = window._t || function(k){ return k; };
+  var _bks = {}, _thirdN = 0, _isGrand = false;
+  cur.forEach(function(m){
+    if (m.isThirdPlace) _thirdN++;
+    var bk = m.bracket || 'main';
+    if (bk === 'grand' || bk === 'grandfinal') _isGrand = true; else _bks[bk] = 1;
+  });
+  var _nBk = Math.max(Object.keys(_bks).length, 1);
+  var _advN = total - _thirdN;
+  var _perTier = Math.round(_advN / _nBk);
+  var _name;
+  if (_isGrand) _name = _t2('bracket.grandFinal');
+  else if (_advN === 0 && _thirdN > 0) _name = 'Disputa de 3º/4º lugar';
+  else if (_perTier === 1) _name = _t2('bracket.final');
+  else if (_perTier === 2) _name = _t2('bracket.semiFinal');
+  else if (_perTier === 4) _name = _t2('bracket.quarterFinal');
+  else if (_perTier === 8) _name = _t2('bracket.roundOf16');
+  else _name = _t2('bracket.round', { n: _idx + 1 });
+  // fallback se a chave i18n não resolveu (retornou a própria chave)
+  if (!_name || _name.indexOf('bracket.') === 0) _name = 'Rodada ' + (_idx + 1);
+  return {
+    roundNum: _idx + 1,
+    name: _name,
+    total: total, done: done, pct: total ? Math.round(done / total * 100) : 0,
+    complete: total > 0 && done === total,
+    roundStartMs: starts.length ? Math.min.apply(null, starts) : null,
+    roundEndMs: (done === total && ends.length) ? Math.max.apply(null, ends) : null
+  };
+};
+
 // HTML interno (recomputado a cada tick).
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
@@ -919,8 +977,14 @@ window._buildProgressInner = function(t) {
   // 🟢 verde = % da rodada concluída; 🔵 azul = tempo regulamentar (do sorteio
   // desta rodada até o PRÓXIMO sorteio); início real = 1º ponto da rodada;
   // final real = último ponto (round.completedAt).
-  var _isLiga = !!(window._isLigaFormat && window._isLigaFormat(t)) && Array.isArray(t.rounds) && t.rounds.length > 0;
   var _mp = !!(window._isMultiPhase && window._isMultiPhase(t));
+  var _cp = t.currentPhaseIndex || 0;
+  // v4.3.8: fase POSTERIOR materializada (chaves em t.matches) → a barra verde ("rodada")
+  // reflete a RODADA ATUAL DESSA fase, não os rounds da Fase 0 (t.rounds). Senão ficava
+  // presa na última rodada da classificatória (bug: "RODADA 1 75/75" estando na R1 da fase 2).
+  var _inLaterPhase = _mp && _cp >= 1 && Array.isArray(t.matches) && t.matches.some(function(m){ return m && (m.phaseIndex || 0) === _cp; });
+  var _isLiga = !!(window._isLigaFormat && window._isLigaFormat(t)) && Array.isArray(t.rounds) && t.rounds.length > 0 && !_inLaterPhase;
+  var _phaseRoundActive = false;
   var _roundComplete = false, _roundCompletedMs = null, _roundNum = 0;
   var _labelSchedStart = 'início programado', _labelSchedEnd = 'final programado', _labelHead = 'Progresso do Torneio';
   if (_isLiga) {
@@ -981,6 +1045,37 @@ window._buildProgressInner = function(t) {
       actualStart = _roundStart || null;
       _labelSchedStart = 'início programado';
       _labelSchedEnd = 'final programado';
+    }
+  }
+
+  // v4.3.8: barra verde ESCOPADA NA RODADA ATUAL DA FASE POSTERIOR (chaves em t.matches).
+  // A rodada = grupo de jogos com o mesmo `round` (as duas trilhas Ouro/Prata somam — R1 da
+  // fase 2 com 24 jogos + 2 repescagem = 26; R2 = 16; e por aí). Rodada atual = a 1ª com
+  // jogo pendente; se todas prontas, a última. Sobrepõe o prog do torneio inteiro (que fica
+  // na barra roxa) só pra ESTA barra verde.
+  if (_inLaterPhase && typeof window._phaseCurrentRoundProgress === 'function') {
+    var _pr = window._phaseCurrentRoundProgress(t);
+    if (_pr && _pr.total > 0) {
+      _phaseRoundActive = true;
+      prog = { total: _pr.total, completed: _pr.done, pct: _pr.pct };
+      progFrac = _pr.total ? (_pr.done / _pr.total) : 0;
+      _roundNum = _pr.roundNum;
+      _roundComplete = _pr.complete;
+      _roundCompletedMs = _pr.roundEndMs;
+      _labelHead = _pr.name || ('Rodada ' + _roundNum);
+      _labelSchedStart = 'início programado';
+      _labelSchedEnd = 'final programado';
+      actualStart = _pr.roundStartMs || null;
+      var _phL = (t.phases && t.phases[_cp]) || {};
+      var _cfgSL = window._tProgParseMs(_phL.startDate ? (_phL.startDate + (_phL.startTime ? ('T' + _phL.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
+      var _cfgEL = window._tProgParseMs(_phL.endDate ? (_phL.endDate + (_phL.endTime ? ('T' + _phL.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
+      if (_cfgSL) schedStart = _cfgSL;
+      if (_cfgEL) { plannedEnd = _cfgEL; }
+      else {
+        var _gdL = parseInt(t.gameDuration) || 30, _ctL = parseInt(t.callTime) || 0, _wuL = parseInt(t.warmupTime) || 0;
+        var _crtL = Math.max(parseInt(t.courtCount) || 1, 1), _slotL = _gdL + _ctL + _wuL + 5;
+        plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_pr.total / _crtL) * _slotL * 60000;
+      }
     }
   }
 
@@ -1103,7 +1198,7 @@ window._buildProgressInner = function(t) {
   var head = _statusLine +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;">' +
     '<span style="font-size:0.82rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;opacity:0.85;">' + _labelHead + '</span>' +
-    '<span style="font-size:0.92rem;font-weight:800;">' + prog.completed + '/' + prog.total + (_isLiga ? ' jogos' : ' partidas') + ' (' + prog.pct + '%)</span>' +
+    '<span style="font-size:0.92rem;font-weight:800;">' + prog.completed + '/' + prog.total + ((_isLiga || _phaseRoundActive) ? ' jogos' : ' partidas') + ' (' + prog.pct + '%)</span>' +
   '</div>';
 
   // v2.7.79: barra simples ("pobre") SÓ quando não há janela programada (sem
@@ -1131,7 +1226,7 @@ window._buildProgressInner = function(t) {
       '<div style="width:100%;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">' +
         '<div style="width:' + prog.pct + '%;height:100%;background:' + c + ';border-radius:4px;transition:width 0.5s ease;"></div>' +
       '</div>' +
-      (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ ' + (_isLiga ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
+      (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ ' + ((_isLiga || _phaseRoundActive) ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
       _estLine2 +
       _ligaBarHtml;
   }
@@ -1139,7 +1234,7 @@ window._buildProgressInner = function(t) {
   var finishedMs = t.finishedAt ? (typeof t.finishedAt === 'number' ? t.finishedAt : new Date(t.finishedAt).getTime()) : null;
   if (finishedMs != null && isNaN(finishedMs)) finishedMs = null;
   // fim "real" da rodada (Liga) quando completa → congela o cronômetro
-  var _roundEndReal = (_isLiga && _roundComplete && _roundCompletedMs) ? _roundCompletedMs : null;
+  var _roundEndReal = ((_isLiga || _phaseRoundActive) && _roundComplete && _roundCompletedMs) ? _roundCompletedMs : null;
   var endForElapsed = _roundEndReal ? _roundEndReal : ((isFinished && finishedMs != null) ? finishedMs : now);
   // v2.7.79: não iniciado (sorteado, sem 1º ponto) → modo "aguardando início":
   // não há "início real / decorrido"; usamos só a janela programada + barras.

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.3.2-beta';
+window.SCOREPLACE_VERSION = '4.3.16-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura

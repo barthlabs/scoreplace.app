@@ -72,6 +72,11 @@ function _applyMyMatchesFilter() {
     clearTimeout(window._pendingSoftRefresh);
     var _goMine = function (behavior) {
       try {
+        // Fase concluída + organizador → o banner "🏆 Avançar" está no topo. O alvo do
+        // scroll passa a ser ELE (a próxima ação do org é avançar de fase), não o jogo/
+        // grupo do usuário. Só existe pro organizador quando a fase fecha (bracket.js).
+        var _adv = document.getElementById('phase-advance-banner');
+        if (_adv) { _adv.scrollIntoView({ behavior: behavior, block: 'start' }); return; }
         var _mine = document.querySelector('[data-my-pending="1"]') || document.querySelector('[data-my-match="1"]');
         if (!_mine) return;
         var _target = (typeof _mine.closest === 'function' && _mine.closest('[data-group-box]')) || _mine;
@@ -318,51 +323,72 @@ function renderBracket(container, tournamentId, isInline) {
     var _curPh = t.currentPhaseIndex || 0;
     if (_curPh > 0 && typeof window._renderPhaseBracket === 'function') {
       var _tIdEsc2 = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      // v3.1.28: navegação de fases — qual fase está sendo VISUALIZADA (default = atual).
-      if (!window._bracketViewPhase) window._bracketViewPhase = {};
-      var _vp = window._bracketViewPhase[t.id];
-      if (_vp == null || _vp > _curPh || _vp < 0) _vp = _curPh;
-      var _viewingPast = _vp < _curPh;
 
-      // Fase de chave concluída E existe próxima fase → banner pra avançar (só na fase ATUAL).
+      // Fase de chave concluída E existe próxima fase → banner pra avançar (fase ATUAL).
       var _nextBanner = '';
-      if (!_viewingPast && isOrg && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
+      if (isOrg && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
         var _nnNm = window._safeHtml(((t.phases[_curPh + 1] || {}).name) || 'próxima fase');
-        _nextBanner = '<div style="margin:0 0 1rem;padding:14px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(99,102,241,0.12));border:1px solid rgba(251,191,36,0.45);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+        _nextBanner = '<div id="phase-advance-banner" style="margin:0 0 1rem;padding:14px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(99,102,241,0.12));border:1px solid rgba(251,191,36,0.45);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
           '<div style="flex:1;min-width:180px;"><div style="font-weight:800;color:var(--text-bright);">Fase concluída ✓</div><div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px;">Avance para <strong>' + _nnNm + '</strong> — as chaves serão geradas pelas colocações desta fase.</div></div>' +
           '<button class="btn btn-success hover-lift" style="white-space:nowrap;" onclick="window._advanceMultiPhase(\'' + _tIdEsc2 + '\')">🏆 Avançar</button>' +
           '</div>';
       }
 
-      // Botão vertical "Fase anterior" (estilo "Mostrar ocultas") — aparece sempre que
-      // a fase VISUALIZADA tem uma fase anterior (encerrada) que dá pra conferir.
-      var _phaseNav = '';
-      if (_vp > 0) {
-        var _prevName = window._safeHtml(((t.phases[_vp - 1] || {}).name) || ('Fase ' + _vp));
-        _phaseNav = '<button onclick="window._bracketGoPrevPhase(\'' + _tIdEsc2 + '\')" title="Conferir a fase anterior (encerrada): ' + _prevName + '" style="position:sticky;top:112px;align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 8px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;background:rgba(99,102,241,0.14);border:1px solid rgba(129,140,248,0.45);color:#a5b4fc;border-radius:10px;font-size:0.74rem;font-weight:700;cursor:pointer;">👁 Fase anterior</button>';
+      // v4.3.10 (pedido do dono): revelador de fase anterior no PADRÃO CANÔNICO — botão
+      // VERTICAL STICKY à esquerda (igual "👁 Mostrar ocultas" das chaves), sempre visível
+      // no scroll. ADITIVO: a fase atual fica SEMPRE à direita; clicar revela as fases
+      // anteriores (encerradas, read-only) ACIMA da atual, sem esconder nada. Estado por
+      // torneio em window._phasePrevOpen[tId]; re-render via _rerenderBracket.
+      var _currentContent = window._renderPhaseBracket(t, canEnterResult, standbyHtml, null);
+      if (!window._phasePrevOpen) window._phasePrevOpen = {};
+      var _prevOpen = !!window._phasePrevOpen[t.id];
+      // v4.3.15: UM nível para trás por vez. Enquanto a FASE ATUAL ainda tem rodada
+      // OCULTA (botão "Mostrar ocultas"), o "Fase anterior" NÃO aparece — o usuário revela
+      // primeiro as rodadas desta fase; só quando não há mais oculta é que surge o botão
+      // pra ir à fase anterior. Evita os DOIS botões verticais empilhados ao mesmo tempo.
+      var _hasHiddenInPhase = false;
+      if (window._hiddenRoundsTier) {
+        var _hrPref = t.id + '|';
+        _hasHiddenInPhase = Object.keys(window._hiddenRoundsTier).some(function (k) {
+          return k.indexOf(_hrPref) === 0 && window._hiddenRoundsTier[k] && window._hiddenRoundsTier[k].size > 0;
+        });
       }
-
-      // Banner "visualizando fase encerrada" + voltar à atual (só quando viewing past).
-      var _pastBanner = '';
-      if (_viewingPast) {
-        var _vpName = window._safeHtml(((t.phases[_vp] || {}).name) || ('Fase ' + (_vp + 1)));
-        _pastBanner = '<div style="margin:0 0 1rem;padding:12px 16px;background:rgba(99,102,241,0.1);border:1px solid rgba(129,140,248,0.35);border-radius:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
-          '<div style="flex:1;min-width:160px;font-size:0.85rem;color:var(--text-bright);font-weight:700;">👁 Conferindo <strong>' + _vpName + '</strong> — fase encerrada (só leitura)</div>' +
-          '<button class="btn btn-primary btn-sm hover-lift" onclick="window._bracketGoCurrentPhase(\'' + _tIdEsc2 + '\')" style="white-space:nowrap;">↩ Voltar à fase atual</button>' +
+      var _prevBtn = (_hasHiddenInPhase && !_prevOpen)
+        ? ''
+        : '<button class="btn btn-micro btn-outline" onclick="window._togglePhasePrev(\'' + _tIdEsc2 + '\')" title="Ver resultados e chaves das fases anteriores (encerradas) sem sair da fase atual" style="position:sticky;top:112px;align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">' + (_prevOpen ? '✕ Ocultar anterior' : '👁 Fase anterior') + '</button>';
+      var _prevSections = '';
+      if (_prevOpen) {
+        for (var _ppi = _curPh - 1; _ppi >= 0; _ppi--) {
+          var _ppName = window._safeHtml(((t.phases[_ppi] || {}).name) || ('Fase ' + (_ppi + 1)));
+          var _ppContent = (_ppi === 0)
+            ? window._renderPhase0ReadOnly(t)
+            : window._renderPhaseBracket(t, false, '', _ppi);
+          // Fallback: se o render da fase 0 vier vazio ou não-carregou, tenta o render de
+          // chave por índice (caso os jogos daquela fase morem em t.matches, não em t.rounds).
+          if (!_ppContent || !String(_ppContent).trim() || /Não foi possível carregar/.test(_ppContent)) {
+            var _alt = window._renderPhaseBracket(t, false, '', _ppi);
+            if (_alt && String(_alt).trim()) _ppContent = _alt;
+          }
+          if (!_ppContent || !String(_ppContent).trim()) _ppContent = '<div style="padding:1rem;color:var(--text-muted);">Sem dados pra exibir desta fase (formato não suportado no modo leitura).</div>';
+          // v4.3.11: cada fase anterior é uma COLUNA à ESQUERDA (flex-shrink:0), largura
+          // contida — o timeline lê da esquerda (mais antigo) pra direita (fase atual).
+          _prevSections += '<div style="flex-shrink:0;width:min(88vw,560px);margin:0 22px 0 0;border:1px solid rgba(129,140,248,0.45);border-radius:12px;background:rgba(99,102,241,0.08);overflow:hidden;align-self:stretch;">' +
+            '<div style="padding:10px 14px;font-weight:800;color:#c7d2fe;border-bottom:1px solid rgba(129,140,248,0.25);">👁 ' + _ppName + ' — fase encerrada</div>' +
+            '<div style="padding:8px 12px 14px;">' + _ppContent + '</div>' +
           '</div>';
+        }
       }
+      // ADITIVO + HORIZONTAL: fase(s) anterior(es) à ESQUERDA, fase atual à DIREITA, num
+      // único scroll horizontal (mais antigo → mais novo). Botão vertical sticky à esquerda.
+      var _revealBody = _prevOpen
+        ? '<div style="flex:1;min-width:0;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;align-items:flex-start;min-width:max-content;">' +
+            _prevSections +
+            '<div style="flex-shrink:0;padding-left:22px;border-left:2px dashed rgba(129,140,248,0.5);">' + _currentContent + '</div>' +
+          '</div></div>'
+        : '<div style="flex:1;min-width:0;">' + _currentContent + '</div>';
+      var _bodyWrap = '<div style="display:flex;align-items:flex-start;gap:10px;">' + _prevBtn + _revealBody + '</div>';
 
-      // Conteúdo da fase visualizada: Fase 0 = renderers da classificatória; ≥1 = chave da fase.
-      var _phaseContent = (_vp === 0)
-        ? window._renderPhase0ReadOnly(t)
-        : window._renderPhaseBracket(t, _viewingPast ? false : canEnterResult, _viewingPast ? '' : standbyHtml, _viewingPast ? _vp : null);
-
-      // Layout: botão vertical à esquerda + conteúdo (igual ao "Mostrar ocultas").
-      var _bodyWrap = _phaseNav
-        ? '<div style="display:flex;align-items:flex-start;gap:10px;">' + _phaseNav + '<div style="flex:1;min-width:0;">' + _phaseContent + '</div></div>'
-        : _phaseContent;
-
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + _nextBanner + _pastBanner + _bodyWrap;
+      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + _nextBanner + _bodyWrap;
       _applyMyMatchesFilter();
       return;
     }
@@ -373,7 +399,7 @@ function renderBracket(container, tournamentId, isInline) {
       // Se a chave da próxima fase não for pow2, _advanceMultiPhase abre o painel de
       // resolução (repescagem/BYE/etc.) — decisão genuína do organizador.
       var _tIdEsc0 = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      _phaseAdvanceBanner = '<div style="margin:0 0 1rem;padding:14px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(99,102,241,0.12));border:1px solid rgba(251,191,36,0.45);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+      _phaseAdvanceBanner = '<div id="phase-advance-banner" style="margin:0 0 1rem;padding:14px 16px;background:linear-gradient(135deg,rgba(251,191,36,0.16),rgba(99,102,241,0.12));border:1px solid rgba(251,191,36,0.45);border-radius:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
         '<div style="flex:1;min-width:180px;"><div style="font-weight:800;color:var(--text-bright);">Fase classificatória concluída ✓</div><div style="font-size:0.82rem;color:var(--text-muted);margin-top:2px;">Avance para <strong>' + _nextPhaseName + '</strong> — as chaves serão geradas pelas colocações desta fase.</div></div>' +
         '<button class="btn btn-success hover-lift" style="white-space:nowrap;" onclick="window._advanceMultiPhase(\'' + _tIdEsc0 + '\')">🏆 Avançar</button>' +
         '</div>';
@@ -2007,20 +2033,12 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
 }
 window._renderPhaseBracket = _renderPhaseBracket;
 
-// v3.1.28: navegação de fases — "Fase anterior" (botão vertical estilo "Mostrar
-// ocultas") pra rever uma fase ANTERIOR já encerrada (só leitura). Estado por torneio
-// em window._bracketViewPhase[tId]; default = fase atual.
-if (!window._bracketViewPhase) window._bracketViewPhase = {};
-window._bracketGoPrevPhase = function (tId) {
-  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
-  var cur = (t && (t.currentPhaseIndex || 0)) || 0;
-  var v = (window._bracketViewPhase[tId] != null) ? window._bracketViewPhase[tId] : cur;
-  window._bracketViewPhase[tId] = Math.max(0, v - 1);
-  if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
-};
-window._bracketGoCurrentPhase = function (tId) {
-  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
-  window._bracketViewPhase[tId] = (t && (t.currentPhaseIndex || 0)) || 0;
+// v4.3.10: revelador ADITIVO de fases anteriores. O botão vertical sticky (padrão
+// "Mostrar ocultas") liga/desliga a exibição read-only das fases encerradas ACIMA da
+// atual — nunca troca a visão nem esconde a fase atual. Estado por torneio + re-render.
+if (!window._phasePrevOpen) window._phasePrevOpen = {};
+window._togglePhasePrev = function (tId) {
+  window._phasePrevOpen[tId] = !window._phasePrevOpen[tId];
   if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
 };
 // Renderiza a FASE 0 (classificatória — Pontos Corridos / Grupos / Rei-Rainha) só
@@ -2030,6 +2048,17 @@ window._bracketGoCurrentPhase = function (tId) {
 window._renderPhase0ReadOnly = function (t) {
   if (!t) return '';
   var f0 = Object.assign({}, t, { currentPhaseIndex: 0 });
+  // v4.3.10: os renderers de grupo/Rei-Rainha (_renderMonarchStage/_getUnifiedRounds) leem
+  // f0.groups, mas os grupos da fase 0 moram em t.rounds[].monarchGroups (Rei/Rainha) ou em
+  // matches taggeados — NÃO em t.groups (que fica vazio depois de avançar). Por isso a fase
+  // anterior "não mostrava nada". Populamos f0.groups com prevPhaseGroups(t) (storage canônico
+  // da fase 0), pra os renderers acharem os dados.
+  try {
+    if (window._phasesEngine && typeof window._phasesEngine.prevPhaseGroups === 'function') {
+      var _pg0 = window._phasesEngine.prevPhaseGroups(t);
+      if (Array.isArray(_pg0) && _pg0.length) f0.groups = _pg0;
+    }
+  } catch (e) {}
   var _isLiga0 = !!(window._isLigaFormat && window._isLigaFormat(f0));
   var _isMonarchDaPraia = window._isMonarchFormat(f0);
   var _hasGroups0 = Array.isArray(f0.groups) && f0.groups.length > 0;
@@ -3044,8 +3073,10 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         '<h3 style="margin:0;font-size:1.1rem;color:var(--text-bright);flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
         (statusBadge || '') + _schGrpBtn2 + _grpArrived + _woCtrlM +
       '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:8px;">' + matchCards + '</div>' +
+      // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
+      // chaves (mesmo padrão de renderGroupStage). Antes vinha depois dos cards de jogo.
       '<div class="standings-scroll">' + standingsTable + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;margin-top:1rem;">' + matchCards + '</div>' +
     '</div>';
   });
 
