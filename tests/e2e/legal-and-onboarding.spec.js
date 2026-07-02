@@ -46,13 +46,13 @@ test.describe('Legal pages — Privacy', () => {
 });
 
 test.describe('Legal pages — Terms', () => {
-  test('rota #terms renderiza com banner alpha + seções', async ({ page }) => {
+  test('rota #terms renderiza com banner beta + seções', async ({ page }) => {
     await page.goto('/#terms', { waitUntil: 'load' });
     await page.waitForTimeout(800);
 
     const text = await page.evaluate(() => document.body.innerText);
     expect(text).toContain('Termos de Uso');
-    expect(text).toContain('Alpha'); // banner disclaimer
+    expect(text).toContain('Beta'); // banner disclaimer (app em fase Beta desde 2026-04-29)
     expect(text).toContain('Quem pode usar');
     expect(text).toContain('responsabilidade');
   });
