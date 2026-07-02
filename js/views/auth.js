@@ -1341,6 +1341,79 @@ function _handleGoogleLoginNative() {
 }
 window._handleGoogleLoginNative = _handleGoogleLoginNative;
 
+// ─── Phone/SMS NATIVO (Capacitor) ─────────────────────────────────────────────
+// v4.3.21: no app nativo o Phone Auth do Firebase JS SDK exige reCAPTCHA, que
+// quebra no WKWebView. A rota nativa usa o plugin @capacitor-firebase/authentication
+// (signInWithPhoneNumber → evento phoneCodeSent com verificationId; iOS via APNs /
+// Android via Play Integrity — SEM reCAPTCHA). O código chega por SMS e é confirmado
+// montando a credencial no JS SDK. Truque de compat: em vez de mexer no
+// handlePhoneVerifyCode (que já faz todo o pós-login — senha, boas-vindas, cleanup),
+// setamos window._phoneConfirmationResult com um wrapper cujo .confirm(code) devolve
+// signInWithCredential — MESMA assinatura do confirmationResult do web (Promise<{user}>),
+// então o fluxo de confirmação existente roda INTOCADO.
+function _sendPhoneCodeNative(phoneE164) {
+  var FA = window.Capacitor.Plugins.FirebaseAuthentication;
+  var note = document.getElementById('phone-step-sms-note');
+  if (note) note.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando código por SMS…</span>';
+  window._log('[scoreplace-auth] Native phone verification starting for', phoneE164);
+
+  var _finishFail = function (msg) {
+    window._phoneLoginInFlight = false;
+    var n = document.getElementById('phone-step-sms-note');
+    if (n) n.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">⚠️ ' + (msg || 'SMS indisponível agora — use o link do WhatsApp acima.') + '</span>';
+  };
+
+  // Limpa listeners de tentativas anteriores antes de registrar de novo.
+  FA.removeAllListeners().then(function () {
+    // Código enviado → guarda verificationId no wrapper compatível.
+    FA.addListener('phoneCodeSent', function (event) {
+      window._phoneLoginInFlight = false;
+      var vId = event && event.verificationId;
+      if (!vId) { _finishFail('Falha ao iniciar verificação por SMS.'); return; }
+      window._phoneConfirmationResult = {
+        confirm: function (code) {
+          var cred = firebase.auth.PhoneAuthProvider.credential(vId, code);
+          return firebase.auth().signInWithCredential(cred);
+        }
+      };
+      var n = document.getElementById('phone-step-sms-note');
+      if (n) n.innerHTML = '<span style="color:#10b981;font-size:0.72rem;">✅ Código enviado por SMS — digite acima.</span>';
+    });
+    // Android: auto-retrieval do SMS → já vem o código, preenche e confirma sozinho.
+    FA.addListener('phoneVerificationCompleted', function (event) {
+      window._phoneLoginInFlight = false;
+      var vId2 = event && event.verificationId;
+      var code2 = event && event.verificationCode;
+      if (!vId2 || !code2) return;
+      if (!window._phoneConfirmationResult) {
+        window._phoneConfirmationResult = {
+          confirm: function (code) {
+            var cred = firebase.auth.PhoneAuthProvider.credential(vId2, code);
+            return firebase.auth().signInWithCredential(cred);
+          }
+        };
+      }
+      var el = document.getElementById('login-phone-code');
+      if (el) el.value = code2;
+      if (typeof handlePhoneVerifyCode === 'function') handlePhoneVerifyCode();
+    });
+    FA.addListener('phoneVerificationFailed', function (event) {
+      window._error('[scoreplace-auth] Native phone verification failed:', event);
+      if (typeof window._captureException === 'function') {
+        window._captureException(new Error('nativePhoneVerificationFailed'), { area: 'phoneLoginNative', message: event && event.message });
+      }
+      _finishFail(event && event.message);
+    });
+    FA.signInWithPhoneNumber({ phoneNumber: phoneE164 }).catch(function (err) {
+      window._error('[scoreplace-auth] Native signInWithPhoneNumber error:', err);
+      _finishFail(err && (err.message || err.code));
+    });
+  }).catch(function (err) {
+    _finishFail(err && (err.message || err.code));
+  });
+}
+window._sendPhoneCodeNative = _sendPhoneCodeNative;
+
 // ─── Account linking helper ─────────────────────────────────────────────────
 // When user tries to sign in with a provider but already has an account with
 // the same email via a different provider, Firebase throws
@@ -2313,6 +2386,15 @@ function handlePhoneLogin() {
       if (ws) ws.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">WhatsApp indisponível agora — use o código do SMS abaixo.</span>';
     });
   })();
+
+  // ── NATIVO (Capacitor): SMS sem reCAPTCHA via plugin ───────────────────────
+  // No app nativo, pula todo o caminho reCAPTCHA (que quebra no WKWebView) e usa
+  // o Phone Auth nativo do plugin. WhatsApp acima já foi disparado como canal
+  // paralelo. Na WEB _isNativeAuthAvailable() é sempre false → segue reCAPTCHA.
+  if (typeof _isNativeAuthAvailable === 'function' && _isNativeAuthAvailable()) {
+    _sendPhoneCodeNative(phone);
+    return;
+  }
 
   // ── SMS (canal secundário) ─────────────────────────────────────────────────
   // v1.3.76-beta: container pro body ANTES de qualquer operação de reCAPTCHA pra
