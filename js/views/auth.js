@@ -1358,110 +1358,12 @@ window._isUnreliableEmailDomain = function(email) {
   return false;
 };
 
-window._detectLoginInputMode = function() {
-  var unifiedEl = document.getElementById('login-unified');
-  var countryEl = document.getElementById('login-unified-country');
-  var helperEl = document.getElementById('login-unified-helper');
-  var rowEl = document.getElementById('login-unified-row');
-  if (!unifiedEl) return;
-  var mode = _detectInputModeRaw(unifiedEl.value);
-
-  // v1.8.17-beta: aplicar máscara de telefone BR progressivamente
-  if (mode === 'phone') {
-    var rawDigits = unifiedEl.value.replace(/\D/g, '');
-    var masked = _maskBRPhone(rawDigits);
-    if (unifiedEl.value !== masked) unifiedEl.value = masked;
-    unifiedEl.dataset.rawPhone = rawDigits;
-  } else if (unifiedEl.dataset && unifiedEl.dataset.rawPhone) {
-    // Saiu do modo phone (voltou a 2 dígitos ou digitou @) — mostra raw digits
-    var cleanDigits = unifiedEl.value.replace(/\D/g, '');
-    if (cleanDigits !== unifiedEl.value.trim()) unifiedEl.value = cleanDigits;
-    delete unifiedEl.dataset.rawPhone;
-  }
-
-  if (countryEl) countryEl.style.display = (mode === 'phone') ? '' : 'none';
-  if (rowEl) rowEl.style.gridTemplateColumns = (mode === 'phone') ? 'auto 1fr auto' : '1fr auto';
-  if (helperEl) {
-    if (mode === 'email') {
-      helperEl.innerHTML = '✉️ Vamos enviar um <b>link de acesso</b> pro seu e-mail. Clique no link e entra direto.';
-    } else if (mode === 'phone') {
-      var ddi = (countryEl && countryEl.value) || '55';
-      helperEl.innerHTML = '📱 Vamos enviar <b>SMS com código</b> pro <b>+' + ddi + '</b> + o número que você digitou. Pra trocar país, use o seletor 🇧🇷 que apareceu à esquerda.';
-    } else {
-      helperEl.innerHTML = 'Aceita <b>e-mail</b> (recebe link mágico) ou <b>celular com DDD</b> (recebe SMS com código). Pra celular, o seletor de país aparece automaticamente — padrão 🇧🇷 +55.';
-    }
-  }
-  // Botão Enviar fica verde quando há valor válido no campo
-  var enviarBtn = document.getElementById('btn-enviar-magic');
-  if (enviarBtn) {
-    var isValid = (mode === 'email' || mode === 'phone');
-    enviarBtn.style.background = isValid ? 'linear-gradient(135deg,#10b981,#059669)' : '';
-    enviarBtn.style.borderColor = isValid ? '#059669' : '';
-  }
-  // Exclusão mútua: bloco "E-mail e Senha" fica desbilitado enquanto este tem conteúdo
-  if (typeof window._loginMutualExclude === 'function') window._loginMutualExclude();
-};
-
-// Exclusão mútua entre os blocos de login. Quando um bloco tem conteúdo,
-// o outro fica com opacity reduzida e pointer-events desativado. Ao apagar
-// tudo do bloco ativo, o outro volta ao normal.
-window._loginMutualExclude = function() {
-  var unifiedEl = document.getElementById('login-unified');
-  var loginEmailEl = document.getElementById('login-email');
-  var loginPassEl = document.getElementById('login-password');
-  var regNameEl = document.getElementById('register-name');
-  var regEmailEl = document.getElementById('register-email');
-  var regPassEl = document.getElementById('register-password');
-  var block1 = document.getElementById('login-unified-step');
-  var block2 = document.getElementById('login-block-email');
-  var hasBlock1 = !!(unifiedEl && unifiedEl.value.trim().length > 0);
-  var hasBlock2 = !!(
-    (loginEmailEl && loginEmailEl.value.trim().length > 0) ||
-    (loginPassEl && loginPassEl.value.length > 0) ||
-    (regNameEl && regNameEl.value.trim().length > 0) ||
-    (regEmailEl && regEmailEl.value.trim().length > 0) ||
-    (regPassEl && regPassEl.value.length > 0)
-  );
-  if (block1) {
-    block1.style.opacity = hasBlock2 ? '0.4' : '1';
-    block1.style.pointerEvents = hasBlock2 ? 'none' : '';
-  }
-  if (block2) {
-    block2.style.opacity = hasBlock1 ? '0.4' : '1';
-    block2.style.pointerEvents = hasBlock1 ? 'none' : '';
-  }
-};
-
-
-window.handleUnifiedLogin = function() {
-  var unifiedEl = document.getElementById('login-unified');
-  var raw = unifiedEl ? unifiedEl.value.trim() : '';
-  if (!raw) {
-    showNotification('Digite e-mail ou celular', 'Informe um e-mail ou número de celular pra continuar.', 'warning');
-    if (unifiedEl) unifiedEl.focus();
-    return;
-  }
-  var mode = _detectInputModeRaw(raw);
-  if (mode === 'email') {
-    var emailEl = document.getElementById('login-email-link');
-    if (emailEl) emailEl.value = raw;
-    handleEmailLinkLogin();
-  } else if (mode === 'phone') {
-    var phoneEl = document.getElementById('login-phone');
-    var unifiedCountry = document.getElementById('login-unified-country');
-    var hiddenCountry = document.getElementById('login-phone-country');
-    // v1.8.17-beta: se máscara foi aplicada, usar dígitos puros (sem parênteses
-    // e traços) para o handler de SMS que concatena com o DDI do país.
-    if (phoneEl) phoneEl.value = (unifiedEl.dataset && unifiedEl.dataset.rawPhone) || raw.replace(/\D/g, '');
-    // Sincroniza country code do dropdown visível pro hidden input
-    // (handlePhoneLogin lê de login-phone-country).
-    if (unifiedCountry && hiddenCountry) hiddenCountry.value = unifiedCountry.value;
-    handlePhoneLogin();
-  } else {
-    showNotification('Formato não reconhecido', 'Digite um e-mail (com @) ou celular com DDD (ex: 11 99999-8888).', 'warning');
-    if (unifiedEl) unifiedEl.focus();
-  }
-};
+// v4.3.19: REMOVIDOS _detectLoginInputMode, _loginMutualExclude e handleUnifiedLogin
+// (modal de login ANTIGO baseado no campo #login-unified / #btn-enviar-magic / blocos
+// #login-unified-step + #login-block-email). Substituídos pelo modal atual com campo
+// único #login-identifier + window._onIdentifierInput() (~linha 1506). Zero callers em
+// grep recursivo (js/ + index.html) quando removidos. Não recriar: o único caminho de
+// login/cadastro é o fluxo unificado _onIdentifierInput / _handleEntrar.
 
 // v3.0.58: REMOVIDO o bloco "Cadastro/login só com celular (v2.4.98)"
 // (_maskPhoneInput + _phoneSignupStart) — era um caminho de cadastro SÓ por código
@@ -2346,13 +2248,11 @@ function handlePhoneLogin() {
 }
 
 function _showPhoneVerificationStep() {
-  // v1.0.22-beta: campo unificado substituiu phone-step-number — agora
-  // escondemos o login-unified-step (campo único email/celular) e mostramos
-  // o phone-step-code (input do código de 6 dígitos).
-  var unifiedStep = document.getElementById('login-unified-step');
+  // Esconde o passo legado do número e mostra phone-step-code (input do código
+  // de 6 dígitos). O campo unificado atual (#login-identifier) vive nos painéis
+  // #login-panel-* — nada a esconder aqui além do legado.
   var phoneStepLegacy = document.getElementById('phone-step-number'); // pré-v1.0.22 (defensivo)
   var codeStep = document.getElementById('phone-step-code');
-  if (unifiedStep) unifiedStep.style.display = 'none';
   if (phoneStepLegacy) phoneStepLegacy.style.display = 'none';
   if (codeStep) codeStep.style.display = 'block';
   var codeInput = document.getElementById('login-phone-code');
@@ -2553,12 +2453,11 @@ function _ensureRecaptchaInBody() {
 }
 
 function _resetPhoneLoginUI() {
-  // v1.0.22-beta: campo unificado — restaura login-unified-step e esconde
-  // o passo de verificação de código.
-  var unifiedStep = document.getElementById('login-unified-step');
+  // Esconde o passo de verificação de código e restaura o passo legado do número
+  // (defensivo). O campo unificado atual (#login-identifier) fica nos painéis
+  // #login-panel-* e não é tocado aqui.
   var phoneStepLegacy = document.getElementById('phone-step-number'); // pré-v1.0.22 (defensivo)
   var codeStep = document.getElementById('phone-step-code');
-  if (unifiedStep) unifiedStep.style.display = 'block';
   if (phoneStepLegacy) phoneStepLegacy.style.display = 'block';
   if (codeStep) codeStep.style.display = 'none';
   window._phoneConfirmationResult = null;
