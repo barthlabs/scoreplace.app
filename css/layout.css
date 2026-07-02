@@ -113,7 +113,9 @@
    real da topbar já com o inset → o padding-top do .main-content se auto-corrige.
    Na WEB não há .sp-native → regra inerte (zero efeito). */
 html.sp-native .topbar {
-  padding-top: calc(0.15rem + env(safe-area-inset-top, 0px)) !important;
+  /* o inset reserva ~59px mas a ilha dinâmica ocupa ~50px — puxamos 6px pra cima,
+     ainda abaixo da ilha. max() protege caso não haja notch (inset=0). */
+  padding-top: max(2px, calc(env(safe-area-inset-top, 0px) - 6px)) !important;
   padding-left: calc(2rem + env(safe-area-inset-left, 0px));
   padding-right: calc(2rem + env(safe-area-inset-right, 0px));
 }
