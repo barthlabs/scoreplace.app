@@ -9,7 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.18-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🧹 Limpeza interna na tela de login:</b> removemos código antigo que não era mais usado (de uma versão anterior do modal de entrada). Nada muda no seu uso — login por e-mail, celular e Google continuam iguais; o app fica só mais enxuto e fácil de manter.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.18-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>👑 Rei/Rainha da Praia mais consistente por dentro:</b> o Rei/Rainha passou a rodar 100% pelo mesmo <b>motor de fases</b> dos outros formatos — ele é um <b>modo de sorteio</b> do Pontos Corridos, não um formato separado. Nada muda no seu uso; a mudança deixa o app mais estável e evita bugs de tela ao montar e avançar torneios com Rei/Rainha.</li>' +
       '</ul>' +
