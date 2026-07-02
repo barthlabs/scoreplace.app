@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "382268772878",
+    "project_id": "scoreplace-app",
+    "storage_bucket": "scoreplace-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:382268772878:android:aa988f7a40f4beb04be25f",
+        "android_client_info": {
+          "package_name": "app.scoreplace"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "382268772878-2gp6j5o51501t6uqlvqs5hp9gbaf29ml.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.scoreplace",
+            "certificate_hash": "9b17d202cc31c923ef000d66af9bf56254cf3a29"
+          }
+        },
+        {
+          "client_id": "382268772878-n6ei0vdmdk1mosji8uosaaf9uqtl6o9c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxTnVWKwiQdhmei8YqQdjhxPnaKNo5iFk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "382268772878-n6ei0vdmdk1mosji8uosaaf9uqtl6o9c.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "382268772878-9uqbuaa7ho56q6d76t7cq5cbcc9edeum.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "app.scoreplace"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
