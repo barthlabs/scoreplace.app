@@ -37,3 +37,29 @@ var _validThemes = ['dark', 'light'];
 // garantindo ordering correto. Custo: ~107KB raw / ~30KB gzipped a mais no
 // boot pra usuários PT (que era o ganho da v0.17.68). Trade-off aceito —
 // ordering correto > economia de bytes que Lighthouse não estava capturando.
+
+// ── Status bar NATIVA sincronizada com o tema (só no app Capacitor) ─────────────
+// Tema escuro → texto do relógio/bateria CLARO (Style.Dark); tema claro → texto
+// ESCURO (Style.Light). Reaplica em toda troca de data-theme. NO-OP na web
+// (window.Capacitor ausente) — não afeta o navegador.
+(function syncNativeStatusBar() {
+  try {
+    if (!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) return;
+  } catch (e) { return; }
+  function apply() {
+    try {
+      var SB = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar;
+      if (!SB) return;
+      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      SB.setStyle({ style: dark ? 'DARK' : 'LIGHT' }); // Dark=texto claro, Light=texto escuro
+      if (typeof SB.setBackgroundColor === 'function') {
+        try { SB.setBackgroundColor({ color: dark ? '#0f0f23' : '#ffffff' }); } catch (e) {} // Android
+      }
+    } catch (e) {}
+  }
+  apply();
+  try {
+    new MutationObserver(apply).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  } catch (e) {}
+  setTimeout(apply, 600); // reaplica quando o bridge/plugin terminar de registrar
+})();
