@@ -1254,7 +1254,8 @@ window._isNativeAuthAvailable = _isNativeAuthAvailable;
 // signInWithGoogle() só devolve a credencial e NÃO cria sessão nativa paralela.
 function _handleGoogleLoginNative() {
   var FA = window.Capacitor.Plugins.FirebaseAuthentication;
-  showNotification(_t('auth.connecting'), _t('auth.connectingMsg'), 'info');
+  // Nativo NÃO usa popup (o _t('auth.connectingMsg') fala em "popup" — web only).
+  showNotification(_t('auth.connecting'), 'Abrindo o login do Google…', 'info');
   window._log('[scoreplace-auth] Native Google Sign-In starting…');
 
   FA.signInWithGoogle().then(function (result) {
