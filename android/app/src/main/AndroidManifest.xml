@@ -32,4 +32,15 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Localização (presença/check-in + quadras próximas) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Câmera (apenas leitura de QR code) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Notificações push (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- câmera não é obrigatória pro app rodar (só pro QR) -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
 </manifest>

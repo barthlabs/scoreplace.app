@@ -47,5 +47,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>O scoreplace usa sua localização para sugerir check-in nos locais esportivos perto de você e mostrar quadras próximas.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>O scoreplace usa a câmera apenas para ler QR codes de convites e de partidas.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
