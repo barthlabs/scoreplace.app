@@ -4,8 +4,13 @@
 
 const { defineConfig, devices } = require('@playwright/test');
 
-const PROD_URL = 'https://scoreplace.app';
-const LOCAL_URL = process.env.SCOREPLACE_URL || PROD_URL;
+// SEGURANÇA: o default é STAGING (Firestore isolado, descartável), NUNCA produção.
+// Specs de escrita (tournament-flow) criam/sorteiam/apagam torneios de verdade — rodar
+// isso contra prod tocaria os dados reais do Confra. Prod só entra por opt-in EXPLÍCITO
+// (SCOREPLACE_URL=https://scoreplace.app), e ainda assim o tournament-flow tem trava
+// própria que se recusa a escrever em prod. Ver docs/staging.md + playwright.config.
+const STAGING_URL = 'https://scoreplace-staging.web.app';
+const LOCAL_URL = process.env.SCOREPLACE_URL || STAGING_URL;
 
 module.exports = defineConfig({
   testDir: './tests/e2e',

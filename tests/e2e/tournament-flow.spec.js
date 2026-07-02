@@ -77,8 +77,16 @@ const FORMATS = [
 test.describe('FLUXO REAL — auth+criar+sortear+router+chave (navegador, staging)', () => {
   // só desktop: o fluxo é viewport-independente e escreve no Firestore staging — rodar no mobile
   // dobraria as escritas sem ganho (overflow mobile já é coberto por bracket-render.spec.js).
-  test.beforeEach(async ({}, testInfo) => {
+  test.beforeEach(async ({ baseURL }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop-chromium', 'fluxo real só no desktop');
+    // TRAVA DE PRODUÇÃO: este spec CRIA/SORTEIA/APAGA torneios no Firestore de verdade.
+    // Nunca pode tocar prod (dados reais do Confra). O Firestore é escolhido por hostname
+    // no auth.js — só staging aponta pro projeto isolado. Qualquer host que NÃO seja staging
+    // (prod, www, etc.) é recusado aqui, mesmo que alguém passe SCOREPLACE_URL à força.
+    let host = '';
+    try { host = new URL(baseURL || '').hostname; } catch (e) {}
+    const isStaging = /(^|\.)scoreplace-staging\.(web\.app|firebaseapp\.com)$/.test(host);
+    test.skip(!isStaging, 'fluxo de ESCRITA só roda contra staging (host=' + (host || '?') + '). Use SCOREPLACE_URL=https://scoreplace-staging.web.app');
   });
   for (const spec of FORMATS) {
     test(spec.label + ' → criar, sortear e renderizar a chave (Firestore real)', async ({ page }) => {
