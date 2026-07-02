@@ -58,6 +58,12 @@
        shell em cache velho); um log que lança abortava a função que o chamava. -->
   <script>(function(){var n=function(){};['_log','_warn','_error','_debug'].forEach(function(k){if(typeof window[k]!=='function')window[k]=n;});})();</script>
 
+  <!-- Plataforma nativa (Capacitor): define SCOREPLACE_PLATFORM ANTES do store.js.
+       No navegador window.Capacitor é undefined → fica 'web' (zero efeito). No app
+       nativo o bridge injeta window.Capacitor → 'ios'/'android'. Seam pra gates de
+       plataforma (ex: reader-app no iOS) + classe no <html> pra CSS safe-area. -->
+  <script>(function(){try{var C=window.Capacitor;if(C&&typeof C.getPlatform==='function'){var p=C.getPlatform();window.SCOREPLACE_PLATFORM=p;var r=document.documentElement;if(r){r.classList.add('sp-native');r.classList.add('sp-'+p);}}}catch(e){}})();</script>
+
   <!-- Injetar tema antes para evitar flicker -->
   <script src="js/theme.js?v=2.8.38-beta"></script>
 

@@ -37,3 +37,15 @@ infra/whatsapp/.env
 
 # Planilha de cobertura de testes (local, nao versionar)
 docs/testes-cobertura-*
+
+# Capacitor — www/ é gerado por tools/build-www.js (fonte de verdade é a raiz)
+www/
+# Artefatos de build nativo (os projetos ios/ e android/ SÃO commitados; os builds não)
+ios/App/Pods/
+ios/App/App/public/
+android/.gradle/
+android/app/build/
+android/build/
+android/app/src/main/assets/public/
+android/capacitor-cordova-android-plugins/
+.gradle/
