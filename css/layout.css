@@ -105,6 +105,23 @@
 /* compensação default da topbar fixa (refinada por _reflowChrome com a altura real) */
 .main-content { padding-top: 76px; }
 
+/* ── Safe-area (só no app NATIVO) ────────────────────────────────────────────
+   No app Capacitor o <html> ganha .sp-native (index.html) + o meta viewport tem
+   viewport-fit=cover, então env(safe-area-inset-*) passa a valer. Empurra o
+   CONTEÚDO da topbar pra baixo da status bar / ilha dinâmica (o fundo escuro da
+   topbar cobre a faixa, o logo/hambúrguer descem). _reflowChrome mede a altura
+   real da topbar já com o inset → o padding-top do .main-content se auto-corrige.
+   Na WEB não há .sp-native → regra inerte (zero efeito). */
+html.sp-native .topbar {
+  padding-top: calc(0.5rem + env(safe-area-inset-top, 0px)) !important;
+  padding-left: calc(2rem + env(safe-area-inset-left, 0px));
+  padding-right: calc(2rem + env(safe-area-inset-right, 0px));
+}
+/* respiro no rodapé pra o conteúdo não sumir sob o indicador de home (iPhone sem botão) */
+html.sp-native .main-content {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px));
+}
+
 .page-title {
   display: flex;
   align-items: center;
