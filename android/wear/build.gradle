@@ -5,7 +5,9 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     defaultConfig {
-        applicationId "app.scoreplace.wear"
+        // MESMO applicationId do celular: o Wear Data Layer só entrega mensagens
+        // entre apps de mesmo package (e mesma assinatura — debug key serve).
+        applicationId "app.scoreplace"
         minSdkVersion 30
         targetSdkVersion 34
         versionCode 1
@@ -28,9 +30,14 @@ android {
     }
 }
 
+configurations.all {
+    // play-services-wearable + androidx puxam kotlin-stdlib-jdk8 antigo que
+    // duplica classes já contidas no kotlin-stdlib moderno. Excluir os módulos
+    // jdk7/jdk8 (fundidos no stdlib desde Kotlin 1.8) resolve o duplicate class.
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+}
+
 dependencies {
-    // Sem deps por enquanto: a tela usa só Views do framework (FrameLayout,
-    // LinearLayout, TextView) e MainActivity estende android.app.Activity com
-    // tema DeviceDefault. androidx.wear + play-services-wearable (Data Layer)
-    // entram na fase da ponte ao vivo com o celular.
+    implementation "com.google.android.gms:play-services-wearable:18.2.0"
 }

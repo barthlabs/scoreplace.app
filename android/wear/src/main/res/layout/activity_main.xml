@@ -10,18 +10,22 @@
         android:layout_height="match_parent"
         android:orientation="horizontal">
 
-        <!-- Time 1 (azul) — sacador -->
+        <!-- Time 1 (azul) -->
         <LinearLayout
+            android:id="@+id/half_left"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:orientation="vertical"
             android:gravity="center_horizontal"
             android:background="@color/half_blue"
+            android:clickable="true"
+            android:focusable="true"
             android:paddingTop="66dp"
             android:paddingBottom="42dp">
 
             <TextView
+                android:id="@+id/point_left"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="40"
@@ -40,16 +44,16 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical">
-
                 <TextView
+                    android:id="@+id/ball_l1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="●"
                     android:textColor="@color/serve_ball"
                     android:textSize="10sp"
                     android:layout_marginEnd="4dp" />
-
                 <TextView
+                    android:id="@+id/name_l1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Rodrigo"
@@ -57,27 +61,47 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Nelson"
-                android:textColor="@color/name_blue_dim"
-                android:textSize="12sp"
-                android:layout_marginTop="2dp" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="2dp">
+                <TextView
+                    android:id="@+id/ball_l2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="●"
+                    android:textColor="@color/serve_ball"
+                    android:textSize="10sp"
+                    android:layout_marginEnd="4dp"
+                    android:visibility="gone" />
+                <TextView
+                    android:id="@+id/name_l2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Nelson"
+                    android:textColor="@color/name_blue_dim"
+                    android:textSize="12sp" />
+            </LinearLayout>
         </LinearLayout>
 
-        <!-- Time 2 (vermelho) — recebedor -->
+        <!-- Time 2 (vermelho) -->
         <LinearLayout
+            android:id="@+id/half_right"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:orientation="vertical"
             android:gravity="center_horizontal"
             android:background="@color/half_red"
+            android:clickable="true"
+            android:focusable="true"
             android:paddingTop="66dp"
             android:paddingBottom="42dp">
 
             <TextView
+                android:id="@+id/point_right"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="30"
@@ -91,20 +115,52 @@
                 android:layout_height="0dp"
                 android:layout_weight="1" />
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Kelly"
-                android:textColor="@color/name_red"
-                android:textSize="12sp" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <TextView
+                    android:id="@+id/ball_r1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="●"
+                    android:textColor="@color/serve_ball"
+                    android:textSize="10sp"
+                    android:layout_marginEnd="4dp"
+                    android:visibility="gone" />
+                <TextView
+                    android:id="@+id/name_r1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Kelly"
+                    android:textColor="@color/name_red"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Zilda"
-                android:textColor="@color/name_red_dim"
-                android:textSize="12sp"
-                android:layout_marginTop="2dp" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="2dp">
+                <TextView
+                    android:id="@+id/ball_r2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="●"
+                    android:textColor="@color/serve_ball"
+                    android:textSize="10sp"
+                    android:layout_marginEnd="4dp"
+                    android:visibility="gone" />
+                <TextView
+                    android:id="@+id/name_r2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Zilda"
+                    android:textColor="@color/name_red_dim"
+                    android:textSize="12sp" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 
@@ -118,6 +174,7 @@
         android:layout_marginTop="12dp">
 
         <TextView
+            android:id="@+id/set_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Set 1"
@@ -137,8 +194,8 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="bottom">
-
             <TextView
+                android:id="@+id/games_left"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="1"
@@ -146,7 +203,6 @@
                 android:textSize="28sp"
                 android:textStyle="bold"
                 android:includeFontPadding="false" />
-
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -155,8 +211,8 @@
                 android:textSize="20sp"
                 android:layout_marginStart="6dp"
                 android:layout_marginEnd="6dp" />
-
             <TextView
+                android:id="@+id/games_right"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="2"
@@ -169,12 +225,15 @@
 
     <!-- Rodapé: Desfazer -->
     <LinearLayout
+        android:id="@+id/btn_undo"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="@drawable/undo_pill"
+        android:clickable="true"
+        android:focusable="true"
         android:paddingStart="14dp"
         android:paddingEnd="14dp"
         android:paddingTop="4dp"

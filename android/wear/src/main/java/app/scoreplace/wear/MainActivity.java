@@ -2,17 +2,161 @@ package app.scoreplace.wear;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import com.google.android.gms.wearable.MessageClient;
+import com.google.android.gms.wearable.MessageEvent;
+import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.Wearable;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 /**
- * scoreplace Wear OS — controle de placar ao vivo (preview estático).
- * Escopo: placar grande + games no topo + bola no sacador + desfazer.
- * Dados mock nesta etapa; a ponte ao vivo com o celular (Wear Data Layer →
- * motor GSM no JS do app) é a fase seguinte.
+ * scoreplace Wear OS — controle de placar ao vivo (fase 4).
+ * Contrato: docs/smartwatch-bridge.md. Relógio burro: toque = intenção
+ * (+1 / desfazer) enviada via Wear Data Layer; renderiza o estado que o
+ * celular devolve (motor GSM = fonte única no JS do app).
  */
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements MessageClient.OnMessageReceivedListener {
+
+    private static final String PATH_STATE = "/scoreplace/state";
+    private static final String PATH_INTENT = "/scoreplace/intent";
+
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private int courtLeft = 1; // qual time está à esquerda (vem do estado)
+
+    private LinearLayout halfLeft, halfRight, btnUndo;
+    private TextView pointLeft, pointRight, gamesLeft, gamesRight, setLabel;
+    private TextView nameL1, nameL2, nameR1, nameR2, ballL1, ballL2, ballR1, ballR2;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        halfLeft = findViewById(R.id.half_left);
+        halfRight = findViewById(R.id.half_right);
+        btnUndo = findViewById(R.id.btn_undo);
+        pointLeft = findViewById(R.id.point_left);
+        pointRight = findViewById(R.id.point_right);
+        gamesLeft = findViewById(R.id.games_left);
+        gamesRight = findViewById(R.id.games_right);
+        setLabel = findViewById(R.id.set_label);
+        nameL1 = findViewById(R.id.name_l1); nameL2 = findViewById(R.id.name_l2);
+        nameR1 = findViewById(R.id.name_r1); nameR2 = findViewById(R.id.name_r2);
+        ballL1 = findViewById(R.id.ball_l1); ballL2 = findViewById(R.id.ball_l2);
+        ballR1 = findViewById(R.id.ball_r1); ballR2 = findViewById(R.id.ball_r2);
+
+        // Toque por POSIÇÃO → intenção pra o TIME que está naquele lado.
+        halfLeft.setOnClickListener(v -> sendPoint(courtLeft));
+        halfRight.setOnClickListener(v -> sendPoint(courtLeft == 1 ? 2 : 1));
+        btnUndo.setOnClickListener(v -> sendIntent("undo", 0));
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Wearable.getMessageClient(this).addListener(this);
+        sendIntent("hello", 0); // pede o estado atual ao celular
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Wearable.getMessageClient(this).removeListener(this);
+    }
+
+    private void sendPoint(int team) { sendIntent("point", team); }
+
+    // Monta a intenção JSON e envia pro celular via Data Layer.
+    private void sendIntent(String type, int team) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("v", 1);
+            o.put("type", type);
+            if (team == 1 || team == 2) o.put("team", team);
+            if (!"hello".equals(type)) o.put("id", UUID.randomUUID().toString());
+            final byte[] bytes = o.toString().getBytes(StandardCharsets.UTF_8);
+            Wearable.getNodeClient(this).getConnectedNodes()
+                .addOnSuccessListener(nodes -> {
+                    MessageClient mc = Wearable.getMessageClient(this);
+                    for (Node node : nodes) mc.sendMessage(node.getId(), PATH_INTENT, bytes);
+                });
+        } catch (Exception e) { /* sem nó / json: no-op */ }
+    }
+
+    // Estado vindo do celular.
+    @Override
+    public void onMessageReceived(MessageEvent event) {
+        if (!PATH_STATE.equals(event.getPath())) return;
+        final String json = new String(event.getData(), StandardCharsets.UTF_8);
+        ui.post(() -> {
+            try { render(new JSONObject(json)); } catch (Exception e) { /* ignore */ }
+        });
+    }
+
+    private void render(JSONObject s) {
+        boolean active = s.optBoolean("active", false);
+        setLabel.setText(active ? s.optString("setLabel", "Set 1") : "Aguardando…");
+        courtLeft = s.optInt("courtLeft", 1);
+        int leftTeam = courtLeft, rightTeam = leftTeam == 1 ? 2 : 1;
+        JSONArray points = s.optJSONArray("points");
+        JSONArray games = s.optJSONArray("games");
+        JSONObject teams = s.optJSONObject("teams");
+        JSONObject server = s.optJSONObject("server");
+        applySide(true, leftTeam, points, games, teams, server);
+        applySide(false, rightTeam, points, games, teams, server);
+    }
+
+    private void applySide(boolean left, int team, JSONArray points, JSONArray games,
+                           JSONObject teams, JSONObject server) {
+        TextView point = left ? pointLeft : pointRight;
+        TextView gm = left ? gamesLeft : gamesRight;
+        LinearLayout half = left ? halfLeft : halfRight;
+        TextView n1 = left ? nameL1 : nameR1, n2 = left ? nameL2 : nameR2;
+        TextView b1 = left ? ballL1 : ballR1, b2 = left ? ballL2 : ballR2;
+
+        int cPoint = getColor(team == 1 ? R.color.team_blue : R.color.team_red);
+        int cHalf = getColor(team == 1 ? R.color.half_blue : R.color.half_red);
+        int cName = getColor(team == 1 ? R.color.name_blue : R.color.name_red);
+        int cNameDim = getColor(team == 1 ? R.color.name_blue_dim : R.color.name_red_dim);
+
+        half.setBackgroundColor(cHalf);
+        point.setTextColor(cPoint);
+        gm.setTextColor(cPoint);
+
+        String pt = points != null ? points.optString(team - 1, "–") : "–";
+        point.setText(pt);
+        gm.setText(games != null ? String.valueOf(games.optInt(team - 1, 0)) : "");
+
+        String p0 = "", p1 = "";
+        if (teams != null) {
+            JSONObject t = teams.optJSONObject(String.valueOf(team));
+            if (t != null) {
+                JSONArray pl = t.optJSONArray("players");
+                if (pl != null) { p0 = pl.optString(0, ""); p1 = pl.optString(1, ""); }
+            }
+        }
+        n1.setText(p0); n1.setTextColor(cName);
+        n2.setText(p1); n2.setTextColor(cNameDim);
+
+        // Bola no jogador sacador (entre os 2 do time), se este time saca.
+        b1.setVisibility(View.GONE);
+        b2.setVisibility(View.GONE);
+        if (server != null && server.optInt("team", 0) == team) {
+            String sn = server.optString("name", "");
+            if (!sn.isEmpty()) {
+                if (sn.equals(p0)) b1.setVisibility(View.VISIBLE);
+                else if (sn.equals(p1)) b2.setVisibility(View.VISIBLE);
+            }
+        }
     }
 }
