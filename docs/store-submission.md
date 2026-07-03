@@ -41,7 +41,7 @@ Base: `PrivacyInfo.xcprivacy` (já no app) + `data-inventory.md`.
 - [x] Permissões no Info.plist (localização, câmera) — textos pt-BR.
 - [x] **Privacy Manifest** (`PrivacyInfo.xcprivacy`) — feito, no bundle.
 - [ ] **Sign in with Apple** — OBRIGATÓRIO (tem login Google). Precisa App ID com a capability (conta paga). Código pode ser scaffoldado antes.
-- [ ] **Push NATIVO** — ⚠️ **GAP**: hoje o push é só FCM **web** (service worker + `messaging.getToken()`), que **NÃO entrega em WebView nativo**. Falta plugin nativo (`@capacitor-firebase/messaging`). iOS também precisa de **APNs Auth Key** no Firebase (conta paga).
+- [~] **Push NATIVO** — CÓDIGO PRONTO (`@capacitor-firebase/messaging` + caminho nativo gated em `js/notifications.js`, v4.3.29-beta). Falta só a **APNs Auth Key** no Firebase (conta Apple paga) pra ATIVAR no iOS — sem ela o `getToken()` nativo do iOS falha (esperado). Também: adicionar a capability **Push Notifications** ao target no Xcode + `registerForRemoteNotifications` (o plugin faz swizzle do AppDelegate). NÃO testável no simulador (sem APNs).
 - [ ] **Assinatura/provisioning** — certificado + provisioning (conta paga).
 - [ ] version (CFBundleShortVersionString) + build (CFBundleVersion) de release.
 - [ ] Reader-app: garantir que NÃO há venda do Pro dentro do app iOS (Pro pausado hoje).
@@ -50,7 +50,7 @@ Base: `PrivacyInfo.xcprivacy` (já no app) + `data-inventory.md`.
 - [x] Ícone + splash + permissões (feito).
 - [x] `google-services.json` + login Google nativo (feito).
 - [ ] **Keystore de RELEASE** (upload key) — gerar e **guardar com segurança** (perder = não atualiza mais o app). Adicionar o SHA-1 dele no app Android do Firebase.
-- [ ] **Push NATIVO** — ⚠️ mesmo gap do iOS: falta o plugin nativo. No Android FUNCIONA já (com o google-services.json + POST_NOTIFICATIONS que temos), sem conta paga — só instalar o plugin e trocar o `getToken` web pelo nativo. Depois verificar ponta a ponta (token → notificação).
+- [x] **Push NATIVO** — ✅ FEITO E VALIDADO no emulador `sp_test` (v4.3.29-beta). Plugin `@capacitor-firebase/messaging` + caminho nativo gated em `js/notifications.js` (token FCM nativo salvo em `users/{uid}.fcmToken`, listeners foreground/tap). Push de teste via FCM v1 API confirmado ponta a ponta: **background** → notificação na bandeja do SO; **foreground** → toast in-app. Sem conta paga (google-services.json + POST_NOTIFICATIONS já existiam). ⚠️ **Caveat de PROD**: o CF `sendPushNotification` manda **data-only** (contrato anti-duplicata da web) — isso exibe em background no nativo Android **só** se o app estiver vivo; pra tray notification confiável em background/killed no nativo, o CF precisa incluir um payload `notification` **só pros tokens nativos** (o campo `fcmTokenPlatform='native-android'` já é salvo pra permitir esse branch). Follow-up de CF (PROD, com o dono).
 - [ ] versionCode/versionName de release.
 
 ---
