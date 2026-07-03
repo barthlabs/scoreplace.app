@@ -8,7 +8,15 @@ const http = require('http');
 const { chromium, devices } = require('@playwright/test');
 
 const ROOT = path.resolve(__dirname, '..');
-const OUT = path.join(ROOT, 'store-assets');
+// DEVICE=play (default, Google Play) | apple (iPhone 6.9" 1290x2796) | ipad (13" 2064x2752)
+const DEV = process.env.DEVICE || 'play';
+const CFG = ({
+  play:  { ctx: null, dir: '' },
+  apple: { ctx: { viewport: { width: 430, height: 932 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, colorScheme: 'dark', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' }, dir: 'apple' },
+  ipad:  { ctx: { viewport: { width: 1032, height: 1376 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: 'dark', userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' }, dir: 'ipad' },
+})[DEV];
+const OUT = path.join(ROOT, 'store-assets', CFG.dir);
+fs.mkdirSync(OUT, { recursive: true });
 const PORT = 9878;
 const MIME = { '.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.ico':'image/x-icon','.woff2':'font/woff2' };
 
@@ -60,7 +68,7 @@ async function shot(page, name) {
 async function main() {
   const server = serve();
   const browser = await chromium.launch();
-  const ctx = await browser.newContext(Object.assign({}, devices['iPhone 13 Pro'], { deviceScaleFactor: 3, colorScheme: 'dark' }));
+  const ctx = await browser.newContext(CFG.ctx || Object.assign({}, devices['iPhone 13 Pro'], { deviceScaleFactor: 3, colorScheme: 'dark' }));
   const page = await ctx.newPage();
   page.on('pageerror', e => console.log('  [pageerror]', String(e).slice(0, 120)));
 
