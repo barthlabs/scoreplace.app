@@ -150,6 +150,46 @@ Política publicada (revisão jurídica fechada em 2026-05-28): `#privacy` e `#t
 
 ---
 
+## 5.1 GOOGLE — o que já está PRONTO (grátis, feito)
+
+Decisões aplicadas: **beta** mantido, **sem Pro**, **iPad sim**, **Wear sim**, **Google primeiro**.
+
+- **"Sem Pro" já está garantido no código** — `window._MONETIZATION_ENABLED = false`
+  (store.js): `_isPro()` retorna true pra todos (acesso completo, sem limites) e
+  `_showUpgradeModal()` é no-op. Os únicos gatilhos de paywall (criar torneio /
+  inscrição) passam por esse no-op → **nenhum CTA de compra de bem digital é
+  alcançável**. Nada a remover. (O botão "Apoie/PIX" é **doação voluntária**, que
+  o Google permite; se quiser, dá pra escondê-lo no nativo, mas não é obrigatório.)
+- **AAB de release assinado gerado e verificado:**
+  `android/app/build/outputs/bundle/release/app-release.aab` (~7.7 MB), assinado com
+  a chave de upload. `versionCode 1`, `versionName "1.0"` (exibe como beta na ficha).
+- **Assinatura configurada** em `android/app/build.gradle` (`signingConfigs.release`
+  lê `android/keystore.properties`, que é **gitignored**). Commit `5908d14c`.
+
+### 🔑 Custódia do keystore (IMPORTANTE — faça backup)
+- Arquivo: `android-signing/upload-keystore.jks` (**gitignored**, fora do git).
+- `android/keystore.properties` guarda a senha (**gitignored**). Alias: `upload`.
+- **A senha foi entregue no chat, não está no git.** Guarde o `.jks` + a senha num
+  cofre (1Password, etc.). Com **Play App Signing** ativo, perder a chave de upload
+  é recuperável (reset via Google), mas ainda assim: faça backup.
+
+### 🔗 Registrar no Firebase (senão o login Google quebra em release)
+No console do Firebase (projeto `scoreplace-app`) → app Android `app.scoreplace` →
+adicionar as impressões digitais da **chave de upload**:
+- **SHA-1:**   `0A:79:82:23:2A:53:4D:8E:31:5D:0F:FB:03:32:92:B5:A9:B4:FF:04`
+- **SHA-256:** `BC:B2:41:AA:9B:D7:FC:C9:00:C7:3F:1E:F2:15:30:A7:E2:11:0A:5C:0B:0D:90:F5:61:E4:70:9B:23:6A:DE:00`
+- Depois de subir no Play e ativar Play App Signing, adicionar TAMBÉM o SHA-1 da
+  **chave de assinatura do app** que o Google mostrar no console.
+
+### Ainda falta (grátis) antes do upload
+- [ ] Screenshots do **telefone** (2–8) — precisa o app logado rodando (ver seção 3).
+      Do **Wear** já há capturas do placar/vitória do relógio.
+- [ ] **Ícone 512×512 PNG** e **feature graphic 1024×500** (gerar do pódio
+      `icons/icon-512.svg`). Verificar também os ícones de launcher do app nativo.
+- [ ] Conferir `assets/` de ícone/splash nativos (não usar o ícone padrão do Capacitor).
+
+---
+
 ## 6. Passos PAGOS (checklist) — só executar após seu OK a cada cobrança
 
 ### Apple — US$ 99/ano (Apple Developer Program)
