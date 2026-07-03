@@ -9347,8 +9347,11 @@ window._openScanQR = function() {
       '<div style="font-size:0.85rem;">Iniciando câmera…</div>' +
     '</div>' +
 
-    // Top bar — texto sutil + X pra fechar
-    '<div style="position:absolute;top:0;left:0;right:0;padding:env(safe-area-inset-top,12px) 16px 16px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,rgba(0,0,0,0.7),transparent);z-index:2;">' +
+    // Top bar — texto sutil + X pra fechar.
+    // v4.3.26: env(...,12px) resolvia pra 0 no iOS (env=0 pra fixed/absolute no WKWebView,
+    // e o fallback 12px só vale se env for NÃO-suportado) → o X/texto ficavam sob a ilha.
+    // max(env, 44px) garante o afastamento. Sobre a câmera, o extra no Android/web é inócuo.
+    '<div style="position:absolute;top:0;left:0;right:0;padding:max(env(safe-area-inset-top,0px),44px) 16px 16px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,rgba(0,0,0,0.7),transparent);z-index:2;">' +
       '<div style="color:#fff;font-size:0.95rem;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,0.5);">Aponte para o QR code</div>' +
       '<button id="scan-qr-close-btn" aria-label="Fechar" style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:1.2rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;">×</button>' +
     '</div>' +
