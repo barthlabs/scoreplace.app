@@ -183,14 +183,15 @@
             android:textSize="10sp"
             android:visibility="gone" />
 
-        <!-- SETS x-y no lugar do rótulo do set: 0-0 no início, preenche conforme
-             os sets fecham. Mostrado quando a partida está ativa. -->
+        <!-- SETS no lugar do rótulo do set: rótulo em cima, "0 - 0" embaixo
+             (empilhado — cabe melhor no topo curvo da tela redonda). Mostrado
+             quando a partida está ativa. -->
         <LinearLayout
             android:id="@+id/sets_row"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
             android:visibility="gone">
             <TextView
                 android:layout_width="wrap_content"
@@ -198,34 +199,39 @@
                 android:text="SETS"
                 android:textColor="@color/meta_dim"
                 android:textSize="8sp"
-                android:letterSpacing="0.1"
-                android:layout_marginEnd="5dp" />
-            <TextView
-                android:id="@+id/sets_left"
+                android:letterSpacing="0.15" />
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="0"
-                android:textColor="@color/team_blue"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:includeFontPadding="false" />
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="-"
-                android:textColor="@color/dash"
-                android:textSize="11sp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp" />
-            <TextView
-                android:id="@+id/sets_right"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0"
-                android:textColor="@color/team_red"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:includeFontPadding="false" />
+                android:orientation="horizontal"
+                android:gravity="bottom">
+                <TextView
+                    android:id="@+id/sets_left"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textColor="@color/team_blue"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:includeFontPadding="false" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="-"
+                    android:textColor="@color/dash"
+                    android:textSize="12sp"
+                    android:layout_marginStart="5dp"
+                    android:layout_marginEnd="5dp" />
+                <TextView
+                    android:id="@+id/sets_right"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textColor="@color/team_red"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:includeFontPadding="false" />
+            </LinearLayout>
         </LinearLayout>
 
         <TextView
