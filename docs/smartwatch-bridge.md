@@ -82,8 +82,31 @@ Gated por `window.SCOREPLACE_PLATFORM` / `Capacitor.isNativePlatform()` →
 ## Status
 
 - ✅ Telas (mock) rodando nos simuladores — commit `d4e3da8b`.
-- ⏳ Este contrato — implementação do módulo JS depende do mapa do motor
-  (`state`, entrada de +1, undo, formatador de exibição) em `bracket-ui.js`.
-- ⏳ Plugin Capacitor + transporte (WatchConnectivity / Wear Data Layer).
-- ⏳ Integrar o target watchOS de verdade no `ios/App` (pbxproj) — o preview
-  standalone (`ios/WatchApp`) não pareia; vira alvo companion.
+- ✅ Ponte JS (fonte única) + plugin/wear do Android — commits `5399…`, `de97…`, `357a…`.
+- ✅ **iOS completo** — plugin `ScoreplaceWatch` (Swift, `WCSession`) + target
+  watchOS companion dentro de `ios/App/App.xcodeproj` (companion do app iOS,
+  `WKCompanionAppBundleIdentifier = app.scoreplace`). Views/model (`RemoteView`,
+  `ScoreState`) são fonte única compartilhada com o preview em
+  `ios/WatchApp/Sources`. Verificado no simulador (iPhone 17 Pro + Apple Watch
+  Series 11, pareados): hello, +1 time 1/2 (mapeado por `courtLeft`), Desfazer,
+  `seq` monotônico e bola no sacador — loop completo relógio↔celular↔motor GSM.
+
+### Notas de implementação iOS (não óbvias)
+
+- **Registro do plugin é à prova de `cap sync`.** O `cap sync` REESCREVE o
+  `packageClassList` do `capacitor.config.json` (varre só `node_modules`), então
+  um plugin app-local sumiria dali. Registramos via subclasse
+  `MainViewController: CAPBridgeViewController` sobrescrevendo `capacitorDidLoad()`
+  → `bridge?.registerPluginInstance(ScoreplaceWatchPlugin())`. `Main.storyboard`
+  aponta pra `MainViewController` (customModule `App`). Sem `.m`, sem bridging
+  header, sem depender do `packageClassList`.
+- **Cirurgia no `project.pbxproj` via gem `xcodeproj`** (Ruby), não à mão nem
+  xcodegen (o `ios/App` não é xcodegen-managed e reproduzir o SPM/Capacitor era
+  arriscado). `cap sync` mexe em `CapApp-SPM/Package.swift`, NÃO no pbxproj —
+  então a cirurgia aditiva sobrevive. Script: adiciona o target watchOS, a fase
+  "Embed Watch Content" (`dstSubfolderSpec=16`, `$(CONTENTS_FOLDER_PATH)/Watch`),
+  a dependência, e os 2 arquivos Swift novos ao target iOS.
+- **Payload trafega como STRING JSON** dos dois lados (igual ao `byte[]` do
+  Android). `updateApplicationContext`/`sendMessage` do WCSession rejeitam
+  `NSNull` (server/winner null) — mandar o JSON serializado contorna isso e
+  entrega o último estado mesmo com o relógio em background.

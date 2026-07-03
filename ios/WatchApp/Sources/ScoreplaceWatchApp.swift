@@ -1,14 +1,15 @@
 import SwiftUI
 
-// scoreplace Watch — controle de placar ao vivo (preview estático).
-// Escopo: placar grande + games no topo + bola no sacador + desfazer.
-// Dados mock nesta etapa; a ponte ao vivo com o iPhone (WatchConnectivity →
-// motor GSM no JS do app) é a fase seguinte.
+// scoreplace Watch — PREVIEW estático standalone (projeto ScoreplaceWatchPreview,
+// gerado por xcodegen). Mostra a tela travada com dados mock; NÃO pareia com o
+// iPhone. O app companion DE VERDADE (que pareia e usa WatchConnectivity → motor
+// GSM no JS) vive no target watchOS dentro de ios/App/App.xcodeproj e reaproveita
+// RemoteView/ScoreState deste mesmo diretório (fonte única das views).
 @main
 struct ScoreplaceWatchApp: App {
     var body: some Scene {
         WindowGroup {
-            RemoteView()
+            RemoteView(state: .mock)
         }
     }
 }
