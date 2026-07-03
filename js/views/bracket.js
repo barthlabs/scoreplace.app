@@ -569,9 +569,16 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
   // courtCount. Só o organizador escolhe a quadra de cada jogo pronto.
   const _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
   const _isOrg = (window.AppStore && typeof window.AppStore.isOrganizer === 'function') ? window.AppStore.isOrganizer(t) : false;
-  const _courts = (Array.isArray(t.courtNames) && t.courtNames.length > 0)
-    ? t.courtNames.slice()
-    : (function(){ var n = parseInt(t.courtCount) || 0; var a = []; for (var i = 1; i <= n; i++) a.push('Quadra ' + i); return a; })();
+  // Robusto: courtNames pode vir como array OU string "A, B, C"; se nenhum,
+  // gera "Quadra 1..N" do courtCount — default 1 (antes era 0, o que fazia o
+  // seletor sumir em torneios do quick-create / sem quadras configuradas).
+  const _courts = (function(){
+    var cn = t.courtNames;
+    if (Array.isArray(cn) && cn.length > 0) return cn.slice();
+    if (typeof cn === 'string' && cn.trim()) return cn.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    var n = parseInt(t.courtCount) || 1;
+    var a = []; for (var i = 1; i <= n; i++) a.push('Quadra ' + i); return a;
+  })();
   const _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
   const renderCard = (e) => {
