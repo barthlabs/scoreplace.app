@@ -51,9 +51,17 @@ var _validThemes = ['dark', 'light'];
       var SB = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar;
       if (!SB) return;
       var dark = document.documentElement.getAttribute('data-theme') === 'dark';
-      SB.setStyle({ style: dark ? 'DARK' : 'LIGHT' }); // Dark=texto claro, Light=texto escuro
-      if (typeof SB.setBackgroundColor === 'function') {
-        try { SB.setBackgroundColor({ color: dark ? '#0f0f23' : '#ffffff' }); } catch (e) {} // Android
+      var isAndroid = false;
+      try { isAndroid = window.Capacitor.getPlatform() === 'android'; } catch (e) {}
+      // Android (targetSdk 36): a faixa da status bar mostra o windowBackground, que
+      // fixamos em #111114 (dark) no styles.xml — porque setBackgroundColor virou no-op
+      // no edge-to-edge do Android 15+. Como a faixa é SEMPRE dark, os ícones têm que ser
+      // SEMPRE claros (Style.DARK), inclusive no tema Claro — senão ficam escuros sobre
+      // dark = invisíveis. No iOS a status bar é edge-to-edge e acompanha o conteúdo do
+      // app, então lá mantemos o sync por tema.
+      SB.setStyle({ style: (isAndroid || dark) ? 'DARK' : 'LIGHT' }); // Dark=ícones claros, Light=ícones escuros
+      if (!isAndroid && typeof SB.setBackgroundColor === 'function') {
+        try { SB.setBackgroundColor({ color: dark ? '#0f0f23' : '#ffffff' }); } catch (e) {} // no-op no Android 15+
       }
     } catch (e) {}
   }
