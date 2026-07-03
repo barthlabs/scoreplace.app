@@ -7437,7 +7437,42 @@ window._openLiveScoring = function(tId, matchId, opts) {
   }
 
   // ── Global handlers (attached to window for onclick access) ──
-  window._liveScorePoint = function(player) { _addPoint(player); };
+  window._liveScorePoint = function(player) { _addPoint(player); _watchNotify(); };
+
+  // ── Ponte pro smartwatch (fase 4, contrato docs/smartwatch-bridge.md) ──
+  // Leitor read-only do estado do placar, indexado por TIME (1/2). Vive aqui
+  // dentro do closure pra enxergar state/_formatGamePoint/_currentSet/etc.
+  // Na web ninguém consome (WatchBridge é inerte) → zero efeito.
+  window._getLiveScoreState = function() {
+    var cs = _currentSet();
+    var srv = _getCurrentServer();
+    return {
+      v: 1,
+      type: 'state',
+      active: !state.isFinished,
+      setLabel: 'Set ' + state.sets.length,
+      points: [
+        _formatGamePoint(state.currentGameP1, state.currentGameP2, state.isTiebreak),
+        _formatGamePoint(state.currentGameP2, state.currentGameP1, state.isTiebreak)
+      ],
+      games: cs ? [cs.gamesP1, cs.gamesP2] : [0, 0],
+      isTiebreak: !!state.isTiebreak,
+      courtLeft: _courtLeft,
+      server: srv ? { team: srv.team, name: srv.name } : null,
+      teams: {
+        '1': { players: p1Players.slice() },
+        '2': { players: p2Players.slice() }
+      },
+      isFinished: !!state.isFinished,
+      winner: state.winner || null
+    };
+  };
+  // Empurra o estado atual pro relógio (no-op se a ponte não estiver ativa/web).
+  function _watchNotify() {
+    if (window.WatchBridge && window.WatchBridge._onEngineState) {
+      try { window.WatchBridge._onEngineState(window._getLiveScoreState()); } catch (e) {}
+    }
+  }
   window._liveScoreFinish = function() {
     // For simple scoring: finish and set winner
     if (state.currentGameP1 === state.currentGameP2 && state.currentGameP1 === 0) {
@@ -7540,6 +7575,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // true), agora volta pra false e _render renderiza a UI de live scoring
     // de novo no lugar do finish screen.
     _render();
+    _watchNotify();
     var remaining = state._undoSnapshots.length;
     showNotification('↶ Ponto desfeito', remaining > 0 ? ('Pode desfazer mais ' + remaining + ' ponto(s) se precisar.') : 'Estado anterior restaurado.', 'success');
   };
