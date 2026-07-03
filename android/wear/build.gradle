@@ -1,0 +1,36 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "app.scoreplace.wear"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "app.scoreplace.wear"
+        minSdkVersion 30
+        targetSdkVersion 34
+        versionCode 1
+        versionName "0.1"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Sem deps por enquanto: a tela usa só Views do framework (FrameLayout,
+    // LinearLayout, TextView) e MainActivity estende android.app.Activity com
+    // tema DeviceDefault. androidx.wear + play-services-wearable (Data Layer)
+    // entram na fase da ponte ao vivo com o celular.
+}
