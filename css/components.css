@@ -129,6 +129,20 @@ input[type="date"] { min-width: 8.5rem !important; }   /* "dd/mm/aaaa" + ícone 
 #venues-detail-overlay .sticky-back-header + * {
   margin-top: 0 !important;
 }
+/* v4.3.26: overlays FULL-SCREEN top:0 (Partida Casual + quick-create bottom-sheet no
+   mobile) usam a .sticky-back-header como topo, SEM a topbar acima — no app NATIVO o
+   header (Voltar / título / ação) encavalava no notch/ilha dinâmica. env(safe-area-
+   inset-top) volta 0 pra elementos fixed no WKWebView (mesmo caso do modal de login,
+   v4.3.20), então usamos PISO fixo de 50px. O fundo dark do header cobre a faixa do
+   notch; o conteúdo desce. Gated por sp-native → inerte na web (sem notch fantasma).
+   EXCLUÍDOS de propósito: #venues-detail-overlay (backdrop em top:60px, abaixo da topbar
+   que já limpa o notch) e #qr-modal-overlay (modal CENTRADO, header não fica no notch).
+   Gated por sp-IOS (não sp-native): no Android o WebView já é inset abaixo da status bar,
+   então o overlay top:0 não encavala — 50px lá viraria gap à toa. */
+html.sp-ios #modal-quick-create .sticky-back-header,
+html.sp-ios #casual-match-overlay .sticky-back-header {
+  padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+}
 /* Hide the page's own back-header while venue detail overlay is open — sem
    isso, a back-header da página (ex: #venues ou #dashboard) aparece através
    da top-bar area e o usuário vê dois "Voltar" duplicados. Aplica só no body,
