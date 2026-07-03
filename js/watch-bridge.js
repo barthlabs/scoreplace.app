@@ -92,6 +92,7 @@
     applyIntent: applyIntent,
     currentState: currentState,
     pushCurrent: function () { push(currentState(), true); },
+    pushInactive: function () { push(inactiveState(), true); }, // placar fechou
     onState: function (cb) { if (typeof cb === 'function') subscribers.push(cb); }
   };
 

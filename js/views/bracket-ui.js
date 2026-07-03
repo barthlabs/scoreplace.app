@@ -7473,6 +7473,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try { window.WatchBridge._onEngineState(window._getLiveScoreState()); } catch (e) {}
     }
   }
+  // Estado INICIAL pro relógio assim que o placar abre (torneio, Rei/Rainha OU
+  // casual — todos passam por aqui). Sem isso o relógio só atualizaria no
+  // próximo hello/ponto; no "jogar novamente" ficaria com o placar anterior.
+  _watchNotify();
   window._liveScoreFinish = function() {
     // For simple scoring: finish and set winner
     if (state.currentGameP1 === state.currentGameP2 && state.currentGameP1 === 0) {
@@ -7491,6 +7495,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch (_e) {}
     }
     _render();
+    _watchNotify(); // relógio reflete o encerramento (mostra vencedor)
   };
 
   // Minus handler: subtract a point (correction)
@@ -7529,6 +7534,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       cs.gamesP2 = state.currentGameP2;
     }
     _render();
+    _watchNotify(); // relógio reflete a correção de −1
   };
 
   // v1.0.36-beta: Global undo do último ponto via snapshot de estado.
@@ -9006,6 +9012,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
       _releaseWakeLock();
       var ov = document.getElementById('live-scoring-overlay');
       if (ov) ov.remove();
+      // Ponte do relógio: o placar fechou → desfaz a fiação (pra o próximo hello
+      // do relógio responder "inativo") e empurra um estado inativo agora, senão
+      // o relógio fica com o placar anterior "congelado". Cobre todos os caminhos
+      // de fechamento (é o teardown único). No-op na web (WatchBridge inerte).
+      window._getLiveScoreState = null;
+      window._liveScorePoint = null;
+      window._liveScoreUndoLastPoint = null;
+      if (window.WatchBridge && window.WatchBridge.pushInactive) {
+        try { window.WatchBridge.pushInactive(); } catch (e) {}
+      }
     };
     var cu = window.AppStore && window.AppStore.currentUser;
     var isOrganizer = isCasual && cu && cu.uid && _casualCreatedBy && cu.uid === _casualCreatedBy;
