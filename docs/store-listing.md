@@ -92,8 +92,9 @@ Capturar em simulador/emulador (grátis). Sugestão de telas (as mais vendedoras
 | iPhone 6.9" (16 Pro Max) | 1290×2796 | **Sim** (Apple exige o maior) |
 | iPhone 6.5"/6.7" | 1242×2688 / 1290×2796 | Recomendado |
 | iPad 13" | 2064×2752 | **Sim se manter iPad** |
-| Apple Watch | 410×502 (S9/S11 45mm) | Opcional (recomendado se listar watch) |
+| Apple Watch | 416×496 (S10/S11 46mm) | Opcional — ✅ FEITO: `store-assets/apple-watch/watch-01-placar.png` (placar ao vivo) |
 - Mín. 1, até 10 por tipo de dispositivo. PNG/JPG, sem transparência.
+- Watch gerado pelo app standalone `ScoreplaceWatchPreview` (xcodegen em `ios/WatchApp/`), `RemoteView(state:.mock)` no simulador → `xcrun simctl io <udid> screenshot`. Nomes do mock anonimizados ("Jogador NN").
 
 ### Google Play
 | Asset | Especificação | Obrigatório? |
