@@ -143,6 +143,23 @@ html.sp-ios #modal-quick-create .sticky-back-header,
 html.sp-ios #casual-match-overlay .sticky-back-header {
   padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
 }
+/* v4.3.26: PLACAR AO VIVO (courtside, base do smartwatch) — overlay full-screen top:0
+   cujo header (📡 AO VIVO / Ajustar / Resetar / Fechar) encavalava na ilha dinâmica no
+   iOS. O header usa env(safe-area-inset-top) inline, mas env=0 pra fixed no WKWebView →
+   não empurrava. Piso fixo de 50px no CONTAINER empurra TODO o conteúdo abaixo do notch
+   (box-sizing:border-box mantém 100dvh). Cobre iOS NATIVO (sp-ios) E PWA instalado
+   (display-mode:standalone, :not(.sp-native)). Android não entra: WebView já é inset
+   abaixo da status bar. */
+html.sp-ios #live-scoring-overlay {
+  padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+  box-sizing: border-box;
+}
+@media (display-mode: standalone) {
+  html:not(.sp-native) #live-scoring-overlay {
+    padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+    box-sizing: border-box;
+  }
+}
 /* Hide the page's own back-header while venue detail overlay is open — sem
    isso, a back-header da página (ex: #venues ou #dashboard) aparece através
    da top-bar area e o usuário vê dois "Voltar" duplicados. Aplica só no body,
