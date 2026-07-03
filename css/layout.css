@@ -119,6 +119,17 @@ html.sp-native .topbar {
   padding-left: calc(2rem + env(safe-area-inset-left, 0px));
   padding-right: calc(2rem + env(safe-area-inset-right, 0px));
 }
+/* Android (targetSdk 36): env(safe-area-inset-top) volta 0 no WebView e o Capacitor
+   já inseta o WebView ABAIXO da status bar de 74px — a topbar NÃO precisa cobrir a
+   status bar (isso é coisa do iOS/notch). Mas o piso de 2px deixava o relógio/rede/
+   bateria COLADOS no conteúdo do topbar (agora que a faixa da status bar é #111114,
+   a mesma cor do topbar, sumiu a separação e parecia CORTE). Damos uma folga real:
+   14px quando o inset não é reportado (caso Capacitor-inset), OU o inset de verdade
+   se algum device reportar (edge-to-edge com cutout) — max() cobre os dois. iOS
+   mantém a fórmula com env acima. */
+html.sp-android .topbar {
+  padding-top: max(env(safe-area-inset-top, 0px), 14px) !important;
+}
 /* respiro no rodapé pra o conteúdo não sumir sob o indicador de home (iPhone sem botão) */
 html.sp-native .main-content {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px));
