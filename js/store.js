@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.3.19-beta';
+window.SCOREPLACE_VERSION = '4.3.21-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -294,6 +294,29 @@ window._monarchGlobalJogoNum = function (t, m, isMe) {
     var pri = PRI[type] || 1;
     if (now - _lastT < COALESCE_MS && pri <= _lastPri) return; // coalesce
     _lastT = now; _lastPri = pri;
+    // ── Nativo (Capacitor iOS/Android): Taptic Engine / vibrador REAL ──
+    // v4.3.21: agora que o app roda nativo, @capacitor/haptics dispara o retorno
+    // tátil de verdade. No iPhone a Vibration API NÃO existe (ver bloco abaixo),
+    // então SEM isto o haptic é no-op total no iOS — botões, placar ao vivo e o
+    // futuro controle no relógio ficavam mudos. Com o plugin, iOS ganha Taptic
+    // real e o Android ganha impacto semântico consistente (light/medium/heavy)
+    // em vez do vibrate() cru. Fire-and-forget (impact/notification são async;
+    // não bloqueiam o gesto). NO-OP na WEB (Capacitor undefined) → caminho web
+    // 100% intocado; segue pro navigator.vibrate / no-op de sempre.
+    try {
+      var C = window.Capacitor;
+      if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform() && C.Plugins && C.Plugins.Haptics) {
+        var H = C.Plugins.Haptics;
+        if (type === 'success' || type === 'warning' || type === 'error') {
+          H.notification({ type: type === 'success' ? 'SUCCESS' : (type === 'warning' ? 'WARNING' : 'ERROR') }).catch(function () {});
+        } else {
+          // tap/light → LIGHT (tique de botão); medium/undo → MEDIUM.
+          var _style = (type === 'medium' || type === 'undo') ? 'MEDIUM' : 'LIGHT';
+          H.impact({ style: _style }).catch(function () {});
+        }
+        return;
+      }
+    } catch (e) {}
     if (SUPPORTS_VIBRATE) {
       try { navigator.vibrate(PATTERNS[type] != null ? PATTERNS[type] : 12); return; } catch (e) {}
     }
