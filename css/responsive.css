@@ -196,12 +196,14 @@
 
 /* Reduce padding and margins */
 @media (max-width: 767px) {
-  /* v4.3.21: gutter lateral externo mais enxuto no mobile. Antes 1rem — no
-     iPhone (rootFont maior via clamp/ui-scale) isso inflava e sobrava "espaço
-     preto dos lados" (queixa do dono: em todo o app dá pra usar mais largura).
-     0.6rem deixa o conteúdo mais edge-to-edge sem colar na borda. */
+  /* v4.3.24: gutter lateral em PX FIXO (não rem). Medido no iPhone 17 Pro: o
+     perfil do dono tem ui-scale ~1.15 → rootFont 17.3px → os gutters em rem
+     inflavam (0.6rem virava ~10px) e sobrava "espaço preto dos lados". O gutter
+     é CHROME, não conteúdo — não deve escalar com a preferência de fonte. 8px
+     fixo deixa o hero/cards edge-to-edge e IGUAL em qualquer ui-scale. Vertical
+     segue rem. */
   .view-container {
-    padding: 0.6rem;
+    padding: 0.75rem 8px;
   }
 
   /* v4.3.21: fim do "box dentro de box" no mobile. O .view-container já dá o
@@ -1139,10 +1141,10 @@ body.hamburger-open #header-notif-bell { display: none !important; }
 @media (max-width: 767px) {
   .hero-box {
     position: relative;
-    /* v4.3.21: padding lateral interno reduzido (1.2rem → 0.95rem) — o conteúdo
-       do hero (saudação, pills, botões) usa mais da largura do card no mobile.
-       Top/bottom preservados. */
-    padding: 1.5rem 0.95rem !important;
+    /* v4.3.24: padding lateral do hero em PX FIXO (14px) — antes rem inflava com
+       ui-scale (iPhone: 1.2rem×17.29=20.75px). Fixo → conteúdo usa mais do card,
+       igual em qualquer ui-scale. Vertical segue rem. */
+    padding: 1.5rem 14px !important;
   }
 }
 
