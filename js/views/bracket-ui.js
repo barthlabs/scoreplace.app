@@ -8529,7 +8529,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Header — 3-column: [AO VIVO + info] [Sets display center] [Reset + Close]
   var headerBg = 'linear-gradient(135deg,#1e293b 0%,#0f172a 100%)';
   var matchLabel = isCasual ? (opts.sportName || 'Partida Casual') : (m.roundIndex !== undefined ? 'Rodada ' + (m.roundIndex + 1) : (m.round || ''));
-  var headerHtml = '<div style="background:' + headerBg + ';padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
+  // v4.3.23: padding-top com env(safe-area-inset-top) — no app nativo/PWA o overlay
+  // é position:fixed;top:0 full-bleed sob a status bar/ilha; sem o inset o "AO VIVO"
+  // e os botões Ajustar/Resetar/Fechar encavalavam no relógio/bateria do sistema.
+  // Inerte na web (insets=0). Depende de viewport-fit=cover estar ativo (preservado).
+  var headerHtml = '<div style="background:' + headerBg + ';padding:calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
     // Left: AO VIVO + match info
     '<div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0;">' +
       '<span style="font-size:1rem;">📡</span>' +
@@ -10976,7 +10980,10 @@ window._openCasualMatch = function(restoreOpts) {
       document.body.appendChild(overlay);
       document.body.style.overflow = 'hidden';
       if (_metaVp) {
-        _metaVp.setAttribute('content', 'width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no');
+        // v4.3.23: preserva viewport-fit=cover (idem abertura do setup) — sem ele
+        // o WKWebView reflowa e env(safe-area-inset-*) zera. Ver a nota no append
+        // original do overlay.
+        _metaVp.setAttribute('content', 'width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover');
       }
       // Re-observa para restaurar scroll/viewport quando fechar
       try { _ovObs.observe(document.body, { childList: true }); } catch(e) {}

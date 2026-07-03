@@ -9,9 +9,10 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.22-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.23-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⚡ Partida Casual voltou a funcionar no app:</b> corrigimos a tela de Partida Casual, que no aplicativo instalado estava com os <b>toques fora do lugar</b> — o "Voltar" não respondia e o "Iniciar" abria as configurações. Agora o cabeçalho fica abaixo da câmera/ilha e cada toque acerta o botão certo.</li>' +
+        '<li><b>📡 Placar ao vivo não encavala mais no relógio:</b> no app instalado, o topo do <b>placar ao vivo</b> (AO VIVO / Ajustar / Resetar / Fechar) subia por cima do relógio e da bateria do celular. Agora o cabeçalho respeita a área da câmera/ilha.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
