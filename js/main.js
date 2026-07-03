@@ -1728,6 +1728,8 @@ window._isInstalledAsPWA = function() {
 // se deve mostrar o banner agora.
 window._shouldShowInstallBanner = function(opts) {
   opts = opts || {};
+  // App nativo (Capacitor) já é "instalado" — sem banner de instalação.
+  if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return false;
   var minSessions = opts.minSessions || 3;
   var maxDismissals = opts.maxDismissals || 3;
   var cooldownDays = opts.cooldownDays || 30;
@@ -1863,6 +1865,8 @@ window._showInstallInstructions = function () {
 // — Apple. No Android/desktop o próprio "Entrar" instala via _enterApp).
 window._installButtonHtml = function (opts) {
   opts = opts || {};
+  // App nativo (Capacitor) já é "instalado" — nada de CTA "Instalar app".
+  if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return '';
   if (window._isInstalledAsPWA && window._isInstalledAsPWA()) return '';
   if (opts.iosOnly) {
     var _ua = navigator.userAgent || '';
