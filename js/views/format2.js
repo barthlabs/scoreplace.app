@@ -77,20 +77,20 @@
     out._scoreBy = (!isDupla || out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada')
       ? 'individual' : 'dupla';
 
-    // Rodadas. Rotativo (RR/sorteio_rodada) é inerentemente por-rodada (Liga limitada).
-    // Dupla fixa e grupos = round-robin ('todos'). Singles pode 'todos' (grupos) ou 'fixo' (liga).
+    // Rodadas. Rotativo (RR/sorteio_rodada) = por-rodada (Liga limitada, sem turnos).
+    // Dupla fixa = round-robin ('todos'). Singles = 'todos' (round-robin) ou 'fixo' (Liga limitada).
+    // IDA-E-VOLTA só em TABELA ÚNICA (grupos=1), todos-contra-todos (dupla fixa ou singles).
     out.rodadas = out.rodadas || {};
     var rotativo = isDupla && (out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada');
-    if (!umGrupo) {
-      out.rodadas.modo = 'todos'; out.rodadas.turnos = (out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
-    } else if (rotativo) {
-      out.rodadas.modo = 'fixo';
+    if (rotativo) {
+      out.rodadas.modo = 'fixo'; out.rodadas.turnos = 'ida';
     } else if (isDupla) {
-      out.rodadas.modo = 'todos'; // dupla fixa 1 grupo = round-robin
-      out.rodadas.turnos = (out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
-    } else {
-      if (out.rodadas.modo !== 'todos' && out.rodadas.modo !== 'fixo') out.rodadas.modo = 'todos';
-      out.rodadas.turnos = (out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
+      out.rodadas.modo = 'todos'; // dupla fixa = round-robin
+      out.rodadas.turnos = (umGrupo && out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
+    } else { // singles
+      if (!umGrupo) out.rodadas.modo = 'todos';
+      else if (out.rodadas.modo !== 'todos' && out.rodadas.modo !== 'fixo') out.rodadas.modo = 'todos';
+      out.rodadas.turnos = (umGrupo && out.rodadas.modo === 'todos' && out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
     }
     out.rodadas.n = Math.max(1, parseInt(out.rodadas.n, 10) || 1);
 
@@ -191,12 +191,17 @@
       top.enrollmentMode = 'individual';
       top.gruposCount = cfg.grupos;
       top.gruposClassified = cfg.classificados;
+      // ida-e-volta só vale em tabela única (grupos=1) todos-contra-todos.
+      var idaVolta = (cfg.grupos === 1 && cfg.rodadas.turnos === 'ida_volta');
+      if (idaVolta) top.ligaTurnos = 2;
       p0 = Object.assign(_phaseBase(re), {
         name: cfg.grupos === 1 ? 'Pontos Corridos' : 'Fase de Grupos',
         formatCode: 'grupos_mata', format: 'Fase de Grupos',
         drawMode: 'sorteio', reiRainha: false,
         gruposCount: cfg.grupos, gruposClassified: cfg.classificados,
         groupsBy: 'sorteio', rounds: 1,
+        turnos: idaVolta ? 'ida_volta' : 'ida',   // ⚠️ motor grupos_mata ainda não honra turnos (TODO extensão)
+        _doubleRR: idaVolta,
         source: { type: 'enrollment' },
         fixedPairs: isDupla,                   // teamSize>1 forma duplas fixas no sorteio
         pairingStrategy: 'top', grandFinal: true
