@@ -9,7 +9,7 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.34-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.35-beta — inclui o botão "Entrar" com mais volume (degradê + brilho esmeralda) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⏱️ Pontos Corridos respeita as suas rodadas:</b> o número de rodadas e a frequência dos sorteios agora seguem exatamente o que você configura (data do 1º sorteio, de quanto em quanto tempo repete e a data final). A barra de progresso, o cronômetro e o botão "Avançar de fase" acompanham — nada mais fica preso numa rodada só.</li>' +
         '<li><b>🎲 Cronômetro do próximo sorteio em destaque:</b> o tempo até o próximo sorteio ficou maior e aparece logo acima do local. Mostra "próximo sorteio" quando há um agendado, "fim do torneio" só nas últimas 48h, e "tempo decorrido" quando não há sorteio marcado. Cada rodada também mostra "<b>Rodada 1 de N</b>".</li>' +
