@@ -923,6 +923,7 @@ window._translations['pt'] = {
   'participants.tournamentStartedMsg': 'A presença dos participantes já pode ser registrada.',
 
   // Bracket UI (bracket-ui.js + bracket-logic.js)
+  'bracket.knockout': 'Eliminatória',
   'bui.knockoutPhase': 'Fase Eliminatória',
   'bui.knockoutPhaseMsg': '{n} classificados avançaram para as eliminatórias!',
   'bui.undo': 'Desfazer',
