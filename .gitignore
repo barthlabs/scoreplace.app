@@ -49,3 +49,9 @@ android/build/
 android/app/src/main/assets/public/
 android/capacitor-cordova-android-plugins/
 .gradle/
+
+# Android signing keystore (segredo — nunca commitar)
+android-signing/
+android/keystore.properties
+*.jks
+*.keystore
