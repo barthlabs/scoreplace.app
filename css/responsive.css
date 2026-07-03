@@ -196,8 +196,13 @@
 
 /* Reduce padding and margins */
 @media (max-width: 767px) {
+  /* v4.3.30: gutter lateral em PX FIXO (não rem). O rem inflava com o ui-scale
+     do perfil (iPhone do dono = ui-scale ~1.15 → rootFont 17.3px → 0.75rem=13px
+     de margem preta; medido no sim). O gutter é CHROME, não conteúdo — não deve
+     escalar com a preferência de fonte. 8px fixo deixa o hero/cards edge-to-edge
+     e IGUAL em qualquer ui-scale (iPhone e Android batem). Vertical segue rem. */
   .view-container {
-    padding: 0.75rem;
+    padding: 0.75rem 8px;
   }
 
   /* v4.3.23: fim do "box dentro de box" no mobile. O .view-container já dá o
@@ -1138,7 +1143,10 @@ body.hamburger-open #header-notif-bell { display: none !important; }
 @media (max-width: 767px) {
   .hero-box {
     position: relative;
-    padding: 1.5rem 1.2rem !important;
+    /* v4.3.30: padding lateral do hero em PX FIXO (14px) — antes 1.2rem inflava
+       com ui-scale (iPhone: 1.2rem×17.29=20.75px). Fixo → conteúdo usa mais do
+       card, igual em qualquer ui-scale. Vertical segue rem. */
+    padding: 1.5rem 14px !important;
   }
 }
 

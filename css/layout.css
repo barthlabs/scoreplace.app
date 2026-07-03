@@ -128,7 +128,10 @@ html.sp-native .topbar {
    se algum device reportar (edge-to-edge com cutout) — max() cobre os dois. iOS
    mantém a fórmula com env acima. */
 html.sp-android .topbar {
-  padding-top: max(env(safe-area-inset-top, 0px), 14px) !important;
+  /* v4.3.30: 14px→8px — o dono comparou com o iPhone e achou o cabeçalho longe
+     demais do relógio no Android. 8px mantém a separação (faixa da status bar é
+     #111114 = cor do topbar) sem o gap exagerado. */
+  padding-top: max(env(safe-area-inset-top, 0px), 8px) !important;
 }
 /* respiro no rodapé pra o conteúdo não sumir sob o indicador de home (iPhone sem botão) */
 html.sp-native .main-content {
