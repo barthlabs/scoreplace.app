@@ -36,6 +36,8 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private LinearLayout halfLeft, halfRight, btnUndo;
     private TextView pointLeft, pointRight, gamesLeft, gamesRight, setLabel;
     private TextView nameL1, nameL2, nameR1, nameR2, ballL1, ballL2, ballR1, ballR2;
+    private LinearLayout setsRow, winnerOverlay;
+    private TextView setsLeft, setsRight, winnerLabel, winnerNames, winnerScore;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +56,12 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         nameR1 = findViewById(R.id.name_r1); nameR2 = findViewById(R.id.name_r2);
         ballL1 = findViewById(R.id.ball_l1); ballL2 = findViewById(R.id.ball_l2);
         ballR1 = findViewById(R.id.ball_r1); ballR2 = findViewById(R.id.ball_r2);
+        setsRow = findViewById(R.id.sets_row);
+        setsLeft = findViewById(R.id.sets_left); setsRight = findViewById(R.id.sets_right);
+        winnerOverlay = findViewById(R.id.winner_overlay);
+        winnerLabel = findViewById(R.id.winner_label);
+        winnerNames = findViewById(R.id.winner_names);
+        winnerScore = findViewById(R.id.winner_score);
 
         // Toque por POSIÇÃO → intenção pra o TIME que está naquele lado.
         halfLeft.setOnClickListener(v -> sendPoint(courtLeft));
@@ -114,6 +122,69 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         JSONObject server = s.optJSONObject("server");
         applySide(true, leftTeam, points, games, teams, server);
         applySide(false, rightTeam, points, games, teams, server);
+
+        // Sets ganhos — só em melhor-de-N (Tênis/Padel/Vôlei/Futevôlei).
+        int setsToWin = s.optInt("setsToWin", 1);
+        JSONArray sets = s.optJSONArray("sets");
+        if (setsToWin > 1 && sets != null) {
+            setsRow.setVisibility(View.VISIBLE);
+            setsLeft.setText(String.valueOf(sets.optInt(leftTeam - 1, 0)));
+            setsLeft.setTextColor(getColor(leftTeam == 1 ? R.color.team_blue : R.color.team_red));
+            setsRight.setText(String.valueOf(sets.optInt(rightTeam - 1, 0)));
+            setsRight.setTextColor(getColor(rightTeam == 1 ? R.color.team_blue : R.color.team_red));
+        } else {
+            setsRow.setVisibility(View.GONE);
+        }
+
+        // Fim de jogo — cobre as metades e trava os toques +1.
+        boolean finished = s.optBoolean("isFinished", false);
+        if (finished) {
+            int winner = s.isNull("winner") ? 0 : s.optInt("winner", 0);
+            if (winner == 1 || winner == 2) {
+                winnerLabel.setText("VENCEDOR");
+                winnerNames.setText(teamNames(teams, winner));
+                winnerNames.setTextColor(getColor(winner == 1 ? R.color.name_blue : R.color.name_red));
+                winnerNames.setVisibility(View.VISIBLE);
+            } else {
+                winnerLabel.setText("EMPATE");
+                winnerNames.setVisibility(View.GONE);
+            }
+            winnerScore.setText(scoreLine(setsToWin, sets, games, leftTeam, rightTeam));
+            winnerOverlay.setVisibility(View.VISIBLE);
+            halfLeft.setClickable(false);
+            halfRight.setClickable(false);
+        } else {
+            winnerOverlay.setVisibility(View.GONE);
+            halfLeft.setClickable(true);
+            halfRight.setClickable(true);
+        }
+    }
+
+    // Nomes do time (um por linha) para a tela de vencedor.
+    private String teamNames(JSONObject teams, int team) {
+        if (teams == null) return "";
+        JSONObject t = teams.optJSONObject(String.valueOf(team));
+        if (t == null) return "";
+        JSONArray pl = t.optJSONArray("players");
+        if (pl == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < pl.length(); i++) {
+            String n = pl.optString(i, "");
+            if (n.isEmpty()) continue;
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(n);
+        }
+        return sb.toString();
+    }
+
+    // Placar final por lado (esquerda–direita): sets em melhor-de-N, senão games.
+    private String scoreLine(int setsToWin, JSONArray sets, JSONArray games, int leftTeam, int rightTeam) {
+        if (setsToWin > 1 && sets != null) {
+            return "Sets " + sets.optInt(leftTeam - 1, 0) + "–" + sets.optInt(rightTeam - 1, 0);
+        }
+        int gl = games != null ? games.optInt(leftTeam - 1, 0) : 0;
+        int gr = games != null ? games.optInt(rightTeam - 1, 0) : 0;
+        return "Games " + gl + "–" + gr;
     }
 
     private void applySide(boolean left, int team, JSONArray points, JSONArray games,

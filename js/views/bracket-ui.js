@@ -7463,6 +7463,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
         '1': { players: p1Players.slice() },
         '2': { players: p2Players.slice() }
       },
+      // Sets ganhos por time [time1, time2]. Durante o jogo conta só sets
+      // FECHADOS (o set atual em curso não é "ganho" ainda); ao encerrar,
+      // includeAll=true inclui o set decisivo. O relógio só desenha isto pra
+      // melhor-de-N (setsToWin>1) — em 1 set (Beach Tennis) fica oculto.
+      sets: [_setsWon(1, !!state.isFinished), _setsWon(2, !!state.isFinished)],
+      setsToWin: state.setsToWin || 1,
       isFinished: !!state.isFinished,
       winner: state.winner || null
     };

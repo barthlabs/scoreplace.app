@@ -49,6 +49,13 @@ struct RemoteView: View {
     private var rightTeam: Int { state.rightTeam }
 
     var body: some View {
+        ZStack {
+            mainContent
+            if state.isFinished { winnerOverlay }   // fim de jogo cobre os botões +1
+        }
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
             // Linha do relógio: Set + cadeado à esquerda, palavra GAMES
             // centralizada (o relógio do sistema fica à direita).
@@ -75,6 +82,21 @@ struct RemoteView: View {
                     .foregroundColor(TeamPalette.of(rightTeam).point)
             }
             .padding(.top, 1)
+
+            // Linha de SETS — só em melhor-de-N (Tênis/Padel/Vôlei/Futevôlei).
+            if state.showsSets {
+                HStack(spacing: 5) {
+                    Text("SETS").font(.system(size: 8)).kerning(1).foregroundColor(.spMetaDim)
+                    Text(String(state.setsFor(leftTeam)))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(TeamPalette.of(leftTeam).point)
+                    Text("–").font(.system(size: 10)).foregroundColor(.spDash)
+                    Text(String(state.setsFor(rightTeam)))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(TeamPalette.of(rightTeam).point)
+                }
+                .padding(.top, 1)
+            }
 
             // Duas metades borda a borda. O TIME em cada lado vem do courtLeft.
             HStack(spacing: 0) {
@@ -133,6 +155,35 @@ struct RemoteView: View {
             .background(Color.white.opacity(0.05))
         }
         .buttonStyle(.plain)
+    }
+
+    // Tela de fim de jogo: 🏆 + nomes do time vencedor (cor do time) ou "Empate",
+    // com o placar final. Cobre as metades → os toques +1 não valem mais.
+    private var winnerOverlay: some View {
+        let w = state.winner ?? 0
+        let pal = TeamPalette.of(w == 2 ? 2 : 1)
+        return VStack(spacing: 3) {
+            Text("🏆").font(.system(size: 40))
+            if w == 1 || w == 2 {
+                Text("Vencedor").font(.system(size: 11)).kerning(1).foregroundColor(.spMeta)
+                ForEach(state.winnerNames, id: \.self) { n in
+                    Text(n).font(.system(size: 16, weight: .semibold)).foregroundColor(pal.name)
+                }
+            } else {
+                Text("Empate").font(.system(size: 18, weight: .semibold)).foregroundColor(.spMeta)
+            }
+            Text(finalScoreLine).font(.system(size: 12)).foregroundColor(.spMetaDim).padding(.top, 3)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.spBg.opacity(0.97).ignoresSafeArea())
+    }
+
+    // Placar final por lado (esquerda–direita): sets em melhor-de-N, senão games.
+    private var finalScoreLine: String {
+        if state.showsSets {
+            return "Sets \(state.setsFor(leftTeam))–\(state.setsFor(rightTeam))"
+        }
+        return "Games \(state.gamesFor(leftTeam))–\(state.gamesFor(rightTeam))"
     }
 }
 

@@ -15,6 +15,8 @@ struct ScoreState: Decodable {
     var courtLeft: Int = 1              // qual TIME está à esquerda
     var server: Server? = nil
     var teams: [String: Team] = [:]     // "1"/"2" → jogadores
+    var sets: [Int] = [0, 0]            // sets ganhos [time1, time2]
+    var setsToWin: Int = 1              // melhor-de-N (1 = set único, ex. Beach Tennis)
     var isFinished: Bool = false
     var winner: Int? = nil
 
@@ -24,7 +26,7 @@ struct ScoreState: Decodable {
     // Decoding tolerante: o snapshot sempre traz as chaves-base, mas `server` e
     // `winner` podem vir null e chaves opcionais (sets/matchId) podem faltar.
     enum CodingKeys: String, CodingKey {
-        case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, isFinished, winner
+        case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, isFinished, winner
     }
     init() {}
     init(from decoder: Decoder) throws {
@@ -39,6 +41,8 @@ struct ScoreState: Decodable {
         courtLeft  = (try? c.decodeIfPresent(Int.self, forKey: .courtLeft)) ?? 1
         server     = (try? c.decodeIfPresent(Server.self, forKey: .server)) ?? nil
         teams      = (try? c.decodeIfPresent([String: Team].self, forKey: .teams)) ?? [:]
+        sets       = (try? c.decodeIfPresent([Int].self, forKey: .sets)) ?? [0, 0]
+        setsToWin  = (try? c.decodeIfPresent(Int.self, forKey: .setsToWin)) ?? 1
         isFinished = (try? c.decodeIfPresent(Bool.self, forKey: .isFinished)) ?? false
         winner     = (try? c.decodeIfPresent(Int.self, forKey: .winner)) ?? nil
     }
@@ -54,9 +58,18 @@ struct ScoreState: Decodable {
         let i = team - 1
         return (i >= 0 && i < games.count) ? games[i] : 0
     }
+    func setsFor(_ team: Int) -> Int {
+        let i = team - 1
+        return (i >= 0 && i < sets.count) ? sets[i] : 0
+    }
     func players(_ team: Int) -> [String] { teams[String(team)]?.players ?? [] }
     func isServing(_ team: Int) -> Bool { server?.team == team }
     var serverName: String { server?.name ?? "" }
+    // Mostra a linha de sets só em melhor-de-N (setsToWin>1); em set único
+    // (Beach Tennis/Pickleball) o placar de games já basta.
+    var showsSets: Bool { setsToWin > 1 }
+    // Nomes do time vencedor (para a tela de fim de jogo); vazio se empate/aberto.
+    var winnerNames: [String] { (winner == 1 || winner == 2) ? players(winner!) : [] }
 
     // Estado de exemplo — usado no #Preview e no app de preview standalone.
     static var mock: ScoreState {
