@@ -564,6 +564,25 @@ var _isStagingHost = (function () {
 window.SCOREPLACE_ENV = _isStagingHost ? 'staging' : 'prod';
 const firebaseConfig = _isStagingHost ? _firebaseConfigStaging : _firebaseConfigProd;
 
+// ─── API key por plataforma NO APP NATIVO ────────────────────────────────────
+// v4.3.22: no app Capacitor o JS SDK roda de origem `capacitor://localhost`. A
+// "Browser key" (a apiKey do config web) é restrita por HTTP referrer a
+// scoreplace.app/*, localhost, etc. — `capacitor://localhost` NÃO está na lista,
+// então TODA request do JS SDK (installations, identitytoolkit/signInWithCredential,
+// securetoken, firestore) volta 403 PERMISSION_DENIED "Requests from referer
+// capacitor://localhost are blocked". As chaves iOS/Android auto-criadas pelo
+// Firebase NÃO têm restrição de referrer/app e cobrem todas essas APIs → usamos
+// elas no nativo. NO-OP na web (SCOREPLACE_PLATFORM undefined). Só afeta prod
+// nativo (staging não roda nativo hoje). Ver memória project_native_app_roadmap.
+try {
+  var _spPlat = window.SCOREPLACE_PLATFORM;
+  if (_spPlat === 'ios') {
+    firebaseConfig.apiKey = 'AIzaSyBI8z9CV_VORj0VxWE8l6px7-OOMDq5etI'; // iOS key (auto Firebase)
+  } else if (_spPlat === 'android') {
+    firebaseConfig.apiKey = 'AIzaSyBxTnVWKwiQdhmei8YqQdjhxPnaKNo5iFk'; // Android key (auto Firebase)
+  }
+} catch (_ak) {}
+
 // ─── Safari detection ───────────────────────────────────────────────────────
 // Safari (desktop + iOS) has ITP that breaks popup-based OAuth when the auth
 // domain is cross-origin (firebaseapp.com). We detect Safari + in-app webviews
