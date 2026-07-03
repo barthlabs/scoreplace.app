@@ -202,8 +202,12 @@
      é CHROME, não conteúdo — não deve escalar com a preferência de fonte. 8px
      fixo deixa o hero/cards edge-to-edge e IGUAL em qualquer ui-scale. Vertical
      segue rem. */
+  /* v4.3.26: gutter lateral ZERADO no mobile — aproveitamento TOTAL da largura em
+     TODAS as telas (pedido do dono). Conteúdo (hero, cards, listas, stats) vai
+     edge-to-edge; o padding interno de cada card segura a leitura. Vertical
+     (0.75rem) preservado. body{overflow-x:hidden} é rede contra transbordo. */
   .view-container {
-    padding: 0.75rem 8px;
+    padding: 0.75rem 0;
   }
 
   /* v4.3.21: fim do "box dentro de box" no mobile. O .view-container já dá o
@@ -214,8 +218,11 @@
      gutter lateral redundante do modal-body; top/bottom preservados. !important
      porque o modal-body recebe padding:1.5rem INLINE no setup do modal. */
   #view-container > .modal > .modal-body {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+    /* v4.3.26: 10px lateral (era 0) — com o view-container em gutter 0, os forms
+       de page-route (perfil, criar torneio) colariam os campos no vidro. 10px dá
+       o respiro justo; cards/hero (filhos diretos do view-container) seguem em 0. */
+    padding-left: 10px !important;
+    padding-right: 10px !important;
   }
 
   .card {
@@ -1141,12 +1148,9 @@ body.hamburger-open #header-notif-bell { display: none !important; }
 @media (max-width: 767px) {
   .hero-box {
     position: relative;
-    /* v4.3.25: hero FULL-BLEED — encosta na borda da tela. A faixa preta era só
-       o padding lateral de 8px do .view-container (margem de CSS, NÃO área sem
-       tela). Margem negativa -8px cancela esse gutter → o card vai de ponta a
-       ponta. Padding interno (14px) mantém o conteúdo respirando. */
-    margin-left: -8px !important;
-    margin-right: -8px !important;
+    /* v4.3.26: hero full-bleed via .view-container com gutter 0 (não precisa mais
+       da margem negativa — ela causaria overflow de 8px). Padding interno 14px
+       mantém o conteúdo respirando. */
     padding: 1.5rem 14px !important;
   }
 }
