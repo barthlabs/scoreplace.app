@@ -311,6 +311,14 @@ function initRouter() {
           window.location.hash = '#dashboard';
         }
         break;
+      case 'formato':
+        // v4.4.x — configurador ÚNICO de formato (reescrita). #formato/:tId
+        if (cleanParam && typeof window.renderFormatoPage === 'function') {
+          window.renderFormatoPage(viewContainer);
+        } else {
+          window.location.hash = '#dashboard';
+        }
+        break;
       case 'participants':
         renderParticipants(viewContainer, cleanParam);
         break;
