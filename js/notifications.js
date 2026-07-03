@@ -129,7 +129,12 @@ window._registerFCMToken = async function() {
       if (window.FirestoreDB && window.FirestoreDB.db) {
         await window.FirestoreDB.db.collection('users').doc(user.uid).set({
           fcmToken: token,
-          fcmTokenUpdatedAt: new Date().toISOString()
+          fcmTokenUpdatedAt: new Date().toISOString(),
+          // 'web' explícito: se o usuário tinha logado no app nativo (token
+          // com fcmTokenPlatform='native-*') e volta pra web, este overwrite
+          // reseta o flag → o CF sabe que agora é token WEB e NÃO adiciona
+          // payload `notification` (contrato data-only anti-duplicata).
+          fcmTokenPlatform: 'web'
         }, { merge: true });
         // Token saved to Firestore
       }

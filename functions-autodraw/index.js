@@ -530,6 +530,27 @@ exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{
     }
   };
 
+  // ⚠️ TOKENS NATIVOS (Capacitor iOS/Android) — exceção AO contrato data-only.
+  // O contrato data-only acima existe SÓ por causa da WEB (o navegador exibe uma
+  // cópia automática do payload `notification` além da que o sw.js mostra → 2x).
+  // No app NATIVO não há sw.js: data-only NÃO gera notificação na bandeja em
+  // background/killed (o SO não auto-exibe sem `notification`). Por isso, e SÓ
+  // pros tokens nativos (fcmTokenPlatform começa com 'native-'; a web grava
+  // 'web' ou nada → nunca entra aqui → segue data-only intocada), adicionamos o
+  // payload `notification`. Validado no emulador Android (v4.3.29-beta): com
+  // notification+data, background → bandeja do SO, foreground → toast in-app
+  // (o plugin não auto-exibe em foreground; iOS usa presentationOptions:[]).
+  const _isNativeToken = String(userData.fcmTokenPlatform || '').indexOf('native') === 0;
+  if (_isNativeToken) {
+    message.notification = {
+      title: notifData.tournamentName || 'scoreplace.app',
+      body: notifData.message || 'Você tem uma nova notificação.'
+    };
+    // Android: colapsa entregas do mesmo doc pelo tag; o tap abre via data.link
+    // (o app trata notificationActionPerformed → navega pro #tournaments/<id>).
+    message.android = { collapseKey: tag, notification: { tag: tag } };
+  }
+
   try {
     await getMessaging().send(message);
     console.log(`Push sent to ${userId}`);
