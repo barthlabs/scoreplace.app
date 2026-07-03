@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0f0f23</color>
+    <color name="half_blue">#162245</color>
+    <color name="half_red">#312728</color>
+    <color name="team_blue">#60a5fa</color>
+    <color name="team_red">#f87171</color>
+    <color name="name_blue">#dbeafe</color>
+    <color name="name_blue_dim">#93a3c2</color>
+    <color name="name_red">#fecaca</color>
+    <color name="name_red_dim">#cc9a9a</color>
+    <color name="serve_ball">#f97316</color>
+    <color name="meta">#9a9ab0</color>
+    <color name="meta_dim">#7a7a95</color>
+    <color name="dash">#5a5a70</color>
+    <color name="undo_bg">#1a1a2e</color>
+    <color name="undo_border">#33334d</color>
+    <color name="undo_text">#d5d5e5</color>
+    <color name="winner_scrim">#FF0F0F23</color>
+    <color name="winner_gold">#f59e0b</color>
+    <color name="btn_cancel_bg">#26263A</color>
+    <color name="btn_confirm_bg">#3B82F6</color>
+</resources>

@@ -7439,7 +7439,57 @@ window._openLiveScoring = function(tId, matchId, opts) {
   }
 
   // ── Global handlers (attached to window for onclick access) ──
-  window._liveScorePoint = function(player) { _addPoint(player); };
+  window._liveScorePoint = function(player) { _addPoint(player); _watchNotify(); };
+
+  // ── Ponte pro smartwatch (fase 4, contrato docs/smartwatch-bridge.md) ──
+  // Leitor read-only do estado do placar, indexado por TIME (1/2). Vive aqui
+  // dentro do closure pra enxergar state/_formatGamePoint/_currentSet/etc.
+  // Na web ninguém consome (WatchBridge é inerte) → zero efeito.
+  window._getLiveScoreState = function() {
+    var cs = _currentSet();
+    var srv = _getCurrentServer();
+    return {
+      v: 1,
+      type: 'state',
+      active: !state.isFinished,
+      setLabel: 'Set ' + state.sets.length,
+      points: [
+        _formatGamePoint(state.currentGameP1, state.currentGameP2, state.isTiebreak),
+        _formatGamePoint(state.currentGameP2, state.currentGameP1, state.isTiebreak)
+      ],
+      games: cs ? [cs.gamesP1, cs.gamesP2] : [0, 0],
+      isTiebreak: !!state.isTiebreak,
+      courtLeft: _courtLeft,
+      server: srv ? { team: srv.team, name: srv.name } : null,
+      teams: {
+        '1': { players: p1Players.slice() },
+        '2': { players: p2Players.slice() }
+      },
+      // Sets ganhos por time [time1, time2]. Durante o jogo conta só sets
+      // FECHADOS (o set atual em curso não é "ganho" ainda); ao encerrar,
+      // includeAll=true inclui o set decisivo. O relógio só desenha isto pra
+      // melhor-de-N (setsToWin>1) — em 1 set (Beach Tennis) fica oculto.
+      sets: [_setsWon(1, !!state.isFinished), _setsWon(2, !!state.isFinished)],
+      setsToWin: state.setsToWin || 1,
+      // "Jogar novamente" só faz sentido em partida casual (recomeça com os
+      // mesmos jogadores). Em torneio o resultado é definitivo → sem botão.
+      canReplay: !!isCasual,
+      // Duplas → o relógio pode oferecer o toggle "Re-sortear duplas".
+      isDoubles: !!isDoubles,
+      isFinished: !!state.isFinished,
+      winner: state.winner || null
+    };
+  };
+  // Empurra o estado atual pro relógio (no-op se a ponte não estiver ativa/web).
+  function _watchNotify() {
+    if (window.WatchBridge && window.WatchBridge._onEngineState) {
+      try { window.WatchBridge._onEngineState(window._getLiveScoreState()); } catch (e) {}
+    }
+  }
+  // Estado INICIAL pro relógio assim que o placar abre (torneio, Rei/Rainha OU
+  // casual — todos passam por aqui). Sem isso o relógio só atualizaria no
+  // próximo hello/ponto; no "jogar novamente" ficaria com o placar anterior.
+  _watchNotify();
   window._liveScoreFinish = function() {
     // For simple scoring: finish and set winner
     if (state.currentGameP1 === state.currentGameP2 && state.currentGameP1 === 0) {
@@ -7458,6 +7508,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch (_e) {}
     }
     _render();
+    _watchNotify(); // relógio reflete o encerramento (mostra vencedor)
   };
 
   // Minus handler: subtract a point (correction)
@@ -7496,6 +7547,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       cs.gamesP2 = state.currentGameP2;
     }
     _render();
+    _watchNotify(); // relógio reflete a correção de −1
   };
 
   // v1.0.36-beta: Global undo do último ponto via snapshot de estado.
@@ -7542,6 +7594,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // true), agora volta pra false e _render renderiza a UI de live scoring
     // de novo no lugar do finish screen.
     _render();
+    _watchNotify();
     var remaining = state._undoSnapshots.length;
     showNotification('↶ Ponto desfeito', remaining > 0 ? ('Pode desfazer mais ' + remaining + ' ponto(s) se precisar.') : 'Estado anterior restaurado.', 'success');
   };
@@ -8044,13 +8097,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // ── fim Rei/Rainha ────────────────────────────────────────────────────────────
 
   // Restart handler: reset score and optionally re-shuffle teams
-  window._liveScoreRestart = function() {
+  window._liveScoreRestart = function(skipConfirm, shuffleOverride) {
     var shuffleChk = document.getElementById('chk-shuffle-teams');
-    var shouldShuffle = shuffleChk && shuffleChk.checked;
-    showConfirmDialog(
-      'Recomeçar partida?',
-      shouldShuffle ? 'O resultado atual será salvo. As duplas serão re-sorteadas e uma nova partida começará.' : 'O resultado atual será salvo e uma nova partida começará.',
-      function() {
+    // Do relógio (skipConfirm) o "re-sortear" vem no override; senão lê o
+    // checkbox do celular.
+    var shouldShuffle = (typeof shuffleOverride === 'boolean')
+      ? shuffleOverride
+      : (shuffleChk && shuffleChk.checked);
+    // skipConfirm: acionado pelo relógio ("Jogar novamente" já confirmado lá),
+    // então recomeça direto sem o diálogo do celular.
+    var doRestart = function() {
         // Persist the finished result as confirmed before wiping state.
         if (state.isFinished && !_resultSaved) {
           try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
@@ -8119,7 +8175,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
           }).catch(function(e) { window._warn('[Casual] restart write err:', e); });
         }
         _render();
-      }
+        _watchNotify(); // relógio reflete o recomeço (0×0 no relógio)
+    };
+    if (skipConfirm) { doRestart(); return; }
+    showConfirmDialog(
+      'Recomeçar partida?',
+      shouldShuffle ? 'O resultado atual será salvo. As duplas serão re-sorteadas e uma nova partida começará.' : 'O resultado atual será salvo e uma nova partida começará.',
+      doRestart
     );
   };
 
@@ -8974,6 +9036,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
       _releaseWakeLock();
       var ov = document.getElementById('live-scoring-overlay');
       if (ov) ov.remove();
+      // Ponte do relógio: o placar fechou → desfaz a fiação (pra o próximo hello
+      // do relógio responder "inativo") e empurra um estado inativo agora, senão
+      // o relógio fica com o placar anterior "congelado". Cobre todos os caminhos
+      // de fechamento (é o teardown único). No-op na web (WatchBridge inerte).
+      window._getLiveScoreState = null;
+      window._liveScorePoint = null;
+      window._liveScoreUndoLastPoint = null;
+      if (window.WatchBridge && window.WatchBridge.pushInactive) {
+        try { window.WatchBridge.pushInactive(); } catch (e) {}
+      }
     };
     var cu = window.AppStore && window.AppStore.currentUser;
     var isOrganizer = isCasual && cu && cu.uid && _casualCreatedBy && cu.uid === _casualCreatedBy;

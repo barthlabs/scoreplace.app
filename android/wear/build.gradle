@@ -1,0 +1,43 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "app.scoreplace.wear"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        // MESMO applicationId do celular: o Wear Data Layer só entrega mensagens
+        // entre apps de mesmo package (e mesma assinatura — debug key serve).
+        applicationId "app.scoreplace"
+        minSdkVersion 30
+        targetSdkVersion 34
+        versionCode 1
+        versionName "0.1"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+configurations.all {
+    // play-services-wearable + androidx puxam kotlin-stdlib-jdk8 antigo que
+    // duplica classes já contidas no kotlin-stdlib moderno. Excluir os módulos
+    // jdk7/jdk8 (fundidos no stdlib desde Kotlin 1.8) resolve o duplicate class.
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+}
+
+dependencies {
+    implementation "com.google.android.gms:play-services-wearable:18.2.0"
+}

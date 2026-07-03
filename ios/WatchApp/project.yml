@@ -1,0 +1,25 @@
+name: ScoreplaceWatchPreview
+options:
+  bundleIdPrefix: app.scoreplace
+  deploymentTarget:
+    watchOS: "10.0"
+targets:
+  ScoreplaceWatchPreview:
+    type: application
+    platform: watchOS
+    sources:
+      - Sources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: scoreplace
+        WKApplication: true
+        WKWatchOnly: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.scoreplace.watchpreview
+        TARGETED_DEVICE_FAMILY: "4"
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGNING_ALLOWED: NO
