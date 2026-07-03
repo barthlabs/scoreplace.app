@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.36-beta — correções: nome da fase e seletor de quadra <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏷️ Nome da fase de eliminatórias:</b> o cabeçalho mostrava um código interno ("BRACKET.KNOCKOUT") em vez de "Eliminatória". Corrigido.</li>' +
+        '<li><b>📍 Seletor de quadra de volta:</b> nos jogos "prontos para chamar", o organizador voltou a ver o seletor pra designar a quadra de cada jogo — inclusive em torneios do atalho rápido. Sem quadras configuradas ele oferece "Quadra 1"; defina o número/nomes de quadras no torneio pra listar mais.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.35-beta — inclui o botão "Entrar" com mais volume (degradê + brilho esmeralda) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⏱️ Pontos Corridos respeita as suas rodadas:</b> o número de rodadas e a frequência dos sorteios agora seguem exatamente o que você configura (data do 1º sorteio, de quanto em quanto tempo repete e a data final). A barra de progresso, o cronômetro e o botão "Avançar de fase" acompanham — nada mais fica preso numa rodada só.</li>' +
