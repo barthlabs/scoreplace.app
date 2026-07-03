@@ -30,9 +30,10 @@ function serve() {
 const FAKE_SESSION = () => {
   window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'ios' };
   const AS = window.AppStore;
-  AS.currentUser = { uid: 'demo-uid', email: 'demo@scoreplace.app', displayName: 'Rodrigo Barth',
+  AS.currentUser = { uid: 'demo-uid', email: 'demo@scoreplace.app', displayName: 'Bruno Costa',
     photoURL: '', plan: 'free', friends: ['a','b','c','d','e'], preferredSports: ['Beach Tennis','Padel'],
-    notifyLevel: 'todas', gender: 'masculino', city: 'São Paulo' };
+    notifyLevel: 'todas', gender: 'masculino', city: 'São Paulo',
+    preferredLocations: [ { label: 'Arena Beach Sports', lat: -23.561, lng: -46.656 }, { label: 'Clube de Tênis Central', lat: -23.588, lng: -46.632 } ] };
   window.currentUser = AS.currentUser;
   window._authStateResolved = true;
   const st = document.createElement('style');
@@ -138,7 +139,47 @@ async function main() {
     await page.evaluate(() => { document.querySelectorAll('[data-install-app-btn]').forEach(b => b.remove()); });
     await shot(page, 'phone-04-placar-ao-vivo.png');
     console.log('  match:', mid);
+    // fecha o overlay do placar (senão cobre as próximas telas)
+    await page.evaluate(() => {
+      if (typeof window._closeLiveScoring === 'function') { try { window._closeLiveScoring(); } catch (e) {} }
+      ['live-scoring-overlay', 'casual-match-overlay'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
+    });
+    await page.waitForTimeout(400);
   }
+
+  // ---- 5. PLACE (locais preferidos) ----
+  console.log('05 place');
+  await goHash(page, '#place');
+  await page.waitForTimeout(1800); // deixa o auto-geolocate falhar (headless) e cair na seção preferidos
+  await page.evaluate(() => { document.querySelectorAll('[data-install-app-btn]').forEach(b => b.remove()); window.scrollTo(0, 0); });
+  await shot(page, 'phone-05-place.png');
+
+  // ---- 6. ESTATÍSTICAS (torneios fake → stats populado) ----
+  console.log('06 estatísticas');
+  await goHash(page, '#dashboard');
+  await page.evaluate(() => {
+    const AS = window.AppStore;
+    const you = AS.currentUser.displayName; // 'Bruno Costa'
+    // registros no schema do matchHistory persistente (players[].uid === uid)
+    const rec = (i, type, win, myP, oP, myG, oG, myS, oS) => ({
+      matchType: type, winnerTeam: win ? 1 : 2, sport: (i % 3 === 0 ? 'Padel' : 'Beach Tennis'),
+      finishedAt: '2026-06-' + String(10 + i).padStart(2, '0') + 'T10:00:00Z',
+      players: [{ uid: 'demo-uid', team: 1, name: you }, { uid: 'opp' + i, team: 2, name: 'Jogador ' + String(i).padStart(2, '0') }],
+      stats: { team1: { points: myP, games: myG, sets: myS }, team2: { points: oP, games: oG, sets: oS } }
+    });
+    const recs = [
+      rec(1, 'casual', true, 24, 18, 6, 3, 1, 0), rec(2, 'casual', true, 28, 22, 7, 5, 1, 0),
+      rec(3, 'casual', false, 16, 24, 3, 6, 0, 1), rec(4, 'casual', true, 24, 15, 6, 2, 1, 0),
+      rec(5, 'tournament', true, 24, 20, 6, 4, 1, 0), rec(6, 'tournament', true, 24, 17, 6, 3, 1, 0),
+      rec(7, 'tournament', false, 19, 24, 4, 6, 0, 1), rec(8, 'tournament', true, 24, 21, 6, 4, 1, 0),
+      rec(9, 'tournament', true, 22, 20, 7, 5, 1, 0)
+    ];
+    try { localStorage.setItem('scoreplace_casual_history_v2', JSON.stringify(recs)); } catch (e) {}
+    if (typeof window._showPlayerStats === 'function') window._showPlayerStats(you);
+  });
+  await page.waitForTimeout(1400);
+  await page.evaluate(() => { document.querySelectorAll('[data-install-app-btn]').forEach(b => b.remove()); });
+  await shot(page, 'phone-06-estatisticas.png');
 
   await browser.close();
   server.close();
