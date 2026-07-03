@@ -41,7 +41,7 @@ Base: `PrivacyInfo.xcprivacy` (já no app) + `data-inventory.md`.
 - [x] Permissões no Info.plist (localização, câmera) — textos pt-BR.
 - [x] **Privacy Manifest** (`PrivacyInfo.xcprivacy`) — feito, no bundle.
 - [ ] **Sign in with Apple** — OBRIGATÓRIO (tem login Google). Precisa App ID com a capability (conta paga). Código pode ser scaffoldado antes.
-- [ ] **APNs / Push** — subir APNs Auth Key no Firebase (conta paga).
+- [ ] **Push NATIVO** — ⚠️ **GAP**: hoje o push é só FCM **web** (service worker + `messaging.getToken()`), que **NÃO entrega em WebView nativo**. Falta plugin nativo (`@capacitor-firebase/messaging`). iOS também precisa de **APNs Auth Key** no Firebase (conta paga).
 - [ ] **Assinatura/provisioning** — certificado + provisioning (conta paga).
 - [ ] version (CFBundleShortVersionString) + build (CFBundleVersion) de release.
 - [ ] Reader-app: garantir que NÃO há venda do Pro dentro do app iOS (Pro pausado hoje).
@@ -50,7 +50,7 @@ Base: `PrivacyInfo.xcprivacy` (já no app) + `data-inventory.md`.
 - [x] Ícone + splash + permissões (feito).
 - [x] `google-services.json` + login Google nativo (feito).
 - [ ] **Keystore de RELEASE** (upload key) — gerar e **guardar com segurança** (perder = não atualiza mais o app). Adicionar o SHA-1 dele no app Android do Firebase.
-- [ ] **FCM push** — verificar ponta a ponta (token → notificação).
+- [ ] **Push NATIVO** — ⚠️ mesmo gap do iOS: falta o plugin nativo. No Android FUNCIONA já (com o google-services.json + POST_NOTIFICATIONS que temos), sem conta paga — só instalar o plugin e trocar o `getToken` web pelo nativo. Depois verificar ponta a ponta (token → notificação).
 - [ ] versionCode/versionName de release.
 
 ---
