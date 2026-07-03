@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.3.27-beta';
+window.SCOREPLACE_VERSION = '4.3.28-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3511,6 +3511,9 @@ window._whatsappShareUrl = function(text) {
 // Android. Trocado por SVG inline (bola laranja com costura branca) → renderiza IGUAL
 // em iOS/Android/web e é inequivocamente uma BOLA. Escala com font-size (width:1em).
 window._BEACH_TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;vertical-align:-0.15em;display:inline-block;flex-shrink:0" aria-label="Beach Tennis"><circle cx="50" cy="50" r="47" fill="#fb923c" stroke="#c2410c" stroke-width="3"/><path d="M18 20 C44 40 44 60 18 80" fill="none" stroke="#fff7ed" stroke-width="5" stroke-linecap="round"/><path d="M82 20 C56 40 56 60 82 80" fill="none" stroke="#fff7ed" stroke-width="5" stroke-linecap="round"/></svg>';
+// v4.3.28: mesmo motivo do beach — o 🎾 do Tênis é RAQUETE+bola no Android. Vira bola
+// verde SVG (bola de tênis clássica). Rende igual em todo lugar.
+window._TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;vertical-align:-0.15em;display:inline-block;flex-shrink:0" aria-label="Tênis"><circle cx="50" cy="50" r="47" fill="#c4e83a" stroke="#84a81f" stroke-width="3"/><path d="M18 20 C44 40 44 60 18 80" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M82 20 C56 40 56 60 82 80" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>';
 
 // v0.17.11: ícone Pickleball — SVG inline com bola amarela e furos visíveis
 // (bola real tem 40 furos; reduzido pra 13 num grid distribuído pra que
@@ -3553,7 +3556,7 @@ window._sportIcon = function(sport) {
   if (s.indexOf('pickleball') !== -1) return '🟡';
   if (s.indexOf('padel') !== -1) return '🥎';
   if (s.indexOf('tênis de mesa') !== -1 || s.indexOf('tenis de mesa') !== -1 || s.indexOf('ping pong') !== -1) return '🏓';
-  if (s.indexOf('tênis') !== -1 || s.indexOf('tenis') !== -1 || s.indexOf('tennis') !== -1) return '🎾';
+  if (s.indexOf('tênis') !== -1 || s.indexOf('tenis') !== -1 || s.indexOf('tennis') !== -1) return window._TENNIS_ICON || '🎾';
   return '🏆';
 };
 
