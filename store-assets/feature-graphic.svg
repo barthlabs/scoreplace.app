@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500" width="1024" height="500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a3e"/>
+      <stop offset="100%" stop-color="#0f0f23"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="500" fill="url(#bg)"/>
+
+  <!-- Pódio + estrela (mesma identidade do ícone), à esquerda -->
+  <g transform="translate(70,60) scale(0.72)">
+    <rect x="117" y="267" width="85" height="139" rx="13" fill="#CBD5E1"/>
+    <rect x="213" y="181" width="86" height="225" rx="13" fill="#F59E0B"/>
+    <rect x="310" y="315" width="85" height="91" rx="13" fill="#FB923C"/>
+    <path d="M 256 107 L 267 139 L 299 139 L 272 159 L 283 192 L 256 171 L 229 192 L 240 159 L 213 139 L 245 139 Z" fill="#F59E0B"/>
+  </g>
+
+  <!-- Wordmark + tagline, à direita -->
+  <text x="468" y="238" font-family="Helvetica, Arial, sans-serif" font-size="104" font-weight="800" fill="#F1F5F9" letter-spacing="-2">scoreplace</text>
+  <text x="472" y="300" font-family="Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#F59E0B">Jogue em outro nível</text>
+  <text x="472" y="352" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="500" fill="#94A3B8">Torneios · Placar ao vivo · Presença · Locais</text>
+</svg>
