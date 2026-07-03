@@ -1141,9 +1141,12 @@ body.hamburger-open #header-notif-bell { display: none !important; }
 @media (max-width: 767px) {
   .hero-box {
     position: relative;
-    /* v4.3.24: padding lateral do hero em PX FIXO (14px) — antes rem inflava com
-       ui-scale (iPhone: 1.2rem×17.29=20.75px). Fixo → conteúdo usa mais do card,
-       igual em qualquer ui-scale. Vertical segue rem. */
+    /* v4.3.25: hero FULL-BLEED — encosta na borda da tela. A faixa preta era só
+       o padding lateral de 8px do .view-container (margem de CSS, NÃO área sem
+       tela). Margem negativa -8px cancela esse gutter → o card vai de ponta a
+       ponta. Padding interno (14px) mantém o conteúdo respirando. */
+    margin-left: -8px !important;
+    margin-right: -8px !important;
     padding: 1.5rem 14px !important;
   }
 }
