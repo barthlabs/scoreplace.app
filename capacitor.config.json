@@ -15,6 +15,9 @@
     "FirebaseAuthentication": {
       "skipNativeAuth": true,
       "providers": ["google.com", "phone"]
+    },
+    "FirebaseMessaging": {
+      "presentationOptions": []
     }
   }
 }
