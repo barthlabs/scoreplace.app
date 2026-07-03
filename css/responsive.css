@@ -197,7 +197,22 @@
 /* Reduce padding and margins */
 @media (max-width: 767px) {
   .view-container {
-    padding: 1rem;
+    padding: 0.75rem;
+  }
+
+  /* v4.3.23: fim do "box dentro de box" no mobile. O .view-container já dá o
+     gutter lateral externo; page-routes (criar/editar torneio, perfil, etc.)
+     renderizam via #view-container > .modal > .modal-body — que somava OUTRO
+     ~1.5rem de padding lateral, empurrando o conteúdo pra dentro e desperdiçando
+     a tela (o "box dentro de box dentro de box"; pior no iPhone: viewport mais
+     estreito + rootFont ~17.3px infla o rem). Zera só o gutter lateral redundante
+     do modal-body — o gutter externo do .view-container basta. Top/bottom
+     preservados. Desktop intocado (regra só no ≤767px). !important porque o
+     modal-body recebe `padding:1.5rem` INLINE no setup do modal (inline vence
+     stylesheet) — só zeramos left/right, o 1.5rem de top/bottom fica. */
+  #view-container > .modal > .modal-body {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
 
   .card {
