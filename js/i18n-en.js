@@ -910,6 +910,7 @@ window._translations['en'] = {
   'participants.tournamentStartedMsg': 'Participant attendance can now be recorded.',
 
   // Bracket UI (bracket-ui.js + bracket-logic.js)
+  'bracket.knockout': 'Knockout',
   'bui.knockoutPhase': 'Knockout Stage',
   'bui.knockoutPhaseMsg': '{n} players advanced to the knockout stage!',
   'bui.undo': 'Undo',
