@@ -196,8 +196,24 @@
 
 /* Reduce padding and margins */
 @media (max-width: 767px) {
+  /* v4.3.21: gutter lateral externo mais enxuto no mobile. Antes 1rem — no
+     iPhone (rootFont maior via clamp/ui-scale) isso inflava e sobrava "espaço
+     preto dos lados" (queixa do dono: em todo o app dá pra usar mais largura).
+     0.6rem deixa o conteúdo mais edge-to-edge sem colar na borda. */
   .view-container {
-    padding: 1rem;
+    padding: 0.6rem;
+  }
+
+  /* v4.3.21: fim do "box dentro de box" no mobile. O .view-container já dá o
+     gutter externo; page-routes (criar/editar torneio, perfil, etc.) renderizam
+     via #view-container > .modal > .modal-body — que somava OUTRO ~1.5rem de
+     padding lateral, empurrando o conteúdo pra dentro e desperdiçando a tela
+     (pior no iPhone: viewport estreito + rootFont maior infla o rem). Zera só o
+     gutter lateral redundante do modal-body; top/bottom preservados. !important
+     porque o modal-body recebe padding:1.5rem INLINE no setup do modal. */
+  #view-container > .modal > .modal-body {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
 
   .card {
@@ -1123,7 +1139,10 @@ body.hamburger-open #header-notif-bell { display: none !important; }
 @media (max-width: 767px) {
   .hero-box {
     position: relative;
-    padding: 1.5rem 1.2rem !important;
+    /* v4.3.21: padding lateral interno reduzido (1.2rem → 0.95rem) — o conteúdo
+       do hero (saudação, pills, botões) usa mais da largura do card no mobile.
+       Top/bottom preservados. */
+    padding: 1.5rem 0.95rem !important;
   }
 }
 
