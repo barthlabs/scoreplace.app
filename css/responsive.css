@@ -196,23 +196,31 @@
 
 /* Reduce padding and margins */
 @media (max-width: 767px) {
-  /* v4.3.32: gutter lateral ZERADO no mobile — aproveitamento TOTAL da largura em
-     TODAS as telas (pedido do dono). O conteúdo (hero, cards, listas, stats,
-     brackets) vai edge-to-edge; o padding INTERNO de cada card (.card, .hero-box,
-     etc.) segura a leitura pra nada colar no vidro. Vertical (0.75rem) preservado.
-     body{overflow-x:hidden} é rede de segurança contra qualquer transbordo. */
+  /* v4.3.24: gutter lateral em PX FIXO (não rem). Medido no iPhone 17 Pro: o
+     perfil do dono tem ui-scale ~1.15 → rootFont 17.3px → os gutters em rem
+     inflavam (0.6rem virava ~10px) e sobrava "espaço preto dos lados". O gutter
+     é CHROME, não conteúdo — não deve escalar com a preferência de fonte. 8px
+     fixo deixa o hero/cards edge-to-edge e IGUAL em qualquer ui-scale. Vertical
+     segue rem. */
+  /* v4.3.26: gutter lateral ZERADO no mobile — aproveitamento TOTAL da largura em
+     TODAS as telas (pedido do dono). Conteúdo (hero, cards, listas, stats) vai
+     edge-to-edge; o padding interno de cada card segura a leitura. Vertical
+     (0.75rem) preservado. body{overflow-x:hidden} é rede contra transbordo. */
   .view-container {
     padding: 0.75rem 0;
   }
 
-  /* v4.3.32: page-routes de FORMULÁRIO (criar/editar torneio, perfil, etc.)
-     renderizam via #view-container > .modal > .modal-body. Com o .view-container
-     agora em gutter 0, um form colaria os campos/labels no vidro (smell de
-     legibilidade). Damos um respiro mínimo de 10px lateral SÓ no modal-body —
-     cards/hero (filhos diretos do view-container) seguem edge-to-edge (0), forms
-     ganham a folga justa. Top/bottom (1.5rem inline) preservados. !important
-     porque o modal-body recebe padding inline no setup do modal. */
+  /* v4.3.21: fim do "box dentro de box" no mobile. O .view-container já dá o
+     gutter externo; page-routes (criar/editar torneio, perfil, etc.) renderizam
+     via #view-container > .modal > .modal-body — que somava OUTRO ~1.5rem de
+     padding lateral, empurrando o conteúdo pra dentro e desperdiçando a tela
+     (pior no iPhone: viewport estreito + rootFont maior infla o rem). Zera só o
+     gutter lateral redundante do modal-body; top/bottom preservados. !important
+     porque o modal-body recebe padding:1.5rem INLINE no setup do modal. */
   #view-container > .modal > .modal-body {
+    /* v4.3.26: 10px lateral (era 0) — com o view-container em gutter 0, os forms
+       de page-route (perfil, criar torneio) colariam os campos no vidro. 10px dá
+       o respiro justo; cards/hero (filhos diretos do view-container) seguem em 0. */
     padding-left: 10px !important;
     padding-right: 10px !important;
   }
@@ -1140,8 +1148,8 @@ body.hamburger-open #header-notif-bell { display: none !important; }
 @media (max-width: 767px) {
   .hero-box {
     position: relative;
-    /* v4.3.32: hero full-bleed via .view-container com gutter 0 (não precisa mais
-       de margem negativa — ela causaria overflow de 8px). Padding interno 14px
+    /* v4.3.26: hero full-bleed via .view-container com gutter 0 (não precisa mais
+       da margem negativa — ela causaria overflow de 8px). Padding interno 14px
        mantém o conteúdo respirando. */
     padding: 1.5rem 14px !important;
   }

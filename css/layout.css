@@ -132,6 +132,22 @@ html.sp-android .topbar {
      demais do relógio no Android. 8px mantém a separação (faixa da status bar é
      #111114 = cor do topbar) sem o gap exagerado. */
   padding-top: max(env(safe-area-inset-top, 0px), 8px) !important;
+/* ── PWA INSTALADO (Add to Home Screen, display:standalone) ─────────────
+   No iOS o meta apple-mobile-web-app-status-bar-style=black-translucent deixa a status
+   bar SOBRE o conteúdo; sem safe-area o relógio/rede/bateria encavalam no logo da
+   topbar (bug reportado por quem instalou o app). O ajuste de safe-area da topbar só
+   existia pra .sp-native (app Capacitor) — o PWA não tem essa classe. Escopo
+   :not(.sp-native) pra NÃO mexer no app nativo. Inerte no browser comum (não casa
+   display-mode:standalone) e sem notch (env=0). */
+@media (display-mode: standalone) {
+  html:not(.sp-native) .topbar {
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important;
+    padding-left: calc(2rem + env(safe-area-inset-left, 0px)) !important;
+    padding-right: calc(2rem + env(safe-area-inset-right, 0px)) !important;
+  }
+  html:not(.sp-native) .main-content {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
 /* respiro no rodapé pra o conteúdo não sumir sob o indicador de home (iPhone sem botão) */
 html.sp-native .main-content {

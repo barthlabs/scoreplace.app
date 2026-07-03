@@ -1121,8 +1121,9 @@
       var _roundsBased = Array.isArray(t.rounds) && t.rounds.length > 0;
       var isMonarch = _roundsBased && t.rounds.some(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
       if (_roundsBased && isMonarch) {
-        var cfg = t.phases[0] || {};
-        var need = parseInt(cfg.rounds) || 1;
+        // v4.x: nº de rodadas PLANEJADAS vem do agendamento (não do `rounds` cacheado) —
+        // vale igual pra Rei/Rainha, sorteio simples ou duplas formadas.
+        var need = (typeof window !== 'undefined' && typeof window._phasePlannedRounds === 'function') ? window._phasePlannedRounds(t, 0) : (parseInt((t.phases[0] || {}).rounds) || 1);
         var monRounds = t.rounds.filter(function (r) { return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length; });
         if (monRounds.length < need) return false;
       }
@@ -1131,7 +1132,7 @@
       // no meio do Suíço (mesmo espírito do check monarca acima e da Liga incremental).
       var cfg0 = t.phases[0] || {};
       if (_roundsBased && !isMonarch && classifyPhaseFormat(cfg0) === 'league') {
-        var needL = parseInt(cfg0.rounds) || parseInt(cfg0.swissRounds) || 1;
+        var needL = (typeof window !== 'undefined' && typeof window._phasePlannedRounds === 'function') ? window._phasePlannedRounds(t, 0) : (parseInt(cfg0.rounds) || parseInt(cfg0.swissRounds) || 1);
         var playedL = t.rounds.filter(function (r) {
           return r && Array.isArray(r.matches) && r.matches.some(function (m) { return !m.isSitOut; });
         }).length;

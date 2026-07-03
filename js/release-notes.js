@@ -9,7 +9,23 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.35-beta — inclui o botão "Entrar" com mais volume (degradê + brilho esmeralda) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⏱️ Pontos Corridos respeita as suas rodadas:</b> o número de rodadas e a frequência dos sorteios agora seguem exatamente o que você configura (data do 1º sorteio, de quanto em quanto tempo repete e a data final). A barra de progresso, o cronômetro e o botão "Avançar de fase" acompanham — nada mais fica preso numa rodada só.</li>' +
+        '<li><b>🎲 Cronômetro do próximo sorteio em destaque:</b> o tempo até o próximo sorteio ficou maior e aparece logo acima do local. Mostra "próximo sorteio" quando há um agendado, "fim do torneio" só nas últimas 48h, e "tempo decorrido" quando não há sorteio marcado. Cada rodada também mostra "<b>Rodada 1 de N</b>".</li>' +
+        '<li><b>⚙️ Resumo da configuração mais completo:</b> em torneios de mais de uma fase, o resumo mostra as duas (ex.: "Pontos Corridos / Eliminatórias") e, abaixo, os detalhes (modalidade, nº de rodadas, periodicidade, pontuação). As caixas de informação ficaram mais legíveis sobre a foto do local.</li>' +
+        '<li><b>🕐 Lista de espera reorganizada:</b> em Pontos Corridos, quem está na lista de espera aparece dentro de "Ficaram de fora desta rodada" (e pode entrar no lugar de um W.O.); a classificação geral abre recolhida em torneios grandes.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.23-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>⚡ Partida Casual voltou a funcionar no app:</b> corrigimos a tela de Partida Casual, que no aplicativo instalado estava com os <b>toques fora do lugar</b> — o "Voltar" não respondia e o "Iniciar" abria as configurações. Agora o cabeçalho fica abaixo da câmera/ilha e cada toque acerta o botão certo.</li>' +
+        '<li><b>📡 Placar ao vivo não encavala mais no relógio:</b> no app instalado, o topo do <b>placar ao vivo</b> (AO VIVO / Ajustar / Resetar / Fechar) subia por cima do relógio e da bateria do celular. Agora o cabeçalho respeita a área da câmera/ilha.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:1px solid var(--border-color,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-weight:800; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.19-beta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(2 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🧹 Limpeza interna na tela de login:</b> removemos código antigo que não era mais usado (de uma versão anterior do modal de entrada). Nada muda no seu uso — login por e-mail, celular e Google continuam iguais; o app fica só mais enxuto e fácil de manter.</li>' +
       '</ul>' +

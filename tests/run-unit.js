@@ -33,6 +33,7 @@ const SUITES = [
   'tests/phase0-monarch-duplas.test.js',
   'tests/phase-complete-tagged.test.js',
   'tests/games-plan-multiphase.test.js',
+  'tests/liga-phase0-rounds-cap.test.js',
   'tests/phase0-groups-canonical.test.js',
   'tests/phase-identity.test.js',
   'tests/no-format-regression.test.js',

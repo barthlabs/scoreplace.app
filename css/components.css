@@ -121,6 +121,32 @@ input[type="date"] { min-width: 8.5rem !important; }   /* "dd/mm/aaaa" + ícone 
   max-width: 100% !important;
   margin: 0 !important;
 }
+/* App NATIVO (Capacitor): estas overlays são position:fixed;top:0 em tela cheia,
+   então o cabeçalho fica no topo absoluto — SOB a status bar / ilha dinâmica. No
+   nativo o webview vai full-bleed (viewport-fit=cover), então empurramos o header
+   pra baixo do inset (o fundo bg-darker cobre a faixa). Espelha o fix da .topbar
+   (layout.css). Na WEB não há .sp-native → regra inerte (insets=0). */
+html.sp-native #modal-quick-create .sticky-back-header,
+html.sp-native #casual-match-overlay .sticky-back-header,
+html.sp-native #modal-support-pix .sticky-back-header,
+html.sp-native #qr-modal-overlay .sticky-back-header,
+html.sp-native #venues-detail-overlay .sticky-back-header {
+  padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+}
+/* Mesmo problema no PWA INSTALADO (Add to Home Screen): o meta
+   apple-mobile-web-app-status-bar-style=black-translucent deixa a status bar SOBRE o
+   conteúdo, então o cabeçalho destas overlays fullscreen também fica sob a faixa.
+   Escopo :not(.sp-native) pra não somar com a regra do Capacitor acima. Espelha o fix
+   da .topbar no PWA (layout.css). Inerte no browser comum (não casa standalone). */
+@media (display-mode: standalone) {
+  html:not(.sp-native) #modal-quick-create .sticky-back-header,
+  html:not(.sp-native) #casual-match-overlay .sticky-back-header,
+  html:not(.sp-native) #modal-support-pix .sticky-back-header,
+  html:not(.sp-native) #qr-modal-overlay .sticky-back-header,
+  html:not(.sp-native) #venues-detail-overlay .sticky-back-header {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+  }
+}
 /* Suppress default 50px spacer in overlay contexts — JS sets it dynamically */
 #modal-quick-create .sticky-back-header + *,
 #casual-match-overlay .sticky-back-header + *,
