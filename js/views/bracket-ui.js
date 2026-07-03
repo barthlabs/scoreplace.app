@@ -12176,7 +12176,14 @@ window._openCasualMatch = function(restoreOpts) {
   document.body.style.overflow = 'hidden';
   var _metaVp = document.querySelector('meta[name="viewport"]');
   var _origVpContent = _metaVp ? _metaVp.getAttribute('content') : '';
-  if (_metaVp) _metaVp.setAttribute('content', 'width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no');
+  // v4.3.20: MANTÉM viewport-fit=cover ao travar o zoom. No app nativo o meta
+  // base (index.html) tem viewport-fit=cover; se a gente o REMOVE aqui, o
+  // WKWebView do iOS faz um reflow do layout viewport (a área que estava full-
+  // bleed sob a ilha dinâmica passa a ser inset pelo sistema) com as coordenadas
+  // de toque desatualizadas → o clique cai "fora de posição" (Voltar não
+  // responde, Iniciar acerta o card de config). Além disso env(safe-area-inset-*)
+  // zera sem viewport-fit=cover. Na WEB o token é inerte (sem notch, insets=0).
+  if (_metaVp) _metaVp.setAttribute('content', 'width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover');
   // Restore on close
   var _ovObs = new MutationObserver(function(muts) {
     if (!document.getElementById('casual-match-overlay') && !document.getElementById('live-scoring-overlay')) {
