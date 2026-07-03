@@ -44,6 +44,9 @@ struct RemoteView: View {
     let state: ScoreState
     var onPoint: (Int) -> Void = { _ in }
     var onUndo: () -> Void = {}
+    var onReplay: (Bool) -> Void = { _ in }      // Bool = re-sortear duplas
+    @State private var replayDismissed = false   // Cancelar esconde o prompt
+    @State private var reshuffle = false         // toggle "Re-sortear duplas"
 
     private var leftTeam: Int { state.leftTeam }
     private var rightTeam: Int { state.rightTeam }
@@ -53,6 +56,9 @@ struct RemoteView: View {
             mainContent
             if state.isFinished { winnerOverlay }   // fim de jogo cobre os botões +1
         }
+        .onChange(of: state.isFinished) { _, finished in
+            if !finished { replayDismissed = false; reshuffle = false }  // recomeçou → reseta
+        }
     }
 
     private var mainContent: some View {
@@ -61,10 +67,21 @@ struct RemoteView: View {
             // centralizada (o relógio do sistema fica à direita).
             ZStack {
                 Text("GAMES").font(.system(size: 9)).kerning(1).foregroundColor(.spMetaDim)
-                HStack {
-                    Text(state.active ? state.setLabel : "Aguardando…")
-                        .font(.system(size: 12)).foregroundColor(.spMeta)
-                    Image(systemName: "lock.open").font(.system(size: 10)).foregroundColor(.spMetaDim)
+                HStack(spacing: 4) {
+                    if state.active {
+                        // SETS no lugar do rótulo do set: 0-0 no início, preenche
+                        // conforme os sets fecham (cor segue o time, ordem dos lados).
+                        Text("SETS").font(.system(size: 8)).foregroundColor(.spMetaDim)
+                        Text(String(state.setsFor(leftTeam)))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(TeamPalette.of(leftTeam).point)
+                        Text("-").font(.system(size: 10)).foregroundColor(.spDash)
+                        Text(String(state.setsFor(rightTeam)))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(TeamPalette.of(rightTeam).point)
+                    } else {
+                        Text("Aguardando…").font(.system(size: 12)).foregroundColor(.spMeta)
+                    }
                     Spacer()
                 }
                 .padding(.leading, 12)
@@ -82,21 +99,6 @@ struct RemoteView: View {
                     .foregroundColor(TeamPalette.of(rightTeam).point)
             }
             .padding(.top, 1)
-
-            // Linha de SETS — só em melhor-de-N (Tênis/Padel/Vôlei/Futevôlei).
-            if state.showsSets {
-                HStack(spacing: 5) {
-                    Text("SETS").font(.system(size: 8)).kerning(1).foregroundColor(.spMetaDim)
-                    Text(String(state.setsFor(leftTeam)))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(TeamPalette.of(leftTeam).point)
-                    Text("–").font(.system(size: 10)).foregroundColor(.spDash)
-                    Text(String(state.setsFor(rightTeam)))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(TeamPalette.of(rightTeam).point)
-                }
-                .padding(.top, 1)
-            }
 
             // Duas metades borda a borda. O TIME em cada lado vem do courtLeft.
             HStack(spacing: 0) {
@@ -155,6 +157,7 @@ struct RemoteView: View {
             .background(Color.white.opacity(0.05))
         }
         .buttonStyle(.plain)
+        .padding(.bottom, 10)   // #3: sem isto o "Desfazer" era cortado pela borda inferior
     }
 
     // Tela de fim de jogo: 🏆 + nomes do time vencedor (cor do time) ou "Empate",
@@ -162,20 +165,57 @@ struct RemoteView: View {
     private var winnerOverlay: some View {
         let w = state.winner ?? 0
         let pal = TeamPalette.of(w == 2 ? 2 : 1)
-        return VStack(spacing: 3) {
-            Text("🏆").font(.system(size: 40))
-            if w == 1 || w == 2 {
-                Text("Vencedor").font(.system(size: 11)).kerning(1).foregroundColor(.spMeta)
-                ForEach(state.winnerNames, id: \.self) { n in
-                    Text(n).font(.system(size: 16, weight: .semibold)).foregroundColor(pal.name)
+        return ScrollView {
+            VStack(spacing: 3) {
+                Text("🏆").font(.system(size: 34))
+                if w == 1 || w == 2 {
+                    Text("Vencedor").font(.system(size: 11)).kerning(1).foregroundColor(.spMeta)
+                    ForEach(state.winnerNames, id: \.self) { n in
+                        Text(n).font(.system(size: 16, weight: .semibold)).foregroundColor(pal.name)
+                    }
+                } else {
+                    Text("Empate").font(.system(size: 18, weight: .semibold)).foregroundColor(.spMeta)
                 }
-            } else {
-                Text("Empate").font(.system(size: 18, weight: .semibold)).foregroundColor(.spMeta)
+                Text(finalScoreLine).font(.system(size: 12)).foregroundColor(.spMetaDim).padding(.top, 3)
+                if state.canReplay && !replayDismissed { replayControls.padding(.top, 10) }
             }
-            Text(finalScoreLine).font(.system(size: 12)).foregroundColor(.spMetaDim).padding(.top, 3)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.spBg.opacity(0.97).ignoresSafeArea())
+        .background(Color.spBg.ignoresSafeArea())   // opaco: fim de jogo é tela definitiva
+    }
+
+    // "Jogar novamente?" (só casual): a pergunta em cima + Cancelar/Confirmar
+    // juntos. Confirmar manda a intenção pro celular recomeçar (mesmos
+    // jogadores, 0×0); Cancelar apenas dispensa o prompt.
+    private var replayControls: some View {
+        VStack(spacing: 6) {
+            Text("Jogar novamente?")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(hex: 0xDBEAFE))
+            HStack(spacing: 8) {
+                Button(action: { replayDismissed = true }) {
+                    Text("Cancelar").font(.system(size: 12))
+                        .frame(maxWidth: .infinity).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08)).clipShape(Capsule())
+                }.buttonStyle(.plain).foregroundColor(Color(hex: 0xD5D5E5))
+                Button(action: { onReplay(reshuffle) }) {
+                    Text("Confirmar").font(.system(size: 12, weight: .semibold))
+                        .frame(maxWidth: .infinity).padding(.vertical, 6)
+                        .background(Color.spBlue.opacity(0.9)).clipShape(Capsule())
+                }.buttonStyle(.plain).foregroundColor(.white)
+            }
+            // Só em duplas: ligado → Confirmar re-sorteia as duplas; desligado
+            // → mantém os mesmos times do último jogo.
+            if state.isDoubles {
+                Toggle(isOn: $reshuffle) {
+                    Text("Re-sortear duplas").font(.system(size: 11)).foregroundColor(.spMeta)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .spBlue))
+                .padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, 10)
     }
 
     // Placar final por lado (esquerda–direita): sets em melhor-de-N, senão games.

@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import com.google.android.gms.wearable.MessageClient;
@@ -36,8 +37,12 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private LinearLayout halfLeft, halfRight, btnUndo;
     private TextView pointLeft, pointRight, gamesLeft, gamesRight, setLabel;
     private TextView nameL1, nameL2, nameR1, nameR2, ballL1, ballL2, ballR1, ballR2;
-    private LinearLayout setsRow, winnerOverlay;
+    private LinearLayout setsRow;
+    private View winnerOverlay, replayControls, reshuffleRow;
     private TextView setsLeft, setsRight, winnerLabel, winnerNames, winnerScore;
+    private TextView btnReplayCancel, btnReplayConfirm;
+    private Switch reshuffleSwitch;
+    private boolean replayDismissed = false; // Cancelar esconde o prompt
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,11 +67,40 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         winnerLabel = findViewById(R.id.winner_label);
         winnerNames = findViewById(R.id.winner_names);
         winnerScore = findViewById(R.id.winner_score);
+        replayControls = findViewById(R.id.replay_controls);
+        reshuffleRow = findViewById(R.id.reshuffle_row);
+        reshuffleSwitch = findViewById(R.id.reshuffle_switch);
+        btnReplayCancel = findViewById(R.id.btn_replay_cancel);
+        btnReplayConfirm = findViewById(R.id.btn_replay_confirm);
 
         // Toque por POSIÇÃO → intenção pra o TIME que está naquele lado.
         halfLeft.setOnClickListener(v -> sendPoint(courtLeft));
         halfRight.setOnClickListener(v -> sendPoint(courtLeft == 1 ? 2 : 1));
         btnUndo.setOnClickListener(v -> sendIntent("undo", 0));
+        // "Jogar novamente?" — Cancelar dispensa o prompt; Confirmar manda a
+        // intenção pro celular recomeçar (com/sem re-sortear as duplas).
+        btnReplayCancel.setOnClickListener(v -> {
+            replayDismissed = true;
+            replayControls.setVisibility(View.GONE);
+        });
+        btnReplayConfirm.setOnClickListener(v -> sendReplay(reshuffleSwitch.isChecked()));
+    }
+
+    // Intenção "replay" com o flag de re-sortear duplas.
+    private void sendReplay(boolean shuffle) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("v", 1);
+            o.put("type", "replay");
+            o.put("shuffle", shuffle);
+            o.put("id", UUID.randomUUID().toString());
+            final byte[] bytes = o.toString().getBytes(StandardCharsets.UTF_8);
+            Wearable.getNodeClient(this).getConnectedNodes()
+                .addOnSuccessListener(nodes -> {
+                    MessageClient mc = Wearable.getMessageClient(this);
+                    for (Node node : nodes) mc.sendMessage(node.getId(), PATH_INTENT, bytes);
+                });
+        } catch (Exception e) { /* no-op */ }
     }
 
     @Override
@@ -113,7 +147,6 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
     private void render(JSONObject s) {
         boolean active = s.optBoolean("active", false);
-        setLabel.setText(active ? s.optString("setLabel", "Set 1") : "Aguardando…");
         courtLeft = s.optInt("courtLeft", 1);
         int leftTeam = courtLeft, rightTeam = leftTeam == 1 ? 2 : 1;
         JSONArray points = s.optJSONArray("points");
@@ -123,20 +156,25 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         applySide(true, leftTeam, points, games, teams, server);
         applySide(false, rightTeam, points, games, teams, server);
 
-        // Sets ganhos — só em melhor-de-N (Tênis/Padel/Vôlei/Futevôlei).
         int setsToWin = s.optInt("setsToWin", 1);
         JSONArray sets = s.optJSONArray("sets");
-        if (setsToWin > 1 && sets != null) {
+
+        // #1: SETS no lugar do rótulo do set — 0-0 no início, preenche conforme
+        // os sets fecham. Ativo → mostra sets; inativo → "Aguardando…".
+        if (active) {
+            setLabel.setVisibility(View.GONE);
             setsRow.setVisibility(View.VISIBLE);
-            setsLeft.setText(String.valueOf(sets.optInt(leftTeam - 1, 0)));
+            setsLeft.setText(String.valueOf(sets != null ? sets.optInt(leftTeam - 1, 0) : 0));
             setsLeft.setTextColor(getColor(leftTeam == 1 ? R.color.team_blue : R.color.team_red));
-            setsRight.setText(String.valueOf(sets.optInt(rightTeam - 1, 0)));
+            setsRight.setText(String.valueOf(sets != null ? sets.optInt(rightTeam - 1, 0) : 0));
             setsRight.setTextColor(getColor(rightTeam == 1 ? R.color.team_blue : R.color.team_red));
         } else {
             setsRow.setVisibility(View.GONE);
+            setLabel.setVisibility(View.VISIBLE);
+            setLabel.setText("Aguardando…");
         }
 
-        // Fim de jogo — cobre as metades e trava os toques +1.
+        // #2: Fim de jogo — cobre as metades e trava os toques +1.
         boolean finished = s.optBoolean("isFinished", false);
         if (finished) {
             int winner = s.isNull("winner") ? 0 : s.optInt("winner", 0);
@@ -150,11 +188,23 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
                 winnerNames.setVisibility(View.GONE);
             }
             winnerScore.setText(scoreLine(setsToWin, sets, games, leftTeam, rightTeam));
+
+            // "Jogar novamente?" — só casual; toggle "Re-sortear" só em duplas.
+            boolean canReplay = s.optBoolean("canReplay", false);
+            boolean isDoubles = s.optBoolean("isDoubles", false);
+            if (canReplay && !replayDismissed) {
+                replayControls.setVisibility(View.VISIBLE);
+                reshuffleRow.setVisibility(isDoubles ? View.VISIBLE : View.GONE);
+            } else {
+                replayControls.setVisibility(View.GONE);
+            }
+
             winnerOverlay.setVisibility(View.VISIBLE);
             halfLeft.setClickable(false);
             halfRight.setClickable(false);
         } else {
             winnerOverlay.setVisibility(View.GONE);
+            replayDismissed = false;   // recomeçou → prompt volta a aparecer
             halfLeft.setClickable(true);
             halfRight.setClickable(true);
         }

@@ -173,13 +173,60 @@
         android:gravity="center_horizontal"
         android:layout_marginTop="12dp">
 
+        <!-- "Aguardando…" quando não há partida (só visível inativo) -->
         <TextView
             android:id="@+id/set_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Set 1"
+            android:text="Aguardando…"
             android:textColor="@color/meta"
-            android:textSize="10sp" />
+            android:textSize="10sp"
+            android:visibility="gone" />
+
+        <!-- SETS x-y no lugar do rótulo do set: 0-0 no início, preenche conforme
+             os sets fecham. Mostrado quando a partida está ativa. -->
+        <LinearLayout
+            android:id="@+id/sets_row"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SETS"
+                android:textColor="@color/meta_dim"
+                android:textSize="8sp"
+                android:letterSpacing="0.1"
+                android:layout_marginEnd="5dp" />
+            <TextView
+                android:id="@+id/sets_left"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
+                android:textColor="@color/team_blue"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:includeFontPadding="false" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="-"
+                android:textColor="@color/dash"
+                android:textSize="11sp"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp" />
+            <TextView
+                android:id="@+id/sets_right"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
+                android:textColor="@color/team_red"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:includeFontPadding="false" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
@@ -221,51 +268,6 @@
                 android:textStyle="bold"
                 android:includeFontPadding="false" />
         </LinearLayout>
-
-        <!-- SETS x-y — só em melhor-de-N (escondido por default) -->
-        <LinearLayout
-            android:id="@+id/sets_row"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="1dp"
-            android:visibility="gone">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="SETS"
-                android:textColor="@color/meta_dim"
-                android:textSize="8sp"
-                android:letterSpacing="0.1"
-                android:layout_marginEnd="5dp" />
-            <TextView
-                android:id="@+id/sets_left"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0"
-                android:textColor="@color/team_blue"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:includeFontPadding="false" />
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="-"
-                android:textColor="@color/dash"
-                android:textSize="11sp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp" />
-            <TextView
-                android:id="@+id/sets_right"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0"
-                android:textColor="@color/team_red"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:includeFontPadding="false" />
-        </LinearLayout>
     </LinearLayout>
 
     <!-- Rodapé: Desfazer -->
@@ -293,56 +295,149 @@
             android:textSize="11sp" />
     </LinearLayout>
 
-    <!-- Fim de jogo: cobre tudo e absorve toques (trava os botões +1) -->
-    <LinearLayout
+    <!-- Fim de jogo: cobre tudo e absorve toques (trava os botões +1).
+         ScrollView pra nunca cortar quando há prompt de "Jogar novamente". -->
+    <ScrollView
         android:id="@+id/winner_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
         android:background="@color/winner_scrim"
         android:clickable="true"
         android:focusable="true"
+        android:fillViewport="true"
         android:visibility="gone">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🏆"
-            android:textSize="40sp"
-            android:includeFontPadding="false" />
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:paddingTop="24dp"
+            android:paddingBottom="24dp">
 
-        <TextView
-            android:id="@+id/winner_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="VENCEDOR"
-            android:textColor="@color/meta"
-            android:textSize="10sp"
-            android:letterSpacing="0.1"
-            android:layout_marginTop="3dp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🏆"
+                android:textSize="36sp"
+                android:includeFontPadding="false" />
 
-        <TextView
-            android:id="@+id/winner_names"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text=""
-            android:textColor="@color/name_blue"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:layout_marginTop="1dp"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp" />
+            <TextView
+                android:id="@+id/winner_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="VENCEDOR"
+                android:textColor="@color/meta"
+                android:textSize="10sp"
+                android:letterSpacing="0.1"
+                android:layout_marginTop="3dp" />
 
-        <TextView
-            android:id="@+id/winner_score"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="@color/meta_dim"
-            android:textSize="11sp"
-            android:layout_marginTop="4dp" />
-    </LinearLayout>
+            <TextView
+                android:id="@+id/winner_names"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text=""
+                android:textColor="@color/name_blue"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:layout_marginTop="1dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp" />
+
+            <TextView
+                android:id="@+id/winner_score"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="@color/meta_dim"
+                android:textSize="11sp"
+                android:layout_marginTop="4dp" />
+
+            <!-- "Jogar novamente?" + Cancelar/Confirmar + toggle Re-sortear.
+                 Só casual (canReplay). -->
+            <LinearLayout
+                android:id="@+id/replay_controls"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:layout_marginTop="10dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Jogar novamente?"
+                    android:textColor="@color/name_blue"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="6dp">
+                    <TextView
+                        android:id="@+id/btn_replay_cancel"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="Cancelar"
+                        android:textColor="@color/undo_text"
+                        android:textSize="12sp"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/pill"
+                        android:backgroundTint="@color/btn_cancel_bg"
+                        android:clickable="true"
+                        android:focusable="true" />
+                    <TextView
+                        android:id="@+id/btn_replay_confirm"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="Confirmar"
+                        android:textColor="#FFFFFF"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/pill"
+                        android:backgroundTint="@color/btn_confirm_bg"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <!-- Re-sortear duplas — só em duplas -->
+                <LinearLayout
+                    android:id="@+id/reshuffle_row"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone">
+                    <Switch
+                        android:id="@+id/reshuffle_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Re-sortear duplas"
+                        android:textColor="@color/meta"
+                        android:textSize="11sp"
+                        android:layout_marginStart="4dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
 
 </FrameLayout>

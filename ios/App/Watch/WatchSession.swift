@@ -27,6 +27,9 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     func sendUndo() {
         sendIntent(["v": 1, "type": "undo", "id": UUID().uuidString])
     }
+    func sendReplay(shuffle: Bool) {
+        sendIntent(["v": 1, "type": "replay", "shuffle": shuffle, "id": UUID().uuidString])
+    }
     func hello() {
         sendIntent(["v": 1, "type": "hello"])
     }

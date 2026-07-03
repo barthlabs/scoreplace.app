@@ -7469,6 +7469,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // melhor-de-N (setsToWin>1) — em 1 set (Beach Tennis) fica oculto.
       sets: [_setsWon(1, !!state.isFinished), _setsWon(2, !!state.isFinished)],
       setsToWin: state.setsToWin || 1,
+      // "Jogar novamente" só faz sentido em partida casual (recomeça com os
+      // mesmos jogadores). Em torneio o resultado é definitivo → sem botão.
+      canReplay: !!isCasual,
+      // Duplas → o relógio pode oferecer o toggle "Re-sortear duplas".
+      isDoubles: !!isDoubles,
       isFinished: !!state.isFinished,
       winner: state.winner || null
     };
@@ -8090,13 +8095,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // ── fim Rei/Rainha ────────────────────────────────────────────────────────────
 
   // Restart handler: reset score and optionally re-shuffle teams
-  window._liveScoreRestart = function() {
+  window._liveScoreRestart = function(skipConfirm, shuffleOverride) {
     var shuffleChk = document.getElementById('chk-shuffle-teams');
-    var shouldShuffle = shuffleChk && shuffleChk.checked;
-    showConfirmDialog(
-      'Recomeçar partida?',
-      shouldShuffle ? 'O resultado atual será salvo. As duplas serão re-sorteadas e uma nova partida começará.' : 'O resultado atual será salvo e uma nova partida começará.',
-      function() {
+    // Do relógio (skipConfirm) o "re-sortear" vem no override; senão lê o
+    // checkbox do celular.
+    var shouldShuffle = (typeof shuffleOverride === 'boolean')
+      ? shuffleOverride
+      : (shuffleChk && shuffleChk.checked);
+    // skipConfirm: acionado pelo relógio ("Jogar novamente" já confirmado lá),
+    // então recomeça direto sem o diálogo do celular.
+    var doRestart = function() {
         // Persist the finished result as confirmed before wiping state.
         if (state.isFinished && !_resultSaved) {
           try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
@@ -8165,7 +8173,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
           }).catch(function(e) { window._warn('[Casual] restart write err:', e); });
         }
         _render();
-      }
+        _watchNotify(); // relógio reflete o recomeço (0×0 no relógio)
+    };
+    if (skipConfirm) { doRestart(); return; }
+    showConfirmDialog(
+      'Recomeçar partida?',
+      shouldShuffle ? 'O resultado atual será salvo. As duplas serão re-sorteadas e uma nova partida começará.' : 'O resultado atual será salvo e uma nova partida começará.',
+      doRestart
     );
   };
 

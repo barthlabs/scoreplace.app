@@ -16,6 +16,8 @@
     <color name="undo_bg">#1a1a2e</color>
     <color name="undo_border">#33334d</color>
     <color name="undo_text">#d5d5e5</color>
-    <color name="winner_scrim">#F20F0F23</color>
+    <color name="winner_scrim">#FF0F0F23</color>
     <color name="winner_gold">#f59e0b</color>
+    <color name="btn_cancel_bg">#26263A</color>
+    <color name="btn_confirm_bg">#3B82F6</color>
 </resources>

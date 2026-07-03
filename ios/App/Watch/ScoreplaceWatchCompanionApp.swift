@@ -13,7 +13,8 @@ struct ScoreplaceWatchCompanionApp: App {
             RemoteView(
                 state: session.state,
                 onPoint: { team in session.sendPoint(team) },
-                onUndo: { session.sendUndo() }
+                onUndo: { session.sendUndo() },
+                onReplay: { shuffle in session.sendReplay(shuffle: shuffle) }
             )
             .onAppear { session.hello() } // pede o estado atual ao aparecer
         }

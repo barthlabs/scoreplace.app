@@ -76,6 +76,14 @@
           window._liveScoreUndoLastPoint();
         }
         break;
+      case 'replay':
+        // "Jogar novamente" (casual) — já confirmado no relógio, pula o
+        // diálogo do celular. intent.shuffle: re-sortear as duplas (true) ou
+        // manter os mesmos times (false).
+        if (typeof window._liveScoreRestart === 'function') {
+          window._liveScoreRestart(true, !!intent.shuffle);
+        }
+        break;
       case 'hello':
         push(currentState(), true); // sempre responde, mesmo se igual
         return;
