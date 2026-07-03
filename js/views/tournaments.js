@@ -2357,20 +2357,6 @@ function renderTournaments(container, tournamentId = null) {
               return `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;" onclick="event.stopPropagation();">${_updatedHtml}${_toggleWrapped}</div>`;
             })()}
             ${(typeof window._buildTimeEstimation === 'function') ? window._buildTimeEstimation(t) : ''}
-            ${t.venue ? `
-            <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 6px; ${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
-               <span style="font-size: 1rem; flex-shrink:0;">📍</span>
-               <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;">
-                 <span>${window._safeHtml(t.venue)}${t.courtCount > 1 ? ' — ' + t.courtCount + ' quadras' : t.courtCount === 1 ? ' — 1 quadra' : ''}</span>
-                 ${t.venueAddress ? '<span style="font-size:0.75rem; font-weight:400; opacity:0.7;">' + window._safeHtml(t.venueAddress) + '</span>' : ''}
-               </span>
-               <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; align-self:stretch;">
-                 ${(t.venuePlaceId || t.venue) ? '<button onclick="event.stopPropagation();window._openVenueFromTournament(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')" title="Ver detalhes do local (movimento, contatos, reviews)" style="background:linear-gradient(135deg,#FFD700,#DAA520);border:none;color:#1a0f00;border-radius:8px;padding:5px 10px;font-size:0.72rem;font-weight:800;cursor:pointer;white-space:nowrap;">📍 Place</button>' : ''}
-                 ${t.venueLat && t.venueLon ? '<a href="' + (t.venuePlaceId ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(t.venue) + '&query_place_id=' + t.venuePlaceId : 'https://www.google.com/maps/search/?api=1&query=' + t.venueLat + ',' + t.venueLon) + '" target="_blank" title="Ver no mapa" style="color:#818cf8; text-decoration:none; font-size:1.2rem; line-height:1;">🗺️</a>' : ''}
-                 ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="margin-top:auto;flex-shrink:0;width:clamp(44px,14vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
-               </div>
-            </div>
-            ${tournamentId && t.venueLat && t.venueLon ? '<div id="tournament-venue-map" data-lat="' + t.venueLat + '" data-lng="' + t.venueLon + '" data-venue="' + window._safeHtml(t.venue || '') + '" style="width:100%;height:180px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);margin-top:8px;background:#1a1a2e;"></div>' : ''}` : ''}
 
             ${(() => {
               if (isFinished) return '';
@@ -2411,26 +2397,33 @@ function renderTournaments(container, tournamentId = null) {
                   var _winEnd = window._tournamentScheduledWindow(t);
                   if (_winEnd && _winEnd.endMs) _tEndTs = _winEnd.endMs;
                 }
-                // 2. Já começou e AINDA HÁ sorteios por vir? → countdown para próximo sorteio.
-                // v2.4.68: o último sorteio já feito (rodada atual = última planejada)
-                // não tem "próximo sorteio" — cai pro countdown de fim do torneio (passo 3).
-                if (!_ligaEvent && !t.drawManual && t.drawFirstDate && !(window._isMultiPhase && window._isMultiPhase(t)) && typeof window._calcNextDrawDate === 'function') {
-                  var _lpDraw = (typeof window._ligaTournamentProgress === 'function') ? window._ligaTournamentProgress(t) : null;
-                  var _moreDraws = !_lpDraw || _lpDraw.currentRoundNum < _lpDraw.roundsPlanned;
-                  if (_moreDraws) {
-                    var _nextDraw = window._calcNextDrawDate(t);
-                    if (_nextDraw) {
-                      var _ndTs = _nextDraw.getTime();
-                      // Só mostra se o próximo sorteio está dentro do prazo do torneio (se houver)
-                      if (!isNaN(_ndTs) && _ndTs > _now && (_tEndTs == null || _ndTs <= _tEndTs)) {
-                        _ligaEvent = { ts: _ndTs, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
-                      }
-                    }
+                // 2. Já começou e HÁ sorteio agendado de verdade? → countdown para o próximo
+                // sorteio. Fonte única _ligaNextDrawEventTs cobre fase única E multi-fase (fase
+                // 0 Liga auto-draw) — antes o multi-fase era pulado, escondendo o relógio.
+                var _H48 = 48 * 60 * 60 * 1000;
+                if (!_ligaEvent && sorteioRealizado && typeof window._ligaNextDrawEventTs === 'function') {
+                  var _ndTs = window._ligaNextDrawEventTs(t);
+                  if (_ndTs && _ndTs > _now && (_tEndTs == null || _ndTs <= _tEndTs)) {
+                    _ligaEvent = { ts: _ndTs, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
                   }
                 }
-                // 3. Sem mais sorteios? → countdown para o fim do torneio
-                if (!_ligaEvent && _tEndTs != null && _tEndTs > _now) {
+                // 3. Sem sorteio por vir → fim do torneio SÓ nas últimas 48h.
+                if (!_ligaEvent && _tEndTs != null && _tEndTs > _now && (_tEndTs - _now) <= _H48) {
                   _ligaEvent = { ts: _tEndTs, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
+                }
+                // 4. Começou, sem sorteio agendado e fora das 48h finais → TEMPO DECORRIDO
+                // (conta pra cima desde o início; usa o mesmo tick via data-elapsed-since).
+                if (!_ligaEvent && sorteioRealizado && typeof window._ligaElapsedSinceTs === 'function') {
+                  var _elSince = window._ligaElapsedSinceTs(t);
+                  if (_elSince && _elSince <= _now) {
+                    var _elText = window._formatCountdown ? window._formatCountdown(_now - _elSince) : '';
+                    var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+                    return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' +
+                      '<span style="font-size:1.3rem;">⏱️</span>' +
+                      '<span style="font-size:0.85rem;font-weight:700;color:' + _rbEl.fg + ' !important;">Tempo decorrido</span>' +
+                      '<span data-elapsed-since="' + _elSince + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _rbEl.fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _elText + '</span>' +
+                    '</div>';
+                  }
                 }
                 if (!_ligaEvent) return '';
                 var _countdownText = window._formatCountdown ? window._formatCountdown(_ligaEvent.ts - _now) : '';
@@ -2442,10 +2435,11 @@ function renderTournaments(container, tournamentId = null) {
                 // sem tarja, usa a cor semântica sobre o tint claro.
                 var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
                 var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-                return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
-                  '<span style="font-size:1.3rem;">' + _ligaEvent.icon + '</span>' +
-                  '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">' + _ligaEvent.label + '</span>' +
-                  '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
+                // v4.x: MAIS DESTAQUE pro cronômetro do sorteio — box maior, número grande.
+                return '<div style="margin-top:10px;display:flex;align-items:center;gap:12px;padding:14px 18px;background:' + _rbCt.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);">' +
+                  '<span style="font-size:1.7rem;">' + _ligaEvent.icon + '</span>' +
+                  '<span style="font-size:0.95rem;font-weight:700;color:' + _ctColor + ' !important;">' + _ligaEvent.label + '</span>' +
+                  '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.7rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;line-height:1;">' + _countdownText + '</span>' +
                 '</div>';
               }
 
@@ -2479,6 +2473,22 @@ function renderTournaments(container, tournamentId = null) {
               '</div>';
             })()}
 
+            ${t.venue ? `
+            <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 8px; ${_pReadBg ? 'background:'+_pReadBg+';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:'+_pReadFg+' !important;border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
+               <span style="font-size: 1rem; flex-shrink:0;">📍</span>
+               <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;">
+                 <span style="font-weight:600;">${window._safeHtml(t.venue)}</span>
+                 ${t.courtCount > 0 ? '<span style="font-size:0.75rem; font-weight:400; opacity:0.7;">' + t.courtCount + (t.courtCount > 1 ? ' quadras' : ' quadra') + '</span>' : ''}
+                 ${t.venueAddress ? '<span style="font-size:0.75rem; font-weight:400; opacity:0.7;">' + window._safeHtml(t.venueAddress) + '</span>' : ''}
+               </span>
+               <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; align-self:stretch;">
+                 ${(t.venuePlaceId || t.venue) ? '<button onclick="event.stopPropagation();window._openVenueFromTournament(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')" title="Ver detalhes do local (movimento, contatos, reviews)" style="background:linear-gradient(135deg,#FFD700,#DAA520);border:none;color:#1a0f00;border-radius:8px;padding:5px 10px;font-size:0.72rem;font-weight:800;cursor:pointer;white-space:nowrap;">📍 Place</button>' : ''}
+                 ${t.venueLat && t.venueLon ? '<a href="' + (t.venuePlaceId ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(t.venue) + '&query_place_id=' + t.venuePlaceId : 'https://www.google.com/maps/search/?api=1&query=' + t.venueLat + ',' + t.venueLon) + '" target="_blank" title="Ver no mapa" style="color:#818cf8; text-decoration:none; font-size:1.2rem; line-height:1;">🗺️</a>' : ''}
+                 ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="margin-top:auto;flex-shrink:0;width:clamp(44px,14vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
+               </div>
+            </div>
+            ${tournamentId && t.venueLat && t.venueLon ? '<div id="tournament-venue-map" data-lat="' + t.venueLat + '" data-lng="' + t.venueLon + '" data-venue="' + window._safeHtml(t.venue || '') + '" style="width:100%;height:180px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);margin-top:8px;background:#1a1a2e;"></div>' : ''}` : ''}
+
             <!-- Linha separadora -->
             <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 1.8rem 0;"></div>
 
@@ -2488,20 +2498,20 @@ function renderTournaments(container, tournamentId = null) {
                <!-- Stats Column -->
                 <div style="display: inline-flex; flex-direction: column; gap: 8px; width: 100%;">
                     <div id="stat-boxes-row" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
-                        <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
+                        <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:'+_pReadBg+';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👤</span>
                            <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Inscritos</span>
                         </div>
                         ${teamCount > 0 ? `
-                        <div class="stat-box" data-stat="equipes" ${_pReadBg ? 'style="background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
+                        <div class="stat-box" data-stat="equipes" ${_pReadBg ? 'style="background:'+_pReadBg+';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👥</span>
                            <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${teamCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Equipes</span>
                         </div>
                         ` : ''}
                         ${standbyCount > 0 ? `
-                        <div class="stat-box" data-stat="waitlist" style="background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.3);">
+                        <div class="stat-box" data-stat="waitlist" style="${_pReadBg ? 'background:'+_pReadBg+';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);' : 'background: rgba(251,191,36,0.12);'} border: 1px solid rgba(251,191,36,0.5);">
                            <span style="font-size: 1.1rem; margin-right: 4px;">⏳</span>
                            <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; color: #fbbf24;">${standbyCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; color: #fbbf24; opacity: 0.9;">Lista de Espera</span>
