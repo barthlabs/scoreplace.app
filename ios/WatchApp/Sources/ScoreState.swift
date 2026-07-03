@@ -83,10 +83,10 @@ struct ScoreState: Decodable {
         s.points = ["40", "30"]
         s.games = [1, 2]
         s.courtLeft = 1
-        s.server = Server(team: 1, name: "Rodrigo")
+        s.server = Server(team: 1, name: "Jogador 01")
         s.teams = [
-            "1": Team(players: ["Rodrigo", "Nelson"]),
-            "2": Team(players: ["Kelly", "Zilda"])
+            "1": Team(players: ["Jogador 01", "Jogador 02"]),
+            "2": Team(players: ["Jogador 03", "Jogador 04"])
         ]
         return s
     }
