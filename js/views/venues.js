@@ -4266,6 +4266,8 @@
       : '';
     var addrLine = v.address ? v.address + '\n' : '';
     var text = title + '\n' + sportsLine + addrLine + '\n👉 ' + url;
+    // Nativo (Capacitor): share sheet real via @capacitor/share. No-op na web.
+    if (window._spNativeShare && window._spNativeShare({ title: title, text: text, url: url })) return;
     // Web Share API — mobile nativo. Desktop (Chrome/Edge) também suporta
     // em alguns casos. Em browsers sem suporte, cai no clipboard.
     if (navigator.share) {

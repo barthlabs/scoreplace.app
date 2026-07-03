@@ -177,6 +177,8 @@ window._shareTournament = function(tournamentId) {
             }
         });
     };
+    // Nativo (Capacitor): share sheet real via @capacitor/share. No-op na web.
+    if (window._spNativeShare && window._spNativeShare({ title: title, text: text, url: url })) return;
     if (navigator.share) {
         navigator.share({ title: title, text: text, url: url }).catch(function() { _copyFallback(); });
     } else {

@@ -2688,6 +2688,8 @@ window._shareMatchResult = function(tId, matchId) {
   var _shareUrl = (typeof window._matchUrl === 'function') ? window._matchUrl(tId, matchId) : window._tournamentUrl(tId);
   text += '\n\n🔗 ' + _shareUrl;
 
+  // Nativo (Capacitor): share sheet real via @capacitor/share. No-op na web.
+  if (window._spNativeShare && window._spNativeShare({ title: _t('bui.resultShareTitle', {name: t.name}), text: text, url: _shareUrl })) return;
   if (navigator.share) {
     navigator.share({ title: _t('bui.resultShareTitle', {name: t.name}), text: text, url: _shareUrl }).catch(function() {});
   } else {
@@ -8463,6 +8465,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
                (state.winner === 0 || state.winner == null ? '🤝 Empate' : '🏆 Vitória: ' + winnerLabel) + '\n\n' +
                '🔗 scoreplace.app';
     var url = window.SCOREPLACE_URL || 'https://scoreplace.app';
+    // Nativo (Capacitor): share sheet real via @capacitor/share. No-op na web.
+    if (window._spNativeShare && window._spNativeShare({ title: title, text: text, url: url })) return;
     if (navigator.share) {
       try {
         navigator.share({ title: title, text: text, url: url }).catch(function(e) {

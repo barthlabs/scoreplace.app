@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.3.21-beta';
+window.SCOREPLACE_VERSION = '4.3.22-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3871,6 +3871,25 @@ window._openExternalUrl = function(url) {
   } catch (e) {
     try { window.open(url, '_blank'); } catch (_) {}
   }
+};
+
+// v4.3.22: compartilhamento NATIVO (Capacitor iOS/Android) via @capacitor/share.
+// No Android o navigator.share NÃO existe no WebView → sem isto os "Compartilhar"
+// (convite, resultado de partida, local) caíam só no clipboard. Com o plugin, os
+// DOIS sistemas abrem o share sheet nativo (WhatsApp, Instagram, SMS, etc.).
+// Retorna true se tratou nativamente (dispara async, fire-and-forget); false →
+// o caller segue o caminho web de sempre (navigator.share / clipboard). NO-OP na
+// web (Capacitor undefined) → caminho web 100% intocado.
+window._spNativeShare = function (opts) {
+  try {
+    var C = window.Capacitor;
+    if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform() && C.Plugins && C.Plugins.Share) {
+      var o = opts || {};
+      C.Plugins.Share.share({ title: o.title, text: o.text, url: o.url, dialogTitle: o.title }).catch(function () {});
+      return true;
+    }
+  } catch (e) {}
+  return false;
 };
 
 // v2.8.36 (canonização B-2): distância great-circle em KM entre dois pontos
