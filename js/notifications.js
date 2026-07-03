@@ -7,8 +7,109 @@
 // so we show a banner prompting the user to enable notifications.
 
 var _t = window._t || function(k) { return k; };
+
+// ─── Push NATIVO (Capacitor) ──────────────────────────────────────────────────
+// No app Capacitor o push do browser (FCM web + service worker) NÃO funciona: o
+// WKWebView/WebView não tem push do navegador. A rota nativa usa o plugin
+// @capacitor-firebase/messaging (getToken devolve um token FCM NATIVO, sem
+// vapidKey/SW) e o SO entrega o push direto ao app. Gate por
+// _isNativeMessagingAvailable() — espelha _isNativeAuthAvailable() de auth.js.
+// Na WEB, window.Capacitor é undefined → SEMPRE false → o fluxo web (getToken/
+// onMessage/SW) fica 100% INTOCADO.
+function _isNativeMessagingAvailable() {
+  try {
+    var C = window.Capacitor;
+    return !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()
+      && C.Plugins && C.Plugins.FirebaseMessaging
+      && typeof C.Plugins.FirebaseMessaging.getToken === 'function');
+  } catch (e) { return false; }
+}
+window._isNativeMessagingAvailable = _isNativeMessagingAvailable;
+
+// Registra os listeners nativos UMA vez (foreground + tap). Guard por flag pra
+// não empilhar handlers se _initFCM/_registerFCMToken rodar de novo (re-login).
+function _bindNativePushListeners() {
+  if (window._nativePushListenersBound) return;
+  var FM = window.Capacitor.Plugins.FirebaseMessaging;
+
+  // Foreground: o SO não mostra banner (presentationOptions:[] no iOS; Android
+  // não auto-exibe em foreground) → exibimos o toast in-app, igual à web.
+  FM.addListener('notificationReceived', function(ev) {
+    try {
+      var n = (ev && ev.notification) || {};
+      var d = n.data || {};
+      var title = n.title || d.title || 'scoreplace.app';
+      var body = n.body || d.body || '';
+      if (typeof showNotification === 'function') showNotification(title, body, 'info');
+    } catch (e) { window._warn('[FCM native] notificationReceived error:', e); }
+  });
+
+  // Tap na notificação → navega pro torneio (mesmo destino do notificationclick
+  // do sw.js). O CF manda data.link = https://scoreplace.app/#tournaments/<id>;
+  // no app in-place basta setar o hash.
+  FM.addListener('notificationActionPerformed', function(ev) {
+    try {
+      var n = (ev && ev.notification) || {};
+      var d = n.data || {};
+      var link = d.link || n.link || '';
+      var hash = link.indexOf('#') >= 0 ? link.slice(link.indexOf('#')) : '';
+      if (hash) window.location.hash = hash;
+    } catch (e) { window._warn('[FCM native] notificationActionPerformed error:', e); }
+  });
+
+  // Token pode ser renovado pelo SO — re-salva quando isso acontece.
+  FM.addListener('tokenReceived', function(ev) {
+    try {
+      var token = ev && ev.token;
+      var user = window.AppStore && window.AppStore.currentUser;
+      if (token && user && user.uid && window.FirestoreDB && window.FirestoreDB.db) {
+        window.FirestoreDB.db.collection('users').doc(user.uid).set({
+          fcmToken: token,
+          fcmTokenUpdatedAt: new Date().toISOString(),
+          fcmTokenPlatform: 'native-' + (window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'app')
+        }, { merge: true }).catch(function() {});
+      }
+    } catch (e) { window._warn('[FCM native] tokenReceived error:', e); }
+  });
+
+  window._nativePushListenersBound = true;
+}
+
+// Pede permissão de push (dialog do SO) + obtém o token FCM nativo + salva no
+// MESMO campo users/{uid}.fcmToken que a web usa (o CF sendPushNotification lê
+// esse campo, sem distinguir web/nativo). fcmTokenPlatform é aditivo — permite
+// que o CF, no futuro, mande payload `notification` só pros tokens nativos
+// (data-only não exibe em background no nativo — ver docs/store-submission.md).
+window._registerFCMTokenNative = async function() {
+  var user = window.AppStore && window.AppStore.currentUser;
+  if (!user || !user.uid) return;
+  var FM = window.Capacitor.Plugins.FirebaseMessaging;
+  try {
+    var perm = await FM.requestPermissions();
+    if (!perm || perm.receive !== 'granted') {
+      // Usuário negou — nada a fazer (sem banner, o dialog do SO já foi a chance).
+      return;
+    }
+    _bindNativePushListeners();
+    var res = await FM.getToken();
+    var token = res && res.token;
+    if (token && window.FirestoreDB && window.FirestoreDB.db) {
+      await window.FirestoreDB.db.collection('users').doc(user.uid).set({
+        fcmToken: token,
+        fcmTokenUpdatedAt: new Date().toISOString(),
+        fcmTokenPlatform: 'native-' + (window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'app')
+      }, { merge: true });
+    } else if (!token) {
+      window._warn('[FCM native] No token received');
+    }
+  } catch (err) {
+    window._warn('[FCM native] Token registration error:', err);
+  }
+};
+
 // Internal: register FCM token after permission is already granted
 window._registerFCMToken = async function() {
+  if (_isNativeMessagingAvailable()) { return window._registerFCMTokenNative(); }
   var user = window.AppStore && window.AppStore.currentUser;
   if (!user || !user.uid) return;
   if (!firebase || !firebase.messaging) return;
@@ -56,6 +157,13 @@ window._registerFCMToken = async function() {
 
 // Called from user click on the "Ativar Notificações" banner button
 window._enablePushNotifications = async function() {
+  // Nativo: o banner web não aparece (init já vai direto ao SO), mas se algum
+  // caller acionar isso no app nativo, delega pro fluxo nativo (dialog do SO).
+  if (_isNativeMessagingAvailable()) {
+    var b = document.getElementById('fcm-permission-banner');
+    if (b) b.remove();
+    return window._registerFCMTokenNative();
+  }
   try {
     var permission = await Notification.requestPermission();
     // Permission result received
@@ -94,6 +202,13 @@ window._dismissFCMBanner = function() {
 
 // Main init: decides whether to show banner or silently register token
 window._initFCM = async function() {
+  // Nativo (Capacitor): não há Notification/serviceWorker do browser nem banner —
+  // o dialog de permissão do SO é o próprio prompt. Vai direto pro fluxo nativo.
+  if (_isNativeMessagingAvailable()) {
+    var nu = window.AppStore && window.AppStore.currentUser;
+    if (!nu || !nu.uid) return;
+    return window._registerFCMTokenNative();
+  }
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     // Browser does not support push notifications
     return;
