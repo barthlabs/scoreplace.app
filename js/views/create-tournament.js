@@ -1913,61 +1913,42 @@ function setupCreateTournamentModal() {
       }
       h += '</div>';
     }
-    // Como avançam os classificados (só em duplas). v2.6.77: toggle "Duplas fixas"
-    // (pares travados na fase × indivíduos) + estratégia SEMPRE ativa (Sorteio /
-    // Performance / Equilíbrio) que define a ordem/pareamento com que avançam.
-    // Pra fase Rei/Rainha a estratégia expande pra grupos de 4 (motor pendente).
+    // v4.3.x: DUPLA, uma vez formada, é FIXA até o fim (salvo suplente por W.O./contusão).
+    // O controle "como formar as duplas" (Performance/Equilíbrio/Sorteio) SÓ aparece quando
+    // ENTRAM INDIVÍDUOS — i.e. a fase anterior foi Rei/Rainha (ranking individual). Se a
+    // anterior já entregou duplas prontas, elas seguem juntas: só um selo informativo, sem
+    // escolha. "Cabeças de chave" saiu — a semeadura na chave é SEMPRE 1×N (genTierBracket
+    // afasta os melhores), independente da estratégia.
     if (teamSize >= 2) {
+      ph.fixedPairs = true; // pares sempre fixos
+      if (ph.pairingStrategy === 'seed' && !isGrupos) ph.pairingStrategy = 'top'; // 'seed' saiu da UI
+      var _prevRR = (i === 0)
+        ? ((((document.getElementById('draw-mode') || {}).value)) === 'rei_rainha')
+        : !!(window._extraPhases[i - 1] && window._extraPhases[i - 1].reiRainha);
       var _ps = ph.pairingStrategy || 'top';
-      var _fixed = ph.fixedPairs !== false; // default: duplas fixas ON
-      h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Como avançam os classificados</div>';
-      h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
-      h += '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox"' + (_fixed ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ',\'fixedPairs\',this.checked)"><span class="toggle-slider"></span></label>';
-      h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">Duplas fixas</span>';
-      h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_fixed ? 'pares travados para toda a fase' : 'classificados entram individualmente') + '</span>';
-      h += '</div>';
-      if (_fixed) {
-        // v3.1.23: "Duplas fixas" FORMA as duplas a partir dos classificados (indivíduos)
-        // — a ESTRATÉGIA define COMO: Performance (1º+2º), Equilíbrio (1º+últ.), Sorteio,
-        // ou Cabeças de chave. Por grupo, a 1ª dupla vai pra Linha 1 (Ouro) e a 2ª pra
-        // Linha 2 (Prata). O motor aplica isso quando os entrantes são indivíduos; se a
-        // fase anterior já entregou duplas prontas, a estratégia é ignorada (mantém os pares).
-        // Antes (v3.0.x) a UI forçava 'seed' e escondia Performance/Equilíbrio — bug.
-        if (_ps !== 'seed' && _ps !== 'draw_among' && _ps !== 'top' && _ps !== 'balanced') _ps = 'top';
-        h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:4px;">Como formar as duplas</div>';
+      if (_ps !== 'top' && _ps !== 'balanced' && _ps !== 'draw_among') _ps = 'top';
+      if (_prevRR) {
+        // fase anterior Rei/Rainha → forma as duplas a partir do ranking individual
+        h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Como formar as duplas <span style="opacity:0.7;">— a fase anterior é Rei/Rainha (ranking individual)</span></div>';
         h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-        [['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.'], ['draw_among', '🎲 Sorteio'], ['seed', '🎯 Cabeças de chave']].forEach(function(p){
+        [['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.'], ['draw_among', '🎲 Sorteio']].forEach(function(p){
           var act = _ps === p[0];
           h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
         });
         h += '</div>';
-      } else {
-        h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-        [['draw_among', '🎲 Sorteio'], ['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.'], ['seed', '🎯 Cabeças de chave']].forEach(function(p){
-          var act = _ps === p[0];
-          h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
-        });
-        h += '</div>';
-      }
-      // v2.7.15: explicação DINÂMICA de quem vai pra qual linha (resolve "o seletor
-      // não diz quem vai pra Ouro/Prata"). Atualiza ao trocar estratégia/linhas.
-      var _nLx = (ph.mapping && ph.mapping.length) || 1;
-      if (_nLx >= 2) {
-        var _Lx = ph.mapping.map(function(mp, k){ return (mp.label || '').trim() || ('Linha ' + (k + 1)); });
-        var _expl;
-        if (_fixed) {
-          // v3.1.23: a estratégia FORMA as duplas dos classificados (indivíduos) e
-          // distribui — 1ª dupla → Linha 1 (Ouro), 2ª → Linha 2 (Prata)…
-          if (_ps === 'top') _expl = 'As duplas são formadas por <b>performance</b> em cada grupo: <b>1º+2º</b>, <b>3º+4º</b>… A 1ª dupla vai pra <b>' + esc(_Lx[0]) + '</b>, a 2ª pra <b>' + esc(_Lx[1]) + '</b>' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
-          else if (_ps === 'balanced') _expl = 'As duplas são formadas por <b>equilíbrio</b> em cada grupo: <b>1º+último</b>, <b>2º+penúltimo</b>… A 1ª dupla vai pra <b>' + esc(_Lx[0]) + '</b>, a 2ª pra <b>' + esc(_Lx[1]) + '</b>' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
-          else if (_ps === 'draw_among') _expl = 'As duplas são <b>sorteadas</b> em cada grupo e distribuídas igualmente entre as ' + _nLx + ' linhas.';
-          else _expl = 'Os <b>melhores</b> viram <b>cabeças de chave</b> (1 por linha), espalhados pra só se cruzarem no fim; os parceiros e as demais duplas são <b>sorteados</b>. <span style="opacity:0.8;">(usa escopo Geral)</span>';
+        h += '<div style="margin-top:6px;font-size:0.72rem;color:#34d399;display:flex;align-items:flex-start;gap:6px;">🔒 <span>Formada aqui, a dupla fica <b>fixa até o fim</b> (só muda por suplente em W.O./contusão).</span></div>';
+        var _nLx = (ph.mapping && ph.mapping.length) || 1;
+        if (_nLx >= 2) {
+          var _Lx = ph.mapping.map(function(mp, k){ return (mp.label || '').trim() || ('Linha ' + (k + 1)); });
+          var _expl;
+          if (_ps === 'top') _expl = 'As duplas são formadas por <b>performance</b>: <b>1º+2º</b>, <b>3º+4º</b>… A 1ª dupla vai pra <b>' + esc(_Lx[0]) + '</b>, a 2ª pra <b>' + esc(_Lx[1]) + '</b>' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
+          else if (_ps === 'balanced') _expl = 'As duplas são formadas por <b>equilíbrio</b>: <b>1º+último</b>, <b>2º+penúltimo</b>… A 1ª dupla vai pra <b>' + esc(_Lx[0]) + '</b>, a 2ª pra <b>' + esc(_Lx[1]) + '</b>' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
+          else _expl = 'As duplas são <b>sorteadas</b> e distribuídas igualmente entre as ' + _nLx + ' linhas.';
+          h += '<div style="margin-top:8px;font-size:0.72rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:7px 10px;line-height:1.4;">↳ ' + _expl + '</div>';
         }
-        else if (_ps === 'seed') _expl = 'Os <b>' + _nLx + ' melhores</b> (ranking geral) viram <b>cabeças de chave</b> — 1 por linha, espalhados pra só se cruzarem no fim; as demais vagas são <b>sorteadas</b> entre as linhas. <span style="opacity:0.8;">(usa escopo Geral)</span>';
-        else if (_ps === 'balanced') _expl = '<b>' + esc(_Lx[0]) + '</b> recebe a dupla 1º+4º (forte+fraco); <b>' + esc(_Lx[1]) + '</b> recebe 2º+3º — linhas equilibradas.';
-        else if (_ps === 'draw_among') _expl = 'As duplas de cada grupo são <b>sorteadas</b> e distribuídas igualmente entre as ' + _nLx + ' linhas.';
-        else _expl = '<b>' + esc(_Lx[0]) + '</b> recebe os <b>vencedores</b> (1º+2º de cada grupo); <b>' + esc(_Lx[1]) + '</b> recebe os <b>derrotados</b> (3º+4º)' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
-        h += '<div style="margin-top:8px;font-size:0.72rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:7px 10px;line-height:1.4;">↳ ' + _expl + '</div>';
+      } else {
+        // duplas já vêm formadas da fase anterior → selo informativo, sem controle
+        h += '<div style="font-size:0.76rem;color:#34d399;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:8px 10px;line-height:1.45;display:flex;align-items:flex-start;gap:7px;">🔒 <span><b>Duplas fixas.</b> As duplas vêm formadas da fase anterior e seguem <b>juntas até o fim</b> — só mudam por suplente (W.O./contusão). Na distribuição, os melhores são sempre <b>afastados</b> (semeadura automática).</span></div>';
       }
     }
     } // fim if(!_txCol)
@@ -2013,17 +1994,11 @@ function setupCreateTournamentModal() {
       h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Nº de grupos <input type="number" min="2" max="16" value="' + (ph.gruposCount || 4) + '" oninput="window._setPhaseField(' + i + ', \'gruposCount\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
       h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Classificados/grupo <input type="number" min="1" max="8" value="' + (ph.gruposClassified || 2) + '" oninput="window._setPhaseField(' + i + ', \'gruposClassified\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
       h += '</div>';
-      // v3.1.10: 🎯 Cabeças de chave (semear os melhores em grupos distintos pra não se
-      // cruzarem cedo) como TOGGLE do organizador. ON='seed' (serpentina sobre o ranking
-      // → espalha os fortes); OFF='draw_among' (pool embaralhado → grupos por sorteio).
-      // buildPhaseGroupStage já honra pairingStrategy via buildEntrantsByDest. Default ON.
-      if (ph.pairingStrategy !== 'draw_among') ph.pairingStrategy = 'seed';
-      var _grpSeedOn = ph.pairingStrategy === 'seed';
-      h += '<div style="display:flex;align-items:center;gap:10px;">';
-      h += '<label class="toggle-switch" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;flex-shrink:0;"><input type="checkbox"' + (_grpSeedOn ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'pairingStrategy\', this.checked ? \'seed\' : \'draw_among\')"><span class="toggle-slider"></span></label>';
-      h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">🎯 Cabeças de chave</span>';
-      h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_grpSeedOn ? 'os melhores são espalhados em grupos diferentes' : 'grupos formados por sorteio') + '</span>';
-      h += '</div>';
+      // v4.3.x: semeadura SEMPRE ligada — os melhores são espalhados em grupos diferentes
+      // (pra só se cruzarem tarde). Deixou de ser toggle. buildPhaseGroupStage aplica via
+      // buildEntrantsByDest('seed').
+      ph.pairingStrategy = 'seed';
+      h += '<div style="font-size:0.72rem;color:var(--text-muted);display:flex;align-items:flex-start;gap:6px;">🎯 <span>Os melhores são sempre espalhados em grupos diferentes (semeadura automática).</span></div>';
     }
     // ─── Datas da fase POR FASE (v2.6.65) ───
     h += window._phaseDatesHtml(i, ph);
