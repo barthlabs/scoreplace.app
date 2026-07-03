@@ -655,6 +655,14 @@ window._assignMatchCourt = function(tId, matchId, court) {
 
 window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   var _t = window._t || function(k) { return k; };
+  // v4.x: Pontos Corridos (Liga) com sorteios sucessivos → a lista de espera é gerida pela
+  // formação automática de grupos (SEM W.O./presença) e aparece DENTRO de "Ficaram de fora
+  // desta rodada". Este painel de check-in (W.O./presença) é pra torneios de 1-2 dias
+  // (eliminatória/grupos). Suprime quando a fase ATUAL é Liga.
+  var _cpIdxSb = (t && t.currentPhaseIndex) || 0;
+  var _curPhSb = (t && Array.isArray(t.phases) && t.phases[_cpIdxSb]) ? t.phases[_cpIdxSb] : null;
+  var _curIsLigaSb = _curPhSb ? (_curPhSb.formatCode === 'liga') : !!(window._isLigaFormat && window._isLigaFormat(t));
+  if (_curIsLigaSb) return '';
   // v2.7.52: LISTA DE ESPERA CANÔNICA — _getWaitlist une os 3 storages
   // (waitlist + standbyParticipants + monarchWaitlist por categoria). Antes só lia
   // os 2 primeiros → no Rei/Rainha (monarchWaitlist) o painel vinha vazio.
@@ -1734,9 +1742,11 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     return _renderClassifFromMap(_lineClassifMap(bracketKey), color, '📊 Classificação parcial', false);
   }
   // Classificação GERAL (quando HÁ grande final unindo as linhas) — delega ao global.
+  // v4.x: geral COLAPSADA por default (consistente com a classificação geral da fase 0 e
+  // com a página do torneio encerrado). Por-linha (parcial) já era colapsada.
   function _unifiedClassifHtml() {
     var map = (typeof window._classifUnifiedMap === 'function') ? window._classifUnifiedMap(t, pm, _tierKeys) : {};
-    return _renderClassifFromMap(map, '#fbbf24', '📊 Classificação geral', true);
+    return _renderClassifFromMap(map, '#fbbf24', '📊 Classificação geral', false);
   }
 
   function renderTier(bracketKey, title, color, showClassif) {
@@ -3635,7 +3645,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // Sit-out matches têm isSitOut=true + sitOutReason='inactive'/'remainder'.
         var _allRoundMatches = currentRoundData.matches || [];
         var _sitOuts = _allRoundMatches.filter(function(m) { return m && m.isSitOut; });
-        if (_sitOuts.length === 0) return '';
+        // v4.x: NÃO retornar cedo por não haver sit-outs — a LISTA DE ESPERA (sit-outs sem
+        // W.O./presença) vive dentro deste box e pode existir mesmo sem inativos/W.O.
         var _inactive = _sitOuts.filter(function(m) { return m.sitOutReason === 'inactive'; });
         var _wo = _sitOuts.filter(function(m) { return m.sitOutReason === 'wo'; }); // v2.4.30
         var _remainder = _sitOuts.filter(function(m) { return m.sitOutReason !== 'inactive' && m.sitOutReason !== 'wo'; });
@@ -3712,58 +3723,59 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _meBadge = _isMe ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.5px;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
             return '<span style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;" onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/\'/g, "\\'")) + '\',\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')">' + window._safeHtml(window._resolveSideLive(t, m.p1)) + _ptsLbl + _meBadge + '</span>';
           }).join('');
-          return '<div style="margin-bottom:8px;">' +
-            '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:' + color + ';margin-bottom:4px;">' +
+          // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
+          // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
+          return '<div style="margin-bottom:8px;background:' + bg + ';border:1px solid ' + border + ';border-radius:10px;padding:8px 10px;">' +
+            '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:' + color + ';margin-bottom:6px;flex-wrap:wrap;">' +
               '<span>' + icon + '</span>' +
               '<span>' + label + ' (' + items.length + ')</span>' +
               (hint ? '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— ' + hint + '</span>' : '') +
             '</div>' +
-            '<div style="display:flex;flex-wrap:wrap;gap:6px;background:' + bg + ';border:1px solid ' + border + ';border-radius:10px;padding:8px 10px;">' + _names + '</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _names + '</div>' +
           '</div>';
         };
         var _inactiveHtml = _renderRow('Desativados', _inactive, '#f87171', 'rgba(239,68,68,0.05)', 'rgba(239,68,68,0.25)', '🔴', 'fizeram 0 pts (optaram por sair)');
         var _woHtml = _renderRow('W.O.', _wo, '#f87171', 'rgba(239,68,68,0.05)', 'rgba(239,68,68,0.3)', '⚠️', 'não puderam jogar — 0 pts'); // v2.4.30
         var _remainderHtml = _renderRow('Sem grupo', _remainder, '#fbbf24', 'rgba(251,191,36,0.05)', 'rgba(251,191,36,0.25)', '😴', 'recebem sua média do torneio');
-        if (!_inactiveHtml && !_woHtml && !_remainderHtml) return '';
+        // v4.x: LISTA DE ESPERA (sit-outs SEM W.O./presença) DENTRO do box — quem está aqui
+        // pode ser CONVIDADO pra jogar no lugar de um W.O.; ao juntar 4 forma um novo grupo.
+        // Antes vivia num bloco solto abaixo (removido). Fonte canônica _getWaitlist.
+        var _waitBoxHtml = '';
+        if (_isReiRainhaRound) {
+          var _wlNames = [];
+          (typeof window._getWaitlist === 'function' ? window._getWaitlist(t) : []).forEach(function(e){
+            var n = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim();
+            if (n && n.indexOf(' / ') === -1 && _wlNames.indexOf(n) === -1) _wlNames.push(n);
+          });
+          if (_wlNames.length) {
+            var _wPills = _wlNames.map(function(n){
+              var _isMe = _nameMatchesCurUser(n);
+              var _bg = _isMe ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.06)';
+              var _bd = _isMe ? 'rgba(34,211,238,0.55)' : 'rgba(251,191,36,0.3)';
+              var _co = _isMe ? '#22d3ee' : '#fbbf24';
+              var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
+              return '<span style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
+            }).join('');
+            var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
+            var _eligRR = _wlNames.length;
+            if (_sameDayRR) { var _ciRR = t.checkedIn || {}, _abRR = t.absent || {}; _eligRR = _wlNames.filter(function(n){ return window._idMapHas(t, _ciRR, n) && !window._idMapHas(t, _abRR, n); }).length; }
+            var _need = (4 - (_eligRR % 4)) % 4; if (_need === 0 && _eligRR === 0) _need = 4;
+            var _hint = (_need === 0) ? 'completou 4 — formando grupo…' : ('faltam ' + _need + (_sameDayRR ? ' presente(s)' : '') + ' para formar o próximo grupo');
+            _waitBoxHtml = '<div style="margin-bottom:8px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 10px;">' +
+              '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
+              '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint + '</span></div>' +
+              '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _wPills + '</div>' +
+            '</div>';
+          }
+        }
+        if (!_inactiveHtml && !_woHtml && !_remainderHtml && !_waitBoxHtml) return '';
         return '<details open style="margin-bottom:1rem;background:rgba(255,255,255,0.02);border:1px solid var(--border-color);border-radius:10px;padding:10px 14px;">' +
           '<summary style="cursor:pointer;user-select:none;font-size:0.82rem;font-weight:700;color:var(--text-bright);margin-bottom:8px;">📋 Ficaram de fora desta rodada</summary>' +
-          '<div style="margin-top:8px;">' + _woHtml + _inactiveHtml + _remainderHtml + '</div>' +
+          '<div style="margin-top:8px;">' + _waitBoxHtml + _inactiveHtml + _woHtml + _remainderHtml + '</div>' +
         '</details>';
       })()}
-      ${_isReiRainhaRound ? (() => {
-        // v2.6.99: Lista de espera Rei/Rainha — sobra do sorteio + novos inscritos.
-        // Quando junta 4, forma um novo grupo automaticamente. Substitui o antigo
-        // "Sem grupo (recebem média)" — quem espera NÃO recebe média, segue na fila.
-        // v3.1.22: fonte CANÔNICA = _getWaitlist (waitlist + standbyParticipants +
-        // monarchWaitlist), idêntica ao painel "📋 Lista de Espera". Antes lia só
-        // monarchWaitlist e DIVERGIA (mostrava 1 quando o outro painel mostrava 4).
-        var _wlNames = [];
-        (typeof window._getWaitlist === 'function' ? window._getWaitlist(t) : []).forEach(function(e){
-          var n = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim();
-          if (n && n.indexOf(' / ') === -1 && _wlNames.indexOf(n) === -1) _wlNames.push(n);
-        });
-        if (!_wlNames.length) return '';
-        var _pills = _wlNames.map(function(n){
-          var _isMe = _nameMatchesCurUser(n);
-          var _bg = _isMe ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.06)';
-          var _bd = _isMe ? 'rgba(34,211,238,0.55)' : 'rgba(251,191,36,0.3)';
-          var _co = _isMe ? '#22d3ee' : '#fbbf24';
-          var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
-          return '<span style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + window._safeHtml(n) + _me + '</span>';
-        }).join('');
-        // v3.1.22: em torneio de MESMO DIA quem conta pra formar são os PRESENTES;
-        // multi-dia conta todos da fila. Hint honesto reflete isso.
-        var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
-        var _eligRR = _wlNames.length;
-        if (_sameDayRR) { var _ciRR = t.checkedIn || {}, _abRR = t.absent || {}; _eligRR = _wlNames.filter(function(n){ return window._idMapHas(t, _ciRR, n) && !window._idMapHas(t, _abRR, n); }).length; }
-        var _need = (4 - (_eligRR % 4)) % 4; if (_need === 0 && _eligRR === 0) _need = 4;
-        var _hint = (_need === 0) ? 'completou 4 — formando grupo…' : ('faltam ' + _need + (_sameDayRR ? ' presente(s)' : '') + ' para formar o próximo grupo');
-        return '<div style="margin-bottom:1rem;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:10px 14px;">' +
-          '<div style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
-          '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— ao juntar 4, forma um novo grupo automaticamente · ' + _hint + '</span></div>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _pills + '</div>' +
-        '</div>';
-      })() : ''}
+      ${''/* v4.x: "Lista de espera" movida pra DENTRO do box "Ficaram de fora desta rodada"
+             (sit-outs box), junto de Desativados/W.O. — ver _renderRoundOutBox acima. */}
       ${_isReiRainhaRound ? (() => {
         var _useSetsMonarch = !!(t.scoring && t.scoring.type === 'gsm');
         // v0.16.52: ordena os grupos pra que o grupo do usuário (se houver) venha
@@ -4160,16 +4172,17 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     var title = displayLabel
       ? _t('bracket.standingsTitleCat', {cat: displayLabel, n: _roundLabel})
       : _t('bracket.standingsTitle', {n: _roundLabel});
-    // v0.16.93: classificação MOSTRADA por default (open) — pedido do
-    // usuário "no detalhe do torneio a classificação deve estar mostrada
-    // por padrao e pode ser ocultada pelo usuário." Spans show/hide mantêm
-    // estilos inline originais — CSS bracket.css já tem regras
-    // details[open] > summary .standings-toggle-{show,hide} que invertem
-    // a visibilidade automaticamente quando o details abre/fecha.
-    return `<div class="card" style="margin-bottom:1rem;">
-      <details open>
+    // v0.16.93: classificação por CATEGORIA mostrada por default (open) — pedido do
+    // usuário "no detalhe do torneio a classificação deve estar mostrada por padrao e
+    // pode ser ocultada pelo usuário." v4.x: a classificação GERAL (sem categoria,
+    // sec.label null — ex.: torneio com muitos inscritos) fica COLAPSADA por default;
+    // por-categoria segue aberta. Spans show/hide mantêm estilos inline originais — CSS
+    // bracket.css já tem regras details[open] > summary .standings-toggle-{show,hide}.
+    var _stdOpen = sec.label ? ' open' : '';
+    return `<div class="card" style="margin:1.25rem 0 1rem;">
+      <details${_stdOpen}>
         <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:.75rem;">
-          <h3 class="card-title" style="margin:0;border-left:3px solid #38bdf8;padding-left:10px;">${title}</h3>
+          <h3 class="card-title" style="margin:0;border-left:3px solid #38bdf8;padding-left:10px;font-size:0.95rem;line-height:1.25;">${title}</h3>
           <span class="standings-toggle-indicator" style="font-size:.85rem;color:var(--text-muted);font-weight:600;white-space:nowrap;">
             <span class="standings-toggle-show">▸ ${_t('bracket.showStandings')}</span>
             <span class="standings-toggle-hide" style="display:none;">▾ ${_t('bracket.hideStandings')}</span>

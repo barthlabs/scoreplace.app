@@ -3167,6 +3167,10 @@ function setupCreateTournamentModal() {
     grp.style.display = '';
     // v2.6.53: SEM "Repetir a cada" (intervalo vazio/0) = sem repetição = 1 rodada.
     // Antes o campo SUMIA; agora mostra 1 (apagar repetições não esconde as rodadas).
+    // v4.x: o nº de rodadas é DERIVADO do agendamento (1º sorteio + repetição + fim) —
+    // é o modelo do dono: define rodadas OU intervalo OU (início+repetição) e o resto sai
+    // sozinho. O cap/estimativa/avanço leem `_phasePlannedRounds` (mesma fórmula), não um
+    // valor cacheado. Aqui é só o DISPLAY.
     if (!interval || interval < 1) {
       if (document.activeElement !== input) input.value = 1;
     } else if (end && !isNaN(end.getTime()) && end >= first) {
@@ -6152,7 +6156,20 @@ function setupCreateTournamentModal() {
             format: format, // string canônica (ex.: 'Liga', 'Dupla Eliminatória')
             drawMode: tourData.drawMode || 'sorteio',
             reiRainha: tourData.drawMode === 'rei_rainha',
-            rounds: parseInt(window._phase1Rounds) || 1,
+            // v4.x: o nº de rodadas da fase 0 Liga é o que o organizador GRAVA no campo
+            // "Rodadas" (#liga-rounds-input) — NUNCA o _phase1Rounds carregado (que ficava
+            // preso no valor antigo, ex.: 1 da fase classificatória original). Esse valor é
+            // o CAP da fase (governa avanço multi-fase e suppress do auto-draw). Sem isso, o
+            // organizador digitava 5 rodadas e o motor parava/avançava na 1ª. Outros formatos
+            // seguem _phase1Rounds (fonte deles).
+            rounds: (function () {
+              if (formatValue === 'liga') {
+                var _lrEl = document.getElementById('liga-rounds-input');
+                var _lrN = _lrEl ? parseInt(_lrEl.value, 10) : 0;
+                if (_lrN >= 1) return _lrN;
+              }
+              return parseInt(window._phase1Rounds) || 1;
+            })(),
             source: { type: 'enrollment' },
             fixedPairs: teamSizeVal > 1,
             groupsBy: tourData.reiRainhaGroupsBy || 'sorteio',

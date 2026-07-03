@@ -805,43 +805,48 @@ function renderDashboard(container) {
                   var _sd = new Date(t.startDate).getTime();
                   if (!isNaN(_sd) && _sd > _now) _ligaEv = { ts: _sd, label: _t('tourn.ligaStart'), icon: '🏁', color: '#10b981' };
                 }
-                // 2. Começou + próximo sorteio → countdown para próximo sorteio
-                if (!_ligaEv && !t.drawManual && t.drawFirstDate && typeof window._calcNextDrawDate === 'function') {
-                  var _nd = window._calcNextDrawDate(t);
-                  if (_nd) {
-                    var _ndTs = _nd.getTime();
-                    var _seTs = null;
-                    var _sm = t.ligaSeasonMonths || t.rankingSeasonMonths;
-                    if (_sm && t.startDate) {
-                      var _ssd = new Date(t.startDate);
-                      if (!isNaN(_ssd.getTime())) { var _se = new Date(_ssd); _se.setMonth(_se.getMonth() + parseInt(_sm)); _seTs = _se.getTime(); }
-                    }
-                    if (!isNaN(_ndTs) && _ndTs > _now && (!_seTs || _ndTs <= _seTs)) _ligaEv = { ts: _ndTs, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
-                  }
-                }
-                // 3. Sem próximo sorteio → countdown para fim da temporada
-                if (!_ligaEv) {
-                  var _sm2 = t.ligaSeasonMonths || t.rankingSeasonMonths;
-                  if (_sm2 && t.startDate) {
-                    var _ssd2 = new Date(t.startDate);
-                    if (!isNaN(_ssd2.getTime())) { var _end = new Date(_ssd2); _end.setMonth(_end.getMonth() + parseInt(_sm2)); var _eTs = _end.getTime(); if (!isNaN(_eTs) && _eTs > _now) _ligaEv = { ts: _eTs, label: _t('tourn.seasonEnd'), icon: '🏁', color: '#8b5cf6' }; }
-                  }
-                }
-                // v2.7.41: toggle Liga "Ativado/Desativado" SEMPRE à direita (igual ao
-                // detalhe), independente de haver countdown. Antes ficava DENTRO do bloco
-                // de countdown (return '' se !_ligaEv) → sumia em torneios multi-fase.
+                // Fim do torneio: endDate ou fim da temporada; multi-fase = fim da última fase.
+                var _tEndTsD = null;
+                if (t.endDate) { var _edD = new Date(String(t.endDate).indexOf('T') > -1 ? t.endDate : (t.endDate + 'T23:59:59')).getTime(); if (!isNaN(_edD)) _tEndTsD = _edD; }
+                if (_tEndTsD == null) { var _smD = t.ligaSeasonMonths || t.rankingSeasonMonths; if (_smD && t.startDate) { var _ssdD = new Date(t.startDate); if (!isNaN(_ssdD.getTime())) { var _seD = new Date(_ssdD); _seD.setMonth(_seD.getMonth() + parseInt(_smD)); _tEndTsD = _seD.getTime(); } } }
+                if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentScheduledWindow === 'function') { var _wD = window._tournamentScheduledWindow(t); if (_wD && _wD.endMs) _tEndTsD = _wD.endMs; }
+                var _H48D = 48 * 60 * 60 * 1000;
+                // toggle Liga "Ativado/Desativado" SEMPRE à direita (independente de countdown).
                 var _ligaToggleDash = (typeof window._buildLigaActiveToggleHtml === 'function')
                   ? window._buildLigaActiveToggleHtml(t)
                   : '';
                 var _toggleRowDash = _ligaToggleDash
                   ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
                   : '';
-                if (!_ligaEv) return _toggleRowDash; // sem countdown → só o toggle (direita)
-                var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
+                // 2. Começou + sorteio agendado de verdade → próximo sorteio (fonte única —
+                // fase única E multi-fase fase 0 Liga auto-draw).
+                if (!_ligaEv && sorteioRealizado && typeof window._ligaNextDrawEventTs === 'function') {
+                  var _ndTsD = window._ligaNextDrawEventTs(t);
+                  if (_ndTsD && _ndTsD > _now && (_tEndTsD == null || _ndTsD <= _tEndTsD)) _ligaEv = { ts: _ndTsD, label: _t('tourn.nextDraw'), icon: '🎲', color: '#fb923c' };
+                }
+                // 3. Sem sorteio por vir → fim do torneio SÓ nas últimas 48h.
+                if (!_ligaEv && _tEndTsD != null && _tEndTsD > _now && (_tEndTsD - _now) <= _H48D) {
+                  _ligaEv = { ts: _tEndTsD, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
+                }
                 var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
-                var _rgb = _cm[_ligaEv.color] || '139,92,246';
                 var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
                 var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
+                // 4. Começou, sem sorteio agendado e fora das 48h finais → TEMPO DECORRIDO.
+                if (!_ligaEv && sorteioRealizado && typeof window._ligaElapsedSinceTs === 'function') {
+                  var _elSinceD = window._ligaElapsedSinceTs(t);
+                  if (_elSinceD && _elSinceD <= _now) {
+                    var _elTextD = window._formatCountdown ? window._formatCountdown(_now - _elSinceD) : '';
+                    return _toggleRowDash +
+                      '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' +
+                      '<span style="font-size:1.3rem;">⏱️</span>' +
+                      '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">Tempo decorrido</span>' +
+                      '<span data-elapsed-since="' + _elSinceD + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _elTextD + '</span>' +
+                    '</div>';
+                  }
+                }
+                if (!_ligaEv) return _toggleRowDash; // sem countdown → só o toggle (direita)
+                var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
+                var _rgb = _cm[_ligaEv.color] || '139,92,246';
                 return _toggleRowDash +
                   '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
                   '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +

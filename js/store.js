@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.3.26-beta';
+window.SCOREPLACE_VERSION = '4.3.34-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3071,9 +3071,13 @@ window._photoReadBox = function () {
     // Antes o escuro usava bg CLARO (226,232,240) → "brilho agressivo" sobre o
     // fundo escuro (pedido do dono). Tema CLARO INTOCADO. Consistente em
     // dashboard, detalhe e utils (todos chamam este helper).
+    // v4.x: tarja MAIS DENSA (0.40→0.60 escuro / 0.72→0.85 claro) — sobre foto de local
+    // agitada o scrim leve deixava a leitura prejudicada (pedido do dono). Os boxes que
+    // usam esta tarja sobre foto devem também aplicar backdrop-filter:blur pra suavizar o
+    // fundo (ex.: _buildTournamentConfigBox).
     return light
-        ? { bg: 'rgba(30,41,59,0.72)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' }
-        : { bg: 'rgba(0,0,0,0.40)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.10)' };
+        ? { bg: 'rgba(30,41,59,0.85)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.14)' }
+        : { bg: 'rgba(0,0,0,0.60)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.12)' };
 };
 
 // v4.0.56: cor de texto semântica legível por tema. As cores semânticas dos
