@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.3.26-beta';
+window.SCOREPLACE_VERSION = '4.3.27-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3505,7 +3505,12 @@ window._whatsappShareUrl = function(text) {
 // vibrante. Renderização consistente em iOS/Android/Windows.
 // Versões anteriores (mantidas no histórico de commits): SVG bicolor com
 // gomo amarelo + linha curva (v0.17.11-v0.17.51).
-window._BEACH_TENNIS_ICON = '<span style="filter:hue-rotate(-50deg) saturate(1.8);display:inline-block;vertical-align:-0.15em;" aria-label="Beach Tennis">🎾</span>';
+// v4.3.27: era '<span style="filter:hue-rotate...">🎾</span>' — mas o emoji 🎾 no
+// Android (Noto) rende como RAQUETE+bola (no iOS/Apple é só a bola), então o indicador
+// do sacador e o ícone de Beach Tennis viravam "uma raquete com bola genérica" no
+// Android. Trocado por SVG inline (bola laranja com costura branca) → renderiza IGUAL
+// em iOS/Android/web e é inequivocamente uma BOLA. Escala com font-size (width:1em).
+window._BEACH_TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;vertical-align:-0.15em;display:inline-block;flex-shrink:0" aria-label="Beach Tennis"><circle cx="50" cy="50" r="47" fill="#fb923c" stroke="#c2410c" stroke-width="3"/><path d="M18 20 C44 40 44 60 18 80" fill="none" stroke="#fff7ed" stroke-width="5" stroke-linecap="round"/><path d="M82 20 C56 40 56 60 82 80" fill="none" stroke="#fff7ed" stroke-width="5" stroke-linecap="round"/></svg>';
 
 // v0.17.11: ícone Pickleball — SVG inline com bola amarela e furos visíveis
 // (bola real tem 40 furos; reduzido pra 13 num grid distribuído pra que
