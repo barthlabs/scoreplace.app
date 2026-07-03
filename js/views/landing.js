@@ -192,8 +192,8 @@
        com que ele tenha a largura total e altura compativel de acordo com
        a tela". Caps inferior/superior previnem que fique pequeno demais ou
        gigante demais em casos extremos (ex: tablet em landscape). */
-    '.landing-cta-btn { display: block; width: 95%; max-width: 760px; margin-left: auto; margin-right: auto; box-sizing: border-box; font-size: clamp(1.05rem, 1.4vw + 0.85rem, 1.55rem); font-weight: 800; padding: clamp(14px, 2vh + 6px, 26px) clamp(16px, 4vw, 48px); border-radius: 14px; cursor: pointer; background: #047857; letter-spacing: 0.3px; box-shadow: inset 0 3px 0 rgba(255,255,255,0.5), inset 0 10px 14px rgba(255,255,255,0.30), inset 0 -20px 24px rgba(0,0,0,0.30), inset 0 -3px 0 rgba(0,0,0,0.22), 0 4px 10px rgba(0,0,0,0.25); }' +
-    '.landing-cta-btn:active { transform: translateY(3px); box-shadow: inset 0 3px 0 rgba(255,255,255,0.4), inset 0 8px 12px rgba(255,255,255,0.24), inset 0 -14px 18px rgba(0,0,0,0.28), 0 2px 5px rgba(0,0,0,0.22); }' +
+    '.landing-cta-btn { display: block; width: 95%; max-width: 760px; margin-left: auto; margin-right: auto; box-sizing: border-box; font-size: clamp(1.05rem, 1.4vw + 0.85rem, 1.55rem); font-weight: 800; padding: clamp(14px, 2vh + 6px, 26px) clamp(16px, 4vw, 48px); border-radius: 14px; cursor: pointer; background: linear-gradient(180deg, #059669 0%, #047857 55%, #036048 100%); letter-spacing: 0.3px; box-shadow: inset 0 3px 0 rgba(255,255,255,0.6), inset 0 13px 17px rgba(255,255,255,0.36), inset 0 -26px 30px rgba(0,0,0,0.38), inset 0 -5px 0 rgba(0,0,0,0.30), 0 12px 30px rgba(5,150,105,0.5), 0 6px 12px rgba(0,0,0,0.32); }' +
+    '.landing-cta-btn:active { transform: translateY(3px); box-shadow: inset 0 3px 0 rgba(255,255,255,0.45), inset 0 9px 13px rgba(255,255,255,0.26), inset 0 -16px 20px rgba(0,0,0,0.32), inset 0 -3px 0 rgba(0,0,0,0.26), 0 5px 14px rgba(5,150,105,0.4), 0 2px 5px rgba(0,0,0,0.24); }' +
     '.landing-cta-btn:hover { background: #065f46; }' +
     /* Hero CTA: ~3x mais alto que o botão padrão, texto em 2 linhas grandes.
        Uma usuária confundiu as modalidades com o próximo passo ("clico em
