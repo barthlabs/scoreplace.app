@@ -2566,6 +2566,11 @@ function renderTournaments(container, tournamentId = null) {
                 ${toggleRegBtn}
                 ${sortearBtn}
                 ${sortearAberto}
+                ${/* v4.4.50: "Avançar de fase" também nas Ferramentas do Organizador — mesma
+                      condição do banner do bracket (multi-fase, fase atual concluída, existe
+                      próxima fase). _advanceMultiPhase abre o painel de resolução se a chave
+                      da próxima fase não for pow2. */ ''}
+                ${(isOrg && !isFinished && window._isMultiPhase && window._isMultiPhase(t) && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && ((t.currentPhaseIndex || 0) + 1) < ((t.phases || []).length)) ? `<button class="btn btn-success hover-lift btn-shine" onclick="event.stopPropagation(); window._advanceMultiPhase('${t.id}')">🏆 Avançar de fase</button>` : ''}
                 ${(!isFinished && hasDraw && !window._isLigaFormat(t)) ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window.finishTournament('${t.id}')">🏁 ${_t('org.finishTournament')}</button>` : ''}
                 ${/* v2.6.29/31: botão "Configurar Playoffs (Fase Final)" removido e o
                       módulo de playoff (tournaments-playoff.js, rota #fase-final,
