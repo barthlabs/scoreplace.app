@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.4.63-beta';
+window.SCOREPLACE_VERSION = '4.4.64-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3271,14 +3271,16 @@ window._fbInner = function (key) {
     var clockPill = pill(orderActive, IND, '🕒' + ar(orderDir), "window._fbSortPill('" + key + "','order')",
         'Ordem de inscrição ' + (orderDir === 'desc' ? '(mais recentes 1º)' : '(mais antigos 1º)') + ' — clique p/ inverter', 'min-width:auto;');
     // SORT ATIVO/INATIVO: só quando a regra permite desativação pelo participante (opts.activeSort).
-    // ↑ = ativos primeiro; ↓ = inativos primeiro. Lê data-part-inactive nos cards (_partApplyFilter).
+    // BOLA VERDE/VERMELHA (pedido do dono): 🟢 = ativos em cima; 🔴 = inativos em cima. Clique
+    // alterna. Lê data-part-inactive nos cards (_partApplyFilter). asc=ativos, desc=inativos.
     var activePill = '';
     if (opts.activeSort) {
         var activeActive = curDim === 'active';
         if (!st.activeDir) st.activeDir = activeActive ? curDir : 'asc';
         var activeDir = activeActive ? curDir : st.activeDir;
-        activePill = pill(activeActive, IND, '✓' + ar(activeDir), "window._fbSortPill('" + key + "','active')",
-            (activeDir === 'desc' ? 'Inativos primeiro' : 'Ativos primeiro') + ' — clique p/ inverter', 'min-width:auto;');
+        var _ball = (activeDir === 'desc') ? '🔴' : '🟢';
+        activePill = pill(activeActive, IND, _ball, "window._fbSortPill('" + key + "','active')",
+            'Ordenar por atividade — ' + (activeDir === 'desc' ? 'inativos em cima' : 'ativos em cima') + ' (clique p/ inverter)', 'font-size:0.9rem;min-width:34px;');
     }
     // GÊNERO cíclico: ⚥ ambos(verde) → ♂ masc(azul) → ♀ fem(rosa) → 🚫 sem gênero(vermelho)
     var gOrder = ['all', 'Masc', 'Fem', 'none'];
