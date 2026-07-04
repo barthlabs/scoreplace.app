@@ -89,14 +89,19 @@
       '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span></label>';
   }
   // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
+  // v4.4.62: CONSIDERA O HORÁRIO de cada campo (não meia-noite). 1º sorteio = data+hora do
+  // agendamento (sem data, cai no início da fase); fim = data+hora de término da fase.
   function _windowDays() {
     if (!S) return null;
-    var first = (S.cfg.rodadas.drawFirstDate) || ((document.getElementById('tourn-start-date') || {}).value) || '';
-    var end = ((document.getElementById('tourn-end-date') || {}).value) || '';
-    if (!first || !end) return null;
-    var d1 = new Date(first + 'T00:00:00'), d2 = new Date(end + 'T00:00:00');
+    var _v = function (id) { var el = document.getElementById(id); return el ? (el.value || '') : ''; };
+    var firstDate = S.cfg.rodadas.drawFirstDate || _v('tourn-start-date') || '';
+    var firstTime = (S.cfg.rodadas.drawFirstDate ? (S.cfg.rodadas.drawFirstTime || '') : _v('tourn-start-time')) || '19:00';
+    var endDate = _v('tourn-end-date');
+    var endTime = _v('tourn-end-time') || '23:59';
+    if (!firstDate || !endDate) return null;
+    var d1 = new Date(firstDate + 'T' + firstTime), d2 = new Date(endDate + 'T' + endTime);
     if (isNaN(d1.getTime()) || isNaN(d2.getTime()) || d2 <= d1) return null;
-    return Math.round((d2 - d1) / 86400000);
+    return (d2 - d1) / 86400000; // dias FRACIONÁRIOS — o horário conta na janela
   }
   // Bloco de agendamento dos sorteios (modo "nº de rodadas"). Layout pedido pelo dono:
   //   Data do 1º sorteio | Hora
@@ -108,7 +113,10 @@
     var canAuto = !!r.drawFirstDate;
     var manual = !!r.drawManual || !canAuto;
     var ivVal = (parseInt(r.drawIntervalDays, 10) >= 1) ? parseInt(r.drawIntervalDays, 10) : '';
-    var fld = function (lbl, html) { return '<label style="display:flex;flex-direction:column;gap:5px;"><span style="font-size:0.72rem;color:var(--text-muted);">' + lbl + '</span>' + html + '</label>'; };
+    // v4.4.62: título com white-space:nowrap — evita que "Repetir a cada (dias)" quebre em 2
+    // linhas em telas estreitas (o que, com align-items:flex-end, empurrava o "Nº de rodadas"
+    // pra baixo). Se não couber lado a lado, a coluna inteira quebra pra linha de baixo (limpo).
+    var fld = function (lbl, html) { return '<label style="display:flex;flex-direction:column;gap:5px;"><span style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;">' + lbl + '</span>' + html + '</label>'; };
     // v4.4.27: mesma apresentação dos campos de Início/Término da fase — usam class="form-control".
     var row1 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:12px;">' +
       fld('Data do 1º sorteio', '<input type="date" class="form-control" value="' + _safe(r.drawFirstDate || '') + '" onchange="window._f2SchedDate(this.value)" style="flex:1 1 0;min-width:0;">') +
@@ -528,8 +536,19 @@
     var st = document.getElementById('tourn-start-time'); if (st && S.cfg.rodadas.drawFirstTime) st.value = S.cfg.rodadas.drawFirstTime;
     ['_recalcDuration', '_checkWeather', '_updateLigaRoundsTag'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
   }
-  window._f2SchedDate = function (v) { if (!S) return; S.cfg.rodadas.drawFirstDate = v || ''; _mirrorPhaseStart(); _norm(); _rerender(); };
-  window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); };
+  // v4.4.62: recalcula o Nº de RODADAS pela janela (fim − 1º sorteio, COM horário) mantendo o
+  // intervalo. Chamado ao mudar data/hora do 1º sorteio, do início ou do fim da fase.
+  function _recalcN() {
+    if (!S || !S.cfg || !S.cfg.rodadas) return;
+    var iv = parseInt(S.cfg.rodadas.drawIntervalDays, 10);
+    if (!(iv >= 1)) return; // sem repetição → nº de rodadas não deriva da janela
+    var d = _windowDays();
+    if (d) S.cfg.rodadas.n = Math.max(1, Math.round(d / iv));
+  }
+  // Exposto pros campos legados de Início/Término da fase (#tourn-start/end-date/time).
+  window._f2RecalcRoundsFromWindow = function () { if (!S || !S.cfg || S.cfg.rodadas.modo !== 'fixo') return; _recalcN(); _norm(); _rerender(); };
+  window._f2SchedDate = function (v) { if (!S) return; S.cfg.rodadas.drawFirstDate = v || ''; _mirrorPhaseStart(); _recalcN(); _norm(); _rerender(); };
+  window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); _recalcN(); _norm(); _rerender(); };
   // VIA DE MÃO DUPLA (v4.4.29): editar REPETIR recalcula as RODADAS pela janela; apagar o repetir
   // o deixa VAZIO (sem repetição) e NÃO mexe nas rodadas — nunca volta sozinho.
   window._f2SchedInterval = function (v) {
