@@ -585,8 +585,16 @@
     if (!S) return;
     var was = !!S.cfg.rodadas.drawFirstDate;
     S.cfg.rodadas.drawFirstDate = v || '';
+    var nowSet = !!S.cfg.rodadas.drawFirstDate;
+    // v4.4.76: preencher a data (vazia→setada) LIGA o modo automático sozinho — a
+    // presença de uma data futura já sinaliza intenção de sortear automaticamente.
+    // O usuário pode voltar pra manual no toggle em seguida. Mata a pegadinha
+    // "data setada + Sortear manualmente ligado = sorteio que nunca acontece"
+    // (nextDrawAt nem era computado). Só na transição vazia→setada (não briga com
+    // edições de data já preenchida nem com o manual reativado depois).
+    if (nowSet && !was) S.cfg.rodadas.drawManual = false;
     _mirrorPhaseStart(); _recalcN(); _norm();
-    if (was !== !!S.cfg.rodadas.drawFirstDate) _rerender(); else _f2SchedRefresh();
+    if (was !== nowSet) _rerender(); else _f2SchedRefresh();
   };
   window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); _recalcN(); _norm(); _f2SchedRefresh(); };
   // VIA DE MÃO DUPLA (v4.4.29): editar REPETIR recalcula as RODADAS pela janela; apagar o repetir
