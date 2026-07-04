@@ -47,6 +47,7 @@
       classifScope: 'per_group', // 'per_group' (melhores de cada grupo) | 'overall' (tabela geral)
       eliminatoria: {
         ativa: true,          // ativo por padrão (dono)
+        dupla: false,         // v4.4.58: false = eliminatória simples; true = Dupla Eliminatória (repescagem)
         linhas: 1,
         nomes: [''],
         origem: 'ja_formadas',
@@ -115,6 +116,10 @@
 
     var e = out.eliminatoria || {};
     e.ativa = !!e.ativa; // v4.4.32: pode desligar SEMPRE (grupos ou pontos corridos); default = defaultConfig
+    // v4.4.58: Dupla Eliminatória (repescagem). É UMA chave só — força 1 linha (chaves
+    // paralelas de dupla-elim fogem do escopo). Simples pode ter 1/2/4 linhas.
+    e.dupla = e.dupla === true;
+    if (e.dupla) e.linhas = 1;
     if ([1, 2, 4].indexOf(e.linhas) === -1) e.linhas = 1;
     if (!Array.isArray(e.nomes)) e.nomes = [];
     while (e.nomes.length < e.linhas) e.nomes.push('');
@@ -196,18 +201,21 @@
     if (!cfg.classifAtiva) {
       var e0 = cfg.eliminatoria;
       var formadas0 = isDupla && cfg.formacaoDupla === 'manual';
-      top.format = 'Eliminatórias Simples';
+      var elimDupla0 = !!e0.dupla; // v4.4.58: Dupla Eliminatória (repescagem)
+      top.format = elimDupla0 ? 'Dupla Eliminatória' : 'Eliminatórias Simples';
       top.drawMode = 'sorteio';
       top.teamSize = teamSize;
       top.enrollmentMode = formadas0 ? 'teams' : 'individual';
       var d0 = _LINE_DESTS[e0.linhas] || ['main'];
       p0 = Object.assign(_phaseBase(re), {
-        name: 'Eliminatória', formatCode: 'elim_simples', format: 'Eliminatórias Simples',
+        name: 'Eliminatória',
+        formatCode: elimDupla0 ? 'elim_dupla' : 'elim_simples',
+        format: elimDupla0 ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,
         source: { type: 'enrollment' },
         fixedPairs: isDupla, pairingStrategy: 'top',
         mapping: _buildMapping(d0, e0.nomes, Math.max(e0.linhas, 2) * 8, e0.linhas),
-        grandFinal: e0.linhas > 1, thirdPlace: e0.terceiro, drawManual: false
+        grandFinal: elimDupla0 || e0.linhas > 1, thirdPlace: e0.terceiro, drawManual: false
       });
       return { topLevel: top, phases: [p0], cfg: cfg };
     }
@@ -299,8 +307,11 @@
         ? ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e.formacao] || 'top')
         : 'top';
       var qAll = !!e.qualifyAll;
+      var elimDupla = !!e.dupla; // v4.4.58: Dupla Eliminatória (repescagem)
       var p1 = Object.assign(_phaseBase(re), {
-        name: 'Eliminatória', formatCode: 'elim_simples', format: 'Eliminatórias Simples',
+        name: 'Eliminatória',
+        formatCode: elimDupla ? 'elim_dupla' : 'elim_simples',
+        format: elimDupla ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,
         gruposCount: cfg.grupos, gruposClassified: cfg.classificados,
         source: {
@@ -310,7 +321,7 @@
           qualifyQuantity: qAll ? 'all' : 'top', qualifyTopN: topN, mapping: mapping
         },
         fixedPairs: elimFixedPairs, pairingStrategy: elimPairing,
-        mapping: mapping, grandFinal: nLines > 1, thirdPlace: e.terceiro,
+        mapping: mapping, grandFinal: elimDupla || nLines > 1, thirdPlace: e.terceiro,
         lateEnrollment: e.lateEnrollment || 'closed', // inscrições durante a eliminatória
         drawManual: false
       });
