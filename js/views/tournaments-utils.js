@@ -1720,6 +1720,25 @@ window._ligaCurrentRoundStartTs = function (t) {
     return null;
 };
 
+// v4.4.x: FONTE ÚNICA do indicador "Rodada em andamento" (rótulo + ícone + tempo decorrido
+// da RODADA ATUAL). Qualquer box que mostre o decorrido da rodada DEVE usar isto — nunca
+// escrever "Tempo decorrido"/"Rodada em andamento" à mão nem recalcular o início. Assim o
+// texto e a semântica (início da rodada, via _ligaCurrentRoundStartTs) ficam num lugar só.
+// Retorna os 3 <span> internos (ícone + rótulo + valor tickando via data-elapsed-since), ou
+// '' quando não há rodada em andamento. O box (borda/fundo/flex) é do chamador.
+//   color: cor do texto (contraste com a tarja). opts: { iconSize, labelSize, valueSize }.
+window._ligaRoundInProgressRow = function (t, color, opts) {
+    var _since = (typeof window._ligaCurrentRoundStartTs === 'function' && window._ligaCurrentRoundStartTs(t))
+        || (typeof window._ligaElapsedSinceTs === 'function' && window._ligaElapsedSinceTs(t));
+    if (!_since || _since > Date.now()) return '';
+    opts = opts || {};
+    var _icon = opts.iconSize || '1.3rem', _lbl = opts.labelSize || '0.85rem', _val = opts.valueSize || '1.15rem';
+    var _txt = window._formatCountdown ? window._formatCountdown(Date.now() - _since) : '';
+    return '<span style="font-size:' + _icon + ';">▶️</span>' +
+        '<span style="font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;">Rodada em andamento</span>' +
+        '<span data-elapsed-since="' + _since + '" style="margin-left:auto;font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;line-height:1;">' + _txt + '</span>';
+};
+
 // Navigate to tournament detail and scroll to highlight the enrolled participant
 window._scrollToParticipant = function(tId, participantName) {
     // Guard: participantName pode ser null para inscritos sem nome (phone-only)

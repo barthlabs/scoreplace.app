@@ -832,18 +832,12 @@ function renderDashboard(container) {
                 var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
                 var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
                 // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
-                // (tempo decorrido da RODADA ATUAL, conta pra cima; tick via data-elapsed-since).
-                if (!_ligaEv && sorteioRealizado) {
-                  var _elSinceD = (typeof window._ligaCurrentRoundStartTs === 'function' && window._ligaCurrentRoundStartTs(t))
-                    || (typeof window._ligaElapsedSinceTs === 'function' && window._ligaElapsedSinceTs(t));
-                  if (_elSinceD && _elSinceD <= _now) {
-                    var _elTextD = window._formatCountdown ? window._formatCountdown(_now - _elSinceD) : '';
+                // (fonte única _ligaRoundInProgressRow — decorrido da rodada atual, tick automático).
+                if (!_ligaEv && sorteioRealizado && typeof window._ligaRoundInProgressRow === 'function') {
+                  var _ripStandaloneD = window._ligaRoundInProgressRow(t, _ctColor);
+                  if (_ripStandaloneD) {
                     return _toggleRowDash +
-                      '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' +
-                      '<span style="font-size:1.3rem;">▶️</span>' +
-                      '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">Rodada em andamento</span>' +
-                      '<span data-elapsed-since="' + _elSinceD + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _elTextD + '</span>' +
-                    '</div>';
+                      '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandaloneD + '</div>';
                   }
                 }
                 if (!_ligaEv) return _toggleRowDash; // sem countdown → só o toggle (direita)
@@ -852,15 +846,10 @@ function renderDashboard(container) {
                 // v4.4.x: 2ª linha "Rodada em andamento" (tempo decorrido da rodada) sempre que
                 // o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
                 var _roundLineD = '';
-                if (_ligaEv.label === _t('tourn.nextDraw') && typeof window._ligaCurrentRoundStartTs === 'function') {
-                  var _rStartD = window._ligaCurrentRoundStartTs(t);
-                  if (_rStartD && _rStartD <= _now) {
-                    var _rElTextD = window._formatCountdown ? window._formatCountdown(_now - _rStartD) : '';
-                    _roundLineD = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(' + _rgb + ',0.3);">' +
-                      '<span style="font-size:1.1rem;">▶️</span>' +
-                      '<span style="font-size:0.8rem;font-weight:700;color:' + _ctColor + ' !important;">Rodada em andamento</span>' +
-                      '<span data-elapsed-since="' + _rStartD + '" style="margin-left:auto;font-size:1.05rem;font-weight:800;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _rElTextD + '</span>' +
-                    '</div>';
+                if (_ligaEv.label === _t('tourn.nextDraw') && typeof window._ligaRoundInProgressRow === 'function') {
+                  var _ripRowD = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.1rem', labelSize: '0.8rem', valueSize: '1.05rem' });
+                  if (_ripRowD) {
+                    _roundLineD = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRowD + '</div>';
                   }
                 }
                 return _toggleRowDash +

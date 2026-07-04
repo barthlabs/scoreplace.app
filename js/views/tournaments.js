@@ -2423,18 +2423,12 @@ function renderTournaments(container, tournamentId = null) {
                   _ligaEvent = { ts: _tEndTs, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
                 }
                 // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
-                // (tempo decorrido da RODADA ATUAL, conta pra cima; tick via data-elapsed-since).
-                if (!_ligaEvent && sorteioRealizado) {
-                  var _elSince = (typeof window._ligaCurrentRoundStartTs === 'function' && window._ligaCurrentRoundStartTs(t))
-                    || (typeof window._ligaElapsedSinceTs === 'function' && window._ligaElapsedSinceTs(t));
-                  if (_elSince && _elSince <= _now) {
-                    var _elText = window._formatCountdown ? window._formatCountdown(_now - _elSince) : '';
-                    var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-                    return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' +
-                      '<span style="font-size:1.3rem;">▶️</span>' +
-                      '<span style="font-size:0.85rem;font-weight:700;color:' + _rbEl.fg + ' !important;">Rodada em andamento</span>' +
-                      '<span data-elapsed-since="' + _elSince + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _rbEl.fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _elText + '</span>' +
-                    '</div>';
+                // (fonte única _ligaRoundInProgressRow — decorrido da rodada atual, tick automático).
+                if (!_ligaEvent && sorteioRealizado && typeof window._ligaRoundInProgressRow === 'function') {
+                  var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+                  var _ripStandalone = window._ligaRoundInProgressRow(t, _rbEl.fg);
+                  if (_ripStandalone) {
+                    return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandalone + '</div>';
                   }
                 }
                 if (!_ligaEvent) return '';
@@ -2450,15 +2444,10 @@ function renderTournaments(container, tournamentId = null) {
                 // v4.4.x: 2ª linha "Rodada em andamento" com o tempo DECORRIDO da rodada atual —
                 // sempre que o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
                 var _roundLine = '';
-                if (_ligaEvent.label === _t('tourn.nextDraw') && typeof window._ligaCurrentRoundStartTs === 'function') {
-                  var _rStart = window._ligaCurrentRoundStartTs(t);
-                  if (_rStart && _rStart <= _now) {
-                    var _rElText = window._formatCountdown ? window._formatCountdown(_now - _rStart) : '';
-                    _roundLine = '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(' + _rgb + ',0.3);">' +
-                      '<span style="font-size:1.2rem;">▶️</span>' +
-                      '<span style="font-size:0.9rem;font-weight:700;color:' + _ctColor + ' !important;">Rodada em andamento</span>' +
-                      '<span data-elapsed-since="' + _rStart + '" style="margin-left:auto;font-size:1.25rem;font-weight:800;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;line-height:1;">' + _rElText + '</span>' +
-                    '</div>';
+                if (_ligaEvent.label === _t('tourn.nextDraw') && typeof window._ligaRoundInProgressRow === 'function') {
+                  var _ripRow = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.2rem', labelSize: '0.9rem', valueSize: '1.25rem' });
+                  if (_ripRow) {
+                    _roundLine = '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRow + '</div>';
                   }
                 }
                 // v4.x: MAIS DESTAQUE pro cronômetro do sorteio — box maior, número grande.
