@@ -303,57 +303,76 @@
     classif += _sec('Rodadas', rInner);
 
     var e = cfg.eliminatoria;
-    // Toggle no CABEÇALHO do box (à direita, alinhado ao título). Ativo por padrão. SEMPRE
-    // habilitado — desligar desativa a eliminatória (nada dentro do box vale) e o torneio
-    // TERMINA na classificatória. Vale inclusive em fase de grupos (v4.4.32, pedido do dono).
+    // Toggle da eliminatória (SEMPRE habilitado). Desligar → torneio termina na classificatória.
+    // Sem classificatória, desligar a elim religa a classif (ao menos uma fase ativa).
     var elimToggle = '<span class="toggle-switch">' +
       '<input type="checkbox"' + (e.ativa ? ' checked' : '') + ' onchange="window._f2Elim(this.checked)">' +
       '<span class="toggle-slider"></span></span>';
     var eb = '';
     if (e.ativa) {
-      // v4.4.31: escopo da classificação (só faz sentido com 2+ grupos): POR GRUPOS (melhores
-      // de cada grupo) × GERAL (tabela única unindo os grupos). Com 1 grupo é sempre geral.
-      var perGroupScope = cfg.grupos > 1 && cfg.classifScope !== 'overall';
-      if (cfg.grupos > 1) {
-        eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Classificação dos participantes</div>' +
-          _pill(perGroupScope, 'window._f2ClassScope(\'per_group\')', '🗂️ Por grupos') +
-          _pill(!perGroupScope, 'window._f2ClassScope(\'overall\')', '📊 Geral') +
-          '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;">' + (perGroupScope
-            ? 'Os melhores de CADA grupo avançam para a eliminatória.'
-            : 'Uma classificação GERAL une todos os grupos; os melhores no geral avançam.') + '</div>';
+      if (!cfg.classifAtiva) {
+        // v4.4.33: ELIMINAÇÃO DIRETA (sem classificatória) — todos os inscritos entram no bracket
+        // por sorteio. A disputa e a formação das duplas moram AQUI (o início da eliminatória).
+        eb += '<div style="font-size:0.74rem;color:#fbbf24;background:rgba(251,191,36,0.08);border-radius:8px;padding:8px 10px;margin-bottom:12px;">Sem fase classificatória — todos os inscritos entram direto na eliminatória.</div>';
+        if (allowsS) {
+          eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Disputa</div>' +
+            _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') +
+            _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas') + '<div style="height:12px;"></div>';
+        }
+        if (isDupla) {
+          eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Duplas na eliminatória</div>' +
+            _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
+            _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') + '<div style="height:12px;"></div>';
+        }
+      } else {
+        // COM classificatória: escopo (2+ grupos) + Nº de classificados + resumo.
+        var perGroupScope = cfg.grupos > 1 && cfg.classifScope !== 'overall';
+        if (cfg.grupos > 1) {
+          eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Classificação dos participantes</div>' +
+            _pill(perGroupScope, 'window._f2ClassScope(\'per_group\')', '🗂️ Por grupos') +
+            _pill(!perGroupScope, 'window._f2ClassScope(\'overall\')', '📊 Geral') +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;">' + (perGroupScope
+              ? 'Os melhores de CADA grupo avançam para a eliminatória.'
+              : 'Uma classificação GERAL une todos os grupos; os melhores no geral avançam.') + '</div>';
+        }
+        var classLabel = perGroupScope ? 'Nº de classificados por grupo' : 'Nº de classificados (total) para a eliminatória';
+        var classMax = perGroupScope ? 8 : 32;
+        if (cfg.classificados > classMax) classMax = cfg.classificados; // nunca corta valor salvo
+        eb += '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;">' + classLabel + '</div>' +
+          '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
+          '<input type="range" min="1" max="' + classMax + '" value="' + cfg.classificados + '" oninput="window._f2ClassLive(this.value)" onchange="window._f2Class(this.value)" style="flex:1;accent-color:#fbbf24;">' +
+          '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#fde68a;">' + cfg.classificados + '</span></div>';
+        eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
       }
-      // v4.4.17: "Nº de classificados" ABRE o box da Eliminatória, como slider (igual grupos).
-      var classLabel = perGroupScope ? 'Nº de classificados por grupo' : 'Nº de classificados (total) para a eliminatória';
-      var classMax = perGroupScope ? 8 : 32;
-      if (cfg.classificados > classMax) classMax = cfg.classificados; // nunca corta valor salvo
-      eb += '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;">' + classLabel + '</div>' +
-        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
-        '<input type="range" min="1" max="' + classMax + '" value="' + cfg.classificados + '" oninput="window._f2ClassLive(this.value)" onchange="window._f2Class(this.value)" style="flex:1;accent-color:#fbbf24;">' +
-        '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#fde68a;">' + cfg.classificados + '</span></div>';
-      // Resumo da eliminatória (pessoas/equipes · jogos · tempo) — atualiza ao vivo no slider.
-      eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
+      // Linhas (comum aos dois modos).
       eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Linhas (chaves paralelas — nomes livres)</div>';
       eb += [1, 2, 4].map(function (n) { return _pill(e.linhas === n, 'window._f2Linhas(' + n + ')', String(n)); }).join('');
       for (var i = 0; i < e.linhas; i++) {
         eb += '<div style="margin-top:6px;"><input type="text" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da linha ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="width:100%;max-width:300px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;"></div>';
       }
-      if (scoreInd && isDupla) {
+      // "Formar da classificação" só faz sentido COM classificatória.
+      if (cfg.classifAtiva && scoreInd && isDupla) {
         eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Origem das duplas na eliminatória</div>';
         eb += _pill(e.origem === 'ja_formadas', 'window._f2Origem(\'ja_formadas\')', 'Já formadas') + _pill(e.origem === 'formar', 'window._f2Origem(\'formar\')', 'Formar da classificação');
         if (e.origem === 'formar') {
           eb += '<div style="margin-top:6px;">' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>';
         }
       }
-      // 3º lugar SEMPRE existe (project_third_place_always) — sem toggle.
+      // Sem classificatória, a eliminatória carrega as Datas + Inscrições (slot vai aqui).
+      if (!cfg.classifAtiva) eb += '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
     }
-    // Desativado → sem conteúdo (só o título + toggle no cabeçalho ficam visíveis).
     var elimInner = e.ativa ? eb : '';
 
-    // Slot pras seções do form (Datas da fase + Inscrições durante a fase) relocadas
-    // pra dentro do box da Fase Classificatória.
-    classif += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
+    // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
+    if (cfg.classifAtiva) classif += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
 
-    var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classif) +
+    // Toggle da classificatória (sempre habilitado). Desligar → eliminação direta.
+    var classifToggle = '<span class="toggle-switch">' +
+      '<input type="checkbox"' + (cfg.classifAtiva ? ' checked' : '') + ' onchange="window._f2ClassifAtiva(this.checked)">' +
+      '<span class="toggle-slider"></span></span>';
+    var classifInner = cfg.classifAtiva ? classif : '';
+
+    var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classifInner, classifToggle) +
       _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, elimToggle) +
       '<div style="margin-top:2px;padding:11px 13px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);font-size:0.82rem;color:#a5b4fc;">📋 ' + _safe(window.FORMAT2.summary(cfg)) + '</div>';
     return h;
@@ -453,7 +472,10 @@
   window._f2Class = function (v) { S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
   // v4.4.31: escopo da classificação — por grupos × geral.
   window._f2ClassScope = function (v) { if (!S) return; S.cfg.classifScope = (v === 'overall') ? 'overall' : 'per_group'; _norm(); _rerender(); };
-  window._f2Elim = function (b) { S.cfg.eliminatoria.ativa = !!b; _norm(); _rerender(); };
+  // Ao menos UMA fase ativa (sem travar toggle): desligar a eliminatória religa a classificatória.
+  window._f2Elim = function (b) { if (!S) return; S.cfg.eliminatoria.ativa = !!b; if (!b) S.cfg.classifAtiva = true; _norm(); _rerender(); };
+  // v4.4.33: toggle da fase classificatória. Desligar → eliminação direta (elim obrigatória).
+  window._f2ClassifAtiva = function (checked) { if (!S) return; S.cfg.classifAtiva = !!checked; if (!checked) S.cfg.eliminatoria.ativa = true; _norm(); _rerender(); };
   window._f2Linhas = function (n) { S.cfg.eliminatoria.linhas = n; _norm(); _rerender(); };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
   window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };

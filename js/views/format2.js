@@ -42,6 +42,7 @@
       parceria: 'sorteio_rodada', // Sorteio + "por rodada" ON por padrão (dono)
       formacaoDupla: 'sorteio',
       rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, _intervalAuto: true },
+      classifAtiva: true,        // false = SEM classificatória → eliminação direta do enrollment
       classificados: 2,          // X que classificam (por grupo OU total, conforme classifScope)
       classifScope: 'per_group', // 'per_group' (melhores de cada grupo) | 'overall' (tabela geral)
       eliminatoria: {
@@ -121,6 +122,10 @@
     if (out._scoreBy !== 'individual') e.origem = 'ja_formadas';
     if (['performance', 'equilibrio', 'sorteio'].indexOf(e.formacao) === -1) e.formacao = 'performance';
     e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
+    // v4.4.33: fase classificatória on/off. Ao menos UMA fase ativa: sem classificatória ⇒
+    // eliminatória obrigatória (eliminação direta do enrollment).
+    out.classifAtiva = out.classifAtiva !== false;
+    if (!out.classifAtiva) e.ativa = true;
     out.eliminatoria = e;
 
     return out;
@@ -129,6 +134,12 @@
   function summary(cfg) {
     var parts = [];
     parts.push(cfg.disputa === 'individual' ? 'Individual' : 'Duplas');
+    if (cfg.classifAtiva === false) {
+      parts.push('Eliminação direta');
+      if (cfg.disputa === 'dupla') parts.push(cfg.formacaoDupla === 'manual' ? 'duplas já formadas' : 'duplas sorteadas');
+      parts.push('elim ' + cfg.eliminatoria.linhas + (cfg.eliminatoria.linhas > 1 ? ' linhas' : ' linha'));
+      return parts.join(' · ');
+    }
     parts.push(cfg.grupos === 1 ? 'Pontos Corridos' : (cfg.grupos + ' grupos'));
     if (cfg.disputa === 'dupla') {
       if (cfg.parceria === 'rei_rainha') parts.push('Rei/Rainha');
@@ -174,6 +185,27 @@
     var scoreInd = cfg._scoreBy === 'individual';
     var re = opts.resultEntry || ['organizer'];
     var top = {}, p0;
+
+    // v4.4.33: SEM fase classificatória → ELIMINAÇÃO DIRETA. Todos os inscritos entram no
+    // bracket por sorteio; duplas já formadas (enrollment=teams) ou sorteadas (individual).
+    if (!cfg.classifAtiva) {
+      var e0 = cfg.eliminatoria;
+      var formadas0 = isDupla && cfg.formacaoDupla === 'manual';
+      top.format = 'Eliminatórias Simples';
+      top.drawMode = 'sorteio';
+      top.teamSize = teamSize;
+      top.enrollmentMode = formadas0 ? 'teams' : 'individual';
+      var d0 = _LINE_DESTS[e0.linhas] || ['main'];
+      p0 = Object.assign(_phaseBase(re), {
+        name: 'Eliminatória', formatCode: 'elim_simples', format: 'Eliminatórias Simples',
+        reiRainha: false, drawMode: 'sorteio', rounds: 1,
+        source: { type: 'enrollment' },
+        fixedPairs: isDupla, pairingStrategy: 'top',
+        mapping: _buildMapping(d0, e0.nomes, Math.max(e0.linhas, 2) * 8, e0.linhas),
+        grandFinal: e0.linhas > 1, thirdPlace: e0.terceiro, drawManual: false
+      });
+      return { topLevel: top, phases: [p0], cfg: cfg };
+    }
 
     // Classificatória = Liga (rotativo/nº-de-rodadas) OU Fase de Grupos (todos-contra-todos).
     // "Nº de rodadas" (modo 'fixo') = Liga rodada-a-rodada com agendamento — vale p/ singles E
