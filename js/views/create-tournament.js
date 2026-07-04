@@ -1736,9 +1736,18 @@ function setupCreateTournamentModal() {
     // Esconde os controles de estrutura que o format2 substitui.
     ['formato-buttons', 'formato-desc', 'dupla-elim-row', 'suico-fields', 'liga-fields',
      'liga-draw-schedule', 'suico-draw-schedule-fields', 'elim-settings', 'grupos-fields',
-     'rei-rainha-fields', 'round-robin-fields', 'manual-pairing-container', 'mixed-pairing-container', 'phases-list',
+     'rei-rainha-fields', 'round-robin-fields', 'phases-list',
      'draw-mode-buttons', 'draw-mode-desc'
     ].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    // v4.4.9: os toggles de FORMAÇÃO DE DUPLAS ficam VISÍVEIS (o dono quer os detalhados):
+    // "Times Sorteados Separados dos Montados" (#mixed-pairing-container) vai LOGO ABAIXO
+    // de "Participantes podem formar suas duplas" (#manual-pairing-container). A visibilidade
+    // por disputa (só duplas) é sincronizada pelo format2 (_syncTeamSize).
+    var _mpc = document.getElementById('manual-pairing-container');
+    var _mixc = document.getElementById('mixed-pairing-container');
+    if (_mpc && _mixc && _mpc.parentElement) {
+      try { _mpc.parentElement.insertBefore(_mixc, _mpc.nextSibling); } catch (e) {}
+    }
     // Esconde os labels órfãos "Formato" e "Modo de Sorteio".
     var fb = document.getElementById('formato-buttons');
     if (fb) { var fg = fb.closest ? fb.closest('.form-group') : null; if (fg) { var l1 = fg.querySelector('label.form-label'); if (l1) l1.style.display = 'none'; } }

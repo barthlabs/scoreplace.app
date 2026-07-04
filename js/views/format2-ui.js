@@ -19,8 +19,16 @@
   function _norm() { if (S) S.cfg = window.FORMAT2.normalize(S.cfg, S.sport); }
   function _syncTeamSize() {
     if (!S) return;
+    var cfg = S.cfg;
     var ts = document.getElementById('tourn-team-size');
-    if (ts) ts.value = window.FORMAT2.teamSizeFor(S.cfg.disputa); // mantém o form (estimativa/categorias) coerente
+    if (ts) ts.value = window.FORMAT2.teamSizeFor(cfg.disputa); // mantém o form (estimativa/categorias) coerente
+    // Toggles de FORMAÇÃO DE DUPLAS (participantes montam · times sorteados vs montados) só
+    // fazem sentido com DUPLAS FIXAS — não em singles nem em parceria rotativa (Rei/Rainha /
+    // sorteio-a-cada-rodada). Sincroniza a visibilidade conforme a config.
+    var fixedDupla = cfg.disputa === 'dupla' && (cfg.grupos > 1 || cfg.parceria === 'fixa');
+    ['manual-pairing-container', 'mixed-pairing-container'].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.style.display = fixedDupla ? '' : 'none';
+    });
   }
   function _rerender() {
     if (!S) return;
@@ -129,19 +137,16 @@
       '<span style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#c7d2fe;">' + cfg.grupos + '</span></div>' +
       _estruturaBlock(cfg));
 
-    // Formação das duplas fixas: Sorteio × Manual (participantes/organizador montam).
-    var _formacao = '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Como as duplas são formadas</div>' +
-      _pill(cfg.formacaoDupla === 'sorteio', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') +
-      _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '✍️ Montadas (participantes/organizador)');
+    // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
+    //  montados — fica nos toggles detalhados da seção "Formação de Duplas" abaixo do form.)
     if (isDupla && um) {
       var pr = cfg.parceria;
       var prBtns = _pill(pr === 'fixa', 'window._f2Parceria(\'fixa\')', '🔒 Dupla fixa') +
         _pill(pr === 'rei_rainha', 'window._f2Parceria(\'rei_rainha\')', '👑 Rei/Rainha') +
         _pill(pr === 'sorteio_rodada', 'window._f2Parceria(\'sorteio_rodada\')', '🎲 Sorteio a cada rodada');
-      h += _sec('Parceria', prBtns + (pr === 'fixa' ? _formacao : ''));
+      h += _sec('Parceria', prBtns);
     } else if (isDupla && !um) {
-      // Fase de grupos: sempre duplas fixas — mas o organizador escolhe como formá-las.
-      h += _sec('Parceria', '<div style="font-size:0.82rem;color:#34d399;margin-bottom:2px;">🔒 Duplas fixas <span style="color:var(--text-muted);">(formadas uma vez e fixas nos grupos)</span></div>' + _formacao);
+      h += _sec('Parceria', '<div style="font-size:0.82rem;color:#34d399;">🔒 Duplas fixas <span style="color:var(--text-muted);">(formadas uma vez e fixas nos grupos)</span></div>');
     }
 
     if (um && !rotativo) {
