@@ -364,17 +364,18 @@
         }
         // v4.4.41: resumo LOGO ABAIXO do slider (pedido do dono).
         eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
-        // "Confrontos na chave" (estratégia) — depois do resumo. SEM toggle de origem (determinada:
-        // individual → forma duplas; dupla fixa → arranja a chave). Sempre visível quando há duplas.
+        // v4.4.43: estratégia = COMO FORMAR AS DUPLAS (nunca confronto direto). As cabeças de
+        // chave são SEMPRE semeadas (melhores afastados, jogos mais fortes ficam pro fim).
         if (isDupla) {
-          var _formaNow = scoreInd;
-          var _stratLbl = _formaNow ? 'Como formar as duplas na eliminatória' : 'Confrontos na chave';
-          var _hints = _formaNow
-            ? { performance: 'Os melhores juntos: 1º+2º, 3º+4º…', equilibrio: 'Forte com fraco: 1º+4º, 2º+3º…', sorteio: 'Parceiros sorteados ao acaso.' }
-            : { performance: 'Os melhores se enfrentam cedo: 1º vs 2º, 3º vs 4º…', equilibrio: 'Melhor contra pior: 1º vs último, 2º vs penúltimo…', sorteio: 'Confrontos sorteados ao acaso.' };
-          eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">' + _stratLbl + '</div>' +
+          var _hints = {
+            performance: 'O 1º forma dupla COM o 2º, o 3º com o 4º… — duplas mais fortes.',
+            equilibrio: 'O 1º forma dupla com o 4º, o 2º com o 3º… — duplas equilibradas.',
+            sorteio: 'Duplas formadas por sorteio — os melhores entram como cabeças de chave.'
+          };
+          eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Como formar as duplas na eliminatória</div>' +
             '<div>' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>' +
-            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (_hints[e.formacao] || '') + ' (as cabeças de chave são sempre semeadas na chave.)</div>';
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (_hints[e.formacao] || '') + '</div>' +
+            '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;opacity:0.85;">As cabeças de chave são sempre semeadas — os melhores só se enfrentam no fim.</div>';
         }
       }
       // Linhas (comum aos dois modos).
