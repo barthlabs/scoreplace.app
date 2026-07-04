@@ -88,16 +88,15 @@
       '<span>' + label + '</span>' +
       '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span></label>';
   }
-  // Intervalo sugerido: (data final do torneio − 1º sorteio) ÷ nº de rodadas.
-  function _autoInterval(r) {
-    var first = r.drawFirstDate || ((document.getElementById('tourn-start-date') || {}).value) || '';
+  // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
+  function _windowDays() {
+    if (!S) return null;
+    var first = (S.cfg.rodadas.drawFirstDate) || ((document.getElementById('tourn-start-date') || {}).value) || '';
     var end = ((document.getElementById('tourn-end-date') || {}).value) || '';
-    var n = Math.max(1, parseInt(r.n, 10) || 1);
-    if (n <= 1 || !first || !end) return null; // 1 rodada não repete
+    if (!first || !end) return null;
     var d1 = new Date(first + 'T00:00:00'), d2 = new Date(end + 'T00:00:00');
     if (isNaN(d1.getTime()) || isNaN(d2.getTime()) || d2 <= d1) return null;
-    var days = Math.round((d2 - d1) / 86400000);
-    return Math.max(1, Math.floor(days / n));
+    return Math.round((d2 - d1) / 86400000);
   }
   // Bloco de agendamento dos sorteios (modo "nº de rodadas"). Layout pedido pelo dono:
   //   Data do 1º sorteio | Hora
@@ -106,37 +105,31 @@
   // Manual é o efetivo quando não há data do 1º sorteio (auto precisa dela).
   function _schedBlock(r) {
     var inp = 'padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;font-size:0.85rem;';
-    var nR = Math.max(1, parseInt(r.n, 10) || 1);
-    var singleDraw = nR <= 1; // 1 rodada = sorteio único, sem repetição
-    var autoIv = _autoInterval(r);
-    if (singleDraw) r.drawIntervalDays = null;                                  // 1 rodada nunca repete
-    else if (r._intervalAuto !== false && autoIv) r.drawIntervalDays = autoIv;  // sugere só até o user editar
     var canAuto = !!r.drawFirstDate;
     var manual = !!r.drawManual || !canAuto;
+    var ivVal = (parseInt(r.drawIntervalDays, 10) >= 1) ? parseInt(r.drawIntervalDays, 10) : '';
     var fld = function (lbl, html) { return '<label style="display:flex;flex-direction:column;gap:5px;"><span style="font-size:0.72rem;color:var(--text-muted);">' + lbl + '</span>' + html + '</label>'; };
     // v4.4.27: mesma apresentação dos campos de Início/Término da fase — usam class="form-control".
     var row1 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:12px;">' +
       fld('Data do 1º sorteio', '<input type="date" class="form-control" value="' + _safe(r.drawFirstDate || '') + '" onchange="window._f2SchedDate(this.value)" style="flex:1 1 0;min-width:0;">') +
       fld('Hora', '<input type="time" class="form-control" value="' + _safe(r.drawFirstTime || '19:00') + '" onchange="window._f2SchedTime(this.value)" style="flex:0 0 auto;">') +
     '</div>';
-    // v4.4.28: "Repetir a cada" vem ANTES de "Nº de rodadas". Repetição pode ficar VAZIA
-    // (sorteia só o 1º; libera as próximas manualmente) — botão ✕ zera. 1 rodada → desabilitada.
-    var ivInput = singleDraw
-      ? '<input type="number" value="" disabled placeholder="—" title="1 rodada não repete" style="' + inp + 'width:110px;text-align:center;opacity:0.45;">'
-      : '<span style="display:inline-flex;align-items:center;gap:6px;">' +
-          '<input type="number" min="1" max="60" value="' + (r.drawIntervalDays || '') + '" placeholder="—" onchange="window._f2SchedInterval(this.value)" style="' + inp + 'width:90px;text-align:center;">' +
-          (r.drawIntervalDays ? '<button type="button" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="background:none;border:none;color:#f87171;font-size:1.05rem;cursor:pointer;line-height:1;padding:2px 5px;">✕</button>' : '') +
-        '</span>';
+    // v4.4.29: VIA DE MÃO DUPLA — "Repetir a cada" e "Nº de rodadas" se ajustam mutuamente pela
+    // janela da fase (editar um recalcula o outro). Nenhum trava o outro. Apagar o repetir o deixa
+    // VAZIO (sem repetição) e NÃO volta sozinho nem mexe nas rodadas; ✕ zera. Ambos editáveis.
+    var ivInput = '<span style="display:inline-flex;align-items:center;gap:6px;">' +
+      '<input type="number" min="1" max="60" value="' + ivVal + '" placeholder="—" onchange="window._f2SchedInterval(this.value)" style="' + inp + 'width:90px;text-align:center;">' +
+      (ivVal ? '<button type="button" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="background:none;border:none;color:#f87171;font-size:1.05rem;cursor:pointer;line-height:1;padding:2px 5px;">✕</button>' : '') +
+    '</span>';
     var row2 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">' +
       fld('Repetir a cada (dias)', ivInput) +
-      fld('Nº de rodadas', '<input type="number" min="1" max="30" value="' + r.n + '" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
+      fld('Nº de rodadas', '<input type="number" min="1" max="30" value="' + (r.n || '') + '" placeholder="—" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
     '</div>';
     var tgl = '<div style="margin-top:14px;">' + _toggleRight('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)') + '</div>';
     var noteTxt;
     if (manual) noteTxt = canAuto ? 'Você sorteia cada rodada manualmente, quando quiser.' : 'Informe a data do 1º sorteio para poder sortear automaticamente.';
-    else if (singleDraw) noteTxt = 'Sorteio único (1 rodada) — sem repetição.';
-    else if (r.drawIntervalDays) noteTxt = 'As rodadas são sorteadas automaticamente a cada ' + r.drawIntervalDays + ' dia(s), a partir do 1º sorteio, dentro das datas da fase.' + (autoIv ? ' Intervalo sugerido: data final ÷ nº de rodadas.' : '');
-    else noteTxt = 'Repetição vazia: sorteia só o 1º; você libera as próximas rodadas manualmente.';
+    else if (ivVal) noteTxt = 'Sorteia a cada ' + ivVal + ' dia(s) a partir do 1º sorteio, dentro das datas da fase. Editar rodadas ou repetição ajusta o outro pela janela.';
+    else noteTxt = 'Sem repetição: sorteia só o 1º; você libera as próximas rodadas manualmente.';
     var note = '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + noteTxt + '</div>';
     return '<div style="margin-top:14px;padding:12px 13px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);">' +
       '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;">Agendamento dos sorteios</div>' +
@@ -381,7 +374,17 @@
   };
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
   window._f2Turnos = function (v) { S.cfg.rodadas.turnos = v; _norm(); _rerender(); };
-  window._f2Rn = function (v) { S.cfg.rodadas.n = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
+  // VIA DE MÃO DUPLA (v4.4.29): editar RODADAS recalcula o REPETIR pela janela da fase; apagar
+  // rodadas NÃO mexe no repetir (e mantém o campo vazio até o user digitar).
+  window._f2Rn = function (v) {
+    if (!S) return;
+    var n = parseInt(v, 10);
+    if (!(n >= 1)) { return; } // vazio → mantém tudo (repetir intacto), sem re-render
+    S.cfg.rodadas.n = n;
+    if (n <= 1) S.cfg.rodadas.drawIntervalDays = null;             // 1 rodada não repete
+    else { var d = _windowDays(); if (d) S.cfg.rodadas.drawIntervalDays = Math.max(1, Math.round(d / n)); }
+    _norm(); _rerender();
+  };
   // Agendamento dos sorteios (modo "nº de rodadas"). Toggle "Sortear manualmente" (checked =
   // manual). A data re-renderiza (recalcula o intervalo sugerido e o default manual/auto). Hora
   // e intervalo NÃO re-renderizam (preserva foco); editar o intervalo desliga o auto-sugerido.
@@ -395,9 +398,16 @@
   }
   window._f2SchedDate = function (v) { if (!S) return; S.cfg.rodadas.drawFirstDate = v || ''; _mirrorPhaseStart(); _norm(); _rerender(); };
   window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); };
-  // Intervalo pode ficar VAZIO (sem repetição) — vazio/inválido vira null, NUNCA volta pro 7.
-  // v4.4.28: marca _intervalAuto=false (para de auto-sugerir) e re-renderiza (mostra/esconde ✕ + nota).
-  window._f2SchedInterval = function (v) { if (!S) return; var iv = parseInt(v, 10); S.cfg.rodadas.drawIntervalDays = (iv >= 1) ? iv : null; S.cfg.rodadas._intervalAuto = false; _rerender(); };
+  // VIA DE MÃO DUPLA (v4.4.29): editar REPETIR recalcula as RODADAS pela janela; apagar o repetir
+  // o deixa VAZIO (sem repetição) e NÃO mexe nas rodadas — nunca volta sozinho.
+  window._f2SchedInterval = function (v) {
+    if (!S) return;
+    var iv = parseInt(v, 10);
+    if (!(iv >= 1)) { S.cfg.rodadas.drawIntervalDays = null; _norm(); _rerender(); return; } // vazio → mantém rodadas
+    S.cfg.rodadas.drawIntervalDays = iv;
+    var d = _windowDays(); if (d) S.cfg.rodadas.n = Math.max(1, Math.round(d / iv)); // recalcula rodadas
+    _norm(); _rerender();
+  };
   // Slider de classificados: número + resumo da eliminatória ao vivo no arraste; re-render ao soltar.
   window._f2ClassLive = function (v) {
     if (!S) return;
