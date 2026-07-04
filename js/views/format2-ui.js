@@ -62,23 +62,44 @@
       '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span>' +
       '<span>' + label + '</span></label>';
   }
-  // Bloco de agendamento dos sorteios (modo "nº de rodadas"): 1º sorteio + intervalo.
+  // Intervalo sugerido: (data final do torneio − 1º sorteio) ÷ nº de rodadas.
+  function _autoInterval(r) {
+    var first = r.drawFirstDate || ((document.getElementById('tourn-start-date') || {}).value) || '';
+    var end = ((document.getElementById('tourn-end-date') || {}).value) || '';
+    var n = Math.max(1, parseInt(r.n, 10) || 1);
+    if (!first || !end) return null;
+    var d1 = new Date(first + 'T00:00:00'), d2 = new Date(end + 'T00:00:00');
+    if (isNaN(d1.getTime()) || isNaN(d2.getTime()) || d2 <= d1) return null;
+    var days = Math.round((d2 - d1) / 86400000);
+    return Math.max(1, Math.floor(days / n));
+  }
+  // Bloco de agendamento dos sorteios (modo "nº de rodadas"). Layout pedido pelo dono:
+  //   Data do 1º sorteio | Hora
+  //   Nº de rodadas | Repetir a cada (dias)
+  //   [toggle] Sortear manualmente  (embaixo)
+  // Manual é o efetivo quando não há data do 1º sorteio (auto precisa dela).
   function _schedBlock(r) {
     var inp = 'padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;font-size:0.85rem;';
-    var head = '<div style="margin-top:14px;padding:12px 13px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);">' +
-      '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Agendamento dos sorteios</div>' +
-      '<div style="margin-bottom:11px;">' + _toggle('Sortear automaticamente', !r.drawManual, 'window._f2SchedAuto(this.checked)') + '</div>';
-    if (r.drawManual) {
-      return head + '<div style="font-size:0.76rem;color:var(--text-muted);">Você sorteia cada rodada manualmente, quando quiser.</div></div>';
-    }
-    return head +
-      '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">' +
-        '<label style="display:flex;flex-direction:column;gap:5px;"><span style="font-size:0.72rem;color:var(--text-muted);">Data do 1º sorteio</span><input type="date" value="' + _safe(r.drawFirstDate || '') + '" onchange="window._f2SchedDate(this.value)" style="' + inp + '"></label>' +
-        '<label style="display:flex;flex-direction:column;gap:5px;"><span style="font-size:0.72rem;color:var(--text-muted);">Hora</span><input type="time" value="' + _safe(r.drawFirstTime || '19:00') + '" onchange="window._f2SchedTime(this.value)" style="' + inp + '"></label>' +
-        '<label style="display:flex;flex-direction:column;gap:5px;"><span style="font-size:0.72rem;color:var(--text-muted);">Repetir a cada (dias)</span><input type="number" min="1" max="60" value="' + (r.drawIntervalDays || 7) + '" onchange="window._f2SchedInterval(this.value)" style="' + inp + 'width:90px;"></label>' +
-      '</div>' +
-      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:9px;">As rodadas são sorteadas automaticamente nesse intervalo, dentro das datas de início/fim da fase (seção Datas).</div>' +
+    var autoIv = _autoInterval(r);
+    if (r._intervalAuto !== false && autoIv) r.drawIntervalDays = autoIv; // preenche o sugerido
+    var canAuto = !!r.drawFirstDate;
+    var manual = !!r.drawManual || !canAuto;
+    var fld = function (lbl, html) { return '<label style="display:flex;flex-direction:column;gap:5px;"><span style="font-size:0.72rem;color:var(--text-muted);">' + lbl + '</span>' + html + '</label>'; };
+    var row1 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:12px;">' +
+      fld('Data do 1º sorteio', '<input type="date" value="' + _safe(r.drawFirstDate || '') + '" onchange="window._f2SchedDate(this.value)" style="' + inp + '">') +
+      fld('Hora', '<input type="time" value="' + _safe(r.drawFirstTime || '19:00') + '" onchange="window._f2SchedTime(this.value)" style="' + inp + '">') +
     '</div>';
+    var row2 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">' +
+      fld('Nº de rodadas', '<input type="number" min="1" max="30" value="' + r.n + '" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
+      fld('Repetir a cada (dias)', '<input type="number" min="1" max="60" value="' + (r.drawIntervalDays || 7) + '" onchange="window._f2SchedInterval(this.value)" style="' + inp + 'width:110px;text-align:center;">') +
+    '</div>';
+    var tgl = '<div style="margin-top:14px;">' + _toggle('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)') + '</div>';
+    var note = manual
+      ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + (canAuto ? 'Você sorteia cada rodada manualmente, quando quiser.' : 'Informe a data do 1º sorteio para poder sortear automaticamente.') + '</div>'
+      : '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">As rodadas são sorteadas automaticamente a cada ' + (r.drawIntervalDays || 7) + ' dia(s), a partir do 1º sorteio, dentro das datas da fase.' + (autoIv ? ' Intervalo sugerido pela data final ÷ nº de rodadas.' : '') + '</div>';
+    return '<div style="margin-top:14px;padding:12px 13px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);">' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;">Agendamento dos sorteios</div>' +
+      row1 + row2 + tgl + note + '</div>';
   }
 
   // Conta PESSOAS inscritas (dupla-entry = 2; senão 1). project_count_people_not_entries.
@@ -197,7 +218,7 @@
           inner += '<div style="margin-top:12px;">' + _toggle('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') + '</div>' +
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Cada ' + (isDupla ? 'dupla' : 'jogador') + ' enfrenta todos os outros' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta (mando invertido)' : '') + '.</div>';
         } else {
-          inner += '<div style="margin-top:12px;display:flex;align-items:center;gap:8px;font-size:0.85rem;">Nº de rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div>';
+          // "Nº de rodadas" agora fica dentro do bloco de agendamento, ao lado de "Repetir a cada".
           inner += _schedBlock(cfg.rodadas);
         }
       } else {
@@ -287,12 +308,13 @@
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
   window._f2Turnos = function (v) { S.cfg.rodadas.turnos = v; _norm(); _rerender(); };
   window._f2Rn = function (v) { S.cfg.rodadas.n = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
-  // Agendamento dos sorteios (modo "nº de rodadas"). O toggle re-renderiza (mostra/esconde
-  // os campos); os inputs de data/hora/intervalo NÃO re-renderizam (preserva foco).
-  window._f2SchedAuto = function (checked) { if (!S) return; S.cfg.rodadas.drawManual = !checked; _norm(); _rerender(); };
-  window._f2SchedDate = function (v) { if (S) S.cfg.rodadas.drawFirstDate = v || ''; };
+  // Agendamento dos sorteios (modo "nº de rodadas"). Toggle "Sortear manualmente" (checked =
+  // manual). A data re-renderiza (recalcula o intervalo sugerido e o default manual/auto). Hora
+  // e intervalo NÃO re-renderizam (preserva foco); editar o intervalo desliga o auto-sugerido.
+  window._f2SchedManual = function (checked) { if (!S) return; S.cfg.rodadas.drawManual = !!checked; _norm(); _rerender(); };
+  window._f2SchedDate = function (v) { if (!S) return; S.cfg.rodadas.drawFirstDate = v || ''; _norm(); _rerender(); };
   window._f2SchedTime = function (v) { if (S) S.cfg.rodadas.drawFirstTime = v || '19:00'; };
-  window._f2SchedInterval = function (v) { if (S) S.cfg.rodadas.drawIntervalDays = Math.max(1, parseInt(v, 10) || 7); };
+  window._f2SchedInterval = function (v) { if (!S) return; S.cfg.rodadas.drawIntervalDays = Math.max(1, parseInt(v, 10) || 7); S.cfg.rodadas._intervalAuto = false; };
   // Slider de classificados: número ao vivo no arraste; re-render ao soltar (igual grupos).
   window._f2ClassLive = function (v) {
     if (!S) return;

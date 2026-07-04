@@ -41,7 +41,7 @@
       grupos: 1,
       parceria: 'fixa',
       formacaoDupla: 'sorteio',
-      rodadas: { modo: 'todos', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false },
+      rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, _intervalAuto: true },
       classificados: 2,          // X que classificam (por grupo se N grupos; total se 1 grupo)
       eliminatoria: {
         ativa: false,
@@ -102,6 +102,7 @@
     var _di = parseInt(out.rodadas.drawIntervalDays, 10);
     out.rodadas.drawIntervalDays = (_di >= 1) ? _di : 7;
     out.rodadas.drawManual = !!out.rodadas.drawManual;
+    out.rodadas._intervalAuto = (out.rodadas._intervalAuto !== false); // sugere intervalo até o user editar
 
     out.classificados = Math.max(1, parseInt(out.classificados, 10) || 2);
 
@@ -190,10 +191,12 @@
       top.gruposCount = 1;
       top.gruposClassified = cfg.classificados;
       if (!isRR && !ligaFixedPairs) { top.equilibrado = true; top.clusterSize = 8; top.balanceBy = 'individual'; }
-      // Agendamento dos sorteios (data 1º sorteio, intervalo em dias, manual on/off).
-      top.drawManual = !!cfg.rodadas.drawManual;
-      if (!cfg.rodadas.drawManual) {
-        top.drawFirstDate = cfg.rodadas.drawFirstDate || '';
+      // Agendamento dos sorteios. Manual é o modo EFETIVO quando o org marcou manual OU
+      // quando não dá pra automatizar (sem data do 1º sorteio). Auto só quando há data.
+      var _schedManual = !!cfg.rodadas.drawManual || !cfg.rodadas.drawFirstDate;
+      top.drawManual = _schedManual;
+      if (!_schedManual) {
+        top.drawFirstDate = cfg.rodadas.drawFirstDate;
         top.drawFirstTime = cfg.rodadas.drawFirstTime || '19:00';
         top.drawIntervalDays = cfg.rodadas.drawIntervalDays || 7;
       }
@@ -205,10 +208,10 @@
         source: { type: 'enrollment' },
         fixedPairs: ligaFixedPairs, gruposCount: 1, gruposClassified: cfg.classificados,
         pairingStrategy: 'top', grandFinal: true, lateEnrollment: 'expand',
-        drawManual: !!cfg.rodadas.drawManual,
-        drawFirstDate: cfg.rodadas.drawManual ? '' : (cfg.rodadas.drawFirstDate || ''),
-        drawFirstTime: cfg.rodadas.drawManual ? '' : (cfg.rodadas.drawFirstTime || '19:00'),
-        drawIntervalDays: cfg.rodadas.drawManual ? null : (cfg.rodadas.drawIntervalDays || 7)
+        drawManual: _schedManual,
+        drawFirstDate: _schedManual ? '' : cfg.rodadas.drawFirstDate,
+        drawFirstTime: _schedManual ? '' : (cfg.rodadas.drawFirstTime || '19:00'),
+        drawIntervalDays: _schedManual ? null : (cfg.rodadas.drawIntervalDays || 7)
       });
     } else {
       top.format = 'Fase de Grupos';
