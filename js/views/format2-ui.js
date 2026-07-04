@@ -351,13 +351,23 @@
               ? 'Os melhores de CADA grupo avançam para a eliminatória.'
               : 'Uma classificação GERAL une todos os grupos; os melhores no geral avançam.') + '</div>';
         }
-        var classLabel = perGroupScope ? 'Nº de classificados por grupo' : 'Nº de classificados (total) para a eliminatória';
-        var classMax = perGroupScope ? 8 : 32;
-        if (cfg.classificados > classMax) classMax = cfg.classificados; // nunca corta valor salvo
-        eb += '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;">' + classLabel + '</div>' +
-          '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
-          '<input type="range" min="1" max="' + classMax + '" value="' + cfg.classificados + '" oninput="window._f2ClassLive(this.value)" onchange="window._f2Class(this.value)" style="flex:1;accent-color:#fbbf24;">' +
-          '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#fde68a;">' + cfg.classificados + '</span></div>';
+        // v4.4.36: Quantos avançam — TODOS × Os melhores (com slider). Todos = todos os
+        // participantes da classificatória entram no bracket (semeados pela classificação).
+        var qAll = !!e.qualifyAll;
+        eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quem avança para a eliminatória</div>' +
+          _pill(!qAll, 'window._f2QualifyAll(false)', '🏅 Os melhores') +
+          _pill(qAll, 'window._f2QualifyAll(true)', '👥 Todos') + '<div style="height:10px;"></div>';
+        if (!qAll) {
+          var classLabel = perGroupScope ? 'Nº de classificados por grupo' : 'Nº de classificados (total) para a eliminatória';
+          var classMax = perGroupScope ? 8 : 32;
+          if (cfg.classificados > classMax) classMax = cfg.classificados; // nunca corta valor salvo
+          eb += '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;">' + classLabel + '</div>' +
+            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
+            '<input type="range" min="1" max="' + classMax + '" value="' + cfg.classificados + '" oninput="window._f2ClassLive(this.value)" onchange="window._f2Class(this.value)" style="flex:1;accent-color:#fbbf24;">' +
+            '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#fde68a;">' + cfg.classificados + '</span></div>';
+        } else {
+          eb += '<div style="font-size:0.74rem;color:#fde68a;margin-bottom:6px;">Todos os participantes da classificatória entram no bracket, semeados pela classificação.</div>';
+        }
         eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
       }
       // Linhas (comum aos dois modos).
@@ -371,7 +381,7 @@
         eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Origem das duplas na eliminatória</div>';
         eb += _pill(e.origem === 'ja_formadas', 'window._f2Origem(\'ja_formadas\')', 'Já formadas') + _pill(e.origem === 'formar', 'window._f2Origem(\'formar\')', 'Formar da classificação');
         if (e.origem === 'formar') {
-          eb += '<div style="margin-top:6px;">' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>';
+          eb += '<div style="margin-top:6px;">' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + _pill(e.formacao === 'seed', 'window._f2Formacao(\'seed\')', '🎯 Cabeças de chave') + '</div>';
         }
       }
       // Inscrições durante a ELIMINATÓRIA (bloco próprio da fase). Só quando a classificatória
@@ -491,6 +501,8 @@
   window._f2Class = function (v) { S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
   // v4.4.31: escopo da classificação — por grupos × geral.
   window._f2ClassScope = function (v) { if (!S) return; S.cfg.classifScope = (v === 'overall') ? 'overall' : 'per_group'; _norm(); _rerender(); };
+  // v4.4.36: quantos avançam — todos × os melhores (slider).
+  window._f2QualifyAll = function (all) { if (!S) return; S.cfg.eliminatoria.qualifyAll = !!all; _norm(); _rerender(); };
   // Ao menos UMA fase ativa (sem travar toggle): desligar a eliminatória religa a classificatória.
   window._f2Elim = function (b) { if (!S) return; S.cfg.eliminatoria.ativa = !!b; if (!b) S.cfg.classifAtiva = true; _norm(); _rerender(); };
   // v4.4.33: toggle da fase classificatória. Desligar → eliminação direta (elim obrigatória).

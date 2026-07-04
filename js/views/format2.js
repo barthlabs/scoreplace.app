@@ -50,7 +50,8 @@
         linhas: 1,
         nomes: [''],
         origem: 'ja_formadas',
-        formacao: 'performance',
+        formacao: 'performance', // performance | equilibrio | sorteio | seed (cabeças de chave)
+        qualifyAll: false,       // false = os X melhores (slider); true = TODOS avançam
         terceiro: true,
         lateEnrollment: 'closed' // inscrições durante a ELIMINATÓRIA: closed | standby | expand
       }
@@ -121,7 +122,8 @@
     if (e.origem !== 'ja_formadas' && e.origem !== 'formar') e.origem = 'ja_formadas';
     // "formar" só quando ENTRAM INDIVÍDUOS (pontuação individual).
     if (out._scoreBy !== 'individual') e.origem = 'ja_formadas';
-    if (['performance', 'equilibrio', 'sorteio'].indexOf(e.formacao) === -1) e.formacao = 'performance';
+    if (['performance', 'equilibrio', 'sorteio', 'seed'].indexOf(e.formacao) === -1) e.formacao = 'performance';
+    e.qualifyAll = !!e.qualifyAll;
     if (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) === -1) e.lateEnrollment = 'closed';
     e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
     // v4.4.33: fase classificatória on/off. Ao menos UMA fase ativa: sem classificatória ⇒
@@ -291,8 +293,9 @@
       var forma = (e.origem === 'formar' && scoreInd && isDupla);
       var elimFixedPairs = !!forma;            // forma duplas dos indivíduos
       var elimPairing = forma
-        ? ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e.formacao] || 'top')
+        ? ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among', seed: 'seed' }[e.formacao] || 'top')
         : 'top';
+      var qAll = !!e.qualifyAll;
       var p1 = Object.assign(_phaseBase(re), {
         name: 'Eliminatória', formatCode: 'elim_simples', format: 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,
@@ -300,8 +303,8 @@
         source: {
           type: 'previous_phase', fromPhaseOffset: 1,
           byGroupRank: perGroup, scope: perGroup ? 'per_group' : 'overall',
-          qualifyMode: perGroup ? 'per_group' : 'overall',
-          qualifyQuantity: 'top', qualifyTopN: topN, mapping: mapping
+          qualifyMode: qAll ? 'all' : (perGroup ? 'per_group' : 'overall'),
+          qualifyQuantity: qAll ? 'all' : 'top', qualifyTopN: topN, mapping: mapping
         },
         fixedPairs: elimFixedPairs, pairingStrategy: elimPairing,
         mapping: mapping, grandFinal: nLines > 1, thirdPlace: e.terceiro,
