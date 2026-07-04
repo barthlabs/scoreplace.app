@@ -347,8 +347,15 @@
   // manual). A data re-renderiza (recalcula o intervalo sugerido e o default manual/auto). Hora
   // e intervalo NÃO re-renderizam (preserva foco); editar o intervalo desliga o auto-sugerido.
   window._f2SchedManual = function (checked) { if (!S) return; S.cfg.rodadas.drawManual = !!checked; _norm(); _rerender(); };
-  window._f2SchedDate = function (v) { if (!S) return; S.cfg.rodadas.drawFirstDate = v || ''; _norm(); _rerender(); };
-  window._f2SchedTime = function (v) { if (S) S.cfg.rodadas.drawFirstTime = v || '19:00'; };
+  // A data/hora do 1º sorteio é TAMBÉM o início da fase (pedido do dono): espelha nos
+  // campos #tourn-start-date/#tourn-start-time e dispara os recálculos do form.
+  function _mirrorPhaseStart() {
+    var sd = document.getElementById('tourn-start-date'); if (sd && S.cfg.rodadas.drawFirstDate) sd.value = S.cfg.rodadas.drawFirstDate;
+    var st = document.getElementById('tourn-start-time'); if (st && S.cfg.rodadas.drawFirstTime) st.value = S.cfg.rodadas.drawFirstTime;
+    ['_recalcDuration', '_checkWeather', '_updateLigaRoundsTag'].forEach(function (fn) { if (typeof window[fn] === 'function') { try { window[fn](); } catch (e) {} } });
+  }
+  window._f2SchedDate = function (v) { if (!S) return; S.cfg.rodadas.drawFirstDate = v || ''; _mirrorPhaseStart(); _norm(); _rerender(); };
+  window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); };
   window._f2SchedInterval = function (v) { if (!S) return; S.cfg.rodadas.drawIntervalDays = Math.max(1, parseInt(v, 10) || 7); S.cfg.rodadas._intervalAuto = false; };
   // Slider de classificados: número ao vivo no arraste; re-render ao soltar (igual grupos).
   window._f2ClassLive = function (v) {
