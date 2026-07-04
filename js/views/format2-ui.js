@@ -170,10 +170,13 @@
   }
 
   // Bloco de fase (Classificatória / Eliminatória) com cabeçalho destacado.
-  function _phaseBlock(title, color, inner) {
+  function _phaseBlock(title, color, inner, headerRight) {
+    var pill = '<span style="display:inline-block;font-size:1.05rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:' + color + ';background:' + color + '22;padding:9px 17px;border-radius:10px;">' + title + '</span>';
+    var header = headerRight
+      ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;">' + pill + headerRight + '</div>'
+      : '<div style="margin-bottom:16px;">' + pill + '</div>';
     return '<div style="border:1px solid ' + color + '55;border-radius:14px;padding:14px 14px 8px;margin-bottom:16px;background:' + color + '0d;">' +
-      '<div style="display:inline-block;font-size:1.05rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:' + color + ';background:' + color + '22;padding:9px 17px;border-radius:10px;margin-bottom:16px;">' + title + '</div>' +
-      inner + '</div>';
+      header + inner + '</div>';
   }
 
   // ── Controles do configurador (compartilhados form+page) ──
@@ -239,11 +242,12 @@
 
     var e = cfg.eliminatoria;
     var elimForced = cfg.grupos > 1;
-    // Fase de grupos sempre tem eliminatória → sem toggle, vai direto aos controles.
-    // Pontos corridos (1 grupo) → toggle liga/desliga.
-    var elimHead = elimForced
-      ? ''
-      : '<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" ' + (e.ativa ? 'checked' : '') + ' onchange="window._f2Elim(this.checked)"> <span style="font-size:0.85rem;">Tem eliminatória no fim</span></label>';
+    // Toggle no CABEÇALHO do box (à direita, alinhado ao título). Ativo por padrão.
+    // Desativado → esconde tudo dentro do box, só o título fica. Fase de grupos (2+)
+    // sempre tem eliminatória → toggle travado ligado.
+    var elimToggle = '<span class="toggle-switch"' + (elimForced ? ' title="Fase de grupos sempre tem eliminatória"' : '') + '>' +
+      '<input type="checkbox"' + (e.ativa ? ' checked' : '') + (elimForced ? ' disabled' : '') + ' onchange="window._f2Elim(this.checked)">' +
+      '<span class="toggle-slider"></span></span>';
     var eb = '';
     if (e.ativa) {
       // v4.4.17: "Nº de classificados" ABRE o box da Eliminatória, como slider (igual grupos).
@@ -268,10 +272,11 @@
       }
       // 3º lugar SEMPRE existe (project_third_place_always) — sem toggle.
     }
-    var elimInner = (elimHead + eb) || '<div style="font-size:0.8rem;color:var(--text-muted);">—</div>';
+    // Desativado → sem conteúdo (só o título + toggle no cabeçalho ficam visíveis).
+    var elimInner = e.ativa ? eb : '';
 
     var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classif) +
-      _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner) +
+      _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, elimToggle) +
       '<div style="margin-top:2px;padding:11px 13px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);font-size:0.82rem;color:#a5b4fc;">📋 ' + _safe(window.FORMAT2.summary(cfg)) + '</div>';
     return h;
   }

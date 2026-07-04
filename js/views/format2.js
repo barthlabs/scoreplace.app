@@ -44,7 +44,7 @@
       rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, _intervalAuto: true },
       classificados: 2,          // X que classificam (por grupo se N grupos; total se 1 grupo)
       eliminatoria: {
-        ativa: false,
+        ativa: true,          // ativo por padrão (dono)
         linhas: 1,
         nomes: [''],
         origem: 'ja_formadas',
