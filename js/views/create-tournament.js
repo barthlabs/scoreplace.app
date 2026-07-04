@@ -1713,7 +1713,12 @@ function setupCreateTournamentModal() {
   // (removido v4.3.3: _phaseDests tinha rótulos "Ouro"/"Prata" hardcoded e zero callers —
   //  o nome de cada linha é 100% do organizador via mapping[i].label. Sem defaults de nome.)
   window._addPhase = function() {
-    window._phasesUserTouched = true; // v3.0.x: o usuário mexeu nas fases de propósito
+    // ⚰️ v4.4.x — construtor de empilhamento de fases FORA DE AÇÃO (não apagado).
+    // Substituído pelo configurador único ⚙️ Formato (#formato/:tId, window.FORMAT2).
+    if (window.showNotification) window.showNotification('Use ⚙️ Formato', 'O construtor de fases foi substituído pelo configurador novo. Configure o formato em ⚙️ Formato (nas Ferramentas do Organizador, após criar o torneio).', 'info');
+    // Corpo antigo mantido morto abaixo (nunca executa):
+    if (true) return; // eslint-disable-line
+    window._phasesUserTouched = true;
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
     var n = window._extraPhases.length + 2;
     window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: 2, scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', rankingType: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
@@ -2038,15 +2043,20 @@ function setupCreateTournamentModal() {
   // _extraPhases + a UI "+ Adicionar fase" no HTML + materializeNextPhase genérico) depois.
   // Ver memória project_format_engine_rewrite.
   window._renderPhases = function() {
-    // A Fase 1 agora é o box "FASE 1" do formulário (com #phase1-name no header).
-    // Aqui renderizamos apenas as fases extras (2+) que o organizador adicionar.
+    // ⚰️ v4.4.x — construtor de empilhamento de fases FORA DE AÇÃO (não apagado).
+    // Mostra só um aviso apontando pro ⚙️ Formato; NÃO monta os cards. Os dados de
+    // _extraPhases (torneios antigos multi-fase) NÃO são apagados — só não editáveis por aqui,
+    // e o save os preserva. Formato agora vive em window.FORMAT2 + página #formato.
     var list = document.getElementById('phases-list');
-    if (!list) return;
+    if (list) list.innerHTML = '<div style="padding:12px 14px;border:1px dashed rgba(129,140,248,0.5);border-radius:10px;background:rgba(99,102,241,0.06);font-size:0.82rem;color:#a5b4fc;line-height:1.5;">⚙️ <b>Formato no configurador novo.</b> O construtor de fases foi desativado. Depois de criar o torneio, defina estrutura, grupos, parceria e eliminatória no botão <b>⚙️ Formato</b> (Ferramentas do Organizador).</div>';
+    var addBtn = document.getElementById('add-phase-btn');
+    if (addBtn) addBtn.style.display = 'none';
+    return; // corpo antigo mantido morto abaixo (nunca executa)
+    // eslint-disable-next-line no-unreachable
     if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
     var h = '';
     window._extraPhases.forEach(function(ph, i){ h += _phaseCardHtml(ph, i); });
     list.innerHTML = h;
-    // v2.6.63: aplica o estado inicial (disable/dim do Grupo B) da Pontuação Avançada por fase.
     window._extraPhases.forEach(function(ph, i){
       if (ph.format === 'liga' && typeof window._onAdvApplyLiveToggle === 'function') window._onAdvApplyLiveToggle(i + 1);
     });
