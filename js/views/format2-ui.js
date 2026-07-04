@@ -137,8 +137,8 @@
     h += _sec('Estrutura — nº de grupos',
       '<div style="display:flex;align-items:center;gap:12px;">' +
       '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
-      '<span style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#c7d2fe;">' + cfg.grupos + '</span></div>' +
-      _estruturaBlock(cfg));
+      '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#c7d2fe;">' + cfg.grupos + '</span></div>' +
+      '<div id="f2-estrutura-block">' + _estruturaBlock(cfg) + '</div>');
 
     // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
     //  montados — fica nos toggles detalhados da seção "Formação de Duplas" abaixo do form.)
@@ -201,7 +201,18 @@
 
   // ── Handlers globais (form + page) ──
   window._f2Disputa = function (v) { S.cfg.disputa = v; _norm(); _rerender(); };
-  window._f2Grupos = function (v) { S.cfg.grupos = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
+  window._f2Grupos = function (v) {
+    if (!S) return;
+    var prev = S.cfg.grupos;
+    S.cfg.grupos = Math.max(1, parseInt(v, 10) || 1);
+    _norm();
+    // Cruzar a fronteira Pontos Corridos (1) ↔ Grupos (2+) muda os controles → re-render completo.
+    // Dentro da mesma faixa, atualização LEVE (fluida): só o número e o bloco da estrutura.
+    if ((prev === 1) !== (S.cfg.grupos === 1)) { _rerender(); return; }
+    var lbl = document.getElementById('f2-grupos-val'); if (lbl) lbl.textContent = S.cfg.grupos;
+    var est = document.getElementById('f2-estrutura-block'); if (est) est.innerHTML = _estruturaBlock(S.cfg);
+    _syncTeamSize();
+  };
   window._f2Parceria = function (v) { S.cfg.parceria = v; _norm(); _rerender(); };
   window._f2Form = function (v) { S.cfg.formacaoDupla = v; _norm(); _rerender(); };
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
