@@ -39,7 +39,7 @@
     return normalize({
       disputa: dispDefault,
       grupos: 1,
-      parceria: 'fixa',
+      parceria: 'sorteio_rodada', // Sorteio + "por rodada" ON por padrão (dono)
       formacaoDupla: 'sorteio',
       rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, _intervalAuto: true },
       classificados: 2,          // X que classificam (por grupo se N grupos; total se 1 grupo)

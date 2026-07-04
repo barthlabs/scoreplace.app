@@ -258,10 +258,21 @@
       // v4.4.19: "Formação das equipes" — como as duplas se formam. Montadas (organizador/
       // jogadores montam) × Sorteio (sorteadas), ambas FIXAS. Rei/Rainha (rotativo) só com 1 grupo.
       var montadas = pr === 'fixa' && cfg.formacaoDupla === 'manual';
-      var sorteadas = pr === 'fixa' && cfg.formacaoDupla !== 'manual';
+      // "Sorteio" cobre por-rodada (sorteio_rodada) E dupla fixa sorteada (fixa+sorteio).
+      var isSorteio = (pr === 'sorteio_rodada') || (pr === 'fixa' && cfg.formacaoDupla !== 'manual');
       var fBtns = _pill(montadas, 'window._f2TeamForm(\'montadas\')', '🤝 Montadas') +
-        _pill(sorteadas, 'window._f2TeamForm(\'sorteio\')', '🎲 Sorteio');
+        _pill(isSorteio, 'window._f2TeamForm(\'sorteio\')', '🎲 Sorteio');
       if (um) fBtns += _pill(pr === 'rei_rainha', 'window._f2TeamForm(\'rei_rainha\')', '👑 Rei/Rainha');
+      // v4.4.30: Sorteio + 1 grupo → toggle "Novo parceiro a cada rodada" (ON por padrão).
+      // ON = sorteio_rodada (rotativo, individual); OFF = dupla sorteada 1× e fixa até o fim.
+      // 2+ grupos: só dupla fixa sorteada (rotativo exige 1 grupo) → sem toggle.
+      if (isSorteio && um) {
+        var porRodada = pr === 'sorteio_rodada';
+        fBtns += '<div style="margin-top:12px;">' + _toggleRight('Novo parceiro a cada rodada', porRodada, 'window._f2SorteioPorRodada(this.checked)') + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (porRodada
+            ? 'A cada rodada, parceiro (e adversário) são sorteados de novo — pontuação individual.'
+            : 'A dupla é sorteada 1× e permanece fixa até o fim do torneio.') + '</div>';
+      }
       classif += _sec('Formação das equipes', fBtns);
     }
 
@@ -368,8 +379,20 @@
   window._f2TeamForm = function (v) {
     if (!S) return;
     if (v === 'montadas') { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'manual'; }
-    else if (v === 'sorteio') { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'sorteio'; }
+    else if (v === 'sorteio') {
+      // v4.4.30: Sorteio defaulta pra "por rodada" (só com 1 grupo); 2+ grupos = dupla fixa sorteada.
+      if (S.cfg.grupos === 1) { S.cfg.parceria = 'sorteio_rodada'; }
+      else { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'sorteio'; }
+    }
     else if (v === 'rei_rainha') { S.cfg.parceria = 'rei_rainha'; }
+    _norm(); _rerender();
+  };
+  // v4.4.30: toggle "Novo parceiro a cada rodada" dentro do Sorteio. ON = sorteio_rodada
+  // (rotativo); OFF = dupla sorteada 1× e fixa (fixa+sorteio).
+  window._f2SorteioPorRodada = function (checked) {
+    if (!S) return;
+    if (checked) { S.cfg.parceria = 'sorteio_rodada'; }
+    else { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'sorteio'; }
     _norm(); _rerender();
   };
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
