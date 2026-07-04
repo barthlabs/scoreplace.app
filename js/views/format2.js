@@ -106,7 +106,7 @@
     // "formar" só quando ENTRAM INDIVÍDUOS (pontuação individual).
     if (out._scoreBy !== 'individual') e.origem = 'ja_formadas';
     if (['performance', 'equilibrio', 'sorteio'].indexOf(e.formacao) === -1) e.formacao = 'performance';
-    e.terceiro = e.terceiro !== false;
+    e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
     out.eliminatoria = e;
 
     return out;

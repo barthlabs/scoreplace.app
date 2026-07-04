@@ -1736,7 +1736,7 @@ function setupCreateTournamentModal() {
     // Esconde os controles de estrutura que o format2 substitui.
     ['formato-buttons', 'formato-desc', 'dupla-elim-row', 'suico-fields', 'liga-fields',
      'liga-draw-schedule', 'suico-draw-schedule-fields', 'elim-settings', 'grupos-fields',
-     'rei-rainha-fields', 'round-robin-fields', 'phases-list',
+     'rei-rainha-fields', 'round-robin-fields', 'phases-list', 'phases-section',
      'draw-mode-buttons', 'draw-mode-desc'
     ].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
     // v4.4.9: os toggles de FORMAÇÃO DE DUPLAS ficam VISÍVEIS (o dono quer os detalhados):

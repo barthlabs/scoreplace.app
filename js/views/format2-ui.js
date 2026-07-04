@@ -29,6 +29,9 @@
     ['manual-pairing-container', 'mixed-pairing-container'].forEach(function (id) {
       var el = document.getElementById(id); if (el) el.style.display = fixedDupla ? '' : 'none';
     });
+    // Pontuação Avançada (💯 pontos individuais custom) é feature de PONTOS CORRIDOS (1 grupo).
+    var adv = document.getElementById('adv-scoring-section');
+    if (adv) adv.style.display = (cfg.grupos === 1) ? '' : 'none';
   }
   function _rerender() {
     if (!S) return;
@@ -146,7 +149,7 @@
         _pill(pr === 'sorteio_rodada', 'window._f2Parceria(\'sorteio_rodada\')', '🎲 Sorteio a cada rodada');
       h += _sec('Parceria', prBtns);
     } else if (isDupla && !um) {
-      h += _sec('Parceria', '<div style="font-size:0.82rem;color:#34d399;">🔒 Duplas fixas <span style="color:var(--text-muted);">(formadas uma vez e fixas nos grupos)</span></div>');
+      h += _sec('Parceria', '<div style="font-size:0.85rem;color:#34d399;font-weight:600;">🔒 Duplas fixas</div>');
     }
 
     if (um && !rotativo) {
@@ -187,10 +190,8 @@
         if (e.origem === 'formar') {
           eb += '<div style="margin-top:6px;">' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>';
         }
-      } else if (isDupla) {
-        eb += '<div style="margin-top:10px;font-size:0.78rem;color:#34d399;">🔒 As duplas já vêm formadas e seguem juntas.</div>';
       }
-      eb += '<div style="margin-top:12px;"><label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" ' + (e.terceiro ? 'checked' : '') + ' onchange="window._f2Terceiro(this.checked)"> <span style="font-size:0.85rem;">Disputa de 3º lugar</span></label></div>';
+      // 3º lugar SEMPRE existe (project_third_place_always) — sem toggle.
     }
     h += _sec('Eliminatória', elimHead + eb);
 
