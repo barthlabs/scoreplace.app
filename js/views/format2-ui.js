@@ -57,36 +57,54 @@
     });
     return n;
   }
-  // Estimativa (pessoas por grupo + tempo) baseada nos inscritos + slider + config.
-  function _estimateBlock(cfg) {
+  // Divisão em grupos a partir dos inscritos + slider.
+  function _groupInfo(cfg) {
     var t = S && S.t;
     var people = _peopleCount(t);
-    if (!people) return '<div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);">Sem inscritos ainda — a previsão aparece quando houver gente inscrita.</div>';
     var isDupla = cfg.disputa === 'dupla';
     var units = isDupla ? Math.floor(people / 2) : people;
-    if (units < 1) return '';
-    var ng = Math.min(cfg.grupos, units);
-    var base = Math.floor(units / ng), rem = units % ng, small = base, big = base + (rem > 0 ? 1 : 0);
-    var puUnits = (rem === 0) ? String(base) : (small + '–' + big);
-    var puPeople = isDupla ? ((rem === 0) ? String(base * 2) : (small * 2 + '–' + big * 2)) : puUnits;
+    var ng = units > 0 ? Math.min(cfg.grupos, units) : cfg.grupos;
+    var base = units > 0 ? Math.floor(units / ng) : 0, rem = units > 0 ? units % ng : 0;
+    var small = base, big = base + (rem > 0 ? 1 : 0);
+    var perU = units > 0 ? (small + (rem ? '–' + big : '')) : '—';
+    var perP = units > 0 ? (isDupla ? (small * 2 + (rem ? '–' + big * 2 : '')) : perU) : '—';
+    return { t: t, people: people, isDupla: isDupla, units: units, ng: ng, base: base, rem: rem, perU: perU, perP: perP };
+  }
+  // Linha de estimativa (inscritos + tempo de jogos).
+  function _estimateLine(cfg) {
+    var gi = _groupInfo(cfg);
+    if (!gi.people) return '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);">Sem inscritos ainda — a divisão dos grupos e o tempo aparecem quando houver gente inscrita.</div>';
     var groupGames = 0;
-    for (var g = 0; g < ng; g++) { var u = base + (g < rem ? 1 : 0); groupGames += u * (u - 1) / 2; }
+    for (var g = 0; g < gi.ng; g++) { var u = gi.base + (g < gi.rem ? 1 : 0); groupGames += u * (u - 1) / 2; }
     var elimGames = 0;
     if (cfg.eliminatoria.ativa) {
       var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
-      q = Math.min(q, units);
+      q = Math.min(q, gi.units);
       if (q >= 2) elimGames = (q - 1) + (cfg.eliminatoria.terceiro ? 1 : 0);
     }
-    var gd = parseInt((document.getElementById('tourn-game-duration') || {}).value, 10) || (t && t.gameDuration) || 30;
-    var cc = parseInt((document.getElementById('tourn-court-count') || {}).value, 10) || (t && t.courtCount) || 1;
+    var gd = parseInt((document.getElementById('tourn-game-duration') || {}).value, 10) || (gi.t && gi.t.gameDuration) || 30;
+    var cc = parseInt((document.getElementById('tourn-court-count') || {}).value, 10) || (gi.t && gi.t.courtCount) || 1;
     var totalGames = Math.round(groupGames + elimGames);
     var mins = Math.ceil(totalGames * gd / Math.max(1, cc));
     var hh = Math.floor(mins / 60), mm = mins % 60;
     var timeStr = hh > 0 ? (hh + 'h' + (mm ? ' ' + mm + 'min' : '')) : (mm + 'min');
-    return '<div style="margin-top:8px;font-size:0.78rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:9px 11px;line-height:1.55;">' +
-      '👥 <b>' + people + '</b> inscritos' + (isDupla ? (' → <b>' + units + '</b> duplas') : '') +
-      ' · <b>' + puPeople + '</b> pessoas por grupo' + (isDupla ? (' <span style="opacity:0.8;">(' + puUnits + ' duplas)</span>') : '') +
-      '<br>⏱️ ~<b>' + timeStr + '</b> de jogos <span style="opacity:0.8;">(' + totalGames + ' jogos · ' + gd + 'min · ' + cc + ' quadra' + (cc > 1 ? 's' : '') + ')</span></div>';
+    return '<div style="margin-top:8px;font-size:0.78rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
+      '👥 <b>' + gi.people + '</b> inscritos' + (gi.isDupla ? (' → <b>' + gi.units + '</b> duplas') : '') +
+      ' · ⏱️ ~<b>' + timeStr + '</b> de jogos <span style="opacity:0.8;">(' + totalGames + ' jogos · ' + gd + 'min · ' + cc + ' quadra' + (cc > 1 ? 's' : '') + ')</span></div>';
+  }
+  // Apresentação abaixo do slider: rótulo (1 grupo) OU números grandes (N grupos).
+  function _estruturaBlock(cfg) {
+    if (cfg.grupos === 1) {
+      return '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">1 grupo — <b>Pontos Corridos</b> (tabela única, classificação geral)</div>' + _estimateLine(cfg);
+    }
+    var gi = _groupInfo(cfg);
+    var col = function (n, lbl) { return '<div style="text-align:center;min-width:62px;"><div style="font-size:1.7rem;font-weight:800;color:#c7d2fe;line-height:1;">' + n + '</div><div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px;">' + lbl + '</div></div>'; };
+    var dot = '<div style="font-size:1.1rem;color:var(--text-muted);align-self:center;opacity:0.6;">·</div>';
+    var nums = '<div style="display:flex;gap:10px;justify-content:center;align-items:flex-start;margin:12px 0 4px;">' +
+      col(cfg.grupos, 'grupos') + dot + col(gi.perP, gi.isDupla ? 'pessoas/grupo' : 'por grupo') +
+      (gi.isDupla ? (dot + col(gi.perU, 'duplas/grupo')) : '') + '</div>' +
+      '<div style="text-align:center;font-size:0.74rem;color:var(--text-muted);"><b>Fase de Grupos</b> — classificação por grupo</div>';
+    return nums + _estimateLine(cfg);
   }
 
   // ── Controles do configurador (compartilhados form+page) ──
@@ -99,19 +117,17 @@
     var scoreInd = cfg._scoreBy === 'individual';
     var h = '';
 
+    // Disputa só aparece onde o esporte permite singles (tênis/tênis de mesa). Nos demais
+    // (sempre duplas) não faz sentido mostrar nada — é óbvio.
     if (allowsS) {
       h += _sec('Disputa', _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') + _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas'));
-    } else {
-      h += _sec('Disputa', '<div style="font-size:0.85rem;color:var(--text-muted);">👥 Duplas <span style="opacity:0.7;">(' + _safe(sport) + ' é sempre em duplas)</span></div>');
     }
 
-    var gLabel = um ? '1 grupo — <b>Pontos Corridos</b> (tabela única, classificação geral)' : (cfg.grupos + ' grupos — <b>Fase de Grupos</b> (classificação por grupo)');
     h += _sec('Estrutura — nº de grupos',
       '<div style="display:flex;align-items:center;gap:12px;">' +
-      '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2Grupos(this.value)" style="flex:1;">' +
+      '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
       '<span style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#c7d2fe;">' + cfg.grupos + '</span></div>' +
-      '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">' + gLabel + '</div>' +
-      _estimateBlock(cfg));
+      _estruturaBlock(cfg));
 
     // Formação das duplas fixas: Sorteio × Manual (participantes/organizador montam).
     var _formacao = '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Como as duplas são formadas</div>' +
