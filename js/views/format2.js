@@ -50,7 +50,7 @@
         linhas: 1,
         nomes: [''],
         origem: 'ja_formadas',
-        formacao: 'performance', // performance | equilibrio | sorteio | seed (cabeças de chave)
+        formacao: 'performance', // performance (1º+2º…) | equilibrio (1º+4º…) | sorteio; cabeças sempre semeadas
         qualifyAll: false,       // false = os X melhores (slider); true = TODOS avançam
         terceiro: true,
         lateEnrollment: 'closed' // inscrições durante a ELIMINATÓRIA: closed | standby | expand
@@ -122,7 +122,7 @@
     if (e.origem !== 'ja_formadas' && e.origem !== 'formar') e.origem = 'ja_formadas';
     // "formar" só quando ENTRAM INDIVÍDUOS (pontuação individual).
     if (out._scoreBy !== 'individual') e.origem = 'ja_formadas';
-    if (['performance', 'equilibrio', 'sorteio', 'seed'].indexOf(e.formacao) === -1) e.formacao = 'performance';
+    if (['performance', 'equilibrio', 'sorteio'].indexOf(e.formacao) === -1) e.formacao = 'performance';
     e.qualifyAll = !!e.qualifyAll;
     if (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) === -1) e.lateEnrollment = 'closed';
     e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
@@ -293,7 +293,7 @@
       var forma = (e.origem === 'formar' && scoreInd && isDupla);
       var elimFixedPairs = !!forma;            // forma duplas dos indivíduos
       var elimPairing = forma
-        ? ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among', seed: 'seed' }[e.formacao] || 'top')
+        ? ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e.formacao] || 'top')
         : 'top';
       var qAll = !!e.qualifyAll;
       var p1 = Object.assign(_phaseBase(re), {

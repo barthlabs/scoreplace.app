@@ -381,7 +381,8 @@
         eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Origem das duplas na eliminatória</div>';
         eb += _pill(e.origem === 'ja_formadas', 'window._f2Origem(\'ja_formadas\')', 'Já formadas') + _pill(e.origem === 'formar', 'window._f2Origem(\'formar\')', 'Formar da classificação');
         if (e.origem === 'formar') {
-          eb += '<div style="margin-top:6px;">' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + _pill(e.formacao === 'seed', 'window._f2Formacao(\'seed\')', '🎯 Cabeças de chave') + '</div>';
+          eb += '<div style="margin-top:6px;">' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + ({ performance: 'Os melhores juntos: 1º+2º, 3º+4º…', equilibrio: 'Forte com fraco: 1º+4º, 2º+3º…', sorteio: 'Parceiros sorteados ao acaso.' }[e.formacao] || '') + ' (as cabeças de chave são sempre semeadas na chave.)</div>';
         }
       }
       // Inscrições durante a ELIMINATÓRIA (bloco próprio da fase). Só quando a classificatória
