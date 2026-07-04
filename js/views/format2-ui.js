@@ -143,7 +143,7 @@
 
     classif += _sec('Estrutura — nº de grupos',
       '<div style="display:flex;align-items:center;gap:12px;">' +
-      '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="var e=document.getElementById(\'f2-grupos-val\');if(e)e.textContent=this.value" onchange="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
+      '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2GruposLive(this.value)" onchange="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
       '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#c7d2fe;">' + cfg.grupos + '</span></div>' +
       '<div id="f2-estrutura-block">' + _estruturaBlock(cfg) + '</div>');
 
@@ -208,10 +208,24 @@
 
   // ── Handlers globais (form + page) ──
   window._f2Disputa = function (v) { S.cfg.disputa = v; _norm(); _rerender(); };
-  // Chamado no ONCHANGE (ao SOLTAR o slider) — re-render completo. Durante o arraste
-  // (oninput) só o número #f2-grupos-val se move (fluido, sem re-render).
+  // ONINPUT (durante o arraste) — atualização LEVE e fluida: o número muda na hora, e os
+  // números de baixo (grupos · pessoas/grupo · duplas/grupo + tempo) atualizam via
+  // requestAnimationFrame (coalesce → no máx. 1 update por frame, sem lag). SEM re-render do
+  // configurador inteiro (isso é que travava). Não normaliza aqui — só o display.
+  window._f2GruposLive = function (v) {
+    if (!S) return;
+    S.cfg.grupos = Math.max(1, parseInt(v, 10) || 1);
+    var lbl = document.getElementById('f2-grupos-val'); if (lbl) lbl.textContent = S.cfg.grupos;
+    if (S._raf) return;
+    S._raf = requestAnimationFrame(function () {
+      S._raf = null;
+      var est = document.getElementById('f2-estrutura-block'); if (est) est.innerHTML = _estruturaBlock(S.cfg);
+    });
+  };
+  // ONCHANGE (ao SOLTAR) — re-render completo (ajusta os controles que dependem do nº de grupos).
   window._f2Grupos = function (v) {
     if (!S) return;
+    if (S._raf) { cancelAnimationFrame(S._raf); S._raf = null; }
     S.cfg.grupos = Math.max(1, parseInt(v, 10) || 1);
     _norm();
     _rerender();
