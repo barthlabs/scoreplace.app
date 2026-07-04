@@ -376,13 +376,25 @@
       for (var i = 0; i < e.linhas; i++) {
         eb += '<div style="margin-top:6px;"><input type="text" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da linha ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="width:100%;max-width:300px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;"></div>';
       }
-      // "Formar da classificação" só faz sentido COM classificatória.
-      if (cfg.classifAtiva && scoreInd && isDupla) {
-        eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Origem das duplas na eliminatória</div>';
-        eb += _pill(e.origem === 'ja_formadas', 'window._f2Origem(\'ja_formadas\')', 'Já formadas') + _pill(e.origem === 'formar', 'window._f2Origem(\'formar\')', 'Formar da classificação');
-        if (e.origem === 'formar') {
-          eb += '<div style="margin-top:6px;">' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>' +
-            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + ({ performance: 'Os melhores juntos: 1º+2º, 3º+4º…', equilibrio: 'Forte com fraco: 1º+4º, 2º+3º…', sorteio: 'Parceiros sorteados ao acaso.' }[e.formacao] || '') + ' (as cabeças de chave são sempre semeadas na chave.)</div>';
+      // Elim vindo da classificatória (com duplas). v4.4.38: a estratégia aparece SEMPRE
+      // (duplas fixas = como parear a chave; individuais que formam = como formar as duplas).
+      if (cfg.classifAtiva && isDupla) {
+        // Origem só quando pontuação INDIVIDUAL (rei/rainha, sorteio-a-cada-rodada): aí decide
+        // se forma as duplas dos indivíduos classificados.
+        if (scoreInd) {
+          eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Origem das duplas na eliminatória</div>';
+          eb += _pill(e.origem === 'ja_formadas', 'window._f2Origem(\'ja_formadas\')', 'Já formadas') + _pill(e.origem === 'formar', 'window._f2Origem(\'formar\')', 'Formar da classificação');
+        }
+        var _formaNow = scoreInd && e.origem === 'formar';
+        var _showStrat = _formaNow || !scoreInd; // formar duplas OU duplas fixas (pareamento da chave)
+        if (_showStrat) {
+          var _stratLbl = _formaNow ? 'Como formar as duplas' : 'Confrontos na chave';
+          var _hints = _formaNow
+            ? { performance: 'Os melhores juntos: 1º+2º, 3º+4º…', equilibrio: 'Forte com fraco: 1º+4º, 2º+3º…', sorteio: 'Parceiros sorteados ao acaso.' }
+            : { performance: 'Os melhores se enfrentam cedo: 1º vs 2º, 3º vs 4º…', equilibrio: 'Melhor contra pior: 1º vs último, 2º vs penúltimo…', sorteio: 'Confrontos sorteados ao acaso.' };
+          eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">' + _stratLbl + '</div>' +
+            '<div>' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (_hints[e.formacao] || '') + ' (as cabeças de chave são sempre semeadas na chave.)</div>';
         }
       }
       // Inscrições durante a ELIMINATÓRIA (bloco próprio da fase). Só quando a classificatória

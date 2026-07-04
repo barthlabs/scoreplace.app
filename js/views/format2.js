@@ -292,7 +292,9 @@
       // Origem: "formar" (indivíduos → duplas) só quando pontuação individual.
       var forma = (e.origem === 'formar' && scoreInd && isDupla);
       var elimFixedPairs = !!forma;            // forma duplas dos indivíduos
-      var elimPairing = forma
+      // v4.4.38: a estratégia (performance/equilíbrio/sorteio) vale SEMPRE que há duplas —
+      // formar (individuais) OU parear a chave (duplas fixas). Antes só valia ao formar.
+      var elimPairing = (isDupla)
         ? ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e.formacao] || 'top')
         : 'top';
       var qAll = !!e.qualifyAll;
