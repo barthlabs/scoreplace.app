@@ -1,20 +1,32 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // format2-ui.js — UI do CONFIGURADOR ÚNICO (reescrita v4.4.x)
 //
-// Página #formato/<tId>: lê/escreve a config window.FORMAT2, compila via
-// compileToPhases() e aplica ao torneio (top-level t.* + phases[]). Substitui o
-// construtor de fases. Segue o padrão de page-route centralizado (_renderBackHeader).
+// Renderiza os controles de window.FORMAT2 em DOIS modos:
+//   • FORM (v4.4.3+): embutido no #fase1-box do editar/criar torneio — o formato
+//     é configurado AQUI, no lugar dos seletores antigos. O save do form lê
+//     window._f2GetConfig() e compila via compileToPhases.
+//   • PAGE (legado): página #formato/:tId (mantida como fallback; o botão foi removido).
 //
-// Isolado: não altera o create-tournament antigo (fica como código morto a apagar).
+// Estado compartilhado S; handlers globais mutam S.cfg + normalizam + re-renderizam
+// no mount atual (form container OU view-container).
 // ─────────────────────────────────────────────────────────────────────────────
 (function () {
   'use strict';
-  var S = null; // { tId, t, sport, cfg }
+  var S = null; // { mode:'form'|'page', mountEl, tId, t, sport, cfg }
   var _safe = function (s) { return (window._safeHtml || function (x) { return x; })(s == null ? '' : String(s)); };
 
   function _tid() { var h = (location.hash || '').replace(/^#/, '').split('/'); return h[1] || ''; }
-  function _rerender() { var c = document.getElementById('view-container'); if (c) window.renderFormatoPage(c); }
-  function _norm() { S.cfg = window.FORMAT2.normalize(S.cfg, S.sport); }
+  function _norm() { if (S) S.cfg = window.FORMAT2.normalize(S.cfg, S.sport); }
+  function _rerender() {
+    if (!S) return;
+    if (S.mode === 'form') {
+      var el = document.getElementById('f2-config-mount');
+      if (el) el.innerHTML = _bodyControls();
+    } else {
+      var c = document.getElementById('view-container');
+      if (c) window.renderFormatoPage(c);
+    }
+  }
 
   function _pill(active, onclick, label) {
     var on = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;';
@@ -22,81 +34,28 @@
     return '<button type="button" onclick="' + onclick + '" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap;margin:0 4px 4px 0;' + (active ? on : off) + '">' + label + '</button>';
   }
   function _sec(title, inner) {
-    return '<div style="margin-bottom:18px;"><div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px;">' + title + '</div>' + inner + '</div>';
+    return '<div style="margin-bottom:16px;"><div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px;">' + title + '</div>' + inner + '</div>';
   }
-  function _num(id, val, min, max, onchange) {
+  function _num(val, min, max, onchange) {
     return '<input type="number" min="' + min + '" max="' + max + '" value="' + val + '" onchange="' + onchange + '" style="width:60px;text-align:center;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);">';
   }
 
-  window.renderFormatoPage = function (container) {
-    var tId = _tid();
-    var lookup = window._findTournamentById || function () { return null; };
-    var t = lookup(tId);
-    var hdr = window._renderBackHeader({ href: '#tournaments/' + tId, label: 'Voltar', middleHtml: '<b>Formato do torneio</b>' });
-    if (!t) {
-      container.innerHTML = hdr + '<div style="padding:24px;text-align:center;color:var(--text-muted);">Torneio não encontrado. Abra logado, pelo app.</div>';
-      return;
-    }
-    var sport = t.sport || 'Beach Tennis';
-    if (!S || S.tId !== tId) {
-      var init = (t.fmt2 && typeof t.fmt2 === 'object') ? window.FORMAT2.normalize(t.fmt2, sport) : window.FORMAT2.defaultConfig(sport);
-      S = { tId: tId, t: t, sport: sport, cfg: init };
-    } else { S.t = t; }
-    container.innerHTML = hdr + _body();
-  };
-
-  // ── Handlers (globais) ──
-  window._f2Disputa = function (v) { S.cfg.disputa = v; _norm(); _rerender(); };
-  window._f2Grupos = function (v) { S.cfg.grupos = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
-  window._f2Parceria = function (v) { S.cfg.parceria = v; _norm(); _rerender(); };
-  window._f2Form = function (v) { S.cfg.formacaoDupla = v; _norm(); _rerender(); };
-  window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
-  window._f2Turnos = function (v) { S.cfg.rodadas.turnos = v; _norm(); _rerender(); };
-  window._f2Rn = function (v) { S.cfg.rodadas.n = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
-  window._f2Class = function (v) { S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
-  window._f2Elim = function (b) { S.cfg.eliminatoria.ativa = !!b; _norm(); _rerender(); };
-  window._f2Linhas = function (n) { S.cfg.eliminatoria.linhas = n; _norm(); _rerender(); };
-  window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
-  window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };
-  window._f2Terceiro = function (b) { S.cfg.eliminatoria.terceiro = !!b; _norm(); /* sem rerender */ };
-  window._f2LineName = function (i, v) { if (S.cfg.eliminatoria.nomes) S.cfg.eliminatoria.nomes[i] = v; /* sem rerender (preserva foco) */ };
-
-  window._f2Apply = function () {
-    var t = S.t;
-    var out = window.FORMAT2.compileToPhases(S.cfg, { sport: S.sport, resultEntry: t.resultEntry || ['organizer'] });
-    Object.assign(t, out.topLevel);
-    t.phases = out.phases;
-    t.fmt2 = S.cfg;                          // guarda a config pra re-editar
-    // limpa resíduo liga quando vira Fase de Grupos, e reseta estado pré-sorteio
-    if (t.format === 'Fase de Grupos') { t.ligaRoundFormat = 'standard'; t.ligaDrawMode = 'standard'; }
-    t.currentPhaseIndex = 0; t.currentStage = null;
-    t.matches = []; t.rounds = []; t.groups = []; t.standings = []; t.thirdPlaceMatch = null;
-    t.updatedAt = new Date().toISOString();
-    var done = function () { if (window.showNotification) showNotification('Formato aplicado', window.FORMAT2.summary(S.cfg), 'success'); location.hash = '#tournaments/' + S.tId; };
-    try {
-      var p = (window.FirestoreDB && window.FirestoreDB.saveTournament) ? window.FirestoreDB.saveTournament(t) : null;
-      if (p && p.then) p.then(done).catch(function (e) { if (window.showNotification) showNotification('Erro ao salvar', String((e && e.message) || e), 'error'); });
-      else done();
-    } catch (e) { if (window.showNotification) showNotification('Erro ao salvar', String((e && e.message) || e), 'error'); }
-  };
-
-  function _body() {
+  // ── Controles do configurador (compartilhados form+page) ──
+  function _bodyControls() {
     var cfg = S.cfg, sport = S.sport;
     var allowsS = window.FORMAT2.allowsSingles(sport);
     var isDupla = cfg.disputa === 'dupla';
     var um = cfg.grupos === 1;
     var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada');
     var scoreInd = cfg._scoreBy === 'individual';
-    var h = '<div style="max-width:720px;margin:0 auto;padding:14px 16px 44px;">';
+    var h = '';
 
-    // Disputa
     if (allowsS) {
       h += _sec('Disputa', _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') + _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas'));
     } else {
       h += _sec('Disputa', '<div style="font-size:0.85rem;color:var(--text-muted);">👥 Duplas <span style="opacity:0.7;">(' + _safe(sport) + ' é sempre em duplas)</span></div>');
     }
 
-    // Slider grupos
     var gLabel = um ? '1 grupo — <b>Pontos Corridos</b> (tabela única, classificação geral)' : (cfg.grupos + ' grupos — <b>Fase de Grupos</b> (classificação por grupo)');
     h += _sec('Estrutura — nº de grupos',
       '<div style="display:flex;align-items:center;gap:12px;">' +
@@ -104,7 +63,6 @@
       '<span style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#c7d2fe;">' + cfg.grupos + '</span></div>' +
       '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">' + gLabel + '</div>');
 
-    // Parceria
     if (isDupla && um) {
       var pr = cfg.parceria;
       var prBtns = _pill(pr === 'fixa', 'window._f2Parceria(\'fixa\')', '🔒 Dupla fixa') +
@@ -117,7 +75,6 @@
       h += _sec('Parceria', '<div style="font-size:0.82rem;color:#34d399;">🔒 Duplas fixas <span style="color:var(--text-muted);">(sorteadas uma vez e fixas nos grupos)</span></div>');
     }
 
-    // Rodadas
     if (um && !rotativo) {
       var modo = cfg.rodadas.modo;
       var rBtns = _pill(modo === 'todos', 'window._f2Modo(\'todos\')', '🔄 Todos contra todos');
@@ -126,18 +83,16 @@
       if (modo === 'todos') {
         inner += '<div style="margin-top:8px;">' + _pill(cfg.rodadas.turnos === 'ida', 'window._f2Turnos(\'ida\')', 'Ida') + _pill(cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(\'ida_volta\')', 'Ida e volta') + '</div>';
       } else {
-        inner += '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num('n', cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Com rodadas insuficientes, os confrontos usam clusters (equilíbrio) e sit-out balanceado.</div>';
+        inner += '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Com rodadas insuficientes, os confrontos usam clusters (equilíbrio) e sit-out balanceado.</div>';
       }
       h += _sec('Rodadas', inner);
     } else if (um && rotativo) {
-      h += _sec('Rodadas', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num('n', cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Sorteio a cada rodada — parceiro' + (cfg.parceria === 'rei_rainha' ? ' (grupos de 4)' : '') + ' e adversário sorteados; pontuação individual; sit-out balanceado.</div>');
+      h += _sec('Rodadas', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Sorteio a cada rodada — parceiro' + (cfg.parceria === 'rei_rainha' ? ' (grupos de 4)' : '') + ' e adversário sorteados; pontuação individual; sit-out balanceado.</div>');
     }
 
-    // Classificação
     var classLabel = um ? 'Nº de classificados (total) para a eliminatória' : 'Nº de classificados por grupo';
-    h += _sec('Classificação', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;flex-wrap:wrap;">' + classLabel + ' ' + _num('c', cfg.classificados, 1, 64, 'window._f2Class(this.value)') + '</div>');
+    h += _sec('Classificação', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;flex-wrap:wrap;">' + classLabel + ' ' + _num(cfg.classificados, 1, 64, 'window._f2Class(this.value)') + '</div>');
 
-    // Eliminatória
     var e = cfg.eliminatoria;
     var elimForced = cfg.grupos > 1;
     var elimHead = elimForced
@@ -160,15 +115,68 @@
         eb += '<div style="margin-top:10px;font-size:0.78rem;color:#34d399;">🔒 As duplas já vêm formadas e seguem juntas.</div>';
       }
       eb += '<div style="margin-top:12px;"><label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" ' + (e.terceiro ? 'checked' : '') + ' onchange="window._f2Terceiro(this.checked)"> <span style="font-size:0.85rem;">Disputa de 3º lugar</span></label></div>';
-      eb += '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);">O esqueleto da chave é pré-desenhado pelo nº de classificados; os confrontos saem da performance (semeadura — os melhores só se cruzam no fim).</div>';
     }
     h += _sec('Eliminatória', elimHead + eb);
 
-    // Resumo + Aplicar
-    h += '<div style="margin-top:10px;padding:11px 13px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);font-size:0.82rem;color:#a5b4fc;">📋 ' + _safe(window.FORMAT2.summary(cfg)) + '</div>';
-    h += '<button type="button" onclick="window._f2Apply()" style="margin-top:16px;width:100%;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">Aplicar formato ao torneio</button>';
-    h += '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);text-align:center;">Depois de aplicar, volte ao torneio e use <b>Sortear</b>.</div>';
-    h += '</div>';
+    h += '<div style="margin-top:4px;padding:11px 13px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);font-size:0.82rem;color:#a5b4fc;">📋 ' + _safe(window.FORMAT2.summary(cfg)) + '</div>';
     return h;
   }
+
+  // ── Handlers globais (form + page) ──
+  window._f2Disputa = function (v) { S.cfg.disputa = v; _norm(); _rerender(); };
+  window._f2Grupos = function (v) { S.cfg.grupos = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
+  window._f2Parceria = function (v) { S.cfg.parceria = v; _norm(); _rerender(); };
+  window._f2Form = function (v) { S.cfg.formacaoDupla = v; _norm(); _rerender(); };
+  window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
+  window._f2Turnos = function (v) { S.cfg.rodadas.turnos = v; _norm(); _rerender(); };
+  window._f2Rn = function (v) { S.cfg.rodadas.n = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
+  window._f2Class = function (v) { S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
+  window._f2Elim = function (b) { S.cfg.eliminatoria.ativa = !!b; _norm(); _rerender(); };
+  window._f2Linhas = function (n) { S.cfg.eliminatoria.linhas = n; _norm(); _rerender(); };
+  window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
+  window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };
+  window._f2Terceiro = function (b) { S.cfg.eliminatoria.terceiro = !!b; _norm(); };
+  window._f2LineName = function (i, v) { if (S && S.cfg.eliminatoria.nomes) S.cfg.eliminatoria.nomes[i] = v; };
+
+  // ── MODO FORM: monta os controles dentro do #fase1-box do editar/criar. ──
+  // sport: modalidade; initialCfg: config existente (t.fmt2) ou null (default do esporte).
+  window._f2MountInForm = function (container, sport, initialCfg) {
+    sport = sport || 'Beach Tennis';
+    var cfg = (initialCfg && typeof initialCfg === 'object') ? window.FORMAT2.normalize(initialCfg, sport) : window.FORMAT2.defaultConfig(sport);
+    S = { mode: 'form', mountEl: container, sport: sport, cfg: cfg };
+    if (container) container.innerHTML = _bodyControls();
+  };
+  // Config atual (pro save do form). null se não montado em modo form.
+  window._f2GetConfig = function () { return (S && S.mode === 'form') ? window.FORMAT2.normalize(S.cfg, S.sport) : null; };
+  // Atualiza a modalidade sem perder a config (quando o form troca o esporte).
+  window._f2SetSport = function (sport) { if (S) { S.sport = sport || S.sport; _norm(); _rerender(); } };
+
+  // ── MODO PAGE (legado): página #formato/:tId ──
+  window.renderFormatoPage = function (container) {
+    var tId = _tid();
+    var lookup = window._findTournamentById || function () { return null; };
+    var t = lookup(tId);
+    var hdr = window._renderBackHeader({ href: '#tournaments/' + tId, label: 'Voltar', middleHtml: '<b>Formato do torneio</b>' });
+    if (!t) { container.innerHTML = hdr + '<div style="padding:24px;text-align:center;color:var(--text-muted);">Torneio não encontrado. Abra logado, pelo app.</div>'; return; }
+    var sport = t.sport || 'Beach Tennis';
+    if (!S || S.mode !== 'page' || S.tId !== tId) {
+      var init = (t.fmt2 && typeof t.fmt2 === 'object') ? window.FORMAT2.normalize(t.fmt2, sport) : window.FORMAT2.defaultConfig(sport);
+      S = { mode: 'page', tId: tId, t: t, sport: sport, cfg: init };
+    } else { S.t = t; }
+    container.innerHTML = hdr + '<div style="max-width:720px;margin:0 auto;padding:14px 16px 44px;">' + _bodyControls() +
+      '<button type="button" onclick="window._f2ApplyPage()" style="margin-top:16px;width:100%;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">Aplicar formato ao torneio</button></div>';
+  };
+  window._f2ApplyPage = function () {
+    var t = S.t;
+    var out = window.FORMAT2.compileToPhases(S.cfg, { sport: S.sport, resultEntry: t.resultEntry || ['organizer'] });
+    Object.assign(t, out.topLevel);
+    t.phases = out.phases; t.fmt2 = S.cfg;
+    if (t.format === 'Fase de Grupos') { t.ligaRoundFormat = 'standard'; t.ligaDrawMode = 'standard'; }
+    t.currentPhaseIndex = 0; t.currentStage = null;
+    t.matches = []; t.rounds = []; t.groups = []; t.standings = []; t.thirdPlaceMatch = null;
+    t.updatedAt = new Date().toISOString();
+    var done = function () { if (window.showNotification) showNotification('Formato aplicado', window.FORMAT2.summary(S.cfg), 'success'); location.hash = '#tournaments/' + S.tId; };
+    try { var p = (window.FirestoreDB && window.FirestoreDB.saveTournament) ? window.FirestoreDB.saveTournament(t) : null; if (p && p.then) p.then(done).catch(function (e) { if (window.showNotification) showNotification('Erro ao salvar', String((e && e.message) || e), 'error'); }); else done(); }
+    catch (e) { if (window.showNotification) showNotification('Erro ao salvar', String((e && e.message) || e), 'error'); }
+  };
 })();

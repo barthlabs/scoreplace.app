@@ -1725,6 +1725,37 @@ function setupCreateTournamentModal() {
     window._renderPhases();
   };
   window._removePhase = function(i) { window._phasesUserTouched = true; if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
+
+  // v4.4.3: monta o CONFIGURADOR ÚNICO (format2) dentro do #fase1-box e ESCONDE os
+  // controles de estrutura antigos (formato/modo/grupos/liga/elim/rei-rainha/etc.).
+  // GSM, categorias, datas, W.O. e lançamento continuam do form. Idempotente: esconde
+  // sempre; monta a config só 1× (não reinicia a cada _onFormatoChange).
+  window._f2MountInEditForm = function () {
+    var box = document.getElementById('fase1-box');
+    if (!box || !window.FORMAT2 || typeof window._f2MountInForm !== 'function') return;
+    // Esconde os controles de estrutura que o format2 substitui.
+    ['formato-buttons', 'formato-desc', 'dupla-elim-row', 'suico-fields', 'liga-fields',
+     'liga-draw-schedule', 'suico-draw-schedule-fields', 'elim-settings', 'grupos-fields',
+     'rei-rainha-fields', 'round-robin-fields', 'manual-pairing-container', 'phases-list',
+     'draw-mode-buttons', 'draw-mode-desc'
+    ].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    // Esconde os labels órfãos "Formato" e "Modo de Sorteio".
+    var fb = document.getElementById('formato-buttons');
+    if (fb) { var fg = fb.closest ? fb.closest('.form-group') : null; if (fg) { var l1 = fg.querySelector('label.form-label'); if (l1) l1.style.display = 'none'; } }
+    var dmb = document.getElementById('draw-mode-buttons');
+    if (dmb && dmb.parentElement) { var l2 = dmb.parentElement.querySelector('label.form-label'); if (l2) l2.style.display = 'none'; }
+    // Injeta o mount 1× e inicia a config (default do esporte ou t.fmt2 do torneio em edição).
+    if (document.getElementById('f2-config-mount')) return;
+    var mount = document.createElement('div');
+    mount.id = 'f2-config-mount';
+    mount.style.cssText = 'margin:2px 0 10px;';
+    try { box.insertBefore(mount, box.children[1] || null); } catch (e) { box.appendChild(mount); }
+    var sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || 'Beach Tennis';
+    var initCfg = null;
+    var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
+    if (editId && typeof window._findTournamentById === 'function') { var t = window._findTournamentById(editId); if (t && t.fmt2) initCfg = t.fmt2; }
+    window._f2MountInForm(mount, sport, initCfg);
+  };
   window._setPhaseField = function(i, field, value) {
     var ph = window._extraPhases[i]; if (!ph) return;
     if (['rounds', 'gruposCount', 'gruposClassified'].indexOf(field) !== -1) value = Math.max(1, parseInt(value) || 1);
@@ -2920,6 +2951,10 @@ function setupCreateTournamentModal() {
 
   window._onFormatoChange = function () {
     if (!document.getElementById('select-formato')) return; // form not in DOM (e.g. moved to #novo-torneio then navigated away)
+    // v4.4.3: o CONFIGURADOR ÚNICO (format2) é montado dentro do #fase1-box e esconde os
+    // controles de estrutura antigos. Deferido pra rodar DEPOIS deste _onFormatoChange
+    // (que seta displays) — o mount re-esconde tudo. Idempotente (config monta 1×).
+    setTimeout(function () { if (typeof window._f2MountInEditForm === 'function') { try { window._f2MountInEditForm(); } catch (e) { if (window._warn) window._warn('[f2 mount] ' + e); } } }, 0);
     const fmt = document.getElementById('select-formato').value;
     const isElim = fmt === 'elim_simples' || fmt === 'elim_dupla';
     const isSuico = fmt === 'suico';
@@ -6285,6 +6320,22 @@ function setupCreateTournamentModal() {
         // guard blinda contra qualquer save sem fases derrubando um torneio multi-fase.
         // Flag transiente — saveTournament lê e REMOVE antes de gravar no Firestore.
         tourData._allowConfigReset = !!window._phasesUserTouched;
+        // v4.4.3: se o CONFIGURADOR ÚNICO (format2) está montado no form, ELE é a FONTE do
+        // formato — sobrescreve top-level + phases com o compilado. GSM/categorias/datas
+        // (top-level) continuam do form; as fases compiladas têm scoring:null → herdam.
+        try {
+          var _f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
+          if (_f2cfg && window.FORMAT2 && typeof window.FORMAT2.compileToPhases === 'function') {
+            var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
+            var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry });
+            Object.assign(tourData, _f2out.topLevel);
+            tourData.phases = _f2out.phases;
+            tourData.fmt2 = _f2cfg;
+            tourData._allowConfigReset = true;
+            if (tourData.format === 'Fase de Grupos') { tourData.ligaRoundFormat = 'standard'; tourData.ligaDrawMode = 'standard'; }
+            if (window._log) window._log('[save] format2 override: ' + window.FORMAT2.summary(_f2cfg) + ' | phases=' + _f2out.phases.length);
+          }
+        } catch (_f2e) { if (window._warn) window._warn('[save] format2 override falhou: ' + _f2e); }
         // v2.6.49: nome custom da Fase 1 persiste SEMPRE (inclusive fase única, onde
         // phases fica null). Antes só era gravado dentro de phases[0] quando havia
         // fase extra — por isso o nome "não gravava" em torneio de fase única.
