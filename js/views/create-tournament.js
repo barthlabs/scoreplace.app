@@ -1462,159 +1462,9 @@ function setupCreateTournamentModal() {
     h += '</div>';
     return h;
   };
-  // Grava data/hora da fase sem re-render (preserva foco do input). — v2.6.65
-  window._setPhaseDate = function(i, field, value) {
-    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
-    ph[field] = value;
-  };
-  // Datas da fase canônicas (mesmo visual da Fase 1: labels no topo, campos na linha mais baixa).
-  window._phaseDatesHtml = function(i, ph) {
-    var T = window._t || function(k){ return k; };
-    var col = 'flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;';
-    var lbl = 'font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;';
-    var rowS = 'display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;';
-    var dInp = 'padding:5px 4px; font-size:0.7rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;';
-    var tInp = 'padding:5px 3px; font-size:0.74rem; width:60px; flex-shrink:0; box-sizing:border-box;';
-    function cell(label, dKey, tKey) {
-      // oninput de Início/Término também recalcula as Rodadas do Agendamento (forward).
-      var extra = (dKey === 'startDate' || dKey === 'endDate' || dKey === 'startTime' || dKey === 'endTime') ? '; window._recalcPhaseRounds && window._recalcPhaseRounds(' + i + ')' : '';
-      return '<div style="' + col + '"><div style="' + lbl + '">' + T(label) + '</div><div style="' + rowS + '">'
-        + '<input type="date" class="form-control" id="ph-' + dKey + '-' + i + '" value="' + (ph[dKey] || '') + '" oninput="window._setPhaseDate(' + i + ',\'' + dKey + '\',this.value)' + extra + '" style="' + dInp + '">'
-        + '<input type="time" class="form-control" id="ph-' + tKey + '-' + i + '" value="' + (ph[tKey] || '') + '" oninput="window._setPhaseDate(' + i + ',\'' + tKey + '\',this.value)' + extra + '" style="' + tInp + '">'
-        + '</div></div>';
-    }
-    var h = '<div style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.75rem; margin-top:10px;">';
-    h += '<div style="font-size:0.72rem; color:#a5b4fc; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem;">📅 ' + T('create.phaseDatesTitle') + '</div>';
-    h += '<div class="dates-row" style="display:flex; gap:10px; align-items:stretch; flex-wrap:wrap;">';
-    // Prazo de inscrição só aparece quando inscrições FECHADAS (igual à Fase 1).
-    if ((ph.lateEnrollment || 'closed') === 'closed') h += cell('create.phaseEnrollDeadline', 'regDate', 'regTime');
-    h += cell('create.phaseStart', 'startDate', 'startTime');
-    h += cell('create.phaseEnd', 'endDate', 'endTime');
-    h += '</div></div>';
-    return h;
-  };
-  // Inscrições durante a fase (Fechadas / Aberta-expande) — mutuamente exclusivo. — v2.6.66
-  window._setPhaseLateEnroll = function(i, mode) {
-    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
-    ph.lateEnrollment = mode;
-    window._renderPhases();
-  };
-  window._phaseLateEnrollHtml = function(i, mode) {
-    var T = window._t || function(k){ return k; };
-    // 3 estados (= Fase 1): 'closed' (Fechadas) | 'expand' (aberta + novos confrontos) | 'standby' (aberta, sem novos confrontos).
-    mode = mode || 'closed';
-    var closed = (mode === 'closed');
-    var expand = (mode === 'expand');
-    var rowS = 'padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
-    var swS = '--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;';
-    // Título + ícone canônicos seguem a posição de cada toggle (v3.1.20) — idêntico à Fase 1.
-    var mLbl = window._lateEnrollLabel('master', closed);
-    var cLbl = window._lateEnrollLabel('conf', expand);
-    var h = '<div style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-top: 12px;">';
-    h += '<p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>';
-    h += '<div style="display:flex;flex-direction:column;gap:8px;">';
-    // Fechadas/Abertas (master): ligado = fechada; desligado = aberta (cai em standby).
-    h += '<div class="toggle-row" style="' + rowS + '"><div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">' + mLbl.icon + '</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + mLbl.title + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(closed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc') + '</div></div></div>';
-    h += '<label class="toggle-switch" style="' + swS + '"><input type="checkbox"' + (closed ? ' checked' : '') + ' onchange="window._setPhaseLateEnroll(' + i + ', this.checked ? \'closed\' : \'standby\')"><span class="toggle-slider"></span></label></div>';
-    // Novos Confrontos / Suplentes Apenas: SÓ aparece quando NÃO fechada (não há suplentes com inscrição fechada).
-    if (!closed) {
-      h += '<div class="toggle-row" style="' + rowS + '"><div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">' + cLbl.icon + '</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + cLbl.title + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(expand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc') + '</div></div></div>';
-      h += '<label class="toggle-switch" style="' + swS + '"><input type="checkbox"' + (expand ? ' checked' : '') + ' onchange="window._setPhaseLateEnroll(' + i + ', this.checked ? \'expand\' : \'standby\')"><span class="toggle-slider"></span></label></div>';
-    }
-    h += '</div></div>';
-    return h;
-  };
-  // ─── Agendamento de Sorteios por fase (só Pontos Corridos) — v2.6.67 ───
-  window._setPhaseDraw = function(i, field, value) {
-    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
-    ph[field] = value;
-  };
-  // v3.1.17: atualiza o texto explicativo da cadência por fase (#ph-draw-explain-i).
-  window._updatePhaseDrawExplain = function(i) {
-    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
-    var ex = document.getElementById('ph-draw-explain-' + i); if (!ex) return;
-    ex.innerHTML = window._drawScheduleExplainText({
-      interval: ph.drawIntervalDays, rounds: ph.rounds,
-      firstDate: ph.drawFirstDate || ph.startDate || '', endDate: ph.endDate || ''
-    });
-  };
-  // FORWARD: datas/intervalo → nº de rodadas (não briga com digitação no campo).
-  // Intervalo vazio/0 → 1 rodada única (sem repetição). Atualiza o texto explicativo.
-  window._recalcPhaseRounds = function(i) {
-    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
-    var input = document.getElementById('ph-rounds-' + i);
-    var firstDateVal = ph.drawFirstDate || ph.startDate || '';
-    var timeVal = ph.drawFirstTime || ph.startTime || '19:00';
-    var interval = parseInt(ph.drawIntervalDays, 10);
-    var first = firstDateVal ? new Date(firstDateVal + 'T' + timeVal + ':00') : null;
-    if (first && !isNaN(first.getTime())) {
-      if (!interval || interval < 1) {
-        ph.rounds = 1; if (input && document.activeElement !== input) input.value = 1;
-      } else {
-        var end = ph.endDate ? new Date(ph.endDate + 'T' + (ph.endTime || '23:59') + ':00') : null;
-        if (end && !isNaN(end.getTime()) && end >= first) {
-          var rounds = Math.floor((end - first) / (interval * 86400000)) + 1;
-          if (rounds < 1) rounds = 1;
-          ph.rounds = rounds;
-          if (input && document.activeElement !== input) input.value = rounds;
-        }
-      }
-    }
-    window._updatePhaseDrawExplain(i);
-  };
-  // v3.1.17 REVERSE: nº de rodadas (>1) → INTERVALO (dias entre sorteios), calculado da
-  // janela 1º sorteio → fim da fase (interval = (fim − 1ºsorteio) / (rodadas − 1)).
-  // Sem fim da fase válido, mantém o legado (rodadas → fim da fase). Pedido do dono.
-  window._applyPhaseRounds = function(i) {
-    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
-    var input = document.getElementById('ph-rounds-' + i);
-    var rounds = input ? parseInt(input.value, 10) : 0;
-    ph.rounds = (rounds && rounds >= 1) ? rounds : 1;
-    var firstDateVal = ph.drawFirstDate || ph.startDate || '';
-    var timeVal = ph.drawFirstTime || ph.startTime || '19:00';
-    var first = firstDateVal ? new Date(firstDateVal + 'T' + timeVal + ':00') : null;
-    if (first && !isNaN(first.getTime()) && rounds >= 2) {
-      var end = ph.endDate ? new Date(ph.endDate + 'T' + (ph.endTime || '23:59') + ':00') : null;
-      if (end && !isNaN(end.getTime()) && end > first) {
-        var ivDays = Math.max(1, Math.round((end - first) / ((rounds - 1) * 86400000)));
-        ph.drawIntervalDays = ivDays;
-        var ivEl = document.getElementById('ph-draw-interval-' + i);
-        if (ivEl && document.activeElement !== ivEl) ivEl.value = ivDays;
-      } else {
-        var interval = parseInt(ph.drawIntervalDays, 10);
-        if (interval && interval >= 1) {
-          var endDate = new Date(first.getTime() + (rounds - 1) * interval * 86400000);
-          ph.endDate = endDate.getFullYear() + '-' + String(endDate.getMonth() + 1).padStart(2, '0') + '-' + String(endDate.getDate()).padStart(2, '0');
-          ph.endTime = timeVal;
-          var endEl = document.getElementById('ph-endDate-' + i); if (endEl) endEl.value = ph.endDate;
-          var endTEl = document.getElementById('ph-endTime-' + i); if (endTEl) endTEl.value = timeVal;
-        }
-      }
-    }
-    window._updatePhaseDrawExplain(i);
-  };
-  window._phaseDrawScheduleHtml = function(i, ph) {
-    var T = window._t || function(k){ return k; };
-    var grp = 'margin:0;flex:0 0 auto;';
-    var lblS = 'font-size:0.7rem;margin-bottom:2px;display:block;color:var(--text-muted);';
-    // v3.1.18: box do Agendamento (verde) com o "Sorteio manual" ANINHADO dentro (box dentro do box).
-    var h = '<div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 0.6rem 0.75rem; margin-top: 12px;">';
-    h += '<p style="margin: 0 0 0.25rem; font-size: 0.75rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">' + T('create.drawSchedule') + '</p>';
-    h += '<p style="margin: 0 0 0.55rem; font-size: 0.72rem; color: var(--text-muted); line-height:1.45;">Indique o <b>intervalo de repetição</b> ou o <b>número de rodadas</b> — o sistema calcula o outro de acordo.</p>';
-    h += '<p style="margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-bright); font-weight: 600;">Primeiro Sorteio</p>';
-    h += '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:0.5rem;">';
-    h += '<div style="' + grp + '"><label style="' + lblS + '">' + T('create.dateLabel') + '</label><input type="date" class="form-control" value="' + (ph.drawFirstDate || '') + '" oninput="window._setPhaseDraw(' + i + ',\'drawFirstDate\',this.value); window._recalcPhaseRounds(' + i + ')" style="width:160px;max-width:100%;padding:6px 8px;font-size:0.85rem;"></div>';
-    h += '<div style="' + grp + '"><label style="' + lblS + '">' + T('create.timeLabel') + '</label><input type="time" class="form-control" value="' + (ph.drawFirstTime || '19:00') + '" oninput="window._setPhaseDraw(' + i + ',\'drawFirstTime\',this.value); window._recalcPhaseRounds(' + i + ')" style="width:100px;padding:6px 8px;font-size:0.85rem;"></div>';
-    h += '<div style="' + grp + '"><label style="' + lblS + '">' + T('create.repeatEvery') + '</label><div style="display:flex;align-items:center;gap:4px;"><input type="number" id="ph-draw-interval-' + i + '" class="form-control" min="1" max="90" value="' + (ph.drawIntervalDays != null && ph.drawIntervalDays !== '' ? ph.drawIntervalDays : 7) + '" oninput="window._setPhaseDraw(' + i + ',\'drawIntervalDays\',this.value); window._recalcPhaseRounds(' + i + ')" style="width:55px;padding:6px 8px;font-size:0.85rem;text-align:center;"><span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">' + T('create.daysUnit') + '</span></div></div>';
-    h += '<div style="margin:0;margin-left:18px;flex:0 0 auto;"><label style="font-size:0.7rem;margin-bottom:2px;display:block;color:#34d399;">Rodadas</label><div style="display:flex;align-items:center;gap:4px;"><input type="number" id="ph-rounds-' + i + '" min="1" max="60" value="' + (ph.rounds || 1) + '" class="form-control" oninput="window._applyPhaseRounds(' + i + ')" title="Digite o nº de rodadas — o intervalo entre sorteios é calculado sozinho a partir do fim da fase" style="width:62px;min-height:40px;padding:6px 8px;font-size:0.85rem;text-align:center;font-weight:700;color:#34d399;background:rgba(16,185,129,0.10);border-color:rgba(16,185,129,0.45);box-sizing:border-box;"><span style="font-size:0.85rem;color:var(--text-muted);white-space:nowrap;">rodadas</span></div></div>';
-    h += '</div>';
-    h += '<div id="ph-draw-explain-' + i + '" style="font-size:0.72rem;color:var(--text-muted);line-height:1.45;margin-top:2px;">' + window._drawScheduleExplainText({ interval: ph.drawIntervalDays, rounds: ph.rounds, firstDate: ph.drawFirstDate || ph.startDate || '', endDate: ph.endDate || '' }) + '</div>';
-    h += '<div style="background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.28); border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.6rem;">';
-    h += '<div class="toggle-row" style="margin:0;"><div class="toggle-row-label"><div><span style="font-weight:bold; color:var(--text-color);">' + T('create.manualDraw') + '</span><div class="toggle-desc">' + T('create.manualDrawDesc') + '</div></div></div><label class="toggle-switch"><input type="checkbox"' + (ph.drawManual ? ' checked' : '') + ' onchange="window._setPhaseDraw(' + i + ',\'drawManual\',this.checked)"><span class="toggle-slider"></span></label></div>';
-    h += '</div>';
-    h += '</div>';
-    return h;
-  };
+  // ⚰️ v4.4.x DELETADO: _phaseLateEnrollHtml + _setPhaseDraw (construtor de fases fase-2+).
+  // ⚰️ v4.4.x DELETADO: _updatePhaseDrawExplain / _recalcPhaseRounds / _applyPhaseRounds /
+  // _phaseDrawScheduleHtml (agendamento de sorteio por fase — construtor fase-2+ morto).
   // ─── Sistema de Pontuação (GSM) por fase — modelo OVERRIDE — v2.6.69 ───
   // ph.scoring null = herda o padrão do torneio; senão = override da fase.
   // (Personalizado fica no padrão do torneio — o modal global é hardwired à Fase 1.)
@@ -1623,62 +1473,7 @@ function setupCreateTournamentModal() {
     if (!sportEl || !sportEl.options[sportEl.selectedIndex]) return '';
     return sportEl.options[sportEl.selectedIndex].text.replace(/^[^\wÀ-ɏ]+/u, '').trim();
   };
-  window._phaseGsmSelectPreset = function(i, key) {
-    var ph = window._extraPhases && window._extraPhases[i]; if (!ph) return;
-    if (key === 'inherit') { ph.scoring = null; ph._gsmPreset = 'inherit'; window._renderPhases(); return; }
-    if (key === 'custom') { if (typeof window._openGSMConfig === 'function') window._openGSMConfig(i); return; }
-    var p = (window._gsmPresets || {})[key]; if (!p) return;
-    var adv = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : !!p.advantageRule;
-    ph._gsmPreset = key;
-    ph.scoring = {
-      type: 'sets', setsToWin: p.setsToWin, gamesPerSet: p.gamesPerSet,
-      tiebreakEnabled: p.tiebreakEnabled, tiebreakPoints: p.tiebreakPoints, tiebreakMargin: p.tiebreakMargin,
-      superTiebreak: p.superTiebreak, superTiebreakPoints: p.superTiebreakPoints, countingType: p.countingType,
-      advantageRule: adv, fixedSet: false, fixedSetGames: 6
-    };
-    window._renderPhases();
-  };
-  window._phaseGsmAdvantage = function(i, checked) {
-    var ph = window._extraPhases && window._extraPhases[i]; if (!ph || !ph.scoring) return;
-    ph.scoring.advantageRule = !!checked;
-    window._renderPhases();
-  };
-  window._phaseGsmHtml = function(i, ph) {
-    var T = window._t || function(k){ return k; };
-    var sc = ph.scoring || null;
-    // v2.6.82: sem "herda do torneio" — picker canônico (igual à Fase 1). Sem override
-    // (ph.scoring null) destaca o preset padrão DO TORNEIO; clicar define o override da fase.
-    var selKey;
-    if (ph._gsmPreset === 'custom') { selKey = 'custom'; }
-    else if (sc) { selKey = (sc.setsToWin >= 3) ? 'best5' : (sc.setsToWin === 2 ? 'best3' : 'set1'); }
-    else { var _ts = parseInt((document.getElementById('gsm-setsToWin') || {}).value, 10) || 1; selKey = (_ts >= 3) ? 'best5' : (_ts === 2 ? 'best3' : 'set1'); }
-    var opts = [['set1', '⚡', '1 Set'], ['best3', '🏆', 'Melhor de 3'], ['best5', '🎯', 'Melhor de 5'], ['custom', '⚙️', 'Personalizado']];
-    var h = '<div style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-top: 12px;">';
-    h += '<p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #c084fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 ' + T('create.matchFormat') + '</p>';
-    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;">';
-    opts.forEach(function(o){
-      var act = selKey === o[0];
-      var desc;
-      if (o[0] === 'custom') {
-        desc = (selKey === 'custom' && sc && window._gsmBuildDescFromValues) ? window._gsmBuildDescFromValues(sc.setsToWin, sc.gamesPerSet, sc.tiebreakEnabled, sc.tiebreakPoints, sc.superTiebreak, sc.superTiebreakPoints) : 'sets/games/TB à sua escolha';
-      } else {
-        desc = (window._gsmBuildDescFromValues ? (function(){ var p = window._gsmPresets[o[0]]; return window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints); })() : '');
-      }
-      h += '<button type="button" onclick="window._phaseGsmSelectPreset(' + i + ',\'' + o[0] + '\')" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;border:2px solid ' + (act ? 'rgba(168,85,247,0.7)' : 'rgba(255,255,255,0.1)') + ';background:' + (act ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.03)') + ';">';
-      h += '<span style="font-size:1.2rem;">' + o[1] + '</span><span style="font-size:0.76rem;font-weight:700;color:' + (act ? '#c084fc' : 'var(--text-bright)') + ';">' + o[2] + '</span>';
-      h += '<span style="font-size:0.62rem;color:var(--text-muted);text-align:center;line-height:1.25;">' + desc + '</span></button>';
-    });
-    h += '</div>';
-    // Vantagem (só quando há override e o esporte não trava no-Ad).
-    if (sc) {
-      var sport = window._currentSportName();
-      var locked = !!(window._gsmNoAdLocked && window._gsmNoAdLocked[sport]);
-      if (!locked) {
-        h += '<div style="margin-top:10px;padding:10px 12px;background:rgba(168,85,247,0.04);border-radius:10px;border:1px solid rgba(168,85,247,0.1);"><div class="toggle-row" style="padding:0;"><div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">' + T('create.gsmAdvantageLabel') + '</span><div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">' + T('create.gsmAdvantageDesc') + '</div></div><label class="toggle-switch toggle-sm"><input type="checkbox"' + (sc.advantageRule ? ' checked' : '') + ' onchange="window._phaseGsmAdvantage(' + i + ', this.checked)"><span class="toggle-slider"></span></label></div></div>';
-      }
-    }
-    return h;
-  };
+  // ⚰️ v4.4.x DELETADO: _phaseGsmSelectPreset / _phaseGsmAdvantage / _phaseGsmHtml (GSM por fase — construtor fase-2+ morto).
   // v2.6.79: default = 1 linha (chave única). Eliminatórias permite configurar 1/2/4
   // linhas via _setPhaseLineCount. Sem rótulos Ouro/Prata hardcoded — o organizador
   // nomeia cada linha (ou fica genérico "Chave N" no motor).
@@ -1714,19 +1509,11 @@ function setupCreateTournamentModal() {
   };
   // (removido v4.3.3: _phaseDests tinha rótulos "Ouro"/"Prata" hardcoded e zero callers —
   //  o nome de cada linha é 100% do organizador via mapping[i].label. Sem defaults de nome.)
-  window._addPhase = function() {
-    // ⚰️ v4.4.x — construtor de empilhamento de fases FORA DE AÇÃO (não apagado).
-    // Substituído pelo configurador único ⚙️ Formato (#formato/:tId, window.FORMAT2).
-    if (window.showNotification) window.showNotification('Use ⚙️ Formato', 'O construtor de fases foi substituído pelo configurador novo. Configure o formato em ⚙️ Formato (nas Ferramentas do Organizador, após criar o torneio).', 'info');
-    // Corpo antigo mantido morto abaixo (nunca executa):
-    if (true) return; // eslint-disable-line
-    window._phasesUserTouched = true;
-    if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
-    var n = window._extraPhases.length + 2;
-    window._extraPhases.push({ name: 'Fase ' + n, format: 'elim_dupla', reiRainha: false, rounds: 1, groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2, sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: 2, scope: 'per_group', fixedPairs: true, pairingStrategy: 'top', woScope: 'individual', rankingType: 'individual', resultEntry: ['organizer'], advancedScoring: null, lateEnrollment: 'closed', drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null, mapping: _phaseDefaultMapping('elim_dupla') });
-    window._renderPhases();
-  };
-  window._removePhase = function(i) { window._phasesUserTouched = true; if (window._extraPhases[i]) window._extraPhases.splice(i, 1); window._renderPhases(); };
+  // ⚰️ v4.4.x DELETADO: _addPhase / _removePhase (construtor de empilhamento de fases fase-2+).
+  // Stubs no-op: o botão #add-phase-btn é removido do DOM pelo _F2_REMOVE (format2); os stubs
+  // só garantem que qualquer onclick residual não lance "is not a function".
+  window._addPhase = function(){};
+  window._removePhase = function(){};
 
   // v4.4.3: monta o CONFIGURADOR ÚNICO (format2) dentro do #fase1-box e ESCONDE os
   // controles de estrutura antigos (formato/modo/grupos/liga/elim/rei-rainha/etc.).
@@ -1831,24 +1618,11 @@ function setupCreateTournamentModal() {
       }
     } catch (e) {}
   };
-  window._setPhaseField = function(i, field, value) {
-    var ph = window._extraPhases[i]; if (!ph) return;
-    if (['rounds', 'gruposCount', 'gruposClassified'].indexOf(field) !== -1) value = Math.max(1, parseInt(value) || 1);
-    if (field === 'reiRainha' || field === 'fixedPairs' || field === 'grandFinal') value = !!value;
-    ph[field] = value;
-    if (field === 'format') {
-      ph.mapping = _phaseDefaultMapping(value);
-      if (value !== 'liga') ph.reiRainha = false; // Rei/Rainha só em Pontos Corridos
-    }
-    // v2.6.83: dois eixos — qualifyQuantity ('all'|'top') × scope ('per_group'|'overall').
-    // Mantém qualifyMode normalizado pro save/motor/estimativa (legado): all|per_group|overall.
-    if (field === 'qualifyQuantity' || field === 'scope') {
-      var _q = ph.qualifyQuantity || 'top';
-      var _s = ph.scope || 'per_group';
-      ph.qualifyMode = (_q === 'all') ? 'all' : (_s === 'overall' ? 'overall' : 'per_group');
-    }
-    if (['format', 'reiRainha', 'sourceType', 'fixedPairs', 'qualifyMode', 'qualifyQuantity', 'scope', 'grandFinal', 'pairingStrategy', 'ligaCadence'].indexOf(field) !== -1) window._renderPhases();
-  };
+  // ⚰️ v4.4.x DELETADO: _setPhaseField (setter do construtor de fases fase-2+). Stub no-op —
+  // seus únicos call sites viviam em _phaseCardHtml/_phaseFormatGridHtml/_phaseDrawModeHtml
+  // (HTML nunca mais gerado, pois _renderPhases virou no-op). O stub evita qualquer erro
+  // "is not a function" caso um onclick residual seja alcançado.
+  window._setPhaseField = function(){};
   // v2.6.77: estratégia de avanço (Performance/Equilíbrio/Sorteio) é INDEPENDENTE
   // do toggle "Duplas fixas". A estratégia sempre define COMO os classificados vão
   // pra próxima fase (em pares fixos OU como indivíduos semeados); o toggle só decide
@@ -1948,225 +1722,11 @@ function setupCreateTournamentModal() {
     }
     return parts.join('  ·  ');
   }
-  function _phaseCardHtml(ph, i) {
-    var num = i + 2;
-    var esc = (window._safeHtml || function(s){ return s; });
-    var isLiga = ph.format === 'liga';
-    var isGrupos = ph.format === 'grupos_mata';
-    var fromPrev = ph.sourceType === 'previous';
-    var teamSize = parseInt((document.getElementById('tourn-team-size') || {}).value) || 1;
-    var qm = ph.qualifyMode || 'per_group';
-    var h = '';
-
-    // ─── BLOCO DE TRANSIÇÃO (como esta fase recebe os classificados da anterior) ───
-    // v2.6.75: fase extra SEMPRE vem dos classificados da fase anterior — inscrição
-    // direta não cabe numa transição. Origem fixa (sem botões de seleção).
-    ph.sourceType = 'previous';
-    var _txCol = !!ph._txCollapsed;
-    h += '<div style="border:1px dashed rgba(245,158,11,0.45);border-radius:12px;padding:10px 12px;margin-bottom:6px;background:rgba(245,158,11,0.05);">';
-    h += '<div style="display:flex;align-items:center;gap:8px;color:#f59e0b;' + (_txCol ? '' : 'margin-bottom:8px;') + '">';
-    h += _phCollapseBtn('window._togglePhaseCollapse(' + i + ',\'tx\')', _txCol, 'rgba(245,158,11,0.18)');
-    h += '<span style="flex-shrink:0;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">⇣ Como a Fase ' + num + ' recebe os classificados</span>';
-    if (_txCol) h += '<span style="font-size:0.72rem;color:var(--text-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">— ' + esc(_phaseTxSummary(ph, teamSize)) + '</span>';
-    h += '</div>';
-    if (!_txCol) {
-    // v2.6.83: "Quem classifica" = DOIS eixos independentes.
-    //  • Quantos: Todos | Os X melhores.   • Classificação: Por grupo | Geral.
-    var _qty = ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top');
-    var _basis = ph.scope || (ph.qualifyMode === 'overall' ? 'overall' : 'per_group');
-    var _topN = ph.qualifyTopN || (ph.mapping && ph.mapping[0] && ph.mapping[0].rankTo) || 2;
-    var _isElim = (ph.format === 'elim_simples' || ph.format === 'elim_dupla');
-    h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Quem classifica</div>';
-    h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">';
-    h += '<span style="font-size:0.68rem;color:var(--text-muted);min-width:82px;">Quantos:</span>';
-    h += _phBtn(i, 'qualifyQuantity', 'all', 'Todos', _qty === 'all');
-    h += _phBtn(i, 'qualifyQuantity', 'top', 'Os melhores', _qty === 'top');
-    if (_qty === 'top') h += '<input type="number" min="1" max="64" value="' + _topN + '" oninput="window._setPhaseTopN(' + i + ', this.value)" style="width:52px;text-align:center;' + _PH_INP + '">';
-    h += '</div>';
-    h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">';
-    h += '<span style="font-size:0.68rem;color:var(--text-muted);min-width:82px;">Classificação:</span>';
-    h += _phBtn(i, 'scope', 'per_group', 'Por grupo', _basis === 'per_group');
-    h += _phBtn(i, 'scope', 'overall', 'Geral', _basis === 'overall');
-    h += '</div>';
-    // v3.0.x: fase eliminatória + "Os melhores X" → o chaveamento se completa SEMPRE
-    // por repescagem das melhores não classificadas (pela tabela) até a potência de 2
-    // superior. Não há tela de resolução de potência de 2 aqui.
-    if (_isElim && _qty === 'top') {
-      h += '<div style="margin-bottom:10px;font-size:0.7rem;color:#fbbf24;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:7px 10px;line-height:1.4;">↳ <b>Repescagem automática:</b> como esta fase é eliminatória, se o nº de classificados não fechar uma potência de 2, o chaveamento é completado com a <b>repescagem das melhores duplas não classificadas</b> (pela tabela) até a potência de 2 superior — sem tela de resolução.</div>';
-    }
-    // Linhas (só Eliminatórias) — apenas o NOME de cada chave. Quem ocupa cada linha é
-    // decidido pelo critério "Como avançam" (Sorteio / Performance / Equilíbrio) abaixo.
-    if (_isElim) {
-      var _lon = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;';
-      var _loff = 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);';
-      var _nLines = (ph.mapping && ph.mapping.length) || 1;
-      h += '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 10px;margin-bottom:' + (teamSize >= 2 ? '10px' : '0') + ';">';
-      h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">Linhas (chaves paralelas) — cada uma é uma chave; os campeões convergem na grande final:</div>';
-      h += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">';
-      h += '<span style="font-size:0.72rem;color:var(--text-muted);">Nº de linhas:</span>';
-      [1, 2, 4].forEach(function(n){
-        h += '<button type="button" onclick="window._setPhaseLineCount(' + i + ',' + n + ')" style="padding:5px 13px;border-radius:9px;font-size:0.8rem;font-weight:700;cursor:pointer;' + (_nLines === n ? _lon : _loff) + '">' + n + '</button>';
-      });
-      h += '</div>';
-      h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:5px;">' + ((teamSize >= 2 && ph.fixedPairs !== false) ? 'Nomeie cada linha (as duplas entram em cada chave pela colocação na fase anterior):' : 'Nomeie cada linha (quem entra em cada chave vem do critério Sorteio / Performance / Equilíbrio abaixo):') + '</div>';
-      (ph.mapping || []).forEach(function(mp, mi){
-        h += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">';
-        h += '<span style="flex-shrink:0;font-size:0.9rem;">🔹</span>';
-        h += '<input type="text" value="' + esc(mp.label || '') + '" placeholder="Nome da linha ' + (mi + 1) + '" oninput="window._setPhaseMappingLabel(' + i + ', ' + mi + ', this.value)" style="flex:1;min-width:120px;' + _PH_INP + '">';
-        h += '</div>';
-      });
-      if (_nLines >= 2) {
-        var _gf = ph.grandFinal !== false;
-        h += '<div style="display:flex;align-items:center;gap:9px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">';
-        h += '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox"' + (_gf ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ',\'grandFinal\',this.checked)"><span class="toggle-slider"></span></label>';
-        h += '<div><span style="font-size:0.8rem;font-weight:600;color:var(--text-bright);">Grande final unindo as linhas</span><div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;">' + (_gf ? 'os campeões das linhas convergem num campeão único' : 'cada linha é independente — categoria própria, classificação separada') + '</div></div>';
-        h += '</div>';
-      }
-      h += '</div>';
-    }
-    // v4.3.x: DUPLA, uma vez formada, é FIXA até o fim (salvo suplente por W.O./contusão).
-    // O controle "como formar as duplas" (Performance/Equilíbrio/Sorteio) SÓ aparece quando
-    // ENTRAM INDIVÍDUOS — i.e. a fase anterior foi Rei/Rainha (ranking individual). Se a
-    // anterior já entregou duplas prontas, elas seguem juntas: só um selo informativo, sem
-    // escolha. "Cabeças de chave" saiu — a semeadura na chave é SEMPRE 1×N (genTierBracket
-    // afasta os melhores), independente da estratégia.
-    if (teamSize >= 2) {
-      ph.fixedPairs = true; // pares sempre fixos
-      if (ph.pairingStrategy === 'seed' && !isGrupos) ph.pairingStrategy = 'top'; // 'seed' saiu da UI
-      var _prevRR = (i === 0)
-        ? ((((document.getElementById('draw-mode') || {}).value)) === 'rei_rainha')
-        : !!(window._extraPhases[i - 1] && window._extraPhases[i - 1].reiRainha);
-      var _ps = ph.pairingStrategy || 'top';
-      if (_ps !== 'top' && _ps !== 'balanced' && _ps !== 'draw_among') _ps = 'top';
-      if (_prevRR) {
-        // fase anterior Rei/Rainha → forma as duplas a partir do ranking individual
-        h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">Como formar as duplas <span style="opacity:0.7;">— a fase anterior é Rei/Rainha (ranking individual)</span></div>';
-        h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-        [['top', '📈 Performance · 1º+2º'], ['balanced', '⚖️ Equilíbrio · 1º+últ.'], ['draw_among', '🎲 Sorteio']].forEach(function(p){
-          var act = _ps === p[0];
-          h += '<button type="button" onclick="window._setPhasePairing(' + i + ',\'' + p[0] + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;' + (act ? 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;' : 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);') + '">' + p[1] + '</button>';
-        });
-        h += '</div>';
-        h += '<div style="margin-top:6px;font-size:0.72rem;color:#34d399;display:flex;align-items:flex-start;gap:6px;">🔒 <span>Formada aqui, a dupla fica <b>fixa até o fim</b> (só muda por suplente em W.O./contusão).</span></div>';
-        var _nLx = (ph.mapping && ph.mapping.length) || 1;
-        if (_nLx >= 2) {
-          var _Lx = ph.mapping.map(function(mp, k){ return (mp.label || '').trim() || ('Linha ' + (k + 1)); });
-          var _expl;
-          if (_ps === 'top') _expl = 'As duplas são formadas por <b>performance</b>: <b>1º+2º</b>, <b>3º+4º</b>… A 1ª dupla vai pra <b>' + esc(_Lx[0]) + '</b>, a 2ª pra <b>' + esc(_Lx[1]) + '</b>' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
-          else if (_ps === 'balanced') _expl = 'As duplas são formadas por <b>equilíbrio</b>: <b>1º+último</b>, <b>2º+penúltimo</b>… A 1ª dupla vai pra <b>' + esc(_Lx[0]) + '</b>, a 2ª pra <b>' + esc(_Lx[1]) + '</b>' + (_nLx >= 4 ? ', e assim por diante' : '') + '.';
-          else _expl = 'As duplas são <b>sorteadas</b> e distribuídas igualmente entre as ' + _nLx + ' linhas.';
-          h += '<div style="margin-top:8px;font-size:0.72rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:7px 10px;line-height:1.4;">↳ ' + _expl + '</div>';
-        }
-      } else {
-        // duplas já vêm formadas da fase anterior → selo informativo, sem controle
-        h += '<div style="font-size:0.76rem;color:#34d399;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:8px 10px;line-height:1.45;display:flex;align-items:flex-start;gap:7px;">🔒 <span><b>Duplas fixas.</b> As duplas vêm formadas da fase anterior e seguem <b>juntas até o fim</b> — só mudam por suplente (W.O./contusão). Na distribuição, os melhores são sempre <b>afastados</b> (semeadura automática).</span></div>';
-      }
-    }
-    } // fim if(!_txCol)
-    h += '</div>'; // fim transição
-
-    // ─── BOX DA FASE (mesma config da Fase 1: Formato + Modo de Sorteio) ───
-    var _boxCol = !!ph._collapsed;
-    h += '<div style="border:1px solid rgba(129,140,248,0.35);border-radius:14px;padding:12px;margin-bottom:14px;background:rgba(99,102,241,0.06);">';
-    h += '<div style="display:flex;align-items:center;gap:8px;color:#a5b4fc;' + (_boxCol ? '' : 'margin-bottom:10px;') + '">';
-    h += _phCollapseBtn('window._togglePhaseCollapse(' + i + ',\'box\')', _boxCol, 'rgba(99,102,241,0.2)');
-    h += '<span style="flex-shrink:0;font-size:0.7rem;font-weight:800;color:#a5b4fc;background:rgba(99,102,241,0.2);padding:4px 10px;border-radius:7px;letter-spacing:0.5px;">FASE ' + num + '</span>';
-    h += '<input type="text" value="' + esc(ph.name || '') + '" placeholder="Nome da fase (opcional)" oninput="window._setPhaseField(' + i + ', \'name\', this.value)" style="flex:1;min-width:0;' + _PH_INP + '">';
-    h += '<button type="button" onclick="window._removePhase(' + i + ')" title="Remover fase" style="flex-shrink:0;border:none;background:rgba(239,68,68,0.15);color:#ef4444;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:0.95rem;font-weight:700;">✕</button>';
-    h += '</div>';
-    if (!_boxCol) {
-    // Formato — render CANÔNICA (mesma grade com ícones SVG + rótulos da Fase 1) — v2.6.64.
-    h += window._phaseFormatGridHtml(i, ph.format);
-    if (isLiga) {
-      // Modo de Sorteio canônico (Sorteio / Rei-Rainha) + Rodadas.
-      h += '<div style="margin-bottom:8px;">' + window._phaseDrawModeHtml(i, !!ph.reiRainha) + '</div>';
-      h += '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:' + (ph.reiRainha ? '8px' : '0') + ';">';
-      h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Rodadas <input type="number" min="1" max="30" value="' + (ph.rounds || 1) + '" oninput="window._setPhaseField(' + i + ', \'rounds\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
-      h += '</div>';
-      // v3.1.15: CADÊNCIA é eixo do formato Pontos Corridos, ORTOGONAL ao modo de
-      // sorteio — vale pra sorteio simples E Rei/Rainha (que é só o modo de sortear as
-      // equipes/confrontos, não um formato). ON = rodada a rodada (o motor incremental
-      // sorteia a próxima quando a atual fecha, estilo temporada — Rei/Rainha forma
-      // grupos de 4 rotativos a cada rodada); OFF = todos contra todos (sorteio único).
-      var _ligaIncr = ph.ligaCadence === 'incremental';
-      h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
-      h += '<label class="toggle-switch" style="--toggle-on-bg:#06b6d4;--toggle-on-glow:rgba(6,182,212,0.3);--toggle-on-border:#06b6d4;flex-shrink:0;"><input type="checkbox"' + (_ligaIncr ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ', \'ligaCadence\', this.checked ? \'incremental\' : \'round_robin\')"><span class="toggle-slider"></span></label>';
-      h += '<span style="font-size:0.82rem;font-weight:600;color:var(--text-bright);">🔁 Rodada a rodada</span>';
-      h += '<span style="font-size:0.72rem;color:var(--text-muted);">' + (_ligaIncr ? 'sorteia a próxima rodada quando a atual fecha' : 'todos contra todos (sorteio único)') + '</span>';
-      h += '</div>';
-      if (ph.reiRainha) {
-        h += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
-        h += '<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:3px;">Formação dos grupos</div><div style="display:flex;gap:6px;">' + _phBtn(i, 'groupsBy', 'sorteio', '🎲 Sorteio', (ph.groupsBy || 'sorteio') === 'sorteio') + _phBtn(i, 'groupsBy', 'ranking', '📊 Ranking', ph.groupsBy === 'ranking') + '</div></div>';
-        h += '</div>';
-      }
-    }
-    if (isGrupos) {
-      h += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">';
-      h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Nº de grupos <input type="number" min="2" max="16" value="' + (ph.gruposCount || 4) + '" oninput="window._setPhaseField(' + i + ', \'gruposCount\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
-      h += '<span style="display:flex;align-items:center;gap:6px;font-size:0.8rem;">Classificados/grupo <input type="number" min="1" max="8" value="' + (ph.gruposClassified || 2) + '" oninput="window._setPhaseField(' + i + ', \'gruposClassified\', this.value)" style="width:56px;text-align:center;' + _PH_INP + '"></span>';
-      h += '</div>';
-      // v4.3.x: semeadura SEMPRE ligada — os melhores são espalhados em grupos diferentes
-      // (pra só se cruzarem tarde). Deixou de ser toggle. buildPhaseGroupStage aplica via
-      // buildEntrantsByDest('seed').
-      ph.pairingStrategy = 'seed';
-      h += '<div style="font-size:0.72rem;color:var(--text-muted);display:flex;align-items:flex-start;gap:6px;">🎯 <span>Os melhores são sempre espalhados em grupos diferentes (semeadura automática).</span></div>';
-    }
-    // ─── Datas da fase POR FASE (v2.6.65) ───
-    h += window._phaseDatesHtml(i, ph);
-    // ─── Agendamento de Sorteios POR FASE (v2.6.67) — só Pontos Corridos ───
-    if (isLiga) h += window._phaseDrawScheduleHtml(i, ph);
-    // ─── Inscrições durante a fase POR FASE (v2.6.66) ───
-    h += window._phaseLateEnrollHtml(i, ph.lateEnrollment || 'closed');
-    // ─── Estimativa de tempo POR FASE (v2.6.68) ───
-    h += window._phaseEstimateHtml(i, ph);
-    // ─── Sistema de Pontuação (GSM) POR FASE (v2.6.69) ───
-    h += window._phaseGsmHtml(i, ph);
-    // ─── Pontuação Avançada POR FASE (v2.6.63) — só em Pontos Corridos (liga) ───
-    if (isLiga) {
-      h += '<div style="margin-top:12px;">' + window._advScoringHtml(i + 1, 'block', ph.advancedScoring) + '</div>';
-    }
-    // ─── W.O. + Lançamento de Resultados POR FASE (v2.6.59) ───
-    h += '<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;">';
-    h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">⚠️ W.O. (ausência)</div>';
-    h += '<div style="margin-bottom:10px;">' + window._woButtonsHtml(i + 1) + '</div>';
-    h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">📋 Lançamento dos resultados</div>';
-    h += window._resultEntryButtonsHtml(i + 1);
-    // ─── Classificação (Personalizada × Em blocos) POR FASE — logo após o lançamento.
-    //     Render CANÔNICA _classifModeHtml(i+1) (a MESMA da Fase 1). Só em chave/grupos. ───
-    if (_isElim || isGrupos) {
-      h += '<div style="font-size:0.7rem;color:var(--text-muted);margin:10px 0 4px;">📊 ' + ((window._t && window._t('create.classificationSection')) || 'Classificação') + '</div>';
-      h += window._classifModeHtml(i + 1);
-    }
-    h += '</div>';
-    } // fim if(!_boxCol)
-    h += '</div>'; // fim box da fase
-    return h;
-  }
-  // ⚰️ CÓDIGO MORTO (v4.4.x) — CONSTRUTOR DE EMPILHAMENTO DE FASES.
-  // Substituído pelo configurador único window.FORMAT2 + página #formato/:tId
-  // (js/views/format2.js + format2-ui.js). Mantido temporariamente até o modelo novo
-  // ser validado no staging; APAGAR (este builder: _renderPhases/_phaseCardHtml/_addPhase/
-  // _extraPhases + a UI "+ Adicionar fase" no HTML + materializeNextPhase genérico) depois.
-  // Ver memória project_format_engine_rewrite.
-  window._renderPhases = function() {
-    // ⚰️ v4.4.x — construtor de empilhamento de fases FORA DE AÇÃO (não apagado).
-    // Mostra só um aviso apontando pro ⚙️ Formato; NÃO monta os cards. Os dados de
-    // _extraPhases (torneios antigos multi-fase) NÃO são apagados — só não editáveis por aqui,
-    // e o save os preserva. Formato agora vive em window.FORMAT2 + página #formato.
-    var list = document.getElementById('phases-list');
-    if (list) list.innerHTML = '<div style="padding:12px 14px;border:1px dashed rgba(129,140,248,0.5);border-radius:10px;background:rgba(99,102,241,0.06);font-size:0.82rem;color:#a5b4fc;line-height:1.5;">⚙️ <b>Formato no configurador novo.</b> O construtor de fases foi desativado. Depois de criar o torneio, defina estrutura, grupos, parceria e eliminatória no botão <b>⚙️ Formato</b> (Ferramentas do Organizador).</div>';
-    var addBtn = document.getElementById('add-phase-btn');
-    if (addBtn) addBtn.style.display = 'none';
-    return; // corpo antigo mantido morto abaixo (nunca executa)
-    // eslint-disable-next-line no-unreachable
-    if (!Array.isArray(window._extraPhases)) window._extraPhases = [];
-    var h = '';
-    window._extraPhases.forEach(function(ph, i){ h += _phaseCardHtml(ph, i); });
-    list.innerHTML = h;
-    window._extraPhases.forEach(function(ph, i){
-      if (ph.format === 'liga' && typeof window._onAdvApplyLiveToggle === 'function') window._onAdvApplyLiveToggle(i + 1);
-    });
-  };
+  // ⚰️ v4.4.x DELETADO: _phaseCardHtml (montava o card de fase-2+) — construtor de
+  // empilhamento de fases substituído pelo configurador único window.FORMAT2 + #formato/:tId.
+  // _renderPhases vira no-op: os helpers idx=0 vivos (_setPhaseWo/_togglePhaseResultEntry/
+  // _setPhaseRankingType) ainda o chamam nos ramos idx>=1 — o no-op os deixa inócuos.
+  window._renderPhases = function(){};
 
   // ── Enrollment Mode Toggles (non-exclusive) ──
   window._syncEnrollToggles = function() {
