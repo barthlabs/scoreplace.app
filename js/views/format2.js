@@ -51,7 +51,8 @@
         nomes: [''],
         origem: 'ja_formadas',
         formacao: 'performance',
-        terceiro: true
+        terceiro: true,
+        lateEnrollment: 'closed' // inscrições durante a ELIMINATÓRIA: closed | standby | expand
       }
     }, sport);
   }
@@ -121,6 +122,7 @@
     // "formar" só quando ENTRAM INDIVÍDUOS (pontuação individual).
     if (out._scoreBy !== 'individual') e.origem = 'ja_formadas';
     if (['performance', 'equilibrio', 'sorteio'].indexOf(e.formacao) === -1) e.formacao = 'performance';
+    if (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) === -1) e.lateEnrollment = 'closed';
     e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
     // v4.4.33: fase classificatória on/off. Ao menos UMA fase ativa: sem classificatória ⇒
     // eliminatória obrigatória (eliminação direta do enrollment).
@@ -303,6 +305,7 @@
         },
         fixedPairs: elimFixedPairs, pairingStrategy: elimPairing,
         mapping: mapping, grandFinal: nLines > 1, thirdPlace: e.terceiro,
+        lateEnrollment: e.lateEnrollment || 'closed', // inscrições durante a eliminatória
         drawManual: false
       });
       phases.push(p1);
