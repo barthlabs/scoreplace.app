@@ -187,7 +187,8 @@
     if (!cfg.eliminatoria || !cfg.eliminatoria.ativa) return '';
     var gi = _groupInfo(cfg);
     var isDupla = cfg.disputa === 'dupla';
-    var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
+    var perGroupScope = cfg.grupos > 1 && cfg.classifScope !== 'overall';
+    var q = perGroupScope ? cfg.grupos * cfg.classificados : cfg.classificados;
     if (gi.units > 0) q = Math.min(q, gi.units);
     var teams = Math.max(0, q);
     var people = teams * (isDupla ? 2 : 1);
@@ -311,9 +312,20 @@
       '<span class="toggle-slider"></span></span>';
     var eb = '';
     if (e.ativa) {
+      // v4.4.31: escopo da classificação (só faz sentido com 2+ grupos): POR GRUPOS (melhores
+      // de cada grupo) × GERAL (tabela única unindo os grupos). Com 1 grupo é sempre geral.
+      var perGroupScope = cfg.grupos > 1 && cfg.classifScope !== 'overall';
+      if (cfg.grupos > 1) {
+        eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Classificação dos participantes</div>' +
+          _pill(perGroupScope, 'window._f2ClassScope(\'per_group\')', '🗂️ Por grupos') +
+          _pill(!perGroupScope, 'window._f2ClassScope(\'overall\')', '📊 Geral') +
+          '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;">' + (perGroupScope
+            ? 'Os melhores de CADA grupo avançam para a eliminatória.'
+            : 'Uma classificação GERAL une todos os grupos; os melhores no geral avançam.') + '</div>';
+      }
       // v4.4.17: "Nº de classificados" ABRE o box da Eliminatória, como slider (igual grupos).
-      var classLabel = um ? 'Nº de classificados (total) para a eliminatória' : 'Nº de classificados por grupo';
-      var classMax = um ? 32 : 8;
+      var classLabel = perGroupScope ? 'Nº de classificados por grupo' : 'Nº de classificados (total) para a eliminatória';
+      var classMax = perGroupScope ? 8 : 32;
       if (cfg.classificados > classMax) classMax = cfg.classificados; // nunca corta valor salvo
       eb += '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;">' + classLabel + '</div>' +
         '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
@@ -440,6 +452,8 @@
     S._rafC = requestAnimationFrame(function () { S._rafC = null; var b = document.getElementById('f2-elim-summary'); if (b) b.innerHTML = _elimSummary(S.cfg); });
   };
   window._f2Class = function (v) { S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
+  // v4.4.31: escopo da classificação — por grupos × geral.
+  window._f2ClassScope = function (v) { if (!S) return; S.cfg.classifScope = (v === 'overall') ? 'overall' : 'per_group'; _norm(); _rerender(); };
   window._f2Elim = function (b) { S.cfg.eliminatoria.ativa = !!b; _norm(); _rerender(); };
   window._f2Linhas = function (n) { S.cfg.eliminatoria.linhas = n; _norm(); _rerender(); };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };

@@ -42,7 +42,8 @@
       parceria: 'sorteio_rodada', // Sorteio + "por rodada" ON por padrão (dono)
       formacaoDupla: 'sorteio',
       rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, _intervalAuto: true },
-      classificados: 2,          // X que classificam (por grupo se N grupos; total se 1 grupo)
+      classificados: 2,          // X que classificam (por grupo OU total, conforme classifScope)
+      classifScope: 'per_group', // 'per_group' (melhores de cada grupo) | 'overall' (tabela geral)
       eliminatoria: {
         ativa: true,          // ativo por padrão (dono)
         linhas: 1,
@@ -105,6 +106,9 @@
     out.rodadas._intervalAuto = (out.rodadas._intervalAuto !== false); // sugere intervalo até o user editar
 
     out.classificados = Math.max(1, parseInt(out.classificados, 10) || 2);
+    // Escopo da classificação: por grupo × geral. Com 1 grupo é sempre geral (não há grupos).
+    if (out.classifScope !== 'overall' && out.classifScope !== 'per_group') out.classifScope = 'per_group';
+    if (umGrupo) out.classifScope = 'overall';
 
     var e = out.eliminatoria || {};
     e.ativa = !umGrupo ? true : !!e.ativa; // grupos ⇒ elim forçada
@@ -242,7 +246,9 @@
 
     if (cfg.eliminatoria.ativa) {
       var e = cfg.eliminatoria;
-      var perGroup = cfg.grupos > 1;
+      // Escopo vem do TOGGLE (classifScope), não do nº de grupos: com 2+ grupos o org escolhe
+      // por-grupo (melhores de cada) OU geral (tabela única). 1 grupo é sempre geral.
+      var perGroup = cfg.grupos > 1 && cfg.classifScope === 'per_group';
       var nLines = e.linhas;
       var dests = _LINE_DESTS[nLines] || ['main'];
       var topN = cfg.classificados;            // por grupo (N grupos) ou total (1 grupo)
