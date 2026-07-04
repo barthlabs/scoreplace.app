@@ -876,10 +876,11 @@ window._tournamentGamesPlan = function (t) {
   }
   var phases = t.phases;
   var curIdx = t.currentPhaseIndex || 0;
-  var totalP = 0, simComplete = true;
+  var totalP = 0, doneP = 0, simComplete = true;
   for (var i = 0; i < phases.length; i++) {
     if (i <= curIdx) {
       totalP += _materializedPhaseGames(t, i);            // fase já sorteada → jogos reais
+      doneP += _completedPhaseGames(t, i);                // v4.4.57: MESMA contagem (real+vencedor)
     } else if (i === curIdx + 1) {
       var sim = _simulatePhaseGames(t, i);                // próxima fase → motor real
       if (sim == null) simComplete = false; else totalP += sim;
@@ -887,9 +888,13 @@ window._tournamentGamesPlan = function (t) {
       simComplete = false;                                // fases 3+ só entram ao materializar a anterior
     }
   }
-  if (totalP < done) totalP = done;
-  return { multiPhase: true, totalPlanned: totalP, totalDone: done,
-           pct: totalP > 0 ? Math.round(done / totalP * 100) : 0,
+  // v4.4.57: `done` do TORNEIO COMPLETO vem da soma por-fase (_completedPhaseGames),
+  // NÃO de _getTournamentProgress().completed — este superconta 1 no multi-fase (contava
+  // 125/123 pra 124/122 reais), fazendo a barra dizer "falta 1 jogo" quando faltam 2
+  // (final + 3º lugar). Somar total e done com o MESMO filtro elimina a divergência.
+  if (totalP < doneP) totalP = doneP;
+  return { multiPhase: true, totalPlanned: totalP, totalDone: doneP,
+           pct: totalP > 0 ? Math.round(doneP / totalP * 100) : 0,
            phasesCount: phases.length, currentPhaseIndex: curIdx, partial: !simComplete };
 };
 
