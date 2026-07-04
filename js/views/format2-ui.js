@@ -212,22 +212,6 @@
       who + ' na eliminatória · 🎯 <b>' + games + '</b> ' + (games === 1 ? 'jogo' : 'jogos') +
       (games > 0 ? ' · ⏱️ ~<b>' + timeStr + '</b>' : '') + '</div>';
   }
-  // Bloco "Inscrições durante a eliminatória" — 3 estados (closed | standby | expand), format2-native.
-  function _lateEnrollBlock(val, fn) {
-    var aberta = (val === 'standby' || val === 'expand'), expand = (val === 'expand');
-    var sw = '--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;';
-    var rowS = 'display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:10px;border:1px solid rgba(251,191,36,0.2);background:rgba(251,191,36,0.05);margin-bottom:8px;';
-    var lbl = function (icon, title, desc, checked, onchange) {
-      return '<div style="' + rowS + '"><span style="font-size:1.05rem;flex-shrink:0;">' + icon + '</span>' +
-        '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:0.9rem;color:var(--text-main);">' + title + '</div><div style="font-size:0.73rem;color:var(--text-muted);margin-top:3px;line-height:1.4;">' + desc + '</div></div>' +
-        '<label class="toggle-switch" style="' + sw + '"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></label></div>';
-    };
-    var h = '<div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">' +
-      '<div style="font-size:0.72rem;color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;">⏱️ Inscrições durante a eliminatória</div>';
-    h += lbl('🔓', 'Abertas', 'Novos inscritos continuam sendo aceitos mesmo depois do início e vão para a lista de espera como suplentes.', aberta, fn + "(this.checked ? 'standby' : 'closed')");
-    if (aberta) h += lbl('➕', 'Novos Confrontos', 'Quando os suplentes acumularem o suficiente para um novo confronto, ele é criado automaticamente e os participantes entram no torneio.', expand, fn + "(this.checked ? 'expand' : 'standby')");
-    return h + '</div>';
-  }
   // Apresentação abaixo do slider: rótulo (1 grupo) OU números grandes (N grupos).
   function _estruturaBlock(cfg) {
     if (cfg.grupos === 1) {
@@ -399,10 +383,9 @@
       for (var i = 0; i < e.linhas; i++) {
         eb += '<div style="margin-top:6px;"><input type="text" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da linha ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="width:100%;max-width:300px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;"></div>';
       }
-      // Inscrições durante a ELIMINATÓRIA (bloco próprio da fase). Só quando a classificatória
-      // está ativa (elim = 2ª fase). Sem classificatória, o bloco do form já mora aqui (slot).
-      if (cfg.classifAtiva) eb += _lateEnrollBlock(e.lateEnrollment || 'closed', 'window._f2ElimLateEnroll');
-      // Sem classificatória, a eliminatória carrega as Datas + Inscrições (slot vai aqui).
+      // v4.4.42: "Inscrições durante a fase" só existe na FASE INICIAL do torneio (onde há
+      // inscrição). Com classificatória, ELA é a inicial e tem o bloco (via slot); a eliminatória
+      // (2ª fase) NÃO tem. Sem classificatória, a eliminatória é a inicial e carrega o bloco (slot).
       if (!cfg.classifAtiva) eb += '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
     }
     var elimInner = e.ativa ? eb : '';
@@ -531,8 +514,6 @@
   window._f2Elim = function (b) { if (!S) return; S.cfg.eliminatoria.ativa = !!b; if (!b) S.cfg.classifAtiva = true; _norm(); _rerender(); };
   // v4.4.33: toggle da fase classificatória. Desligar → eliminação direta (elim obrigatória).
   window._f2ClassifAtiva = function (checked) { if (!S) return; S.cfg.classifAtiva = !!checked; if (!checked) S.cfg.eliminatoria.ativa = true; _norm(); _rerender(); };
-  // Inscrições durante a eliminatória: closed | standby | expand → phases[1].lateEnrollment.
-  window._f2ElimLateEnroll = function (mode) { if (!S) return; S.cfg.eliminatoria.lateEnrollment = (mode === 'expand' || mode === 'standby') ? mode : 'closed'; _norm(); _rerender(); };
   window._f2Linhas = function (n) { S.cfg.eliminatoria.linhas = n; _norm(); _rerender(); };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
   window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };
