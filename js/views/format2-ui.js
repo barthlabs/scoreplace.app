@@ -305,9 +305,9 @@
     var e = cfg.eliminatoria;
     // Toggle da eliminatória (SEMPRE habilitado). Desligar → torneio termina na classificatória.
     // Sem classificatória, desligar a elim religa a classif (ao menos uma fase ativa).
-    var elimToggle = '<span class="toggle-switch">' +
+    var elimToggle = '<label class="toggle-switch" style="cursor:pointer;">' +
       '<input type="checkbox"' + (e.ativa ? ' checked' : '') + ' onchange="window._f2Elim(this.checked)">' +
-      '<span class="toggle-slider"></span></span>';
+      '<span class="toggle-slider"></span></label>';
     var eb = '';
     if (e.ativa) {
       if (!cfg.classifAtiva) {
@@ -367,9 +367,9 @@
     if (cfg.classifAtiva) classif += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
 
     // Toggle da classificatória (sempre habilitado). Desligar → eliminação direta.
-    var classifToggle = '<span class="toggle-switch">' +
+    var classifToggle = '<label class="toggle-switch" style="cursor:pointer;">' +
       '<input type="checkbox"' + (cfg.classifAtiva ? ' checked' : '') + ' onchange="window._f2ClassifAtiva(this.checked)">' +
-      '<span class="toggle-slider"></span></span>';
+      '<span class="toggle-slider"></span></label>';
     var classifInner = cfg.classifAtiva ? classif : '';
 
     var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classifInner, classifToggle) +
