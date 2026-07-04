@@ -3304,6 +3304,10 @@ function renderTournaments(container, tournamentId = null) {
                     for (var _pcsi = 0; _pcsi < _pCardSkillCats.length; _pcsi++) { if (_pCardCatStr === _pCardSkillCats[_pcsi] || _pCardCatStr.endsWith(' ' + _pCardSkillCats[_pcsi])) { _pCardSkill = _pCardSkillCats[_pcsi]; break; } }
                     var _pCardOrder = (typeof bgNum === 'number' || /^[0-9]+$/.test(String(bgNum))) ? (parseInt(bgNum, 10) - 1) : idx;
                     var _pCardNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
+                    // v4.4.75: inativo (Liga com auto-desativação) → data-part-inactive p/ o FILTRO
+                    // ativo/inativo da barra (mesma regra de participants.js:1902/2148). Faltava aqui
+                    // → o filtro 🔴 inativos casava zero na lista da detail page.
+                    var _pCardInactive = (t.allowSelfDeactivation !== false && typeof p === 'object' && p && p.ligaActive === false) ? '1' : '0';
                     // Linha inferior CANÔNICA: tipo de inscrição (esquerda) + 🗑️ remover (direita).
                     var _typeAndDelRow = (typeLabel || _delBtn2)
                         ? '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">' +
@@ -3313,7 +3317,7 @@ function renderTournaments(container, tournamentId = null) {
                         : '';
 
                     return `
-                      <div class="participant-card" data-part-card="1" data-part-org="${_pCardOrg ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="0" data-part-name="${_pCardNameAttr}" data-part-gender="${_pCardGender}" data-part-skill="${String(_pCardSkill).replace(/"/g, '&quot;')}" data-part-order="${_pCardOrder}" data-participant-name="${window._safeHtml(pName)}" data-merge-name="${window._safeHtml(pName)}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+                      <div class="participant-card" data-part-card="1" data-part-org="${_pCardOrg ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="0" data-part-name="${_pCardNameAttr}" data-part-inactive="${_pCardInactive}" data-part-gender="${_pCardGender}" data-part-skill="${String(_pCardSkill).replace(/"/g, '&quot;')}" data-part-order="${_pCardOrder}" data-participant-name="${window._safeHtml(pName)}" data-merge-name="${window._safeHtml(pName)}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                           ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(bgNum) : ('<div style="position:absolute;right:8px;bottom:6px;font-size:' + (String(bgNum).length > 2 ? '1.6rem' : '2rem') + ';font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">' + bgNum + '</div>')}
                           <div style="position:relative;z-index:1;">
                               <!-- HEADER: avatar + nome + coroa (igual ao card #participants) | toggle ativado/desativado da Liga -->
@@ -3522,7 +3526,9 @@ function renderTournaments(container, tournamentId = null) {
               var _dpOrder = members
                 ? (parseInt(_s1 || '0', 10) || 0)
                 : (window._enrollNumber ? (parseInt(window._enrollNumber(_enrollOrderMapD, p), 10) || 0) : 0);
-              return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
+              // v4.4.75: inativo → data-part-inactive p/ o FILTRO ativo/inativo da barra (faltava aqui).
+              var _dpInactive = (t.allowSelfDeactivation !== false && typeof p === 'object' && p && p.ligaActive === false) ? '1' : '0';
+              return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
                 ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
                 _enrollBadge + _wmL + _wmR +
                 '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' +
