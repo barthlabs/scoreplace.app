@@ -802,6 +802,30 @@ function _materializedPhaseGames(t, phaseIdx) {
   return (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && real(m); }).length;
 }
 
+// v4.4.48: jogos CONCLUÍDOS (com vencedor) de UMA fase — espelha _materializedPhaseGames
+// mas só conta os que já têm resultado. Usado pra escopar a barra VERDE do topo na fase
+// atual (a barra roxa "Torneio completo" segue somando todas as fases). BYE/folga fora.
+function _completedPhaseGames(t, phaseIdx) {
+  function done(m) {
+    if (!m || m.isBye || m.isSitOut) return false;
+    if (m.p1 === 'BYE' || m.p2 === 'BYE') return false;
+    return !!m.winner;
+  }
+  var c = 0;
+  if (phaseIdx === 0) {
+    (t.rounds || []).forEach(function (r) { (r.matches || []).forEach(function (m) { if (done(m)) c++; }); });
+    c += (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === 0 && done(m); }).length;
+    return c;
+  }
+  var slot = t.phaseRounds && t.phaseRounds[phaseIdx];
+  if (slot && Array.isArray(slot.rounds)) {
+    var lc = 0;
+    slot.rounds.forEach(function (r) { (r && r.matches || []).forEach(function (m) { if (done(m)) lc++; }); });
+    return lc;
+  }
+  return (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && done(m); }).length;
+}
+
 // Conta os jogos PREVISTOS de uma fase de chave RODANDO O MOTOR REAL
 // (window._phasesEngine.buildPhaseBrackets) sobre os grupos da fase anterior.
 // Conta jogáveis = não-BYE (inclui rodadas futuras TBD + convergência se houver).
@@ -867,6 +891,19 @@ window._tournamentGamesPlan = function (t) {
   return { multiPhase: true, totalPlanned: totalP, totalDone: done,
            pct: totalP > 0 ? Math.round(done / totalP * 100) : 0,
            phasesCount: phases.length, currentPhaseIndex: curIdx, partial: !simComplete };
+};
+
+// v4.4.48: progresso da FASE ATUAL (só o estágio corrente) — total = jogos planejados
+// da fase, done = jogos já concluídos dela. Escopa a barra VERDE do topo na fase (não no
+// torneio inteiro): numa Fase de Grupos com 72 jogos, quando os 72 saem → 100% (e o botão
+// de avançar fase aparece). Rodadas de grupos diferentes se encavalam → escopar por RODADA
+// enganaria; a fase toda é a medida certa. Torneio inteiro segue na barra roxa (_gp).
+window._currentPhaseGames = function (t) {
+  var idx = (t && t.currentPhaseIndex) || 0;
+  var total = _materializedPhaseGames(t, idx);
+  var done = _completedPhaseGames(t, idx);
+  if (total < done) total = done;
+  return { total: total, done: done, pct: total > 0 ? Math.round(done / total * 100) : 0, phaseIndex: idx };
 };
 
 // Janela PROGRAMADA do TORNEIO INTEIRO: início = MENOR data de início entre todas
@@ -953,14 +990,17 @@ window._phaseCurrentRoundProgress = function(t) {
 // HTML interno (recomputado a cada tick).
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
-  // Multi-fase (ex.: Suíço classificatória → eliminatória): o "N/N partidas" e a barra
-  // do header refletem o TORNEIO INTEIRO (soma TODAS as fases via _tournamentGamesPlan),
-  // não só a fase atual — senão a classificatória sozinha aparece 100% (bug reportado).
-  // Liga tem escopo-de-rodada próprio no ramo _isLiga abaixo (que re-sobrepõe este prog).
-  if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentGamesPlan === 'function') {
-    var _gpHead = window._tournamentGamesPlan(t);
-    if (_gpHead && _gpHead.totalPlanned > 0) {
-      prog = { total: _gpHead.totalPlanned, completed: _gpHead.totalDone, pct: _gpHead.pct };
+  // v4.4.48: Multi-fase (ex.: Fase de Grupos → Eliminatória): a barra VERDE do topo reflete
+  // a FASE ATUAL (só o estágio corrente). Numa classificatória de 72 jogos, quando os 72
+  // saem → 100% e o botão "avançar de fase" aparece — é o que o dono quer VER no topo. O
+  // TORNEIO INTEIRO (soma todas as fases) vive na barra ROXA "🏆 Torneio completo" (_gp).
+  // Rodadas de grupos diferentes se encavalam → escopar por rodada enganaria; a fase toda é
+  // a medida certa. Liga (Pontos Corridos) e fase posterior de chave têm escopo-de-rodada
+  // próprio nos ramos _isLiga / _inLaterPhase abaixo (que re-sobrepõem este prog).
+  if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._currentPhaseGames === 'function') {
+    var _cpHead = window._currentPhaseGames(t);
+    if (_cpHead && _cpHead.total > 0) {
+      prog = { total: _cpHead.total, completed: _cpHead.done, pct: _cpHead.pct };
     }
   }
   if (!prog.total) return '';
