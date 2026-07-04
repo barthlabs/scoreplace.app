@@ -1735,13 +1735,25 @@ function setupCreateTournamentModal() {
   window._f2MountInEditForm = function () {
     var box = document.getElementById('fase1-box');
     if (!box || !window.FORMAT2 || typeof window._f2MountInForm !== 'function') return;
-    // Esconde os controles de estrutura que o format2 substitui.
-    // querySelectorAll (não getElementById) — cobre instância duplicada do form no DOM.
-    ['fase1-header-row', 'formato-buttons', 'formato-desc', 'dupla-elim-row', 'suico-fields', 'liga-fields',
-     'liga-draw-schedule', 'suico-draw-schedule-fields', 'elim-settings', 'grupos-fields',
-     'rei-rainha-fields', 'round-robin-fields', 'phases-list', 'phases-section',
-     'draw-mode-buttons', 'draw-mode-desc', 'game-type-desc'
-    ].forEach(function (id) { Array.prototype.forEach.call(document.querySelectorAll('#' + id), function (el) { el.style.setProperty('display', 'none', 'important'); }); });
+    // v4.4.18: ISOLAMENTO COMPLETO do construtor antigo (pedido do dono — "tira o fallback
+    // de ação, senão não temos segurança de que o novo funciona"). Os controles de ESTRUTURA
+    // que o format2 substitui inteiramente são REMOVIDOS do DOM (não só escondidos): assim não
+    // há como o construtor antigo vazar nem dirigir o save. Se o format2 quebrar, some (óbvio)
+    // em vez de silenciosamente cair no velho. Antes de remover, qualquer input/select COM id é
+    // realocado escondido no #fase1-box (o save/_onFormatoChange acessam por id).
+    var _F2_REMOVE = ['fase1-header-row', 'formato-buttons', 'formato-desc', 'dupla-elim-row',
+      'elim-settings', 'grupos-fields', 'rei-rainha-fields', 'round-robin-fields',
+      'phases-list', 'phases-section', 'draw-mode-buttons', 'draw-mode-desc'];
+    _F2_REMOVE.forEach(function (id) {
+      Array.prototype.forEach.call(document.querySelectorAll('#' + id), function (el) {
+        if (el.querySelectorAll) Array.prototype.forEach.call(el.querySelectorAll('input[id],select[id],textarea[id]'), function (f) { f.style.display = 'none'; try { box.appendChild(f); } catch (e) {} });
+        try { el.remove(); } catch (e) {}
+      });
+    });
+    // Config específica de Liga/Suíço (season/inatividade/agendamento) que o format2 ainda não
+    // cobre guarda inputs escondidos que _onFormatoChange toca → ESCONDE (não remove).
+    ['suico-fields', 'liga-fields', 'liga-draw-schedule', 'suico-draw-schedule-fields', 'game-type-desc']
+      .forEach(function (id) { Array.prototype.forEach.call(document.querySelectorAll('#' + id), function (el) { el.style.setProperty('display', 'none', 'important'); }); });
     // v4.4.9: os toggles de FORMAÇÃO DE DUPLAS ficam VISÍVEIS (o dono quer os detalhados):
     // "Times Sorteados Separados dos Montados" (#mixed-pairing-container) vai LOGO ABAIXO
     // de "Participantes podem formar suas duplas" (#manual-pairing-container). A visibilidade
@@ -2988,27 +3000,30 @@ function setupCreateTournamentModal() {
     const isGrupos = fmt === 'grupos_mata';
     const drawMode = document.getElementById('draw-mode').value;
     const isMonarch = drawMode === 'rei_rainha';
+    // v4.4.18: os controles de ESTRUTURA antigos são REMOVIDOS do DOM pelo format2
+    // (não só escondidos) — então todo toggle de display aqui precisa ser null-safe.
+    var _sd = function (id, v) { var e = document.getElementById(id); if (e) e.style.display = v; };
 
     // v2.6.66: sub-toggle "Dupla eliminatória" só aparece na categoria Eliminatórias.
     var _duplaRow = document.getElementById('dupla-elim-row');
     if (_duplaRow) _duplaRow.style.display = isElim ? 'flex' : 'none';
 
-    document.getElementById('suico-fields').style.display = isSuico ? 'block' : 'none';
-    document.getElementById('liga-fields').style.display = isLiga ? 'block' : 'none';
+    _sd('suico-fields', isSuico ? 'block' : 'none');
+    _sd('liga-fields', isLiga ? 'block' : 'none');
     // v2.6.48: Agendamento de Sorteios foi extraído do #liga-fields pra logo abaixo
     // das "Datas da fase" — visibilidade controlada aqui (só Liga/Pontos Corridos).
     var _dsEl = document.getElementById('liga-draw-schedule');
     if (_dsEl) _dsEl.style.display = isLiga ? 'block' : 'none';
     if (isLiga && typeof window._updateLigaRoundsTag === 'function') setTimeout(window._updateLigaRoundsTag, 0);
-    document.getElementById('suico-draw-schedule-fields').style.display = isSuico ? 'block' : 'none';
-    document.getElementById('elim-settings').style.display = (isElim || isGrupos) ? 'block' : 'none';
-    document.getElementById('grupos-fields').style.display = isGrupos ? 'block' : 'none';
+    _sd('suico-draw-schedule-fields', isSuico ? 'block' : 'none');
+    _sd('elim-settings', (isElim || isGrupos) ? 'block' : 'none');
+    _sd('grupos-fields', isGrupos ? 'block' : 'none');
     if (isGrupos && typeof window._renderGruposSuggestions === 'function') { try { window._renderGruposSuggestions(); } catch (e) {} }
     // v3.0.x: o texto de "Novos Confrontos" muda conforme o formato (grupos tem
     // comportamento próprio) — re-sincroniza ao trocar o formato.
     if (typeof window._syncLateEnrollment === 'function') { try { window._syncLateEnrollment(); } catch (e) {} }
     // Rei/Rainha classified config: hide for Liga (pontos corridos, sem fase eliminatória)
-    document.getElementById('rei-rainha-fields').style.display = (isMonarch && !isLiga) ? 'block' : 'none';
+    _sd('rei-rainha-fields', (isMonarch && !isLiga) ? 'block' : 'none');
 
     // Grupos + Elim. incompatível com Rei/Rainha: esconder botão e forçar Sorteio
     var monarchDrawBtn = document.getElementById('btn-draw-mode-monarch');
@@ -6355,6 +6370,7 @@ function setupCreateTournamentModal() {
         // (top-level) continuam do form; as fases compiladas têm scoring:null → herdam.
         try {
           var _f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
+          var _f2mounted = !!document.getElementById('f2-config-mount');
           if (_f2cfg && window.FORMAT2 && typeof window.FORMAT2.compileToPhases === 'function') {
             var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
             var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry });
@@ -6364,8 +6380,19 @@ function setupCreateTournamentModal() {
             tourData._allowConfigReset = true;
             if (tourData.format === 'Fase de Grupos') { tourData.ligaRoundFormat = 'standard'; tourData.ligaDrawMode = 'standard'; }
             if (window._log) window._log('[save] format2 override: ' + window.FORMAT2.summary(_f2cfg) + ' | phases=' + _f2out.phases.length);
+          } else if (_f2mounted) {
+            // v4.4.18: SEM FALLBACK pro construtor antigo. O configurador está montado mas não
+            // retornou config válida → algo quebrou. ABORTA o save (loud) em vez de salvar
+            // silenciosamente pelo caminho velho — é a garantia de que o NOVO está dirigindo.
+            if (typeof showNotification === 'function') showNotification('Formato não pôde ser lido', 'O configurador de formato não carregou direito. Recarregue a página — nada foi salvo.', 'error');
+            if (window._warn) window._warn('[save] format2 montado mas _f2GetConfig() nulo — save ABORTADO (sem fallback)');
+            return;
           }
-        } catch (_f2e) { if (window._warn) window._warn('[save] format2 override falhou: ' + _f2e); }
+        } catch (_f2e) {
+          if (typeof showNotification === 'function') showNotification('Erro no formato', 'Não foi possível compilar o formato. Recarregue a página — nada foi salvo.', 'error');
+          if (window._warn) window._warn('[save] format2 override falhou: ' + _f2e);
+          return; // v4.4.18: sem fallback silencioso — aborta
+        }
         // v2.6.49: nome custom da Fase 1 persiste SEMPRE (inclusive fase única, onde
         // phases fica null). Antes só era gravado dentro de phases[0] quando havia
         // fase extra — por isso o nome "não gravava" em torneio de fase única.
