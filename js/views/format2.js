@@ -193,6 +193,7 @@
       top.gruposClassified = cfg.classificados;
       // ida-e-volta só vale em tabela única (grupos=1) todos-contra-todos.
       var idaVolta = (cfg.grupos === 1 && cfg.rodadas.turnos === 'ida_volta');
+      top.turnos = idaVolta ? 'ida_volta' : 'ida';   // _buildPhase0Cfg propaga p/ genGroupsFromPool
       if (idaVolta) top.ligaTurnos = 2;
       p0 = Object.assign(_phaseBase(re), {
         name: cfg.grupos === 1 ? 'Pontos Corridos' : 'Fase de Grupos',

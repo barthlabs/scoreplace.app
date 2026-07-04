@@ -2031,6 +2031,12 @@ function setupCreateTournamentModal() {
     h += '</div>'; // fim box da fase
     return h;
   }
+  // ⚰️ CÓDIGO MORTO (v4.4.x) — CONSTRUTOR DE EMPILHAMENTO DE FASES.
+  // Substituído pelo configurador único window.FORMAT2 + página #formato/:tId
+  // (js/views/format2.js + format2-ui.js). Mantido temporariamente até o modelo novo
+  // ser validado no staging; APAGAR (este builder: _renderPhases/_phaseCardHtml/_addPhase/
+  // _extraPhases + a UI "+ Adicionar fase" no HTML + materializeNextPhase genérico) depois.
+  // Ver memória project_format_engine_rewrite.
   window._renderPhases = function() {
     // A Fase 1 agora é o box "FASE 1" do formulário (com #phase1-name no header).
     // Aqui renderizamos apenas as fases extras (2+) que o organizador adicionar.

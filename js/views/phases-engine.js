@@ -595,22 +595,29 @@
     var counter = 0;
     function mkId() { return idPrefix + '-' + (counter++); }
     var allMatches = [];
+    // v4.4.x: ida-e-volta (turnos=2) — repete o round-robin com mando invertido.
+    // GATED: só quando phaseCfg.turnos==='ida_volta' (ou _doubleRR); ausente = single-RR (comportamento legado).
+    var _turnos = (phaseCfg && (phaseCfg.turnos === 'ida_volta' || phaseCfg._doubleRR)) ? 2 : 1;
     groups.forEach(function (g) {
       // v3.1.9: round-robin via núcleo compartilhado (método do círculo) → rodadas
-      // BALANCEADAS dentro do grupo (mesmo SET de pares de antes; agora com nº de rodada,
-      // igual à Fase 0). Estático: todos os jogos existem de uma vez (todas as rodadas).
-      roundRobinSchedule(g.players).forEach(function (rd) {
-        rd.pairs.forEach(function (pr) {
-          var A = pr.a, B = pr.b;
-          var m = {
-            id: mkId(), round: rd.round, bracket: 'group', groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
-            p1: A.displayName, p2: B.displayName, team1Obj: A, team2Obj: B,
-            winner: null, scoreP1: null, scoreP2: null,
-            label: g.name + ' • ' + A.displayName + ' vs ' + B.displayName
-          };
-          g.matches.push(m); allMatches.push(m);
+      // BALANCEADAS dentro do grupo. Estático: todos os jogos existem de uma vez.
+      var sched = roundRobinSchedule(g.players);
+      var nRounds = sched.length;
+      for (var turn = 0; turn < _turnos; turn++) {
+        sched.forEach(function (rd) {
+          rd.pairs.forEach(function (pr) {
+            var A = (turn === 0) ? pr.a : pr.b;   // volta: inverte mando
+            var B = (turn === 0) ? pr.b : pr.a;
+            var m = {
+              id: mkId(), round: rd.round + turn * nRounds, bracket: 'group', groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
+              p1: A.displayName, p2: B.displayName, team1Obj: A, team2Obj: B,
+              winner: null, scoreP1: null, scoreP2: null,
+              label: (_turnos > 1 ? ((turn === 0 ? 'Ida' : 'Volta') + ' • ') : '') + g.name + ' • ' + A.displayName + ' vs ' + B.displayName
+            };
+            g.matches.push(m); allMatches.push(m);
+          });
         });
-      });
+      }
     });
     var _ret = { matches: allMatches, groups: groups };
     if (_waitlist.length) _ret.waitlist = _waitlist;  // suplentes (grupos de mesmo tamanho) → storePhase → standbyParticipants

@@ -954,6 +954,9 @@ window._buildPhase0Cfg = function (t) {
         source: { type: 'enrollment' }
     };
     if (code === 'liga') cfg.ligaCadence = (t.ligaDrawMode === 'round_robin') ? 'round_robin' : 'incremental';
+    // v4.4.x: ida-e-volta em Fase de Grupos (tabela única de duplas fixas) — propaga o
+    // turnos pro genGroupsFromPool. Ausente/ida = single-RR (legado). Ver format2.
+    if (code === 'grupos_mata') cfg.turnos = (t.turnos === 'ida_volta' || parseInt(t.ligaTurnos, 10) === 2) ? 'ida_volta' : 'ida';
     return cfg;
 };
 

@@ -2552,6 +2552,7 @@ function renderTournaments(container, tournamentId = null) {
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
                 ${!isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
+                ${(isOrg && !hasDraw) ? `<button class="btn btn-tool-green hover-lift" onclick="event.stopPropagation(); window.location.hash='#formato/${t.id}'" title="Configurador simplificado de formato (v4.4 — novo)">⚙️ Formato</button>` : ''}
                 <button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.location.hash='#comunicados/${t.id}'">📢 Comunicados</button>
                 ${addParticipantBtns}
                 ${/* v1.9.98: CSV removido daqui — já está no grid de ações geral do organizador (Regras/Inscritos/Imprimir/CSV/Modo TV). Evita duplicação. */ ''}
