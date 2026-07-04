@@ -1775,6 +1775,31 @@ function setupCreateTournamentModal() {
     var gtb = document.getElementById('game-type-buttons');
     if (gtb) { var gg = gtb.closest ? gtb.closest('.form-group') : null; (gg || gtb).style.display = 'none'; }
     var gtd = document.getElementById('game-type-desc'); if (gtd) gtd.style.display = 'none';
+    // v4.4.53: "Modo de Sorteio" órfão — o wrapper #draw-mode-container só guarda o label
+    // (os botões/desc já saíram no _F2_REMOVE); o format2 ("Formação das equipes") cobre isso.
+    // Esconde a frase inteira.
+    var _dmc = document.getElementById('draw-mode-container'); if (_dmc) _dmc.style.setProperty('display', 'none', 'important');
+    // v4.4.53: "Formato da Partida" (GSM) e "Categorias" saem de DENTRO do #fase1-box e vão
+    // pra ANTES dele — ficam entre "Máx. Participantes" (inscrição) e o Formato (fase
+    // classificatória). Idempotente: mover nó já reposicionado é no-op. Save lê por id (posição
+    // no DOM não importa).
+    var _formParent = box.parentElement;
+    if (_formParent) {
+      var _gsm = document.getElementById('gsm-section');
+      // Bloco de categorias (sem id próprio): sobe de #gender-cat-buttons até o filho DIRETO
+      // de #fase1-box (posição inicial) OU de #formParent (já realocado numa render anterior) —
+      // assim o achamos de novo mesmo depois de movido (senão a ordem invertia entre re-renders).
+      var _catBlock = null, _gcb = document.getElementById('gender-cat-buttons');
+      if (_gcb) {
+        var _pp = _gcb;
+        while (_pp && _pp.parentElement && _pp.parentElement.id !== 'fase1-box' && _pp.parentElement !== _formParent) _pp = _pp.parentElement;
+        if (_pp && _pp.parentElement && (_pp.parentElement.id === 'fase1-box' || _pp.parentElement === _formParent)) _catBlock = _pp;
+      }
+      // Ordem final determinística (idempotente a cada render): … Máx. Participantes · GSM ·
+      // Categorias · #fase1-box. Insere Categorias antes do box, depois GSM antes de Categorias.
+      if (_catBlock && _catBlock.parentElement) { try { _formParent.insertBefore(_catBlock, box); } catch (e) {} }
+      if (_gsm && _gsm.parentElement) { try { _formParent.insertBefore(_gsm, (_catBlock && _catBlock.parentElement === _formParent) ? _catBlock : box); } catch (e) {} }
+    }
     // Injeta o mount e inicia a config (default do esporte ou t.fmt2 do torneio em edição).
     // v4.4.17: editId-aware — se já há mount PRA ESTE torneio, mantém (não apaga config
     // em andamento). Se o torneio mudou (ou saiu de edição pra criação), reconstrói.
