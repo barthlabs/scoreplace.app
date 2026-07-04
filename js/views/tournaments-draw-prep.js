@@ -4,6 +4,21 @@
 
 var _t = window._t || function(k) { return k; };
 
+// v4.4.45: torneio configurado no format2 já tem os grupos definidos (gruposCount/
+// gruposClassified) — não faz sentido re-perguntar a distribuição no Sortear. Fecha a
+// inscrição, salva e sorteia direto. Retorna true se tratou. DEFINIDA NO TOPO (não dentro
+// de _showGroupsConfigPanel) pra estar sempre disponível quando o gate do Sortear a chama.
+window._grupos_f2Direct = function(tId) {
+    var t = window._findTournamentById ? window._findTournamentById(tId) : null;
+    if (!t || !t.fmt2 || !(parseInt(t.gruposCount, 10) >= 1)) return false;
+    if (t.status !== 'closed') t.status = 'closed';
+    delete t._suspendedByPanel; delete t._previousStatus;
+    var _go = function() { if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId); };
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) { window.FirestoreDB.saveTournament(t).then(_go).catch(_go); }
+    else { _go(); }
+    return true;
+};
+
 // ============ UNIFIED RESOLUTION PANEL SYSTEM ============
 
 window._diagnoseAll = function(t) {
@@ -691,6 +706,7 @@ window.showUnifiedResolutionPanel = function(tId) {
             // de "resto/potência de 2" da eliminatória. Só caímos no painel padrão se
             // houver TIMES INCOMPLETOS de verdade (duplas pré-formadas faltando membro).
             if (_diagG.incompleteTeams.length === 0) {
+                if (typeof window._grupos_f2Direct === 'function' && window._grupos_f2Direct(tId)) return; // format2 → sorteia direto
                 window._showGroupsConfigPanel(tId);
                 return;
             }
@@ -2984,6 +3000,7 @@ window.toggleRegistrationStatus = function (tId) {
                 return;
             }
         }
+        if (typeof window._grupos_f2Direct === 'function' && window._grupos_f2Direct(tId)) return; // format2 → sorteia direto
         window._showGroupsConfigPanel(tId);
         return;
     }
