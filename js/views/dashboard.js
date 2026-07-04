@@ -847,11 +847,28 @@ function renderDashboard(container) {
                 if (!_ligaEv) return _toggleRowDash; // sem countdown → só o toggle (direita)
                 var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
                 var _rgb = _cm[_ligaEv.color] || '139,92,246';
+                // v4.4.x: 2ª linha "Rodada em andamento" (tempo decorrido da rodada) sempre que
+                // o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
+                var _roundLineD = '';
+                if (_ligaEv.label === _t('tourn.nextDraw') && typeof window._ligaCurrentRoundStartTs === 'function') {
+                  var _rStartD = window._ligaCurrentRoundStartTs(t);
+                  if (_rStartD && _rStartD <= _now) {
+                    var _rElTextD = window._formatCountdown ? window._formatCountdown(_now - _rStartD) : '';
+                    _roundLineD = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(' + _rgb + ',0.3);">' +
+                      '<span style="font-size:1.1rem;">▶️</span>' +
+                      '<span style="font-size:0.8rem;font-weight:700;color:' + _ctColor + ' !important;">Rodada em andamento</span>' +
+                      '<span data-elapsed-since="' + _rStartD + '" style="margin-left:auto;font-size:1.05rem;font-weight:800;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _rElTextD + '</span>' +
+                    '</div>';
+                  }
+                }
                 return _toggleRowDash +
-                  '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
-                  '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +
-                  '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">' + _ligaEv.label + '</span>' +
-                  '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
+                  '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
+                  '<div style="display:flex;align-items:center;gap:10px;">' +
+                    '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +
+                    '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">' + _ligaEv.label + '</span>' +
+                    '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
+                  '</div>' +
+                  _roundLineD +
                 '</div>';
               }
 

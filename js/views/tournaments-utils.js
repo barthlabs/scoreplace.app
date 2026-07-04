@@ -1698,6 +1698,28 @@ window._ligaElapsedSinceTs = function (t) {
     return null;
 };
 
+// v4.4.x: início (ms) da RODADA ATUAL da Liga — pra "Rodada em andamento" (tempo decorrido
+// da rodada, não do torneio). Mesma regra do progresso: 1º ponto real da rodada (m.startedAt);
+// sem ponto ainda, cai no horário PROGRAMADO do sorteio desta rodada (drawFirstDate + ri*intervalo);
+// sem agendamento (sorteio manual), usa createdAt/drawnAt da rodada. null se não há rodada.
+window._ligaCurrentRoundStartTs = function (t) {
+    if (!t || !Array.isArray(t.rounds) || !t.rounds.length) return null;
+    var _ri = t.rounds.length - 1;
+    var _curR = t.rounds[_ri] || {};
+    var _rMatches = (_curR.matches || []).filter(function (m) { return !m.isSitOut; });
+    var _starts = _rMatches.map(function (m) { return m.startedAt ? (+m.startedAt) : 0; }).filter(function (x) { return x; });
+    if (_starts.length) return Math.min.apply(null, _starts); // 1º ponto real da rodada
+    var _fdStr = String(t.drawFirstDate || '').indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate ? (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')) : '');
+    var _firstDrawMs = _fdStr ? new Date(_fdStr).getTime() : NaN;
+    if (!isNaN(_firstDrawMs)) {
+        var _intvDays = parseInt(t.drawIntervalDays) || 7; if (_intvDays < 1) _intvDays = 1;
+        return _firstDrawMs + _ri * (_intvDays * 86400000);
+    }
+    var _rt = _curR.createdAt || _curR.drawnAt || _curR.at; // sorteio manual: carimbo da rodada
+    if (_rt) { var _rm = new Date(_rt).getTime(); if (!isNaN(_rm)) return _rm; }
+    return null;
+};
+
 // Navigate to tournament detail and scroll to highlight the enrolled participant
 window._scrollToParticipant = function(tId, participantName) {
     // Guard: participantName pode ser null para inscritos sem nome (phone-only)
