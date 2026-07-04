@@ -3309,7 +3309,6 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
         </div>
         ${matchesHtml ? `
           <div style="border-top:1px solid var(--border-color);padding-top:1rem;">
-            <h4 style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.75rem;border-left:3px solid var(--text-muted);padding-left:8px;">Jogos</h4>
             ${matchesHtml}
           </div>` : ''}
       </div>`;
