@@ -111,9 +111,11 @@
     var canAuto = !!r.drawFirstDate;
     var manual = !!r.drawManual || !canAuto;
     var fld = function (lbl, html) { return '<label style="display:flex;flex-direction:column;gap:5px;"><span style="font-size:0.72rem;color:var(--text-muted);">' + lbl + '</span>' + html + '</label>'; };
+    // v4.4.27: mesma apresentação dos campos de Início/Término da fase — usam class="form-control"
+    // (fonte do app var(--font-body) + ícone de calendário/relógio CLARO via filtro do CSS).
     var row1 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:12px;">' +
-      fld('Data do 1º sorteio', '<input type="date" value="' + _safe(r.drawFirstDate || '') + '" onchange="window._f2SchedDate(this.value)" style="' + inp + '">') +
-      fld('Hora', '<input type="time" value="' + _safe(r.drawFirstTime || '19:00') + '" onchange="window._f2SchedTime(this.value)" style="' + inp + '">') +
+      fld('Data do 1º sorteio', '<input type="date" class="form-control" value="' + _safe(r.drawFirstDate || '') + '" onchange="window._f2SchedDate(this.value)" style="flex:1 1 0;min-width:0;">') +
+      fld('Hora', '<input type="time" class="form-control" value="' + _safe(r.drawFirstTime || '19:00') + '" onchange="window._f2SchedTime(this.value)" style="flex:0 0 auto;">') +
     '</div>';
     var row2 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">' +
       fld('Nº de rodadas', '<input type="number" min="1" max="30" value="' + r.n + '" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
