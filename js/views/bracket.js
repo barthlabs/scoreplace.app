@@ -418,7 +418,12 @@ function renderBracket(container, tournamentId, isInline) {
   // (Pontos Corridos) mostrava só "Rodada 1 · Fase 1" SEM os cards dos jogos.
   var _canonHasPhase0Matches = (t.matches || []).some(function (m) { return (m.phaseIndex || 0) === 0 && !m.isSitOut && !m.isBye; });
   if (t._canonicalDraw && (t.currentPhaseIndex || 0) === 0 && _canonHasPhase0Matches && typeof window._renderPhaseBracket === 'function') {
-    container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
+    // v4.4.49: incluir _phaseAdvanceBanner — este caminho canônico (Fase de Grupos/elim
+    // sorteada pelo motor, jogos taggeados em t.matches, t.groups vazio) é o que a Confra
+    // usa. Sem ele, a fase classificatória fechava 100% mas o botão "Avançar" nunca aparecia
+    // (banner era calculado na linha ~402 e descartado). Os outros ramos (Liga 428, grupos 436)
+    // já o inseriam; só este esquecia.
+    container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
     _applyMyMatchesFilter();
     return;
   }
@@ -464,9 +469,9 @@ function renderBracket(container, tournamentId, isInline) {
   // (see renderSingleElimBracket / renderDoubleElimBracket). No separate card.
   try {
     if (isDupla) {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
     } else {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult, standbyHtml);
     }
   } catch (bracketErr) {
     window._error('[Bracket] Render error:', bracketErr);
