@@ -1744,6 +1744,10 @@ function setupCreateTournamentModal() {
     if (fb) { var fg = fb.closest ? fb.closest('.form-group') : null; if (fg) { var l1 = fg.querySelector('label.form-label'); if (l1) l1.style.display = 'none'; } }
     var dmb = document.getElementById('draw-mode-buttons');
     if (dmb && dmb.parentElement) { var l2 = dmb.parentElement.querySelector('label.form-label'); if (l2) l2.style.display = 'none'; }
+    // v4.4.4: esconde o cabeçalho "FASE 1" + campo "Nome da fase" — não há mais conceito
+    // de fase (modelo sincrético). É a linha que contém #phase1-name.
+    var p1n = document.getElementById('phase1-name');
+    if (p1n && p1n.parentElement) p1n.parentElement.style.display = 'none';
     // Injeta o mount 1× e inicia a config (default do esporte ou t.fmt2 do torneio em edição).
     if (document.getElementById('f2-config-mount')) return;
     var mount = document.createElement('div');
