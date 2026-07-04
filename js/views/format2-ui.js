@@ -33,12 +33,32 @@
     var adv = document.getElementById('adv-scoring-section');
     if (adv) adv.style.display = (cfg.grupos === 1) ? '' : 'none';
   }
+  // As seções "Datas da fase" (#phase-dates-box) e "Inscrições durante a fase"
+  // (#late-enroll-box) são DO FORM — relocadas pra dentro do box da Fase Classificatória
+  // (slot #f2-classif-extra). Como o mount reescreve innerHTML a cada mudança, movo pra
+  // fora (pro pai do mount) ANTES de reescrever e de volta DEPOIS — preserva valores/listeners.
+  var _EXT_IDS = ['phase-dates-box', 'late-enroll-box'];
+  function _stashExt() {
+    var mount = document.getElementById('f2-config-mount');
+    var holder = mount && mount.parentNode;
+    if (!holder) return;
+    _EXT_IDS.forEach(function (id) { var el = document.getElementById(id); if (el && el.parentNode !== holder) holder.appendChild(el); });
+  }
+  function _placeExt() {
+    var slot = document.getElementById('f2-classif-extra');
+    if (!slot) return;
+    _EXT_IDS.forEach(function (id) { var el = document.getElementById(id); if (el) slot.appendChild(el); });
+  }
+  window._f2PlaceExtSections = _placeExt; // pra chamar de fora após o mount
+
   function _rerender() {
     if (!S) return;
     if (S.mode === 'form') {
       _syncTeamSize();
+      _stashExt();
       var el = document.getElementById('f2-config-mount');
       if (el) el.innerHTML = _bodyControls();
+      _placeExt();
     } else {
       var c = document.getElementById('view-container');
       if (c) window.renderFormatoPage(c);
@@ -275,6 +295,10 @@
     // Desativado → sem conteúdo (só o título + toggle no cabeçalho ficam visíveis).
     var elimInner = e.ativa ? eb : '';
 
+    // Slot pras seções do form (Datas da fase + Inscrições durante a fase) relocadas
+    // pra dentro do box da Fase Classificatória.
+    classif += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
+
     var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classif) +
       _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, elimToggle) +
       '<div style="margin-top:2px;padding:11px 13px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);font-size:0.82rem;color:#a5b4fc;">📋 ' + _safe(window.FORMAT2.summary(cfg)) + '</div>';
@@ -347,7 +371,7 @@
     var cfg = (initialCfg && typeof initialCfg === 'object') ? window.FORMAT2.normalize(initialCfg, sport) : window.FORMAT2.defaultConfig(sport);
     S = { mode: 'form', mountEl: container, sport: sport, cfg: cfg, t: tournament || null };
     _syncTeamSize();
-    if (container) container.innerHTML = _bodyControls();
+    if (container) { container.innerHTML = _bodyControls(); _placeExt(); }
   };
   // Config atual (pro save do form). null se não montado em modo form.
   window._f2GetConfig = function () { return (S && S.mode === 'form') ? window.FORMAT2.normalize(S.cfg, S.sport) : null; };

@@ -336,7 +336,7 @@ function setupCreateTournamentModal() {
               </div>
 
               <!-- Datas da fase (logo abaixo do Formato) — v2.6.46 -->
-              <div style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.4rem; margin-bottom:1rem;">
+              <div id="phase-dates-box" style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.4rem; margin-bottom:1rem;">
                 <div style="font-size:0.72rem; color:#a5b4fc; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem; padding-left:0.35rem;">📅 ${_t('create.phaseDatesTitle')}</div>
                 <div class="dates-row" style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
                   <div id="reg-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
@@ -405,7 +405,7 @@ function setupCreateTournamentModal() {
               </div>
 
               <!-- Inscrições durante a fase — logo abaixo do Agendamento de Sorteios (v2.6.51) -->
-              <div style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
+              <div id="late-enroll-box" style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
                 <input type="hidden" id="late-enrollment" value="closed">
                 <div style="display:flex;flex-direction:column;gap:8px;" id="late-enrollment-buttons">
