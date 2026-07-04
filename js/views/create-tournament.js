@@ -6,16 +6,14 @@ window._sportScoringDefaults = window._sportScoringDefaultsMap();
 
 function setupCreateTournamentModal() {
   // ═══ RENDER CANÔNICA DE CONFIG DE FASE (v2.6.61) — definida ANTES do template ═══
-  // Uma única montagem usada por TODAS as fases (Fase 1 = idx 0; extras = idx 1+).
-  // Ajustar aqui vale pra todas. Estado-alvo: idx 0 grava no hidden da Fase 1 (save/load
-  // do topo intocados); idx>=1 grava em _extraPhases[idx-1]. — Bloco 1: W.O. (ausência) —
+  // v4.4.x (Camada 2): SÓ existe a Fase 1 (idx 0). O ramo idx>=1 (construtor de fases 2+ /
+  // _extraPhases) foi REMOVIDO. Gravam no hidden da Fase 1 (save/load do topo intocados).
+  // — Bloco 1: W.O. (ausência) —
   window._phaseWoVal = function(idx) {
-    if (idx === 0) { var h = document.getElementById('wo-scope'); return (h && h.value) || 'individual'; }
-    var ph = window._extraPhases && window._extraPhases[idx - 1]; return (ph && ph.woScope) || 'individual';
+    var h = document.getElementById('wo-scope'); return (h && h.value) || 'individual';
   };
   window._setPhaseWo = function(idx, val) {
-    if (idx === 0) { var h = document.getElementById('wo-scope'); if (h) h.value = val; var box = document.getElementById('phase-wo-buttons-0'); if (box) box.outerHTML = window._woButtonsHtml(0); }
-    else { var ph = window._extraPhases && window._extraPhases[idx - 1]; if (ph) { ph.woScope = val; window._renderPhases(); } }
+    var h = document.getElementById('wo-scope'); if (h) h.value = val; var box = document.getElementById('phase-wo-buttons-0'); if (box) box.outerHTML = window._woButtonsHtml(0);
   };
   // v2.6.71: W.O. volta a ser UM toggle único (igual à Fase 1 original): ligado = só o
   // ausente sai (Individual); desligado = time inteiro sai. Render canônica p/ todas as fases.
@@ -33,32 +31,21 @@ function setupCreateTournamentModal() {
   };
   // — Bloco 2: Lançamento de Resultados (multi-seleção: organizador/jogadores/árbitro) —
   window._phaseReVal = function(idx) {
-    if (idx === 0) {
-      var h = document.getElementById('select-result-entry');
-      var raw = (h && h.value) || 'organizer';
-      var arr; try { arr = JSON.parse(raw); } catch (e) { arr = raw; }
-      if (!Array.isArray(arr)) arr = [arr];
-      return arr.length ? arr : ['organizer'];
-    }
-    var ph = window._extraPhases && window._extraPhases[idx - 1];
-    var r = ph && ph.resultEntry;
-    var a = Array.isArray(r) ? r.slice() : [r || 'organizer'];
-    return a.length ? a : ['organizer'];
+    var h = document.getElementById('select-result-entry');
+    var raw = (h && h.value) || 'organizer';
+    var arr; try { arr = JSON.parse(raw); } catch (e) { arr = raw; }
+    if (!Array.isArray(arr)) arr = [arr];
+    return arr.length ? arr : ['organizer'];
   };
   window._togglePhaseResultEntry = function(idx, role) {
     var arr = window._phaseReVal(idx);
     var p = arr.indexOf(role);
     if (p !== -1) arr.splice(p, 1); else arr.push(role);
     if (!arr.length) arr = ['organizer']; // nunca tudo-off
-    if (idx === 0) {
-      var h = document.getElementById('select-result-entry');
-      if (h) h.value = arr.length === 1 ? arr[0] : JSON.stringify(arr);
-      var box = document.getElementById('phase-re-buttons-0');
-      if (box) box.outerHTML = window._resultEntryButtonsHtml(0);
-    } else {
-      var ph = window._extraPhases && window._extraPhases[idx - 1];
-      if (ph) { ph.resultEntry = arr; window._renderPhases(); }
-    }
+    var h = document.getElementById('select-result-entry');
+    if (h) h.value = arr.length === 1 ? arr[0] : JSON.stringify(arr);
+    var box = document.getElementById('phase-re-buttons-0');
+    if (box) box.outerHTML = window._resultEntryButtonsHtml(0);
   };
   window._resultEntryButtonsHtml = function(idx) {
     var T = window._t || function(k){ return k; };
@@ -77,21 +64,15 @@ function setupCreateTournamentModal() {
     h += '</div>';
     return h;
   };
-  // — Bloco 2b: Classificação (Personalizada × Em blocos) — CANÔNICO p/ TODAS as fases.
-  //   idx 0 = grava no hidden #elim-ranking-type da Fase 1 (save `elimRankingType` intacto);
-  //   idx>=1 = grava em _extraPhases[idx-1].rankingType. Mesma render em qualquer fase.
+  // — Bloco 2b: Classificação (Personalizada × Em blocos) — grava no hidden #elim-ranking-type
+  //   da Fase 1 (save `elimRankingType` intacto). Só existe a Fase 1 (idx 0).
   window._phaseRankingVal = function(idx) {
-    if (idx === 0) { var h = document.getElementById('elim-ranking-type'); return (h && h.value === 'blocks') ? 'blocks' : 'individual'; }
-    var ph = window._extraPhases && window._extraPhases[idx - 1]; return (ph && ph.rankingType === 'blocks') ? 'blocks' : 'individual';
+    var h = document.getElementById('elim-ranking-type'); return (h && h.value === 'blocks') ? 'blocks' : 'individual';
   };
   window._setPhaseRankingType = function(idx, val) {
     val = (val === 'blocks') ? 'blocks' : 'individual';
-    if (idx === 0) {
-      var h = document.getElementById('elim-ranking-type'); if (h) h.value = val;
-      var box = document.getElementById('phase-classif-0'); if (box) box.outerHTML = window._classifModeHtml(0);
-    } else {
-      var ph = window._extraPhases && window._extraPhases[idx - 1]; if (ph) { ph.rankingType = val; window._renderPhases(); }
-    }
+    var h = document.getElementById('elim-ranking-type'); if (h) h.value = val;
+    var box = document.getElementById('phase-classif-0'); if (box) box.outerHTML = window._classifModeHtml(0);
   };
   window._classifModeHtml = function(idx) {
     var T = window._t || function(k){ return k; };
@@ -106,8 +87,8 @@ function setupCreateTournamentModal() {
       + '<small class="text-muted" style="display:block;margin-top:6px;">' + T('create.rankingTypeHint') + '</small>'
       + '</div>';
   };
-  // — Bloco 3: Pontuação Avançada (GSM). idx 0 = IDs sem sufixo (Fase 1, save/load/motor
-  //   intactos); idx>=1 = IDs sufixados -N, gravados em _extraPhases[idx-1].advancedScoring. —
+  // — Bloco 3: Pontuação Avançada (GSM) da Fase 1. idx 0 = IDs sem sufixo (save/load/motor
+  //   intactos). Construtor de fases 2+ removido (Camada 2) — só existe a Fase 1. —
   window._advScoringHtml = function(idx, initialDisplay, advData) {
     var T = window._t || function(k){ return k; };
     var s = idx === 0 ? '' : ('-' + idx);
@@ -1391,77 +1372,11 @@ function setupCreateTournamentModal() {
     window._onFormatoChange();
   };
 
-  // ── Construtor de Fases (multi-fase configurável) ──
-  // Fase 1 = o formato escolhido no topo (origem: inscrição direta + sorteio).
-  // Fases 2+ vivem em window._extraPhases; cada uma define formato, rodadas,
-  // origem (inscrição OU classificados da fase anterior por colocação de grupo)
-  // e duplas fixas. Serializado em t.phases[] só quando há ao menos uma fase extra.
-  window._extraPhases = window._extraPhases || [];
+  // ── Formato (configurador único format2) ──
+  // v4.4.x (Camada 2): o antigo construtor de fases 2+ (window._extraPhases) foi REMOVIDO.
+  // O configurador único window.FORMAT2 (format2.js + format2-ui.js) é a fonte única de
+  // t.phases; a config crua vive em t.fmt2. Só resta o nome custom da Fase 1 (espelho).
   window._phase1Name = window._phase1Name || '';
-  window._phase1Rounds = window._phase1Rounds || 1;
-  var _PHASE_FORMATS = [
-    { v: 'liga', label: 'Pontos Corridos' },
-    { v: 'elim_simples', label: 'Eliminatória Simples' },
-    { v: 'elim_dupla', label: 'Dupla Eliminatória (Superior/Inferior)' },
-    { v: 'grupos_mata', label: 'Fase de Grupos' }
-  ];
-  // v2.6.64: ícones SVG idênticos aos da Fase 1 — render canônica de Formato pras fases extras.
-  var _PHASE_FORMAT_SVG = {
-    elim_simples: '<svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="4" x2="12" y2="4" opacity=".5"/><line x1="2" y1="14" x2="12" y2="14" opacity=".5"/><line x1="12" y1="4" x2="12" y2="14"/><line x1="12" y1="9" x2="22" y2="9"/><line x1="2" y1="22" x2="12" y2="22" opacity=".5"/><line x1="2" y1="32" x2="12" y2="32" opacity=".5"/><line x1="12" y1="22" x2="12" y2="32"/><line x1="12" y1="27" x2="22" y2="27"/><line x1="22" y1="9" x2="22" y2="27"/><line x1="22" y1="18" x2="32" y2="18"/><circle cx="36" cy="18" r="3" fill="currentColor" stroke="none" opacity=".6"/></svg>',
-    elim_dupla: '<svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="3" x2="10" y2="3" opacity=".5"/><line x1="2" y1="10" x2="10" y2="10" opacity=".5"/><line x1="10" y1="3" x2="10" y2="10"/><line x1="10" y1="6.5" x2="18" y2="6.5"/><line x1="18" y1="6.5" x2="18" y2="13"/><line x1="18" y1="13" x2="26" y2="13"/><line x1="2" y1="20" x2="10" y2="20" opacity=".4" stroke-dasharray="2 2"/><line x1="2" y1="27" x2="10" y2="27" opacity=".4" stroke-dasharray="2 2"/><line x1="10" y1="20" x2="10" y2="27" opacity=".6" stroke-dasharray="2 2"/><line x1="10" y1="23.5" x2="18" y2="23.5" opacity=".6" stroke-dasharray="2 2"/><line x1="18" y1="19" x2="18" y2="23.5" opacity=".6" stroke-dasharray="2 2"/><line x1="18" y1="19" x2="26" y2="19" opacity=".6" stroke-dasharray="2 2"/><line x1="26" y1="13" x2="26" y2="19"/><line x1="26" y1="16" x2="34" y2="16"/><circle cx="37" cy="16" r="2.5" fill="currentColor" stroke="none" opacity=".6"/></svg>',
-    grupos_mata: '<svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1" y="2" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="2" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="7" x2="13" y2="7" opacity=".5"/><line x1="4" y1="12" x2="13" y2="12" opacity=".5"/><rect x="1" y="20" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="20" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="25" x2="13" y2="25" opacity=".5"/><line x1="4" y1="30" x2="13" y2="30" opacity=".5"/><line x1="20" y1="9" x2="20" y2="27"/><line x1="20" y1="9" x2="28" y2="9" opacity=".6"/><line x1="20" y1="27" x2="28" y2="27" opacity=".6"/><line x1="28" y1="9" x2="28" y2="27"/><line x1="28" y1="18" x2="36" y2="18"/><circle cx="38" cy="18" r="1.8" fill="currentColor" stroke="none" opacity=".6"/></svg>',
-    liga: '<svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><rect x="2" y="2" width="36" height="32" rx="3" opacity=".3" fill="currentColor" stroke="none"/><rect x="2" y="2" width="36" height="32" rx="3" fill="none" opacity=".6"/><line x1="2" y1="10" x2="38" y2="10" opacity=".4"/><line x1="2" y1="18" x2="38" y2="18" opacity=".25"/><line x1="2" y1="26" x2="38" y2="26" opacity=".25"/><line x1="14" y1="2" x2="14" y2="34" opacity=".25"/><line x1="26" y1="2" x2="26" y2="34" opacity=".25"/><circle cx="7" cy="15" r="1.5" fill="currentColor" stroke="none" opacity=".5"/><circle cx="7" cy="23" r="1.5" fill="currentColor" stroke="none" opacity=".35"/><circle cx="7" cy="31" r="1.5" fill="currentColor" stroke="none" opacity=".25"/></svg>'
-  };
-  var _PHASE_FORMAT_LABELKEY = { elim_simples: 'format.single', elim_dupla: 'format.double', grupos_mata: 'format.groupsShort', liga: 'format.league' };
-  // Grade de Formato canônica (mesmo visual da Fase 1) — usada nos cards de fase extra.
-  // v2.6.68: 3 categorias (Pontos Corridos / Fase de Grupos / Eliminatórias), igual à
-  // Fase 1. Dupla Eliminatória vira sub-toggle dentro de Eliminatórias. O valor gravado
-  // em ph.format continua sendo o interno legado ('liga'|'grupos_mata'|'elim_simples'|'elim_dupla').
-  window._phaseFormatGridHtml = function(i, current) {
-    var T = window._t || function(k){ return k; };
-    if (!document.getElementById('sp-phase-fmt-grid-css-v2')) {
-      var _st = document.createElement('style');
-      _st.id = 'sp-phase-fmt-grid-css-v2';
-      _st.textContent = '.sp-phase-fmt-grid{grid-template-columns:repeat(3,1fr)!important}@media(max-width:600px){.sp-phase-fmt-grid{grid-template-columns:repeat(3,1fr)!important}}';
-      document.head.appendChild(_st);
-    }
-    var on = 'border:2px solid #3b82f6;background:rgba(59,130,246,0.12);color:#60a5fa;';
-    var off = 'border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);';
-    var isElim = (current === 'elim_simples' || current === 'elim_dupla');
-    var cats = [
-      { val: 'liga',        svg: _PHASE_FORMAT_SVG.liga,        labelKey: 'format.league',      act: current === 'liga' },
-      { val: 'grupos_mata', svg: _PHASE_FORMAT_SVG.grupos_mata, labelKey: 'format.groupsShort', act: current === 'grupos_mata' },
-      { val: (current === 'elim_dupla' ? 'elim_dupla' : 'elim_simples'), svg: _PHASE_FORMAT_SVG.elim_simples, labelKey: 'format.elimination', act: isElim }
-    ];
-    var h = '<label style="display:block;font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Formato</label>';
-    h += '<div class="sp-phase-fmt-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">';
-    cats.forEach(function(c){
-      h += '<button type="button" onclick="window._setPhaseField(' + i + ',\'format\',\'' + c.val + '\')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;font-weight:700;text-align:center;line-height:1.1;' + (c.act ? on : off) + '">' + c.svg + T(c.labelKey) + '</button>';
-    });
-    h += '</div>';
-    // Sub-toggle Dupla Eliminatória — só na categoria Eliminatórias.
-    if (isElim) {
-      var dupChecked = current === 'elim_dupla';
-      h += '<div style="display:flex;align-items:center;gap:10px;margin:-2px 0 10px;padding:8px 12px;border-radius:10px;border:1px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.06);">';
-      h += '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox"' + (dupChecked ? ' checked' : '') + ' onchange="window._setPhaseField(' + i + ',\'format\',this.checked?\'elim_dupla\':\'elim_simples\')"><span class="toggle-slider"></span></label>';
-      h += '<div><span style="font-weight:600;font-size:0.85rem;color:var(--text-bright);">' + T('format.double') + '</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">' + T('create.descElimDupla') + '</div></div>';
-      h += '</div>';
-    }
-    return h;
-  };
-  // Modo de Sorteio canônico (Sorteio / Rei-Rainha) — só Pontos Corridos tem Rei/Rainha.
-  window._phaseDrawModeHtml = function(i, isRei) {
-    var T = window._t || function(k){ return k; };
-    var on = 'border:2px solid #34d399;background:rgba(16,185,129,0.15);color:#34d399;';
-    var off = 'border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);';
-    var bs = 'padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;font-weight:600;';
-    var h = '<label style="display:block;font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + T('create.drawMode') + '</label>';
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
-    h += '<button type="button" onclick="window._setPhaseField(' + i + ',\'reiRainha\',false)" style="' + bs + (!isRei ? on : off) + '">🎲 ' + T('create.drawModeSorteio') + '</button>';
-    h += '<button type="button" onclick="window._setPhaseField(' + i + ',\'reiRainha\',true)" style="' + bs + (isRei ? on : off) + '">👑 ' + T('format.monarchShort') + '</button>';
-    h += '</div>';
-    return h;
-  };
   // ⚰️ v4.4.x DELETADO: _phaseLateEnrollHtml + _setPhaseDraw (construtor de fases fase-2+).
   // ⚰️ v4.4.x DELETADO: _updatePhaseDrawExplain / _recalcPhaseRounds / _applyPhaseRounds /
   // _phaseDrawScheduleHtml (agendamento de sorteio por fase — construtor fase-2+ morto).
@@ -1474,39 +1389,6 @@ function setupCreateTournamentModal() {
     return sportEl.options[sportEl.selectedIndex].text.replace(/^[^\wÀ-ɏ]+/u, '').trim();
   };
   // ⚰️ v4.4.x DELETADO: _phaseGsmSelectPreset / _phaseGsmAdvantage / _phaseGsmHtml (GSM por fase — construtor fase-2+ morto).
-  // v2.6.79: default = 1 linha (chave única). Eliminatórias permite configurar 1/2/4
-  // linhas via _setPhaseLineCount. Sem rótulos Ouro/Prata hardcoded — o organizador
-  // nomeia cada linha (ou fica genérico "Chave N" no motor).
-  function _phaseDefaultMapping(format) {
-    return [ { dest: 'main', rankFrom: 1, rankTo: 2, label: '' } ];
-  }
-  // dest keys das linhas: 1 linha → ['main']; 2/4 → ['upper','lower','line3','line4'].
-  // Mantém compat com o motor (converge upper+lower); line3/line4 entram na fase 4-linhas.
-  function _lineDests(n) { return (n <= 1) ? ['main'] : ['upper', 'lower', 'line3', 'line4'].slice(0, n); }
-  // v2.6.92 (Motor Chunk 1): deriva o mapping QUE O MOTOR LÊ a partir do modelo novo
-  // de "quem classifica" — quantos (Todos | Os X melhores via qualifyTopN) × base (scope)
-  // distribuídos pelas N linhas por faixa de colocação. O motor (buildEntrantsByDest)
-  // consome rankFrom/rankTo por dest; aqui traduzimos qualifyTopN → faixas. Os nomes das
-  // linhas (label) são preservados. 'Todos' com 1 linha = rankTo amplo (todos); 'Todos'
-  // multi-linha mantém as faixas existentes (split por N é trabalho de runtime — Chunk 2).
-  window._deriveMotorMapping = function (ph) {
-    var lines = (Array.isArray(ph.mapping) && ph.mapping.length) ? ph.mapping : [{ dest: 'main', label: '' }];
-    var nLines = lines.length;
-    var quantity = ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top');
-    if (quantity === 'all') {
-      // v2.7.17: 'Todos' = profundidade ampla (rankTo 999) em TODAS as linhas — o
-      // destino vem da estratégia, então a faixa só sinaliza "todos avançam".
-      return lines.map(function (ln) { return { dest: ln.dest, rankFrom: 1, rankTo: 999, label: (ln.label || '').trim() }; });
-    }
-    var topN = Math.max(parseInt(ph.qualifyTopN, 10) || 2, 1);
-    var per = Math.floor(topN / nLines), rem = topN - per * nLines, start = 1;
-    return lines.map(function (ln, k) {
-      var cnt = Math.max(per + (k < rem ? 1 : 0), 1);
-      var m = { dest: ln.dest, rankFrom: start, rankTo: start + cnt - 1, label: (ln.label || '').trim() };
-      start += cnt;
-      return m;
-    });
-  };
   // (removido v4.3.3: _phaseDests tinha rótulos "Ouro"/"Prata" hardcoded e zero callers —
   //  o nome de cada linha é 100% do organizador via mapping[i].label. Sem defaults de nome.)
   // ⚰️ v4.4.x DELETADO: _addPhase / _removePhase (construtor de empilhamento de fases fase-2+).
@@ -1604,6 +1486,8 @@ function setupCreateTournamentModal() {
     var sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || 'Beach Tennis';
     var initCfg = null, tourn = null;
     if (editId && typeof window._findTournamentById === 'function') { tourn = window._findTournamentById(editId); if (tourn && tourn.fmt2) initCfg = tourn.fmt2; }
+    // v4.4.x (Camada 2): torneio NOVO a partir de template — inicia da config do template.
+    if (!initCfg && window._f2PendingTemplateCfg) { initCfg = window._f2PendingTemplateCfg; window._f2PendingTemplateCfg = null; }
     window._f2MountInForm(mount, sport, initCfg, tourn);
     // v4.4.59: "Sistema de Pontos Avançado" disponível na classificatória de QUALQUER formato.
     // Reposiciona logo abaixo do configurador (área da classificatória) e mostra quando há
@@ -1623,68 +1507,6 @@ function setupCreateTournamentModal() {
   // (HTML nunca mais gerado, pois _renderPhases virou no-op). O stub evita qualquer erro
   // "is not a function" caso um onclick residual seja alcançado.
   window._setPhaseField = function(){};
-  // v2.6.77: estratégia de avanço (Performance/Equilíbrio/Sorteio) é INDEPENDENTE
-  // do toggle "Duplas fixas". A estratégia sempre define COMO os classificados vão
-  // pra próxima fase (em pares fixos OU como indivíduos semeados); o toggle só decide
-  // se os pares ficam travados na fase ou se entram individualmente.
-  window._setPhasePairing = function(i, strategy) {
-    var ph = window._extraPhases[i]; if (!ph) return;
-    ph.pairingStrategy = strategy;
-    // v2.7.17: Cabeças de chave precisa do ranking GERAL (espalha os melhores
-    // entre as linhas) → força escopo geral.
-    if (strategy === 'seed') {
-      ph.scope = 'overall';
-      ph.qualifyMode = (ph.qualifyQuantity === 'all') ? 'all' : 'overall';
-    }
-    window._renderPhases();
-  };
-  // v2.6.83: "Os X melhores" — quantos avançam (eixo quantidade). Grava em qualifyTopN
-  // SEM re-render (preserva o foco do input). Vale tanto pra per_group quanto pra geral.
-  window._setPhaseTopN = function(i, value) {
-    var ph = window._extraPhases[i]; if (!ph) return;
-    ph.qualifyTopN = Math.max(1, parseInt(value) || 1);
-  };
-  // v2.6.79: nº de linhas (chaves paralelas) numa Eliminatória — 1, 2 ou 4. 3 é
-  // BLOQUEADO (a 3ª linha exigiria a 4ª por justiça das semis). Preserva nomes/faixas
-  // existentes ao redimensionar; novas linhas ganham faixa default 2 em 2 (1-2, 3-4…).
-  window._setPhaseLineCount = function(i, n) {
-    var ph = window._extraPhases[i]; if (!ph) return;
-    n = (n === 4) ? 4 : (n === 2 ? 2 : 1); // bloqueia 3
-    var prev = Array.isArray(ph.mapping) ? ph.mapping : [];
-    var dests = _lineDests(n);
-    ph.mapping = dests.map(function(d, k){
-      var o = prev[k] || {};
-      return { dest: d, rankFrom: o.rankFrom || (2 * k + 1), rankTo: o.rankTo || (2 * k + 2), label: o.label || '' };
-    });
-    window._renderPhases();
-  };
-  // v2.6.62: _togglePhaseResultEntry agora é canônico (definido no topo, idx 0 = Fase 1).
-  // Botão de toggle do construtor (estilo dos botões da Fase 1).
-  function _phBtn(i, field, val, label, active) {
-    var on = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;';
-    var off = 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);';
-    return '<button type="button" onclick="window._setPhaseField(' + i + ',\'' + field + '\',\'' + val + '\')" style="padding:6px 10px;border-radius:9px;font-size:0.76rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all 0.15s;' + (active ? on : off) + '">' + label + '</button>';
-  }
-  window._setPhaseMapping = function(i, mi, key, value) {
-    var ph = window._extraPhases[i]; if (!ph || !ph.mapping || !ph.mapping[mi]) return;
-    ph.mapping[mi][key] = Math.max(1, parseInt(value) || 1);
-  };
-  // Nome da trilha (Ouro/Prata/…) — não re-renderiza pra não perder o foco do input.
-  window._setPhaseMappingLabel = function(i, mi, value) {
-    var ph = window._extraPhases[i]; if (!ph || !ph.mapping || !ph.mapping[mi]) return;
-    ph.mapping[mi].label = value;
-  };
-  // (render canônica de W.O. movida pro TOPO de setupCreateTournamentModal — v2.6.61,
-  //  pra estar definida antes do template da Fase 1 que a usa.)
-  function _phOpt(v, label, sel) { return '<option value="' + v + '"' + (sel ? ' selected' : '') + '>' + label + '</option>'; }
-  var _PH_INP = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;';
-  // v2.6.78: colapsar/expandir fase e transição. _collapsed/_txCollapsed são UI-only
-  // (o save monta objeto novo com chaves explícitas → não vão pro Firestore).
-  window._togglePhaseCollapse = function(i, which) {
-    var ph = window._extraPhases[i]; if (!ph) return;
-    if (which === 'tx') ph._txCollapsed = !ph._txCollapsed; else ph._collapsed = !ph._collapsed;
-    window._renderPhases();
-  };
   // Fase 1 é HTML estático: colapsa escondendo tudo no #fase1-box menos o cabeçalho.
   // Via CSS (atributo data-collapsed) pra NÃO mexer no display inline dos filhos —
   // várias seções (suico/grupos/liga-fields…) têm display:none próprio que precisa
@@ -1700,28 +1522,6 @@ function setupCreateTournamentModal() {
     box.setAttribute('data-collapsed', collapsed ? '1' : '0');
     var btn = document.getElementById('fase1-collapse-btn'); if (btn) btn.textContent = collapsed ? '▸' : '▾';
   };
-  // Botão de colapso canônico (▸/▾).
-  function _phCollapseBtn(onclick, collapsed, color) {
-    return '<button type="button" onclick="' + onclick + '" title="Colapsar/expandir" style="flex-shrink:0;border:none;background:' + color + ';color:inherit;width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:700;line-height:1;">' + (collapsed ? '▸' : '▾') + '</button>';
-  }
-  // Resumo de 1 linha das escolhas da transição (mostrado quando colapsada).
-  function _phaseTxSummary(ph, teamSize) {
-    var qm = ph.qualifyMode || 'per_group', parts = [];
-    // v2.6.83: resumo dos dois eixos + linhas (Eliminatórias).
-    var _qty = ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top');
-    var _basis = ph.scope || (ph.qualifyMode === 'overall' ? 'overall' : 'per_group');
-    var _basisLbl = (_basis === 'overall') ? 'geral' : 'por grupo';
-    parts.push((_qty === 'all') ? ('Todos · ' + _basisLbl) : ('Top ' + (ph.qualifyTopN || 2) + ' · ' + _basisLbl));
-    if (ph.format === 'elim_simples' || ph.format === 'elim_dupla') {
-      var _nL = (ph.mapping || []).length || 1;
-      if (_nL > 1) parts.push(_nL + ' linhas · ' + (ph.grandFinal !== false ? 'grande final' : 'independentes'));
-    }
-    if (teamSize >= 2) {
-      var sl = { draw_among: 'Sorteio', top: 'Performance', balanced: 'Equilíbrio' }[ph.pairingStrategy || 'top'] || 'Performance';
-      parts.push((ph.fixedPairs !== false ? 'duplas fixas' : 'individual') + ' · ' + sl);
-    }
-    return parts.join('  ·  ');
-  }
   // ⚰️ v4.4.x DELETADO: _phaseCardHtml (montava o card de fase-2+) — construtor de
   // empilhamento de fases substituído pelo configurador único window.FORMAT2 + #formato/:tId.
   // _renderPhases vira no-op: os helpers idx=0 vivos (_setPhaseWo/_togglePhaseResultEntry/
@@ -4006,83 +3806,6 @@ function setupCreateTournamentModal() {
     });
   };
 
-  // Estimativa de cada fase extra (mesma lógica; N planejado/genérico).
-  window._phaseEstimateHtml = function (i, ph) {
-    var T = window._t || function (k) { return k; };
-    var inner = window._estimateInnerForPhase(ph, i);
-    var h = '<div style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px; padding: 0.6rem 0.75rem; margin-top: 12px;">';
-    h += '<div style="font-size: 0.72rem; color: #f59e0b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 0.5rem;">⏱ Estimativa de tempo da fase</div>';
-    h += '<div id="ph-estimate-ladder-' + i + '">' + inner + '</div></div>';
-    return h;
-  };
-  // v2.6.81: nº de ENTRANTES de uma fase extra DERIVADO da fase anterior + "quem
-  // classifica". Encadeia da Fase 1 (inscritos reais OU planejado: max/target-slots)
-  // por cada fase: 'Todos' → mantém o nº de ativos; 'Melhores no geral' → soma das
-  // faixas (top X, fixo); 'Melhores de cada grupo' → grupos da fase anterior × faixa.
-  // Só ajusta o que muda (formato/rei-rainha/grupos), como pedido.
-  window._derivePhaseEntrants = function (i) {
-    var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
-    var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
-    var N = 0, isReal = false;
-    var editId = gv('edit-tournament-id');
-    if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
-      var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
-      if (t && Array.isArray(t.participants) && t.participants.length > 0) { N = t.participants.length; isReal = true; }
-    }
-    if (!isReal) {
-      var elm = gv('enrollment-limit-mode') || 'cap';
-      if (elm === 'draw') N = iv('tourn-target-slots', 0);
-      if (!N) N = iv('tourn-max-participants', 0);
-    }
-    // Parâmetros da fase ANTERIOR (começam na Fase 1).
-    var prevFmt = gv('select-formato') || 'elim_simples';
-    var prevRei = (gv('draw-mode') || 'sorteio') === 'rei_rainha';
-    var prevGrupos = iv('grupos-count', 4);
-    function groupsOf(fmt, rei, grupos, n) {
-      if (rei) return Math.max(Math.ceil((n || 0) / 4), 1);
-      if (fmt === 'grupos_mata') return Math.max(grupos || 4, 1);
-      return 1;
-    }
-    for (var k = 0; k <= i; k++) {
-      var ph = window._extraPhases[k]; if (!ph) break;
-      // v2.6.83: quantidade vem de qualifyQuantity ('all'|'top') + qualifyTopN; base de scope.
-      var _qty = ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top');
-      var _basis = ph.scope || (ph.qualifyMode === 'overall' ? 'overall' : 'per_group');
-      if (_qty !== 'all') {
-        var topN = Math.max(parseInt(ph.qualifyTopN, 10) || 2, 1);
-        if (_basis === 'overall') { N = (N > 0) ? Math.min(topN, N) : topN; }
-        else { var g = groupsOf(prevFmt, prevRei, prevGrupos, N); var d = g * topN; N = (N > 0) ? Math.min(d, N) : d; }
-      }
-      prevFmt = ph.format; prevRei = !!ph.reiRainha; prevGrupos = ph.gruposCount || 4;
-    }
-    return { N: N, isReal: isReal && N >= 2 };
-  };
-  // Calcula o HTML interno da estimativa de uma fase (lê tempos/quadras/categorias do torneio).
-  window._estimateInnerForPhase = function (ph, i) {
-    var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
-    var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
-    var K = 1, ageCats = 0;
-    try {
-      var cd = (window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {}) || {};
-      if (cd.combinedCategories && cd.combinedCategories.length) K = cd.combinedCategories.length;
-      ageCats = (cd.ageCategories || []).length;
-    } catch (e) { K = 1; }
-    var ent = (typeof i === 'number' && typeof window._derivePhaseEntrants === 'function') ? window._derivePhaseEntrants(i) : { N: 0, isReal: false };
-    return window._buildPhaseEstimate({
-      call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
-      courts: iv('tourn-court-count', 1), fmt: ph.format || 'elim_simples', drawMode: ph.reiRainha ? 'rei_rainha' : 'sorteio',
-      K: K, ageCats: ageCats, N: ent.N, isReal: ent.isReal,
-      gruposCount: ph.gruposCount || 4
-    });
-  };
-  // Atualiza as escadas de estimativa de todas as fases extras (sem re-render do card).
-  window._refreshAllPhaseEstimates = function () {
-    if (!Array.isArray(window._extraPhases)) return;
-    window._extraPhases.forEach(function (ph, i) {
-      var el = document.getElementById('ph-estimate-ladder-' + i);
-      if (el) el.innerHTML = window._estimateInnerForPhase(ph, i);
-    });
-  };
 
   // v3.0.x: divisão da Fase de Grupos por SLIDER. Esquerda = mais grupos menores,
   // direita = menos grupos maiores. Sugerido a partir do nº de inscritos (real ao
@@ -4190,7 +3913,6 @@ function setupCreateTournamentModal() {
   window._recalcDuration = function () {
     if (window._renderGruposSuggestions) { try { window._renderGruposSuggestions(); } catch (e) {} }
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
-    if (window._refreshAllPhaseEstimates) { try { window._refreshAllPhaseEstimates(); } catch (e) {} }
     // v2.6.37: a escada de estimativa (_renderPhaseEstimate) é a ÚNICA estimativa.
     // O box de diagnóstico legado (capacidade/sugestões/"max feasible") mostrava
     // números absurdos derivados da janela de datas — desativado de vez.
@@ -5029,63 +4751,11 @@ function setupCreateTournamentModal() {
     var _svEl = document.getElementById('grupos-seed-vip'); if (_svEl) _svEl.checked = !!t.gruposSeedVip; // v3.1.11
     var _scEl = document.getElementById('grupos-seed-category'); if (_scEl) _scEl.checked = !!t.gruposSeedCategory; // v3.1.12
 
-    // Construtor de Fases — restaura fases extras (t.phases[0] = fase 1, do topo)
-    window._phasesUserTouched = false; // v3.0.x: edição começa "limpa" — só vira true se add/remove
-    if (Array.isArray(t.phases) && t.phases.length > 1) {
-      var _p1 = t.phases[0] || {};
-      window._phase1Name = _p1.name || t.phase1Name || '';
-      window._phase1Rounds = parseInt(_p1.rounds) || 1;
-      window._extraPhases = t.phases.slice(1).map(function(ph) {
-        var src = ph.source || {};
-        var fromPrev = src.type === 'previous_phase';
-        return {
-          name: ph.name || '',
-          format: ph.formatCode || 'elim_dupla',
-          reiRainha: !!ph.reiRainha,
-          rounds: parseInt(ph.rounds) || 1,
-          drawMode: ph.drawMode || (ph.reiRainha ? 'rei_rainha' : 'sorteio'),
-          groupsBy: ph.groupsBy || 'sorteio',
-          gruposCount: parseInt(ph.gruposCount) || 4,
-          gruposClassified: parseInt(ph.gruposClassified) || 2,
-          sourceType: fromPrev ? 'previous' : 'enrollment',
-          qualifyMode: src.qualifyMode || (src.scope === 'overall' ? 'overall' : 'per_group'),
-          qualifyQuantity: src.qualifyQuantity || (src.qualifyMode === 'all' ? 'all' : 'top'),
-          qualifyTopN: parseInt(src.qualifyTopN) || 2,
-          scope: src.scope || 'per_group',
-          fixedPairs: ph.fixedPairs !== false,
-          pairingStrategy: ph.pairingStrategy || 'top',
-          grandFinal: ph.grandFinal !== false,
-          // v2.6.59: config por fase — W.O. + lançamento (normaliza resultEntry pra array na UI).
-          woScope: (ph.woScope === 'team' ? 'time' : (ph.woScope || 'individual')),
-          rankingType: (ph.rankingType === 'blocks' ? 'blocks' : 'individual'), // v3.1.34
-          resultEntry: (function(){ var r = ph.resultEntry; if (Array.isArray(r)) return r.length ? r : ['organizer']; if (typeof r === 'string') { try { var p = JSON.parse(r); if (Array.isArray(p)) return p.length ? p : ['organizer']; } catch(e){} return [r]; } return ['organizer']; })(),
-          // v2.6.63: Pontuação Avançada por fase (objeto {enabled, categories, applyLiveScoring} ou null).
-          advancedScoring: ph.advancedScoring || null,
-          // v2.6.65: Datas da fase.
-          regDate: ph.regDate || '', regTime: ph.regTime || '',
-          startDate: ph.startDate || '', startTime: ph.startTime || '',
-          endDate: ph.endDate || '', endTime: ph.endTime || '',
-          // v2.6.66: Inscrições durante a fase.
-          lateEnrollment: ph.lateEnrollment || 'closed',
-          // v2.6.67: Agendamento de Sorteios.
-          drawFirstDate: ph.drawFirstDate || '',
-          drawFirstTime: ph.drawFirstTime || '19:00',
-          drawIntervalDays: (ph.drawIntervalDays != null && ph.drawIntervalDays !== '' ? ph.drawIntervalDays : 7),
-          drawManual: !!ph.drawManual,
-          // v2.6.69: Sistema de Pontuação por fase (null = herda do torneio).
-          scoring: (ph.scoring && ph.scoring.type) ? ph.scoring : null,
-          mapping: (fromPrev && Array.isArray(src.mapping) && src.mapping.length)
-            ? src.mapping.map(function(m){ return { dest: m.dest, rankFrom: parseInt(m.rankFrom) || 1, rankTo: parseInt(m.rankTo) || 1, label: m.label || '' }; })
-            : _phaseDefaultMapping(ph.formatCode || 'elim_dupla')
-        };
-      });
-    } else {
-      window._extraPhases = [];
-      window._phase1Name = t.phase1Name || ''; // v2.6.49: nome da Fase 1 mesmo em fase única
-      window._phase1Rounds = 1;
-    }
-    // v2.6.49: popular o input do nome da Fase 1 (antes só a variável era setada,
-    // o campo ficava vazio no edit → re-save apagava o nome).
+    // v4.4.x (Camada 2): a estrutura de fases é restaurada pelo format2 a partir de t.fmt2
+    // (_f2MountInEditForm lê tourn.fmt2). Aqui só populamos o nome custom da Fase 1 (espelho
+    // top-level) pra que um re-save não apague o nome.
+    var _p0 = (Array.isArray(t.phases) && t.phases[0]) ? t.phases[0] : {};
+    window._phase1Name = _p0.name || t.phase1Name || '';
     var _p1NameInput = document.getElementById('phase1-name');
     if (_p1NameInput) _p1NameInput.value = window._phase1Name || '';
 
@@ -5705,196 +5375,35 @@ function setupCreateTournamentModal() {
           tourData.drawMode = 'sorteio';
         }
 
-        // ── Construtor de Fases ──
-        // Quando há ao menos uma fase extra, grava t.phases[] (fase 0 = formato do
-        // topo + origem por inscrição; fases 1+ vêm do construtor). Fase única =
-        // legado: t.phases fica null e o motor usa os campos top-level de sempre.
-        // v3.1.37: UNIFICAÇÃO DE SCHEMA — a Fase 1 (phase 0) passa a ser uma fase CANÔNICA
-        // e COMPLETA em t.phases[0], com a MESMA shape das fases extras (datas + W.O. +
-        // lançamento + classificação + pontuação + config de formato). Fim da assimetria
-        // "Fase 1 mora no top-level, extras moram em phases[]" — que causava bugs (ex.: data
-        // de fim mostrando só a Fase 1). O top-level continua gravado como ESPELHO/fallback
-        // (motor lê t.phases[i].X || t.X), então docs antigos seguem funcionando. Os
-        // INSCRITOS/INSCRIÇÕES são top-level (t.participants/memberUids/...) e NÃO são tocados.
-        function _buildPhase0() {
-          var _p1NameEl0 = document.getElementById('phase1-name');
-          return {
-            name: (_p1NameEl0 && _p1NameEl0.value.trim()) || 'Fase 1',
-            // monarch standalone grava como Pontos Corridos (Liga+rei_rainha) — o
-            // formatCode da fase acompanha (o formato do form era só a seleção de UI).
-            formatCode: monarchAsLiga ? 'liga' : formatValue,
-            format: format, // string canônica (ex.: 'Liga', 'Dupla Eliminatória')
-            drawMode: tourData.drawMode || 'sorteio',
-            reiRainha: tourData.drawMode === 'rei_rainha',
-            // v4.x: o nº de rodadas da fase 0 Liga é o que o organizador GRAVA no campo
-            // "Rodadas" (#liga-rounds-input) — NUNCA o _phase1Rounds carregado (que ficava
-            // preso no valor antigo, ex.: 1 da fase classificatória original). Esse valor é
-            // o CAP da fase (governa avanço multi-fase e suppress do auto-draw). Sem isso, o
-            // organizador digitava 5 rodadas e o motor parava/avançava na 1ª. Outros formatos
-            // seguem _phase1Rounds (fonte deles).
-            rounds: (function () {
-              if (formatValue === 'liga') {
-                var _lrEl = document.getElementById('liga-rounds-input');
-                var _lrN = _lrEl ? parseInt(_lrEl.value, 10) : 0;
-                if (_lrN >= 1) return _lrN;
-              }
-              return parseInt(window._phase1Rounds) || 1;
-            })(),
-            source: { type: 'enrollment' },
-            fixedPairs: teamSizeVal > 1,
-            groupsBy: tourData.reiRainhaGroupsBy || 'sorteio',
-            gruposCount: parseInt(tourData.gruposCount) || 4,
-            gruposClassified: parseInt(tourData.gruposClassified) || 2,
-            pairingStrategy: 'top',
-            grandFinal: true, // fase base — não é uma linha de fase final
-            woScope: tourData.woScope || 'individual',
-            rankingType: (tourData.elimRankingType === 'blocks' ? 'blocks' : 'individual'),
-            resultEntry: tourData.resultEntry,
-            advancedScoring: (formatValue === 'liga' && typeof window._readAdvScoring === 'function') ? (window._readAdvScoring(0) || null) : null,
-            regDate: regDateRaw, regTime: regTimeRaw,
-            startDate: startDateRaw, startTime: startTimeRaw,
-            endDate: endDateRaw, endTime: endTimeRaw,
-            lateEnrollment: tourData.lateEnrollment || 'closed',
-            drawFirstDate: tourData.drawFirstDate || '',
-            drawFirstTime: tourData.drawFirstTime || '19:00',
-            drawIntervalDays: (parseInt(tourData.drawIntervalDays, 10) >= 1 ? parseInt(tourData.drawIntervalDays, 10) : null),
-            drawManual: !!tourData.drawManual,
-            scoring: (tourData.scoring && tourData.scoring.type) ? tourData.scoring : null
-          };
+        // ── Formato via CONFIGURADOR ÚNICO (format2) ──
+        // v4.4.x (Camada 2): o CONFIGURADOR ÚNICO (format2) é a FONTE ÚNICA de t.phases +
+        // dos campos top-level de ESTRUTURA (format/drawMode/teamSize/grupos/liga/…). Está
+        // sempre montado no form (_f2MountInEditForm no único ponto de render) → sempre
+        // presente aqui. GSM, categorias, datas, W.O. e lançamento continuam do form (top-level).
+        // SEM FALLBACK (decisão do dono): se a config não puder ser lida/compilada, ABORTA o
+        // save (loud) — nada é gravado. É a garantia de que só o NOVO dirige.
+        var _f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
+        if (!_f2cfg || !window.FORMAT2 || typeof window.FORMAT2.compileToPhases !== 'function') {
+          if (typeof showNotification === 'function') showNotification('Formato não pôde ser lido', 'O configurador de formato não carregou. Recarregue a página — nada foi salvo.', 'error');
+          if (window._warn) window._warn('[save] format2 indisponível (_f2GetConfig/FORMAT2 nulo) — save ABORTADO (sem fallback)');
+          return;
         }
-        var _extra = Array.isArray(window._extraPhases) ? window._extraPhases.slice() : [];
-        // PILHA DE 2 FASES (preset, decisão do dono 28-jun): "Fase de Grupos + Eliminatórias"
-        // e Rei/Rainha (standalone) viram phases=[grupos/monarch, eliminatória]. A transição
-        // grupos→elim deixa de ser avanço INTERNO e passa pelo motor multi-fase (advanceMultiPhase;
-        // o botão "Avançar" já despacha multi-fase em bracket.js). Só auto-injeta em torneio NOVO
-        // sem fases próprias do construtor — edição respeita o que já existe (backward-compat dos
-        // torneios single-format já sorteados em prod).
-        // PILHA DE 2 FASES (preset): grupos_mata E Rei/Rainha standalone. Ambos verificados:
-        // a transição grupos/monarch→elim usa standings INDIVIDUAIS (fix em advanceMultiPhase:
-        // _isMonarchPrev detecta monarch da Fase 0 em t.groups) → elim INDIVIDUAL nos dois.
-        var _presetTwoPhase = (formatValue === 'grupos_mata') || (drawModeValue === 'rei_rainha' && formatValue !== 'liga');
-        if (!editId && _extra.length === 0 && _presetTwoPhase) {
-          var _autoTopN = (drawModeValue === 'rei_rainha') ? 2 : (parseInt(tourData.gruposClassified, 10) || 2);
-          _extra = [{
-            name: 'Eliminatória', format: 'elim_simples', reiRainha: false, rounds: 1,
-            groupsBy: 'sorteio', gruposCount: 4, gruposClassified: 2,
-            sourceType: 'previous', qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: _autoTopN,
-            scope: 'per_group', fixedPairs: teamSizeVal > 1, pairingStrategy: 'top', grandFinal: true,
-            woScope: tourData.woScope || 'individual', rankingType: 'individual',
-            resultEntry: tourData.resultEntry, advancedScoring: null, lateEnrollment: 'closed',
-            drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, scoring: null
-          }];
-        }
-        if (_extra.length > 0) {
-          var _phase1 = _buildPhase0();
-          var _rest = _extra.map(function(ph, _ei) {
-            var src = ph.sourceType === 'previous'
-              ? { type: 'previous_phase', fromPhaseOffset: 1, byGroupRank: (ph.scope || 'per_group') !== 'overall', scope: (ph.scope || 'per_group'), qualifyMode: ph.qualifyMode || 'per_group', qualifyQuantity: ph.qualifyQuantity || (ph.qualifyMode === 'all' ? 'all' : 'top'), qualifyTopN: parseInt(ph.qualifyTopN) || 2, mapping: window._deriveMotorMapping(ph) }
-              : { type: 'enrollment' };
-            return {
-              name: (ph.name || '').trim() || 'Fase',
-              formatCode: ph.format,
-              format: (formatMap[ph.format] || ph.format),
-              reiRainha: !!ph.reiRainha,
-              drawMode: ph.reiRainha ? 'rei_rainha' : 'sorteio',
-              groupsBy: ph.groupsBy || 'sorteio',
-              gruposCount: parseInt(ph.gruposCount) || 4,
-              gruposClassified: parseInt(ph.gruposClassified) || 2,
-              rounds: parseInt(ph.rounds) || 1,
-              source: src,
-              fixedPairs: !!ph.fixedPairs,
-              // v2.6.77: estratégia de avanço é INDEPENDENTE do toggle duplas-fixas —
-              // ela ordena/pareia os classificados mesmo quando entram individualmente
-              // (o motor expande pra grupos de 4 numa fase Rei/Rainha). Sempre persiste.
-              pairingStrategy: ph.pairingStrategy || 'top',
-              // v2.6.80: grande final unindo as linhas (campeão único) × linhas
-              // independentes (cada linha = categoria com classificação própria).
-              grandFinal: ph.grandFinal !== false,
-              // v2.6.59: config POR FASE — W.O. e lançamento de resultados. O motor lê
-              // t.phases[i].X com fallback pro top-level (t.X = fase 0/default).
-              woScope: ph.woScope || 'individual',
-              rankingType: (ph.rankingType === 'blocks' ? 'blocks' : 'individual'), // v3.1.34
-              resultEntry: (function(){ var a = Array.isArray(ph.resultEntry) ? ph.resultEntry.slice() : [ph.resultEntry || 'organizer']; if (!a.length) a = ['organizer']; return a.length === 1 ? a[0] : a; })(),
-              // v2.6.63: Pontuação Avançada por fase (só Pontos Corridos). Lê do DOM da fase.
-              advancedScoring: (ph.format === 'liga' && typeof window._readAdvScoring === 'function') ? window._readAdvScoring(_ei + 1) : null,
-              // v2.6.65: Datas da fase por fase (strings vazias quando não preenchidas).
-              regDate: ph.regDate || '', regTime: ph.regTime || '',
-              startDate: ph.startDate || '', startTime: ph.startTime || '',
-              endDate: ph.endDate || '', endTime: ph.endTime || '',
-              // v2.6.66: Inscrições durante a fase ('closed' | 'expand').
-              lateEnrollment: ph.lateEnrollment || 'closed',
-              // v2.6.67: Agendamento de Sorteios (só Pontos Corridos). Em outros formatos vai null.
-              drawFirstDate: (ph.format === 'liga' ? (ph.drawFirstDate || '') : ''),
-              drawFirstTime: (ph.format === 'liga' ? (ph.drawFirstTime || '19:00') : ''),
-              drawIntervalDays: (ph.format === 'liga' ? (parseInt(ph.drawIntervalDays, 10) >= 1 ? parseInt(ph.drawIntervalDays, 10) : 0) : null),
-              drawManual: (ph.format === 'liga' ? !!ph.drawManual : false),
-              // v2.6.69: Sistema de Pontuação por fase (null = herda o padrão do torneio).
-              scoring: (ph.scoring && ph.scoring.type) ? ph.scoring : null
-            };
-          });
-          tourData.phases = [_phase1].concat(_rest);
-          // Framing CANÔNICO (dono): não existe "Grupos+Eliminatória" — são duas fases
-          // canônicas. Nomeia a fase 0 do preset como a fase canônica que ela é ("Fase de
-          // Grupos" / "Rei/Rainha"); a fase elim auto-injetada já se chama "Eliminatória".
-          if (_presetTwoPhase && tourData.phases[0]) {
-            tourData.phases[0].name = (drawModeValue === 'rei_rainha') ? 'Rei/Rainha' : 'Fase de Grupos';
-          }
-        } else {
-          // v3.0.x: NÃO apagar fases silenciosamente. Se está editando um torneio
-          // multi-fase e o usuário NÃO removeu fases de propósito (_phasesUserTouched),
-          // o construtor pode ter vindo vazio por um glitch de load/render — então
-          // PRESERVA as fases já gravadas em vez de colapsar 2 fases em 1.
-          var _existingPhases = null;
-          if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
-            var _epT = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
-            if (_epT && Array.isArray(_epT.phases) && _epT.phases.length > 1) _existingPhases = _epT.phases;
-          }
-          if (_existingPhases && !window._phasesUserTouched) {
-            tourData.phases = _existingPhases; // preserva — não foi remoção intencional
-            if (window._warn) window._warn('[save] construtor de fases veio vazio mas torneio é multi-fase e usuário não removeu — preservando t.phases (' + _existingPhases.length + ')');
-          } else {
-            // v3.1.37: fase única também grava t.phases CANÔNICA = [phase0 completa]. O guard
-            // de saveTournament (firebase-db.js) só "preserva" quando o EXISTENTE é multi-fase
-            // (length>1) e o save não foi autorizado — então torneio single legítimo grava [p0].
-            tourData.phases = [_buildPhase0()];
-          }
-        }
-        // v3.0.x: autoriza o guard de saveTournament a REDUZIR/remover fases SÓ quando o
-        // organizador mexeu nas fases de propósito (add/remove no construtor). Sem isso, o
-        // guard blinda contra qualquer save sem fases derrubando um torneio multi-fase.
-        // Flag transiente — saveTournament lê e REMOVE antes de gravar no Firestore.
-        tourData._allowConfigReset = !!window._phasesUserTouched;
-        // v4.4.3: se o CONFIGURADOR ÚNICO (format2) está montado no form, ELE é a FONTE do
-        // formato — sobrescreve top-level + phases com o compilado. GSM/categorias/datas
-        // (top-level) continuam do form; as fases compiladas têm scoring:null → herdam.
         try {
-          var _f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
-          var _f2mounted = !!document.getElementById('f2-config-mount');
-          if (_f2cfg && window.FORMAT2 && typeof window.FORMAT2.compileToPhases === 'function') {
-            var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
-            var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry });
-            Object.assign(tourData, _f2out.topLevel);
-            tourData.phases = _f2out.phases;
-            tourData.fmt2 = _f2cfg;
-            tourData._allowConfigReset = true;
-            if (tourData.format === 'Fase de Grupos') { tourData.ligaRoundFormat = 'standard'; tourData.ligaDrawMode = 'standard'; }
-            if (window._log) window._log('[save] format2 override: ' + window.FORMAT2.summary(_f2cfg) + ' | phases=' + _f2out.phases.length);
-          } else if (_f2mounted) {
-            // v4.4.18: SEM FALLBACK pro construtor antigo. O configurador está montado mas não
-            // retornou config válida → algo quebrou. ABORTA o save (loud) em vez de salvar
-            // silenciosamente pelo caminho velho — é a garantia de que o NOVO está dirigindo.
-            if (typeof showNotification === 'function') showNotification('Formato não pôde ser lido', 'O configurador de formato não carregou direito. Recarregue a página — nada foi salvo.', 'error');
-            if (window._warn) window._warn('[save] format2 montado mas _f2GetConfig() nulo — save ABORTADO (sem fallback)');
-            return;
-          }
+          var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
+          var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry });
+          Object.assign(tourData, _f2out.topLevel);
+          tourData.phases = _f2out.phases;
+          tourData.fmt2 = _f2cfg;
+          tourData._allowConfigReset = true;
+          if (tourData.format === 'Fase de Grupos') { tourData.ligaRoundFormat = 'standard'; tourData.ligaDrawMode = 'standard'; }
+          if (window._log) window._log('[save] format2: ' + window.FORMAT2.summary(_f2cfg) + ' | phases=' + _f2out.phases.length);
         } catch (_f2e) {
           if (typeof showNotification === 'function') showNotification('Erro no formato', 'Não foi possível compilar o formato. Recarregue a página — nada foi salvo.', 'error');
-          if (window._warn) window._warn('[save] format2 override falhou: ' + _f2e);
-          return; // v4.4.18: sem fallback silencioso — aborta
+          if (window._warn) window._warn('[save] format2 compile falhou: ' + _f2e);
+          return; // sem fallback silencioso — aborta
         }
-        // v2.6.49: nome custom da Fase 1 persiste SEMPRE (inclusive fase única, onde
-        // phases fica null). Antes só era gravado dentro de phases[0] quando havia
-        // fase extra — por isso o nome "não gravava" em torneio de fase única.
+        // v2.6.49: nome custom da Fase 1 persiste SEMPRE. Gravado como espelho top-level
+        // (as fases compiladas pelo format2 já trazem seus próprios nomes canônicos).
         var _p1NameAll = document.getElementById('phase1-name');
         tourData.phase1Name = (_p1NameAll && _p1NameAll.value.trim()) || '';
 
@@ -6567,15 +6076,11 @@ window._gsmInitPresets = function() {
 
 // Legacy-compatible _openGSMConfig — now opens "Personalizado" overlay
 window._openGSMConfig = function(targetPhase) {
-  // v2.6.85: targetPhase (índice) → "Personalizado" da FASE. Lê de ph.scoring (ou cai
-  // no padrão do torneio se a fase ainda não tem override); ao Aplicar grava em ph.scoring.
-  window._gsmConfigTargetPhase = (typeof targetPhase === 'number') ? targetPhase : null;
+  // v4.4.x (Camada 2): GSM por fase (construtor fase-2+) removido — o modal é sempre o
+  // "Personalizado" global (Fase 1/torneio). targetPhase mantido só por compat de assinatura.
+  window._gsmConfigTargetPhase = null;
   var _ps = null;
-  if (window._gsmConfigTargetPhase != null) {
-    var _pph = window._extraPhases && window._extraPhases[window._gsmConfigTargetPhase];
-    _ps = (_pph && _pph.scoring) || null;
-  }
-  // Read current values — da fase (se houver) OU dos campos globais (Fase 1/torneio).
+  // Read current values — dos campos globais (Fase 1/torneio).
   var setsToWin = _ps ? String(_ps.setsToWin) : document.getElementById('gsm-setsToWin').value;
   var gamesPerSet = _ps ? String(_ps.gamesPerSet) : document.getElementById('gsm-gamesPerSet').value;
   var tbEnabled = _ps ? !!_ps.tiebreakEnabled : document.getElementById('gsm-tiebreakEnabled').value === 'true';
@@ -6779,37 +6284,8 @@ window._gsmUpdateSummary = function() {
 };
 
 window._gsmSaveConfig = function() {
-  // v2.6.85: Personalizado de uma FASE → grava em ph.scoring e sai (não toca nos
-  // campos globais nem nas prefs do torneio).
-  if (window._gsmConfigTargetPhase != null) {
-    var _ti = window._gsmConfigTargetPhase;
-    var _tph = window._extraPhases && window._extraPhases[_ti];
-    if (_tph) {
-      var _g = function(id, d){ var e = document.getElementById(id); return e ? e.value : d; };
-      var _c = function(id){ var e = document.getElementById(id); return e ? e.checked : false; };
-      var _fs = _c('gsm-cfg-fixedSet');
-      var _gms = parseInt(_g('gsm-cfg-gamesPerSet', '6'), 10) || 6;
-      _tph.scoring = {
-        type: 'sets',
-        setsToWin: parseInt(_g('gsm-cfg-setsToWin', '1'), 10) || 1,
-        gamesPerSet: _gms,
-        tiebreakEnabled: _c('gsm-cfg-tiebreak'),
-        tiebreakPoints: parseInt(_g('gsm-cfg-tbPoints', '7'), 10) || 7,
-        tiebreakMargin: parseInt(_g('gsm-cfg-tbMargin', '2'), 10) || 2,
-        superTiebreak: _c('gsm-cfg-superTb'),
-        superTiebreakPoints: parseInt(_g('gsm-cfg-stbPoints', '10'), 10) || 10,
-        countingType: 'tennis',
-        advantageRule: (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false,
-        fixedSet: _fs,
-        fixedSetGames: _fs ? _gms : 6
-      };
-      _tph._gsmPreset = 'custom';
-    }
-    window._gsmConfigTargetPhase = null;
-    var _ov = document.getElementById('gsm-config-overlay'); if (_ov) _ov.remove();
-    if (typeof window._renderPhases === 'function') window._renderPhases();
-    return;
-  }
+  // v4.4.x (Camada 2): GSM por fase removido — o modal grava sempre nos campos globais
+  // (Fase 1/torneio). Sem branch de _gsmConfigTargetPhase.
   // Mark that user explicitly chose custom — preserved until a preset is clicked
   window._gsmForcedCustom = true;
   // Always save as type 'sets'
@@ -7099,15 +6575,13 @@ window._prefillFromTemplate = function(tpl) {
     if (typeof window._updateCategoryPreview === 'function') { try { window._updateCategoryPreview(); } catch (e) {} }
   }
 
-  // v3.0.x: CONFIG MULTI-FASE — restaura o construtor de fases inteiro + Fase 1 + toggles
-  // relacionados (grupos, monarca, "deixar de fora"). O save lê window._extraPhases pra montar
-  // t.phases, então restaurar o estado cru round-trips a config multifase 100%. Vem por último
-  // (depois do formato já aplicado, que mostra a seção de fases).
-  if (Array.isArray(tpl.extraPhases)) {
-    try { window._extraPhases = JSON.parse(JSON.stringify(tpl.extraPhases)); }
-    catch (e) { window._extraPhases = tpl.extraPhases.slice(); }
+  // v4.4.x (Camada 2): CONFIG DE FORMATO — restaura a config do configurador único (format2)
+  // salva em tpl.fmt2. É a fonte única de t.phases. Setamos como config pendente e remontamos
+  // o format2 pra ele iniciar a partir dela (torneio NOVO a partir de template = sem editId).
+  if (tpl.fmt2) {
+    window._f2PendingTemplateCfg = tpl.fmt2;
+    var _fm = document.getElementById('f2-config-mount'); if (_fm) { try { _fm.remove(); } catch (e) {} }
   }
-  if (tpl.phase1Rounds != null) window._phase1Rounds = parseInt(tpl.phase1Rounds) || 1;
   if (tpl.phase1Name != null) {
     window._phase1Name = tpl.phase1Name;
     var _p1nEl = document.getElementById('phase1-name');
@@ -7120,13 +6594,7 @@ window._prefillFromTemplate = function(tpl) {
   if (tpl.gruposSeedCategory !== undefined) _setC('grupos-seed-category', tpl.gruposSeedCategory);
   if (tpl.allowSelfDeactivation !== undefined) _setC('liga-allow-self-deactivation', tpl.allowSelfDeactivation);
   if (tpl.reiRainhaGroupsBy) _setV('reirainha-groups-by', tpl.reiRainhaGroupsBy);
-  // re-renderiza o construtor com as fases restauradas. Mesmo que a seção esteja oculta pelo
-  // formato, o save lê window._extraPhases — então a config é gravada de qualquer jeito.
-  if (Array.isArray(tpl.extraPhases) && tpl.extraPhases.length) {
-    var _psEl = document.getElementById('phases-section');
-    if (_psEl && _psEl.style.display === 'none') _psEl.style.display = '';
-  }
-  if (typeof window._renderPhases === 'function') { try { window._renderPhases(); } catch (e) {} }
+  if (typeof window._f2MountInEditForm === 'function') { try { window._f2MountInEditForm(); } catch (e) {} }
   if (typeof window._renderGruposSuggestions === 'function') { try { window._renderGruposSuggestions(); } catch (e) {} }
 };
 
@@ -7523,14 +6991,11 @@ window._saveCurrentFormAsTemplate = function() {
       ligaSeasonMonths: get('liga-season-months') || '',
       drawIntervalDays: get('liga-draw-interval') || get('suico-draw-interval') || '',
       drawManual: getChecked('liga-draw-manual') || getChecked('suico-draw-manual'),
-      // v3.0.x: CONFIG MULTI-FASE COMPLETA. Antes o template NÃO gravava NADA disso — toda
-      // a config do construtor de fases se perdia ao reaplicar. window._extraPhases é o estado
-      // cru do construtor (cada fase: formato, Rei/Rainha, grupos, mapping/linhas, datas,
-      // pontuação, W.O., lançamento…) — é a MESMA fonte que o save lê pra montar t.phases,
-      // então guardar o estado cru round-trips 100%. Fase 1 (nome/rodadas) + toggles top-level.
-      extraPhases: (function () { try { return JSON.parse(JSON.stringify(window._extraPhases || [])); } catch (e) { return []; } })(),
+      // v4.4.x (Camada 2): CONFIG DE FORMATO COMPLETA = a config do configurador único
+      // (format2). É a MESMA fonte que o save lê pra montar t.phases → guardar a config crua
+      // round-trips 100%. Fase 1 (nome) + toggles top-level completam.
+      fmt2: (function () { try { return (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) { return null; } })(),
       phase1Name: (function () { var el = document.getElementById('phase1-name'); return el ? el.value.trim() : ''; })(),
-      phase1Rounds: parseInt(window._phase1Rounds) || 1,
       allowSelfDeactivation: (function () { var el = document.getElementById('liga-allow-self-deactivation'); return el ? !!el.checked : true; })(),
       gruposCount: parseInt(get('grupos-count')) || 4,
       gruposClassified: parseInt(get('grupos-classified')) || 2,

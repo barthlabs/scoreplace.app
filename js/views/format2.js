@@ -171,7 +171,7 @@
   }
 
   // Distribui `topN` vagas em `nLines` linhas (bandas contíguas, resto na frente) —
-  // espelha _deriveMotorMapping do builder atual.
+  // produz o mapping que o motor (buildEntrantsByDest) consome por rankFrom/rankTo.
   function _buildMapping(dests, names, topN, nLines) {
     var per = Math.floor(topN / nLines), rem = topN % nLines, rank = 1, mapping = [];
     for (var i = 0; i < nLines; i++) {
