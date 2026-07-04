@@ -1589,24 +1589,65 @@ window._phaseGameOffset = function (t, phaseIndex) {
 // de cada fase: Dupla Elim intercala upper/lower por rodada + grand no fim; senão tiers na
 // ordem gold→silver→main→line3→line4→(extras), colunas por rodada asc, 3º-lugar ANTES da
 // final, grande-final por último. BYEs não consomem número (igual ao render).
+// v4.4.68: FONTE ÚNICA em runtime pro Rei/Rainha — elimina a duplicação sem sentido. `round.matches`
+// (plano) e `round.monarchGroups[i].matches` viram objetos SEPARADOS ao carregar do Firestore (a
+// serialização quebra a referência que existia no sorteio). Aqui RELIGAMOS: cada group.matches[j]
+// passa a apontar pro objeto de round.matches com o mesmo id. Se um placar existir só numa cópia,
+// funde no objeto do plano antes de religar (nunca perde resultado). Jogo que só existe no grupo
+// entra no plano. Depois disto há UM objeto por jogo — sem cópias divergentes, sem colisão de número.
+window._relinkMonarchToFlat = function (t) {
+  if (!t || !Array.isArray(t.rounds)) return;
+  t.rounds.forEach(function (rd) {
+    if (!rd || !Array.isArray(rd.monarchGroups) || !rd.monarchGroups.length) return;
+    if (!Array.isArray(rd.matches)) rd.matches = [];
+    var byId = {};
+    rd.matches.forEach(function (m) { if (m && m.id != null) byId[String(m.id)] = m; });
+    rd.monarchGroups.forEach(function (g) {
+      if (!g || !Array.isArray(g.matches)) return;
+      g.matches = g.matches.map(function (gm) {
+        if (!gm || gm.id == null) return gm;
+        var flat = byId[String(gm.id)];
+        if (flat) {
+          if (flat !== gm && gm.winner && !flat.winner) { // preserva placar salvo só no grupo
+            flat.winner = gm.winner; flat.scoreP1 = gm.scoreP1; flat.scoreP2 = gm.scoreP2; flat.draw = gm.draw;
+            if (!flat.startedAt) flat.startedAt = gm.startedAt; if (!flat.resultAt) flat.resultAt = gm.resultAt;
+          }
+          return flat; // referencia o objeto do plano (fonte única)
+        }
+        rd.matches.push(gm); byId[String(gm.id)] = gm; // só existia no grupo → entra no plano
+        return gm;
+      });
+    });
+  });
+};
+
 window._assignGlobalGameNumbers = function (t) {
   if (!t) return;
+  if (typeof window._relinkMonarchToFlat === 'function') window._relinkMonarchToFlat(t); // FONTE ÚNICA
   var isBye = window._isByeMatch || function () { return false; };
   var n = 0;
+  // v4.4.68: id→número. O Rei/Rainha guarda cada jogo em DUAS cópias (round.matches plano E
+  // round.monarchGroups[i].matches) — no sorteio são a mesma referência, mas o Firestore
+  // serializa separado e ao CARREGAR viram objetos distintos com o mesmo id. `stamp` carimba
+  // pelo id: a 1ª ocorrência ganha ++n; qualquer OUTRA cópia do mesmo id reaproveita o número.
+  // Assim as duas cópias ficam com o MESMO "Jogo N" e não há colisão. FONTE ÚNICA, sem fallback.
+  var numById = {};
   function stamp(m) {
     if (!m) return;
     if (m.isSitOut || isBye(m)) { m._gameNum = null; return; }
+    if (m.id != null && numById[m.id] != null) { m._gameNum = numById[m.id]; return; } // cópia já numerada
     m._gameNum = ++n;
+    if (m.id != null) numById[m.id] = m._gameNum;
   }
   // (1) Classificatória Liga/Suíço (t.rounds) — rodada asc (ordem do array), índice do array.
-  //     v4.4.67 CANÔNICO: Rei/Rainha numera POR GRUPO na ordem do array de grupos (A, B, C…),
-  //     jogos dentro do grupo em ordem (a1 antes de b2). NÃO pela ordem do array plano rd.matches
-  //     — a inscrição tardia (expand) deixa rd.matches fora de ordem de grupo, o que estourava a
-  //     numeração dos jogos novos (76,77,78 num total de 75). O GRUPO é a fonte de ordem. Isto é
-  //     a FONTE ÚNICA: o render do monarch usa m._gameNum (sem contador próprio).
+  //     Rei/Rainha numera POR GRUPO na ordem do array de grupos (A, B, C…), jogos dentro do grupo
+  //     em ordem (a1 antes de b2) — a fonte de ordem é o GRUPO, não o array plano rd.matches (que a
+  //     inscrição tardia deixa fora de ordem). Depois carimba o array plano pelas MESMAS ids
+  //     (reaproveita numById) pra as duas cópias baterem.
   (t.rounds || []).forEach(function (rd) {
     if (rd && Array.isArray(rd.monarchGroups) && rd.monarchGroups.length) {
       rd.monarchGroups.forEach(function (g) { (((g && g.matches) || [])).forEach(stamp); });
+      (((rd && rd.matches) || [])).forEach(stamp); // cópias plano por id (num já definido acima)
     } else {
       (((rd && rd.matches) || [])).forEach(stamp);
     }
@@ -3084,8 +3125,8 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // jogador no LOCAL, não de cada partida. Suprime o botão por-jogo aqui.
     window._suppressMatchArrivedBtn = true;
     var matchCards = matches.map(function(m, mi) {
-      // v4.4.67: FONTE ÚNICA — usa m._gameNum (canônico, por grupo). Fallback só se não carimbado.
-      return renderMatchCard(m, canEnterResult, t.id, (m._gameNum || ((gi * 3) + mi + 1)));
+      // v4.4.68: FONTE ÚNICA — m._gameNum, SEM fallback (o stamp carimba as duas cópias por id).
+      return renderMatchCard(m, canEnterResult, t.id, m._gameNum);
     }).join('');
     window._suppressMatchArrivedBtn = false;
 
@@ -3975,10 +4016,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // do _renderMonarchStage).
           window._suppressMatchArrivedBtn = true;
           var gCards = g.matches.map(function(m) {
-            // v4.4.67: FONTE ÚNICA — m._gameNum (canônico, por grupo). Fallback só se não carimbado.
-            _monarchGlobalMatchNum++;
+            // v4.4.68: FONTE ÚNICA — m._gameNum, SEM fallback (relink + stamp garantem carimbo).
             // v2.3.19: grupo concluído → cards compactos (sem botão Editar).
-            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, (m._gameNum || _monarchGlobalMatchNum), gDone, _pendingSub) + '</div>';
+            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, m._gameNum, gDone, _pendingSub) + '</div>';
           }).join('');
           window._suppressMatchArrivedBtn = false;
           // "Em andamento" REMOVIDO (pedido do dono — é óbvio, só rouba espaço). Só o
