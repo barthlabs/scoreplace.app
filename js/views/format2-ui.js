@@ -366,7 +366,10 @@
           _pill(qAll, 'window._f2QualifyAll(true)', '👥 Todos') + '<div style="height:10px;"></div>';
         if (!qAll) {
           var classLabel = perGroupScope ? 'Nº de classificados por grupo' : 'Nº de classificados (total) para a eliminatória';
-          var classMax = perGroupScope ? 8 : 32;
+          // v4.4.41: o slider (geral) vai ATÉ o nº de unidades inscritas (duplas/jogadores);
+          // chegar no total vira "Todos". Sem inscritos, cap generoso (64) pra passar de 32.
+          var _units = _groupInfo(cfg).units;
+          var classMax = perGroupScope ? 8 : (_units > 1 ? _units : 64);
           if (cfg.classificados > classMax) classMax = cfg.classificados; // nunca corta valor salvo
           eb += '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;">' + classLabel + '</div>' +
             '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
@@ -375,10 +378,12 @@
         } else {
           eb += '<div style="font-size:0.74rem;color:#fde68a;margin-bottom:6px;">Todos os participantes da classificatória entram no bracket, semeados pela classificação.</div>';
         }
-        // v4.4.40: "Confrontos na chave" (estratégia) LOGO ABAIXO do "Quem avança". SEM toggle de
-        // origem (é determinada: individual → forma duplas; dupla fixa → arranja a chave). Sempre visível.
+        // v4.4.41: resumo LOGO ABAIXO do slider (pedido do dono).
+        eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
+        // "Confrontos na chave" (estratégia) — depois do resumo. SEM toggle de origem (determinada:
+        // individual → forma duplas; dupla fixa → arranja a chave). Sempre visível quando há duplas.
         if (isDupla) {
-          var _formaNow = scoreInd; // individual → forma duplas dos classificados; dupla fixa → carrega
+          var _formaNow = scoreInd;
           var _stratLbl = _formaNow ? 'Como formar as duplas na eliminatória' : 'Confrontos na chave';
           var _hints = _formaNow
             ? { performance: 'Os melhores juntos: 1º+2º, 3º+4º…', equilibrio: 'Forte com fraco: 1º+4º, 2º+3º…', sorteio: 'Parceiros sorteados ao acaso.' }
@@ -387,7 +392,6 @@
             '<div>' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>' +
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (_hints[e.formacao] || '') + ' (as cabeças de chave são sempre semeadas na chave.)</div>';
         }
-        eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
       }
       // Linhas (comum aos dois modos).
       eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Linhas (chaves paralelas — nomes livres)</div>';
@@ -509,7 +513,16 @@
     if (S._rafC) return;
     S._rafC = requestAnimationFrame(function () { S._rafC = null; var b = document.getElementById('f2-elim-summary'); if (b) b.innerHTML = _elimSummary(S.cfg); });
   };
-  window._f2Class = function (v) { S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
+  window._f2Class = function (v) {
+    if (!S) return;
+    var n = Math.max(1, parseInt(v, 10) || 1);
+    // v4.4.41: chegar no total de inscritos (geral) = TODOS → some a barra, botão vira Todos.
+    var units = _groupInfo(S.cfg).units;
+    var perGroupScope = S.cfg.grupos > 1 && S.cfg.classifScope !== 'overall';
+    if (!perGroupScope && units > 1 && n >= units) { S.cfg.eliminatoria.qualifyAll = true; }
+    else { S.cfg.classificados = n; }
+    _norm(); _rerender();
+  };
   // v4.4.31: escopo da classificação — por grupos × geral.
   window._f2ClassScope = function (v) { if (!S) return; S.cfg.classifScope = (v === 'overall') ? 'overall' : 'per_group'; _norm(); _rerender(); };
   // v4.4.36: quantos avançam — todos × os melhores (slider).
