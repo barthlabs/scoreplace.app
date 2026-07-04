@@ -93,7 +93,7 @@
     var first = r.drawFirstDate || ((document.getElementById('tourn-start-date') || {}).value) || '';
     var end = ((document.getElementById('tourn-end-date') || {}).value) || '';
     var n = Math.max(1, parseInt(r.n, 10) || 1);
-    if (!first || !end) return null;
+    if (n <= 1 || !first || !end) return null; // 1 rodada não repete
     var d1 = new Date(first + 'T00:00:00'), d2 = new Date(end + 'T00:00:00');
     if (isNaN(d1.getTime()) || isNaN(d2.getTime()) || d2 <= d1) return null;
     var days = Math.round((d2 - d1) / 86400000);
@@ -106,25 +106,38 @@
   // Manual é o efetivo quando não há data do 1º sorteio (auto precisa dela).
   function _schedBlock(r) {
     var inp = 'padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;font-size:0.85rem;';
+    var nR = Math.max(1, parseInt(r.n, 10) || 1);
+    var singleDraw = nR <= 1; // 1 rodada = sorteio único, sem repetição
     var autoIv = _autoInterval(r);
-    if (r._intervalAuto !== false && autoIv) r.drawIntervalDays = autoIv; // preenche o sugerido
+    if (singleDraw) r.drawIntervalDays = null;                                  // 1 rodada nunca repete
+    else if (r._intervalAuto !== false && autoIv) r.drawIntervalDays = autoIv;  // sugere só até o user editar
     var canAuto = !!r.drawFirstDate;
     var manual = !!r.drawManual || !canAuto;
     var fld = function (lbl, html) { return '<label style="display:flex;flex-direction:column;gap:5px;"><span style="font-size:0.72rem;color:var(--text-muted);">' + lbl + '</span>' + html + '</label>'; };
-    // v4.4.27: mesma apresentação dos campos de Início/Término da fase — usam class="form-control"
-    // (fonte do app var(--font-body) + ícone de calendário/relógio CLARO via filtro do CSS).
+    // v4.4.27: mesma apresentação dos campos de Início/Término da fase — usam class="form-control".
     var row1 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:12px;">' +
       fld('Data do 1º sorteio', '<input type="date" class="form-control" value="' + _safe(r.drawFirstDate || '') + '" onchange="window._f2SchedDate(this.value)" style="flex:1 1 0;min-width:0;">') +
       fld('Hora', '<input type="time" class="form-control" value="' + _safe(r.drawFirstTime || '19:00') + '" onchange="window._f2SchedTime(this.value)" style="flex:0 0 auto;">') +
     '</div>';
+    // v4.4.28: "Repetir a cada" vem ANTES de "Nº de rodadas". Repetição pode ficar VAZIA
+    // (sorteia só o 1º; libera as próximas manualmente) — botão ✕ zera. 1 rodada → desabilitada.
+    var ivInput = singleDraw
+      ? '<input type="number" value="" disabled placeholder="—" title="1 rodada não repete" style="' + inp + 'width:110px;text-align:center;opacity:0.45;">'
+      : '<span style="display:inline-flex;align-items:center;gap:6px;">' +
+          '<input type="number" min="1" max="60" value="' + (r.drawIntervalDays || '') + '" placeholder="—" onchange="window._f2SchedInterval(this.value)" style="' + inp + 'width:90px;text-align:center;">' +
+          (r.drawIntervalDays ? '<button type="button" title="Sem repetição" onclick="window._f2SchedInterval(\'\')" style="background:none;border:none;color:#f87171;font-size:1.05rem;cursor:pointer;line-height:1;padding:2px 5px;">✕</button>' : '') +
+        '</span>';
     var row2 = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">' +
+      fld('Repetir a cada (dias)', ivInput) +
       fld('Nº de rodadas', '<input type="number" min="1" max="30" value="' + r.n + '" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
-      fld('Repetir a cada (dias)', '<input type="number" min="1" max="60" value="' + (r.drawIntervalDays || 7) + '" onchange="window._f2SchedInterval(this.value)" style="' + inp + 'width:110px;text-align:center;">') +
     '</div>';
     var tgl = '<div style="margin-top:14px;">' + _toggleRight('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)') + '</div>';
-    var note = manual
-      ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + (canAuto ? 'Você sorteia cada rodada manualmente, quando quiser.' : 'Informe a data do 1º sorteio para poder sortear automaticamente.') + '</div>'
-      : '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">As rodadas são sorteadas automaticamente a cada ' + (r.drawIntervalDays || 7) + ' dia(s), a partir do 1º sorteio, dentro das datas da fase.' + (autoIv ? ' Intervalo sugerido pela data final ÷ nº de rodadas.' : '') + '</div>';
+    var noteTxt;
+    if (manual) noteTxt = canAuto ? 'Você sorteia cada rodada manualmente, quando quiser.' : 'Informe a data do 1º sorteio para poder sortear automaticamente.';
+    else if (singleDraw) noteTxt = 'Sorteio único (1 rodada) — sem repetição.';
+    else if (r.drawIntervalDays) noteTxt = 'As rodadas são sorteadas automaticamente a cada ' + r.drawIntervalDays + ' dia(s), a partir do 1º sorteio, dentro das datas da fase.' + (autoIv ? ' Intervalo sugerido: data final ÷ nº de rodadas.' : '');
+    else noteTxt = 'Repetição vazia: sorteia só o 1º; você libera as próximas rodadas manualmente.';
+    var note = '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + noteTxt + '</div>';
     return '<div style="margin-top:14px;padding:12px 13px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);">' +
       '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;">Agendamento dos sorteios</div>' +
       row1 + row2 + tgl + note + '</div>';
@@ -175,6 +188,28 @@
     return '<div style="margin-top:8px;font-size:0.78rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
       '👥 <b>' + gi.people + '</b> inscritos' + (gi.isDupla ? (' → <b>' + gi.units + '</b> duplas') : '') +
       ' · ⏱️ ~<b>' + timeStr + '</b> de jogos <span style="opacity:0.8;">(' + totalGames + ' jogos · ' + gd + 'min · ' + cc + ' quadra' + (cc > 1 ? 's' : '') + ')</span></div>';
+  }
+  // Resumo da eliminatória (abaixo do slider de classificados): pessoas/equipes, jogos, tempo.
+  function _elimSummary(cfg) {
+    if (!cfg.eliminatoria || !cfg.eliminatoria.ativa) return '';
+    var gi = _groupInfo(cfg);
+    var isDupla = cfg.disputa === 'dupla';
+    var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
+    if (gi.units > 0) q = Math.min(q, gi.units);
+    var teams = Math.max(0, q);
+    var people = teams * (isDupla ? 2 : 1);
+    var games = (teams >= 2) ? (teams - 1) + (cfg.eliminatoria.terceiro ? 1 : 0) : 0;
+    var gd = parseInt((document.getElementById('tourn-game-duration') || {}).value, 10) || (gi.t && gi.t.gameDuration) || 30;
+    var cc = parseInt((document.getElementById('tourn-court-count') || {}).value, 10) || (gi.t && gi.t.courtCount) || 1;
+    var mins = Math.ceil(games * gd / Math.max(1, cc));
+    var hh = Math.floor(mins / 60), mm = mins % 60;
+    var timeStr = hh > 0 ? (hh + 'h' + (mm ? ' ' + mm + 'min' : '')) : (mm + 'min');
+    var who = isDupla
+      ? ('👥 <b>' + people + '</b> ' + (people === 1 ? 'pessoa' : 'pessoas') + ' → <b>' + teams + '</b> ' + (teams === 1 ? 'dupla' : 'duplas'))
+      : ('👥 <b>' + teams + '</b> ' + (teams === 1 ? 'jogador' : 'jogadores'));
+    return '<div style="margin-top:8px;font-size:0.78rem;color:#fde68a;background:rgba(251,191,36,0.09);border:1px solid rgba(251,191,36,0.18);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
+      who + ' na eliminatória · 🎯 <b>' + games + '</b> ' + (games === 1 ? 'jogo' : 'jogos') +
+      (games > 0 ? ' · ⏱️ ~<b>' + timeStr + '</b>' : '') + '</div>';
   }
   // Apresentação abaixo do slider: rótulo (1 grupo) OU números grandes (N grupos).
   function _estruturaBlock(cfg) {
@@ -280,6 +315,8 @@
         '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
         '<input type="range" min="1" max="' + classMax + '" value="' + cfg.classificados + '" oninput="window._f2ClassLive(this.value)" onchange="window._f2Class(this.value)" style="flex:1;accent-color:#fbbf24;">' +
         '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#fde68a;">' + cfg.classificados + '</span></div>';
+      // Resumo da eliminatória (pessoas/equipes · jogos · tempo) — atualiza ao vivo no slider.
+      eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
       eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Linhas (chaves paralelas — nomes livres)</div>';
       eb += [1, 2, 4].map(function (n) { return _pill(e.linhas === n, 'window._f2Linhas(' + n + ')', String(n)); }).join('');
       for (var i = 0; i < e.linhas; i++) {
@@ -358,12 +395,16 @@
   }
   window._f2SchedDate = function (v) { if (!S) return; S.cfg.rodadas.drawFirstDate = v || ''; _mirrorPhaseStart(); _norm(); _rerender(); };
   window._f2SchedTime = function (v) { if (!S) return; S.cfg.rodadas.drawFirstTime = v || '19:00'; _mirrorPhaseStart(); };
-  window._f2SchedInterval = function (v) { if (!S) return; S.cfg.rodadas.drawIntervalDays = Math.max(1, parseInt(v, 10) || 7); S.cfg.rodadas._intervalAuto = false; };
-  // Slider de classificados: número ao vivo no arraste; re-render ao soltar (igual grupos).
+  // Intervalo pode ficar VAZIO (sem repetição) — vazio/inválido vira null, NUNCA volta pro 7.
+  // v4.4.28: marca _intervalAuto=false (para de auto-sugerir) e re-renderiza (mostra/esconde ✕ + nota).
+  window._f2SchedInterval = function (v) { if (!S) return; var iv = parseInt(v, 10); S.cfg.rodadas.drawIntervalDays = (iv >= 1) ? iv : null; S.cfg.rodadas._intervalAuto = false; _rerender(); };
+  // Slider de classificados: número + resumo da eliminatória ao vivo no arraste; re-render ao soltar.
   window._f2ClassLive = function (v) {
     if (!S) return;
     S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1);
     var lbl = document.getElementById('f2-class-val'); if (lbl) lbl.textContent = S.cfg.classificados;
+    if (S._rafC) return;
+    S._rafC = requestAnimationFrame(function () { S._rafC = null; var b = document.getElementById('f2-elim-summary'); if (b) b.innerHTML = _elimSummary(S.cfg); });
   };
   window._f2Class = function (v) { S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
   window._f2Elim = function (b) { S.cfg.eliminatoria.ativa = !!b; _norm(); _rerender(); };

@@ -100,7 +100,8 @@
     out.rodadas.drawFirstDate = out.rodadas.drawFirstDate || '';
     out.rodadas.drawFirstTime = out.rodadas.drawFirstTime || '19:00';
     var _di = parseInt(out.rodadas.drawIntervalDays, 10);
-    out.rodadas.drawIntervalDays = (_di >= 1) ? _di : 7;
+    out.rodadas.drawIntervalDays = (_di >= 1) ? _di : null; // vazio = sem repetição (NÃO força 7)
+    if (out.rodadas.n <= 1) out.rodadas.drawIntervalDays = null; // 1 rodada não repete
     out.rodadas.drawManual = !!out.rodadas.drawManual;
     out.rodadas._intervalAuto = (out.rodadas._intervalAuto !== false); // sugere intervalo até o user editar
 
@@ -198,7 +199,7 @@
       if (!_schedManual) {
         top.drawFirstDate = cfg.rodadas.drawFirstDate;
         top.drawFirstTime = cfg.rodadas.drawFirstTime || '19:00';
-        top.drawIntervalDays = cfg.rodadas.drawIntervalDays || 7;
+        top.drawIntervalDays = (cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null; // vazio = sem repetição
       }
       p0 = Object.assign(_phaseBase(re), {
         name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
@@ -211,7 +212,7 @@
         drawManual: _schedManual,
         drawFirstDate: _schedManual ? '' : cfg.rodadas.drawFirstDate,
         drawFirstTime: _schedManual ? '' : (cfg.rodadas.drawFirstTime || '19:00'),
-        drawIntervalDays: _schedManual ? null : (cfg.rodadas.drawIntervalDays || 7)
+        drawIntervalDays: _schedManual ? null : ((cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null)
       });
     } else {
       top.format = 'Fase de Grupos';
