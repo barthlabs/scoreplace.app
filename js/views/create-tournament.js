@@ -1818,6 +1818,18 @@ function setupCreateTournamentModal() {
     var initCfg = null, tourn = null;
     if (editId && typeof window._findTournamentById === 'function') { tourn = window._findTournamentById(editId); if (tourn && tourn.fmt2) initCfg = tourn.fmt2; }
     window._f2MountInForm(mount, sport, initCfg, tourn);
+    // v4.4.59: "Sistema de Pontos Avançado" disponível na classificatória de QUALQUER formato.
+    // Reposiciona logo abaixo do configurador (área da classificatória) e mostra quando há
+    // classificatória (Fase de Grupos / Pontos Corridos); esconde na eliminação direta.
+    try {
+      var _advSec = document.getElementById('adv-scoring-section');
+      if (_advSec) {
+        var _f2adv = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
+        var _hasClassif = !!(_f2adv && _f2adv.classifAtiva === true);
+        if (mount && mount.parentNode === box) { box.insertBefore(_advSec, mount.nextSibling); }
+        _advSec.style.display = _hasClassif ? 'block' : 'none';
+      }
+    } catch (e) {}
   };
   window._setPhaseField = function(i, field, value) {
     var ph = window._extraPhases[i]; if (!ph) return;
@@ -3103,12 +3115,11 @@ function setupCreateTournamentModal() {
     var estimContainer = document.getElementById('time-estimates-container');
     if (estimContainer) estimContainer.style.display = (isLiga || isSuico) ? 'none' : '';
 
-    // Sistema de Pontos Avançado: só faz sentido em pontos corridos (Liga/Suíço).
-    // Em eliminatórias (simples/dupla) e grupos + eliminatória não há ranking
-    // acumulado por pontos — a seção só complica o formulário. Restrito a Liga
-    // (Suíço incluído por ser da mesma família de pontos corridos, embora hoje
-    // não seja mais selecionável no picker — preserva edição de torneios legados).
-    var advScoringStandings = isLiga || isSuico;
+    // Sistema de Pontos Avançado: vale em QUALQUER classificatória com tabela de pontos.
+    // v4.4.59 (pedido do dono): Liga/Suíço OU classificatória do format2 (Fase de Grupos /
+    // Pontos Corridos). Só some quando não há classificatória (eliminação direta).
+    var _f2cAdv = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
+    var advScoringStandings = isLiga || isSuico || (_f2cAdv ? _f2cAdv.classifAtiva === true : false);
     var advSection = document.getElementById('adv-scoring-section');
     if (advSection) advSection.style.display = advScoringStandings ? 'block' : 'none';
     document.querySelectorAll('#tiebreaker-list li[data-tb="pontos_avancados"], #tiebreaker-excluded-list li[data-tb="pontos_avancados"]').forEach(function(tbAdv) {
@@ -6338,11 +6349,15 @@ function setupCreateTournamentModal() {
           tourData.tiebreakersExcluded = Array.from(tbExcl.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
         }
 
-        // Sistema de Pontos Avançado: só vale em pontos corridos (Liga/Suíço).
-        // A seção fica oculta nos demais formatos — aqui o save respeita o mesmo
-        // gate pra não persistir um estado ligado caso o torneio tenha sido
-        // trocado de Liga pra eliminatória/grupos depois de configurar pontos.
-        var _advStandings = (formatValue === 'liga' || formatValue === 'suico');
+        // Sistema de Pontos Avançado: vale em qualquer CLASSIFICATÓRIA (tem tabela de pontos).
+        // v4.4.59 (pedido do dono): antes só Liga/Suíço; agora também Fase de Grupos / Pontos
+        // Corridos do format2 — o motor de classificação já aplica advancedScoring em qualquer
+        // formato (bracket-logic). Gate pela config do format2 (classifAtiva), não pelo
+        // #select-formato (que é legado/instável no fluxo format2). Sem classificatória
+        // (eliminação direta) → sem pontos avançados.
+        var _f2cForAdv = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
+        var _advStandings = (formatValue === 'liga' || formatValue === 'suico') ||
+                            (_f2cForAdv ? _f2cForAdv.classifAtiva === true : false);
         var _advEnabled = document.getElementById('adv-scoring-enabled');
         if (_advStandings && _advEnabled) {
           var _advCats = {};
