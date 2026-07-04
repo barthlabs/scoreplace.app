@@ -56,11 +56,17 @@
   function _num(val, min, max, onchange) {
     return '<input type="number" min="' + min + '" max="' + max + '" value="' + val + '" onchange="' + onchange + '" style="width:60px;text-align:center;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);">';
   }
-  // Toggle padrão do app (.toggle-switch) com rótulo à direita.
+  // Toggle padrão do app (.toggle-switch) com rótulo à direita do controle.
   function _toggle(label, checked, onchange) {
     return '<label style="display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-size:0.9rem;color:var(--text-main);">' +
       '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span>' +
       '<span>' + label + '</span></label>';
+  }
+  // Toggle em linha cheia: rótulo à ESQUERDA, controle alinhado à DIREITA.
+  function _toggleRight(label, checked, onchange) {
+    return '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;font-size:0.9rem;color:var(--text-main);width:100%;">' +
+      '<span>' + label + '</span>' +
+      '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span></label>';
   }
   // Intervalo sugerido: (data final do torneio − 1º sorteio) ÷ nº de rodadas.
   function _autoInterval(r) {
@@ -93,7 +99,7 @@
       fld('Nº de rodadas', '<input type="number" min="1" max="30" value="' + r.n + '" onchange="window._f2Rn(this.value)" style="' + inp + 'width:90px;text-align:center;">') +
       fld('Repetir a cada (dias)', '<input type="number" min="1" max="60" value="' + (r.drawIntervalDays || 7) + '" onchange="window._f2SchedInterval(this.value)" style="' + inp + 'width:110px;text-align:center;">') +
     '</div>';
-    var tgl = '<div style="margin-top:14px;">' + _toggle('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)') + '</div>';
+    var tgl = '<div style="margin-top:14px;">' + _toggleRight('Sortear manualmente', manual, 'window._f2SchedManual(this.checked)') + '</div>';
     var note = manual
       ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + (canAuto ? 'Você sorteia cada rodada manualmente, quando quiser.' : 'Informe a data do 1º sorteio para poder sortear automaticamente.') + '</div>'
       : '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">As rodadas são sorteadas automaticamente a cada ' + (r.drawIntervalDays || 7) + ' dia(s), a partir do 1º sorteio, dentro das datas da fase.' + (autoIv ? ' Intervalo sugerido pela data final ÷ nº de rodadas.' : '') + '</div>';
@@ -206,30 +212,30 @@
       classif += _sec('Formação das equipes', fBtns);
     }
 
-    if (!rotativo) {
-      var modo = cfg.rodadas.modo;
-      var inner;
-      if (um) {
-        // Pontos corridos: DOIS modos em oposição — todos-contra-todos (toggle ida/volta)
-        // OU nº de rodadas (com agendamento dos sorteios).
-        inner = _pill(modo === 'todos', 'window._f2Modo(\'todos\')', '🔄 Todos contra todos') +
-                _pill(modo === 'fixo', 'window._f2Modo(\'fixo\')', '🔢 Nº de rodadas');
-        if (modo === 'todos') {
-          inner += '<div style="margin-top:12px;">' + _toggle('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') + '</div>' +
-            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Cada ' + (isDupla ? 'dupla' : 'jogador') + ' enfrenta todos os outros' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta (mando invertido)' : '') + '.</div>';
-        } else {
-          // "Nº de rodadas" agora fica dentro do bloco de agendamento, ao lado de "Repetir a cada".
-          inner += _schedBlock(cfg.rodadas);
-        }
+    var rModo = cfg.rodadas.modo;
+    var rInner;
+    if (rotativo) {
+      // Rei/Rainha (ou sorteio a cada rodada): SEMPRE nº de rodadas + agendamento (rotativo por
+      // rodada). "Todos contra todos" não se aplica — mas o Nº de rodadas FICA (pedido do dono).
+      rInner = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">Sorteio a cada rodada — ' +
+        (cfg.parceria === 'rei_rainha' ? 'grupos de 4, parceiros rotativos' : 'parceiro e adversário sorteados') +
+        '; pontuação individual.</div>' + _schedBlock(cfg.rodadas);
+    } else if (um) {
+      // Pontos corridos: Nº de rodadas (PADRÃO, primeiro) × Todos contra todos.
+      rInner = _pill(rModo === 'fixo', 'window._f2Modo(\'fixo\')', '🔢 Nº de rodadas') +
+               _pill(rModo === 'todos', 'window._f2Modo(\'todos\')', '🔄 Todos contra todos');
+      if (rModo === 'todos') {
+        rInner += '<div style="margin-top:12px;">' + _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Cada ' + (isDupla ? 'dupla' : 'jogador') + ' enfrenta todos os outros' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta (mando invertido)' : '') + '.</div>';
       } else {
-        // Fase de grupos (2+): round-robin dentro do grupo, com toggle ida/volta.
-        inner = _toggle('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') +
-          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Dentro de cada grupo, todos contra todos' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta' : '') + '.</div>';
+        rInner += _schedBlock(cfg.rodadas);
       }
-      classif += _sec('Rodadas', inner);
     } else {
-      classif += _sec('Rodadas', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Sorteio a cada rodada — parceiro' + (cfg.parceria === 'rei_rainha' ? ' (grupos de 4)' : '') + ' e adversário sorteados; pontuação individual; sit-out balanceado.</div>');
+      // Fase de grupos (2+): round-robin dentro do grupo, com toggle ida/volta.
+      rInner = _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') +
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Dentro de cada grupo, todos contra todos' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta' : '') + '.</div>';
     }
+    classif += _sec('Rodadas', rInner);
 
     var e = cfg.eliminatoria;
     var elimForced = cfg.grupos > 1;
