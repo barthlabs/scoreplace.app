@@ -119,9 +119,10 @@
     if (!Array.isArray(e.nomes)) e.nomes = [];
     while (e.nomes.length < e.linhas) e.nomes.push('');
     e.nomes = e.nomes.slice(0, e.linhas);
-    if (e.origem !== 'ja_formadas' && e.origem !== 'formar') e.origem = 'ja_formadas';
-    // "formar" só quando ENTRAM INDIVÍDUOS (pontuação individual).
-    if (out._scoreBy !== 'individual') e.origem = 'ja_formadas';
+    // v4.4.40: origem é DETERMINADA pela classificatória (não é escolha livre): pontuação
+    // individual (rei/rainha, sorteio-a-cada-rodada) → FORMAR as duplas dos indivíduos;
+    // dupla fixa → duplas carregam (já formadas).
+    e.origem = (out._scoreBy === 'individual' && isDupla) ? 'formar' : 'ja_formadas';
     if (['performance', 'equilibrio', 'sorteio'].indexOf(e.formacao) === -1) e.formacao = 'performance';
     e.qualifyAll = !!e.qualifyAll;
     if (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) === -1) e.lateEnrollment = 'closed';

@@ -188,7 +188,14 @@
     var gi = _groupInfo(cfg);
     var isDupla = cfg.disputa === 'dupla';
     var perGroupScope = cfg.grupos > 1 && cfg.classifScope !== 'overall';
-    var q = perGroupScope ? cfg.grupos * cfg.classificados : cfg.classificados;
+    // v4.4.40: "Todos" → o total é o nº REAL de inscritos (não o classificados). Sem inscritos,
+    // não dá pra saber quantos "todos" são → mensagem em vez de número fixo.
+    if (cfg.eliminatoria.qualifyAll) {
+      if (gi.units <= 0) {
+        return '<div style="margin-top:8px;font-size:0.78rem;color:#fde68a;background:rgba(251,191,36,0.09);border:1px solid rgba(251,191,36,0.18);border-radius:8px;padding:9px 11px;line-height:1.5;">👥 <b>Todos</b> os inscritos entram na eliminatória — o total (duplas · jogos · tempo) aparece quando houver gente inscrita.</div>';
+      }
+    }
+    var q = cfg.eliminatoria.qualifyAll ? gi.units : (perGroupScope ? cfg.grupos * cfg.classificados : cfg.classificados);
     if (gi.units > 0) q = Math.min(q, gi.units);
     var teams = Math.max(0, q);
     var people = teams * (isDupla ? 2 : 1);
@@ -368,22 +375,17 @@
         } else {
           eb += '<div style="font-size:0.74rem;color:#fde68a;margin-bottom:6px;">Todos os participantes da classificatória entram no bracket, semeados pela classificação.</div>';
         }
-        // v4.4.39: "Confrontos na chave" (estratégia) LOGO ABAIXO do "Quem avança" (pedido do dono).
+        // v4.4.40: "Confrontos na chave" (estratégia) LOGO ABAIXO do "Quem avança". SEM toggle de
+        // origem (é determinada: individual → forma duplas; dupla fixa → arranja a chave). Sempre visível.
         if (isDupla) {
-          if (scoreInd) {
-            eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Origem das duplas na eliminatória</div>';
-            eb += _pill(e.origem === 'ja_formadas', 'window._f2Origem(\'ja_formadas\')', 'Já formadas') + _pill(e.origem === 'formar', 'window._f2Origem(\'formar\')', 'Formar da classificação');
-          }
-          var _formaNow = scoreInd && e.origem === 'formar';
-          if (_formaNow || !scoreInd) {
-            var _stratLbl = _formaNow ? 'Como formar as duplas' : 'Confrontos na chave';
-            var _hints = _formaNow
-              ? { performance: 'Os melhores juntos: 1º+2º, 3º+4º…', equilibrio: 'Forte com fraco: 1º+4º, 2º+3º…', sorteio: 'Parceiros sorteados ao acaso.' }
-              : { performance: 'Os melhores se enfrentam cedo: 1º vs 2º, 3º vs 4º…', equilibrio: 'Melhor contra pior: 1º vs último, 2º vs penúltimo…', sorteio: 'Confrontos sorteados ao acaso.' };
-            eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">' + _stratLbl + '</div>' +
-              '<div>' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>' +
-              '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (_hints[e.formacao] || '') + ' (as cabeças de chave são sempre semeadas na chave.)</div>';
-          }
+          var _formaNow = scoreInd; // individual → forma duplas dos classificados; dupla fixa → carrega
+          var _stratLbl = _formaNow ? 'Como formar as duplas na eliminatória' : 'Confrontos na chave';
+          var _hints = _formaNow
+            ? { performance: 'Os melhores juntos: 1º+2º, 3º+4º…', equilibrio: 'Forte com fraco: 1º+4º, 2º+3º…', sorteio: 'Parceiros sorteados ao acaso.' }
+            : { performance: 'Os melhores se enfrentam cedo: 1º vs 2º, 3º vs 4º…', equilibrio: 'Melhor contra pior: 1º vs último, 2º vs penúltimo…', sorteio: 'Confrontos sorteados ao acaso.' };
+          eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">' + _stratLbl + '</div>' +
+            '<div>' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (_hints[e.formacao] || '') + ' (as cabeças de chave são sempre semeadas na chave.)</div>';
         }
         eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
       }
