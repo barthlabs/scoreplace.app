@@ -256,6 +256,15 @@
       (Array.isArray(S.t.rounds) && S.t.rounds.length > 0)
     ));
     var _classifLocked = _p0Drawn && cfg.classifAtiva;
+    // v4.4.52: a eliminatória trava assim que a fase AVANÇA (é gerada) — depois disso a config
+    // dela não muda mais. Com classificatória, a elim é fase posterior → travada quando
+    // currentPhaseIndex>=1 (avançou) ou há jogos taggeados phaseIndex>=1. Sem classificatória
+    // (eliminação direta), a elim É a fase 0 → trava quando a fase 0 é sorteada (_p0Drawn).
+    var _elimAdvanced = !!(S && S.t && (
+      (Array.isArray(S.t.matches) && S.t.matches.some(function (m) { return (m.phaseIndex || 0) >= 1; })) ||
+      ((S.t.currentPhaseIndex || 0) >= 1)
+    ));
+    var _elimLocked = (cfg.classifAtiva ? _elimAdvanced : _p0Drawn) && cfg.eliminatoria.ativa;
 
     // Disputa só aparece onde o esporte permite singles (tênis/tênis de mesa). Nos demais
     // (sempre duplas) não faz sentido mostrar nada — é óbvio.
@@ -320,10 +329,10 @@
     classif += _sec('Rodadas', rInner);
 
     var e = cfg.eliminatoria;
-    // Toggle da eliminatória (SEMPRE habilitado). Desligar → torneio termina na classificatória.
-    // Sem classificatória, desligar a elim religa a classif (ao menos uma fase ativa).
-    var elimToggle = '<label class="toggle-switch" style="cursor:pointer;">' +
-      '<input type="checkbox"' + (e.ativa ? ' checked' : '') + ' onchange="window._f2Elim(this.checked)">' +
+    // Toggle da eliminatória (habilitado, MENOS quando a fase já avançou → travado). Desligar →
+    // torneio termina na classificatória. Sem classificatória, desligar religa a classif.
+    var elimToggle = '<label class="toggle-switch" style="cursor:' + (_elimLocked ? 'not-allowed' : 'pointer') + ';' + (_elimLocked ? 'opacity:0.5;' : '') + '">' +
+      '<input type="checkbox"' + (e.ativa ? ' checked' : '') + (_elimLocked ? ' disabled' : '') + ' onchange="window._f2Elim(this.checked)">' +
       '<span class="toggle-slider"></span></label>';
     var eb = '';
     if (e.ativa) {
@@ -400,6 +409,15 @@
       if (!cfg.classifAtiva) eb += '<div id="f2-classif-extra" style="margin-top:12px;"></div>';
     }
     var elimInner = e.ativa ? eb : '';
+    // v4.4.52: fase avançou → config da eliminatória travada (cinza, sem cliques). Nota muda
+    // conforme haja classificatória (avançou de fase) ou seja eliminação direta (já sorteada).
+    if (_elimLocked) {
+      var _elimNote = cfg.classifAtiva
+        ? '🔒 <b>Fase eliminatória em andamento</b> — o torneio já avançou de fase; a configuração não pode mais ser alterada.'
+        : '🔒 <b>Eliminatória já sorteada</b> — a configuração não pode mais ser alterada.';
+      elimInner = '<div style="font-size:0.76rem;color:#fde68a;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">' + _elimNote + '</div>' +
+        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + eb + '</div>';
+    }
 
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
     if (cfg.classifAtiva) classif += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
@@ -418,8 +436,13 @@
         '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + classif + '</div>';
     }
 
-    var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classifInner, classifToggle) +
-      _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, elimToggle);
+    // v4.4.52: cadeado 🔒 ENTRE o título e o toggle quando a fase está travada.
+    function _hdrRight(locked, toggle) {
+      var lk = locked ? '<span title="Fase travada — configuração não pode mais mudar" style="font-size:1.2rem;line-height:1;">🔒</span>' : '';
+      return '<span style="display:inline-flex;align-items:center;gap:12px;">' + lk + toggle + '</span>';
+    }
+    var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classifInner, _hdrRight(_classifLocked, classifToggle)) +
+      _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, _hdrRight(_elimLocked, elimToggle));
     return h;
   }
 
