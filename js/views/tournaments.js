@@ -2475,7 +2475,7 @@ function renderTournaments(container, tournamentId = null) {
 
             ${t.venue ? `
             <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 8px; ${_pReadBg ? 'background:'+_pReadBg+';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:'+_pReadFg+' !important;border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
-               <span style="font-size: 1rem; flex-shrink:0;">📍</span>
+               ${t.venueLat && t.venueLon ? '<a href="' + (t.venuePlaceId ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(t.venue) + '&query_place_id=' + t.venuePlaceId : 'https://www.google.com/maps/search/?api=1&query=' + t.venueLat + ',' + t.venueLon) + '" target="_blank" title="Ver no mapa" style="font-size:1.15rem; flex-shrink:0; line-height:1; text-decoration:none;">🗺️</a>' : '<span style="font-size: 1rem; flex-shrink:0;">📍</span>'}
                <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;">
                  <span style="font-weight:600;">${window._safeHtml(t.venue)}</span>
                  ${t.courtCount > 0 ? '<span style="font-size:0.75rem; font-weight:400; opacity:0.7;">' + t.courtCount + (t.courtCount > 1 ? ' quadras' : ' quadra') + '</span>' : ''}
@@ -2483,7 +2483,6 @@ function renderTournaments(container, tournamentId = null) {
                </span>
                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; align-self:stretch;">
                  ${(t.venuePlaceId || t.venue) ? '<button onclick="event.stopPropagation();window._openVenueFromTournament(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')" title="Ver detalhes do local (movimento, contatos, reviews)" style="background:linear-gradient(135deg,#FFD700,#DAA520);border:none;color:#1a0f00;border-radius:8px;padding:5px 10px;font-size:0.72rem;font-weight:800;cursor:pointer;white-space:nowrap;">📍 Place</button>' : ''}
-                 ${t.venueLat && t.venueLon ? '<a href="' + (t.venuePlaceId ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(t.venue) + '&query_place_id=' + t.venuePlaceId : 'https://www.google.com/maps/search/?api=1&query=' + t.venueLat + ',' + t.venueLon) + '" target="_blank" title="Ver no mapa" style="color:#818cf8; text-decoration:none; font-size:1.2rem; line-height:1;">🗺️</a>' : ''}
                  ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="margin-top:auto;flex-shrink:0;width:clamp(44px,14vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
                </div>
             </div>
