@@ -236,19 +236,8 @@ window._devSimulateCurrentPhase = function (tId) {
       m.resultAt = Math.round(startMs + ((i + 1) / todo.length) * span); // último = agora
       if (m.id != null) byId[String(m.id)] = m;
     });
-    // sincroniza Rei/Rainha (monarchGroups) por id, caso sejam objetos separados de round.matches
-    if (Array.isArray(t.rounds)) {
-      t.rounds.forEach(function (r) {
-        if (r && Array.isArray(r.monarchGroups)) {
-          r.monarchGroups.forEach(function (g) {
-            if (g && Array.isArray(g.matches)) g.matches.forEach(function (gm) {
-              var src = (gm && gm.id != null) ? byId[String(gm.id)] : null;
-              if (src && gm !== src) { gm.scoreP1 = src.scoreP1; gm.scoreP2 = src.scoreP2; gm.winner = src.winner; gm.draw = src.draw; gm.startedAt = src.startedAt; gm.resultAt = src.resultAt; }
-            });
-          });
-        }
-      });
-    }
+    // v4.4.69: sync Rei/Rainha REMOVIDO — group.matches são REFERÊNCIAS de round.matches
+    // (FONTE ÚNICA, hidratada no load). Mutar o jogo no plano já reflete no grupo.
     // Simular resultado É JOGAR: marca PRESENÇA dos jogadores (igual ao lançamento real, que
     // passa por _applyResultToTournament) e registra o INÍCIO. Sem isso, a seção "prontos para
     // chamar" (exige presença) e a barra (exige início) ficavam vazias após simular. (dono)

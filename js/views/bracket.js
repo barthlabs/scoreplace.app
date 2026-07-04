@@ -1589,48 +1589,57 @@ window._phaseGameOffset = function (t, phaseIndex) {
 // de cada fase: Dupla Elim intercala upper/lower por rodada + grand no fim; senão tiers na
 // ordem gold→silver→main→line3→line4→(extras), colunas por rodada asc, 3º-lugar ANTES da
 // final, grande-final por último. BYEs não consomem número (igual ao render).
-// v4.4.68: FONTE ÚNICA em runtime pro Rei/Rainha — elimina a duplicação sem sentido. `round.matches`
-// (plano) e `round.monarchGroups[i].matches` viram objetos SEPARADOS ao carregar do Firestore (a
-// serialização quebra a referência que existia no sorteio). Aqui RELIGAMOS: cada group.matches[j]
-// passa a apontar pro objeto de round.matches com o mesmo id. Se um placar existir só numa cópia,
-// funde no objeto do plano antes de religar (nunca perde resultado). Jogo que só existe no grupo
-// entra no plano. Depois disto há UM objeto por jogo — sem cópias divergentes, sem colisão de número.
-window._relinkMonarchToFlat = function (t) {
-  if (!t || !Array.isArray(t.rounds)) return;
+// v4.4.69 FONTE ÚNICA Rei/Rainha (schema, sem gambiarra): o jogo mora UMA vez em
+// round.matches. Os grupos guardam só `matchIds` — o Firestore NUNCA mais grava
+// cópia do jogo (o fold em saveTournament/mutateTournament/_saveToCache remove
+// group.matches do payload). Esta função HIDRATA a leitura: reconstrói
+// group.matches como REFERÊNCIAS aos objetos de round.matches (o MESMO objeto,
+// nunca cópia) — divergência é impossível por construção, sem sync perpétuo.
+// Idempotente. MIGRA docs legados com group.matches embutido: dobra em matchIds,
+// garante o objeto no plano (fundindo resultado se só a cópia do grupo tinha) e
+// relinka. Roda no ingest (onSnapshot/cache), no topo do render e na transação.
+window._hydrateMonarchGroups = function (t) {
+  if (!t || !Array.isArray(t.rounds)) return t;
   t.rounds.forEach(function (rd) {
     if (!rd || !Array.isArray(rd.monarchGroups) || !rd.monarchGroups.length) return;
     if (!Array.isArray(rd.matches)) rd.matches = [];
     var byId = {};
     rd.matches.forEach(function (m) { if (m && m.id != null) byId[String(m.id)] = m; });
     rd.monarchGroups.forEach(function (g) {
-      if (!g || !Array.isArray(g.matches)) return;
-      g.matches = g.matches.map(function (gm) {
-        if (!gm || gm.id == null) return gm;
-        var flat = byId[String(gm.id)];
-        if (flat) {
-          if (flat !== gm && gm.winner && !flat.winner) { // preserva placar salvo só no grupo
+      if (!g) return;
+      // (a) LEGADO: cópias embutidas sem matchIds → dobra em matchIds + migra pro plano.
+      if (!Array.isArray(g.matchIds) && Array.isArray(g.matches)) {
+        g.matchIds = [];
+        g.matches.forEach(function (gm) {
+          if (!gm || gm.id == null) return;
+          g.matchIds.push(String(gm.id));
+          var flat = byId[String(gm.id)];
+          if (!flat) { rd.matches.push(gm); byId[String(gm.id)] = gm; } // só no grupo → adota no plano
+          else if (flat !== gm && gm.winner && !flat.winner) {          // placar salvo só na cópia → funde
             flat.winner = gm.winner; flat.scoreP1 = gm.scoreP1; flat.scoreP2 = gm.scoreP2; flat.draw = gm.draw;
             if (!flat.startedAt) flat.startedAt = gm.startedAt; if (!flat.resultAt) flat.resultAt = gm.resultAt;
           }
-          return flat; // referencia o objeto do plano (fonte única)
-        }
-        rd.matches.push(gm); byId[String(gm.id)] = gm; // só existia no grupo → entra no plano
-        return gm;
-      });
+        });
+      }
+      // (b) reconstrói group.matches como REFERÊNCIAS do plano (fonte única).
+      if (Array.isArray(g.matchIds)) {
+        g.matches = g.matchIds.map(function (id) { return byId[String(id)]; }).filter(Boolean);
+      }
     });
   });
+  return t;
 };
 
 window._assignGlobalGameNumbers = function (t) {
   if (!t) return;
-  if (typeof window._relinkMonarchToFlat === 'function') window._relinkMonarchToFlat(t); // FONTE ÚNICA
+  if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(t); // FONTE ÚNICA
   var isBye = window._isByeMatch || function () { return false; };
   var n = 0;
-  // v4.4.68: id→número. O Rei/Rainha guarda cada jogo em DUAS cópias (round.matches plano E
-  // round.monarchGroups[i].matches) — no sorteio são a mesma referência, mas o Firestore
-  // serializa separado e ao CARREGAR viram objetos distintos com o mesmo id. `stamp` carimba
-  // pelo id: a 1ª ocorrência ganha ++n; qualquer OUTRA cópia do mesmo id reaproveita o número.
-  // Assim as duas cópias ficam com o MESMO "Jogo N" e não há colisão. FONTE ÚNICA, sem fallback.
+  // v4.4.69: id→número. Após _hydrateMonarchGroups, group.matches[j] É o MESMO objeto de
+  // round.matches (ref compartilhada, fonte única). `stamp` carimba pelo id: a 1ª ocorrência
+  // ganha ++n; visitar o mesmo objeto de novo (grupo e depois plano) reaproveita numById —
+  // idempotente. Rei/Rainha numera POR GRUPO (ordem dos grupos), depois o plano confirma pelas
+  // MESMAS ids. Zero cópia, zero colisão, zero fallback.
   var numById = {};
   function stamp(m) {
     if (!m) return;

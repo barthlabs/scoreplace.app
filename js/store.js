@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.4.68-beta';
+window.SCOREPLACE_VERSION = '4.4.69-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -4637,12 +4637,32 @@ window.AppStore = {
       // perdeu as fases horas depois". Strip numa cópia rasa: não muta o objeto vivo
       // (a flag em memória se auto-limpa no próximo echo do onSnapshot).
       var clean = this.tournaments.map(function(t) {
-        if (t && t._allowConfigReset !== undefined) {
-          var c = Object.assign({}, t);
-          delete c._allowConfigReset;
-          return c;
+        if (!t) return t;
+        // v4.4.69 FONTE ÚNICA Rei/Rainha: o cache local também guarda os grupos só
+        // com matchIds (round.matches é a única lista de jogos). Sem isto o
+        // localStorage duplicaria cada jogo (group.matches são refs → JSON as copia).
+        // Clona só o que for tocado — nunca muta o objeto vivo (que mantém as refs).
+        var _needFold = Array.isArray(t.rounds) && t.rounds.some(function(r){ return r && Array.isArray(r.monarchGroups) && r.monarchGroups.some(function(g){ return g && Array.isArray(g.matches); }); });
+        if (t._allowConfigReset === undefined && !_needFold) return t;
+        var c = Object.assign({}, t);
+        delete c._allowConfigReset;
+        if (_needFold) {
+          c.rounds = t.rounds.map(function(r){
+            if (!r || !Array.isArray(r.monarchGroups)) return r;
+            var rc = Object.assign({}, r);
+            rc.monarchGroups = r.monarchGroups.map(function(g){
+              if (!g || !Array.isArray(g.matches)) return g;
+              var gc = Object.assign({}, g);
+              if (!Array.isArray(gc.matchIds) || !gc.matchIds.length) {
+                gc.matchIds = g.matches.map(function(m){ return m && m.id; }).filter(function(x){ return x != null; }).map(String);
+              }
+              delete gc.matches;
+              return gc;
+            });
+            return rc;
+          });
         }
-        return t;
+        return c;
       });
       var data = { ts: Date.now(), tournaments: clean };
       localStorage.setItem(this._cacheKey, JSON.stringify(data));
@@ -4663,6 +4683,11 @@ window.AppStore = {
           });
         } else {
           this.tournaments = data.tournaments;
+        }
+        // v4.4.69 Rei/Rainha: o cache guarda grupos só com matchIds — reidrata
+        // group.matches como refs de round.matches antes de qualquer consumidor.
+        if (typeof window._hydrateMonarchGroups === 'function') {
+          this.tournaments.forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
         }
         // Loaded from local cache
         return true;
@@ -5063,7 +5088,12 @@ window.AppStore = {
           }
         });
         store.tournaments = tournaments;
-        store._saveToCache();
+        store._saveToCache(); // cache enxuto (matchIds) — foldado dentro do _saveToCache
+        // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte
+        // única) DEPOIS de cachear — todo consumidor em memória vê os grupos montados.
+        if (typeof window._hydrateMonarchGroups === 'function') {
+          tournaments.forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
+        }
         store._loading = false;
 
         // v1.9.81: detecta remoções (presente antes, ausente agora) e, se o
@@ -5163,7 +5193,9 @@ window.AppStore = {
                 snap2.forEach(function(doc) {
                   var id = String(doc.id);
                   if (!existing.has(id)) {
-                    store.tournaments.push(doc.data());
+                    var _td = doc.data();
+                    if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(_td); } catch(e){} }
+                    store.tournaments.push(_td);
                     added++;
                   }
                 });
@@ -5534,6 +5566,10 @@ window.AppStore = {
       }
       this.tournaments = tournaments;
       this._saveToCache();
+      // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte única).
+      if (typeof window._hydrateMonarchGroups === 'function') {
+        this.tournaments.forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
+      }
       // Tournaments loaded from Firestore
     } catch (e) {
       window._error('Erro ao carregar torneios:', e);

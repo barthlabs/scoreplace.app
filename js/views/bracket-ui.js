@@ -275,14 +275,12 @@ window._suggestFriendsForGuestName = function(typedName, excludeUids) {
 
 
 // v0.16.87: propaga mutação de um match (m) pra todas as refs com mesmo id
-// no tournament. Necessário porque após Firestore deserialização (onSnapshot
-// dispara em todo save), refs entre t.rounds[i].matches[k] e
-// t.rounds[i].monarchGroups[gi].matches[mi] ficam SEPARADAS — antes eram o
-// mesmo object (criado em _generateReiRainhaRoundForPlayers e shared), mas
-// JSON serialize/deserialize só preserva valores. Se mutar uma ref, a outra
-// continua estale e o renderer lê dela. Fix: após mutar a "primary" ref,
-// achar todas as outras refs com mesmo id e copiar os campos mutáveis.
-// Lista de campos cobre o que `_saveResultInline` e `_editResult` mexem.
+// no tournament (chaves eliminatórias/grupos que podem repetir o match em mais
+// de uma estrutura legada). Lista de campos cobre o que `_saveResultInline` e
+// `_editResult` mexem.
+// v4.4.69: o branch monarchGroups[gi].matches saiu daqui — Rei/Rainha agora é
+// FONTE ÚNICA: group.matches são REFERÊNCIAS de round.matches (hidratadas no
+// load), então mutar round.matches já muta o grupo. Nada a propagar/sincronizar.
 function _propagateMatchUpdate(t, m) {
   if (!t || !m || !m.id) return;
   var FIELDS = ['winner', 'draw', 'scoreP1', 'scoreP2', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'isBye', 'pendingResult', 'wo', 'woAbsentSide'];
@@ -299,22 +297,12 @@ function _propagateMatchUpdate(t, m) {
   };
   // 1. Walk t.matches (flat elim list)
   if (Array.isArray(t.matches)) t.matches.forEach(updateRef);
-  // 2. Walk t.rounds[i].matches and t.rounds[i].monarchGroups[gi].matches
+  // 2. Walk t.rounds[i].matches — FONTE ÚNICA do Rei/Rainha (os grupos referenciam
+  //    esses mesmos objetos, então não há segunda cópia pra sincronizar).
   if (Array.isArray(t.rounds)) {
     t.rounds.forEach(function(r) {
       if (!r) return;
       if (Array.isArray(r.matches)) r.matches.forEach(updateRef);
-      if (Array.isArray(r.monarchGroups)) {
-        r.monarchGroups.forEach(function(g) {
-          if (g && Array.isArray(g.matches)) g.matches.forEach(updateRef);
-          if (g && Array.isArray(g.rounds)) {
-            g.rounds.forEach(function(gr) {
-              if (Array.isArray(gr)) gr.forEach(updateRef);
-              else if (gr && Array.isArray(gr.matches)) gr.matches.forEach(updateRef);
-            });
-          }
-        });
-      }
     });
   }
   // 3. Walk t.groups (group stage)
