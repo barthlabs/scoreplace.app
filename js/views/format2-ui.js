@@ -40,6 +40,49 @@
     return '<input type="number" min="' + min + '" max="' + max + '" value="' + val + '" onchange="' + onchange + '" style="width:60px;text-align:center;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);">';
   }
 
+  // Conta PESSOAS inscritas (dupla-entry = 2; senão 1). project_count_people_not_entries.
+  function _peopleCount(t) {
+    var ps = (t && t.participants) || [];
+    var n = 0;
+    ps.forEach(function (p) {
+      if (!p) return;
+      if (p.p2Name || (Array.isArray(p.participants) && p.participants.length > 1)) n += 2;
+      else n += 1;
+    });
+    return n;
+  }
+  // Estimativa (pessoas por grupo + tempo) baseada nos inscritos + slider + config.
+  function _estimateBlock(cfg) {
+    var t = S && S.t;
+    var people = _peopleCount(t);
+    if (!people) return '<div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);">Sem inscritos ainda — a previsão aparece quando houver gente inscrita.</div>';
+    var isDupla = cfg.disputa === 'dupla';
+    var units = isDupla ? Math.floor(people / 2) : people;
+    if (units < 1) return '';
+    var ng = Math.min(cfg.grupos, units);
+    var base = Math.floor(units / ng), rem = units % ng, small = base, big = base + (rem > 0 ? 1 : 0);
+    var puUnits = (rem === 0) ? String(base) : (small + '–' + big);
+    var puPeople = isDupla ? ((rem === 0) ? String(base * 2) : (small * 2 + '–' + big * 2)) : puUnits;
+    var groupGames = 0;
+    for (var g = 0; g < ng; g++) { var u = base + (g < rem ? 1 : 0); groupGames += u * (u - 1) / 2; }
+    var elimGames = 0;
+    if (cfg.eliminatoria.ativa) {
+      var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
+      q = Math.min(q, units);
+      if (q >= 2) elimGames = (q - 1) + (cfg.eliminatoria.terceiro ? 1 : 0);
+    }
+    var gd = parseInt((document.getElementById('tourn-game-duration') || {}).value, 10) || (t && t.gameDuration) || 30;
+    var cc = parseInt((document.getElementById('tourn-court-count') || {}).value, 10) || (t && t.courtCount) || 1;
+    var totalGames = Math.round(groupGames + elimGames);
+    var mins = Math.ceil(totalGames * gd / Math.max(1, cc));
+    var hh = Math.floor(mins / 60), mm = mins % 60;
+    var timeStr = hh > 0 ? (hh + 'h' + (mm ? ' ' + mm + 'min' : '')) : (mm + 'min');
+    return '<div style="margin-top:8px;font-size:0.78rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:9px 11px;line-height:1.55;">' +
+      '👥 <b>' + people + '</b> inscritos' + (isDupla ? (' → <b>' + units + '</b> duplas') : '') +
+      ' · <b>' + puPeople + '</b> pessoas por grupo' + (isDupla ? (' <span style="opacity:0.8;">(' + puUnits + ' duplas)</span>') : '') +
+      '<br>⏱️ ~<b>' + timeStr + '</b> de jogos <span style="opacity:0.8;">(' + totalGames + ' jogos · ' + gd + 'min · ' + cc + ' quadra' + (cc > 1 ? 's' : '') + ')</span></div>';
+  }
+
   // ── Controles do configurador (compartilhados form+page) ──
   function _bodyControls() {
     var cfg = S.cfg, sport = S.sport;
@@ -61,7 +104,8 @@
       '<div style="display:flex;align-items:center;gap:12px;">' +
       '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2Grupos(this.value)" style="flex:1;">' +
       '<span style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#c7d2fe;">' + cfg.grupos + '</span></div>' +
-      '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">' + gLabel + '</div>');
+      '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">' + gLabel + '</div>' +
+      _estimateBlock(cfg));
 
     if (isDupla && um) {
       var pr = cfg.parceria;
@@ -140,10 +184,10 @@
 
   // ── MODO FORM: monta os controles dentro do #fase1-box do editar/criar. ──
   // sport: modalidade; initialCfg: config existente (t.fmt2) ou null (default do esporte).
-  window._f2MountInForm = function (container, sport, initialCfg) {
+  window._f2MountInForm = function (container, sport, initialCfg, tournament) {
     sport = sport || 'Beach Tennis';
     var cfg = (initialCfg && typeof initialCfg === 'object') ? window.FORMAT2.normalize(initialCfg, sport) : window.FORMAT2.defaultConfig(sport);
-    S = { mode: 'form', mountEl: container, sport: sport, cfg: cfg };
+    S = { mode: 'form', mountEl: container, sport: sport, cfg: cfg, t: tournament || null };
     if (container) container.innerHTML = _bodyControls();
   };
   // Config atual (pro save do form). null se não montado em modo form.

@@ -1755,10 +1755,10 @@ function setupCreateTournamentModal() {
     mount.style.cssText = 'margin:2px 0 10px;';
     try { box.insertBefore(mount, box.children[1] || null); } catch (e) { box.appendChild(mount); }
     var sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || 'Beach Tennis';
-    var initCfg = null;
+    var initCfg = null, tourn = null;
     var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
-    if (editId && typeof window._findTournamentById === 'function') { var t = window._findTournamentById(editId); if (t && t.fmt2) initCfg = t.fmt2; }
-    window._f2MountInForm(mount, sport, initCfg);
+    if (editId && typeof window._findTournamentById === 'function') { tourn = window._findTournamentById(editId); if (tourn && tourn.fmt2) initCfg = tourn.fmt2; }
+    window._f2MountInForm(mount, sport, initCfg, tourn);
   };
   window._setPhaseField = function(i, field, value) {
     var ph = window._extraPhases[i]; if (!ph) return;
