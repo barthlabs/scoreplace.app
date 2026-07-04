@@ -401,8 +401,7 @@
     var classifInner = cfg.classifAtiva ? classif : '';
 
     var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classifInner, classifToggle) +
-      _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, elimToggle) +
-      '<div style="margin-top:2px;padding:11px 13px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);font-size:0.82rem;color:#a5b4fc;">📋 ' + _safe(window.FORMAT2.summary(cfg)) + '</div>';
+      _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, elimToggle);
     return h;
   }
 
