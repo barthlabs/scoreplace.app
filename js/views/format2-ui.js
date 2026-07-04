@@ -404,8 +404,8 @@
       // Quando ON é UMA chave só (força 1 linha no normalize) → o controle de Linhas some.
       eb += '<div style="margin-top:14px;">' + _toggleRight('Dupla Eliminatória', !!e.dupla, 'window._f2ElimDupla(this.checked)') + '</div>' +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (e.dupla
-          ? 'Cada ' + (isDupla ? 'dupla' : 'jogador') + ' só é eliminado após <b>2 derrotas</b>: quem perde na chave de cima cai na <b>chave de baixo (repescagem)</b> e ainda pode voltar. As duas chaves se encontram na <b>grande final</b>.'
-          : 'Eliminação simples — uma derrota e está fora. Ative para <b>Dupla Eliminatória</b>: chave de repescagem, só sai com 2 derrotas.') + '</div>';
+          ? 'Cada ' + (isDupla ? 'dupla' : 'jogador') + ' só é ' + (isDupla ? 'eliminada' : 'eliminado') + ' após <b>2 derrotas</b>: quem perde na <b>chave de cima</b> cai na <b>chave de baixo</b> (ainda no torneio) e as duas se encontram na <b>grande final</b>.'
+          : 'Eliminação simples — uma derrota e está fora. Ative para <b>Dupla Eliminatória</b>: só sai com 2 derrotas (quem perde na chave de cima cai na de baixo).') + '</div>';
       // Linhas (chaves paralelas): só na eliminatória SIMPLES — a dupla-elim é chave única.
       if (!e.dupla) {
         eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Linhas (chaves paralelas — nomes livres)</div>';
