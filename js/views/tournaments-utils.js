@@ -1112,7 +1112,14 @@ window._buildProgressInner = function(t) {
       // no multi-fase _thisDraw vem de drawFirstDate+intervalo (que NÃO se aplica) e
       // gerava "INÍCIO REAL 21/06 (futuro/passado) + DECORRIDO 0/21h". Sem ponto jogado
       // → actualStart null → _notStarted true → selo "⏳ Aguardando início".
-      actualStart = _roundStart || null;
+      // v4.4.66: AUTO-DRAW (drawManual!==true) — a rodada foi sorteada automaticamente e já está
+      // VALENDO a partir do início PROGRAMADO da fase; não é "aguardando início" (não há botão de
+      // iniciar — é automático). Sem 1º ponto ainda, se a rodada está sorteada (_rTotal>0) e o
+      // início programado (schedStart) já passou, usa schedStart como início real → "em andamento".
+      // Antes do horário programado (ou manual) segue "aguardando início".
+      if (_roundStart) actualStart = _roundStart;
+      else if (t.drawManual !== true && _rTotal > 0 && schedStart && now >= schedStart) actualStart = schedStart;
+      else actualStart = null;
       _labelSchedStart = 'início programado';
       _labelSchedEnd = 'final programado';
     }
