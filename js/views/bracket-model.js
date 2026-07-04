@@ -396,6 +396,51 @@
     return cols;
   }
 
+  // ── FONTE ÚNICA Rei/Rainha: normalizador de escrita (persistência) ─────────
+  // v4.4.70: casa canônica ÚNICA do fold. Remove `group.matches` do payload e
+  // deixa só `matchIds` — round.matches continua a única lista de jogos gravada.
+  // Sem isto o Firestore grava cada jogo Rei/Rainha DUAS vezes (round.matches +
+  // monarchGroups[i].matches) e as cópias divergem ao carregar.
+  //
+  // Roda no deep-clone do save (NÃO na memória, que mantém group.matches como
+  // referências hidratadas). Idempotente. Trata `data.rounds[]` (Fase 0) E
+  // `data.phaseRounds[k].rounds[]` (Liga multi-fase) — a mesma duplicação
+  // acontece nas rodadas de fase posterior.
+  //
+  // Vive aqui (bracket-model.js, arquivo vendored p/ functions-autodraw) para ser
+  // FONTE ÚNICA: tanto o cliente (firebase-db.js) quanto o servidor (autoDraw,
+  // via draw-core shim) chamam ESTA função antes de gravar. Zero drift, zero
+  // segundo lugar pra esquecer de foldar.
+  function _foldRoundsArray(rounds) {
+    if (!Array.isArray(rounds)) return;
+    rounds.forEach(function (r) {
+      if (!r || !Array.isArray(r.monarchGroups)) return;
+      r.monarchGroups.forEach(function (g) {
+        if (!g || !Array.isArray(g.matches)) return;
+        if (!Array.isArray(g.matchIds) || !g.matchIds.length) {
+          g.matchIds = g.matches
+            .map(function (m) { return m && m.id; })
+            .filter(function (x) { return x != null; })
+            .map(String);
+        }
+        delete g.matches; // fonte única = round.matches
+      });
+    });
+  }
+  window._foldMonarchGroups = function _foldMonarchGroups(data) {
+    if (!data) return data;
+    _foldRoundsArray(data.rounds);
+    // phaseRounds: objeto { [phaseIndex]: { rounds: [...] } } — Liga incremental
+    // de fase posterior. Mesma duplicação Rei/Rainha; folda também.
+    if (data.phaseRounds && typeof data.phaseRounds === 'object') {
+      Object.keys(data.phaseRounds).forEach(function (k) {
+        var slot = data.phaseRounds[k];
+        if (slot && Array.isArray(slot.rounds)) _foldRoundsArray(slot.rounds);
+      });
+    }
+    return data;
+  };
+
   // ── Canonical write helper ────────────────────────────────────────────────
   // Append matches (and optional monarchGroups) into the correct legacy field
   // on t based on the column's phase. Generators should prefer this over

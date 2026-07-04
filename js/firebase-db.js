@@ -87,28 +87,16 @@ window.FirestoreDB = {
     return obj;
   },
 
-  // v4.4.69 FONTE ÚNICA Rei/Rainha: remove group.matches do PAYLOAD e deixa só
-  // `matchIds`. round.matches continua a única lista de jogos persistida — sem
-  // isto o Firestore gravaria cada jogo DUAS vezes (round.matches +
-  // monarchGroups[i].matches) e as cópias divergiam ao carregar. Opera no
-  // deep-clone (cleanData vem de _cleanUndefined) → NÃO afeta a memória (que
-  // mantém group.matches como referências hidratadas). Idempotente. Chamado em
-  // saveTournament e mutateTournament — todo write de torneio inteiro passa aqui.
+  // v4.4.70 FONTE ÚNICA Rei/Rainha: delega pro normalizador CANÔNICO em
+  // bracket-model.js (window._foldMonarchGroups) — mesma função que o servidor
+  // (autoDraw, via draw-core shim) chama antes de gravar. Uma implementação só,
+  // zero drift. Remove group.matches do PAYLOAD e deixa só matchIds; round.matches
+  // continua a única lista de jogos persistida. Chamado em saveTournament e
+  // mutateTournament — todo write de torneio inteiro passa aqui.
   _foldMonarchGroups(cleanData) {
-    if (!cleanData || !Array.isArray(cleanData.rounds)) return cleanData;
-    cleanData.rounds.forEach(function (r) {
-      if (!r || !Array.isArray(r.monarchGroups)) return;
-      r.monarchGroups.forEach(function (g) {
-        if (!g || !Array.isArray(g.matches)) return;
-        if (!Array.isArray(g.matchIds) || !g.matchIds.length) {
-          g.matchIds = g.matches
-            .map(function (m) { return m && m.id; })
-            .filter(function (x) { return x != null; })
-            .map(String);
-        }
-        delete g.matches; // fonte única = round.matches
-      });
-    });
+    if (typeof window !== 'undefined' && typeof window._foldMonarchGroups === 'function') {
+      return window._foldMonarchGroups(cleanData);
+    }
     return cleanData;
   },
 

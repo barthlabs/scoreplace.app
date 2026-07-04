@@ -251,6 +251,17 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         // campo (só o cliente persistia) → banner "Iniciar Torneio" reaparecia e a duração
         // do torneio quebrava (NaN). Mesma classe dos incidentes monarchWaitlist/tournamentStarted.
         if (t.tournamentStarted) payload.tournamentStarted = t.tournamentStarted;
+        // v4.4.70 FONTE ÚNICA Rei/Rainha: normaliza o que vai ser GRAVADO (grupos
+        // com matchIds, sem group.matches embutido — round.matches é a fonte
+        // única). Chama a MESMA função canônica que o cliente (bracket-model.js,
+        // vendored → drawWindow). Sem isto o sorteio do SERVIDOR regravava cada
+        // jogo Rei/Rainha em dobro. Clona só rounds (payload tem sentinel
+        // FieldValue em nextDrawAt que não sobrevive a JSON) → não muta t em
+        // memória, que ainda é lido nas notificações abaixo.
+        if (drawWindow && typeof drawWindow._foldMonarchGroups === 'function' && Array.isArray(payload.rounds)) {
+          payload.rounds = JSON.parse(JSON.stringify(payload.rounds));
+          drawWindow._foldMonarchGroups(payload);
+        }
         await db.collection('tournaments').doc(tId).update(payload);
 
         console.log(`Auto-draw: round ${res.roundNumber} created with ${res.matchCount} match(es)` +
@@ -401,8 +412,17 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
   let nextMs = null;
   try { nextMs = drawWindow._nextOwedDrawMs(t, nowMs); } catch (e) { /* best-effort */ }
   const nextField = (typeof nextMs === 'number') ? nextMs : FieldValue.delete();
+  // v4.4.70 FONTE ÚNICA Rei/Rainha: fase posterior também pode ter grupos
+  // Rei/Rainha duplicados (round.matches + monarchGroups[i].matches). Normaliza
+  // o que vai ser gravado via a MESMA função canônica vendored. Clona phaseRounds
+  // (não muta t em memória, lido nas notificações abaixo).
+  let _phaseRoundsToSave = t.phaseRounds;
+  if (drawWindow && typeof drawWindow._foldMonarchGroups === 'function') {
+    _phaseRoundsToSave = JSON.parse(JSON.stringify(t.phaseRounds));
+    drawWindow._foldMonarchGroups({ phaseRounds: _phaseRoundsToSave });
+  }
   await db.collection('tournaments').doc(tId).update({
-    phaseRounds: t.phaseRounds,
+    phaseRounds: _phaseRoundsToSave,
     nextDrawAt: nextField,
     updatedAt: t.updatedAt,
   });
