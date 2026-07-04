@@ -1748,6 +1748,12 @@ function setupCreateTournamentModal() {
     // de fase (modelo sincrético). É a linha que contém #phase1-name.
     var p1n = document.getElementById('phase1-name');
     if (p1n && p1n.parentElement) p1n.parentElement.style.display = 'none';
+    // v4.4.6: esconde o "Tipo de Jogo" (Simples/Duplas) antigo — o format2 "Disputa" já
+    // faz isso, e só mostra o toggle onde o esporte permite singles (tênis/tênis de mesa).
+    // O hidden #tourn-team-size fica no DOM (só oculto); o format2 sincroniza o value.
+    var gtb = document.getElementById('game-type-buttons');
+    if (gtb) { var gg = gtb.closest ? gtb.closest('.form-group') : null; (gg || gtb).style.display = 'none'; }
+    var gtd = document.getElementById('game-type-desc'); if (gtd) gtd.style.display = 'none';
     // Injeta o mount 1× e inicia a config (default do esporte ou t.fmt2 do torneio em edição).
     if (document.getElementById('f2-config-mount')) return;
     var mount = document.createElement('div');

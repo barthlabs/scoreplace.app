@@ -17,9 +17,15 @@
 
   function _tid() { var h = (location.hash || '').replace(/^#/, '').split('/'); return h[1] || ''; }
   function _norm() { if (S) S.cfg = window.FORMAT2.normalize(S.cfg, S.sport); }
+  function _syncTeamSize() {
+    if (!S) return;
+    var ts = document.getElementById('tourn-team-size');
+    if (ts) ts.value = window.FORMAT2.teamSizeFor(S.cfg.disputa); // mantém o form (estimativa/categorias) coerente
+  }
   function _rerender() {
     if (!S) return;
     if (S.mode === 'form') {
+      _syncTeamSize();
       var el = document.getElementById('f2-config-mount');
       if (el) el.innerHTML = _bodyControls();
     } else {
@@ -139,8 +145,10 @@
 
     var e = cfg.eliminatoria;
     var elimForced = cfg.grupos > 1;
+    // Fase de grupos sempre tem eliminatória → sem toggle, vai direto aos controles.
+    // Pontos corridos (1 grupo) → toggle liga/desliga.
     var elimHead = elimForced
-      ? '<div style="font-size:0.82rem;color:#34d399;">✅ Eliminatória (obrigatória em fase de grupos)</div>'
+      ? ''
       : '<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" ' + (e.ativa ? 'checked' : '') + ' onchange="window._f2Elim(this.checked)"> <span style="font-size:0.85rem;">Tem eliminatória no fim</span></label>';
     var eb = '';
     if (e.ativa) {
@@ -188,6 +196,7 @@
     sport = sport || 'Beach Tennis';
     var cfg = (initialCfg && typeof initialCfg === 'object') ? window.FORMAT2.normalize(initialCfg, sport) : window.FORMAT2.defaultConfig(sport);
     S = { mode: 'form', mountEl: container, sport: sport, cfg: cfg, t: tournament || null };
+    _syncTeamSize();
     if (container) container.innerHTML = _bodyControls();
   };
   // Config atual (pro save do form). null se não montado em modo form.
