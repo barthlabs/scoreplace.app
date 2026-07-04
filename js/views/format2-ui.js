@@ -419,6 +419,15 @@
         for (var i = 0; i < e.linhas; i++) {
           eb += '<div style="margin-top:6px;"><input type="text" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da linha ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="width:100%;max-width:300px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;"></div>';
         }
+        // v4.4.73: Grande Final — só na SIMPLES com 2/4 linhas (na dupla-elim é sempre,
+        // não tem toggle). ON = campeões das linhas se cruzam numa grande final (após a
+        // 1ª linha). OFF = linhas independentes, cada uma com seu campeão.
+        if (e.linhas > 1) {
+          eb += '<div style="margin-top:14px;">' + _toggleRight('Grande Final', e.grandFinal !== false, 'window._f2GrandFinal(this.checked)') + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (e.grandFinal !== false
+              ? 'Os campeões das linhas se cruzam numa <b>grande final</b> (com grandes semifinais), renderizada logo após a 1ª linha. Desative para deixar as linhas <b>independentes</b> — cada uma com seu próprio campeão.'
+              : 'Linhas <b>independentes</b> — cada linha tem seu próprio campeão, sem grande final unindo-as. Ative para cruzá-las numa grande final.') + '</div>';
+        }
       }
       // v4.4.42: "Inscrições durante a fase" só existe na FASE INICIAL do torneio (onde há
       // inscrição). Com classificatória, ELA é a inicial e tem o bloco (via slot); a eliminatória
@@ -617,6 +626,7 @@
   // v4.4.33: toggle da fase classificatória. Desligar → eliminação direta (elim obrigatória).
   window._f2ClassifAtiva = function (checked) { if (!S) return; S.cfg.classifAtiva = !!checked; if (!checked) S.cfg.eliminatoria.ativa = true; _norm(); _rerender(); };
   window._f2Linhas = function (n) { S.cfg.eliminatoria.linhas = n; _norm(); _rerender(); };
+  window._f2GrandFinal = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinal = !!checked; _norm(); _rerender(); };
   // v4.4.58: Dupla Eliminatória (repescagem). ON força 1 linha (chave única) no normalize.
   window._f2ElimDupla = function (checked) { S.cfg.eliminatoria.dupla = !!checked; _norm(); _rerender(); };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };

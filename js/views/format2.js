@@ -54,6 +54,8 @@
         formacao: 'performance', // performance (1º+2º…) | equilibrio (1º+4º…) | sorteio; cabeças sempre semeadas
         qualifyAll: false,       // false = os X melhores (slider); true = TODOS avançam
         terceiro: true,
+        grandFinal: true,        // v4.4.73: grande final unindo as linhas. Só editável na SIMPLES
+                                 // com 2/4 linhas (desativar = linhas independentes). Dupla = sempre.
         lateEnrollment: 'closed' // inscrições durante a ELIMINATÓRIA: closed | standby | expand
       }
     }, sport);
@@ -121,6 +123,11 @@
     e.dupla = e.dupla === true;
     if (e.dupla) e.linhas = 1;
     if ([1, 2, 4].indexOf(e.linhas) === -1) e.linhas = 1;
+    // v4.4.73: grande final. Default ON. Dupla Eliminatória SEMPRE tem (inerente ao
+    // formato). Só a SIMPLES com 2/4 linhas pode desativar (→ linhas independentes,
+    // cada uma com seu campeão). 1 linha não tem conceito de grande final.
+    e.grandFinal = (e.grandFinal !== false);
+    if (e.dupla) e.grandFinal = true;
     if (!Array.isArray(e.nomes)) e.nomes = [];
     while (e.nomes.length < e.linhas) e.nomes.push('');
     e.nomes = e.nomes.slice(0, e.linhas);
@@ -215,7 +222,7 @@
         source: { type: 'enrollment' },
         fixedPairs: isDupla, pairingStrategy: 'top',
         mapping: _buildMapping(d0, e0.nomes, Math.max(e0.linhas, 2) * 8, e0.linhas),
-        grandFinal: elimDupla0 || e0.linhas > 1, thirdPlace: e0.terceiro, drawManual: false
+        grandFinal: elimDupla0 || (e0.linhas > 1 && e0.grandFinal !== false), thirdPlace: e0.terceiro, drawManual: false
       });
       return { topLevel: top, phases: [p0], cfg: cfg };
     }
@@ -321,7 +328,7 @@
           qualifyQuantity: qAll ? 'all' : 'top', qualifyTopN: topN, mapping: mapping
         },
         fixedPairs: elimFixedPairs, pairingStrategy: elimPairing,
-        mapping: mapping, grandFinal: elimDupla || nLines > 1, thirdPlace: e.terceiro,
+        mapping: mapping, grandFinal: elimDupla || (nLines > 1 && e.grandFinal !== false), thirdPlace: e.terceiro,
         lateEnrollment: e.lateEnrollment || 'closed', // inscrições durante a eliminatória
         drawManual: false
       });
