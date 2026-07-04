@@ -247,6 +247,16 @@
     var scoreInd = cfg._scoreBy === 'individual';
     var classif = '';
 
+    // v4.4.51: editando torneio cuja fase classificatória JÁ FOI SORTEADA → trava a config
+    // DELA (cinza, sem cliques). A eliminatória segue editável até avançar de fase. Em criação
+    // (S.t null) e antes do sorteio → tudo livre. "Sorteada" = há jogos da fase 0 (t.matches
+    // taggeado phaseIndex 0) OU rodadas nativas (t.rounds, Liga/Suíço classificatória).
+    var _p0Drawn = !!(S && S.t && (
+      (Array.isArray(S.t.matches) && S.t.matches.some(function (m) { return (m.phaseIndex || 0) === 0; })) ||
+      (Array.isArray(S.t.rounds) && S.t.rounds.length > 0)
+    ));
+    var _classifLocked = _p0Drawn && cfg.classifAtiva;
+
     // Disputa só aparece onde o esporte permite singles (tênis/tênis de mesa). Nos demais
     // (sempre duplas) não faz sentido mostrar nada — é óbvio.
     if (allowsS) {
@@ -394,11 +404,19 @@
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
     if (cfg.classifAtiva) classif += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
 
-    // Toggle da classificatória (sempre habilitado). Desligar → eliminação direta.
-    var classifToggle = '<label class="toggle-switch" style="cursor:pointer;">' +
-      '<input type="checkbox"' + (cfg.classifAtiva ? ' checked' : '') + ' onchange="window._f2ClassifAtiva(this.checked)">' +
+    // Toggle da classificatória (sempre habilitado, MENOS quando já sorteada → travado).
+    // Desligar → eliminação direta.
+    var classifToggle = '<label class="toggle-switch" style="cursor:' + (_classifLocked ? 'not-allowed' : 'pointer') + ';' + (_classifLocked ? 'opacity:0.5;' : '') + '">' +
+      '<input type="checkbox"' + (cfg.classifAtiva ? ' checked' : '') + (_classifLocked ? ' disabled' : '') + ' onchange="window._f2ClassifAtiva(this.checked)">' +
       '<span class="toggle-slider"></span></label>';
     var classifInner = cfg.classifAtiva ? classif : '';
+    // v4.4.51: fase classificatória já sorteada → conteúdo cinza e sem interação (a config
+    // dela não muda mais). O #f2-classif-extra (Datas/Inscrições) fica dentro do wrapper, então
+    // também trava — coerente com "as opções da fase classificatória ficam cinzas".
+    if (_classifLocked) {
+      classifInner = '<div style="font-size:0.76rem;color:#c7d2fe;background:rgba(129,140,248,0.12);border:1px solid rgba(129,140,248,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">🔒 <b>Fase classificatória já sorteada</b> — a configuração não pode mais ser alterada. Você ainda pode ajustar a <b>fase eliminatória</b> antes de avançar de fase.</div>' +
+        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + classif + '</div>';
+    }
 
     var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classifInner, classifToggle) +
       _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, elimToggle);
