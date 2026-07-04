@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.4.62-beta';
+window.SCOREPLACE_VERSION = '4.4.63-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3230,7 +3230,7 @@ window._fbAction = function (key, field, val, noRerender) {
 window._fbSortPill = function (key, dim) {
     var st = window._filterBarState[key] || (window._filterBarState[key] = {});
     var cur = st.sort || 'order-asc';
-    var curDim = cur.indexOf('name') === 0 ? 'name' : 'order';
+    var curDim = cur.indexOf('name') === 0 ? 'name' : (cur.indexOf('active') === 0 ? 'active' : 'order');
     var curDir = cur.indexOf('-desc') >= 0 ? 'desc' : 'asc';
     var nd = (curDim === dim) ? (curDir === 'asc' ? 'desc' : 'asc') : (st[dim + 'Dir'] || 'asc');
     st[dim + 'Dir'] = nd;
@@ -3258,7 +3258,7 @@ window._fbInner = function (key) {
     var BLUE = { bg: 'rgba(96,165,250,0.22)', bd: 'rgba(96,165,250,0.7)', fg: '#93c5fd' };
     var PINK = { bg: 'rgba(244,114,182,0.22)', bd: 'rgba(244,114,182,0.7)', fg: '#f9a8d4' };
     // SORT (Opção 1): A-Z e 🕒, cada um uma pílula; ativo indigo + seta da direção.
-    var curDim = sort.indexOf('name') === 0 ? 'name' : 'order';
+    var curDim = sort.indexOf('name') === 0 ? 'name' : (sort.indexOf('active') === 0 ? 'active' : 'order');
     var curDir = sort.indexOf('-desc') >= 0 ? 'desc' : 'asc';
     if (!st.nameDir) st.nameDir = (curDim === 'name') ? curDir : 'asc';
     if (!st.orderDir) st.orderDir = (curDim === 'order') ? curDir : 'asc';
@@ -3270,6 +3270,16 @@ window._fbInner = function (key) {
         'Ordem alfabética ' + (nameDir === 'desc' ? '(Z→A)' : '(A→Z)') + ' — clique p/ inverter', 'min-width:auto;');
     var clockPill = pill(orderActive, IND, '🕒' + ar(orderDir), "window._fbSortPill('" + key + "','order')",
         'Ordem de inscrição ' + (orderDir === 'desc' ? '(mais recentes 1º)' : '(mais antigos 1º)') + ' — clique p/ inverter', 'min-width:auto;');
+    // SORT ATIVO/INATIVO: só quando a regra permite desativação pelo participante (opts.activeSort).
+    // ↑ = ativos primeiro; ↓ = inativos primeiro. Lê data-part-inactive nos cards (_partApplyFilter).
+    var activePill = '';
+    if (opts.activeSort) {
+        var activeActive = curDim === 'active';
+        if (!st.activeDir) st.activeDir = activeActive ? curDir : 'asc';
+        var activeDir = activeActive ? curDir : st.activeDir;
+        activePill = pill(activeActive, IND, '✓' + ar(activeDir), "window._fbSortPill('" + key + "','active')",
+            (activeDir === 'desc' ? 'Inativos primeiro' : 'Ativos primeiro') + ' — clique p/ inverter', 'min-width:auto;');
+    }
     // GÊNERO cíclico: ⚥ ambos(verde) → ♂ masc(azul) → ♀ fem(rosa) → 🚫 sem gênero(vermelho)
     var gOrder = ['all', 'Masc', 'Fem', 'none'];
     var gMap = {
@@ -3337,7 +3347,7 @@ window._fbInner = function (key) {
     // as pílulas na mesma linha.
     return hidden
         + '<div style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;">'
-        + azPill + clockPill
+        + azPill + clockPill + activePill
         + '<span style="flex:0 0 auto;width:1px;height:22px;background:rgba(255,255,255,0.12);margin:0 1px;"></span>'
         + (modeT ? '' : genderBtn) + thirdBtn + searchInp
         + '</div>';
@@ -3387,7 +3397,10 @@ window._inscritosBar = function (t, show) {
         stateKey: 'inscritos', sort: 'name-asc', sticky: true,
         searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
         onChange: 'window._partApplyFilter()',
-        skillCategories: ((t && t.skillCategories) || [])
+        skillCategories: ((t && t.skillCategories) || []),
+        // v4.4.63: sort ativos/inativos só quando a regra permite o participante se desativar
+        // (allowSelfDeactivation, conceito de Liga/Pontos Corridos). Fora disso todos são ativos.
+        activeSort: !!(t && t.allowSelfDeactivation !== false && window._isLigaFormat && window._isLigaFormat(t))
     });
     return bar + '<div id="part-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum inscrito encontrado.</div>';
 };

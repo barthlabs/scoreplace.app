@@ -1015,6 +1015,14 @@ window._partApplyFilter = function () {
       var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
       return sort === 'name-desc' ? -r : r;
     }
+    // v4.4.63: sort ATIVOS/INATIVOS. asc (↑) = ativos primeiro; desc (↓) = inativos primeiro.
+    // Desempate por nome. Lê data-part-inactive (1=inativo).
+    if (sort === 'active-asc' || sort === 'active-desc') {
+      var ia = a.getAttribute('data-part-inactive') === '1' ? 1 : 0;
+      var ib = b.getAttribute('data-part-inactive') === '1' ? 1 : 0;
+      if (ia !== ib) return sort === 'active-desc' ? (ib - ia) : (ia - ib);
+      return (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
+    }
     var oa = parseInt(a.getAttribute('data-part-order') || '0', 10), ob = parseInt(b.getAttribute('data-part-order') || '0', 10);
     return sort === 'order-desc' ? (ob - oa) : (oa - ob);
   };
