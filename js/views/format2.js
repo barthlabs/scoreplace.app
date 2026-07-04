@@ -69,7 +69,9 @@
       out.parceria = null;
     } else {
       if (['fixa', 'rei_rainha', 'sorteio_rodada'].indexOf(out.parceria) === -1) out.parceria = 'fixa';
-      // (sem forçar 'fixa' em 2+ grupos — controles ficam visíveis; regras a desenhar)
+      // Rei/Rainha (grupos de 4 rotativos) só faz sentido com 1 grupo. 2+ grupos ⇒ dupla fixa
+      // (montadas ou sorteadas). Pedido do dono: "rei/rainha só aparece se for 1 grupo".
+      if (!umGrupo && out.parceria !== 'fixa') out.parceria = 'fixa';
     }
     if (out.formacaoDupla !== 'manual' && out.formacaoDupla !== 'sorteio') out.formacaoDupla = 'sorteio';
 
@@ -115,8 +117,10 @@
     var parts = [];
     parts.push(cfg.disputa === 'individual' ? 'Individual' : 'Duplas');
     parts.push(cfg.grupos === 1 ? 'Pontos Corridos' : (cfg.grupos + ' grupos'));
-    if (cfg.disputa === 'dupla' && cfg.grupos === 1) {
-      parts.push({ fixa: 'dupla fixa', rei_rainha: 'Rei/Rainha', sorteio_rodada: 'sorteio/rodada' }[cfg.parceria] || 'dupla fixa');
+    if (cfg.disputa === 'dupla') {
+      if (cfg.parceria === 'rei_rainha') parts.push('Rei/Rainha');
+      else if (cfg.parceria === 'sorteio_rodada') parts.push('sorteio/rodada');
+      else parts.push(cfg.formacaoDupla === 'manual' ? 'duplas montadas' : 'duplas sorteadas');
     }
     if (cfg.grupos === 1) {
       parts.push(cfg.rodadas.modo === 'fixo' ? (cfg.rodadas.n + ' rodadas') : ('todos ' + (cfg.rodadas.turnos === 'ida_volta' ? 'ida/volta' : 'ida')));

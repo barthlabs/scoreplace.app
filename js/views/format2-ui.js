@@ -151,10 +151,14 @@
     //  montados — fica nos toggles detalhados da seção "Formação de Duplas" abaixo do form.)
     if (isDupla) {
       var pr = cfg.parceria;
-      var prBtns = _pill(pr === 'fixa', 'window._f2Parceria(\'fixa\')', '🔒 Dupla fixa') +
-        _pill(pr === 'rei_rainha', 'window._f2Parceria(\'rei_rainha\')', '👑 Rei/Rainha') +
-        _pill(pr === 'sorteio_rodada', 'window._f2Parceria(\'sorteio_rodada\')', '🎲 Sorteio a cada rodada');
-      classif += _sec('Parceria', prBtns);
+      // v4.4.19: "Formação das equipes" — como as duplas se formam. Montadas (organizador/
+      // jogadores montam) × Sorteio (sorteadas), ambas FIXAS. Rei/Rainha (rotativo) só com 1 grupo.
+      var montadas = pr === 'fixa' && cfg.formacaoDupla === 'manual';
+      var sorteadas = pr === 'fixa' && cfg.formacaoDupla !== 'manual';
+      var fBtns = _pill(montadas, 'window._f2TeamForm(\'montadas\')', '🤝 Montadas') +
+        _pill(sorteadas, 'window._f2TeamForm(\'sorteio\')', '🎲 Sorteio');
+      if (um) fBtns += _pill(pr === 'rei_rainha', 'window._f2TeamForm(\'rei_rainha\')', '👑 Rei/Rainha');
+      classif += _sec('Formação das equipes', fBtns);
     }
 
     if (!rotativo) {
@@ -237,6 +241,15 @@
   };
   window._f2Parceria = function (v) { S.cfg.parceria = v; _norm(); _rerender(); };
   window._f2Form = function (v) { S.cfg.formacaoDupla = v; _norm(); _rerender(); };
+  // v4.4.19: "Formação das equipes" — 1 controle: Montadas (fixa+manual) / Sorteio
+  // (fixa+sorteio) / Rei/Rainha (rotativo, só 1 grupo).
+  window._f2TeamForm = function (v) {
+    if (!S) return;
+    if (v === 'montadas') { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'manual'; }
+    else if (v === 'sorteio') { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'sorteio'; }
+    else if (v === 'rei_rainha') { S.cfg.parceria = 'rei_rainha'; }
+    _norm(); _rerender();
+  };
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
   window._f2Turnos = function (v) { S.cfg.rodadas.turnos = v; _norm(); _rerender(); };
   window._f2Rn = function (v) { S.cfg.rodadas.n = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
