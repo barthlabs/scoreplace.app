@@ -69,7 +69,7 @@
       out.parceria = null;
     } else {
       if (['fixa', 'rei_rainha', 'sorteio_rodada'].indexOf(out.parceria) === -1) out.parceria = 'fixa';
-      if (!umGrupo && out.parceria !== 'fixa') out.parceria = 'fixa'; // 2+ grupos ⇒ só dupla fixa
+      // (sem forçar 'fixa' em 2+ grupos — controles ficam visíveis; regras a desenhar)
     }
     if (out.formacaoDupla !== 'manual' && out.formacaoDupla !== 'sorteio') out.formacaoDupla = 'sorteio';
 
@@ -83,14 +83,13 @@
     out.rodadas = out.rodadas || {};
     var rotativo = isDupla && (out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada');
     if (rotativo) {
-      out.rodadas.modo = 'fixo'; out.rodadas.turnos = 'ida';
-    } else if (isDupla) {
-      out.rodadas.modo = 'todos'; // dupla fixa = round-robin
-      out.rodadas.turnos = (umGrupo && out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
-    } else { // singles
-      if (!umGrupo) out.rodadas.modo = 'todos';
+      out.rodadas.modo = 'fixo'; out.rodadas.turnos = 'ida'; // rotativo = por-rodada
+    } else {
+      // dupla fixa OU singles: round-robin ('todos') ou nº fixo (só singles).
+      if (isDupla) out.rodadas.modo = 'todos';
       else if (out.rodadas.modo !== 'todos' && out.rodadas.modo !== 'fixo') out.rodadas.modo = 'todos';
-      out.rodadas.turnos = (umGrupo && out.rodadas.modo === 'todos' && out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
+      // ida-e-volta vale em qualquer round-robin (o motor dobra o RR — grupos ou tabela única).
+      out.rodadas.turnos = (out.rodadas.modo === 'todos' && out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
     }
     out.rodadas.n = Math.max(1, parseInt(out.rodadas.n, 10) || 1);
 

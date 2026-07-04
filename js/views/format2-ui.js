@@ -142,17 +142,15 @@
 
     // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
     //  montados — fica nos toggles detalhados da seção "Formação de Duplas" abaixo do form.)
-    if (isDupla && um) {
+    if (isDupla) {
       var pr = cfg.parceria;
       var prBtns = _pill(pr === 'fixa', 'window._f2Parceria(\'fixa\')', '🔒 Dupla fixa') +
         _pill(pr === 'rei_rainha', 'window._f2Parceria(\'rei_rainha\')', '👑 Rei/Rainha') +
         _pill(pr === 'sorteio_rodada', 'window._f2Parceria(\'sorteio_rodada\')', '🎲 Sorteio a cada rodada');
       h += _sec('Parceria', prBtns);
-    } else if (isDupla && !um) {
-      h += _sec('Parceria', '<div style="font-size:0.85rem;color:#34d399;font-weight:600;">🔒 Duplas fixas</div>');
     }
 
-    if (um && !rotativo) {
+    if (!rotativo) {
       var modo = cfg.rodadas.modo;
       var rBtns = _pill(modo === 'todos', 'window._f2Modo(\'todos\')', '🔄 Todos contra todos');
       if (!isDupla) rBtns += _pill(modo === 'fixo', 'window._f2Modo(\'fixo\')', '#️⃣ Nº fixo de rodadas');
@@ -163,7 +161,7 @@
         inner += '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Com rodadas insuficientes, os confrontos usam clusters (equilíbrio) e sit-out balanceado.</div>';
       }
       h += _sec('Rodadas', inner);
-    } else if (um && rotativo) {
+    } else {
       h += _sec('Rodadas', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Sorteio a cada rodada — parceiro' + (cfg.parceria === 'rei_rainha' ? ' (grupos de 4)' : '') + ' e adversário sorteados; pontuação individual; sit-out balanceado.</div>');
     }
 
