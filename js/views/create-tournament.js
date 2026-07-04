@@ -992,6 +992,8 @@ function setupCreateTournamentModal() {
         tb.parentNode.insertBefore(f1, tb.nextSibling);
         f1.parentNode.insertBefore(ps, f1.nextSibling);
       }
+      // v4.4.15: CRITÉRIOS DE DESEMPATE = a ÚLTIMA coisa da edição (pedido do dono).
+      if (tb && tb.parentNode) tb.parentNode.appendChild(tb);
     })();
 
     // Render the centralized back header with action buttons (Voltar + Carregar + Salvar Template + Descartar + Salvar)

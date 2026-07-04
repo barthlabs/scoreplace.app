@@ -118,6 +118,13 @@
     return nums + _estimateLine(cfg);
   }
 
+  // Bloco de fase (Classificatória / Eliminatória) com cabeçalho destacado.
+  function _phaseBlock(title, color, inner) {
+    return '<div style="border:1px solid ' + color + '55;border-radius:14px;padding:14px 14px 8px;margin-bottom:16px;background:' + color + '0d;">' +
+      '<div style="display:inline-block;font-size:0.82rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;color:' + color + ';background:' + color + '22;padding:7px 14px;border-radius:9px;margin-bottom:16px;">' + title + '</div>' +
+      inner + '</div>';
+  }
+
   // ── Controles do configurador (compartilhados form+page) ──
   function _bodyControls() {
     var cfg = S.cfg, sport = S.sport;
@@ -126,15 +133,15 @@
     var um = cfg.grupos === 1;
     var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada');
     var scoreInd = cfg._scoreBy === 'individual';
-    var h = '';
+    var classif = '';
 
     // Disputa só aparece onde o esporte permite singles (tênis/tênis de mesa). Nos demais
     // (sempre duplas) não faz sentido mostrar nada — é óbvio.
     if (allowsS) {
-      h += _sec('Disputa', _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') + _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas'));
+      classif += _sec('Disputa', _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') + _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas'));
     }
 
-    h += _sec('Estrutura — nº de grupos',
+    classif += _sec('Estrutura — nº de grupos',
       '<div style="display:flex;align-items:center;gap:12px;">' +
       '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="var e=document.getElementById(\'f2-grupos-val\');if(e)e.textContent=this.value" onchange="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
       '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#c7d2fe;">' + cfg.grupos + '</span></div>' +
@@ -147,7 +154,7 @@
       var prBtns = _pill(pr === 'fixa', 'window._f2Parceria(\'fixa\')', '🔒 Dupla fixa') +
         _pill(pr === 'rei_rainha', 'window._f2Parceria(\'rei_rainha\')', '👑 Rei/Rainha') +
         _pill(pr === 'sorteio_rodada', 'window._f2Parceria(\'sorteio_rodada\')', '🎲 Sorteio a cada rodada');
-      h += _sec('Parceria', prBtns);
+      classif += _sec('Parceria', prBtns);
     }
 
     if (!rotativo) {
@@ -160,13 +167,13 @@
       } else {
         inner += '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Com rodadas insuficientes, os confrontos usam clusters (equilíbrio) e sit-out balanceado.</div>';
       }
-      h += _sec('Rodadas', inner);
+      classif += _sec('Rodadas', inner);
     } else {
-      h += _sec('Rodadas', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Sorteio a cada rodada — parceiro' + (cfg.parceria === 'rei_rainha' ? ' (grupos de 4)' : '') + ' e adversário sorteados; pontuação individual; sit-out balanceado.</div>');
+      classif += _sec('Rodadas', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Sorteio a cada rodada — parceiro' + (cfg.parceria === 'rei_rainha' ? ' (grupos de 4)' : '') + ' e adversário sorteados; pontuação individual; sit-out balanceado.</div>');
     }
 
     var classLabel = um ? 'Nº de classificados (total) para a eliminatória' : 'Nº de classificados por grupo';
-    h += _sec('Classificação', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;flex-wrap:wrap;">' + classLabel + ' ' + _num(cfg.classificados, 1, 64, 'window._f2Class(this.value)') + '</div>');
+    classif += _sec('Classificação', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;flex-wrap:wrap;">' + classLabel + ' ' + _num(cfg.classificados, 1, 64, 'window._f2Class(this.value)') + '</div>');
 
     var e = cfg.eliminatoria;
     var elimForced = cfg.grupos > 1;
@@ -191,9 +198,11 @@
       }
       // 3º lugar SEMPRE existe (project_third_place_always) — sem toggle.
     }
-    h += _sec('Eliminatória', elimHead + eb);
+    var elimInner = (elimHead + eb) || '<div style="font-size:0.8rem;color:var(--text-muted);">—</div>';
 
-    h += '<div style="margin-top:4px;padding:11px 13px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);font-size:0.82rem;color:#a5b4fc;">📋 ' + _safe(window.FORMAT2.summary(cfg)) + '</div>';
+    var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classif) +
+      _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner) +
+      '<div style="margin-top:2px;padding:11px 13px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);font-size:0.82rem;color:#a5b4fc;">📋 ' + _safe(window.FORMAT2.summary(cfg)) + '</div>';
     return h;
   }
 
