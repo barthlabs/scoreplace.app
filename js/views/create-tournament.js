@@ -289,7 +289,7 @@ function setupCreateTournamentModal() {
                    A Fase 1 é o formato escolhido aqui; fases extras vêm em
                    "+ Adicionar fase" logo abaixo do box. -->
               <div id="fase1-box" style="border:1px solid rgba(129,140,248,0.35); border-radius:14px; padding:1rem; margin-bottom:1rem; background:rgba(99,102,241,0.05);">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <div id="fase1-header-row" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
                   <button type="button" id="fase1-collapse-btn" onclick="window._toggleFase1Collapse()" title="Colapsar/expandir fase" style="flex-shrink:0;border:none;background:rgba(99,102,241,0.2);color:#a5b4fc;width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:700;line-height:1;">▾</button>
                   <span style="flex-shrink:0;font-size:0.7rem;font-weight:800;color:#a5b4fc;background:rgba(99,102,241,0.2);padding:4px 10px;border-radius:7px;letter-spacing:0.5px;">FASE 1</span>
                   <input type="text" id="phase1-name" placeholder="Nome da fase (opcional)" oninput="window._phase1Name=this.value" style="flex:1;min-width:0;padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;">
@@ -1734,11 +1734,12 @@ function setupCreateTournamentModal() {
     var box = document.getElementById('fase1-box');
     if (!box || !window.FORMAT2 || typeof window._f2MountInForm !== 'function') return;
     // Esconde os controles de estrutura que o format2 substitui.
-    ['formato-buttons', 'formato-desc', 'dupla-elim-row', 'suico-fields', 'liga-fields',
+    // querySelectorAll (não getElementById) — cobre instância duplicada do form no DOM.
+    ['fase1-header-row', 'formato-buttons', 'formato-desc', 'dupla-elim-row', 'suico-fields', 'liga-fields',
      'liga-draw-schedule', 'suico-draw-schedule-fields', 'elim-settings', 'grupos-fields',
      'rei-rainha-fields', 'round-robin-fields', 'phases-list', 'phases-section',
-     'draw-mode-buttons', 'draw-mode-desc'
-    ].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+     'draw-mode-buttons', 'draw-mode-desc', 'game-type-desc'
+    ].forEach(function (id) { Array.prototype.forEach.call(document.querySelectorAll('#' + id), function (el) { el.style.setProperty('display', 'none', 'important'); }); });
     // v4.4.9: os toggles de FORMAÇÃO DE DUPLAS ficam VISÍVEIS (o dono quer os detalhados):
     // "Times Sorteados Separados dos Montados" (#mixed-pairing-container) vai LOGO ABAIXO
     // de "Participantes podem formar suas duplas" (#manual-pairing-container). A visibilidade
@@ -1753,10 +1754,7 @@ function setupCreateTournamentModal() {
     if (fb) { var fg = fb.closest ? fb.closest('.form-group') : null; if (fg) { var l1 = fg.querySelector('label.form-label'); if (l1) l1.style.display = 'none'; } }
     var dmb = document.getElementById('draw-mode-buttons');
     if (dmb && dmb.parentElement) { var l2 = dmb.parentElement.querySelector('label.form-label'); if (l2) l2.style.display = 'none'; }
-    // v4.4.4: esconde o cabeçalho "FASE 1" + campo "Nome da fase" — não há mais conceito
-    // de fase (modelo sincrético). É a linha que contém #phase1-name.
-    var p1n = document.getElementById('phase1-name');
-    if (p1n && p1n.parentElement) p1n.parentElement.style.display = 'none';
+    // (cabeçalho "FASE 1" já escondido acima via #fase1-header-row — sincretismo, sem fases.)
     // v4.4.6: esconde o "Tipo de Jogo" (Simples/Duplas) antigo — o format2 "Disputa" já
     // faz isso, e só mostra o toggle onde o esporte permite singles (tênis/tênis de mesa).
     // O hidden #tourn-team-size fica no DOM (só oculto); o format2 sincroniza o value.
