@@ -2422,16 +2422,17 @@ function renderTournaments(container, tournamentId = null) {
                 if (!_ligaEvent && _tEndTs != null && _tEndTs > _now && (_tEndTs - _now) <= _H48) {
                   _ligaEvent = { ts: _tEndTs, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
                 }
-                // 4. Começou, sem sorteio agendado e fora das 48h finais → TEMPO DECORRIDO
-                // (conta pra cima desde o início; usa o mesmo tick via data-elapsed-since).
-                if (!_ligaEvent && sorteioRealizado && typeof window._ligaElapsedSinceTs === 'function') {
-                  var _elSince = window._ligaElapsedSinceTs(t);
+                // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
+                // (tempo decorrido da RODADA ATUAL, conta pra cima; tick via data-elapsed-since).
+                if (!_ligaEvent && sorteioRealizado) {
+                  var _elSince = (typeof window._ligaCurrentRoundStartTs === 'function' && window._ligaCurrentRoundStartTs(t))
+                    || (typeof window._ligaElapsedSinceTs === 'function' && window._ligaElapsedSinceTs(t));
                   if (_elSince && _elSince <= _now) {
                     var _elText = window._formatCountdown ? window._formatCountdown(_now - _elSince) : '';
                     var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
                     return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' +
-                      '<span style="font-size:1.3rem;">⏱️</span>' +
-                      '<span style="font-size:0.85rem;font-weight:700;color:' + _rbEl.fg + ' !important;">Tempo decorrido</span>' +
+                      '<span style="font-size:1.3rem;">▶️</span>' +
+                      '<span style="font-size:0.85rem;font-weight:700;color:' + _rbEl.fg + ' !important;">Rodada em andamento</span>' +
                       '<span data-elapsed-since="' + _elSince + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _rbEl.fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _elText + '</span>' +
                     '</div>';
                   }

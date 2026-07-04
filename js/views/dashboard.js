@@ -831,15 +831,17 @@ function renderDashboard(container) {
                 var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
                 var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
                 var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-                // 4. Começou, sem sorteio agendado e fora das 48h finais → TEMPO DECORRIDO.
-                if (!_ligaEv && sorteioRealizado && typeof window._ligaElapsedSinceTs === 'function') {
-                  var _elSinceD = window._ligaElapsedSinceTs(t);
+                // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
+                // (tempo decorrido da RODADA ATUAL, conta pra cima; tick via data-elapsed-since).
+                if (!_ligaEv && sorteioRealizado) {
+                  var _elSinceD = (typeof window._ligaCurrentRoundStartTs === 'function' && window._ligaCurrentRoundStartTs(t))
+                    || (typeof window._ligaElapsedSinceTs === 'function' && window._ligaElapsedSinceTs(t));
                   if (_elSinceD && _elSinceD <= _now) {
                     var _elTextD = window._formatCountdown ? window._formatCountdown(_now - _elSinceD) : '';
                     return _toggleRowDash +
                       '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' +
-                      '<span style="font-size:1.3rem;">⏱️</span>' +
-                      '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">Tempo decorrido</span>' +
+                      '<span style="font-size:1.3rem;">▶️</span>' +
+                      '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">Rodada em andamento</span>' +
                       '<span data-elapsed-since="' + _elSinceD + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _elTextD + '</span>' +
                     '</div>';
                   }
