@@ -48,13 +48,24 @@ window._addPlaceholdersCore = function (id, qtd, onDone) {
         dest = 'inscritos';
     }
     if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
+    // v4.4.72: onDone SÓ após o save resolver (ou falhar) — mantém o botão em
+    // "Adicionando…" (cinza) até o commit REAL + toast, dando o retorno visual do
+    // comando commitado. Antes onDone era síncrono (fora do .then) e revertia o
+    // botão no mesmo tick do clique, antes de pintar o cinza → parecia que nada
+    // acontecia. Espelha o fluxo do participante (_doAddParticipant no .then).
+    var _finishAdd = function () {
+        if (typeof onDone === 'function') { onDone(); return; }
+        var container = document.getElementById('view-container');
+        if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); }
+    };
     if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
         window.FirestoreDB.saveTournament(t).then(function () {
             showNotification('Placeholders adicionados', qtd + ' placeholder(s) em ' + dest + '.', 'success');
-        }).catch(function (err) { if (window._error) window._error('Erro ao salvar placeholders:', err); showNotification('Erro', 'Não foi possível salvar.', 'error'); });
+            _finishAdd();
+        }).catch(function (err) { if (window._error) window._error('Erro ao salvar placeholders:', err); showNotification('Erro', 'Não foi possível salvar.', 'error'); _finishAdd(); });
+    } else {
+        _finishAdd();
     }
-    if (typeof onDone === 'function') { onDone(); }
-    else { var container = document.getElementById('view-container'); if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); } }
 };
 
 // v2.7.32: handlers de ação do inscrito (remover/split) definidos no NÍVEL DO MÓDULO
