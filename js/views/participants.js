@@ -977,6 +977,9 @@ window._partApplyFilter = function () {
   var sort = (document.getElementById('part-sort') || {}).value || 'name-asc';
   var gf = (document.getElementById('part-gender') || {}).value || 'all';
   var sk = (document.getElementById('part-skill') || {}).value || 'all';
+  // v4.4.65: FILTRO ativos/inativos (bola verde/vermelha). all=todos, active=só ativos,
+  // inactive=só inativos. Lê data-part-inactive (1=inativo).
+  var af = (document.getElementById('part-active') || {}).value || 'all';
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-part-card]'));
   if (!cards.length) return;
   var shown = 0;
@@ -989,10 +992,12 @@ window._partApplyFilter = function () {
     // (data-part-name casa qualquer um dos nomes). Pra solo, mantém o casamento exato,
     // tolerando também valor multi (g/s separados por vírgula) por segurança.
     var isMulti = c.getAttribute('data-part-multi') === '1';
+    var _inact = c.getAttribute('data-part-inactive') === '1';
     var okSearch = !q || nm.indexOf(q) !== -1;
     var okGender = isMulti || gf === 'all' || g === gf || g.split(',').indexOf(gf) !== -1;
     var okSkill = isMulti || sk === 'all' || s === sk || s.split(',').indexOf(sk) !== -1;
-    var ok = okSearch && okGender && okSkill;
+    var okActive = af === 'all' || (af === 'active' ? !_inact : _inact);
+    var ok = okSearch && okGender && okSkill && okActive;
     c.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
@@ -1015,14 +1020,7 @@ window._partApplyFilter = function () {
       var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
       return sort === 'name-desc' ? -r : r;
     }
-    // v4.4.63: sort ATIVOS/INATIVOS. asc (↑) = ativos primeiro; desc (↓) = inativos primeiro.
-    // Desempate por nome. Lê data-part-inactive (1=inativo).
-    if (sort === 'active-asc' || sort === 'active-desc') {
-      var ia = a.getAttribute('data-part-inactive') === '1' ? 1 : 0;
-      var ib = b.getAttribute('data-part-inactive') === '1' ? 1 : 0;
-      if (ia !== ib) return sort === 'active-desc' ? (ib - ia) : (ia - ib);
-      return (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
-    }
+    // v4.4.65: ativo/inativo virou FILTRO (acima), não sort — sort era imperceptível.
     var oa = parseInt(a.getAttribute('data-part-order') || '0', 10), ob = parseInt(b.getAttribute('data-part-order') || '0', 10);
     return sort === 'order-desc' ? (ob - oa) : (oa - ob);
   };

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.4.64-beta';
+window.SCOREPLACE_VERSION = '4.4.65-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -3216,7 +3216,7 @@ window._fbAction = function (key, field, val, noRerender) {
     var st = window._filterBarState[key] || (window._filterBarState[key] = {});
     st[field] = val;
     var opts = window._filterBarCfg[key] || {};
-    var idMap = { sort: opts.sortId, gender: opts.genderId, skill: opts.skillId, sport: opts.sportId, search: opts.searchId };
+    var idMap = { sort: opts.sortId, gender: opts.genderId, skill: opts.skillId, sport: opts.sportId, search: opts.searchId, active: opts.activeId };
     var el = idMap[field] && document.getElementById(idMap[field]);
     if (el && el.value !== val) el.value = val;
     if (!noRerender) {
@@ -3270,17 +3270,25 @@ window._fbInner = function (key) {
         'Ordem alfabética ' + (nameDir === 'desc' ? '(Z→A)' : '(A→Z)') + ' — clique p/ inverter', 'min-width:auto;');
     var clockPill = pill(orderActive, IND, '🕒' + ar(orderDir), "window._fbSortPill('" + key + "','order')",
         'Ordem de inscrição ' + (orderDir === 'desc' ? '(mais recentes 1º)' : '(mais antigos 1º)') + ' — clique p/ inverter', 'min-width:auto;');
-    // SORT ATIVO/INATIVO: só quando a regra permite desativação pelo participante (opts.activeSort).
-    // BOLA VERDE/VERMELHA (pedido do dono): 🟢 = ativos em cima; 🔴 = inativos em cima. Clique
-    // alterna. Lê data-part-inactive nos cards (_partApplyFilter). asc=ativos, desc=inativos.
+    // FILTRO ATIVO/INATIVO (bola verde/vermelha) — só quando a regra permite o participante se
+    // desativar (opts.activeSort). Cíclico como o gênero: ⚪ Todos → 🟢 Só ativos → 🔴 Só inativos.
+    // FILTRA a lista de verdade (encolhe) — o sort era imperceptível: "ativos em cima" não mudava
+    // nada porque a lista já é quase toda de ativos. Filtro por data-part-inactive (#part-active).
     var activePill = '';
+    var aCur = 'all';
     if (opts.activeSort) {
-        var activeActive = curDim === 'active';
-        if (!st.activeDir) st.activeDir = activeActive ? curDir : 'asc';
-        var activeDir = activeActive ? curDir : st.activeDir;
-        var _ball = (activeDir === 'desc') ? '🔴' : '🟢';
-        activePill = pill(activeActive, IND, _ball, "window._fbSortPill('" + key + "','active')",
-            'Ordenar por atividade — ' + (activeDir === 'desc' ? 'inativos em cima' : 'ativos em cima') + ' (clique p/ inverter)', 'font-size:0.9rem;min-width:34px;');
+        var aOrder = ['all', 'active', 'inactive'];
+        aCur = (aOrder.indexOf(st.active) >= 0) ? st.active : 'all';
+        st.active = aCur;
+        var aNext = aOrder[(aOrder.indexOf(aCur) + 1) % aOrder.length];
+        var aMap = {
+            all:      { sym: '⚪', t: 'Todos',       c: { bg: 'rgba(255,255,255,0.05)', bd: 'rgba(255,255,255,0.14)', fg: 'var(--text-muted)' } },
+            active:   { sym: '🟢', t: 'Só ativos',   c: GREEN },
+            inactive: { sym: '🔴', t: 'Só inativos', c: RED }
+        };
+        var aCfg = aMap[aCur];
+        activePill = pill(aCur !== 'all', aCfg.c, aCfg.sym, "window._fbAction('" + key + "','active','" + aNext + "')",
+            'Atividade: ' + aCfg.t + ' — clique p/ alternar', 'font-size:0.9rem;min-width:34px;');
     }
     // GÊNERO cíclico: ⚥ ambos(verde) → ♂ masc(azul) → ♀ fem(rosa) → 🚫 sem gênero(vermelho)
     var gOrder = ['all', 'Masc', 'Fem', 'none'];
@@ -3334,6 +3342,7 @@ window._fbInner = function (key) {
     // (pedido do dono). Sem botão e sem input oculto de gênero nesse modo.
     if (opts.genderId && !modeT) hidden += '<input type="hidden" id="' + opts.genderId + '" value="' + gCur + '">';
     if (opts.skillId) hidden += '<input type="hidden" id="' + opts.skillId + '" value="' + sCur + '">';
+    if (opts.activeId) hidden += '<input type="hidden" id="' + opts.activeId + '" value="' + aCur + '">';
     if (opts.sportId) hidden += '<input type="hidden" id="' + opts.sportId + '" value="' + esc(spCur) + '">';
     var searchInp = '';
     if (opts.searchId) {
@@ -3400,8 +3409,9 @@ window._inscritosBar = function (t, show) {
         searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
         onChange: 'window._partApplyFilter()',
         skillCategories: ((t && t.skillCategories) || []),
-        // v4.4.63: sort ativos/inativos só quando a regra permite o participante se desativar
-        // (allowSelfDeactivation, conceito de Liga/Pontos Corridos). Fora disso todos são ativos.
+        // v4.4.63/65: FILTRO ativos/inativos (bola verde/vermelha) só quando a regra permite o
+        // participante se desativar (allowSelfDeactivation, conceito de Liga/Pontos Corridos).
+        activeId: 'part-active',
         activeSort: !!(t && t.allowSelfDeactivation !== false && window._isLigaFormat && window._isLigaFormat(t))
     });
     return bar + '<div id="part-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum inscrito encontrado.</div>';
