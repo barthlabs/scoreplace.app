@@ -425,7 +425,7 @@ function initRouter() {
         // navegação — renderCreateTournamentPage move .modal pro container
         // preservando valores.
         if (typeof window.renderCreateTournamentPage === 'function') {
-          window.renderCreateTournamentPage(viewContainer);
+          window.renderCreateTournamentPage(viewContainer, param);
         } else {
           window.location.replace('#dashboard');
           return;

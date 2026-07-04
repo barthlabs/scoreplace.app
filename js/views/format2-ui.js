@@ -121,7 +121,7 @@
   // Bloco de fase (Classificatória / Eliminatória) com cabeçalho destacado.
   function _phaseBlock(title, color, inner) {
     return '<div style="border:1px solid ' + color + '55;border-radius:14px;padding:14px 14px 8px;margin-bottom:16px;background:' + color + '0d;">' +
-      '<div style="display:inline-block;font-size:0.82rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;color:' + color + ';background:' + color + '22;padding:7px 14px;border-radius:9px;margin-bottom:16px;">' + title + '</div>' +
+      '<div style="display:inline-block;font-size:1.05rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:' + color + ';background:' + color + '22;padding:9px 17px;border-radius:10px;margin-bottom:16px;">' + title + '</div>' +
       inner + '</div>';
   }
 
@@ -172,9 +172,6 @@
       classif += _sec('Rodadas', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">Rodadas ' + _num(cfg.rodadas.n, 1, 30, 'window._f2Rn(this.value)') + '</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Sorteio a cada rodada — parceiro' + (cfg.parceria === 'rei_rainha' ? ' (grupos de 4)' : '') + ' e adversário sorteados; pontuação individual; sit-out balanceado.</div>');
     }
 
-    var classLabel = um ? 'Nº de classificados (total) para a eliminatória' : 'Nº de classificados por grupo';
-    classif += _sec('Classificação', '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;flex-wrap:wrap;">' + classLabel + ' ' + _num(cfg.classificados, 1, 64, 'window._f2Class(this.value)') + '</div>');
-
     var e = cfg.eliminatoria;
     var elimForced = cfg.grupos > 1;
     // Fase de grupos sempre tem eliminatória → sem toggle, vai direto aos controles.
@@ -184,6 +181,14 @@
       : '<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" ' + (e.ativa ? 'checked' : '') + ' onchange="window._f2Elim(this.checked)"> <span style="font-size:0.85rem;">Tem eliminatória no fim</span></label>';
     var eb = '';
     if (e.ativa) {
+      // v4.4.17: "Nº de classificados" ABRE o box da Eliminatória, como slider (igual grupos).
+      var classLabel = um ? 'Nº de classificados (total) para a eliminatória' : 'Nº de classificados por grupo';
+      var classMax = um ? 32 : 8;
+      if (cfg.classificados > classMax) classMax = cfg.classificados; // nunca corta valor salvo
+      eb += '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;">' + classLabel + '</div>' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
+        '<input type="range" min="1" max="' + classMax + '" value="' + cfg.classificados + '" oninput="window._f2ClassLive(this.value)" onchange="window._f2Class(this.value)" style="flex:1;accent-color:#fbbf24;">' +
+        '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#fde68a;">' + cfg.classificados + '</span></div>';
       eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Linhas (chaves paralelas — nomes livres)</div>';
       eb += [1, 2, 4].map(function (n) { return _pill(e.linhas === n, 'window._f2Linhas(' + n + ')', String(n)); }).join('');
       for (var i = 0; i < e.linhas; i++) {
@@ -235,6 +240,12 @@
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
   window._f2Turnos = function (v) { S.cfg.rodadas.turnos = v; _norm(); _rerender(); };
   window._f2Rn = function (v) { S.cfg.rodadas.n = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
+  // Slider de classificados: número ao vivo no arraste; re-render ao soltar (igual grupos).
+  window._f2ClassLive = function (v) {
+    if (!S) return;
+    S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1);
+    var lbl = document.getElementById('f2-class-val'); if (lbl) lbl.textContent = S.cfg.classificados;
+  };
   window._f2Class = function (v) { S.cfg.classificados = Math.max(1, parseInt(v, 10) || 1); _norm(); _rerender(); };
   window._f2Elim = function (b) { S.cfg.eliminatoria.ativa = !!b; _norm(); _rerender(); };
   window._f2Linhas = function (n) { S.cfg.eliminatoria.linhas = n; _norm(); _rerender(); };

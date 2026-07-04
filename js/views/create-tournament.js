@@ -1763,15 +1763,22 @@ function setupCreateTournamentModal() {
     var gtb = document.getElementById('game-type-buttons');
     if (gtb) { var gg = gtb.closest ? gtb.closest('.form-group') : null; (gg || gtb).style.display = 'none'; }
     var gtd = document.getElementById('game-type-desc'); if (gtd) gtd.style.display = 'none';
-    // Injeta o mount 1× e inicia a config (default do esporte ou t.fmt2 do torneio em edição).
-    if (document.getElementById('f2-config-mount')) return;
+    // Injeta o mount e inicia a config (default do esporte ou t.fmt2 do torneio em edição).
+    // v4.4.17: editId-aware — se já há mount PRA ESTE torneio, mantém (não apaga config
+    // em andamento). Se o torneio mudou (ou saiu de edição pra criação), reconstrói.
+    var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
+    var _existing = document.getElementById('f2-config-mount');
+    if (_existing) {
+      if (_existing.getAttribute('data-f2-editid') === editId) return; // mesmo contexto → mantém
+      try { _existing.remove(); } catch (e) {}
+    }
     var mount = document.createElement('div');
     mount.id = 'f2-config-mount';
+    mount.setAttribute('data-f2-editid', editId);
     mount.style.cssText = 'margin:2px 0 10px;';
     try { box.insertBefore(mount, box.children[1] || null); } catch (e) { box.appendChild(mount); }
     var sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || 'Beach Tennis';
     var initCfg = null, tourn = null;
-    var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
     if (editId && typeof window._findTournamentById === 'function') { tourn = window._findTournamentById(editId); if (tourn && tourn.fmt2) initCfg = tourn.fmt2; }
     window._f2MountInForm(mount, sport, initCfg, tourn);
   };
@@ -5046,7 +5053,7 @@ function setupCreateTournamentModal() {
     }
   };
 
-  window.openEditTournamentModal = function (tId) {
+  window.openEditTournamentModal = function (tId, skipNav) {
     const t = window._findTournamentById(tId);
     if (!t) return;
 
@@ -5558,10 +5565,14 @@ function setupCreateTournamentModal() {
     // v1.3.13-beta: navega pra rota #novo-torneio. Pre-population já rolou
     // acima — renderCreateTournamentPage move .modal pro view-container
     // preservando valores. Post-init (GSM, places, venue map) roda lá.
-    if (typeof window._navigateToCreateTournament === 'function') {
-      window._navigateToCreateTournament();
-    } else {
-      openModal('modal-create-tournament');
+    // v4.4.17: skipNav=true quando a repopulação vem do próprio render (refresh
+    // com #novo-torneio/<tId>) — evita re-navegar/loopar.
+    if (!skipNav) {
+      if (typeof window._navigateToCreateTournament === 'function') {
+        window._navigateToCreateTournament(tId);
+      } else {
+        openModal('modal-create-tournament');
+      }
     }
     if (typeof window._refreshTemplateBtn === 'function') window._refreshTemplateBtn();
   };
@@ -7667,16 +7678,18 @@ window._discardCreateTournament = function() {
 // continua acontecendo nos call-sites ANTES da navegação — DOM moves
 // preservam valores quando renderCreateTournamentPage move .modal pro
 // view-container.
-window._navigateToCreateTournament = function () {
-  // Se já está em #novo-torneio, força re-render (initRouter)
-  if (window.location.hash === '#novo-torneio') {
+window._navigateToCreateTournament = function (editId) {
+  // v4.4.17: editId vai NA URL (#novo-torneio/<tId>) — assim um refresh reabre o
+  // MESMO torneio em edição em vez de cair num torneio novo sem nome.
+  var target = editId ? ('#novo-torneio/' + editId) : '#novo-torneio';
+  if (window.location.hash === target) {
     if (typeof window.initRouter === 'function') window.initRouter();
   } else {
-    window.location.hash = '#novo-torneio';
+    window.location.hash = target;
   }
 };
 
-window.renderCreateTournamentPage = function (container) {
+window.renderCreateTournamentPage = function (container, editId) {
   if (!container) return;
   // Garantir que setupCreateTournamentModal já criou a estrutura DOM
   if (!document.getElementById('modal-create-tournament') && typeof window.setupCreateTournamentModal === 'function') {
@@ -7692,6 +7705,27 @@ window.renderCreateTournamentPage = function (container) {
   }
   if (!modalInner) return;
 
+  // v4.4.17: deep-link/refresh em #novo-torneio/<tId> → repopula o form ANTES de
+  // mover pro container (o wrapper #modal-create-tournament ainda existe, então
+  // openEditTournamentModal não recria um form duplicado). skipNav evita re-navegar.
+  if (editId && (document.getElementById('edit-tournament-id') || {}).value !== editId
+      && typeof window.openEditTournamentModal === 'function'
+      && typeof window._findTournamentById === 'function') {
+    if (window._findTournamentById(editId)) {
+      try { window.openEditTournamentModal(editId, true); } catch (e) {}
+      modalEl = document.getElementById('modal-create-tournament');
+      modalInner = modalEl ? modalEl.querySelector('.modal') : null;
+      if (!modalInner) return;
+    } else if (!window._f2EditRetry) {
+      // Torneios ainda não carregaram do Firestore — tenta de novo em 600ms.
+      window._f2EditRetry = true;
+      setTimeout(function () {
+        window._f2EditRetry = false;
+        if (window.location.hash === '#novo-torneio/' + editId && typeof window.initRouter === 'function') window.initRouter();
+      }, 600);
+    }
+  }
+
   container.innerHTML = '';
   container.appendChild(modalInner);
   if (modalEl && modalEl.parentNode === document.body) modalEl.remove();
@@ -7700,8 +7734,14 @@ window.renderCreateTournamentPage = function (container) {
   // viewport (the CSS media query handles layout, but the DOM must exist in-situ).
   if (typeof window._renderCreateTournamentHeader === 'function') window._renderCreateTournamentHeader();
 
+  // v4.4.17: monta o configurador format2 no ÚNICO ponto de render — garante que
+  // TODO torneio (criar OU editar, navegação OU refresh) mostra o mesmo configurador
+  // e nunca o construtor de fases antigo (que fica só escondido). Idempotente por editId.
+  if (typeof window._f2MountInEditForm === 'function') { try { window._f2MountInEditForm(); } catch (e) {} }
+
   // Re-rodar setup async que depende de DOM visível (places, venue map, GSM)
   setTimeout(function () {
+    if (typeof window._f2MountInEditForm === 'function') { try { window._f2MountInEditForm(); } catch (e) {} }
     if (typeof window._gsmInitPresets === 'function') window._gsmInitPresets();
     else if (typeof window._updateGSMSummaryFromHidden === 'function') window._updateGSMSummaryFromHidden();
     if (typeof window._initPlacesAutocomplete === 'function') window._initPlacesAutocomplete();
