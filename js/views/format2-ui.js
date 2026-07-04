@@ -303,12 +303,11 @@
     classif += _sec('Rodadas', rInner);
 
     var e = cfg.eliminatoria;
-    var elimForced = cfg.grupos > 1;
-    // Toggle no CABEÇALHO do box (à direita, alinhado ao título). Ativo por padrão.
-    // Desativado → esconde tudo dentro do box, só o título fica. Fase de grupos (2+)
-    // sempre tem eliminatória → toggle travado ligado.
-    var elimToggle = '<span class="toggle-switch"' + (elimForced ? ' title="Fase de grupos sempre tem eliminatória"' : '') + '>' +
-      '<input type="checkbox"' + (e.ativa ? ' checked' : '') + (elimForced ? ' disabled' : '') + ' onchange="window._f2Elim(this.checked)">' +
+    // Toggle no CABEÇALHO do box (à direita, alinhado ao título). Ativo por padrão. SEMPRE
+    // habilitado — desligar desativa a eliminatória (nada dentro do box vale) e o torneio
+    // TERMINA na classificatória. Vale inclusive em fase de grupos (v4.4.32, pedido do dono).
+    var elimToggle = '<span class="toggle-switch">' +
+      '<input type="checkbox"' + (e.ativa ? ' checked' : '') + ' onchange="window._f2Elim(this.checked)">' +
       '<span class="toggle-slider"></span></span>';
     var eb = '';
     if (e.ativa) {

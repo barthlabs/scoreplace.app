@@ -111,7 +111,7 @@
     if (umGrupo) out.classifScope = 'overall';
 
     var e = out.eliminatoria || {};
-    e.ativa = !umGrupo ? true : !!e.ativa; // grupos ⇒ elim forçada
+    e.ativa = !!e.ativa; // v4.4.32: pode desligar SEMPRE (grupos ou pontos corridos); default = defaultConfig
     if ([1, 2, 4].indexOf(e.linhas) === -1) e.linhas = 1;
     if (!Array.isArray(e.nomes)) e.nomes = [];
     while (e.nomes.length < e.linhas) e.nomes.push('');
