@@ -41,7 +41,7 @@
       grupos: 1,
       parceria: 'fixa',
       formacaoDupla: 'sorteio',
-      rodadas: { modo: 'todos', turnos: 'ida', n: 5 },
+      rodadas: { modo: 'todos', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false },
       classificados: 2,          // X que classificam (por grupo se N grupos; total se 1 grupo)
       eliminatoria: {
         ativa: false,
@@ -87,13 +87,21 @@
     if (rotativo) {
       out.rodadas.modo = 'fixo'; out.rodadas.turnos = 'ida'; // rotativo = por-rodada
     } else {
-      // dupla fixa OU singles: round-robin ('todos') ou nº fixo (só singles).
-      if (isDupla) out.rodadas.modo = 'todos';
-      else if (out.rodadas.modo !== 'todos' && out.rodadas.modo !== 'fixo') out.rodadas.modo = 'todos';
+      // dupla fixa OU singles: round-robin ('todos') OU nº de rodadas ('fixo').
+      if (out.rodadas.modo !== 'todos' && out.rodadas.modo !== 'fixo') out.rodadas.modo = 'todos';
+      // "Nº de rodadas" (fixo, com agendamento) só faz sentido em PONTOS CORRIDOS (1 grupo).
+      // Em fase de grupos (2+), sempre round-robin dentro do grupo.
+      if (!umGrupo) out.rodadas.modo = 'todos';
       // ida-e-volta vale em qualquer round-robin (o motor dobra o RR — grupos ou tabela única).
       out.rodadas.turnos = (out.rodadas.modo === 'todos' && out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
     }
     out.rodadas.n = Math.max(1, parseInt(out.rodadas.n, 10) || 1);
+    // Agendamento dos sorteios (só relevante no modo "nº de rodadas").
+    out.rodadas.drawFirstDate = out.rodadas.drawFirstDate || '';
+    out.rodadas.drawFirstTime = out.rodadas.drawFirstTime || '19:00';
+    var _di = parseInt(out.rodadas.drawIntervalDays, 10);
+    out.rodadas.drawIntervalDays = (_di >= 1) ? _di : 7;
+    out.rodadas.drawManual = !!out.rodadas.drawManual;
 
     out.classificados = Math.max(1, parseInt(out.classificados, 10) || 2);
 
@@ -162,30 +170,45 @@
     var re = opts.resultEntry || ['organizer'];
     var top = {}, p0;
 
-    // Classificatória = Liga (rotativo/singles-limitado) OU Fase de Grupos (dupla fixa / todos).
+    // Classificatória = Liga (rotativo/nº-de-rodadas) OU Fase de Grupos (todos-contra-todos).
+    // "Nº de rodadas" (modo 'fixo') = Liga rodada-a-rodada com agendamento — vale p/ singles E
+    // dupla fixa (pontos corridos com nº determinado de rodadas). Todos-contra-todos = grupos.
     var useLiga = isDupla
-      ? (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada')
+      ? (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada' || cfg.rodadas.modo === 'fixo')
       : (cfg.rodadas.modo === 'fixo');
 
     if (useLiga) {
       var isRR = isDupla && cfg.parceria === 'rei_rainha';
+      // dupla FIXA com nº de rodadas → Liga com pares travados (não rotativo).
+      var ligaFixedPairs = isDupla && cfg.parceria === 'fixa';
       top.format = 'Liga';
       top.drawMode = isRR ? 'rei_rainha' : 'sorteio';
       top.teamSize = teamSize;
-      top.enrollmentMode = 'individual';
+      top.enrollmentMode = ligaFixedPairs ? 'teams' : 'individual';
       top.ligaRoundFormat = isRR ? 'rei_rainha' : 'standard';
       top.ligaDrawMode = 'standard';           // rodada-a-rodada (não RR pré-gerado)
       top.gruposCount = 1;
       top.gruposClassified = cfg.classificados;
-      if (!isRR) { top.equilibrado = true; top.clusterSize = 8; top.balanceBy = 'individual'; }
+      if (!isRR && !ligaFixedPairs) { top.equilibrado = true; top.clusterSize = 8; top.balanceBy = 'individual'; }
+      // Agendamento dos sorteios (data 1º sorteio, intervalo em dias, manual on/off).
+      top.drawManual = !!cfg.rodadas.drawManual;
+      if (!cfg.rodadas.drawManual) {
+        top.drawFirstDate = cfg.rodadas.drawFirstDate || '';
+        top.drawFirstTime = cfg.rodadas.drawFirstTime || '19:00';
+        top.drawIntervalDays = cfg.rodadas.drawIntervalDays || 7;
+      }
       p0 = Object.assign(_phaseBase(re), {
         name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
         formatCode: 'liga', format: 'Liga',
         drawMode: top.drawMode, reiRainha: isRR,
         rounds: cfg.rodadas.n, groupsBy: 'sorteio',
         source: { type: 'enrollment' },
-        fixedPairs: false, gruposCount: 1, gruposClassified: cfg.classificados,
-        pairingStrategy: 'top', grandFinal: true, lateEnrollment: 'expand'
+        fixedPairs: ligaFixedPairs, gruposCount: 1, gruposClassified: cfg.classificados,
+        pairingStrategy: 'top', grandFinal: true, lateEnrollment: 'expand',
+        drawManual: !!cfg.rodadas.drawManual,
+        drawFirstDate: cfg.rodadas.drawManual ? '' : (cfg.rodadas.drawFirstDate || ''),
+        drawFirstTime: cfg.rodadas.drawManual ? '' : (cfg.rodadas.drawFirstTime || '19:00'),
+        drawIntervalDays: cfg.rodadas.drawManual ? null : (cfg.rodadas.drawIntervalDays || 7)
       });
     } else {
       top.format = 'Fase de Grupos';
