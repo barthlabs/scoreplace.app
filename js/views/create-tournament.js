@@ -1736,7 +1736,7 @@ function setupCreateTournamentModal() {
     // Esconde os controles de estrutura que o format2 substitui.
     ['formato-buttons', 'formato-desc', 'dupla-elim-row', 'suico-fields', 'liga-fields',
      'liga-draw-schedule', 'suico-draw-schedule-fields', 'elim-settings', 'grupos-fields',
-     'rei-rainha-fields', 'round-robin-fields', 'manual-pairing-container', 'phases-list',
+     'rei-rainha-fields', 'round-robin-fields', 'manual-pairing-container', 'mixed-pairing-container', 'phases-list',
      'draw-mode-buttons', 'draw-mode-desc'
     ].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
     // Esconde os labels órfãos "Formato" e "Modo de Sorteio".

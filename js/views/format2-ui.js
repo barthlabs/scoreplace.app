@@ -113,16 +113,19 @@
       '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">' + gLabel + '</div>' +
       _estimateBlock(cfg));
 
+    // Formação das duplas fixas: Sorteio × Manual (participantes/organizador montam).
+    var _formacao = '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Como as duplas são formadas</div>' +
+      _pill(cfg.formacaoDupla === 'sorteio', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') +
+      _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '✍️ Montadas (participantes/organizador)');
     if (isDupla && um) {
       var pr = cfg.parceria;
       var prBtns = _pill(pr === 'fixa', 'window._f2Parceria(\'fixa\')', '🔒 Dupla fixa') +
         _pill(pr === 'rei_rainha', 'window._f2Parceria(\'rei_rainha\')', '👑 Rei/Rainha') +
         _pill(pr === 'sorteio_rodada', 'window._f2Parceria(\'sorteio_rodada\')', '🎲 Sorteio a cada rodada');
-      var extra = '';
-      if (pr === 'fixa') extra = '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Formação das duplas</div>' + _pill(cfg.formacaoDupla === 'sorteio', 'window._f2Form(\'sorteio\')', '🎲 Sorteio') + _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '✍️ Manual');
-      h += _sec('Parceria', prBtns + extra);
+      h += _sec('Parceria', prBtns + (pr === 'fixa' ? _formacao : ''));
     } else if (isDupla && !um) {
-      h += _sec('Parceria', '<div style="font-size:0.82rem;color:#34d399;">🔒 Duplas fixas <span style="color:var(--text-muted);">(sorteadas uma vez e fixas nos grupos)</span></div>');
+      // Fase de grupos: sempre duplas fixas — mas o organizador escolhe como formá-las.
+      h += _sec('Parceria', '<div style="font-size:0.82rem;color:#34d399;margin-bottom:2px;">🔒 Duplas fixas <span style="color:var(--text-muted);">(formadas uma vez e fixas nos grupos)</span></div>' + _formacao);
     }
 
     if (um && !rotativo) {
