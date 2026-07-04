@@ -152,7 +152,7 @@
         '<label class="form-label" style="font-size:0.82rem;font-weight:600;">👤 Nome do participante</label>' +
         '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">' +
           '<input type="text" id="addpart-name-' + safeId + '" placeholder="Ex.: Maria Silva" style="' + fieldStyle + 'flex:1;min-width:160px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddParticipant(\'' + safeId + '\');}">' +
-          '<button type="button" class="btn btn-cyan hover-lift" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button>' +
+          '<button type="button" id="addpart-name-btn-' + safeId + '" class="btn btn-cyan hover-lift" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button>' +
         '</div>' +
       '</div>';
 
@@ -162,7 +162,7 @@
         '<p style="font-size:0.66rem;color:var(--text-muted);margin:4px 0 8px;">Cria N vagas "Jogador NN" que entram no sorteio como inscritos normais. Cada vaga pode ser ocupada depois por um jogador real que se inscrever.</p>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<input type="number" min="1" max="200" value="8" id="addpart-ph-' + safeId + '" style="' + fieldStyle + 'width:110px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddPlaceholders(\'' + safeId + '\');}">' +
-          '<button type="button" class="btn btn-cyan hover-lift" onclick="window._pageAddPlaceholders(\'' + safeId + '\')">Adicionar</button>' +
+          '<button type="button" id="addpart-ph-btn-' + safeId + '" class="btn btn-cyan hover-lift" onclick="window._pageAddPlaceholders(\'' + safeId + '\')">Adicionar</button>' +
         '</div>' +
       '</div>';
 
@@ -180,11 +180,30 @@
     if (el) el.textContent = n + ' inscrito(s) no momento';
   }
 
+  // v4.4.67: estado "Adicionando…" (cinza, desabilitado) enquanto grava; volta a azul/ativo
+  // quando o callback dispara (após o toast). Safety-timeout restaura se o core não voltar.
+  function _addBtnLoading(btnId, on) {
+    var b = document.getElementById(btnId); if (!b) return;
+    if (on) {
+      if (b.dataset.origHtml == null) b.dataset.origHtml = b.innerHTML;
+      b.disabled = true; b.innerHTML = 'Adicionando…';
+      b.style.opacity = '0.55'; b.style.cursor = 'wait'; b.style.filter = 'grayscale(1)'; b.style.pointerEvents = 'none';
+    } else {
+      b.disabled = false; if (b.dataset.origHtml != null) { b.innerHTML = b.dataset.origHtml; delete b.dataset.origHtml; }
+      b.style.opacity = ''; b.style.cursor = ''; b.style.filter = ''; b.style.pointerEvents = '';
+    }
+  }
+
   window._pageAddParticipant = function (tId) {
     var inp = document.getElementById('addpart-name-' + tId);
     var name = inp ? inp.value.trim() : '';
     if (!name) { if (typeof showNotification === 'function') showNotification('Nome vazio', 'Digite o nome do participante.', 'warning'); return; }
+    var btnId = 'addpart-name-btn-' + tId;
+    _addBtnLoading(btnId, true);
+    var _done = false, _finish = function () { if (_done) return; _done = true; _addBtnLoading(btnId, false); };
+    var _to = setTimeout(_finish, 8000); // safety
     window._doAddParticipant(tId, name, null, null, function () {
+      clearTimeout(_to); _finish();
       if (inp) { inp.value = ''; inp.focus(); }
       _refreshCount(tId);
     });
@@ -194,7 +213,12 @@
     var inp = document.getElementById('addpart-ph-' + tId);
     var n = inp ? parseInt(inp.value, 10) : NaN;
     if (isNaN(n) || n <= 0) { if (typeof showNotification === 'function') showNotification('Número inválido', 'Informe quantos placeholders (maior que zero).', 'warning'); return; }
+    var btnId = 'addpart-ph-btn-' + tId;
+    _addBtnLoading(btnId, true);
+    var _done = false, _finish = function () { if (_done) return; _done = true; _addBtnLoading(btnId, false); };
+    var _to = setTimeout(_finish, 12000); // safety (N placeholders demora mais)
     window._addPlaceholdersCore(tId, n, function () {
+      clearTimeout(_to); _finish();
       if (inp) inp.value = '';
       _refreshCount(tId);
     });

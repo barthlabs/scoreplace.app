@@ -1599,7 +1599,18 @@ window._assignGlobalGameNumbers = function (t) {
     m._gameNum = ++n;
   }
   // (1) Classificatória Liga/Suíço (t.rounds) — rodada asc (ordem do array), índice do array.
-  (t.rounds || []).forEach(function (rd) { (((rd && rd.matches) || [])).forEach(stamp); });
+  //     v4.4.67 CANÔNICO: Rei/Rainha numera POR GRUPO na ordem do array de grupos (A, B, C…),
+  //     jogos dentro do grupo em ordem (a1 antes de b2). NÃO pela ordem do array plano rd.matches
+  //     — a inscrição tardia (expand) deixa rd.matches fora de ordem de grupo, o que estourava a
+  //     numeração dos jogos novos (76,77,78 num total de 75). O GRUPO é a fonte de ordem. Isto é
+  //     a FONTE ÚNICA: o render do monarch usa m._gameNum (sem contador próprio).
+  (t.rounds || []).forEach(function (rd) {
+    if (rd && Array.isArray(rd.monarchGroups) && rd.monarchGroups.length) {
+      rd.monarchGroups.forEach(function (g) { (((g && g.matches) || [])).forEach(stamp); });
+    } else {
+      (((rd && rd.matches) || [])).forEach(stamp);
+    }
+  });
   // (2) Fases canônicas (t.matches) por phaseIndex asc.
   var byPhase = {};
   (t.matches || []).forEach(function (m) { var p = (m && m.phaseIndex) || 0; (byPhase[p] = byPhase[p] || []).push(m); });
@@ -3073,7 +3084,8 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // jogador no LOCAL, não de cada partida. Suprime o botão por-jogo aqui.
     window._suppressMatchArrivedBtn = true;
     var matchCards = matches.map(function(m, mi) {
-      return renderMatchCard(m, canEnterResult, t.id, (gi * 3) + mi + 1);
+      // v4.4.67: FONTE ÚNICA — usa m._gameNum (canônico, por grupo). Fallback só se não carimbado.
+      return renderMatchCard(m, canEnterResult, t.id, (m._gameNum || ((gi * 3) + mi + 1)));
     }).join('');
     window._suppressMatchArrivedBtn = false;
 
@@ -3963,10 +3975,10 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // do _renderMonarchStage).
           window._suppressMatchArrivedBtn = true;
           var gCards = g.matches.map(function(m) {
-            // v1.0.64-beta: usa contador global em vez de mi+1 (que resetava por grupo)
+            // v4.4.67: FONTE ÚNICA — m._gameNum (canônico, por grupo). Fallback só se não carimbado.
             _monarchGlobalMatchNum++;
             // v2.3.19: grupo concluído → cards compactos (sem botão Editar).
-            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, _monarchGlobalMatchNum, gDone, _pendingSub) + '</div>';
+            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, (m._gameNum || _monarchGlobalMatchNum), gDone, _pendingSub) + '</div>';
           }).join('');
           window._suppressMatchArrivedBtn = false;
           // "Em andamento" REMOVIDO (pedido do dono — é óbvio, só rouba espaço). Só o
