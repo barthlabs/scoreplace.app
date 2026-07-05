@@ -943,6 +943,13 @@ function renderTournaments(container, tournamentId = null) {
     // Auto-mover participantes solo para waitlist antes do sorteio em torneios de duplas
     window._autoMoveSoloToWaitlist = function(t) {
         if (!t) return 0;
+        // v4.4.97: dupla FORMADA (manual) — os avulsos sem-dupla são PENDÊNCIA
+        // CONSCIENTE (reabrir/formar/lista/exclusão via _showRemainderPanel), NUNCA
+        // mover em silêncio pra lista de espera. Só o modo SORTEIO (auto-pareamento)
+        // move solos automaticamente. Sem isso, o painel de sem-dupla era pulado e o
+        // fluxo caía direto no pow2 ignorando os avulsos (regressão do v4.4.96, que
+        // fez esta função reconhecer 'teams' e passar a comê-los antes de perguntar).
+        if (typeof window._isManualPairing === 'function' && window._isManualPairing(t)) return 0;
         var enrollmentMode = t.enrollmentMode || t.enrollment || 'individual';
         var teamSize = parseInt(t.teamSize) || 1;
         if (!(window._isTeamEnrollMode(enrollmentMode) && teamSize === 2)) return 0;
