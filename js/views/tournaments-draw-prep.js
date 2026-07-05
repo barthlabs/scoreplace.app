@@ -32,6 +32,9 @@ window._diagnoseAll = function(t) {
     let preFormedTeams = 0;
     let individuals = 0;
     const incompleteTeams = [];
+    // v4.4.x: PESSOAS ≠ ENTRADAS — uma dupla é 2 pessoas, não 1 (regra do dono, nunca misturar).
+    // "Total inscritos" nos painéis é gente, não nº de cards. Soma os membros reais de cada entrada.
+    let totalPeople = 0;
 
     arr.forEach(function(p, idx) {
         const pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
@@ -43,8 +46,10 @@ window._diagnoseAll = function(t) {
                 incompleteTeams.push({ index: idx, name: pName, members: members, missing: teamSize - members.length });
             }
             preFormedTeams++;
+            totalPeople += members.length; // dupla completa = 2, incompleta = nº real
         } else {
             individuals++;
+            totalPeople += 1; // avulso = 1 pessoa
         }
     });
 
@@ -76,6 +81,7 @@ window._diagnoseAll = function(t) {
         hasIssues: incompleteTeams.length > 0 || remainder > 0 || isOdd || !isPowerOf2,
         teamSize: teamSize,
         totalRawParticipants: arr.length,
+        totalPeople: totalPeople,
         individuals: individuals,
         preFormedTeams: preFormedTeams,
         effectiveTeams: effectiveTeams,
@@ -453,7 +459,7 @@ window._showRemainderPanel = function(tId, info, t) {
                     '<div style="font-size:0.62rem;color:#fcd34d;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _lblRemainder + '</div>' +
                 '</div>' +
                 '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
-                    '<div style="font-size:1.4rem;font-weight:900;color:#60a5fa;line-height:1;">' + info.totalRawParticipants + '</div>' +
+                    '<div style="font-size:1.4rem;font-weight:900;color:#60a5fa;line-height:1;">' + (info.totalPeople != null ? info.totalPeople : _totalPlayers) + '</div>' +
                     '<div style="font-size:0.62rem;color:#93c5fd;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _t('predraw.totalEnrolled') + '</div>' +
                 '</div>' +
             '</div>' +
@@ -1187,7 +1193,7 @@ window.showUnifiedResolutionPanel = function(tId) {
     // Build the panel HTML
     let gaugeHtml = '';
     var _centerLabel = info.isTeam ? _t('predraw.gaugeCenterTeams') : _t('predraw.gaugeCenterParts');
-    var _centerSub = info.isTeam ? '(' + info.totalRawParticipants + ' ' + _t('predraw.unitParticipants') + ')' : '';
+    var _centerSub = info.isTeam ? '(' + (info.totalPeople != null ? info.totalPeople : info.totalRawParticipants) + ' ' + _t('predraw.unitParticipants') + ')' : '';
     var _loSub = info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.loP2 * info.teamSize}) : _t('predraw.gaugeCenterParts');
     var _hiSub = info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.hiP2 * info.teamSize}) : _t('predraw.gaugeCenterParts');
 
