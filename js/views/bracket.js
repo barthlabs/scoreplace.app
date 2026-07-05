@@ -3556,28 +3556,52 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // (o "Saldo" já é o saldo de games). Hide data-driven.
   var _anyRealSets = _allStandingsRows.some(function(s){ return ((s.setsWon||0)+(s.setsLost||0)) > 0; });
   var _showGsm = _useSetsStandings && _anyRealSets;
-  // v4.4.x: TARJA VERDE de "quem classifica" na CLASSIFICAÇÃO GERAL (por seção/categoria).
-  // Vale quando a transição pra próxima fase é OVERALL (Rei/Rainha / Pontos Corridos, onde a
-  // classificação que define quem avança é a geral, não por grupo). Corte = top-N (maior rankTo
-  // do mapping, ou qualifyTopN). 0 = sem próxima fase overall → sem verde na geral (a por-grupo
-  // da Fase de Grupos é marcada dentro de cada grupo). Todos classificam → corte cobre a lista.
-  var _geralGreenCut = 0;
+  // v4.4.x: DESTAQUE de "quem classifica" na CLASSIFICAÇÃO GERAL (por seção/categoria), quando a
+  // transição pra próxima fase é OVERALL (Rei/Rainha / Pontos Corridos). Cada LINHA da próxima
+  // fase (Ouro/Prata/…) recebe sua própria tarja ATENUADA (cor da linha, não verde) — assim numa
+  // config "todos classificam em 2 linhas por performance" dá pra LER quem vai pra qual linha.
+  //   _geralLinePlan: null (sem próxima fase overall → sem tarja na geral; Fase de Grupos marca
+  //   por grupo) | {mode:'ranges', ranges:[{from,to,idx}]} (top-N por linha via mapping) |
+  //   {mode:'splitAll', nLines} (todos classificam → divide o campo por performance nas N linhas).
+  var _geralLinePlan = null;
   (function () {
     if (!(window._isMultiPhase && window._isMultiPhase(t))) return;
     var _np = t.phases[(t.currentPhaseIndex || 0) + 1];
     if (!_np || !_np.source) return;
     if (((_np.source.scope) || _np.scope || 'per_group') !== 'overall') return;
-    var _src = _np.source, _cut = 0;
-    // "Todos classificam" (qualifyAll) → o corte cobre a lista inteira (todos verdes).
-    var _isAll = _src.qualifyQuantity === 'all' || _src.qualifyMode === 'all';
-    if (Array.isArray(_src.mapping) && _src.mapping.length) {
-      var _mx = _src.mapping.reduce(function (m, mp) { return Math.max(m, parseInt(mp.rankTo, 10) || 0); }, 0);
-      if (_mx >= 999) _isAll = true;
-      else if (_mx > 0) _cut = _mx;
+    var _src = _np.source;
+    var _map = Array.isArray(_src.mapping) ? _src.mapping : [];
+    var _nLines = _map.length || 1;
+    var _isAll = _src.qualifyQuantity === 'all' || _src.qualifyMode === 'all' ||
+      (_map.length > 0 && _map.every(function (mp) { return (parseInt(mp.rankTo, 10) || 0) >= 999; }));
+    if (_isAll) { _geralLinePlan = { mode: 'splitAll', nLines: _nLines }; return; }
+    if (_map.length) {
+      var _ranges = _map.map(function (mp, idx) {
+        return { from: parseInt(mp.rankFrom, 10) || 1, to: parseInt(mp.rankTo, 10) || 0, idx: idx };
+      }).filter(function (r) { return r.to > 0 && r.to < 999; });
+      if (_ranges.length) { _geralLinePlan = { mode: 'ranges', ranges: _ranges }; return; }
     }
-    if (!_cut && !_isAll) _cut = parseInt(_src.qualifyTopN, 10) || 0;
-    _geralGreenCut = _isAll ? 999999 : (_cut > 0 ? _cut : 0);
+    var _cut = parseInt(_src.qualifyTopN, 10) || 0;
+    if (_cut > 0) _geralLinePlan = { mode: 'ranges', ranges: [{ from: 1, to: _cut, idx: 0 }] };
   })();
+  // Cores ATENUADAS por linha (ideia de Ouro/Prata/Bronze mantendo leitura). Índice = ordem da
+  // linha na próxima fase (0 = 1ª linha = "Ouro").
+  var _GERAL_LINE_TINTS = ['rgba(251,191,36,0.16)', 'rgba(203,213,225,0.16)', 'rgba(234,88,12,0.15)', 'rgba(34,211,238,0.14)'];
+  // Índice da linha (0-based) que a posição i (0-based) da seção alimenta, ou -1 se não classifica.
+  var _geralLineIdxFor = function (i, total) {
+    if (!_geralLinePlan) return -1;
+    if (_geralLinePlan.mode === 'splitAll') {
+      var n = _geralLinePlan.nLines; if (n <= 1) return 0;
+      var per = Math.ceil((total || 0) / n) || 1;
+      return Math.min(Math.floor(i / per), n - 1);
+    }
+    var rank = i + 1;
+    for (var k = 0; k < _geralLinePlan.ranges.length; k++) {
+      var r = _geralLinePlan.ranges[k];
+      if (rank >= r.from && rank <= r.to) return r.idx;
+    }
+    return -1;
+  };
   // v2.3.15: nova ordem de colunas — [PA ou Pts] · %G · V · D · [E] · Saldo · [±S ±G] · J
   const _buildStandingsRows = function(computed) {
     return computed.map((s, i) => {
@@ -3599,7 +3623,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         ? `<td style="padding:11px 14px;text-align:center;color:${_setsDiff >= 0 ? '#06b6d4' : '#f87171'};">${_setsDiff >= 0 ? '+' : ''}${_setsDiff}</td><td style="padding:11px 14px;text-align:center;color:${_gamesDiff >= 0 ? '#8b5cf6' : '#f87171'};">${_gamesDiff >= 0 ? '+' : ''}${_gamesDiff}</td>`
         : '';
       return `
-    <tr style="border-bottom:1px solid var(--border-color);${i < _geralGreenCut ? 'background:rgba(34,197,94,0.10);' : (i < 3 ? 'background:rgba(251,191,36,0.03)' : '')}">
+    ${(() => {
+      var _lineIdx = _geralLineIdxFor(i, computed.length);
+      var _bg = _lineIdx >= 0 ? _GERAL_LINE_TINTS[_lineIdx % _GERAL_LINE_TINTS.length] : (i < 3 && !_geralLinePlan ? 'rgba(251,191,36,0.03)' : '');
+      return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + _bg + ';' : '') + '">';
+    })()}
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
       <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
       ${_scoreCell}
@@ -3966,8 +3994,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // v4.4.x: no Rei/Rainha (grupos rotativos de 4) a classificação que define quem avança
         // é a GERAL (overall) — a tarja verde de "quem classifica" NÃO vai na tabela do grupo
         // (senão, se todos classificam, tudo fica verde e não informa nada). Ela vai só na
-        // CLASSIFICAÇÃO GERAL (ver _geralGreenCut). Aqui a por-grupo só marca verde quando a
-        // transição é POR GRUPO (Fase de Grupos com corte real por grupo → _classifN).
+        // CLASSIFICAÇÃO GERAL (ver _geralLinePlan — tarja por linha Ouro/Prata). Aqui a por-grupo
+        // só marca verde quando a transição é POR GRUPO (Fase de Grupos, corte por grupo → _classifN).
         // v4.4.x: o botão "Editar" (corrigir placar) fica disponível na classificatória
         // ATÉ a fase avançar — depois disso (eliminatória/encerrado/visão read-only) some.
         var _phaseLocked = (t.currentStage === 'elimination') || (t.status === 'finished') || !!(opts && opts.suppressAutoAdvance);
