@@ -403,8 +403,16 @@ window._showRemainderPanel = function(tId, info, t) {
     var _totalPlayers = _arr.reduce(function(s, p) { return s + _playersOf(p); }, 0) || (info.effectiveTeams * _ts + info.remainder);
     var _maxTeams = Math.floor(_totalPlayers / _ts);
     var _targetTeams = _maxTeams >= 1 ? 1 : 0; while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
-    var teamsFormed = _targetTeams;
-    var remCount = _totalPlayers - (_targetTeams * _ts);
+    // v4.4.x: DUPLAS FORMADAS (manual) — o "resto" NÃO é sobra pra fechar potência de 2: são
+    // os AVULSOS que ficaram SEM DUPLA. Mostra as EQUIPES FORMADAS reais (não recompõe pow2)
+    // e X "sem dupla". Formação por SORTEIO segue a lógica antiga (pow2 do pool).
+    var _manualPair = (typeof window._isManualPairing === 'function') && _tObj && window._isManualPairing(_tObj);
+    var teamsFormed = _manualPair ? (info.preFormedTeams || 0) : _targetTeams;
+    var remCount = _manualPair ? (info.remainder || 0) : (_totalPlayers - (_targetTeams * _ts));
+    // Rótulos: dupla formada usa "sem dupla" / "equipes formadas"; sorteio mantém o legado.
+    var _lblTeamsFormed = _manualPair ? 'equipes formadas' : _t('predraw.teamsFormed');
+    var _lblRemainder = _manualPair ? 'sem dupla' : _t('predraw.remainderLabel');
+    var _lblWhatToDo = _manualPair ? 'O que fazer com quem ficou sem dupla?' : _t('predraw.whatToDo');
     var remLabel = remCount + ' ' + (remCount > 1 ? _t('predraw.unitParticipants') : _t('predraw.unitParticipantSingular'));
     var teamLabel = teamsFormed + ' ' + (teamsFormed > 1 ? _t('predraw.unitTeams') : _t('predraw.unitTeamSingular'));
 
@@ -425,8 +433,8 @@ window._showRemainderPanel = function(tId, info, t) {
             '<div style="display:flex;align-items:center;gap:10px;">' +
                 '<span style="font-size:1.3rem;">👥</span>' +
                 '<div>' +
-                    '<h3 style="margin:0;color:#ede9fe;font-size:1rem;font-weight:900;letter-spacing:-0.02em;">' + _t('predraw.remainderTitle') + '</h3>' +
-                    '<p style="margin:2px 0 0;color:#c4b5fd;font-size:0.72rem;">' + _t('predraw.remainderSubtitle', {label: remLabel, p: (remCount > 1 ? 'm' : '')}) + '</p>' +
+                    '<h3 style="margin:0;color:#ede9fe;font-size:1rem;font-weight:900;letter-spacing:-0.02em;">' + (_manualPair ? 'Participantes sem dupla' : _t('predraw.remainderTitle')) + '</h3>' +
+                    '<p style="margin:2px 0 0;color:#c4b5fd;font-size:0.72rem;">' + (_manualPair ? (remCount + ' sem dupla · ' + teamsFormed + ' equipe' + (teamsFormed > 1 ? 's' : '') + ' formada' + (teamsFormed > 1 ? 's' : '')) : _t('predraw.remainderSubtitle', {label: remLabel, p: (remCount > 1 ? 'm' : '')})) + '</p>' +
                 '</div>' +
             '</div>' +
             '<button onclick="window._cancelRemainderPanel(\'' + tIdSafe + '\')" style="background:rgba(0,0,0,0.25);color:#ede9fe;border:2px solid rgba(237,233,254,0.3);padding:6px 16px;border-radius:10px;font-weight:700;font-size:0.8rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\';this.style.borderColor=\'rgba(237,233,254,0.5)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.borderColor=\'rgba(237,233,254,0.3)\'">' + _t('predraw.cancelBtn') + '</button>' +
@@ -438,11 +446,11 @@ window._showRemainderPanel = function(tId, info, t) {
             '<div style="display:flex;gap:0.6rem;flex-wrap:wrap;">' +
                 '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
                     '<div style="font-size:1.4rem;font-weight:900;color:#a78bfa;line-height:1;">' + teamsFormed + '</div>' +
-                    '<div style="font-size:0.62rem;color:#c4b5fd;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _t('predraw.teamsFormed') + '</div>' +
+                    '<div style="font-size:0.62rem;color:#c4b5fd;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _lblTeamsFormed + '</div>' +
                 '</div>' +
                 '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
                     '<div style="font-size:1.4rem;font-weight:900;color:#f59e0b;line-height:1;">' + remCount + '</div>' +
-                    '<div style="font-size:0.62rem;color:#fcd34d;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _t('predraw.remainderLabel') + '</div>' +
+                    '<div style="font-size:0.62rem;color:#fcd34d;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _lblRemainder + '</div>' +
                 '</div>' +
                 '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
                     '<div style="font-size:1.4rem;font-weight:900;color:#60a5fa;line-height:1;">' + info.totalRawParticipants + '</div>' +
@@ -452,7 +460,7 @@ window._showRemainderPanel = function(tId, info, t) {
         '</div>' +
         // Options
         '<div style="padding:0.85rem 1.25rem 1.1rem;">' +
-            '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.68rem;text-transform:uppercase;letter-spacing:1.8px;font-weight:700;">' + _t('predraw.whatToDo') + '</h4>' +
+            '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.68rem;text-transform:uppercase;letter-spacing:1.8px;font-weight:700;">' + _lblWhatToDo + '</h4>' +
             // Sorteio Geral toggle (default ON = random; OFF = last)
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:9px;">' +
                 '<div style="flex:1;min-width:0;">' +
