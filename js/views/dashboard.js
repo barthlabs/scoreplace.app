@@ -2302,6 +2302,10 @@ function renderDashboard(container) {
 
   // Separate active and finished when showing "Todos"
   let filteredHtml = '';
+  // v4.4.x: a seção "Torneios Encerrados" é EXTRAÍDA da lista principal e renderizada só DEPOIS
+  // do runningBottomHtml ("Em andamento" que não é desta semana) — encerrado só fica na frente
+  // dos OCULTADOS (pedido do dono). Assim o de casais (em andamento) vem ANTES dos encerrados.
+  let finishedSectionHtml = '';
   if (curFilter === 'todos' && !curSport && !curLocation && !curFormat && encerradosCount > 0) {
     // v2.1.12: torneio encerrado só vai pra seção "Encerrados" depois de 24h.
     // v2.1.48: nas primeiras 12h após encerrar, continua na lista principal (pra
@@ -2319,7 +2323,7 @@ function renderDashboard(container) {
     const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
     filteredHtml = visibleActive.length > 0
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
-      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
+      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml || finishedList.length > 0) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
     if (activeList.length > visibleActive.length) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
     }
@@ -2346,7 +2350,7 @@ function renderDashboard(container) {
         if (myFinished.length > 0) finishedCards += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);margin-bottom:8px;opacity:0.7;">' + _t('dashboard.otherFinished', {count: otherFinished.length}) + '</div>';
         finishedCards += _renderTGroup(otherFinished);
       }
-      filteredHtml += '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
+      finishedSectionHtml = '<div style="margin-top:1.25rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
     }
   } else {
     // When viewing "encerrados" filter, sort user's tournaments first
@@ -2896,6 +2900,7 @@ function renderDashboard(container) {
       ${(window._dashView === 'compact') ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : '<div class="cards-grid">' + filteredHtml + '</div>'}
     </div>
     ${runningBottomHtml}
+    ${(window._dashView === 'compact') ? '' : finishedSectionHtml}
     ${(() => {
       // v0.16.60: diag SEMPRE visível, independente de filtro — usuário
       // reportou "nelson ainda nao ve torneio algum" mas o diag da v0.16.59
