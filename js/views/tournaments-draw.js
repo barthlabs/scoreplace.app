@@ -1282,7 +1282,16 @@ window.generateDrawFunction = function (tId) {
 
         // Eliminatória / Grupos / Rei-Rainha: matches flat taggeados na fase 0 via storePhase.
         var _r0 = _E0.storePhase(t, 0, _built0);
-        if (!_r0 || !_r0.ok) { showNotification(_t('draw.warning'), _t('tdraw.drawDone'), 'warning'); return; }
+        // v4.4.100: storePhase FALHOU (ex.: 'no-entrants' — o split por categoria não casou
+        // ninguém). NÃO reusar a mensagem de SUCESSO (_t('tdraw.drawDone') = "Sorteio
+        // realizado com sucesso!") aqui — era isso que fazia o "diz que sorteou mas não
+        // mostra chave". Encerra o loader e mostra ERRO real. (O motor agora tem rede de
+        // segurança que evita chegar aqui no caso de categoria — ver phases-engine.js.)
+        if (!_r0 || !_r0.ok) {
+            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            showNotification('⚠️ Sorteio não gerou a chave', 'Nenhum jogo foi criado (' + ((_r0 && _r0.error) || 'motor vazio') + '). Confira inscritos/categorias e tente de novo.', 'error');
+            return;
+        }
         // Dupla Eliminatória clássica: _buildDoubleElimBracket monta upper R2+/lower/grande
         // final a partir da R1 (lê t.matches) e tagueia tudo na fase 0. Mesmo do legado.
         if (_built0.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {

@@ -858,12 +858,21 @@
           // a chave saía incompleta (só a repescagem R1). Ver project_dupla_elim_repechage.
           if (b.needsRepechageDoubleElim && b.repMeta) { b.repMeta.category = cat; repMetas.push(b.repMeta); }
         });
-        built = { matches: allM };
-        if (needsDE) built.needsDoubleElim = true;
-        if (repMetas.length) {
-          built.needsRepechageDoubleElim = true;
-          built.repMeta = repMetas[0];                 // caso comum: 1 categoria (ex.: Casais "Misto Obrig.")
-          if (repMetas.length > 1) built.repMetaByCat = repMetas; // multi-categoria: builder por categoria
+        // v4.4.100: REDE DE SEGURANÇA — se o split por categoria não casou NINGUÉM (todo
+        // catPool vazio: catOf divergiu de cfg.categories, ex.: a categoria não estava
+        // gravada nos participantes no instante do sorteio) mas o pool TEM gente, gera UMA
+        // chave única com todo o pool em vez de devolver chave vazia. Sem isso, storePhase
+        // dava 'no-entrants' e o sorteio virava fantasma ("Sorteio realizado" sem chave).
+        if (allM.length === 0 && pool.length > 0) {
+          built = _genElimFromPool(pool, cfg, idPrefix);
+        } else {
+          built = { matches: allM };
+          if (needsDE) built.needsDoubleElim = true;
+          if (repMetas.length) {
+            built.needsRepechageDoubleElim = true;
+            built.repMeta = repMetas[0];                 // caso comum: 1 categoria (ex.: Casais "Misto Obrig.")
+            if (repMetas.length > 1) built.repMetaByCat = repMetas; // multi-categoria: builder por categoria
+          }
         }
       } else {
         built = _genElimFromPool(pool, cfg, idPrefix);
