@@ -1171,7 +1171,7 @@ function renderTournaments(container, tournamentId = null) {
             } else if (t) {
                 var _eMode = t.enrollmentMode || t.enrollment || 'individual';
                 var _tSz = parseInt(t.teamSize) || 1;
-                if ((_eMode === 'time' || _eMode === 'misto') && _tSz === 2 &&
+                if (window._isTeamEnrollMode(_eMode) && _tSz === 2 &&
                     typeof window._listSoloEntries === 'function' && typeof window._showSoloResolutionPanel === 'function' &&
                     window._listSoloEntries(t).length > 0) {
                     window._showSoloResolutionPanel(tId, isAberto);
@@ -1185,7 +1185,7 @@ function renderTournaments(container, tournamentId = null) {
             // de Inscrição. Intercepta ANTES de mover solos pra lista de espera.
             if (t) {
                 var _enrM = t.enrollmentMode || t.enrollment || 'individual';
-                if (_enrM === 'time' && typeof window._diagnoseAll === 'function') {
+                if ((_enrM === 'time' || _enrM === 'teams') && typeof window._diagnoseAll === 'function') {
                     var _diagTeams = window._diagnoseAll(t);
                     // dispara quando há jogadores SEM equipe (individuais soltos)
                     // ou nenhum time formado — em ambos não dá pra sortear os times.

@@ -1936,7 +1936,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     }
     function fmtEnroll() {
         var m = t.enrollmentMode || 'individual';
-        return m === 'time' ? 'Apenas times' : m === 'misto' ? 'Misto (individual + times)' : 'Individual';
+        return (m === 'time' || m === 'teams') ? 'Apenas times' : m === 'misto' ? 'Misto (individual + times)' : 'Individual';
     }
     function fmtScoring() {
         var s = t.scoring;

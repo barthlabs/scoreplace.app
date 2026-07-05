@@ -1668,7 +1668,7 @@ function setupCreateTournamentModal() {
     var team = document.getElementById('enroll-toggle-team');
     if (!indiv || !team) return;
     if (value === 'individual') { indiv.checked = true; team.checked = false; }
-    else if (value === 'time') { indiv.checked = false; team.checked = true; }
+    else if (value === 'time' || value === 'teams') { indiv.checked = false; team.checked = true; }
     else if (value === 'misto') { indiv.checked = true; team.checked = true; }
     window._syncEnrollToggles();
   };

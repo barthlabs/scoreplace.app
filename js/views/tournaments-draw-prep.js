@@ -24,7 +24,7 @@ window._grupos_f2Direct = function(tId) {
 window._diagnoseAll = function(t) {
     const enrMode = t.enrollmentMode || t.enrollment || 'individual';
     let teamSize = parseInt(t.teamSize) || 1;
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
 
     const arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
 
@@ -610,7 +610,7 @@ window._executeRemoval = function(tId, mode, method) {
     var arr = Array.isArray(t.participants) ? t.participants.slice() : [];
     var _ts = parseInt(t.teamSize) || 1;
     var _enr = t.enrollmentMode || t.enrollment || 'individual';
-    if ((_enr === 'time' || _enr === 'misto') && _ts < 2) _ts = 2;
+    if (window._isTeamEnrollMode(_enr) && _ts < 2) _ts = 2;
     var _playersOf = function(p) { return window._entryTeamMembers(p) ? _ts : 1; }; // v3.0.x: time por estrutura, não por '/'
     var _manualPair = (typeof window._isManualPairing === 'function') && window._isManualPairing(t);
     var removed = [];
@@ -1432,7 +1432,7 @@ window._soloManualPairPage = function (tId) {
 window.checkIncompleteTeams = function (t) {
     const enrMode = t.enrollmentMode || t.enrollment || 'individual';
     let teamSize = parseInt(t.teamSize) || 1;
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
     const participants = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
 
     const incomplete = [];
@@ -1626,7 +1626,7 @@ window._saveDissolveResolution = function (tId) {
 
     var enrMode = t.enrollmentMode || t.enrollment || 'individual';
     var teamSize = parseInt(t.teamSize) || 1;
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
 
     var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     var newParts = [];
@@ -1689,7 +1689,7 @@ window.checkOddEntries = function (t) {
     var arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     var teamSize = parseInt(t.teamSize) || 1;
     var enrMode = t.enrollmentMode || t.enrollment || 'individual';
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
 
     var preFormedTeams = 0, individuals = 0;
     arr.forEach(function(p) {
@@ -1767,7 +1767,7 @@ window.checkPowerOf2 = function (t) {
     const arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     let teamSize = parseInt(t.teamSize) || 1;
     const enrMode = t.enrollmentMode || t.enrollment || 'individual';
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
 
     // Count effective bracket entries (teams or individuals)
     let preFormedTeams = 0;

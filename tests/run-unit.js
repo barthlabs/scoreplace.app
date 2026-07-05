@@ -37,6 +37,7 @@ const SUITES = [
   'tests/phase0-groups-canonical.test.js',
   'tests/phase-identity.test.js',
   'tests/no-format-regression.test.js',
+  'tests/duplas-teams-enrollmode.test.js',
   'tests/apply-result.test.js',
   'tests/apply-round-close.test.js',
   'tests/apply-wo.test.js',

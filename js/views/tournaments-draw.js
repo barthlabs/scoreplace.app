@@ -450,7 +450,7 @@ window._createExtraGamesFromWaitlist = function(t) {
   // 1) pareia 2 solos tardios → 1 jogo solo-vs-solo (NUNCA formar dupla numa chave
   // individual — decisão do dono 1-jul). O mínimo do pool muda: 4 (duplas) vs 2 (indiv).
   var _teamSize = parseInt(t.teamSize) || 1;
-  var _isTeams = _teamSize > 1 || t.enrollmentMode === 'time' || t.enrollmentMode === 'misto';
+  var _isTeams = _teamSize > 1 || window._isTeamEnrollMode(t.enrollmentMode);
   var _minPool = _isTeams ? 4 : 2;
   if (pool.length < _minPool) return 0;
   // v3.1.22: sorteia a ordem do pareamento dos entrantes (os jogos já criados ficam
@@ -639,7 +639,7 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   if (typeof window._isManualPairing === 'function' && window._isManualPairing(t)) return false;
   var enrMode = t.enrollmentMode || t.enrollment || 'individual';
   var teamSize = parseInt(t.teamSize) || 1;
-  if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+  if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
   if (teamSize !== 2) return false; // só duplas
   var gc = Array.isArray(t.genderCategories) ? t.genderCategories : [];
   var hasGenderSplit = gc.some(function(c){ return /masc/i.test(String(c)) || /fem/i.test(String(c)); });
@@ -1211,7 +1211,7 @@ window.generateDrawFunction = function (tId) {
         // NUNCA em Rei/Rainha (força individual).
         var _ts0 = _isMon0 ? 1 : (parseInt(t.teamSize, 10) || 1);
         var _enr0 = t.enrollmentMode || t.enrollment || 'individual';
-        if (!_isMon0 && (_enr0 === 'time' || _enr0 === 'misto') && _ts0 < 2) _ts0 = 2;
+        if (!_isMon0 && window._isTeamEnrollMode(_enr0) && _ts0 < 2) _ts0 = 2;
         if (_ts0 > 1) {
             if (!t.teamOrigins) t.teamOrigins = {};
             var _f0 = _formDoublesTeams(Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}), _ts0, t.teamOrigins, t._drawBalanceMode);
@@ -1336,7 +1336,7 @@ window.generateDrawFunction = function (tId) {
     let teamSize = parseInt(t.teamSize) || 1;
     // Fallback: se modo de inscrição é time/misto mas teamSize ficou 1, forçar mínimo 2
     const enrMode = t.enrollmentMode || t.enrollment || 'individual';
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) {
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) {
         teamSize = 2;
     }
     if (teamSize > 1) {
