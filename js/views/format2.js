@@ -303,8 +303,14 @@
       var perGroup = cfg.grupos > 1 && cfg.classifScope === 'per_group';
       var nLines = e.linhas;
       var dests = _LINE_DESTS[nLines] || ['main'];
-      var topN = cfg.classificados;            // por grupo (N grupos) ou total (1 grupo)
-      var mapping = _buildMapping(dests, e.nomes, topN, nLines);
+      var topN = cfg.classificados;            // quantos classificam = valor do SLIDER
+      var qAll0 = !!e.qualifyAll;              // "Todos" = atalho do slider no máximo
+      // v4.4.x: quantos avançam vem do SLIDER (classificados). "Todos" (qualifyAll) NÃO é limitado
+      // pelo número do slider — é o MÁXIMO (todos) → mapping com rankTo:999 (profundidade = todos
+      // no motor, buildEntrantsByDest). Sem "Todos" → faixas do slider via _buildMapping.
+      var mapping = qAll0
+        ? dests.map(function (dst, di) { return { dest: dst, rankFrom: 1, rankTo: 999, label: (e.nomes && e.nomes[di]) || '' }; })
+        : _buildMapping(dests, e.nomes, topN, nLines);
       // Origem: "formar" (indivíduos → duplas) só quando pontuação individual.
       var forma = (e.origem === 'formar' && scoreInd && isDupla);
       var elimFixedPairs = !!forma;            // forma duplas dos indivíduos
