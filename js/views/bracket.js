@@ -3086,11 +3086,11 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       var setDiff = s.setsWon - s.setsLost;
       var gameDiff = s.gamesWon - s.gamesLost;
       var winRatePct = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
-      var bg = i < classified ? 'rgba(251,191,36,0.08)' : '';
-      var clr = i < classified ? '#fbbf24' : 'var(--text-muted)';
+      var bg = i < classified ? 'rgba(34,197,94,0.10)' : '';
+      var clr = i < classified ? '#4ade80' : 'var(--text-muted)';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(s.name, window._currentBracketTournament) : window._safeHtml(s.name))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + (i < classified ? ' <span style="font-size:0.6rem;color:#fbbf24;font-weight:800;">CLASSIF.</span>' : '') + '</td>' +
+        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(s.name, window._currentBracketTournament) : window._safeHtml(s.name))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
         (s.points != null
@@ -3317,7 +3317,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const rows = sorted.map((s, i) => `
       <tr style="border-bottom:1px solid var(--border-color);${i < classified ? 'background:rgba(34,197,94,0.08);' : ''}">
         <td style="padding:8px 12px;font-weight:700;color:${i < classified ? '#4ade80' : 'var(--text-muted)'};">${medal(i)}</td>
-        <td style="padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))} ${i < classified ? '<span style="font-size:0.65rem;color:#4ade80;font-weight:800;">CLASSIF.</span>' : ''}</td>
+        <td style="padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</td>
         <td style="padding:8px 12px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>
         <td style="padding:8px 12px;text-align:center;color:#4ade80;">${s.wins}</td>
         ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>` : ''}
@@ -3934,12 +3934,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // Renderização das ordens fixas (myGroups primeiro, depois otherGroups)
         // mantém numeração consistente independente do sort visual.
         var _monarchGlobalMatchNum = _monarchPrevRoundsMatches;
-        // v2.7.18: classificação POR GRUPO volta quando a transição p/ a próxima
-        // fase é POR GRUPO — o organizador precisa ver 1º/2º/3º/4º de cada grupo
-        // pra entender quem vai pra qual linha (Ouro/Prata). A geral continua acima.
+        // v4.4.x: classificação POR GRUPO SEMPRE visível acima de cada grupo (pedido do
+        // dono — "estou sentindo falta da classificação por grupos acima de cada grupo").
+        // A geral continua acima das rodadas. Quem classifica pra próxima fase (transição
+        // POR GRUPO) ganha só a TARJA VERDE na linha — sem texto "CLASSIF.".
         var _nextPhT = (window._isMultiPhase && window._isMultiPhase(t)) ? (t.phases[(t.currentPhaseIndex || 0) + 1] || null) : null;
         var _nextScopeT = _nextPhT ? (((_nextPhT.source && _nextPhT.source.scope) || _nextPhT.scope || 'per_group')) : null;
-        var _showGroupStandings = !!_nextPhT && _nextScopeT !== 'overall';
+        var _showGroupStandings = true;
         var _renderGroup = function(g) {
           // v2.3.19: classificação POR GRUPO removida — a classificação geral
           // (todos os jogadores) fica acima das rodadas. Aqui só renderizamos
@@ -3977,6 +3978,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             _gst = _gst.slice().sort(function (a, b) { return _stRank(a.name) - _stRank(b.name); });
             // Pts AVANÇADOS visíveis na tabela quando o torneio usa Pontos Avançados.
             var _advPtsOn = !!(t.advancedScoring && t.advancedScoring.enabled);
+            // Quantos classificam POR GRUPO pra próxima fase (0 = fase única → sem tarja verde).
+            var _classifN = (_nextPhT && _nextScopeT !== 'overall' && typeof window._phaseClassifiedCount === 'function') ? window._phaseClassifiedCount(t, _gst.length) : 0;
             if (_gst.length) {
               var _gstRows = _gst.map(function(s, idx) {
                 var _pos = idx + 1, _md = _pos === 1 ? '🥇' : _pos === 2 ? '🥈' : _pos === 3 ? '🥉' : '';
@@ -3987,7 +3990,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _woTag = (_isRed || _isAmb)
                   ? ' <span style="font-size:0.58rem;font-weight:900;color:' + (_isRed ? '#f87171' : '#fbbf24') + ';border:1px solid ' + (_isRed ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)') + ';border-radius:5px;padding:0 5px;vertical-align:middle;">W.O.</span>'
                   : '';
-                return '<tr style="border-top:1px solid rgba(255,255,255,0.06);">' +
+                var _clsGreen = (idx < _classifN && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
+                return '<tr style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
                   '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + window._safeHtml(s.name) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + '</td>' +
                   (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:#fbbf24;font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
