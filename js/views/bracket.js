@@ -2972,10 +2972,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       </div>`;
   }
 
-  // v4.3.17: borda ESQUERDA do card inteiro com a cor da LINHA (Ouro/Prata/…) — mesma
-  // paleta canônica das chaves. Só nas linhas paralelas (gold/silver/line3/line4); linha
-  // única 'main', grande final e 3º lugar não recebem (não há "linha" a distinguir).
-  var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6' };
+  // v4.3.17/v4.4.98: borda ESQUERDA do card inteiro com a cor da LINHA — mesma paleta
+  // canônica das chaves. Regra do dono: SEMPRE que a eliminatória tem mais de uma linha
+  // paralela, cada box de jogo ganha a cor da sua linha. (a) Ouro/Prata/… do construtor
+  // de fases: gold/silver/line3/line4. (b) Dupla Eliminatória: 'upper' (Chave Superior,
+  // verde) e 'lower' (Chave Inferior, âmbar) — MESMAS cores dos cabeçalhos das seções
+  // (ver renderSection em ~1551-1552). Linha única 'main', Grande Final ('grand') e 3º
+  // lugar NÃO recebem (culminação/linha única — não há "linha paralela" a distinguir).
+  var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
   var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + _tierLC[m.bracket] + ';') : '';
   return `
     <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:120px;background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
