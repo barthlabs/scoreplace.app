@@ -3941,6 +3941,27 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _nextPhT = (window._isMultiPhase && window._isMultiPhase(t)) ? (t.phases[(t.currentPhaseIndex || 0) + 1] || null) : null;
         var _nextScopeT = _nextPhT ? (((_nextPhT.source && _nextPhT.source.scope) || _nextPhT.scope || 'per_group')) : null;
         var _showGroupStandings = true;
+        // v4.4.x: Rei/Rainha classifica pela GERAL (grupos são rotativos de 4). Quando a
+        // transição pra próxima fase é OVERALL, marca com tarja verde na tabela do grupo os
+        // nomes que estão dentro do corte da classificação geral (top-N da tabela geral).
+        var _overallGreenNames = {};
+        if (_nextPhT && _nextScopeT === 'overall') {
+          var _ovSrc = _nextPhT.source || {};
+          var _ovCut = 0;
+          if (Array.isArray(_ovSrc.mapping) && _ovSrc.mapping.length) {
+            var _ovMx = _ovSrc.mapping.reduce(function (m, mp) { return Math.max(m, parseInt(mp.rankTo, 10) || 0); }, 0);
+            if (_ovMx > 0 && _ovMx < 999) _ovCut = _ovMx;
+          }
+          if (!_ovCut) _ovCut = parseInt(_ovSrc.qualifyTopN, 10) || 0;
+          if (_ovCut > 0) {
+            __standingsCache.forEach(function (sec) {
+              (sec.computed || []).slice(0, _ovCut).forEach(function (s) { if (s && s.name) _overallGreenNames[String(s.name)] = 1; });
+            });
+          }
+        }
+        // v4.4.x: o botão "Editar" (corrigir placar) fica disponível na classificatória
+        // ATÉ a fase avançar — depois disso (eliminatória/encerrado/visão read-only) some.
+        var _phaseLocked = (t.currentStage === 'elimination') || (t.status === 'finished') || !!(opts && opts.suppressAutoAdvance);
         var _renderGroup = function(g) {
           // v2.3.19: classificação POR GRUPO removida — a classificação geral
           // (todos os jogadores) fica acima das rodadas. Aqui só renderizamos
@@ -3990,7 +4011,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _woTag = (_isRed || _isAmb)
                   ? ' <span style="font-size:0.58rem;font-weight:900;color:' + (_isRed ? '#f87171' : '#fbbf24') + ';border:1px solid ' + (_isRed ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)') + ';border-radius:5px;padding:0 5px;vertical-align:middle;">W.O.</span>'
                   : '';
-                var _clsGreen = (idx < _classifN && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
+                var _clsGreen = ((idx < _classifN || _overallGreenNames[s.name]) && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
                 return '<tr style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
                   '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + window._safeHtml(s.name) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + '</td>' +
@@ -4030,8 +4051,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           window._suppressMatchArrivedBtn = true;
           var gCards = g.matches.map(function(m) {
             // v4.4.68: FONTE ÚNICA — m._gameNum, SEM fallback (relink + stamp garantem carimbo).
-            // v2.3.19: grupo concluído → cards compactos (sem botão Editar).
-            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, m._gameNum, gDone, _pendingSub) + '</div>';
+            // v4.4.x: o botão Editar (corrigir placar) fica ATÉ a fase avançar (_phaseLocked),
+            // não some só porque o grupo concluiu — o organizador ainda pode corrigir placar.
+            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, m._gameNum, _phaseLocked, _pendingSub) + '</div>';
           }).join('');
           window._suppressMatchArrivedBtn = false;
           // "Em andamento" REMOVIDO (pedido do dono — é óbvio, só rouba espaço). Só o
@@ -4066,10 +4088,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // o substituto convidado já surge nos cards de jogo (via _pendingSub).
           // _woName já foi calculado acima.
           return '<div data-group-box="1" style="scroll-margin-top:120px;background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
-            // Header EMPILHADO (pedido do dono): nome do grupo → SEU GRUPO (só no grupo
-            // do usuário) → 👑 Rei/Rainha, um abaixo do outro; controles à direita.
-            '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;">' +
-              '<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start;">' +
+            // Header do grupo: nome + SEU GRUPO + 👑 Rei/Rainha. Quando NÃO há botões
+            // (_rightCtrl vazio) economiza espaço colocando tudo numa LINHA só (pedido do
+            // dono); com botões, empilha à esquerda e deixa os controles à direita.
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;">' +
+              '<div style="display:flex;' + (_rightCtrl ? 'flex-direction:column;align-items:flex-start;gap:5px;' : 'flex-direction:row;align-items:center;gap:8px;flex-wrap:wrap;') + '">' +
                 '<span style="display:inline-flex;align-items:center;gap:6px;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + statusBadge + '</span>' +
                 (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') +
                 _monarchBadge +
