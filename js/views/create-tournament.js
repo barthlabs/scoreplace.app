@@ -4501,7 +4501,7 @@ function setupCreateTournamentModal() {
     var _teamTgl = document.getElementById('enroll-toggle-team');
     if (_indivTgl && _teamTgl) {
       _indivTgl.checked = (_enrollMode === 'individual' || _enrollMode === 'misto');
-      _teamTgl.checked = (_enrollMode === 'time' || _enrollMode === 'misto');
+      _teamTgl.checked = (_enrollMode === 'time' || _enrollMode === 'teams' || _enrollMode === 'misto');
       window._syncEnrollToggles();
     }
     // v2.2.46: restaura toggle de separação por origem (modo misto)

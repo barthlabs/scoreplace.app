@@ -579,7 +579,7 @@ function renderDashboard(container) {
 
     let enrollmentText = _t('enroll.modeMixed');
     if (t.enrollmentMode === 'individual') enrollmentText = _t('enroll.modeIndividual');
-    else if (t.enrollmentMode === 'time') enrollmentText = _t('enroll.modeTeam');
+    else if (t.enrollmentMode === 'time' || t.enrollmentMode === 'teams') enrollmentText = _t('enroll.modeTeam');
     else if (t.enrollmentMode === 'misto') enrollmentText = _t('enroll.modeMixed');
 
     // v2.8.42: isOrg por UID (identidade primária) — email só como fallback legado

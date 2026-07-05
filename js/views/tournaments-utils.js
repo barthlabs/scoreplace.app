@@ -15,6 +15,16 @@ window._isMonarchFormat = window._isMonarchFormat || function(t) {
     return !!(t && (t.drawMode === 'rei_rainha' || t.ligaRoundFormat === 'rei_rainha'));
 };
 
+// v4.4.96: enrollmentMode CANÔNICO — 'time' (legado) e 'teams' (format2, ver
+// format2.js:215/244) são SINÔNIMOS de "equipe/dupla"; 'misto' também permite
+// duplas. Helper único pra matar o drift 'time' vs 'teams' que fazia torneios de
+// dupla-formada criados pelo format2 (enrollmentMode='teams') caírem no grid
+// individual misturado (regressão do card canônico de duplas). Sempre usar este
+// helper — NUNCA comparar `enrollmentMode === 'time'` cru (fica cego a 'teams').
+window._isTeamEnrollMode = window._isTeamEnrollMode || function(mode) {
+    return mode === 'time' || mode === 'teams' || mode === 'misto';
+};
+
 // ── Merge Participants: mesclar dois participantes (organizer, após sorteio) ──
 // Supports both desktop drag-and-drop AND mobile touch drag.
 // Core logic in _executeMerge(); drag/touch just determine source+target names.

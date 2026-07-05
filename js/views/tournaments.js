@@ -945,7 +945,7 @@ function renderTournaments(container, tournamentId = null) {
         if (!t) return 0;
         var enrollmentMode = t.enrollmentMode || t.enrollment || 'individual';
         var teamSize = parseInt(t.teamSize) || 1;
-        if (!((enrollmentMode === 'time' || enrollmentMode === 'misto') && teamSize === 2)) return 0;
+        if (!(window._isTeamEnrollMode(enrollmentMode) && teamSize === 2)) return 0;
 
         var parts = Array.isArray(t.participants) ? t.participants : [];
         var solo = parts.filter(function(p) {
@@ -1669,7 +1669,7 @@ function renderTournaments(container, tournamentId = null) {
 
         let enrollmentText = _t('enroll.modeMixed');
         if (t.enrollmentMode === 'individual') enrollmentText = _t('enroll.modeIndividual');
-        else if (t.enrollmentMode === 'time') enrollmentText = _t('enroll.modeTeam');
+        else if (t.enrollmentMode === 'time' || t.enrollmentMode === 'teams') enrollmentText = _t('enroll.modeTeam');
         else if (t.enrollmentMode === 'misto') enrollmentText = _t('enroll.modeMixed');
 
         const sortearOnClick = `event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._handleSortearClick('${t.id}', ${isAberto})`;
@@ -1937,7 +1937,7 @@ function renderTournaments(container, tournamentId = null) {
 
         // --- Variáveis de botões do organizador (escopo global do card para evitar ReferenceError) ---
         const allowsIndividual = !t.enrollmentMode || t.enrollmentMode === 'individual' || t.enrollmentMode === 'misto';
-        const allowsTeams = t.enrollmentMode === 'time' || t.enrollmentMode === 'misto';
+        const allowsTeams = window._isTeamEnrollMode(t.enrollmentMode);
         // Para duplas (teamSize===2 com enrollmentMode=time): mostrar "+ Participante"
         // pois inscrições são individuais e duplas formadas por arrastar e soltar.
         const isDoublesMode = allowsTeams && parseInt(t.teamSize || 2) === 2;
@@ -3392,7 +3392,7 @@ function renderTournaments(container, tournamentId = null) {
             </div>`;
 
             // ── Torneios de duplas: layout em duas seções ─────────────────────────
-            const _isDoublesTournament = (t.enrollmentMode === 'time' || t.enrollmentMode === 'misto') && parseInt(t.teamSize || 2) === 2;
+            const _isDoublesTournament = window._isTeamEnrollMode(t.enrollmentMode) && parseInt(t.teamSize || 2) === 2;
             const _allParts = Array.isArray(t.participants) ? t.participants : [];
             // v2.7.90: dupla = entrada com p1Name E p2Name (verdade ESTRUTURAL) OU nome
             // "A / B" (legado). NÃO depender só de "/" no displayName: duplas formadas
