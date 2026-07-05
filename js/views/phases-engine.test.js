@@ -632,5 +632,36 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(pm.length === 10 && pm.every(function (m) { return m.bracket === 'league'; }), 'materialize: gerou 10 jogos de LIGA (não chave)');
 })();
 
+// 20) Chaveamento: Cabeças de chave (seed) × Equilíbrio (balanced) na R1 do genTierBracket.
+//     Reproduz a escolha do organizador: com 8 colocados ranqueados R1..R8, seed pareia
+//     espelho (1×8, 2×7…) e balanced pareia adjacente (1×2, 3×4…) — confrontos DIFERENTES.
+(function () {
+  var teams = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8'].map(function (n) { return { displayName: n }; });
+  function r1set(seedMode) {
+    var b = eng.genTierBracket(teams.slice(), 'main', 'gt-' + seedMode, 'bye', false, seedMode);
+    return b.matches.filter(function (m) { return m.round === 1; })
+      .map(function (m) { return [m.p1, m.p2].sort().join('×'); }).sort();
+  }
+  eq(r1set('seed'), ['R1×R8', 'R2×R7', 'R3×R6', 'R4×R5'], 'seed: espelho 1×N (cabeças de chave protegidas)');
+  eq(r1set('balanced'), ['R1×R2', 'R3×R4', 'R5×R6', 'R7×R8'], 'balanced: confrontos adjacentes (equilíbrio)');
+  ok(JSON.stringify(r1set('seed')) !== JSON.stringify(r1set('balanced')), 'seed × balanced produzem confrontos DIFERENTES');
+  // default (sem seedMode) = seed (compat).
+  eq(r1set(undefined), ['R1×R8', 'R2×R7', 'R3×R6', 'R4×R5'], 'default = cabeças de chave (retrocompat)');
+
+  // 8 → potência de 2 exata: mesmo nº de jogos nos dois modos, árvore idêntica.
+  var bSeed = eng.genTierBracket(teams.slice(), 'main', 'gs', 'bye', false, 'seed');
+  var bBal = eng.genTierBracket(teams.slice(), 'main', 'gb', 'bye', false, 'balanced');
+  eq(bSeed.matches.length, bBal.matches.length, 'seed × balanced: mesmo total de jogos (mesma árvore)');
+  eq(bBal.totalRounds, 3, 'balanced com 8 colocados = 3 rodadas');
+
+  // Fora de potência de 2 (6 colocados): balanced dá 2 BYEs pros melhores + adjacentes no resto.
+  var t6 = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6'].map(function (n) { return { displayName: n }; });
+  var b6 = eng.genTierBracket(t6, 'main', 'g6', 'bye', false, 'balanced');
+  var byeWinners = b6.matches.filter(function (m) { return m.round === 1 && m.isBye; }).map(function (m) { return m.winner; }).sort();
+  eq(byeWinners, ['R1', 'R2'], 'balanced fora de pow2: BYE vai pros 2 melhores');
+  var realR1 = b6.matches.filter(function (m) { return m.round === 1 && !m.isBye; }).map(function (m) { return [m.p1, m.p2].sort().join('×'); }).sort();
+  eq(realR1, ['R3×R4', 'R5×R6'], 'balanced fora de pow2: resto pareia adjacente');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);

@@ -389,22 +389,26 @@
         }
         // v4.4.41: resumo LOGO ABAIXO do slider (pedido do dono).
         eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
-        // v4.4.43: estratégia = COMO FORMAR AS DUPLAS (nunca confronto direto). As cabeças de
-        // chave são SEMPRE semeadas (melhores afastados, jogos mais fortes ficam pro fim).
-        // v4.4.55: só faz sentido quando os classificados vêm de classificação INDIVIDUAL
-        // (Rei/Rainha ou sorteio a cada rodada) → `e.origem === 'formar'`. Se a fase anterior
-        // já tem DUPLAS FIXAS (montadas/sorteadas fixas), elas passam prontas → sem "como formar".
-        if (isDupla && e.origem === 'formar') {
-          var _hints = {
-            performance: 'O 1º forma dupla COM o 2º, o 3º com o 4º… — duplas mais fortes.',
-            equilibrio: 'O 1º forma dupla com o 4º, o 2º com o 3º… — duplas equilibradas.',
-            sorteio: 'Duplas formadas por sorteio — os melhores entram como cabeças de chave.'
-          };
-          eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Como formar as duplas na eliminatória</div>' +
-            '<div>' + _pill(e.formacao === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') + _pill(e.formacao === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') + _pill(e.formacao === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') + '</div>' +
-            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (_hints[e.formacao] || '') + '</div>' +
-            '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;opacity:0.85;">As cabeças de chave são sempre semeadas — os melhores só se enfrentam no fim.</div>';
-        }
+        // v4.4.x: ESTRATÉGIA da eliminatória — UM conceito geral (pedido do dono). Vale pra
+        // TODO torneio (individual E duplas). NÃO são duas escolhas (formar duplas × confrontos):
+        // é UMA só. Performance = beneficiar os melhores (duplas fortes juntas + cabeças de chave
+        // protegidas). Equilíbrio = jogos disputados (duplas equilibradas + confrontos parelhos).
+        // A Dupla Eliminatória tem semeadura própria (repescagem) → sem escolha de confronto, mas
+        // a formação das duplas (quando aplicável) ainda usa a estratégia.
+        var _forma = isDupla && e.origem === 'formar';       // há duplas a FORMAR dos indivíduos
+        var _hP = _forma
+          ? 'Beneficia os melhores: duplas fortes juntas (1º+2º, 3º+4º…) e cabeças de chave protegidas — os melhores só se cruzam no fim.'
+          : 'Beneficia os melhores: cabeças de chave protegidas — o 1º pega o último, o 2º o penúltimo… os melhores só se cruzam no fim.';
+        var _hE = _forma
+          ? 'Jogos mais disputados: duplas equilibradas (1º+4º, 2º+3º…) e confrontos parelhos (1º×2º, 3º×4º…) desde a 1ª rodada.'
+          : 'Jogos mais disputados: confrontos parelhos (1º×2º, 3º×4º…) desde a 1ª rodada — sem proteger os melhores.';
+        var _hints = { performance: _hP, equilibrio: _hE, sorteio: 'Duplas e confrontos definidos por sorteio, sem usar a classificação.' };
+        var _fx = (e.formacao === 'sorteio' && !_forma) ? 'performance' : e.formacao; // sorteio só quando forma duplas
+        eb += '<div style="margin-top:14px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Estratégia da eliminatória</div>' +
+          '<div>' + _pill(_fx === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') +
+          _pill(_fx === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') +
+          (_forma ? _pill(_fx === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') : '') + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (_hints[_fx] || _hints.performance) + '</div>';
       }
       // v4.4.58: Dupla Eliminatória (repescagem) — toggle + explicação de como funciona.
       // Quando ON é UMA chave só (força 1 linha no normalize) → o controle de Linhas some.
@@ -638,6 +642,8 @@
   // v4.4.58: Dupla Eliminatória (repescagem). ON força 1 linha (chave única) no normalize.
   window._f2ElimDupla = function (checked) { S.cfg.eliminatoria.dupla = !!checked; _norm(); _rerender(); };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
+  // v4.4.x: estratégia ÚNICA da eliminatória (performance/equilíbrio/sorteio) — dirige formação
+  // das duplas E semeadura dos confrontos (compilador deriva bracketSeeding).
   window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };
   window._f2Terceiro = function (b) { S.cfg.eliminatoria.terceiro = !!b; _norm(); };
   window._f2LineName = function (i, v) { if (S && S.cfg.eliminatoria.nomes) S.cfg.eliminatoria.nomes[i] = v; };

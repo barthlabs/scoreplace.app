@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.106-beta — você escolhe a estratégia da eliminatória <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎯 Estratégia da eliminatória:</b> na fase eliminatória você agora decide o critério do chaveamento com uma escolha só, que vale para qualquer torneio (individual ou duplas). <b>📈 Performance</b> beneficia os melhores — as equipes mais fortes ficam juntas e os cabeças de chave são protegidos, se cruzando só nas fases finais (1º × último, 2º × penúltimo…). <b>⚖️ Equilíbrio</b> deixa os jogos mais disputados desde o começo — confrontos parelhos já na 1ª rodada (1º × 2º, 3º × 4º…), sem proteger os melhores. Quando há duplas a formar, existe ainda a opção <b>🎲 Sorteio</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.103-beta — novo criador de torneios por fases + polimento de duplas e sorteio <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🧩 Criador de torneios por fases:</b> montar o torneio ficou mais claro — uma Fase Classificatória (Pontos Corridos, grupos ou Rei/Rainha) seguida de uma Fase Eliminatória, cada uma com seu botão liga/desliga no título. Você escolhe como formar as equipes (Montadas, Sorteio ou Rei/Rainha), o número de rodadas, o agendamento dos sorteios e quantos avançam — por grupo ou pela classificação geral, com atalho "Todos". A fase classificatória trava (fica cinza) depois de sorteada; a eliminatória fica editável até você clicar "🏆 Avançar de fase".</li>' +

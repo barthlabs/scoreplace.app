@@ -226,9 +226,15 @@
   //   'exclusion': corta os piores colocados até a potência ABAIXO → chave limpa.
   //   'playin': classificatória (round 0) entre os últimos → reduz pra potência abaixo;
   //             os melhores entram direto, os vencedores do play-in completam a chave.
-  function genTierBracket(teams, bracketKey, idPrefix, resolution, tierThird) {
+  function genTierBracket(teams, bracketKey, idPrefix, resolution, tierThird, seedMode) {
     teams = teams || [];
     resolution = resolution || 'bye';
+    // v4.4.x: seedMode = REGRA GERAL do torneio (cabeças de chave × equilíbrio dos
+    // confrontos). 'seed' (default) = espelho 1×N (cabeças protegidas); 'balanced' =
+    // colocações adjacentes (1×2, 3×4…) — jogos parelhos desde a R1. Só afeta o caminho
+    // padrão (bye/pow2 e o pós-corte de exclusão/espera); a repescagem (playin) tem
+    // semeadura própria (todos jogam a R1) e ignora o modo.
+    seedMode = (seedMode === 'balanced') ? 'balanced' : 'seed';
     var n = teams.length;
     if (n === 0) return { matches: [], finalMatchId: null, soleWinner: null };
     if (n === 1) return { matches: [], finalMatchId: null, soleWinner: teams[0].displayName };
@@ -339,10 +345,29 @@
 
     var pow = 1; while (pow < slots.length) pow *= 2; // 'bye' → pow > n; senão pow == lo
     var totalRounds = Math.round(Math.log(pow) / Math.log(2));
+
+    // v4.4.x: pareamento da R1 conforme seedMode.
+    //   'seed' (Cabeças de chave): espelho 1×N — o melhor pega o pior, o 2º o penúltimo…;
+    //     os BYEs (fora de pow2) caem sobre os melhores colocados (folga merecida) e os
+    //     cabeças só se cruzam nas fases finais.
+    //   'balanced' (Equilíbrio dos confrontos): colocações ADJACENTES (1×2, 3×4…) — jogos
+    //     parelhos desde a R1, sem proteger os melhores. Os BYEs vão pros melhores; o
+    //     restante pareia adjacente por rank. Mesmo nº de jogos (pow/2) → árvore idêntica.
+    var _r1Pairs = [];
+    if (seedMode === 'balanced') {
+      var _byeN = pow - slots.length;
+      for (var _bi = 0; _bi < _byeN; _bi++) _r1Pairs.push([slots[_bi] || null, null]);
+      var _restS = slots.slice(_byeN);
+      for (var _rj = 0; _rj + 1 < _restS.length; _rj += 2) _r1Pairs.push([_restS[_rj], _restS[_rj + 1]]);
+      if (_restS.length % 2 === 1) _r1Pairs.push([_restS[_restS.length - 1], null]); // guarda (2n-pow é par → não ocorre)
+    } else {
+      for (var _si = 0; _si < pow / 2; _si++) _r1Pairs.push([slots[_si] || null, slots[pow - 1 - _si] || null]);
+    }
+
     var roundsMap = {};
     var r1 = [];
-    for (var i = 0; i < pow / 2; i++) {
-      var s1 = slots[i] || null, s2 = slots[pow - 1 - i] || null;
+    for (var i = 0; i < _r1Pairs.length; i++) {
+      var s1 = _r1Pairs[i][0], s2 = _r1Pairs[i][1];
       var t1 = (s1 && s1.team) ? s1.team : null, t2 = (s2 && s2.team) ? s2.team : null;
       var pi1 = (s1 && s1.fromPlayIn) ? s1.fromPlayIn : null, pi2 = (s2 && s2.fromPlayIn) ? s2.fromPlayIn : null;
       var isBye = !s1 || !s2;
@@ -422,6 +447,7 @@
     var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 2 }];
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs !== false) : true;
     var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
+    var bracketSeeding = (phaseCfg && phaseCfg.bracketSeeding === 'balanced') ? 'balanced' : 'seed'; // cabeças × equilíbrio
     var scope = src.scope || 'per_group';            // 'per_group' | 'overall'
     var rankingBasis = src.rankingBasis || 'individual'; // 'individual' | 'team' (keep)
 
@@ -461,7 +487,7 @@
       // v2.7.23: resolução de potência-de-2 escolhida pelo organizador (uma só pra
       // todas as linhas). Default 'bye' = comportamento legado. Setado pelo painel.
       var _res = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
-      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res, _tierThird);
+      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res, _tierThird, bracketSeeding);
       // v2.6.79: nome da linha/chave = o que o organizador digitou (mapping[].label);
       // sem ícone de medalha hardcoded. Fallback genérico "Chave N" (ordem da linha).
       var _mp = mapping.filter(function (m) { return m.dest === dest; })[0];
@@ -786,7 +812,8 @@
       return _duplaR1FromPool(pool, _res, idPrefix);
     }
     // Linha única = bracket 'main' (igual à Fase N) → _renderPhaseBracket renderiza por 1 render só.
-    return genTierBracket(pool, 'main', idPrefix, _res, _third);
+    var _seed = (cfg && cfg.bracketSeeding === 'balanced') ? 'balanced' : 'seed'; // cabeças × equilíbrio
+    return genTierBracket(pool, 'main', idPrefix, _res, _third, _seed);
   }
 
   function generatePhase(pool, cfg, ctx) {

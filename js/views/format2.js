@@ -51,7 +51,9 @@
         linhas: 1,
         nomes: [''],
         origem: 'ja_formadas',
-        formacao: 'performance', // performance (1º+2º…) | equilibrio (1º+4º…) | sorteio; cabeças sempre semeadas
+        formacao: 'performance', // ESTRATÉGIA geral: performance (beneficia os melhores) | equilibrio
+                                 // (jogos disputados) | sorteio. Dirige FORMAÇÃO das duplas E semeadura
+                                 // dos confrontos de uma vez só (compilador deriva bracketSeeding).
         qualifyAll: false,       // false = os X melhores (slider); true = TODOS avançam
         terceiro: true,
         grandFinal: true,        // v4.4.73: grande final unindo as linhas. Só editável na SIMPLES
@@ -136,6 +138,9 @@
     // dupla fixa → duplas carregam (já formadas).
     e.origem = (out._scoreBy === 'individual' && isDupla) ? 'formar' : 'ja_formadas';
     if (['performance', 'equilibrio', 'sorteio'].indexOf(e.formacao) === -1) e.formacao = 'performance';
+    // 'sorteio' só faz sentido FORMANDO duplas (senão não há o que sortear — os confrontos
+    // seguem a classificação). Fora disso cai em 'performance' (beneficia os melhores).
+    if (e.formacao === 'sorteio' && !(isDupla && e.origem === 'formar')) e.formacao = 'performance';
     e.qualifyAll = !!e.qualifyAll;
     if (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) === -1) e.lateEnrollment = 'closed';
     e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
@@ -220,7 +225,7 @@
         format: elimDupla0 ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,
         source: { type: 'enrollment' },
-        fixedPairs: isDupla, pairingStrategy: 'top',
+        fixedPairs: isDupla, pairingStrategy: 'top', // eliminação direta: inscritos sorteados (sem ranking → semeadura neutra)
         mapping: _buildMapping(d0, e0.nomes, Math.max(e0.linhas, 2) * 8, e0.linhas),
         grandFinal: elimDupla0 || (e0.linhas > 1 && e0.grandFinal !== false), thirdPlace: e0.terceiro, drawManual: false
       });
@@ -319,6 +324,10 @@
       var elimPairing = (isDupla)
         ? ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e.formacao] || 'top')
         : 'top';
+      // v4.4.x: CONCEITO ÚNICO — a MESMA estratégia dirige a semeadura dos confrontos:
+      // performance → cabeças de chave (seed, protege os melhores); equilíbrio → confrontos
+      // parelhos (balanced); sorteio → duplas já vêm embaralhadas, semeadura neutra (seed).
+      var elimSeeding = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'seed' }[e.formacao] || 'seed');
       var qAll = !!e.qualifyAll;
       var elimDupla = !!e.dupla; // v4.4.58: Dupla Eliminatória (repescagem)
       var p1 = Object.assign(_phaseBase(re), {
@@ -336,7 +345,7 @@
           // plana → motor usa pool global (respeita o slider), sem degenerar pra por-grupo.
           flatOverall: (cfg.parceria === 'rei_rainha' && !perGroup)
         },
-        fixedPairs: elimFixedPairs, pairingStrategy: elimPairing,
+        fixedPairs: elimFixedPairs, pairingStrategy: elimPairing, bracketSeeding: elimSeeding,
         mapping: mapping, grandFinal: elimDupla || (nLines > 1 && e.grandFinal !== false), thirdPlace: e.terceiro,
         lateEnrollment: e.lateEnrollment || 'closed', // inscrições durante a eliminatória
         drawManual: false
