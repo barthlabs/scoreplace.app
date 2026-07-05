@@ -3556,6 +3556,28 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // (o "Saldo" já é o saldo de games). Hide data-driven.
   var _anyRealSets = _allStandingsRows.some(function(s){ return ((s.setsWon||0)+(s.setsLost||0)) > 0; });
   var _showGsm = _useSetsStandings && _anyRealSets;
+  // v4.4.x: TARJA VERDE de "quem classifica" na CLASSIFICAÇÃO GERAL (por seção/categoria).
+  // Vale quando a transição pra próxima fase é OVERALL (Rei/Rainha / Pontos Corridos, onde a
+  // classificação que define quem avança é a geral, não por grupo). Corte = top-N (maior rankTo
+  // do mapping, ou qualifyTopN). 0 = sem próxima fase overall → sem verde na geral (a por-grupo
+  // da Fase de Grupos é marcada dentro de cada grupo). Todos classificam → corte cobre a lista.
+  var _geralGreenCut = 0;
+  (function () {
+    if (!(window._isMultiPhase && window._isMultiPhase(t))) return;
+    var _np = t.phases[(t.currentPhaseIndex || 0) + 1];
+    if (!_np || !_np.source) return;
+    if (((_np.source.scope) || _np.scope || 'per_group') !== 'overall') return;
+    var _src = _np.source, _cut = 0;
+    // "Todos classificam" (qualifyAll) → o corte cobre a lista inteira (todos verdes).
+    var _isAll = _src.qualifyQuantity === 'all' || _src.qualifyMode === 'all';
+    if (Array.isArray(_src.mapping) && _src.mapping.length) {
+      var _mx = _src.mapping.reduce(function (m, mp) { return Math.max(m, parseInt(mp.rankTo, 10) || 0); }, 0);
+      if (_mx >= 999) _isAll = true;
+      else if (_mx > 0) _cut = _mx;
+    }
+    if (!_cut && !_isAll) _cut = parseInt(_src.qualifyTopN, 10) || 0;
+    _geralGreenCut = _isAll ? 999999 : (_cut > 0 ? _cut : 0);
+  })();
   // v2.3.15: nova ordem de colunas — [PA ou Pts] · %G · V · D · [E] · Saldo · [±S ±G] · J
   const _buildStandingsRows = function(computed) {
     return computed.map((s, i) => {
@@ -3577,7 +3599,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         ? `<td style="padding:11px 14px;text-align:center;color:${_setsDiff >= 0 ? '#06b6d4' : '#f87171'};">${_setsDiff >= 0 ? '+' : ''}${_setsDiff}</td><td style="padding:11px 14px;text-align:center;color:${_gamesDiff >= 0 ? '#8b5cf6' : '#f87171'};">${_gamesDiff >= 0 ? '+' : ''}${_gamesDiff}</td>`
         : '';
       return `
-    <tr style="border-bottom:1px solid var(--border-color);${i < 3 ? 'background:rgba(251,191,36,0.03)' : ''}">
+    <tr style="border-bottom:1px solid var(--border-color);${i < _geralGreenCut ? 'background:rgba(34,197,94,0.10);' : (i < 3 ? 'background:rgba(251,191,36,0.03)' : '')}">
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
       <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
       ${_scoreCell}
@@ -3941,24 +3963,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _nextPhT = (window._isMultiPhase && window._isMultiPhase(t)) ? (t.phases[(t.currentPhaseIndex || 0) + 1] || null) : null;
         var _nextScopeT = _nextPhT ? (((_nextPhT.source && _nextPhT.source.scope) || _nextPhT.scope || 'per_group')) : null;
         var _showGroupStandings = true;
-        // v4.4.x: Rei/Rainha classifica pela GERAL (grupos são rotativos de 4). Quando a
-        // transição pra próxima fase é OVERALL, marca com tarja verde na tabela do grupo os
-        // nomes que estão dentro do corte da classificação geral (top-N da tabela geral).
-        var _overallGreenNames = {};
-        if (_nextPhT && _nextScopeT === 'overall') {
-          var _ovSrc = _nextPhT.source || {};
-          var _ovCut = 0;
-          if (Array.isArray(_ovSrc.mapping) && _ovSrc.mapping.length) {
-            var _ovMx = _ovSrc.mapping.reduce(function (m, mp) { return Math.max(m, parseInt(mp.rankTo, 10) || 0); }, 0);
-            if (_ovMx > 0 && _ovMx < 999) _ovCut = _ovMx;
-          }
-          if (!_ovCut) _ovCut = parseInt(_ovSrc.qualifyTopN, 10) || 0;
-          if (_ovCut > 0) {
-            __standingsCache.forEach(function (sec) {
-              (sec.computed || []).slice(0, _ovCut).forEach(function (s) { if (s && s.name) _overallGreenNames[String(s.name)] = 1; });
-            });
-          }
-        }
+        // v4.4.x: no Rei/Rainha (grupos rotativos de 4) a classificação que define quem avança
+        // é a GERAL (overall) — a tarja verde de "quem classifica" NÃO vai na tabela do grupo
+        // (senão, se todos classificam, tudo fica verde e não informa nada). Ela vai só na
+        // CLASSIFICAÇÃO GERAL (ver _geralGreenCut). Aqui a por-grupo só marca verde quando a
+        // transição é POR GRUPO (Fase de Grupos com corte real por grupo → _classifN).
         // v4.4.x: o botão "Editar" (corrigir placar) fica disponível na classificatória
         // ATÉ a fase avançar — depois disso (eliminatória/encerrado/visão read-only) some.
         var _phaseLocked = (t.currentStage === 'elimination') || (t.status === 'finished') || !!(opts && opts.suppressAutoAdvance);
@@ -4011,7 +4020,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _woTag = (_isRed || _isAmb)
                   ? ' <span style="font-size:0.58rem;font-weight:900;color:' + (_isRed ? '#f87171' : '#fbbf24') + ';border:1px solid ' + (_isRed ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)') + ';border-radius:5px;padding:0 5px;vertical-align:middle;">W.O.</span>'
                   : '';
-                var _clsGreen = ((idx < _classifN || _overallGreenNames[s.name]) && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
+                var _clsGreen = (idx < _classifN && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
                 return '<tr style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
                   '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + window._safeHtml(s.name) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + '</td>' +
