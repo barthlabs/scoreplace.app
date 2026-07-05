@@ -331,7 +331,10 @@
           type: 'previous_phase', fromPhaseOffset: 1,
           byGroupRank: perGroup, scope: perGroup ? 'per_group' : 'overall',
           qualifyMode: qAll ? 'all' : (perGroup ? 'per_group' : 'overall'),
-          qualifyQuantity: qAll ? 'all' : 'top', qualifyTopN: topN, mapping: mapping
+          qualifyQuantity: qAll ? 'all' : 'top', qualifyTopN: topN, mapping: mapping,
+          // v4.4.x: Rei/Rainha em escopo GERAL → grupos rotativos de 4 = ranking geral é lista
+          // plana → motor usa pool global (respeita o slider), sem degenerar pra por-grupo.
+          flatOverall: (cfg.parceria === 'rei_rainha' && !perGroup)
         },
         fixedPairs: elimFixedPairs, pairingStrategy: elimPairing,
         mapping: mapping, grandFinal: elimDupla || (nLines > 1 && e.grandFinal !== false), thirdPlace: e.terceiro,

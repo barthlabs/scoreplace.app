@@ -197,9 +197,12 @@
     // (nenhuma chave, só a grande final). Nesse caso usa POR GRUPO: cada linha vira
     // uma faixa de colocação (Linha 1 = 1º de cada grupo, Linha 2 = 2º, …) — chaves
     // de verdade. Geral só vale com 1 linha OU 1 grupo (pool único de verdade).
+    // v4.4.x: EXCEÇÃO Rei/Rainha (opts.flatOverall): os "grupos" são rotativos de 4 (uma
+    // rodada), então o ranking GERAL é uma lista plana de N jogadores — pool geral de
+    // verdade. Aí NÃO degenera: usa o pool global e respeita o corte do slider (maxRankTo).
     var _nLines = destKeys.length;
     var _multiGroup = (prevGroups || []).length >= 2;
-    var _useOverall = (scope === 'overall') && !(_nLines >= 2 && _multiGroup);
+    var _useOverall = (scope === 'overall') && (opts.flatOverall === true || !(_nLines >= 2 && _multiGroup));
     if (_useOverall) {
       // Pool agregado (ranking geral) — usado por Cabeças de chave e por qualquer
       // estratégia em escopo Geral.
@@ -885,7 +888,7 @@
     var fixedPairs = cfg ? (cfg.fixedPairs !== false) : true;
     var pairingStrategy = (cfg && cfg.pairingStrategy) || 'top';
     return buildEntrantsByDest(prevGroups, mapping, fixedPairs, ctx.computeStandings, pairingStrategy,
-      { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual' });
+      { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual', flatOverall: src.flatOverall === true });
   }
 
   // v3.1: LIGA / PONTOS CORRIDOS como fase posterior. Tabela ÚNICA (não grupos):
