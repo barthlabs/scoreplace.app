@@ -559,13 +559,18 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
   const renderSideRow = (name) => {
     if (!name || name === 'TBD' || name === 'BYE') return '';
     const members = name.includes(' / ') ? name.split(' / ').map(n => n.trim()).filter(n => n) : [name];
-    const dots = members.map(n => {
+    const dots = members.map((n, i) => {
       const present = window._idMapHas(t, ci, n);
       const isAbs = window._idMapHas(t, absentMap, n);
       const dotColor = present ? '#10b981' : isAbs ? '#ef4444' : '#64748b';
       const textColor = present ? '#4ade80' : isAbs ? '#f87171' : '#94a3b8';
-      return `<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block;"></span><span style="font-size:0.78rem;color:${textColor};">${_sh(n)}</span></span>`;
-    }).join('<span style="font-size:0.65rem;color:rgba(255,255,255,0.15);margin:0 2px;">/</span>');
+      // v4.4.99: a "/" separadora fica COLADA ao FIM do nome de cima (inline, DENTRO do
+      // próprio span do nome), nunca como item flex solto entre os dois. Assim, quando o
+      // nome do topo quebra em 2 linhas, a "/" acompanha "…Souza /" em vez de vazar pro
+      // começo da linha do 2º nome (o deslocamento que aparecia na Karla/Adriano). (dono)
+      const sep = (i < members.length - 1) ? '<span style="font-size:0.65rem;color:rgba(255,255,255,0.2);margin-left:4px;">/</span>' : '';
+      return `<span style="display:inline-flex;align-items:baseline;gap:3px;"><span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block;align-self:center;"></span><span style="font-size:0.78rem;color:${textColor};">${_sh(n)}${sep}</span></span>`;
+    }).join('');
     return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${dots}</div>`;
   };
 
