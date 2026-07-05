@@ -1720,23 +1720,49 @@ window._ligaCurrentRoundStartTs = function (t) {
     return null;
 };
 
-// v4.4.x: FONTE ÚNICA do indicador "Rodada em andamento" (rótulo + ícone + tempo decorrido
-// da RODADA ATUAL). Qualquer box que mostre o decorrido da rodada DEVE usar isto — nunca
-// escrever "Tempo decorrido"/"Rodada em andamento" à mão nem recalcular o início. Assim o
-// texto e a semântica (início da rodada, via _ligaCurrentRoundStartTs) ficam num lugar só.
-// Retorna os 3 <span> internos (ícone + rótulo + valor tickando via data-elapsed-since), ou
-// '' quando não há rodada em andamento. O box (borda/fundo/flex) é do chamador.
-//   color: cor do texto (contraste com a tarja). opts: { iconSize, labelSize, valueSize }.
+// v4.4.x: fim (ms) da RODADA ATUAL da Liga QUANDO todos os resultados já foram lançados
+// (todas as partidas não-folga têm vencedor). = último placar concluído (max m.resultAt) ou
+// completedAt da rodada. null se a rodada AINDA não encerrou (ou não dá pra carimbar o fim) →
+// nesse caso o relógio segue "em andamento". Usado pra CONGELAR o relógio em "Rodada encerrada".
+window._ligaCurrentRoundEndTs = function (t) {
+    if (!t || !Array.isArray(t.rounds) || !t.rounds.length) return null;
+    var _curR = t.rounds[t.rounds.length - 1] || {};
+    var _rMatches = (_curR.matches || []).filter(function (m) { return !m.isSitOut; });
+    if (!_rMatches.length) return null;
+    var _allDone = _rMatches.every(function (m) { return !!m.winner || m.isBye; });
+    if (!_allDone) return null; // rodada não encerrada
+    var _ends = _rMatches.map(function (m) { return m.resultAt ? (+m.resultAt) : 0; }).filter(function (x) { return x; });
+    if (_ends.length) return Math.max.apply(null, _ends);
+    if (_curR.completedAt) { var _c = new Date(_curR.completedAt).getTime(); if (!isNaN(_c)) return _c; }
+    return null; // encerrada mas sem carimbo de fim → não congela com valor errado
+};
+
+// v4.4.x: FONTE ÚNICA do indicador da RODADA ATUAL. Enquanto a rodada roda → "▶️ Rodada em
+// andamento" com o tempo decorrido tickando (data-elapsed-since). Quando TODOS os resultados
+// foram lançados → "🏁 Rodada encerrada" com a DURAÇÃO TOTAL CONGELADA (sem data-elapsed-since,
+// não conta mais). Qualquer box que mostre isso DEVE usar este helper — texto/semântica num só
+// lugar. Retorna os 3 <span> internos, ou '' quando não há rodada. O box (borda/fundo) é do chamador.
+//   color: cor do texto. opts: { iconSize, labelSize, valueSize }.
 window._ligaRoundInProgressRow = function (t, color, opts) {
     var _since = (typeof window._ligaCurrentRoundStartTs === 'function' && window._ligaCurrentRoundStartTs(t))
         || (typeof window._ligaElapsedSinceTs === 'function' && window._ligaElapsedSinceTs(t));
     if (!_since || _since > Date.now()) return '';
     opts = opts || {};
     var _icon = opts.iconSize || '1.3rem', _lbl = opts.labelSize || '0.85rem', _val = opts.valueSize || '1.15rem';
+    var _endTs = (typeof window._ligaCurrentRoundEndTs === 'function') ? window._ligaCurrentRoundEndTs(t) : null;
+    var _valStyle = 'margin-left:auto;font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;';
+    var _lblStyle = 'font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    if (_endTs && _endTs >= _since) {
+        // ENCERRADA — relógio congelado na duração total (sem data-elapsed-since → não ticka).
+        var _dur = window._formatCountdown ? window._formatCountdown(_endTs - _since) : '';
+        return '<span style="font-size:' + _icon + ';flex-shrink:0;">🏁</span>' +
+            '<span style="' + _lblStyle + '">Rodada encerrada</span>' +
+            '<span style="' + _valStyle + '">' + _dur + '</span>';
+    }
     var _txt = window._formatCountdown ? window._formatCountdown(Date.now() - _since) : '';
     return '<span style="font-size:' + _icon + ';flex-shrink:0;">▶️</span>' +
-        '<span style="font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Rodada em andamento</span>' +
-        '<span data-elapsed-since="' + _since + '" style="margin-left:auto;font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;">' + _txt + '</span>';
+        '<span style="' + _lblStyle + '">Rodada em andamento</span>' +
+        '<span data-elapsed-since="' + _since + '" style="' + _valStyle + '">' + _txt + '</span>';
 };
 
 // Navigate to tournament detail and scroll to highlight the enrolled participant
