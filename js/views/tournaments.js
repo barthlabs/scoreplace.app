@@ -3497,11 +3497,11 @@ function renderTournaments(container, tournamentId = null) {
                   var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                   var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
                   var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
-                  // v2.8.68: nome NÃO trunca — quebra em até 2 linhas e a fonte ENCOLHE
-                  // (auto-fit JS _fitTwoLineNames) até caber na altura do avatar (28px).
+                  // v2.8.68/v4.4.105: nome maior (17px) que NÃO trunca — quebra em até 2 linhas
+                  // (altura 44px); só ENCOLHE via auto-fit JS _fitTwoLineNames em casos extremos.
                   // class sp-fit-name + data-fit-h/max alimentam o medidor; avatar acompanha
                   // (align-items:center). title = nome completo no hover.
-                  var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="28" data-fit-max="13.5" style="font-weight:700;font-size:13.5px;color:var(--text-bright);line-height:1.1;max-height:28px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
+                  var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="17" style="font-weight:700;font-size:17px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
                   var _av = right
                     ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
                     : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
@@ -3574,9 +3574,9 @@ function renderTournaments(container, tournamentId = null) {
                 var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                 var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
                 var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
-                // v2.8.88: nome longo NÃO trunca — encolhe a fonte e quebra em até 2 linhas
-                // respeitando a altura do avatar (28px), igual ao card de dupla formada.
-                var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="28" data-fit-max="13.5" style="font-weight:700;font-size:13.5px;color:var(--text-bright);line-height:1.1;max-height:28px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
+                // v2.8.88/v4.4.105: nome maior (17px), quebra em até 2 linhas (altura 44px) e só
+                // encolhe em casos extremos — igual ao card de dupla formada.
+                var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="17" style="font-weight:700;font-size:17px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
                 var _av = right
                   ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
                   : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
