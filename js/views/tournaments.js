@@ -2453,9 +2453,9 @@ function renderTournaments(container, tournamentId = null) {
                 // v4.x: MAIS DESTAQUE pro cronômetro do sorteio — box maior, número grande.
                 return '<div style="margin-top:10px;padding:14px 18px;background:' + _rbCt.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);">' +
                   '<div style="display:flex;align-items:center;gap:12px;">' +
-                    '<span style="font-size:1.7rem;">' + _ligaEvent.icon + '</span>' +
-                    '<span style="font-size:0.95rem;font-weight:700;color:' + _ctColor + ' !important;">' + _ligaEvent.label + '</span>' +
-                    '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.7rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;line-height:1;">' + _countdownText + '</span>' +
+                    '<span style="font-size:1.5rem;flex-shrink:0;">' + _ligaEvent.icon + '</span>' +
+                    '<span style="font-size:0.95rem;font-weight:700;color:' + _ctColor + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _ligaEvent.label + '</span>' +
+                    '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.35rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
                   '</div>' +
                   _roundLine +
                 '</div>';
@@ -2487,7 +2487,7 @@ function renderTournaments(container, tournamentId = null) {
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt2.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ' !important;">' + _next.label + '</span>' +
-                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText2 + '</span>' +
+                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _countdownText2 + '</span>' +
               '</div>';
             })()}
 

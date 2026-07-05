@@ -1734,9 +1734,9 @@ window._ligaRoundInProgressRow = function (t, color, opts) {
     opts = opts || {};
     var _icon = opts.iconSize || '1.3rem', _lbl = opts.labelSize || '0.85rem', _val = opts.valueSize || '1.15rem';
     var _txt = window._formatCountdown ? window._formatCountdown(Date.now() - _since) : '';
-    return '<span style="font-size:' + _icon + ';">▶️</span>' +
-        '<span style="font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;">Rodada em andamento</span>' +
-        '<span data-elapsed-since="' + _since + '" style="margin-left:auto;font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;line-height:1;">' + _txt + '</span>';
+    return '<span style="font-size:' + _icon + ';flex-shrink:0;">▶️</span>' +
+        '<span style="font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Rodada em andamento</span>' +
+        '<span data-elapsed-since="' + _since + '" style="margin-left:auto;font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;">' + _txt + '</span>';
 };
 
 // Navigate to tournament detail and scroll to highlight the enrolled participant

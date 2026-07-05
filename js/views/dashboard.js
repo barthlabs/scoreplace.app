@@ -855,9 +855,9 @@ function renderDashboard(container) {
                 return _toggleRowDash +
                   '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
                   '<div style="display:flex;align-items:center;gap:10px;">' +
-                    '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +
-                    '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">' + _ligaEv.label + '</span>' +
-                    '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
+                    '<span style="font-size:1.3rem;flex-shrink:0;">' + _ligaEv.icon + '</span>' +
+                    '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _ligaEv.label + '</span>' +
+                    '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.1rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _ct + '</span>' +
                   '</div>' +
                   _roundLineD +
                 '</div>';
@@ -887,7 +887,7 @@ function renderDashboard(container) {
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt2.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ' !important;">' + _next.label + '</span>' +
-                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
+                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.1rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
               '</div>';
             })()}
 
