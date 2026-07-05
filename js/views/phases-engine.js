@@ -835,10 +835,15 @@
     } else if (fmt === 'groups') {
       built = genGroupsFromPool(pool, cfg, idPrefix);
     } else {
-      // Eliminatória: split por CATEGORIA (cada categoria = chave independente). Sem
-      // categorias → 1 chave. O split é um EIXO da fase (cfg.categories), não código de
+      // Eliminatória: split por CATEGORIA só quando há 2+ categorias REAIS (cada uma =
+      // chave independente). O split é um EIXO da fase (cfg.categories), não código de
       // posição. Cada chave tagueia seus matches com a categoria.
-      var cats = (cfg && Array.isArray(cfg.categories) && cfg.categories.length) ? cfg.categories : null;
+      // v4.4.101 (raiz, sem fallback): categoria ÚNICA (ex.: Casais "Misto Obrig.") = UMA
+      // chave — split de 1 categoria é no-op e FRÁGIL: bastava catOf não bater o único
+      // `cat` (categoria não gravada no participante naquele instante) pra sumir todo mundo
+      // → 'no-entrants' → sorteio fantasma. Categoria única NÃO passa pelo split; a chave
+      // sai do pool inteiro e os jogos são taggeados com ela. Split existe só p/ 2+.
+      var cats = (cfg && Array.isArray(cfg.categories) && cfg.categories.length > 1) ? cfg.categories : null;
       if (cats && ctx && typeof ctx.catOf === 'function') {
         var allM = [], needsDE = false, repMetas = [];
         cats.forEach(function (cat, ci) {
@@ -858,24 +863,24 @@
           // a chave saía incompleta (só a repescagem R1). Ver project_dupla_elim_repechage.
           if (b.needsRepechageDoubleElim && b.repMeta) { b.repMeta.category = cat; repMetas.push(b.repMeta); }
         });
-        // v4.4.100: REDE DE SEGURANÇA — se o split por categoria não casou NINGUÉM (todo
-        // catPool vazio: catOf divergiu de cfg.categories, ex.: a categoria não estava
-        // gravada nos participantes no instante do sorteio) mas o pool TEM gente, gera UMA
-        // chave única com todo o pool em vez de devolver chave vazia. Sem isso, storePhase
-        // dava 'no-entrants' e o sorteio virava fantasma ("Sorteio realizado" sem chave).
-        if (allM.length === 0 && pool.length > 0) {
-          built = _genElimFromPool(pool, cfg, idPrefix);
-        } else {
-          built = { matches: allM };
-          if (needsDE) built.needsDoubleElim = true;
-          if (repMetas.length) {
-            built.needsRepechageDoubleElim = true;
-            built.repMeta = repMetas[0];                 // caso comum: 1 categoria (ex.: Casais "Misto Obrig.")
-            if (repMetas.length > 1) built.repMetaByCat = repMetas; // multi-categoria: builder por categoria
-          }
+        built = { matches: allM };
+        if (needsDE) built.needsDoubleElim = true;
+        if (repMetas.length) {
+          built.needsRepechageDoubleElim = true;
+          built.repMeta = repMetas[0];
+          if (repMetas.length > 1) built.repMetaByCat = repMetas; // multi-categoria: builder por categoria
         }
       } else {
+        // Sem split (0 ou 1 categoria): UMA chave do pool inteiro. Se há exatamente 1
+        // categoria, tagueia os jogos com ela (o filtro por categoria em _computeStandings
+        // exige a tag). Igual ao ramo do split: matches taggeados + repMeta.category setado
+        // → _buildRepechageDoubleElim carimba os jogos que cria depois (upper R2+/lower/grand).
         built = _genElimFromPool(pool, cfg, idPrefix);
+        var _loneCat = (cfg && Array.isArray(cfg.categories) && cfg.categories.length === 1) ? cfg.categories[0] : null;
+        if (_loneCat != null) {
+          (built.matches || []).forEach(function (m) { if (m.category == null) m.category = _loneCat; });
+          if (built.repMeta && built.repMeta.category == null) built.repMeta.category = _loneCat;
+        }
       }
     }
     if (cfg && cfg.category != null) (built.matches || []).forEach(function (m) { if (m.category == null) m.category = cfg.category; });
