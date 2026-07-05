@@ -9,6 +9,25 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.103-beta — novo criador de torneios por fases + polimento de duplas e sorteio <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🧩 Criador de torneios por fases:</b> montar o torneio ficou mais claro — uma Fase Classificatória (Pontos Corridos, grupos ou Rei/Rainha) seguida de uma Fase Eliminatória, cada uma com seu botão liga/desliga no título. Você escolhe como formar as equipes (Montadas, Sorteio ou Rei/Rainha), o número de rodadas, o agendamento dos sorteios e quantos avançam — por grupo ou pela classificação geral, com atalho "Todos". A fase classificatória trava (fica cinza) depois de sorteada; a eliminatória fica editável até você clicar "🏆 Avançar de fase".</li>' +
+        '<li><b>👫 Duplas montadas mais consistentes:</b> quem ainda está "sem dupla" aparece em cima e as duplas formadas embaixo. Ao sortear, o app pergunta primeiro o que fazer com quem ficou sem dupla (reabrir, lista de espera ou excluir) e só então monta a chave contando apenas as equipes completas. "Total de inscritos" passa a contar pessoas (uma dupla = 2).</li>' +
+        '<li><b>📊 Classificação por grupo à vista:</b> em Rei/Rainha e Fase de Grupos, a tabela de classificação aparece acima de cada grupo, e quem se classifica é marcado com uma tarja verde. Na classificação geral, as linhas (Ouro/Prata…) ganham cores próprias.</li>' +
+        '<li><b>⏱️ "Rodada em andamento" e "Rodada encerrada":</b> o box do próximo sorteio ganhou uma 2ª linha com o tempo decorrido da rodada; quando todos os resultados entram, o relógio congela em "🏁 Rodada encerrada". O número da contagem sempre cabe em uma linha.</li>' +
+        '<li><b>🎾 Dupla Eliminatória mais legível:</b> cada jogo mostra na lateral a cor da sua chave (Superior verde, Inferior âmbar). E no agendamento de quadras, os nomes das duplas ficam alinhados sem "escorregar".</li>' +
+        '<li><b>🔧 Sorteio à prova de falhas:</b> corrigimos casos em que o app dizia "sorteio realizado" mas a chave não aparecia. O sorteio de duplas montadas agora gera a chave de forma confiável, inclusive fora de potência de 2 (com repescagem).</li>' +
+        '<li><b>🗂️ Ordem da tela inicial:</b> torneios em andamento vêm antes dos encerrados; encerrados ficam só à frente dos que você ocultou. E o resumo de configuração do torneio agora abre sempre recolhido.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.36-beta — correções: nome da fase e seletor de quadra <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏷️ Nome da fase de eliminatórias:</b> o cabeçalho mostrava um código interno ("BRACKET.KNOCKOUT") em vez de "Eliminatória". Corrigido.</li>' +
+        '<li><b>📍 Seletor de quadra de volta:</b> nos jogos "prontos para chamar", o organizador voltou a ver o seletor pra designar a quadra de cada jogo — inclusive em torneios do atalho rápido. Sem quadras configuradas ele oferece "Quadra 1"; defina o número/nomes de quadras no torneio pra listar mais.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.35-beta — inclui o botão "Entrar" com mais volume (degradê + brilho esmeralda) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⏱️ Pontos Corridos respeita as suas rodadas:</b> o número de rodadas e a frequência dos sorteios agora seguem exatamente o que você configura (data do 1º sorteio, de quanto em quanto tempo repete e a data final). A barra de progresso, o cronômetro e o botão "Avançar de fase" acompanham — nada mais fica preso numa rodada só.</li>' +
