@@ -608,29 +608,43 @@ window._executeRemoval = function(tId, mode, method) {
     if (!t) return;
 
     var arr = Array.isArray(t.participants) ? t.participants.slice() : [];
-    // v2.1.29: remove em PLAYERS até sobrar exatamente a maior potência de 2 de
-    // TIMES COMPLETOS — zero resto, zero BYE. Antes removia só o "remainder" (o
-    // avulso, 1), deixando nº de times fora da potência de 2 → BYE. Ex.: 19
-    // avulsos (dupla) → mantém 16 (8 duplas) e manda 3 pra espera.
     var _ts = parseInt(t.teamSize) || 1;
     var _enr = t.enrollmentMode || t.enrollment || 'individual';
     if ((_enr === 'time' || _enr === 'misto') && _ts < 2) _ts = 2;
     var _playersOf = function(p) { return window._entryTeamMembers(p) ? _ts : 1; }; // v3.0.x: time por estrutura, não por '/'
-    var _totalPlayers = arr.reduce(function(s, p) { return s + _playersOf(p); }, 0);
-    var _maxTeams = Math.floor(_totalPlayers / _ts);
-    var _targetTeams = _maxTeams >= 1 ? 1 : 0;
-    while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
-    var _playersToRemove = _totalPlayers - (_targetTeams * _ts);
+    var _manualPair = (typeof window._isManualPairing === 'function') && window._isManualPairing(t);
     var removed = [];
-    var _removedPlayers = 0;
-    if (method === 'last') {
-        while (_removedPlayers < _playersToRemove && arr.length > 0) {
-            var _e = arr.pop(); removed.unshift(_e); _removedPlayers += _playersOf(_e);
-        }
+    if (_manualPair) {
+        // v4.4.95: dupla FORMADA (formação manual) — os avulsos sem-dupla são
+        // INELEGÍVEIS (não têm com quem jogar). Move/exclui TODOS eles; os times
+        // já formados ficam intactos (a resolução pow2 roda depois só sobre eles).
+        // NUNCA calcula excedente pow2 sobre o pool inteiro de pessoas — era isso
+        // que deixava sem-dupla pra trás (34 pessoas → 32 → removia só 2 de 4).
+        var _keep = [];
+        arr.forEach(function(p) {
+            if (window._entryTeamMembers(p)) _keep.push(p); else removed.push(p);
+        });
+        arr = _keep;
     } else {
-        while (_removedPlayers < _playersToRemove && arr.length > 0) {
-            var _idx = Math.floor(Math.random() * arr.length);
-            var _e2 = arr.splice(_idx, 1)[0]; removed.push(_e2); _removedPlayers += _playersOf(_e2);
+        // v2.1.29: remove em PLAYERS até sobrar exatamente a maior potência de 2 de
+        // TIMES COMPLETOS — zero resto, zero BYE. Antes removia só o "remainder" (o
+        // avulso, 1), deixando nº de times fora da potência de 2 → BYE. Ex.: 19
+        // avulsos (dupla) → mantém 16 (8 duplas) e manda 3 pra espera.
+        var _totalPlayers = arr.reduce(function(s, p) { return s + _playersOf(p); }, 0);
+        var _maxTeams = Math.floor(_totalPlayers / _ts);
+        var _targetTeams = _maxTeams >= 1 ? 1 : 0;
+        while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
+        var _playersToRemove = _totalPlayers - (_targetTeams * _ts);
+        var _removedPlayers = 0;
+        if (method === 'last') {
+            while (_removedPlayers < _playersToRemove && arr.length > 0) {
+                var _e = arr.pop(); removed.unshift(_e); _removedPlayers += _playersOf(_e);
+            }
+        } else {
+            while (_removedPlayers < _playersToRemove && arr.length > 0) {
+                var _idx = Math.floor(Math.random() * arr.length);
+                var _e2 = arr.splice(_idx, 1)[0]; removed.push(_e2); _removedPlayers += _playersOf(_e2);
+            }
         }
     }
     var removeCount = removed.length;
