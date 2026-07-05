@@ -48,9 +48,13 @@ window._diagnoseAll = function(t) {
         }
     });
 
-    // Scenario A: Remainder (individuals that can't form teams)
-    const remainder = individuals % teamSize;
-    const completeTeamsFromIndividuals = Math.floor(individuals / teamSize);
+    // v4.4.x: DUPLAS FORMADAS (manual) — os avulsos NÃO se auto-formam por sorteio: são
+    // PENDÊNCIA (reabrir/formar/lista/exclusão). Então nenhum time sai dos avulsos e a pow2
+    // conta só os times FORMADOS; todos os avulsos entram como "resto" a resolver.
+    // Formação por SORTEIO (default) segue auto-formando os avulsos em duplas completas.
+    const _manualPair = (typeof window._isManualPairing === 'function') && window._isManualPairing(t);
+    const remainder = _manualPair ? individuals : (individuals % teamSize);
+    const completeTeamsFromIndividuals = _manualPair ? 0 : Math.floor(individuals / teamSize);
     const effectiveTeams = preFormedTeams + completeTeamsFromIndividuals;
 
     // Scenario B+C: Power of 2 check

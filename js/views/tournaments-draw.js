@@ -606,6 +606,16 @@ window._rebuildIntegratedBracket = function(t) {
   return true;
 };
 
+// v4.4.x: FONTE ÚNICA — o torneio forma as duplas MANUALMENTE (participantes/organizador
+// montam), em vez de por SORTEIO? Sinal definitivo = fmt2.formacaoDupla === 'manual'; legado =
+// manualPairing === 'open'. Quando manual, os avulsos (sem dupla) são PENDÊNCIA a resolver
+// (reabrir/formar/lista/exclusão), NÃO gente pra auto-parear nem pra contar como time na pow2.
+window._isManualPairing = function (t) {
+  if (!t) return false;
+  if (t.fmt2 && typeof t.fmt2 === 'object' && t.fmt2.formacaoDupla) return t.fmt2.formacaoDupla === 'manual';
+  return t.manualPairing === 'open';
+};
+
 // ─── v2.1.20: Diálogo de gênero pré-sorteio (duplas mistas, sorteio livre) ────
 // Mostra ANTES do sorteio quando: duplas (teamSize 2) formadas por pareamento de
 // indivíduos, SEM categoria masc/fem separada. Deixa o organizador (a) atribuir
@@ -622,6 +632,11 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   // (gênero + Livre/Equilibrado) só faz sentido em Eliminatórias/Grupos de duplas fixas.
   // Pular pra Liga — senão o "Sortear" abre essa tela errada (exposto após reset).
   if (window._isLigaFormat && window._isLigaFormat(t)) return false;
+  // v4.4.x: DUPLAS FORMADAS (manual) — as duplas são montadas pelos participantes/organizador,
+  // NÃO se auto-formam por sorteio. Os avulsos (sem dupla) são PENDÊNCIA (reabrir/formar/lista/
+  // exclusão), não gente pra parear ao acaso. Então esse diálogo (Livre/Equilibrado) não se
+  // aplica — pular. Só vale quando a formação é por SORTEIO (formacaoDupla !== 'manual').
+  if (typeof window._isManualPairing === 'function' && window._isManualPairing(t)) return false;
   var enrMode = t.enrollmentMode || t.enrollment || 'individual';
   var teamSize = parseInt(t.teamSize) || 1;
   if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
