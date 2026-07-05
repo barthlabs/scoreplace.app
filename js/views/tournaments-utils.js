@@ -2032,14 +2032,10 @@ window._buildTournamentConfigBox = function (t, opts) {
     // v4.x: sobre foto → tarja densa (_photoReadBox) + backdrop blur pra suavizar o fundo
     // agitado e garantir contraste do texto.
     var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);') : '';
-    // v2.7.47: persiste colapsado/expandido POR TORNEIO. Uma vez colapsado, fica
-    // colapsado (mesmo após re-render / mudança de versão); só expande se o usuário
-    // expandir. Sem estado salvo → usa o default (opts.open).
-    var _cfgKey = 'scoreplace_cfgbox_' + String((t && t.id) || '');
-    var _cfgSaved = null; try { _cfgSaved = localStorage.getItem(_cfgKey); } catch (e) {}
-    var _cfgOpen = (_cfgSaved === '1') ? true : (_cfgSaved === '0') ? false : !!(opts && opts.open);
-    var _cfgKeyJs = _cfgKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var openAttr = _cfgOpen ? ' open' : '';
+    // v4.4.x: SEMPRE colapsado por padrão — no DETALHE e na DASHBOARD (pedido do dono:
+    // "sempre fechado no detalhe e na dashboard"). Abre só quando o usuário clica (estado
+    // do <details> na sessão); sem persistência de "aberto" — todo render começa fechado.
+    var openAttr = '';
     // v4.x: TÍTULO = formatos das FASES juntos (ex.: "Pontos Corridos / Eliminatórias") —
     // multi-fase mostra as duas. O tipo de jogo (Duplas 2×2) desce pro digest, sem tanto peso.
     var _titleFmt = fmt;
@@ -2082,7 +2078,6 @@ window._buildTournamentConfigBox = function (t, opts) {
     // label "configuração ▾" do fim é cortada. O <span> do meio elipsa o texto
     // longo; o do fim nunca encolhe (flex-shrink:0 + nowrap) — fica sempre legível.
     return '<details class="info-box tourn-config-box"' + openAttr +
-        ' ontoggle="try{localStorage.setItem(\'' + _cfgKeyJs + '\', this.open?\'1\':\'0\')}catch(e){}"' +
         ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;' + bgStyle + '">' +
         '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;flex-direction:column;gap:3px;min-width:0;max-width:100%;">' +
         '<span style="display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;">' +
