@@ -4356,8 +4356,32 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       prevRoundsInner += '<div style="margin-bottom: 12px;">' +
         '<div style="font-weight: 700; font-size: 0.85rem; color: var(--text-bright); margin-bottom: 8px;">' + (rdIsRR ? '👑 ' : '') + _t('bracket.round', {n: ri + 1}) + (rdComplete ? ' — ' + _t('bracket.complete') + ' ✓' : '') + '</div>' +
         '<div style="display: flex; flex-wrap: wrap; gap: 12px;">';
-      rd.matches.forEach(function(m, mi) {
+      // v4.4.114: ordena — jogos reais primeiro, depois FOLGA (âmbar), depois INATIVO (vermelho).
+      var _rdOrdered = (rd.matches || []).slice().sort(function(a, b){
+        function rank(x){ if(!x || !x.isSitOut) return 0; return x.sitOutReason === 'inactive' ? 2 : 1; }
+        return rank(a) - rank(b);
+      });
+      _rdOrdered.forEach(function(m, mi) {
         if (!m.p1 && !m.p2) return;
+        // v4.4.114: FOLGA/INATIVO têm card próprio — nunca renderiza como jogo "/ FOLGA" com
+        // rótulo "Pendente" (folga/inatividade não é jogo pendente). Inativo = vermelho
+        // "INATIVO"; sobra de sorteio = âmbar "FOLGA".
+        if (m.isSitOut) {
+          var _inact = m.sitOutReason === 'inactive';
+          var _soLbl = _inact ? 'INATIVO' : 'FOLGA';
+          var _soCol = _inact ? '#ef4444' : '#fbbf24';
+          var _soBg2 = _inact ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.08)';
+          var _soBd2 = _inact ? 'rgba(239,68,68,0.22)' : 'rgba(245,158,11,0.22)';
+          var _soIc2 = _inact ? '🔴' : '😴';
+          prevRoundsInner += '<div style="min-width:200px;flex:1;max-width:280px;background:' + _soBg2 + ';border:1px solid ' + _soBd2 + ';border-radius:8px;padding:8px 12px;font-size:0.8rem;">' +
+            '<div style="display:flex;align-items:center;gap:6px;">' +
+              '<span style="flex-shrink:0;">' + _soIc2 + '</span>' +
+              '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-muted);">' + window._safeHtml(window._resolveSideLive(t, m.p1) || m.p1) + '</span>' +
+              '<span style="flex-shrink:0;font-weight:800;font-size:0.6rem;color:' + _soCol + ';text-transform:uppercase;letter-spacing:0.4px;">' + _soLbl + '</span>' +
+            '</div>' +
+          '</div>';
+          return;
+        }
         var w = m.winner;
         var isDraw = w === 'draw' || m.draw;
         var p1Win = !!w && w === m.p1;

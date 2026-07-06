@@ -13,11 +13,14 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 function eq(a, b, m) { ok(a === b, m + ' (esperado ' + b + ', veio ' + a + ')'); }
 
 // 3 jogos de um grupo Rei/Rainha (A,B,C,D). A joga os 3 (parceiro rotativo).
-function games(idSuffix) {
+// gi = índice do grupo: a re-geração da MESMA rodada põe os mesmos 4 num gi DIFERENTE
+// (0 na 1ª geração, 1 na 2ª) — o dedup NÃO pode olhar o gi, só os times.
+function games(idSuffix, gi) {
+  gi = gi || 0;
   return [
-    { id: 'g1-' + idSuffix, round: 1, monarchGroup: 0, isMonarch: true, team1: ['A', 'B'], team2: ['C', 'D'], p1: 'A / B', p2: 'C / D', winner: 'A / B', scoreP1: 6, scoreP2: 3 },
-    { id: 'g2-' + idSuffix, round: 1, monarchGroup: 0, isMonarch: true, team1: ['A', 'C'], team2: ['B', 'D'], p1: 'A / C', p2: 'B / D', winner: 'A / C', scoreP1: 6, scoreP2: 2 },
-    { id: 'g3-' + idSuffix, round: 1, monarchGroup: 0, isMonarch: true, team1: ['A', 'D'], team2: ['B', 'C'], p1: 'A / D', p2: 'B / C', winner: 'B / C', scoreP1: 4, scoreP2: 6 }
+    { id: 'g1-' + idSuffix, round: 1, monarchGroup: gi, isMonarch: true, team1: ['A', 'B'], team2: ['C', 'D'], p1: 'A / B', p2: 'C / D', winner: 'A / B', scoreP1: 6, scoreP2: 3 },
+    { id: 'g2-' + idSuffix, round: 1, monarchGroup: gi, isMonarch: true, team1: ['A', 'C'], team2: ['B', 'D'], p1: 'A / C', p2: 'B / D', winner: 'A / C', scoreP1: 6, scoreP2: 2 },
+    { id: 'g3-' + idSuffix, round: 1, monarchGroup: gi, isMonarch: true, team1: ['A', 'D'], team2: ['B', 'C'], p1: 'A / D', p2: 'B / C', winner: 'B / C', scoreP1: 4, scoreP2: 6 }
   ];
 }
 
@@ -52,9 +55,10 @@ function sumCount(result, key) {
   eq(sumCount(r, 'game_lost'), 11, 'baseline: 11 games perdidos (3+2+6)');
 })();
 
-// ── 2. COM duplicata (mesmos jogos, IDs diferentes): NÃO pode dobrar ──
+// ── 2. COM duplicata (mesmos jogos, IDs E grupo DIFERENTES): NÃO pode dobrar ──
+// Reproduz o caso REAL: a re-geração põe a cópia no grupo 1 (o original é grupo 0).
 (function () {
-  var dup = games('a').concat(games('b')); // 3 reais + 3 cópias com id diferente
+  var dup = games('a', 0).concat(games('b', 1)); // 3 reais (gi=0) + 3 cópias (gi=1, ids diferentes)
   var r = W._calcAdvancedPoints(mkT(dup), 'A', null);
   eq(sumCount(r, 'participation'), 3, 'DUP: participações continuam 3 (não 6) — dedup lógico');
   eq(sumCount(r, 'match_won'), 2, 'DUP: vitórias continuam 2 (não 4)');
@@ -65,10 +69,11 @@ function sumCount(result, key) {
 // ── 3. _appendCanonicalColumn não re-appenda jogos já presentes (guarda na fonte) ──
 (function () {
   var t = { rounds: [] };
-  var g = games('x');
+  var g = games('x', 0);
   W._appendCanonicalColumn(t, { phase: 'monarch', round: 1, format: 'rei_rainha', matches: g.slice(), monarchGroups: [{ players: ['A', 'B', 'C', 'D'], matches: g.slice() }] });
-  // 2ª chamada com os MESMOS jogos (re-sorteio) — ids diferentes, mesma identidade lógica.
-  W._appendCanonicalColumn(t, { phase: 'monarch', round: 1, format: 'rei_rainha', matches: games('y'), monarchGroups: [{ players: ['A', 'B', 'C', 'D'], matches: games('y') }] });
+  // 2ª chamada com os MESMOS jogos (re-sorteio) — ids E grupo (gi=1) diferentes, mesma identidade lógica.
+  var g2 = games('y', 1);
+  W._appendCanonicalColumn(t, { phase: 'monarch', round: 1, format: 'rei_rainha', matches: g2.slice(), monarchGroups: [{ players: ['A', 'B', 'C', 'D'], matches: g2.slice() }] });
   eq(t.rounds[0].matches.length, 3, 'append 2× a mesma rodada NÃO duplica jogos (3, não 6)');
   eq((t.rounds[0].monarchGroups || []).length, 1, 'append 2× NÃO duplica o grupo monarca (1, não 2)');
 })();

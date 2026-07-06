@@ -302,7 +302,11 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
     var _s1 = Array.isArray(m.team1) ? m.team1.slice().sort().join(',') : String(m.p1 || '');
     var _s2 = Array.isArray(m.team2) ? m.team2.slice().sort().join(',') : String(m.p2 || '');
     var _sides = [_s1, _s2].sort().join('__');
-    var lk = String(m.round || m.roundNumber || 0) + '|' + (m.monarchGroup != null ? m.monarchGroup : '') + '|' + (m.category || '') + '|' + (m.bracket || '') + '|' + _sides;
+    // v4.4.114: NÃO inclui monarchGroup na chave — uma re-geração da rodada põe os MESMOS
+    // 4 jogadores num índice de grupo diferente (gi=1 em vez de 0), e incluir o grupo
+    // deixava a cópia escapar (por isso "nada mudou"). Os times já identificam o jogo
+    // dentro da rodada (um jogador está em UM grupo só).
+    var lk = String(m.round || m.roundNumber || 0) + '|' + (m.category || '') + '|' + (m.bracket || '') + '|' + _sides;
     if (_seenLogical[lk]) return false;
     _seenLogical[lk] = 1; return true;
   });
@@ -2484,161 +2488,6 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
   }
 }
 
-// ─── Round-robin ("Todos contra todos") schedule ─────────────────────────────
-
-// Build one turno: enough rounds so every pair of players has been in the same
-// group of 4 at least once. Uses greedy Monte Carlo (try 200 shuffles per round,
-// pick the one that maximises newly-covered pairs).
-function _buildOneTurno(players) {
-  var n = players.length;
-  if (n < 4) return [];
-
-  // Canonicalise pair key (always smaller string first)
-  function pairKey(a, b) { return a < b ? a + '|||' + b : b + '|||' + a; }
-
-  // All pairs that must be covered within this turno
-  var covered = {};
-  var totalPairs = 0;
-  for (var i = 0; i < n; i++) {
-    for (var j = i + 1; j < n; j++) {
-      covered[pairKey(players[i], players[j])] = false;
-      totalPairs++;
-    }
-  }
-
-  var numPlaying = n - (n % 4); // must be multiple of 4
-  var rounds = [];
-  var maxRounds = Math.ceil((n - 1) / 3) + n; // generous safety cap
-
-  for (var r = 0; r < maxRounds; r++) {
-    // Count uncovered pairs
-    var uncovered = 0;
-    for (var k in covered) { if (!covered[k]) uncovered++; }
-    if (uncovered === 0) break;
-
-    // Try 200 shuffles, pick the one covering most uncovered pairs
-    var best = null;
-    var bestNew = -1;
-    for (var a = 0; a < 200; a++) {
-      var shuffled = players.slice();
-      for (var si = shuffled.length - 1; si > 0; si--) {
-        var sj = Math.floor(Math.random() * (si + 1));
-        var stmp = shuffled[si]; shuffled[si] = shuffled[sj]; shuffled[sj] = stmp;
-      }
-      var playing = shuffled.slice(0, numPlaying);
-      var newCount = 0;
-      for (var gi = 0; gi < playing.length; gi += 4) {
-        var grp = playing.slice(gi, gi + 4);
-        for (var gii = 0; gii < grp.length; gii++) {
-          for (var gjj = gii + 1; gjj < grp.length; gjj++) {
-            var pk = pairKey(grp[gii], grp[gjj]);
-            if (!covered[pk]) newCount++;
-          }
-        }
-      }
-      if (newCount > bestNew) { bestNew = newCount; best = playing; }
-    }
-
-    if (!best || bestNew === 0) break; // can't improve further
-
-    // Form groups of 4 and mark pairs covered
-    var roundGroups = [];
-    for (var gi2 = 0; gi2 < best.length; gi2 += 4) {
-      var grp2 = best.slice(gi2, gi2 + 4);
-      roundGroups.push(grp2);
-      for (var gii2 = 0; gii2 < grp2.length; gii2++) {
-        for (var gjj2 = gii2 + 1; gjj2 < grp2.length; gjj2++) {
-          covered[pairKey(grp2[gii2], grp2[gjj2])] = true;
-        }
-      }
-    }
-    rounds.push(roundGroups);
-  }
-
-  return rounds;
-}
-
-// Pre-generate schedule for all turnos: array of {turno, groups[]}
-function _buildRoundRobinSchedule(players, numTurnos) {
-  var schedule = [];
-  for (var turno = 1; turno <= numTurnos; turno++) {
-    // Shuffle player order between turnos for variety
-    var tp = players.slice();
-    for (var i = tp.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = tp[i]; tp[i] = tp[j]; tp[j] = tmp;
-    }
-    var turnoRounds = _buildOneTurno(tp);
-    turnoRounds.forEach(function(groups) {
-      schedule.push({ turno: turno, groups: groups });
-    });
-  }
-  return schedule;
-}
-
-// Pop next round from pre-generated schedule and append to tournament
-window._drawFromRoundRobinSchedule = function(t, category, _rn) {
-  if (!t.ligaRRSchedule) t.ligaRRSchedule = {};
-  var catKey = (category || '_default_').replace(/\s+/g, '_');
-
-  // (Re-)generate schedule when empty
-  if (!t.ligaRRSchedule[catKey] || t.ligaRRSchedule[catKey].length === 0) {
-    var standings = _computeStandings(t, category);
-    var activeNames = _getActiveLigaPlayers(t);
-    var players = standings.map(function(s) { return s.name; }).filter(function(n) { return activeNames[n]; });
-    if (players.length < 4) return false;
-    var numTurnos = t.ligaTurnos || 1;
-    t.ligaRRSchedule[catKey] = _buildRoundRobinSchedule(players, numTurnos);
-  }
-
-  if (!t.ligaRRSchedule[catKey] || t.ligaRRSchedule[catKey].length === 0) return false;
-
-  var nextRound = t.ligaRRSchedule[catKey].shift(); // consume next entry
-  // v2.5.1: o nº da rodada deriva do MAIOR `round` já existente +1, não da
-  // contagem de colunas. Multi-categoria gera 1 coluna por categoria no MESMO
-  // sorteio — todas têm que ficar na MESMA rodada (C e D ambas Rodada 1), senão
-  // a 2ª categoria virava "Rodada 2". roundIndex (índice físico da coluna)
-  // continua = length.
-  var roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);
-  var ts = Date.now();
-  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
-  var catLabel = category && window._displayCategoryName
-    ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
-  var turnoLabel = nextRound.turno ? ' [T' + nextRound.turno + ']' : '';
-
-  var allMatches = [];
-  var monarchGroups = [];
-
-  nextRound.groups.forEach(function(grp, gi) {
-    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: grp, category: category, ts: ts, nameSuffix: turnoLabel });
-    allMatches = allMatches.concat(g.matches);
-    monarchGroups.push(g);
-  });
-
-  // Sit-outs for players not in any group this round
-  var allPlaying = [];
-  nextRound.groups.forEach(function(g) { allPlaying = allPlaying.concat(g); });
-  var allActive = Object.keys(_getActiveLigaPlayers(t));
-  allActive.forEach(function(name, si) {
-    if (allPlaying.indexOf(name) === -1) {
-      var avgPts = _sitOutComp(t, name, category); // PA quando o torneio usa Pontos Avançados; senão pontos simples
-      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: 'remainder', points: avgPts });
-      allMatches.push(soObj);
-      _recordSitOut(t, [name], category);
-    }
-  });
-
-  _recordOpponentHistory(t, monarchGroups, category);
-
-  window._appendCanonicalColumn(t, {
-    phase: 'monarch', round: roundNum, status: 'active',
-    format: 'rei_rainha', matches: allMatches, monarchGroups: monarchGroups,
-    turno: nextRound.turno
-  });
-
-  return true;
-};
-
 // ─── Swiss pairing ────────────────────────────────────────────────────────────
 function _generateNextRound(t) {
   // v2.4.28: ANTES de filtrar por categoria, encaixa quem está sem categoria
@@ -2666,20 +2515,14 @@ function _generateNextRound(t) {
   // virava round=2.
   var _batchRound = ((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1;
 
-  // "Todos contra todos" mode: pop next round from pre-generated schedule
-  if (isLiga && t.ligaDrawMode === 'round_robin') {
-    var cats = (typeof window._sortCategoriesBySkillOrder === 'function')
-      ? window._sortCategoriesBySkillOrder(t.combinedCategories || [], t.skillCategories)
-      : (t.combinedCategories || []);
-    if (cats.length === 0) {
-      window._drawFromRoundRobinSchedule(t, null, _batchRound);
-    } else {
-      cats.forEach(function(cat) { window._drawFromRoundRobinSchedule(t, cat, _batchRound); });
-    }
-    return;
-  }
+  // v4.4.114: CAMINHO ÚNICO CANÔNICO. O modo "round_robin" pré-agendado
+  // (_drawFromRoundRobinSchedule) foi APAGADO — era um 2º gerador de rodada monarca com
+  // lógica de folga/inativo DIVERGENTE (marcava tudo como 'remainder', nunca 'inactive'),
+  // fonte de regressão. format2 (motor canônico) nunca usa round_robin (sempre 'standard').
+  // Torneios legados com ligaDrawMode='round_robin' caem AQUI no gerador padrão incremental
+  // (Rei/Rainha ou simples), que trata inativo corretamente. Nada é gerado fora deste ponto.
 
-  // Standard Liga or Rei/Rainha
+  // Gerador padrão: Rei/Rainha OU simples — ÚNICO caminho de geração de rodada.
   var useReiRainha = t.ligaRoundFormat === 'rei_rainha';
   var genFn = useReiRainha ? _generateReiRainhaRoundForPlayers : _generateNextRoundForPlayers;
 

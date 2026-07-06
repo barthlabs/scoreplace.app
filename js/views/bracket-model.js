@@ -499,7 +499,9 @@
         if (!m) return '';
         var s1 = Array.isArray(m.team1) ? m.team1.slice().sort().join(',') : String(m.p1 || '');
         var s2 = Array.isArray(m.team2) ? m.team2.slice().sort().join(',') : String(m.p2 || '');
-        return String(m.round || 0) + '|' + (m.monarchGroup != null ? m.monarchGroup : '') + '|' + (m.category || '') + '|' + (m.isSitOut ? ('so:' + (m.p1 || '')) : [s1, s2].sort().join('__'));
+        // v4.4.114: SEM monarchGroup — a re-geração põe os mesmos times num índice de grupo
+        // diferente; os times já identificam o jogo dentro da rodada.
+        return String(m.round || 0) + '|' + (m.category || '') + '|' + (m.isSitOut ? ('so:' + (m.p1 || '')) : [s1, s2].sort().join('__'));
       };
       var _have = {};
       (existing.matches || []).forEach(function (m) { if (m) { if (m.id != null) _have['id:' + m.id] = 1; _have['lk:' + _lk(m)] = 1; } });
