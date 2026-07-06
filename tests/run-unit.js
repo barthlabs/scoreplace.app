@@ -15,6 +15,8 @@ const SUITES = [
   'tests/phase-lifecycle.test.js',
   'tests/phase-lifecycle-formats.test.js',
   'tests/phase-chaining.test.js',
+  'tests/phase-inactive-include.test.js',
+  'tests/phase-promote-line.test.js',
   'tests/standings-tiebreakers.test.js',
   'tests/seed-pairing.test.js',
   'tests/grandfinal-lines.test.js',

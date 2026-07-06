@@ -997,7 +997,8 @@ window.showUnifiedResolutionPanel = function(tId) {
         exclusion: { title: _t('predraw.optExclusionTitle'), lines: ['Chave de ' + info.loP2, (_nExc === 1 ? 'O último é removido do torneio' : 'Os ' + _nExc + ' últimos são removidos do torneio')] },
         swiss:     { title: _t('predraw.optSwissTitle'),     lines: ['Troca pro formato Suíço', 'Todos jogam várias rodadas, sem eliminação direta', 'Classificação por pontos'] },
         dissolve:  { title: _t('predraw.optDissolveTitle'),  lines: ['Desfaz os times incompletos em jogadores individuais', 'Re-sorteia as duplas'] },
-        poll:      { title: _t('predraw.optPollTitle'),      lines: ['Cria uma enquete pros participantes', 'Eles votam na solução a aplicar'] }
+        poll:      { title: _t('predraw.optPollTitle'),      lines: ['Cria uma enquete pros participantes', 'Eles votam na solução a aplicar'] },
+        promote:   { title: 'Promover linha',                lines: ['A melhor dupla da linha de baixo sobe pra de cima', 'Rebalanceia (cima +1, baixo −1)', 'Se ainda sobrar, você escolhe BYE/repescagem'] }
     };
 
     // Render function (allows re-rendering on exclude)
@@ -1045,7 +1046,8 @@ window.showUnifiedResolutionPanel = function(tId) {
             { key: 'exclusion', icon: '🚫', title: _t('predraw.optExclusionTitle'), desc: _exclusionDesc },
             { key: 'swiss', icon: '🏅', title: _t('predraw.optSwissTitle'), desc: _t('predraw.optSwissDesc') },
             { key: 'dissolve', icon: '🧩', title: _t('predraw.optDissolveTitle'), desc: _t('predraw.optDissolveDesc') },
-            { key: 'poll', icon: '🗳️', title: _t('predraw.optPollTitle'), desc: _t('predraw.optPollDesc') }
+            { key: 'poll', icon: '🗳️', title: _t('predraw.optPollTitle'), desc: _t('predraw.optPollDesc') },
+            { key: 'promote', icon: '⬆️', title: 'Promover linha', desc: 'A melhor dupla da linha de baixo sobe pra completar a de cima. Rebalanceia o resto; se ainda não fechar, você escolhe BYE/repescagem.' }
         ];
 
         // Filter options based on context
@@ -1059,7 +1061,10 @@ window.showUnifiedResolutionPanel = function(tId) {
         let activeOptions = allOptions.filter(function(o) {
             if (excludedKeys.indexOf(o.key) !== -1) return false;
             if (t._phaseResInfo) {
-                if (['playin','standby','bye','exclusion'].indexOf(o.key) === -1) return false;
+                // v4.4.111: "Promover linha" só faz sentido com 2+ linhas (sobe da pior pra melhor).
+                var _phaseAllowed = ['playin','standby','bye','exclusion'];
+                if ((t._phaseResInfo.lines || []).length >= 2) _phaseAllowed.push('promote');
+                if (_phaseAllowed.indexOf(o.key) === -1) return false;
                 if (o.key === 'bye' && _phaseNextIsDupla) return false;
                 return true;
             }
@@ -1078,7 +1083,8 @@ window.showUnifiedResolutionPanel = function(tId) {
             exclusion: { f: 3,  i: 2,  e: 10 },
             swiss:     { f: 9,  i: 10, e: 5 },
             dissolve:  { f: 7,  i: 7,  e: 4 },
-            poll:      { f: 10, i: 10, e: 2 }
+            poll:      { f: 10, i: 10, e: 2 },
+            promote:   { f: 8,  i: 10, e: 7 }
         };
 
         // Boost effort for reopen if missing is small
@@ -1269,6 +1275,18 @@ window.showUnifiedResolutionPanel = function(tId) {
         if (t._phaseResInfo) {
             var _pi = t._phaseResInfo;
             var _idx = (_pi.nextIdx != null) ? _pi.nextIdx : ((t.currentPhaseIndex||0)+1);
+            // v4.4.111: PROMOVER LINHA — não é uma resolução de chave; rebalanceia (sobe 1
+            // da linha de baixo pra de cima) e RE-AVALIA. Se ainda não fechar em pow2, o
+            // painel reaparece com as contagens novas pro organizador escolher BYE/repescagem
+            // (ou promover de novo). Ver project_phase_inactive_resolution.
+            if (option === 'promote') {
+                if (t.phases && t.phases[_idx]) t.phases[_idx]._promoteLines = (parseInt(t.phases[_idx]._promoteLines, 10) || 0) + 1;
+                delete t._phaseResInfo;
+                var _pp2 = document.getElementById('unified-resolution-panel'); if (_pp2) _pp2.remove();
+                document.body.style.overflow = '';
+                if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+                return;
+            }
             if (t.phases && t.phases[_idx]) t.phases[_idx].bracketResolution = option;
             delete t._phaseResInfo;
             var _pp = document.getElementById('unified-resolution-panel'); if (_pp) _pp.remove();

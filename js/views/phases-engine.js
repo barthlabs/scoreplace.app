@@ -117,6 +117,14 @@
     var ks = Object.keys(bd);
     return ks.length ? ks[ks.length - 1] : null;
   }
+  // v4.4.111: a linha "de cima" (melhor) — destino de quem é promovido da linha de baixo.
+  function _highestDestKey(bd) {
+    if (!bd) return null;
+    if (bd.upper) return 'upper';
+    if (bd.main) return 'main';
+    var ks = Object.keys(bd);
+    return ks.length ? ks[0] : null;
+  }
 
   function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, opts) {
     opts = opts || {};
@@ -254,6 +262,19 @@
           }).filter(function (m) { return m.name; });
           var _step = (fixedPairs ? 2 : 1);
           for (var _k = 0; _k < _members.length; _k += _step) byDest[_lo].push(mkTeam(_members.slice(_k, _k + _step)));
+        }
+      }
+    }
+    // v4.4.111: PROMOVER LINHA — sobe os N MELHORES da pior linha pra melhor, rebalanceando
+    // o resto (cima +N, baixo −N). O promovido é o melhor de baixo → entra como PIOR semente
+    // de cima. Se ainda sobrar degrau de potência de 2, o organizador resolve no painel
+    // normal (BYE/repescagem). Nunca esvazia a linha de baixo (guard length>1).
+    var _promote = parseInt(opts.promoteLines, 10) || 0;
+    if (_promote > 0) {
+      var _hiK = _highestDestKey(byDest), _loK2 = _lowestDestKey(byDest);
+      if (_hiK && _loK2 && _hiK !== _loK2 && Array.isArray(byDest[_loK2]) && Array.isArray(byDest[_hiK])) {
+        for (var _pm = 0; _pm < _promote && byDest[_loK2].length > 1; _pm++) {
+          byDest[_hiK].push(byDest[_loK2].shift());
         }
       }
     }
@@ -496,7 +517,8 @@
     // dentro de buildEntrantsByDest — escopo geral ranqueia junto; por-grupo cai na pior
     // linha. Ver project_phase_inactive_resolution.
     var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy,
-      { scope: scope, rankingBasis: rankingBasis, includeInactive: (phaseCfg && phaseCfg._includeInactive) || null });
+      { scope: scope, rankingBasis: rankingBasis, includeInactive: (phaseCfg && phaseCfg._includeInactive) || null,
+        promoteLines: (phaseCfg && phaseCfg._promoteLines) || 0 });
 
     // v4.1.29: DUPLA ELIMINATÓRIA CLÁSSICA como fase (pedido do dono: "escolhi dupla
     // eliminatória e parece simples"). Linha ÚNICA ('main', sem Ouro/Prata) + formato dupla
@@ -975,7 +997,7 @@
     var pairingStrategy = (cfg && cfg.pairingStrategy) || 'top';
     return buildEntrantsByDest(prevGroups, mapping, fixedPairs, ctx.computeStandings, pairingStrategy,
       { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual', flatOverall: src.flatOverall === true,
-        includeInactive: (cfg && cfg._includeInactive) || null });
+        includeInactive: (cfg && cfg._includeInactive) || null, promoteLines: (cfg && cfg._promoteLines) || 0 });
   }
 
   // v3.1: LIGA / PONTOS CORRIDOS como fase posterior. Tabela ÚNICA (não grupos):
