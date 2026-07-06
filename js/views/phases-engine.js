@@ -108,6 +108,16 @@
   // Carry-forward ('keep') implícito: se as colocações já SÃO times (dupla veio
   // formada da fase anterior), elas seguem juntas — fixedPairs/pairingStrategy são
   // ignorados, ninguém é re-pareado.
+  // v4.4.109: a linha "de baixo" (pior) de um byDest — pra onde inativos incluídos vão e
+  // pra onde a contagem do medidor deve somá-los. Preferência lower → main → última chave.
+  function _lowestDestKey(bd) {
+    if (!bd) return null;
+    if (bd.lower) return 'lower';
+    if (bd.main) return 'main';
+    var ks = Object.keys(bd);
+    return ks.length ? ks[ks.length - 1] : null;
+  }
+
   function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, opts) {
     opts = opts || {};
     var scope = opts.scope || 'per_group';
@@ -452,6 +462,27 @@
     var rankingBasis = src.rankingBasis || 'individual'; // 'individual' | 'team' (keep)
 
     var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
+
+    // v4.4.109 (staging): INATIVOS "incluídos" (organizador escolheu Incluir no gate de
+    // inativos) entram POR CLASSIFICAÇÃO. Como não jogaram, ficam com 0 pts / 0 V / 0 D →
+    // são os PIORES classificados → caem na PIOR linha (a de baixo). Não é regra fixa: é
+    // consequência da colocação zero. Como a dupla é formada DENTRO de cada grupo (não pela
+    // classificação geral), um inativo — que não tem grupo — só pode entrar como entrante
+    // extra no fim da pior linha. Formam duplas entre si. Contagem espelhada no medidor
+    // (advanceMultiPhase) via _lowestDestKey. Ver inativos-flow / project_count_people_not_entries.
+    if (phaseCfg && Array.isArray(phaseCfg._includeInactive) && phaseCfg._includeInactive.length) {
+      var _loDest = _lowestDestKey(byDest);
+      if (_loDest) {
+        if (!byDest[_loDest]) byDest[_loDest] = [];
+        var _inMembers = phaseCfg._includeInactive.map(function (p) {
+          return { name: (p && (p.displayName || p.name)) || '', uid: p && p.uid, email: p && p.email, photoURL: p && p.photoURL };
+        }).filter(function (m) { return m.name; });
+        var _inStep = (fixedPairs ? 2 : 1);
+        for (var _ij = 0; _ij < _inMembers.length; _ij += _inStep) {
+          byDest[_loDest].push(mkTeam(_inMembers.slice(_ij, _ij + _inStep)));
+        }
+      }
+    }
 
     // v4.1.29: DUPLA ELIMINATÓRIA CLÁSSICA como fase (pedido do dono: "escolhi dupla
     // eliminatória e parece simples"). Linha ÚNICA ('main', sem Ouro/Prata) + formato dupla
@@ -1482,6 +1513,18 @@
       if (window.showAlertDialog) window.showAlertDialog('Fase incompleta', 'Conclua todos os jogos da fase atual antes de avançar.', null, { type: 'warning' });
       return;
     }
+    // v4.4.109 (staging): INATIVOS — participantes que desativaram o toggle (ligaActive=false)
+    // não jogaram a classificatória, então não têm colocação e somem da transição. ANTES de
+    // montar as linhas da próxima fase, perguntar ao organizador: incluir / lista de espera /
+    // excluir. Uma vez por transição (keyed por nextIdx via t._inactiveResolvedPhase).
+    var _niIdx = (t.currentPhaseIndex || 0) + 1;
+    if (t._inactiveResolvedPhase !== _niIdx && typeof window._phasePendingInactives === 'function') {
+      var _inatvList = window._phasePendingInactives(t);
+      if (_inatvList.length && typeof window._showInactivePhasePanel === 'function') {
+        window._showInactivePhasePanel(tId, _inatvList);
+        return;
+      }
+    }
     // Escolhe a função de standings conforme a forma dos grupos da fase anterior:
     //  • Rei/Rainha (monarchGroups) → standings INDIVIDUAL (_computeMonarchStandings).
     //  • Fase de Grupos (t.groups, individuais OU duplas) → _groupTeamStandings
@@ -1526,7 +1569,16 @@
       var _src = _nextCfg.source || {};
       var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
       var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }) });
-      var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
+      // v4.4.109: inativos incluídos entram como duplas no FIM da linha de baixo — o medidor
+      // (contagem por linha) precisa somá-los na MESMA linha que buildPhaseBrackets usa.
+      var _incLo = _lowestDestKey(_byDest);
+      var _incN = (_nextCfg._includeInactive && _nextCfg._includeInactive.length) || 0;
+      var _incTeams = _incN ? Math.ceil(_incN / ((_nextCfg.fixedPairs !== false) ? 2 : 1)) : 0;
+      var _lines = _mp.map(function (m) {
+        var _sz = (_byDest[m.dest] || []).length;
+        if (_incTeams && m.dest === _incLo) _sz += _incTeams;
+        return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: _sz };
+      }).filter(function (l) { return l.size > 0; });
       var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
       if (_anyNonPow2) {
         // v3.1.23: quando uma linha não fecha em potência de 2, SEMPRE pergunta ao

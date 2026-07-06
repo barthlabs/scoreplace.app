@@ -726,6 +726,92 @@ window._phaseResToInfo = function(phaseCtx, t){
       _lines:(phaseCtx.lines||[]), _nLines:(phaseCtx.lines||[]).length, _nextIdx:phaseCtx.nextIdx, _nextName:phaseCtx.nextName };
 };
 
+// ============ INATIVOS NA TRANSIÇÃO DE FASE (v4.4.109 — staging) ============
+// Participantes que desativaram o toggle (ligaActive=false) não jogaram a classificatória,
+// então não têm colocação e somem da transição. Antes de montar as linhas da próxima fase,
+// o organizador decide: Incluir (formam duplas no fim da linha de baixo) / Lista de espera
+// (disponíveis pra W.O.) / Excluir (ficam de fora). Gate em advanceMultiPhase chama daqui.
+
+// Lista os inativos pendentes (objetos de participante). Vazio se auto-desativação está off.
+window._phasePendingInactives = function(t){
+    if (!t || t.allowSelfDeactivation === false) return [];
+    var allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    return allP.filter(function(p){ return p && typeof p === 'object' && p.ligaActive === false; });
+};
+
+// Aplica a escolha do organizador e retoma o avanço de fase.
+window._resolvePhaseInactives = function(tId, choice){
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var _niIdx = (t.currentPhaseIndex || 0) + 1;
+    var inativos = window._phasePendingInactives(t);
+    if (choice === 'standby') {
+        var _sb = Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : [];
+        var _have = {};
+        _sb.forEach(function(p){ var nm = (typeof p === 'string') ? p : (p && (p.displayName || p.name)); if (nm) _have[nm] = 1; });
+        inativos.forEach(function(p){ var nm = p.displayName || p.name; if (nm && !_have[nm]) { _sb.push(nm); _have[nm] = 1; } });
+        t.standbyParticipants = _sb;
+    } else if (choice === 'include') {
+        // Entram por classificação: como não jogaram (0 pts), são os piores → pior linha.
+        // Reativa (ligaActive=true) pra ficarem consistentes no resto do app.
+        if (t.phases && t.phases[_niIdx]) t.phases[_niIdx]._includeInactive = inativos.slice();
+        var _allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+        inativos.forEach(function(inp){
+            var _nm = inp && (inp.displayName || inp.name);
+            _allP.forEach(function(p){ if (p && typeof p === 'object' && (p.displayName || p.name) === _nm) p.ligaActive = true; });
+        });
+    }
+    // 'exclude' → nada a fazer (não entram na próxima fase)
+    t._inactiveResolvedPhase = _niIdx;
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+    var _p = document.getElementById('inactive-phase-panel'); if (_p) _p.remove();
+    document.body.style.overflow = '';
+    if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+};
+
+// Painel: 3 opções (Incluir / Lista de espera / Excluir). Mesma linguagem visual âmbar
+// do painel de resolução de potência de 2, mas ação direta (sem Nash).
+window._showInactivePhasePanel = function(tId, inativos){
+    inativos = inativos || [];
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var tIdSafe = String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var _n = inativos.length;
+    var _names = inativos.map(function(p){ return window._safeHtml((p && (p.displayName || p.name)) || 'Participante'); });
+    var _namesStr = _names.slice(0, 8).join(' · ') + (_names.length > 8 ? ' · +' + (_names.length - 8) : '');
+    var existing = document.getElementById('inactive-phase-panel'); if (existing) existing.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'inactive-phase-panel';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
+    document.body.style.overflow = 'hidden';
+    function _optCard(choice, icon, title, desc, accent){
+        return '<button onclick="window._spinButton&&window._spinButton(this,\'Aplicando…\'); window._resolvePhaseInactives(\'' + tIdSafe + '\', \'' + choice + '\')" ' +
+            'style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.04);border:1.5px solid ' + accent + ';border-radius:14px;padding:13px 15px;margin-bottom:10px;cursor:pointer;transition:all 0.15s;" ' +
+            'onmouseover="this.style.background=\'rgba(255,255,255,0.09)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.04)\'">' +
+            '<div style="font-size:0.98rem;font-weight:800;color:var(--text-bright,#f8fafc);margin-bottom:3px;">' + icon + ' ' + title + '</div>' +
+            '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.45;">' + desc + '</div>' +
+        '</button>';
+    }
+    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">' +
+        '<div style="background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:14px 1.4rem;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+            '<div style="display:flex;align-items:center;gap:12px;">' +
+                '<span style="font-size:1.5rem;flex-shrink:0;">😴</span>' +
+                '<div style="min-width:0;">' +
+                    '<h3 style="margin:0;color:#fef3c7;font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">Participantes inativos</h3>' +
+                    '<p style="margin:2px 0 0;color:#fde68a;font-size:0.75rem;opacity:0.9;">' + _n + (_n === 1 ? ' participante desativou' : ' participantes desativaram') + ' a participação e não jogaram esta fase</p>' +
+                '</div>' +
+            '</div>' +
+        '</div>' +
+        '<div style="padding:16px 1.4rem;overflow-y:auto;">' +
+            '<div style="font-size:0.76rem;color:var(--text-muted,#94a3b8);background:rgba(148,163,184,0.08);border-radius:10px;padding:8px 11px;margin-bottom:14px;line-height:1.5;">' + _namesStr + '</div>' +
+            _optCard('include', '➕', 'Incluir na eliminatória', 'Entram por classificação: como não jogaram (0 pts), são os piores classificados e caem na linha de baixo, formando duplas entre si.', 'rgba(74,222,128,0.5)') +
+            _optCard('standby', '⏱️', 'Lista de espera', 'Ficam disponíveis pra substituir num W.O., mas não entram na chave agora.', 'rgba(251,191,36,0.5)') +
+            _optCard('exclude', '🚫', 'Excluir da próxima fase', 'Ficam de fora da eliminatória. Continuam inscritos no torneio.', 'rgba(248,113,113,0.45)') +
+        '</div>' +
+    '</div>';
+    document.body.appendChild(overlay);
+};
+
 window.showUnifiedResolutionPanel = function(tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;

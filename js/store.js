@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.4.108-beta';
+window.SCOREPLACE_VERSION = '4.4.109-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -910,6 +910,7 @@ window._softRefreshView = function() {
                   document.getElementById('live-scoring-overlay') ||
                   document.getElementById('casual-match-overlay') ||
                   document.getElementById('unified-resolution-panel') ||
+                  document.getElementById('inactive-phase-panel') ||
                   document.getElementById('groups-config-panel') ||
                   document.getElementById('remainder-resolution-panel') ||
                   document.getElementById('vagas-draw-panel') ||
