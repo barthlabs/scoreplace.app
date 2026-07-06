@@ -262,6 +262,13 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
   var total = 0;
   var breakdown = [];
 
+  // v4.4.115: uid do jogador consultado (pra casar jogos por UID quando o jogo tiver uids).
+  var _queryUid = null;
+  try {
+    var _n2uQ = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : null;
+    if (_n2uQ && Object.prototype.hasOwnProperty.call(_n2uQ, playerName)) _queryUid = _n2uQ[playerName] || null;
+  } catch (e) {}
+
   // v2.3.3: format-agnostic — varre TODAS as partidas do torneio (eliminatórias,
   // grupos, rounds de Liga/Suíço, Rei/Rainha) via coletor canônico, em vez de só
   // t.rounds. Assim Pontos Avançados funciona em qualquer tipo de torneio.
@@ -330,8 +337,21 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
       var isMonarch = m.isMonarch && Array.isArray(m.team1) && Array.isArray(m.team2);
       var side1 = isMonarch ? m.team1 : m.p1;
       var side2 = isMonarch ? m.team2 : m.p2;
-      var isInP1 = _playerInSide(side1, playerName);
-      var isInP2 = _playerInSide(side2, playerName);
+      // v4.4.115: IDENTIDADE POR UID. Se sabemos o uid do jogador consultado E o jogo guarda
+      // uids nos slots, casa POR UID — imune a homônimo e a clobber de nome (ex.: os jogos da
+      // Vivian que viraram "Vivi Hirata" por string têm team1Uids da Vivian → não contam pra
+      // Vivi Hirata). Sem uid no jogo (dados legados) OU sem uid do consultado → cai no nome.
+      var _mHasUids = Array.isArray(m.team1Uids) || Array.isArray(m.team2Uids) || m.p1Uid != null || m.p2Uid != null;
+      var isInP1, isInP2;
+      if (_queryUid && _mHasUids) {
+        var _u1 = isMonarch ? (m.team1Uids || []) : [m.p1Uid];
+        var _u2 = isMonarch ? (m.team2Uids || []) : [m.p2Uid];
+        isInP1 = _u1.indexOf(_queryUid) !== -1;
+        isInP2 = _u2.indexOf(_queryUid) !== -1;
+      } else {
+        isInP1 = _playerInSide(side1, playerName);
+        isInP2 = _playerInSide(side2, playerName);
+      }
       if (!isInP1 && !isInP2) return;
 
       var isDraw = m.winner === 'draw' || m.draw;
@@ -2789,6 +2809,11 @@ function _buildMonarchGroup(opts) {
     ? ' (' + window._displayCategoryName(category) + ')'
     : (category ? ' (' + category + ')' : '');
   var groupName = 'R' + roundNum + ' ' + window._groupName(gi) + nameSuffix;
+  // v4.4.115: IDENTIDADE POR UID. Cada slot do jogo guarda o uid do jogador (team1Uids/
+  // team2Uids) além do nome. Assim PA, render e o sync de nome resolvem por uid — homônimos
+  // (ex.: "Vivian" × "Vivi Hirata") nunca mais se misturam. nameToUid vem do chamador.
+  var _n2u = opts.nameToUid || null;
+  var _uidOf = function (nm) { return (_n2u && Object.prototype.hasOwnProperty.call(_n2u, nm)) ? (_n2u[nm] || null) : null; };
   var A = P[0], B = P[1], C = P[2], D = P[3];
   var pairings = [{ t1: [A, B], t2: [C, D] }, { t1: [A, C], t2: [B, D] }, { t1: [A, D], t2: [B, C] }];
   var matches = pairings.map(function (pair, mi) {
@@ -2797,6 +2822,7 @@ function _buildMonarchGroup(opts) {
       round: roundNum, roundIndex: opts.roundIndex,
       p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
       team1: pair.t1, team2: pair.t2,
+      team1Uids: pair.t1.map(_uidOf), team2Uids: pair.t2.map(_uidOf),
       winner: null, scoreP1: null, scoreP2: null,
       isMonarch: true, monarchGroup: gi,
       label: groupName + ' • Jogo ' + (mi + 1) + catLabel
@@ -2804,9 +2830,31 @@ function _buildMonarchGroup(opts) {
     if (category) m.category = category;
     return m;
   });
-  return { name: groupName, players: P.slice(), matches: matches };
+  return { name: groupName, players: P.slice(), playersUids: P.map(_uidOf), matches: matches };
 }
 window._buildMonarchGroup = _buildMonarchGroup;
+
+// v4.4.115: mapa nome→uid dos INDIVÍDUOS do torneio, pra o sorteio gravar o uid em cada
+// slot do jogo. Cobre indivíduos (uid+name) e membros de dupla (p1Name/p1Uid, p2Name/p2Uid,
+// sub-participants[]). Homônimos verdadeiros (2 pessoas mesmo nome) mantêm o último — é a
+// mesma ambiguidade que o sorteio já tem por operar em nomes; o ganho é que nomes DISTINTOS
+// (Vivian × Vivi Hirata) nunca mais se cruzam no PA/render/sync.
+function _buildNameToUid(t) {
+  var map = {};
+  var parr = Array.isArray(t && t.participants) ? t.participants : Object.values((t && t.participants) || {});
+  parr.forEach(function (p) {
+    if (!p || typeof p !== 'object') return;
+    if (p.p1Name && p.p1Uid) map[String(p.p1Name).trim()] = p.p1Uid;
+    if (p.p2Name && p.p2Uid) map[String(p.p2Name).trim()] = p.p2Uid;
+    if (Array.isArray(p.participants)) p.participants.forEach(function (s) {
+      if (s && s.uid) { var sn = String((s.displayName || s.name) || '').trim(); if (sn) map[sn] = s.uid; }
+    });
+    var nm = String((p.displayName || p.name) || '').trim();
+    if (nm && p.uid && !map[nm]) map[nm] = p.uid;
+  });
+  return map;
+}
+window._buildNameToUid = _buildNameToUid;
 
 // v2.7.3: ÚNICA fonte da partida de FOLGA (sit-out). Antes construída à mão em 3
 // lugares (round-robin, Rei/Rainha, Suíço) — drift de label/reason/pontos.
@@ -2895,10 +2943,11 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   eligible = _plainShuffle(eligible);
   var used = [];
   var formed = 0;
+  var _n2uMapWl = _buildNameToUid(t); // v4.4.115: identidade por uid nos jogos formados da espera
   while (eligible.length >= 4) {
     var grp = eligible.splice(0, 4);
     var gi = (col.monarchGroups || []).length;
-    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed });
+    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uMapWl });
     col.monarchGroups.push(g);
     col.matches = (col.matches || []).concat(g.matches);
     grp.forEach(function (n) { used.push(n); });
@@ -3138,10 +3187,11 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   // Divide playing players into groups of 4
   var numGroups = Math.floor(playingPlayers.length / 4);
   var groups = [];
+  var _n2uMap = _buildNameToUid(t); // v4.4.115: nome→uid pra gravar identidade nos jogos
 
   for (var gi = 0; gi < numGroups; gi++) {
     var gPlayers = playingPlayers.slice(gi * 4, gi * 4 + 4);
-    groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts }));
+    groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts, nameToUid: _n2uMap }));
   }
 
   // Record opponent pairings for anti-repeat logic in future rounds
