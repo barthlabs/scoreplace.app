@@ -703,10 +703,27 @@ window._phaseResToInfo = function(phaseCtx, t){
     var nonPow2 = sizes.filter(function(s){return s>1 && (s&(s-1))!==0;});
     var repr = nonPow2.length ? Math.max.apply(null,nonPow2) : Math.max.apply(null, sizes.concat([0]));
     var lo=_lo(repr), hi=lo*2;
+    // v4.4.108: as LINHAS da fase são CLASSIFICADOS (uma linha = um competidor que
+    // avança) — em torneio de duplas, cada linha é uma DUPLA, nunca uma pessoa. O
+    // medidor NÃO pode rotular isso como "inscritos" (pessoas). Deriva a unidade real
+    // do modo de inscrição pra rotular "duplas"/"times" corretamente. Regra de ouro:
+    // inscritos = PESSOAS; entrada de dupla = 2. Ver project_count_people_not_entries.
+    var _teamMode = !!(window._isTeamEnrollMode && window._isTeamEnrollMode(t && t.enrollmentMode));
+    var _tsz = parseInt(t && t.teamSize) || (_teamMode ? 2 : 1);
+    var _pUnit, _pUnitCenter;
+    if (_teamMode) {
+      var _isDupla = _tsz === 2;
+      _pUnit = _isDupla ? 'duplas' : 'times';
+      _pUnitCenter = _isDupla ? 'Duplas' : 'Times';
+    } else {
+      _pUnit = 'classificados';
+      _pUnitCenter = 'Classificados';
+    }
     return { hasIssues:true, isPowerOf2:(repr&(repr-1))===0, isOdd:(repr%2)===1,
       effectiveTeams:repr, loP2:lo, hiP2:hi, excess:Math.max(0,repr-lo), missing:Math.max(0,hi-repr),
       remainder:0, incompleteTeams:[], isTeam:false, teamSize:1, totalRawParticipants:repr,
-      _isPhase:true, _lines:(phaseCtx.lines||[]), _nLines:(phaseCtx.lines||[]).length, _nextIdx:phaseCtx.nextIdx, _nextName:phaseCtx.nextName };
+      _isPhase:true, _phaseTeamMode:_teamMode, _phaseTeamSize:_tsz, _phaseUnit:_pUnit, _phaseUnitCenter:_pUnitCenter,
+      _lines:(phaseCtx.lines||[]), _nLines:(phaseCtx.lines||[]).length, _nextIdx:phaseCtx.nextIdx, _nextName:phaseCtx.nextName };
 };
 
 window.showUnifiedResolutionPanel = function(tId) {
@@ -871,8 +888,9 @@ window.showUnifiedResolutionPanel = function(tId) {
     // v4.0.68: resumo por opção = TÍTULO (nome da opção) + passos (processo → chave).
     // A estimativa de tempo vem do _unifiedEstData. Mostrado no detalhe sticky ao
     // selecionar. Formato pedido pelo dono (ex. Play-in).
-    var _uUnit = info.isTeam ? 'times' : 'participantes';
-    var _uUnit1 = info.isTeam ? 'time' : 'participante';
+    // v4.4.108: em transição de FASE, a unidade é a real (duplas/times), nunca "participantes".
+    var _uUnit = info._isPhase ? info._phaseUnit : (info.isTeam ? 'times' : 'participantes');
+    var _uUnit1 = info._isPhase ? (info._phaseUnit || '').replace(/s$/, '') : (info.isTeam ? 'time' : 'participante');
     var _uG = Math.floor(info.effectiveTeams / 2);
     var _nBL = Math.max(0, info.loP2 - _uG), _nMiss = info.missing, _nExc = info.excess;
     // Repescagem — texto SIMPLIFICADO (a lógica EXATA vive em genTierBracket/phases-engine
@@ -919,9 +937,11 @@ window.showUnifiedResolutionPanel = function(tId) {
         // Dynamic descriptions based on context
         var _remLabel = info.remainder > 0 ? info.remainder + ' ' + (info.remainder > 1 ? _t('predraw.unitParticipants') : _t('predraw.unitParticipantSingular')) : '';
         var _excessLabel = info.excess > 0
-            ? info.excess + ' ' + (info.isTeam
-                ? (info.excess > 1 ? _t('predraw.unitTeams') : _t('predraw.unitTeamSingular'))
-                : (info.excess > 1 ? _t('predraw.unitParts') : _t('predraw.unitParticipantSingular')))
+            ? info.excess + ' ' + (info._isPhase
+                ? (info.excess > 1 ? info._phaseUnit : (info._phaseUnit || '').replace(/s$/, ''))
+                : (info.isTeam
+                    ? (info.excess > 1 ? _t('predraw.unitTeams') : _t('predraw.unitTeamSingular'))
+                    : (info.excess > 1 ? _t('predraw.unitParts') : _t('predraw.unitParticipantSingular'))))
             : '';
         var _standbyDesc = info.remainder > 0
             ? _t('predraw.standbyRemDesc', {label: _remLabel})
@@ -1206,14 +1226,23 @@ window.showUnifiedResolutionPanel = function(tId) {
 
     // Build the panel HTML
     let gaugeHtml = '';
-    var _centerLabel = info.isTeam ? _t('predraw.gaugeCenterTeams') : _t('predraw.gaugeCenterParts');
-    var _centerSub = info.isTeam ? '(' + (info.totalPeople != null ? info.totalPeople : info.totalRawParticipants) + ' ' + _t('predraw.unitParticipants') + ')' : '';
-    var _loSub = info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.loP2 * info.teamSize}) : _t('predraw.gaugeCenterParts');
-    var _hiSub = info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.hiP2 * info.teamSize}) : _t('predraw.gaugeCenterParts');
+    // v4.4.108: transição de FASE → as linhas são CLASSIFICADOS (duplas/times em
+    // torneio de duplas), NUNCA "inscritos" (pessoas). Usa a unidade real derivada
+    // em _phaseResToInfo. Fora de fase (resolução de inscrição), mantém o comportamento
+    // antigo (isTeam → times; senão inscritos).
+    var _isPhaseGauge = !!info._isPhase;
+    var _centerLabel = _isPhaseGauge ? info._phaseUnitCenter
+        : (info.isTeam ? _t('predraw.gaugeCenterTeams') : _t('predraw.gaugeCenterParts'));
+    var _centerSub = (!_isPhaseGauge && info.isTeam) ? '(' + (info.totalPeople != null ? info.totalPeople : info.totalRawParticipants) + ' ' + _t('predraw.unitParticipants') + ')' : '';
+    var _loSub = _isPhaseGauge ? info._phaseUnit
+        : (info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.loP2 * info.teamSize}) : _t('predraw.gaugeCenterParts'));
+    var _hiSub = _isPhaseGauge ? info._phaseUnit
+        : (info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.hiP2 * info.teamSize}) : _t('predraw.gaugeCenterParts'));
 
     var _excessCount = info.effectiveTeams - info.loP2;
     var _missingCount = info.hiP2 - info.effectiveTeams;
-    var _unitLabel = info.isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts');
+    var _unitLabel = _isPhaseGauge ? info._phaseUnit
+        : (info.isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts'));
 
     // v4.2.3 (pedido do dono): NOMES DAS LINHAS acima do medidor de potência de 2 —
     // cada linha numa row própria ("Ouro (25)", quebra, "Prata (25)"). Só em transição
