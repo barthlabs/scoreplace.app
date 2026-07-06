@@ -1142,8 +1142,11 @@ function renderTournaments(container, tournamentId = null) {
                 startDraw();
             };
             // persiste ANTES de sortear — senão o onSnapshot devolve os ausentes
-            if (moved > 0 && window.AppStore && typeof window.AppStore.syncImmediate === 'function') {
-                Promise.resolve(window.AppStore.syncImmediate(tId)).then(proceed).catch(proceed);
+            if (moved > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
+                // BLINDAGEM (project_concurrency_safe_saves): re-aplica o move (ausentes→
+                // espera) no doc FRESCO, em vez de syncImmediate (doc inteiro → clobbera
+                // check-in/W.O. concorrente). A função de move é pura + idempotente.
+                Promise.resolve(window.AppStore.mutate(tId, function (ft) { window._moveAbsentToWaitlistForPresentDraw(ft); })).then(proceed).catch(proceed);
             } else {
                 proceed();
             }
@@ -1213,13 +1216,16 @@ function renderTournaments(container, tournamentId = null) {
             // O listener onSnapshot substitui store.tournaments inteiro quando chega
             // dados do servidor — sem salvar primeiro, os participantes originais
             // (com ausentes) voltam do Firestore e o sorteio os inclui mesmo assim.
-            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.syncImmediate === 'function') {
+            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
                 var _doGenderThenDraw = function() {
                     if (typeof window._maybeShowGenderDrawDialog === 'function' &&
                         window._maybeShowGenderDrawDialog(tId, _continueDraw)) return;
                     _continueDraw();
                 };
-                Promise.resolve(window.AppStore.syncImmediate(tId)).then(_doGenderThenDraw).catch(_doGenderThenDraw);
+                // BLINDAGEM (project_concurrency_safe_saves): re-aplica o move de ausentes
+                // no doc FRESCO, em vez de syncImmediate (doc inteiro → clobbera check-in/
+                // W.O. concorrente). _autoMoveAbsentToStandby é pura + idempotente.
+                Promise.resolve(window.AppStore.mutate(tId, function (ft) { window._autoMoveAbsentToStandby(ft); })).then(_doGenderThenDraw).catch(_doGenderThenDraw);
                 return;
             }
             // v2.1.20: em duplas mistas com sorteio livre (sem categoria masc/fem),

@@ -1359,8 +1359,22 @@ window._saveSetResult = function(tId, matchId) {
     var _ovGsm = document.getElementById('set-scoring-overlay');
     if (_ovGsm) _ovGsm.remove();
     _propagateMatchUpdate(t, m);
-    window.AppStore.logAction(tId, 'Resultado proposto (sets): ' + m.p1 + ' vs ' + m.p2 + ' — aguardando aprovação (' + m.pendingResult.proposedByName + ')');
-    window.AppStore.syncImmediate(tId);
+    var _pendingGsmObj = m.pendingResult;
+    var _gsmPropLogMsg = 'Resultado proposto (sets): ' + m.p1 + ' vs ' + m.p2 + ' — aguardando aprovação (' + m.pendingResult.proposedByName + ')';
+    window.AppStore.logAction(tId, _gsmPropLogMsg);
+    // BLINDAGEM DE CORRIDA (project_concurrency_safe_saves): re-aplica a proposta GSM
+    // (pendingResult) no match FRESCO via commitTournamentTx, em vez de syncImmediate
+    // (doc inteiro → lost-update quando 2 propostas/resultados concorrem). Espelha o
+    // caminho de proposta simples de _saveResultInline.
+    window.AppStore.commitTournamentTx(tId, function (freshT) {
+      var fm = window._findMatch(freshT, matchId);
+      if (fm) {
+        fm.pendingResult = _pendingGsmObj;
+        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(freshT, fm);
+      }
+      if (!Array.isArray(freshT.history)) freshT.history = [];
+      freshT.history.push({ date: new Date().toISOString(), message: _gsmPropLogMsg });
+    });
     // 4.1 DUAL-WRITE: espelha a proposta (sets) no doc do jogo.
     _dualWriteResult(tId, matchId);
     try { _notifyPendingApproval(t, m, m.pendingResult.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
@@ -4955,11 +4969,44 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (typeof window._advanceWinner === 'function') window._advanceWinner(t, m);
     if (typeof window._maybeFinishElimination === 'function') window._maybeFinishElimination(t);
 
-    // Save & sync (includes the advance mutations above)
-    window.AppStore.syncImmediate(tId);
-    if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) {
-      window.FirestoreDB.saveTournament(t);
-    }
+    // BLINDAGEM DE CORRIDA (project_concurrency_safe_saves): antes eram DOIS saves de
+    // doc inteiro (syncImmediate + saveTournament) → lost-update quando 2 jogos são
+    // finalizados ao mesmo tempo. Agora re-aplica os campos JÁ computados do resultado
+    // no match FRESCO (+ check-in + advance no fresco), atomicamente. A `t` local já foi
+    // mutada acima (UI otimista).
+    var _liveResult = {
+      sets: m.sets, setsWonP1: m.setsWonP1, setsWonP2: m.setsWonP2,
+      scoreP1: m.scoreP1, scoreP2: m.scoreP2,
+      totalGamesP1: m.totalGamesP1, totalGamesP2: m.totalGamesP2,
+      fixedSet: m.fixedSet, winner: m.winner, draw: m.draw,
+      liveScored: true, resultAt: m.resultAt, startedAt: m.startedAt
+    };
+    var _liveSides = [m.p1, m.p2];
+    var _liveLogMsg = 'Resultado (ao vivo): ' + m.p1 + ' vs ' + m.p2 + (m.winner === 'draw' ? ' — Empate' : ' — Vencedor: ' + m.winner);
+    window.AppStore.logAction(tId, _liveLogMsg);
+    window.AppStore.commitTournamentTx(tId, function (freshT) {
+      var fm = window._findMatch(freshT, matchId);
+      if (!fm) return;
+      Object.keys(_liveResult).forEach(function (k) { if (_liveResult[k] !== undefined) fm[k] = _liveResult[k]; });
+      if (!freshT.checkedIn) freshT.checkedIn = {};
+      if (!freshT.absent) freshT.absent = {};
+      _liveSides.forEach(function (side) {
+        if (!side || side === 'TBD' || side === 'BYE') return;
+        var _ns = side.indexOf(' / ') !== -1 ? side.split(' / ')
+                : side.indexOf('/') !== -1 ? side.split('/') : [side];
+        _ns.forEach(function (raw) {
+          var nm = raw.trim();
+          if (!nm) return;
+          if (!window._idMapHas(freshT, freshT.checkedIn, nm)) window._idMapSet(freshT, freshT.checkedIn, nm, Date.now());
+          window._idMapDel(freshT, freshT.absent, nm);
+        });
+      });
+      if (!freshT.tournamentStarted) freshT.tournamentStarted = Date.now();
+      if (typeof window._advanceWinner === 'function') window._advanceWinner(freshT, fm);
+      if (typeof window._maybeFinishElimination === 'function') window._maybeFinishElimination(freshT);
+      if (!Array.isArray(freshT.history)) freshT.history = [];
+      freshT.history.push({ date: new Date().toISOString(), message: _liveLogMsg });
+    });
 
     // Persist detailed tournament match stats in each registered participant's
     // account so their per-user history outlives the tournament.

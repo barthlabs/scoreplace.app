@@ -56,7 +56,12 @@ window._processWoSubstitutions = function(tId) {
   if (!t) return { ok: false, reason: 'no-tournament' };
   const r = window._applyWoSubsToTournament(t);
   if (r && r.subCount > 0) {
-    if (typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
+    // BLINDAGEM (project_concurrency_safe_saves): re-aplica as substituições no doc
+    // FRESCO via portão (o núcleo é idempotente — absent já substituído = no-op), em
+    // vez de syncImmediate (doc inteiro → lost-update com check-in/resultado concorrente).
+    if (window.AppStore && typeof window.AppStore.mutate === 'function') {
+      window.AppStore.mutate(tId, function (ft) { window._applyWoSubsToTournament(ft); });
+    } else if (typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
     else window.AppStore.sync();
   }
   return r;
@@ -754,48 +759,44 @@ window._showAbsenteeResolutionDialog = function (tId, present, absentees, procee
 window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  if (!t.checkedIn) t.checkedIn = {};
-  if (!t.absent) t.absent = {};
-  const parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  const present = [];
-  const absentees = [];
-  parts.forEach(function (p) {
-    const en = window._pName(p);
-    if (window._idMapHas(t, t.checkedIn, p)) present.push(p);
-    else absentees.push(p);
-  });
-
-  if (mode === 'waitlist') {
-    if (!Array.isArray(t.waitlist)) t.waitlist = [];
-    absentees.forEach(function (p) {
-      const en = window._pName(p);
-      const exists = t.waitlist.some(function (w) { return window._pName(w) === en; });
-      if (!exists) t.waitlist.push(p);
-      // Estado neutro na lista de espera (pode ser chamado depois p/ substituir W.O.)
-      window._idMapDel(t, t.checkedIn, p);
-      window._idMapDel(t, t.absent, p);
+  // Núcleo PURO da chamada pré-sorteio (transaction-safe): particiona presentes×
+  // ausentes pelo check-in do `tt` passado, move ausentes p/ espera|desclassificados
+  // (dedup por nome) e seta participants=presentes. Idempotente (2ª passada: todos os
+  // participantes restantes já são presentes → ninguém a mover). Reusável no portão.
+  var _applyRoll = function (tt) {
+    if (!tt.checkedIn) tt.checkedIn = {};
+    if (!tt.absent) tt.absent = {};
+    var _pp = Array.isArray(tt.participants) ? tt.participants : Object.values(tt.participants || {});
+    var pres = [], abs = [];
+    _pp.forEach(function (p) { if (window._idMapHas(tt, tt.checkedIn, p)) pres.push(p); else abs.push(p); });
+    var bucket = (mode === 'waitlist') ? 'waitlist' : 'disqualified';
+    if (!Array.isArray(tt[bucket])) tt[bucket] = [];
+    abs.forEach(function (p) {
+      var en = window._pName(p);
+      if (!tt[bucket].some(function (w) { return window._pName(w) === en; })) tt[bucket].push(p);
+      // Estado neutro (pode ser chamado depois p/ substituir W.O.)
+      window._idMapDel(tt, tt.checkedIn, p);
+      window._idMapDel(tt, tt.absent, p);
     });
-  } else { // disqualify
-    if (!Array.isArray(t.disqualified)) t.disqualified = [];
-    absentees.forEach(function (p) {
-      const en = window._pName(p);
-      const exists = t.disqualified.some(function (w) { return window._pName(w) === en; });
-      if (!exists) t.disqualified.push(p);
-      window._idMapDel(t, t.checkedIn, p);
-      window._idMapDel(t, t.absent, p);
-    });
-  }
-
-  t.participants = present;
+    tt.participants = pres;
+    return { present: pres, absent: abs };
+  };
+  var _rc = _applyRoll(t); // local otimista + arrays pra UI/log
+  var present = _rc.present, absentees = _rc.absent;
 
   if (window.AppStore && typeof window.AppStore.logAction === 'function') {
     window.AppStore.logAction(tId, 'Chamada pré-sorteio: ' + present.length + ' presente(s), ' +
       absentees.length + (mode === 'waitlist' ? ' à lista de espera' : ' desclassificado(s)'));
   }
 
-  const savePromise = (window.AppStore && typeof window.AppStore.syncImmediate === 'function')
-    ? window.AppStore.syncImmediate(tId)
-    : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve());
+  // BLINDAGEM (project_concurrency_safe_saves): re-aplica a chamada no doc FRESCO via
+  // portão (idempotente), em vez de syncImmediate (doc inteiro → clobbera check-in
+  // concorrente). Re-particiona pela presença fresca — mais correto sob concorrência.
+  const savePromise = (window.AppStore && typeof window.AppStore.mutate === 'function')
+    ? window.AppStore.mutate(tId, function (ft) { _applyRoll(ft); })
+    : ((window.AppStore && typeof window.AppStore.syncImmediate === 'function')
+        ? window.AppStore.syncImmediate(tId)
+        : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve()));
 
   Promise.resolve(savePromise).then(function () {
     if (typeof showNotification === 'function') {
