@@ -213,10 +213,25 @@
     var _nLines = destKeys.length;
     var _multiGroup = (prevGroups || []).length >= 2;
     var _useOverall = (scope === 'overall') && (opts.flatOverall === true || !(_nLines >= 2 && _multiGroup));
+    // v4.4.110: INATIVOS "incluídos" (opts.includeInactive = objetos de participante).
+    // Entram POR CLASSIFICAÇÃO — a MESMA régua dos ativos. Não jogaram → 0 pts naquelas
+    // rodadas; quem jogou antes guarda os pontos. Ver project_phase_inactive_resolution.
+    var _ina = (opts.includeInactive || []).filter(Boolean);
     if (_useOverall) {
-      // Pool agregado (ranking geral) — usado por Cabeças de chave e por qualquer
-      // estratégia em escopo Geral.
-      var global = _globalStandings(prevGroups, computeStandings);
+      // ESCOPO GERAL: monta um grupo SINTÉTICO só com os inativos + TODOS os jogos da
+      // fase, e joga no _globalStandings — assim eles são ranqueados junto com todo mundo
+      // (0 pts cai embaixo naturalmente; com pontos, pode SUBIR). Nunca destino fixo.
+      var _pgForGlobal = prevGroups || [];
+      if (_ina.length) {
+        var _allMs = [];
+        (prevGroups || []).forEach(function (g) {
+          (g.matches || []).forEach(function (m) { _allMs.push(m); });
+          (g.rounds || []).forEach(function (r) { (r.matches || []).forEach(function (m) { _allMs.push(m); }); });
+        });
+        var _inaNames = _ina.map(function (p) { return (p && (p.displayName || p.name)) || ''; }).filter(Boolean);
+        _pgForGlobal = (prevGroups || []).concat([{ name: '__inativos__', players: _inaNames, matches: _allMs }]);
+      }
+      var global = _globalStandings(_pgForGlobal, computeStandings);
       var gdepth = (maxRankTo >= 999 || maxRankTo <= 0) ? global.length : Math.min(maxRankTo, global.length);
       _distributePool(global.slice(0, gdepth), destKeys);
     } else {
@@ -225,6 +240,22 @@
         var depth = (maxRankTo >= 999 || maxRankTo <= 0) ? standings.length : Math.min(maxRankTo, standings.length);
         _distributePool(standings.slice(0, depth), destKeys);
       });
+      // ESCOPO POR GRUPO: os inativos não pertencem a nenhum grupo → não há como entrar
+      // na formação {1º,2º}/{3º,4º} de um grupo. Como são os piores classificados (0 pts),
+      // entram como duplas entre si no FIM da PIOR linha. É a mesma consequência de
+      // classificação — só que aqui não há caminho pra linha de cima (o dono confirmou:
+      // "aqui não ocorreria por ser formada a dupla dentro de cada grupo").
+      if (_ina.length) {
+        var _lo = _lowestDestKey(byDest);
+        if (_lo) {
+          if (!byDest[_lo]) byDest[_lo] = [];
+          var _members = _ina.map(function (p) {
+            return { name: (p && (p.displayName || p.name)) || '', uid: p && p.uid, email: p && p.email, photoURL: p && p.photoURL };
+          }).filter(function (m) { return m.name; });
+          var _step = (fixedPairs ? 2 : 1);
+          for (var _k = 0; _k < _members.length; _k += _step) byDest[_lo].push(mkTeam(_members.slice(_k, _k + _step)));
+        }
+      }
     }
     return byDest;
   }
@@ -461,28 +492,11 @@
     var scope = src.scope || 'per_group';            // 'per_group' | 'overall'
     var rankingBasis = src.rankingBasis || 'individual'; // 'individual' | 'team' (keep)
 
-    var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
-
-    // v4.4.109 (staging): INATIVOS "incluídos" (organizador escolheu Incluir no gate de
-    // inativos) entram POR CLASSIFICAÇÃO. Como não jogaram, ficam com 0 pts / 0 V / 0 D →
-    // são os PIORES classificados → caem na PIOR linha (a de baixo). Não é regra fixa: é
-    // consequência da colocação zero. Como a dupla é formada DENTRO de cada grupo (não pela
-    // classificação geral), um inativo — que não tem grupo — só pode entrar como entrante
-    // extra no fim da pior linha. Formam duplas entre si. Contagem espelhada no medidor
-    // (advanceMultiPhase) via _lowestDestKey. Ver inativos-flow / project_count_people_not_entries.
-    if (phaseCfg && Array.isArray(phaseCfg._includeInactive) && phaseCfg._includeInactive.length) {
-      var _loDest = _lowestDestKey(byDest);
-      if (_loDest) {
-        if (!byDest[_loDest]) byDest[_loDest] = [];
-        var _inMembers = phaseCfg._includeInactive.map(function (p) {
-          return { name: (p && (p.displayName || p.name)) || '', uid: p && p.uid, email: p && p.email, photoURL: p && p.photoURL };
-        }).filter(function (m) { return m.name; });
-        var _inStep = (fixedPairs ? 2 : 1);
-        for (var _ij = 0; _ij < _inMembers.length; _ij += _inStep) {
-          byDest[_loDest].push(mkTeam(_inMembers.slice(_ij, _ij + _inStep)));
-        }
-      }
-    }
+    // v4.4.110: inativos "incluídos" (phaseCfg._includeInactive) entram POR CLASSIFICAÇÃO
+    // dentro de buildEntrantsByDest — escopo geral ranqueia junto; por-grupo cai na pior
+    // linha. Ver project_phase_inactive_resolution.
+    var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy,
+      { scope: scope, rankingBasis: rankingBasis, includeInactive: (phaseCfg && phaseCfg._includeInactive) || null });
 
     // v4.1.29: DUPLA ELIMINATÓRIA CLÁSSICA como fase (pedido do dono: "escolhi dupla
     // eliminatória e parece simples"). Linha ÚNICA ('main', sem Ouro/Prata) + formato dupla
@@ -960,7 +974,8 @@
     var fixedPairs = cfg ? (cfg.fixedPairs !== false) : true;
     var pairingStrategy = (cfg && cfg.pairingStrategy) || 'top';
     return buildEntrantsByDest(prevGroups, mapping, fixedPairs, ctx.computeStandings, pairingStrategy,
-      { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual', flatOverall: src.flatOverall === true });
+      { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual', flatOverall: src.flatOverall === true,
+        includeInactive: (cfg && cfg._includeInactive) || null });
   }
 
   // v3.1: LIGA / PONTOS CORRIDOS como fase posterior. Tabela ÚNICA (não grupos):
@@ -1568,17 +1583,10 @@
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _src = _nextCfg.source || {};
       var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+      // v4.4.110: selectQualifiers já inclui os inativos (por classificação) no _byDest,
+      // então a contagem por linha do medidor já reflete cima/baixo corretamente.
       var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }) });
-      // v4.4.109: inativos incluídos entram como duplas no FIM da linha de baixo — o medidor
-      // (contagem por linha) precisa somá-los na MESMA linha que buildPhaseBrackets usa.
-      var _incLo = _lowestDestKey(_byDest);
-      var _incN = (_nextCfg._includeInactive && _nextCfg._includeInactive.length) || 0;
-      var _incTeams = _incN ? Math.ceil(_incN / ((_nextCfg.fixedPairs !== false) ? 2 : 1)) : 0;
-      var _lines = _mp.map(function (m) {
-        var _sz = (_byDest[m.dest] || []).length;
-        if (_incTeams && m.dest === _incLo) _sz += _incTeams;
-        return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: _sz };
-      }).filter(function (l) { return l.size > 0; });
+      var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
       if (_anyNonPow2) {
         // v3.1.23: quando uma linha não fecha em potência de 2, SEMPRE pergunta ao

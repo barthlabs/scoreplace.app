@@ -804,7 +804,7 @@ window._showInactivePhasePanel = function(tId, inativos){
         '</div>' +
         '<div style="padding:16px 1.4rem;overflow-y:auto;">' +
             '<div style="font-size:0.76rem;color:var(--text-muted,#94a3b8);background:rgba(148,163,184,0.08);border-radius:10px;padding:8px 11px;margin-bottom:14px;line-height:1.5;">' + _namesStr + '</div>' +
-            _optCard('include', '➕', 'Incluir na eliminatória', 'Entram por classificação: como não jogaram (0 pts), são os piores classificados e caem na linha de baixo, formando duplas entre si.', 'rgba(74,222,128,0.5)') +
+            _optCard('include', '➕', 'Incluir na eliminatória', 'Entram por classificação, igual aos ativos: sobem ou descem de linha conforme os pontos que somaram. Quem não jogou fica com 0 e cai na linha de baixo.', 'rgba(74,222,128,0.5)') +
             _optCard('standby', '⏱️', 'Lista de espera', 'Ficam disponíveis pra substituir num W.O., mas não entram na chave agora.', 'rgba(251,191,36,0.5)') +
             _optCard('exclude', '🚫', 'Excluir da próxima fase', 'Ficam de fora da eliminatória. Continuam inscritos no torneio.', 'rgba(248,113,113,0.45)') +
         '</div>' +

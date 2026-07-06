@@ -90,5 +90,59 @@ function entrantsInLine(res, lineLabel) {
   ok(prataStr.indexOf('X3') !== -1, '3 inativos: X3 entra (sozinho) na linha de baixo');
 })();
 
+// ── 4. ESCOPO GERAL: inativo COM pontos sobe pra linha de CIMA; inativo 0 pts fica embaixo ──
+// Regra do dono: colocação POR CLASSIFICAÇÃO, nunca hardcoded na linha de baixo. Num
+// formato de classificação geral (multi-rodada), um inativo que somou pontos antes de
+// desativar pode ter classificação suficiente pra Ouro.
+(function () {
+  // Classificação global (por nome). HERO é inativo mas somou 3 (jogou antes de desativar);
+  // ZERO é inativo sem pontos. Ativos: P1..P6.
+  var SCORE = { P1: 5, P2: 4, HERO: 3, P3: 2, P4: 1, P5: 0, P6: 0, ZERO: 0 };
+  function csOverall(g) {
+    return (g.players || []).map(function (p) {
+      var n = (typeof p === 'string') ? p : (p.name || p.displayName);
+      return { name: n, displayName: n, wins: SCORE[n] || 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, pointsFor: 0, pointsAgainst: 0 };
+    }).sort(function (a, b) { return (b.wins || 0) - (a.wins || 0); });
+  }
+  var groups = [{ name: 'Geral', groupIdx: 0, players: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'].map(function (n) { return { name: n, displayName: n }; }) }];
+  var cfgOverall = {
+    name: 'Eliminatória', formatCode: 'elim_simples', format: 'Eliminatórias Simples',
+    fixedPairs: false, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true, thirdPlace: false,
+    source: { scope: 'overall', rankingBasis: 'individual', mapping: [{ dest: 'upper', label: 'Ouro' }, { dest: 'lower', label: 'Prata' }] },
+    _includeInactive: [
+      { displayName: 'HERO', name: 'HERO', ligaActive: false },
+      { displayName: 'ZERO', name: 'ZERO', ligaActive: false }
+    ]
+  };
+  var res = E.buildPhaseBrackets(groups, cfgOverall, csOverall, 'ovr');
+  var ouro = entrantsInLine(res, 'Ouro');
+  var prata = entrantsInLine(res, 'Prata');
+  // ranking: P1(5) P2(4) HERO(3) P3(2) | P4(1) P5(0) P6(0) ZERO(0) → 4 em cima, 4 embaixo
+  ok(ouro.indexOf('HERO') !== -1, 'GERAL: inativo COM pontos (HERO) sobe pra Ouro [ouro=' + ouro.join(',') + ']');
+  ok(ouro.indexOf('ZERO') === -1 && prata.indexOf('ZERO') !== -1, 'GERAL: inativo 0 pts (ZERO) fica na Prata [prata=' + prata.join(',') + ']');
+  // não é hardcoded: HERO NÃO está na linha de baixo
+  ok(prata.indexOf('HERO') === -1, 'GERAL: HERO NÃO foi jogado direto na linha de baixo (fim do hardcoded)');
+})();
+
+// ── 5. ESCOPO GERAL single-round: inativo 0 pts cai embaixo (por classificação, não regra) ──
+(function () {
+  function cs0(g) {
+    return (g.players || []).map(function (p) {
+      var n = (typeof p === 'string') ? p : (p.name || p.displayName);
+      // ativos com 1 win; inativo (Z) com 0 → último
+      return { name: n, displayName: n, wins: (n === 'Z' ? 0 : 1), setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, pointsFor: 0, pointsAgainst: 0 };
+    }).sort(function (a, b) { return (b.wins || 0) - (a.wins || 0); });
+  }
+  var groups = [{ name: 'Geral', groupIdx: 0, players: ['Q1', 'Q2', 'Q3'].map(function (n) { return { name: n, displayName: n }; }) }];
+  var cfg = {
+    name: 'Eliminatória', fixedPairs: false, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true, thirdPlace: false,
+    source: { scope: 'overall', rankingBasis: 'individual', mapping: [{ dest: 'upper', label: 'Ouro' }, { dest: 'lower', label: 'Prata' }] },
+    _includeInactive: [{ displayName: 'Z', name: 'Z', ligaActive: false }]
+  };
+  var res = E.buildPhaseBrackets(groups, cfg, cs0, 'sr');
+  var prata = entrantsInLine(res, 'Prata');
+  ok(prata.indexOf('Z') !== -1, 'GERAL single-round: inativo 0 pts (Z) cai na Prata por classificação [prata=' + prata.join(',') + ']');
+})();
+
 console.log((fail === 0 ? '✅' : '❌') + ' phase-inactive-include: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);
