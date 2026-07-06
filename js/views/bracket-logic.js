@@ -43,15 +43,42 @@ window._computeMonarchStandings = function(group, t, category) {
   // W.O. — sempre aparece. Ghosts vêm de t.ligaGhosts (quando t disponível).
   var _ghostSet = (t && Array.isArray(t.ligaGhosts)) ? t.ligaGhosts : [];
   var _isGhostMon = function (n) { return n && _ghostSet.indexOf(n) !== -1; };
-  (group.players || []).forEach(function(name) {
-    if (_isGhostMon(name)) return; // ghost fora da classificação
-    stats[name] = {
-      name: name, wins: 0, losses: 0, played: 0,
-      pointsFor: 0, pointsAgainst: 0,
-      setsWon: 0, setsLost: 0,
-      gamesWon: 0, gamesLost: 0,
-      tiebreaksWon: 0, tiebreaksLost: 0
+  // v4.4.117: CLASSIFICAÇÃO POR UID. A chave da tabela é o uid (quando conhecido) — dois
+  // homônimos (Vivian × Vivi Hirata, ou 2 pessoas mesmo nome) NUNCA se somam na mesma linha.
+  // Seed do elenco usa group.playersUids (gravado no sorteio); cada jogo usa team1Uids/
+  // team2Uids. Sem uid (dados legados) → resolve por nome via _buildNameToUid; sem nem isso,
+  // cai em 'name:'+nome (mesmo comportamento antigo). O nome exibido vem do elenco (não do
+  // nome do jogo, que pode estar clobberado) — então mesmo com nome trocado a linha fica certa.
+  var _n2uMon = (t && typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
+  // v4.4.117: nome→uid derivado DOS PRÓPRIOS JOGOS (team1Uids/team2Uids). Garante que o SEED
+  // do elenco e o loop dos jogos usem a MESMA fonte de uid — senão elenco por nome × jogo por
+  // uid davam chaves diferentes e o jogo era pulado (0 vitórias). Ordem: uid explícito do slot
+  // → uid pelos jogos → uid pelo perfil (_n2uMon) → sem uid (name:).
+  var _matchN2u = {};
+  (function () {
+    var ms = (group.rounds && group.rounds[0]) ? group.rounds[0].matches : (group.matches || []);
+    (ms || []).forEach(function (m) {
+      if (!m) return;
+      (m.team1 || []).forEach(function (nm, i) { var u = (m.team1Uids || [])[i]; if (nm && u && !_matchN2u[nm]) _matchN2u[nm] = u; });
+      (m.team2 || []).forEach(function (nm, i) { var u = (m.team2Uids || [])[i]; if (nm && u && !_matchN2u[nm]) _matchN2u[nm] = u; });
+    });
+  })();
+  function _monKey(name, uid) {
+    var u = uid || _matchN2u[name] || _n2uMon[name] || null;
+    return u ? ('uid:' + u) : ('name:' + name);
+  }
+  function _monEnsure(name, uid) {
+    if (_isGhostMon(name)) return null;
+    var k = _monKey(name, uid);
+    if (!stats[k]) stats[k] = {
+      key: k, uid: (uid || _n2uMon[name] || null), name: name,
+      wins: 0, losses: 0, played: 0, pointsFor: 0, pointsAgainst: 0,
+      setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, tiebreaksLost: 0
     };
+    return k;
+  }
+  (group.players || []).forEach(function(name, i) {
+    _monEnsure(name, Array.isArray(group.playersUids) ? group.playersUids[i] : null);
   });
 
   var matches = (group.rounds && group.rounds[0]) ? group.rounds[0].matches : (group.matches || []);
@@ -90,31 +117,36 @@ window._computeMonarchStandings = function(group, t, category) {
       });
     }
 
-    m.team1.forEach(function(name) {
-      if (!stats[name]) return;
-      stats[name].played++;
-      stats[name].pointsFor += s1;
-      stats[name].pointsAgainst += s2;
-      stats[name].setsWon += sw1;
-      stats[name].setsLost += sw2;
-      stats[name].gamesWon += gw1;
-      stats[name].gamesLost += gw2;
-      stats[name].tiebreaksWon += tb1;
-      stats[name].tiebreaksLost += tb2;
-      if (team1Won) stats[name].wins++; else stats[name].losses++;
+    var _u1m = Array.isArray(m.team1Uids) ? m.team1Uids : [];
+    var _u2m = Array.isArray(m.team2Uids) ? m.team2Uids : [];
+    // v4.4.117: só ATUALIZA quem já está no elenco (seed) — NÃO cria linha nova a partir do
+    // nome do jogo (preserva "tabela = os do grupo"). Casa por UID (chave uid:...); se o nome
+    // do jogo está clobberado mas o uid bate o do elenco, encontra a linha certa.
+    m.team1.forEach(function(name, i) {
+      var k = _monKey(name, _u1m[i]); if (!stats[k]) return;
+      stats[k].played++;
+      stats[k].pointsFor += s1;
+      stats[k].pointsAgainst += s2;
+      stats[k].setsWon += sw1;
+      stats[k].setsLost += sw2;
+      stats[k].gamesWon += gw1;
+      stats[k].gamesLost += gw2;
+      stats[k].tiebreaksWon += tb1;
+      stats[k].tiebreaksLost += tb2;
+      if (team1Won) stats[k].wins++; else stats[k].losses++;
     });
-    m.team2.forEach(function(name) {
-      if (!stats[name]) return;
-      stats[name].played++;
-      stats[name].pointsFor += s2;
-      stats[name].pointsAgainst += s1;
-      stats[name].setsWon += sw2;
-      stats[name].setsLost += sw1;
-      stats[name].gamesWon += gw2;
-      stats[name].gamesLost += gw1;
-      stats[name].tiebreaksWon += tb2;
-      stats[name].tiebreaksLost += tb1;
-      if (!team1Won) stats[name].wins++; else stats[name].losses++;
+    m.team2.forEach(function(name, i) {
+      var k = _monKey(name, _u2m[i]); if (!stats[k]) return;
+      stats[k].played++;
+      stats[k].pointsFor += s2;
+      stats[k].pointsAgainst += s1;
+      stats[k].setsWon += sw2;
+      stats[k].setsLost += sw1;
+      stats[k].gamesWon += gw2;
+      stats[k].gamesLost += gw1;
+      stats[k].tiebreaksWon += tb2;
+      stats[k].tiebreaksLost += tb1;
+      if (!team1Won) stats[k].wins++; else stats[k].losses++;
     });
   });
 
@@ -133,7 +165,9 @@ window._computeMonarchStandings = function(group, t, category) {
   var _adv = !!(t && t.advancedScoring && t.advancedScoring.enabled && typeof window._calcAdvancedPoints === 'function');
   if (_adv) {
     Object.keys(stats).forEach(function(k) {
-      stats[k].points = window._calcAdvancedPoints(t, k, category || null, matches).total;
+      // v4.4.117: passa o uid EXATO (stats[k].uid) pro PA — casa os jogos por uid, não por
+      // nome (k agora é 'uid:...'; o nome do slot pode estar clobberado). Fecha o homônimo.
+      stats[k].points = window._calcAdvancedPoints(t, stats[k].name, category || null, matches, stats[k].uid).total;
     });
   }
 
@@ -227,7 +261,7 @@ function _woAdvPenalty(t) {
 }
 window._woAdvPenalty = _woAdvPenalty;
 
-function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
+function _calcAdvancedPoints(t, playerName, category, matchesOverride, uidOverride) {
   if (!t || !t.advancedScoring || !t.advancedScoring.enabled || !playerName) {
     return { total: 0, breakdown: [] };
   }
@@ -262,11 +296,16 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
   var total = 0;
   var breakdown = [];
 
-  // v4.4.115: uid do jogador consultado (pra casar jogos por UID quando o jogo tiver uids).
+  // v4.4.115/117: uid do jogador consultado (casa jogos por UID). uidOverride (do caller,
+  // ex.: _computeMonarchStandings que já sabe o uid exato do slot) VENCE — fecha até o caso
+  // de dois homônimos com o MESMO nome. Sem override, resolve por nome (distinto → uid certo).
   var _queryUid = null;
   try {
-    var _n2uQ = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : null;
-    if (_n2uQ && Object.prototype.hasOwnProperty.call(_n2uQ, playerName)) _queryUid = _n2uQ[playerName] || null;
+    if (uidOverride) _queryUid = uidOverride;
+    else {
+      var _n2uQ = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : null;
+      if (_n2uQ && Object.prototype.hasOwnProperty.call(_n2uQ, playerName)) _queryUid = _n2uQ[playerName] || null;
+    }
   } catch (e) {}
 
   // v2.3.3: format-agnostic — varre TODAS as partidas do torneio (eliminatórias,

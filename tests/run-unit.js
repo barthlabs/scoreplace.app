@@ -19,6 +19,7 @@ const SUITES = [
   'tests/phase-promote-line.test.js',
   'tests/advanced-points-dedup.test.js',
   'tests/pa-uid-identity.test.js',
+  'tests/standings-uid-identity.test.js',
   'tests/standings-tiebreakers.test.js',
   'tests/seed-pairing.test.js',
   'tests/grandfinal-lines.test.js',

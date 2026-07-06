@@ -102,14 +102,27 @@ function _nameUidMap(t) {
 }
 
 // ── Mutações de baixo nível ─────────────────────────────────────────────────
-function _rewriteSlot(group, fromName, toName, clearResults) {
+function _rewriteSlot(group, fromName, toName, clearResults, t) {
+  // v4.4.117: além do NOME, reescreve o UID do slot (identidade por uid). O substituto é
+  // outra pessoa — o jogo/elenco tem que apontar pro uid DELE (ou null se convidado sem
+  // conta). Sem isto, o slot mantinha o uid do ausente e a classificação por uid confundia
+  // o substituto com o ausente. toUid resolvido pelo perfil do substituto.
+  var _toUid = null;
+  try { var _n2u = (t && typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : null; if (_n2u && Object.prototype.hasOwnProperty.call(_n2u, toName)) _toUid = _n2u[toName] || null; } catch (e) {}
+  function _rw(names, uids) {
+    if (!Array.isArray(names)) return names;
+    return names.map(function (n, i) {
+      if (n === fromName) { if (Array.isArray(uids)) uids[i] = _toUid; return toName; }
+      return n;
+    });
+  }
   (group.matches || []).forEach(function (m) {
-    if (Array.isArray(m.team1)) m.team1 = m.team1.map(function (n) { return n === fromName ? toName : n; });
-    if (Array.isArray(m.team2)) m.team2 = m.team2.map(function (n) { return n === fromName ? toName : n; });
+    if (Array.isArray(m.team1)) m.team1 = _rw(m.team1, m.team1Uids);
+    if (Array.isArray(m.team2)) m.team2 = _rw(m.team2, m.team2Uids);
     if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
     if (clearResults) { m.winner = null; m.scoreP1 = null; m.scoreP2 = null; m.sets = null; delete m.pendingResult; delete m.draw; }
   });
-  if (Array.isArray(group.players)) group.players = group.players.map(function (n) { return n === fromName ? toName : n; });
+  if (Array.isArray(group.players)) group.players = _rw(group.players, group.playersUids);
 }
 function _removeSitOut(round, name) {
   if (Array.isArray(round.matches)) round.matches = round.matches.filter(function (m) { return !(m.isSitOut && m.p1 === name); });
@@ -278,7 +291,7 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
     var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
     if (!g || !r) return;
     _addWoMarker(ft, r, roundIndex, absentName, cat);
-    _rewriteSlot(g, absentName, gname, true);
+    _rewriteSlot(g, absentName, gname, true, t);
     _addGhost(ft, gname);
     g.woAbsent = absentName; g.subStatus = 'filled'; g.subName = gname; g.subIsGuest = true;
     delete g.pendingInviteId;
@@ -391,7 +404,7 @@ window._ligaAcceptSub = function (tId, inviteId) {
         ft.monarchWaitlist[_wlK] = ft.monarchWaitlist[_wlK].filter(function (n) { return n !== _invName; });
       }
     } catch (e) {}
-    _rewriteSlot(g, _absName, _invName, true);
+    _rewriteSlot(g, _absName, _invName, true, t);
     g.subStatus = 'filled'; g.subName = _invName; g.subIsGuest = false; delete g.pendingInviteId;
     fiv.status = 'accepted'; fiv.resolvedAt = new Date().toISOString();
     // supersede os convites-irmãos (vaga preenchida pelo primeiro que aceitou)
@@ -492,7 +505,7 @@ window._ligaRevertWo = function (tId, roundIndex, groupName) {
       if (!g || !r) return;
       var _abs = g.woAbsent; if (!_abs) return; // já revertido (idempotência)
       if (g.subStatus === 'filled' && g.subName) {
-        _rewriteSlot(g, g.subName, _abs, true); // substituto → ausente de volta
+        _rewriteSlot(g, g.subName, _abs, true, t); // substituto → ausente de volta
         if (g.subIsGuest) _removeGhost(ft, g.subName);
         else _addFolgaMarker(ft, r, roundIndex, g.subName, cat); // folga volta pro substituto real
       }
