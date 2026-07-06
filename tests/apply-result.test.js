@@ -118,5 +118,45 @@ ok(typeof W._applyResultToTournament === 'function', '_applyResultToTournament c
   ok(t.checkedIn && t.checkedIn.A != null && t.checkedIn.B != null, 'checkin: lançar resultado marca ambos presentes');
 })();
 
+// ── 7. GSM multi-set (gsmFinal): best-of-3 aplica os sets pré-computados ──────
+// Trava a extensão que permite _saveSetResult (GSM) persistir via commitResultTx
+// (transação, re-aplicável no fresco) em vez de syncImmediate (doc inteiro).
+(function () {
+  const t = { format: 'Eliminatórias Simples', matches: [
+    { id: 'g3', round: 1, p1: 'A', p2: 'B', nextMatchId: 'F', nextSlot: 'p1' },
+    { id: 'F', round: 2, p1: 'TBD', p2: 'TBD' },
+  ] };
+  const sets = [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 3, gamesP2: 6 }, { gamesP1: 7, gamesP2: 6, tiebreak: { pointsP1: 7, pointsP2: 5 } }];
+  const m = W._applyResultToTournament(t, 'g3', { gsmFinal: true, sets: sets, setsWonP1: 2, setsWonP2: 1, isFixedSet: false });
+  eq(m.winner, 'A', 'gsmFinal: 2×1 sets → vencedor A');
+  eq(m.setsWonP1, 2, 'gsmFinal: setsWonP1');
+  ok(Array.isArray(m.sets) && m.sets.length === 3, 'gsmFinal: 3 sets gravados');
+  eq(m.totalGamesP1, 16, 'gsmFinal: totalGamesP1 = 6+3+7');
+  eq(m.totalGamesP2, 16, 'gsmFinal: totalGamesP2 = 4+6+6');
+  eq(m.scoreP1, 2, 'gsmFinal: scoreP1 = sets ganhos (não-fixo)');
+  eq(W._findMatch(t, 'F').p1, 'A', 'gsmFinal: vencedor avança pra final');
+})();
+
+// ── 8. NO-LOST-UPDATE: re-aplicar um jogo NÃO clobbera o resultado de OUTRO ──
+// Essência da blindagem: commitResultTx re-aplica só a mutação do PRÓPRIO match
+// sobre o doc FRESCO (que já tem o resultado do outro jogo). Antes, syncImmediate
+// gravava o doc inteiro da `t` local (estale) e o 2º lançamento apagava o 1º.
+// Aqui provamos que a mutação de m2 preserva m1 (o oposto do lost-update).
+(function () {
+  const t = { format: 'Eliminatórias Simples', matches: [
+    { id: 'm1', round: 1, p1: 'A', p2: 'B', nextMatchId: 'F', nextSlot: 'p1' },
+    { id: 'm2', round: 1, p1: 'C', p2: 'D', nextMatchId: 'F', nextSlot: 'p2' },
+    { id: 'F', round: 2, p1: 'TBD', p2: 'TBD' },
+  ] };
+  // Jogador 1 lançou m1 (já persistido no doc "fresco").
+  W._applyResultToTournament(t, 'm1', { s1: 6, s2: 1 });
+  // Jogador 2 lança m2 GSM: a transação re-aplica m2 sobre o MESMO doc fresco.
+  W._applyResultToTournament(t, 'm2', { gsmFinal: true, sets: [{ gamesP1: 6, gamesP2: 0 }, { gamesP1: 6, gamesP2: 2 }], setsWonP1: 2, setsWonP2: 0, isFixedSet: false });
+  eq(W._findMatch(t, 'm1').winner, 'A', 'no-lost-update: resultado de m1 PRESERVADO após lançar m2');
+  eq(W._findMatch(t, 'm2').winner, 'C', 'no-lost-update: m2 gravado');
+  eq(W._findMatch(t, 'F').p1, 'A', 'no-lost-update: m1 avançou pra final (slot p1)');
+  eq(W._findMatch(t, 'F').p2, 'C', 'no-lost-update: m2 avançou pra final (slot p2)');
+})();
+
 console.log((fail === 0 ? '✅' : '❌') + ' apply-result: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

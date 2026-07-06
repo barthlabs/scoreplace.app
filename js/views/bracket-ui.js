@@ -1440,8 +1440,16 @@ window._saveSetResult = function(tId, matchId) {
     : (s.gamesP1 + '-' + s.gamesP2)
   ).join(' ');
 
-  window.AppStore.logAction(tId, 'Resultado: ' + m.p1 + ' vs ' + m.p2 + ' — ' + scoreText + ' — Vencedor: ' + m.winner);
-  window.AppStore.syncImmediate(tId);
+  var _gsmLogMsg = 'Resultado: ' + m.p1 + ' vs ' + m.p2 + ' — ' + scoreText + ' — Vencedor: ' + m.winner;
+  window.AppStore.logAction(tId, _gsmLogMsg);
+  // BLINDAGEM DE CORRIDA (project_concurrency_safe_saves): em vez de syncImmediate
+  // (grava o doc INTEIRO → lost-update quando 2 resultados de jogos diferentes
+  // concorrem, o último clobbera o outro), re-aplica o resultado GSM sobre o estado
+  // FRESCO via commitResultTx → _applyResultToTournament(gsmFinal). A `t` local já
+  // foi mutada acima (UI otimista); a transação reproduz a MESMA mutação no fresco.
+  window.AppStore.commitResultTx(tId, matchId, {
+    gsmFinal: true, sets: sets, setsWonP1: p1Sets, setsWonP2: p2Sets, isFixedSet: !!isFixedSet
+  }, _gsmLogMsg);
 
   // Persist per-user matchHistory record (GSM path) — uses richer m.sets data.
   try { _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGamesP1, totalGamesP2); } catch(e) {}
@@ -1532,7 +1540,29 @@ window._applyResultToTournament = function (t, matchId, payload) {
   }));
   var allowDraw = isGroupMatch || isRoundMatch;
 
-  if (useSets) {
+  if (payload.gsmFinal) {
+    // Caminho GSM multi-set (best-of-N): a payload já traz o array de sets computado
+    // por _saveSetResult. Espelha EXATAMENTE a mutação final daquela função (m.sets,
+    // setsWon, fixedSet, scores, totalGames, winner). Re-aplicável sobre o doc FRESCO
+    // dentro da transação (commitResultTx) → sem lost-update quando 2 resultados
+    // concorrem. GSM final nunca é empate. project_concurrency_safe_saves.
+    var _gs = payload.sets || [];
+    m.sets = _gs;
+    m.setsWonP1 = payload.setsWonP1; m.setsWonP2 = payload.setsWonP2;
+    if (payload.isFixedSet) {
+      m.fixedSet = true;
+      var _gf0 = _gs[0];
+      m.scoreP1 = _gf0 ? _gf0.gamesP1 : payload.setsWonP1;
+      m.scoreP2 = _gf0 ? _gf0.gamesP2 : payload.setsWonP2;
+    } else {
+      m.scoreP1 = payload.setsWonP1; m.scoreP2 = payload.setsWonP2;
+    }
+    var _gtg1 = 0, _gtg2 = 0;
+    _gs.forEach(function (s) { _gtg1 += (s.gamesP1 || 0); _gtg2 += (s.gamesP2 || 0); });
+    m.totalGamesP1 = _gtg1; m.totalGamesP2 = _gtg2;
+    if (payload.setsWonP1 > payload.setsWonP2) { m.winner = m.p1; m.draw = false; }
+    else if (payload.setsWonP2 > payload.setsWonP1) { m.winner = m.p2; m.draw = false; }
+  } else if (useSets) {
     var setData = { gamesP1: s1, gamesP2: s2 };
     if (isFixedSet) setData.fixedSet = true;
     if (isTiebreakEntry) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
@@ -1546,10 +1576,12 @@ window._applyResultToTournament = function (t, matchId, payload) {
     m.scoreP1 = s1; m.scoreP2 = s2;
   }
 
-  if (s1 === s2 && allowDraw) {
-    m.winner = 'draw'; m.draw = true;
-  } else {
-    m.winner = s1 > s2 ? m.p1 : m.p2; m.draw = false;
+  if (!payload.gsmFinal) {
+    if (s1 === s2 && allowDraw) {
+      m.winner = 'draw'; m.draw = true;
+    } else {
+      m.winner = s1 > s2 ? m.p1 : m.p2; m.draw = false;
+    }
   }
   m.resultAt = Date.now();
   if (!m.startedAt) m.startedAt = m.resultAt;
