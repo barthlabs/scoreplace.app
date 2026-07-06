@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.120-beta — nada se perde quando todo mundo mexe no torneio ao mesmo tempo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Gravações simultâneas não se atropelam mais:</b> quando duas pessoas mexem no mesmo torneio quase no mesmo instante — dois organizadores, ou um jogador e o organizador — cada alteração agora é aplicada sobre a versão <b>mais recente</b> do torneio, e não mais por cima de uma cópia antiga. Antes, a última gravação podia apagar sem querer o que a outra pessoa acabou de fazer (o clássico "sumiu o resultado que eu tinha lançado"). Vale para <b>lançamento de placar e sets</b>, <b>proposta/confirmação de resultado</b>, <b>sorteio da rodada</b>, <b>substituição por W.O.</b> e <b>chamada de presença</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.108-beta — avanço de fase: linhas contam duplas, não pessoas <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🏷️ "Duplas", não "Inscritos", no ajuste de chaveamento:</b> ao avançar de fase num torneio de duplas, o medidor de potência de 2 dizia "Inscritos" (pessoas) para o que na verdade são as <b>duplas</b> de cada linha (Ouro/Prata). Agora mostra "24 Duplas", "sobram 8 duplas", "faltam 8 duplas" — a contagem certa da unidade certa. Em torneio individual, mostra "Classificados".</li>' +
