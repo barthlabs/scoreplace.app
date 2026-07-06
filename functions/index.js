@@ -5705,7 +5705,10 @@ exports.reconcileParticipantNames = onSchedule(
 // sejam resolvidas.
 exports.scheduledAutoMergeCleanup = onSchedule(
   {
-    schedule:  "45 7 * * *",       // 04:45 BRT = 07:45 UTC
+    // v4.4.117: BUG corrigido — o cron "45 7" estava em UTC (07:45) mas o timeZone é
+    // Sao_Paulo, então rodava 07:45 BRT (3h ATRASADO). Agora "04:45" no fuso Sao_Paulo,
+    // igual aos outros scheduled. Fireava 3h fora do pretendido.
+    schedule:  "every day 04:45",  // 04:45 BRT (timeZone Sao_Paulo)
     timeZone:  "America/Sao_Paulo",
     region:    "us-central1",
     memory:    "512MiB",
