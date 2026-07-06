@@ -4766,6 +4766,7 @@ exports.requestEmailMerge = onCall(
 exports.confirmEmailMerge = onCall(
   { region: "us-central1", memory: "512MiB", timeoutSeconds: 300, cors: APP_ORIGINS },
   async (request) => {
+    // v4.4.116: usa _repairTournaments/_replaceNameInMatches uid-scoped (marcador força redeploy).
     const token = String((request.data && request.data.token) || "").trim();
     if (!token) throw new HttpsError("invalid-argument", "token ausente");
     const db = admin.firestore();
@@ -5455,6 +5456,7 @@ exports.fixMergedParticipants = onRequest(
 exports.autoMergeOnProfileUpdate = onDocumentWritten(
   { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 120 },
   async (event) => {
+    // v4.4.116: merge por uid (_scanAndMergeByField/_executeMerge/_replaceNameInMatches uid-scoped).
     const after  = event.data.after;
     const before = event.data.before;
 
@@ -5710,6 +5712,7 @@ exports.scheduledAutoMergeCleanup = onSchedule(
     timeoutSeconds: 540,
   },
   async () => {
+    // v4.4.116: merge por uid (_scanAndMergeByField/_repairTournaments/_replaceNameInMatches uid-scoped).
     const db = admin.firestore();
     console.log("[scheduledAutoMergeCleanup] Iniciando varredura diária de duplicatas");
 
