@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.4.111-beta';
+window.SCOREPLACE_VERSION = '4.4.112-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -851,6 +851,13 @@ window._softRefreshView = function() {
   // close/redirect. Block entirely; user exits intentionally via Voltar/Salvar.
   var _currentView = (window.location.hash || '').replace('#', '').split('/')[0];
   if (_currentView === 'novo-torneio') return;
+  // v4.4.112: #participantes ("+ Participante" / placeholders) é PÁGINA DE FORMULÁRIO —
+  // não tem lista, só campos + botões. Um snapshot do Firestore (o próprio write echoa)
+  // re-renderizava a página e RECRIAVA o botão azul ANTES do cinza "Adicionando…" pintar
+  // → o feedback do _addBtnLoading nunca aparecia ("parece que clicou e nada acontece").
+  // A contagem se atualiza cirurgicamente via _refreshCount no callback. Mesmo padrão do
+  // novo-torneio (form page não re-renderiza em soft-refresh).
+  if (_currentView === 'participantes') return;
   // v2.8.23/60: a DASHBOARD não faz soft-refresh a cada snapshot (rebuild constante do
   // innerHTML = "travada no scroll"). MAS quando o CONJUNTO de torneios muda de verdade
   // (dados que chegaram async do listener — torneios que "não apareciam até navegar"),

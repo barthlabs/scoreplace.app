@@ -186,11 +186,22 @@
     var b = document.getElementById(btnId); if (!b) return;
     if (on) {
       if (b.dataset.origHtml == null) b.dataset.origHtml = b.innerHTML;
+      b.dataset.loadStart = String(Date.now());
       b.disabled = true; b.innerHTML = 'Adicionando…';
       b.style.opacity = '0.55'; b.style.cursor = 'wait'; b.style.filter = 'grayscale(1)'; b.style.pointerEvents = 'none';
     } else {
-      b.disabled = false; if (b.dataset.origHtml != null) { b.innerHTML = b.dataset.origHtml; delete b.dataset.origHtml; }
-      b.style.opacity = ''; b.style.cursor = ''; b.style.filter = ''; b.style.pointerEvents = '';
+      // v4.4.112: duração MÍNIMA visível (~450ms). Se o save voltou instantâneo (cache
+      // Firestore), segura o cinza mais um pouco — senão pisca rápido demais e o dono lê
+      // como "não aconteceu nada". Reverte pelo id (sobrevive a qualquer re-render).
+      var _start = parseInt(b.dataset.loadStart, 10) || 0;
+      var _elapsed = _start ? (Date.now() - _start) : 999;
+      var _revert = function () {
+        var bb = document.getElementById(btnId); if (!bb) return;
+        bb.disabled = false; if (bb.dataset.origHtml != null) { bb.innerHTML = bb.dataset.origHtml; delete bb.dataset.origHtml; }
+        bb.style.opacity = ''; bb.style.cursor = ''; bb.style.filter = ''; bb.style.pointerEvents = '';
+        delete bb.dataset.loadStart;
+      };
+      if (_elapsed < 450) setTimeout(_revert, 450 - _elapsed); else _revert();
     }
   }
 
