@@ -3320,10 +3320,21 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
   var roundStatus = {};  // roundNum -> 'played' | 'folga' | 'inativo'
   var allRoundSet = {};
   Object.keys(playedRoundSet).forEach(function(rk) { roundStatus[rk] = 'played'; allRoundSet[rk] = true; });
+  // v4.4.113: uma rodada só entra como folga/inativo se REALMENTE COMEÇOU (tem ao menos
+  // 1 jogo com resultado). Sem isto, uma rodada gerada mas ainda SEM placar (ex.: R2
+  // sorteada e não jogada) aparecia como "inativo" pro jogador — confuso ("por que inativo
+  // na R2 se ela nem foi jogada?"). Rodada pendente não conta folga/inatividade.
+  var _roundStarted = {};
+  _allM.forEach(function(m) {
+    if (!m || m.isSitOut || m.isBye) return;
+    if (category && m.category !== category) return;
+    if (m.winner) _roundStarted[m.round || m.roundNumber || 0] = true;
+  });
   _allM.forEach(function(m) {
     if (category && m.category !== category) return;
     var rk = m.round || m.roundNumber || 0;
     if (!rk) return;
+    if (roundStatus[rk] !== 'played' && !_roundStarted[rk]) return; // rodada pendente (sem resultado) — ignora
     allRoundSet[rk] = true;
     if (roundStatus[rk] === 'played') return;
     if (m.isSitOut && (m.p1 === playerName || _paInSide(m.p1))) {

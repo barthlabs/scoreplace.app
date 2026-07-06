@@ -289,6 +289,23 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
     if (_seenMid[k]) return false;
     _seenMid[k] = 1; return true;
   });
+  // v4.4.113: dedup LÓGICO (além do id). Uma re-geração/re-sorteio da rodada pode criar
+  // cópias do MESMO jogo com IDs DIFERENTES (id carrega Date.now()) — a dedup por id não
+  // pega, e os games/participação DOBRAVAM nos Pontos Avançados (bug: 6 participações numa
+  // rodada Rei/Rainha de 3 jogos; games ganhos acima do máximo físico). Chave lógica: rodada
+  // + grupo + categoria + os dois lados (ordenados). Jogos legítimos SEMPRE diferem nessa
+  // chave (pares distintos por rodada), então nunca deduplica jogo real. Sit-outs passam
+  // (têm lógica própria de folga/inatividade).
+  var _seenLogical = {};
+  _allMatches = _allMatches.filter(function (m) {
+    if (!m || m.isSitOut) return true;
+    var _s1 = Array.isArray(m.team1) ? m.team1.slice().sort().join(',') : String(m.p1 || '');
+    var _s2 = Array.isArray(m.team2) ? m.team2.slice().sort().join(',') : String(m.p2 || '');
+    var _sides = [_s1, _s2].sort().join('__');
+    var lk = String(m.round || m.roundNumber || 0) + '|' + (m.monarchGroup != null ? m.monarchGroup : '') + '|' + (m.category || '') + '|' + (m.bracket || '') + '|' + _sides;
+    if (_seenLogical[lk]) return false;
+    _seenLogical[lk] = 1; return true;
+  });
   // Rodadas em que o jogador LEVOU W.O.: ele NÃO jogou (foi substituído). NENHUM jogo
   // dessas rodadas pontua pra ele — só a punição de W.O. Blindagem contra jogos
   // "fantasma" com o nome dele que sobraram no doc após a substituição (a substituição
