@@ -9,6 +9,12 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.0-beta — a classificação nunca mais confunde dois jogadores <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🆔 Classificação e desempate por identidade, não por nome:</b> a tabela de classificação (Pontos Corridos, Suíço e Rei/Rainha) agora identifica cada pessoa pela sua conta, e não mais só pelo nome escrito no jogo. Antes, se alguém trocava o nome no meio do torneio, ou se havia dois jogadores com nomes parecidos, os pontos e o critério de <b>confronto direto</b> podiam cair na linha errada — misturando dois jogadores ou "sumindo" com os jogos de um deles. Agora cada linha soma exatamente os jogos da pessoa certa, e o nome exibido continua o do cadastro.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.120-beta — nada se perde quando todo mundo mexe no torneio ao mesmo tempo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🛡️ Gravações simultâneas não se atropelam mais:</b> quando duas pessoas mexem no mesmo torneio quase no mesmo instante — dois organizadores, ou um jogador e o organizador — cada alteração agora é aplicada sobre a versão <b>mais recente</b> do torneio, e não mais por cima de uma cópia antiga. Antes, a última gravação podia apagar sem querer o que a outra pessoa acabou de fazer (o clássico "sumiu o resultado que eu tinha lançado"). Vale para <b>lançamento de placar e sets</b>, <b>proposta/confirmação de resultado</b>, <b>sorteio da rodada</b>, <b>substituição por W.O.</b> e <b>chamada de presença</b>.</li>' +

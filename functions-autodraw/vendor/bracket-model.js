@@ -491,9 +491,36 @@
       if (Array.isArray(desc.monarchGroups)) col.monarchGroups = desc.monarchGroups.slice();
       t.rounds[idx] = col;
     } else {
-      existing.matches = existing.matches.concat(desc.matches);
+      // v4.4.113: GUARDA contra re-append — se a rodada for re-gerada (auto-draw
+      // disparando 2×, re-sorteio, race), NÃO duplica jogos já presentes. Sem isto,
+      // o concat criava cópias do mesmo jogo com IDs diferentes → games/participação
+      // DOBRAVAM nos Pontos Avançados. Chave: id OU (rodada + grupo + times ordenados).
+      var _lk = function (m) {
+        if (!m) return '';
+        var s1 = Array.isArray(m.team1) ? m.team1.slice().sort().join(',') : String(m.p1 || '');
+        var s2 = Array.isArray(m.team2) ? m.team2.slice().sort().join(',') : String(m.p2 || '');
+        // v4.4.114: SEM monarchGroup — a re-geração põe os mesmos times num índice de grupo
+        // diferente; os times já identificam o jogo dentro da rodada.
+        return String(m.round || 0) + '|' + (m.category || '') + '|' + (m.isSitOut ? ('so:' + (m.p1 || '')) : [s1, s2].sort().join('__'));
+      };
+      var _have = {};
+      (existing.matches || []).forEach(function (m) { if (m) { if (m.id != null) _have['id:' + m.id] = 1; _have['lk:' + _lk(m)] = 1; } });
+      var _fresh = (desc.matches || []).filter(function (m) {
+        if (!m) return false;
+        if (m.id != null && _have['id:' + m.id]) return false;
+        if (_have['lk:' + _lk(m)]) return false;
+        return true;
+      });
+      existing.matches = existing.matches.concat(_fresh);
       if (Array.isArray(desc.monarchGroups)) {
-        existing.monarchGroups = (existing.monarchGroups || []).concat(desc.monarchGroups);
+        // dedup grupos monarca por assinatura dos jogadores (grupo re-gerado = mesmos 4).
+        var _haveG = {};
+        (existing.monarchGroups || []).forEach(function (g) { if (g) _haveG[(g.players || []).slice().sort().join(',')] = 1; });
+        var _freshG = desc.monarchGroups.filter(function (g) {
+          var sig = (g && g.players || []).slice().sort().join(',');
+          if (_haveG[sig]) return false; _haveG[sig] = 1; return true;
+        });
+        existing.monarchGroups = (existing.monarchGroups || []).concat(_freshG);
       }
       if (desc.format) existing.format = desc.format;
     }
