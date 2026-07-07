@@ -181,8 +181,8 @@ function initRouter() {
 
     // v2.1.94-beta: gate expandido para TODAS as rotas. Usuário não logado
     // nunca vê dados de torneio (evita confusão com dados desatualizados).
-    // Exceções: #terms e #privacy (páginas legais sempre públicas).
-    var _isLegalView = (view === 'privacy' || view === 'terms');
+    // Exceções: #terms, #privacy e #delete-account (páginas legais sempre públicas).
+    var _isLegalView = (view === 'privacy' || view === 'terms' || view === 'delete-account');
     if (!_isLoggedInNow && !_isLegalView && typeof renderLanding === 'function') {
 
       if (_hasAuthCacheNow) {
@@ -458,6 +458,14 @@ function initRouter() {
       case 'terms':
         if (typeof window.renderTerms === 'function') {
           window.renderTerms(viewContainer);
+        } else {
+          window.location.replace('#dashboard');
+          return;
+        }
+        break;
+      case 'delete-account':
+        if (typeof window.renderDeleteAccount === 'function') {
+          window.renderDeleteAccount(viewContainer);
         } else {
           window.location.replace('#dashboard');
           return;
