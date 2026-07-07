@@ -27,6 +27,8 @@ window._clearDrawRuntimeFlags = function (t) {
     'hasRepechage', 'repechageConfig', 'standbyMode', 'standbyPick',
     // suspensão de painel / estágio corrente
     '_suspendedByPanel', '_previousStatus', 'currentStage', '_reopenIfDrawCancelled',
+    // v4.5.10: marca de auto-fecho por prazo vencido (só afeta o gate do Sortear) — limpa no reset/reabrir
+    '_autoClosedByDeadline',
     // Sorteio de Vagas + snapshots + flags internos do motor
     'drawSelectionDone', 'waitlistOrder', 'preDrawEnrollees', 'pendingDraw',
     '_drawBalanceMode', '_canonicalDraw', '_cleanupApplied', '_skipCatValidation',
@@ -44,6 +46,10 @@ window._clearDrawRuntimeFlags = function (t) {
 // (t.phases, t.scoring, categorias, tiebreakers…). Base do re-sorteio e do reset.
 window._clearTournamentDraw = function (t) {
   if (!t) return;
+  // v4.5.6: o reset já restaura o elenco (waitlist/standby → participants abaixo). Descarta
+  // qualquer snapshot de draw-prep pendente pra não restaurar um elenco obsoleto num cancel
+  // posterior. "O botão de reset do sorteio reseta tudo também" (pedido do dono).
+  try { if (window._drawPrepSnapshots && t.id != null) delete window._drawPrepSnapshots[String(t.id)]; } catch (_eSnap) {}
   // v3.0.x: o reset volta ao estado de INSCRIÇÕES — então desmonta as duplas
   // FORMADAS PELO SORTEIO (teamOrigins[...] === 'sorteada') de volta pros
   // indivíduos, devolve os suplentes da lista de espera pros inscritos e dedup.
@@ -196,8 +202,21 @@ window._devSimulateCurrentPhase = function (tId) {
   if (!t) return;
   function realTeam(s) { return s && s !== 'TBD' && s !== 'BYE' && s !== '—'; }
   function byeSlot(s) { return !s || s === 'BYE' || s === '—'; } // BYE/vazio (NÃO TBD — TBD = não pronto)
-  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
-  var todo = all.filter(function (m) {
+  // FONTE ÚNICA: os jogos a preencher vêm do MOTOR, não de uma varredura própria.
+  // _phasesEngine.pendingMatches é o ESPELHO EXATO de phaseComplete — o mesmo enumerador
+  // que decide se a fase acabou. Antes o simulador varria por conta própria
+  // (_collectAllMatches), um SEGUNDO caminho que podia divergir do motor: um grupo ficava
+  // de fora do simular e a fase era dada por encerrada sem ele (bug do grupo Y, Rei/Rainha).
+  // Agora simular preenche EXATAMENTE o que o motor exige pra fechar a fase atual — sem
+  // caminho alternativo. Torneio de fase única legado (sem t.phases) cai no fallback.
+  var pend;
+  if (window._phasesEngine && typeof window._phasesEngine.isMultiPhase === 'function' &&
+      window._phasesEngine.isMultiPhase(t) && typeof window._phasesEngine.pendingMatches === 'function') {
+    pend = window._phasesEngine.pendingMatches(t).map(function (x) { return x && x.match; });
+  } else {
+    pend = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+  }
+  var todo = pend.filter(function (m) {
     if (!m || m.winner || m.isSitOut || m.isBye) return false;
     var p1ok = realTeam(m.p1), p2ok = realTeam(m.p2);
     if (p1ok && p2ok) return true;            // jogo normal
@@ -428,9 +447,10 @@ window._createExtraGamesFromWaitlist = function(t) {
   if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return 0;
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-categoria: fora do escopo por ora
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio já feito
-  // trava: se a R2+ já tem resultado, a qualificação fechou (não cresce mais)
-  var r2HasResult = t.matches.some(function(m){ return m && m.round >= 2 && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length)); });
-  if (r2HasResult) return 0;
+  // trava: se a 2ª RODADA da fase já começou a ser jogada, a qualificação fechou (não cresce
+  // mais). v4.5.16: usa a regra canônica window._lateEnrollR2Started — "R2" = 2ª rodada DISTINTA
+  // (não `round===2` literal, que quebrava com play-in/repescagem onde a 2ª rodada é round=1).
+  if (typeof window._lateEnrollR2Started === 'function' && window._lateEnrollR2Started(t)) return 0;
 
   var _name = function(p){ return window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name) || '')); };
   var _sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
@@ -1169,12 +1189,33 @@ window.generateDrawFunction = function (tId) {
         t.drawVisibility = 'public';
     }
 
+    // v4.5.6: SORTEIO EFETIVO — passou todos os gates. As decisões (sem-dupla/pow2) agora
+    // ficam PERMANENTES → o snapshot de draw-prep deixa de valer (cancel não restaura mais).
+    var _prepSnap = null;
+    try { _prepSnap = window._drawPrepSnapshots && window._drawPrepSnapshots[String(tId)]; } catch (_eSnapGet) {}
+
     // BLINDAGEM: snapshot do estado PRÉ-sorteio (aqui `t` ainda não tem chave — passamos
     // todos os gates de validação/re-sorteio acima). Os 3 saves de sorteio abaixo trocam
     // syncImmediate (merge doc inteiro, lost-update) por _commitInitialDraw (delta atômico
     // sobre o fresco). Um snapshot só serve os 3 ramos. project_concurrency_safe_saves.
     var _preDraw;
     try { _preDraw = JSON.parse(JSON.stringify(t)); } catch (_e) { _preDraw = {}; }
+    // v4.5.7: usa o elenco ORIGINAL (snapshot de draw-prep) como baseline do roster no
+    // _preDraw → o delta do _commitInitialDraw captura TODAS as decisões que mexeram no
+    // elenco ANTES daqui (sem-dupla→espera, standby, exclusão) e as persiste ATOMICAMENTE
+    // com a chave. Sem isto, waitlist/standbyParticipants ficavam iguais em preDraw e t →
+    // fora do delta → não gravavam (e dependiam do sync() que clobberava a chave). Ver
+    // _startDraw (snapshot) / _cancelDrawResolution (restore).
+    if (_prepSnap) {
+        try {
+            if (_prepSnap.participants) _preDraw.participants = _prepSnap.participants;
+            if (_prepSnap.waitlist) _preDraw.waitlist = _prepSnap.waitlist;
+            if (_prepSnap.standbyParticipants) _preDraw.standbyParticipants = _prepSnap.standbyParticipants;
+            if (_prepSnap.monarchWaitlist) _preDraw.monarchWaitlist = _prepSnap.monarchWaitlist;
+            if (_prepSnap.teamOrigins) _preDraw.teamOrigins = _prepSnap.teamOrigins;
+        } catch (_eBase) {}
+    }
+    try { if (window._drawPrepSnapshots) delete window._drawPrepSnapshots[String(tId)]; } catch (_eSnapClr) {}
 
     // v4.1.30: o SORTEIO LIMPA a presença — "acabou de sortear, ninguém está presente"
     // (dono). A partir daqui presença vem SÓ de: (a) lançar resultado = quem jogou está

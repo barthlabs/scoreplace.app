@@ -2053,6 +2053,9 @@ function _updateProgressiveClassification(t) {
 function _maybeFinishMultiPhase(t) {
   if (!t || t.status === 'finished') return false;
   if (!(window._isMultiPhase && window._isMultiPhase(t))) return false;
+  // v4.5.12: mesma regra da inscrição tardia POR FASE — janela aberta (R1 da fase atual) não
+  // auto-encerra; fecha no 1º resultado de R2 (ver window._lateEnrollWindowOpen).
+  if (window._lateEnrollWindowOpen && window._lateEnrollWindowOpen(t)) return false;
   var cur = t.currentPhaseIndex || 0;
   var last = t.phases.length - 1;
   if (cur < 1 || cur < last) return false; // ainda em fase classificatória ou há fases por vir
@@ -2119,18 +2122,59 @@ function _maybeFinishMultiPhase(t) {
 }
 window._maybeFinishMultiPhase = _maybeFinishMultiPhase;
 
+// v4.5.12 CANÔNICO (pedido do dono): a janela da INSCRIÇÃO TARDIA ('standby'/'expand') está
+// ABERTA enquanto a fase atual ainda está na R1 (ninguém jogou 2 jogos com resultado) e FECHA
+// no lançamento do resultado de QUALQUER jogo da R2 (o 1º time a ter 2 jogos COM resultado na
+// fase). Regra ÚNICA, pra qualquer formato configurado assim, avaliada POR FASE
+// (currentPhaseIndex). Multi-fase: cada fase reabre na sua própria R1. Enquanto aberta:
+// aceita novos inscritos + forma novos confrontos e o torneio NÃO auto-encerra. `status
+// === 'closed'` (organizador fechou na mão) ou formato sem inscrição tardia → janela fechada.
+// A SEGUNDA RODADA da fase já começou a ser jogada? "R2" = 2ª rodada, NÃO o número literal
+// `round===2` — com play-in/repescagem o `round` começa em 0, então a 2ª rodada ("Quartas")
+// pode ser round=1. Calculamos a 2ª rodada DISTINTA da LINHA PRINCIPAL (chave superior; exclui
+// a chave inferior/grande final da Dupla). "Começou a jogar" = winner OU placar OU sets OU
+// m.startedAt (proxy do 1º ponto no placar ao vivo, _openLiveScoring). Só a fase corrente.
+// NÃO checa lateEnrollment/status — é a pergunta pura "R2 já começou?" (usada por
+// _lateEnrollWindowOpen E pelo botão Encerrar/Reabrir, que some quando a R2 começa).
+window._lateEnrollR2Started = function (t) {
+  if (!t) return false;
+  var cur = t.currentPhaseIndex || 0;
+  var main = (Array.isArray(t.matches) ? t.matches : []).filter(function (m) {
+    return m && !m.isBye && (m.phaseIndex || 0) === cur && m.bracket !== 'lower' && m.bracket !== 'grand' && m.round != null;
+  });
+  if (!main.length) return false;
+  var uniqRounds = main.map(function (m) { return m.round; }).sort(function (a, b) { return a - b; })
+    .filter(function (v, i, a) { return a.indexOf(v) === i; });
+  if (uniqRounds.length < 2) return false; // só existe a 1ª rodada ainda → R2 não começou
+  var secondRound = uniqRounds[1];
+  return main.some(function (m) {
+    return m.round >= secondRound &&
+           (m.winner || m.startedAt || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length));
+  });
+};
+
+// A janela da INSCRIÇÃO TARDIA ('standby'/'expand') está ABERTA enquanto a fase está na R1 e
+// FECHA no 1º resultado/ponto da R2 (2ª rodada). `status==='closed'` (fechado na mão) ou
+// formato sem inscrição tardia → janela fechada. Regra ÚNICA, por fase (currentPhaseIndex).
+window._lateEnrollWindowOpen = function (t) {
+  if (!t) return false;
+  if (t.lateEnrollment !== 'standby' && t.lateEnrollment !== 'expand') return false;
+  if (t.status === 'closed') return false; // organizador fechou na mão
+  return !window._lateEnrollR2Started(t); // aberta enquanto a 2ª rodada não começou
+};
+
 function _maybeFinishElimination(t) {
   if (t.status === 'finished') return;
   // v2.6.97: construtor de fases tem encerramento próprio (última fase concluída).
   if (window._isMultiPhase && window._isMultiPhase(t)) { _maybeFinishMultiPhase(t); return; }
-  // v2.4.20: inscrição TARDIA ('standby'/'expand') mantém a Eliminatória ABERTA —
-  // completar os jogos atuais NÃO encerra o torneio. Novos confrontos da lista de
-  // espera (a cada 4), repescagem e a próxima rodada ainda podem entrar. Só encerra
-  // quando o organizador fecha as inscrições ("Encerrar Inscrições" → status='closed',
-  // ver toggleRegistrationStatus). Bug Vivi Hirata (Eliminatórias Simples + inscrição
-  // aberta): completar o 1º confronto marcava 'finished' e travava a inscrição em
-  // TODOS os caminhos, apesar de cards/config mostrarem aberto.
-  if ((t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand') && t.status !== 'closed') return;
+  // v4.5.12: inscrição TARDIA ('standby'/'expand') — REGRA CANÔNICA (pedido do dono): a
+  // janela de aceitar novos inscritos/confrontos fica aberta DURANTE a R1 da fase e FECHA no
+  // lançamento do resultado de QUALQUER jogo da R2 (qualquer time que já jogou 2 jogos com
+  // resultado na fase atual). Enquanto a janela está ABERTA, o torneio NÃO auto-encerra
+  // (dá pra entrar mais gente e formar novos confrontos na R1). Depois que fecha, segue o
+  // fluxo normal e encerra quando a chave completa. Vale pra QUALQUER formato configurado
+  // assim, POR FASE (multi-fase: cada fase tem sua R1/R2). Ver window._lateEnrollWindowOpen.
+  if (window._lateEnrollWindowOpen && window._lateEnrollWindowOpen(t)) return;
   if (t.currentStage === 'groups') return;
   // v2.0.4: BUG — o formato salvo é 'Eliminatórias Simples' (plural), mas aqui
   // checava 'Eliminatória Simples' (singular) → a função saía cedo e o torneio

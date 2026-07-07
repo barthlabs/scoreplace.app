@@ -9,6 +9,15 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.20-beta — inscrição aberta na 1ª rodada e formação de duplas na lista de espera <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📝 Inscrições abertas durante a 1ª rodada, encerram na 2ª:</b> quando o organizador configura inscrição depois do início, o torneio segue aceitando gente e formando novos confrontos durante a <b>1ª rodada da fase</b>. No <b>primeiro resultado (ou primeiro ponto no placar ao vivo) da 2ª rodada</b>, as inscrições se encerram automaticamente — o botão <b>+ Participante</b> fica cinza e o <b>Encerrar Inscrições</b> some. Vale para qualquer formato, por fase.</li>' +
+        '<li><b>🏆 Torneio encerra sozinho depois da grande final:</b> em eliminatórias com inscrição tardia, ao decidir a última partida o torneio agora fecha automaticamente e mostra o <b>pódio</b> e a <b>classificação final</b> — antes podia ficar "em andamento" pra sempre.</li>' +
+        '<li><b>🤝 Formar duplas na lista de espera (arrastar e soltar):</b> em torneios de duplas com inscrição aberta na 1ª rodada, a lista de espera abaixo da chave vira uma área onde os avulsos aparecem como cards e podem ser <b>arrastados um sobre o outro (pelo ⠿) para formar uma dupla</b> — com o presente/ausente de cada jogador ali mesmo. Funciona no computador e no celular.</li>' +
+        '<li><b>🎴 Cards de inscrito mais legíveis:</b> nome dos participantes maior e número de inscrição padronizado nos cards.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.0-beta — a classificação nunca mais confunde dois jogadores <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🆔 Classificação e desempate por identidade, não por nome:</b> a tabela de classificação (Pontos Corridos, Suíço e Rei/Rainha) agora identifica cada pessoa pela sua conta, e não mais só pelo nome escrito no jogo. Antes, se alguém trocava o nome no meio do torneio, ou se havia dois jogadores com nomes parecidos, os pontos e o critério de <b>confronto direto</b> podiam cair na linha errada — misturando dois jogadores ou "sumindo" com os jogos de um deles. Agora cada linha soma exatamente os jogos da pessoa certa, e o nome exibido continua o do cadastro.</li>' +

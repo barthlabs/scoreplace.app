@@ -1611,6 +1611,26 @@
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });
       if (_anyNonPow2) {
+        // v4.5.5: PROMOVER LINHA é um passo SEPARADO e ANTERIOR à resolução de pow2 —
+        // NÃO uma opção de chave. Promover sobe a melhor dupla da linha de baixo pra de
+        // cima (cima +1, baixo −1), mudando as CONTAGENS de cada linha (ex.: 25/25 → 26/24).
+        // Só depois de fixadas as contagens é que a pow2 é proposta — e aí cada linha
+        // resolve com o SEU número (26 e 24 rendem BYE/repescagem diferentes). Antes as duas
+        // decisões vinham misturadas no mesmo painel, e escolher "promover" não escolhia a
+        // solução de pow2 (bug reportado). Multi-linha → pergunta o promote primeiro; uma vez
+        // decidido (_promoteAsked) segue pro painel de pow2. selectQualifiers já aplica
+        // _promoteLines, então _lines aqui já reflete o promote acumulado. Ver
+        // feedback_resolution_one_logic / project_numeric_resolution_canon.
+        // Promover é decisão de 0 ou 1: só faz sentido quando UMA promoção ZERA as linhas
+        // ímpares (linha ímpar = 1 equipe sem adversário). 25/25 (2 ímpares) → 26/24 (tudo
+        // par): resolve. _phasePromoteHelps é a fonte única (mesma regra do painel). Só
+        // pergunta uma vez por transição (_promoteAsked).
+        if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
+            typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {
+          t._phaseResInfo = { lines: _lines, nextIdx: (t.currentPhaseIndex || 0) + 1, nextName: _nextCfg.name || ('Fase ' + ((t.currentPhaseIndex || 0) + 2)) };
+          window._showPhasePromotePanel(tId);
+          return;
+        }
         // v3.1.23: quando uma linha não fecha em potência de 2, SEMPRE pergunta ao
         // organizador como resolver (Play-in/Repescagem · Lista de espera · BYE ·
         // Exclusão) — com o equilíbrio de Nash, o tempo estimado e o nº de partidas

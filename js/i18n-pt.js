@@ -245,7 +245,7 @@ window._translations['pt'] = {
   'org.closeRegistration': 'Encerrar Inscrições',
   'org.reopenRegistration': 'Reabrir Inscrições',
   'org.closeRegConfirmTitle': 'Encerrar Inscrições',
-  'org.closeRegConfirmMsg': 'As inscrições ainda estão abertas. Deseja encerrar as inscrições prematuramente?',
+  'org.closeRegConfirmMsg': 'As inscrições ainda estão <b>abertas</b>. Deseja <b>encerrar as inscrições</b> e realizar o <b>sorteio antecipado</b> agora?',
   'org.finishTournament': 'Encerrar Torneio',
   'org.deleteTournament': 'Apagar Torneio',
   'org.communicate': 'Comunicar Inscritos',

@@ -46,6 +46,7 @@ function _applyMyMatchesFilter() {
   // v4.0.96: fia o arrastar-real-sobre-vaga (placeholder) APÓS cada render do bracket,
   // em TODOS os formatos. Antes do early-return abaixo pra sempre rodar.
   if (typeof window._wirePlaceholderDnD === 'function') { try { window._wirePlaceholderDnD(); } catch (e) {} }
+  if (typeof window._wireLateJoinPairDnD === 'function') { try { window._wireLateJoinPairDnD(); } catch (e) {} }
   var cards = document.querySelectorAll('[data-my-match]');
   if (!cards.length) return;
   cards.forEach(function(card) {
@@ -103,6 +104,24 @@ function renderBracket(container, tournamentId, isInline) {
   let t = tId && window.AppStore ? window._findTournamentById(tId) : null;
   if (!t && tId && window.AppStore && Array.isArray(window.AppStore.publicDiscovery)) {
     t = window.AppStore.publicDiscovery.find(tour => tour.id.toString() === tId.toString()) || null;
+  }
+
+  // v4.5.11: ao ABRIR a chave, se ela já está totalmente jogada (final/grande final
+  // decidida) mas o torneio ficou 'active' — caso da inscrição tardia ('expand'/'standby')
+  // que não auto-encerrava depois da final —, encerra AGORA pra mostrar pódio +
+  // classificação. `_maybeFinishElimination` é idempotente (sai cedo se já finished OU se
+  // ainda há jogo pendente). Persiste no doc FRESCO só quando REALMENTE virou 'finished'
+  // (não salva a cada render; o próximo render vê 'finished' e nem entra aqui). Sem isto,
+  // torneios já jogados até a final ficavam presos em 'active' pra sempre (bug reportado).
+  if (t && t.status !== 'finished' && typeof window._maybeFinishElimination === 'function') {
+    try {
+      window._maybeFinishElimination(t);
+      if (t.status === 'finished' && window.AppStore && typeof window.AppStore.mutate === 'function') {
+        window.AppStore.mutate(String(tId), function (ft) {
+          if (ft.status !== 'finished' && typeof window._maybeFinishElimination === 'function') window._maybeFinishElimination(ft);
+        });
+      }
+    } catch (_efin) {}
   }
 
   // Se torneio não encontrado localmente, tentar carregar do Firestore
@@ -670,6 +689,208 @@ window._assignMatchCourt = function(tId, matchId, court) {
   }
 };
 
+// ─── Formação de duplas na LISTA DE ESPERA durante a R1 (inscrição tardia aberta) ──────
+// v4.5.18 (regra do dono): num torneio de DUPLAS com a janela da inscrição tardia ABERTA
+// (R1 da fase — ver window._lateEnrollWindowOpen), a lista de espera abaixo da chave vira
+// uma SEÇÃO DE PAREAMENTO: cada avulso é um card âmbar arrastável (nos moldes do pré-sorteio)
+// com toggle de presença abaixo do nome; arrastar um sobre outro forma uma dupla; ao formar
+// 2 duplas, o motor cria um novo confronto na R1 SUPERIOR (Increment 2). Fechada a janela
+// (1º resultado de R2), volta a ser a lista de espera padrão (suplentes). Renderer ISOLADO —
+// não toca o _duplaCard do pré-sorteio (evita regressão). Reusa helpers globais.
+window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
+  if (!t) return '';
+  var _safeHtml = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+  var _sa = function (s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+  var tIdSafe = _sa(t.id);
+  var _merged = (typeof window._getWaitlist === 'function')
+    ? window._getWaitlist(t)
+    : (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : []);
+  var _nm = function (p) { return (window._pName ? window._pName(p, '?') : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '?')); };
+  var _isPair = function (p) { return p && typeof p === 'object' && p.p1Name && p.p2Name; };
+  var _solos = _merged.filter(function (p) { return !_isPair(p) && _nm(p).indexOf('/') === -1 && !(p && Array.isArray(p.participants) && p.participants.length); });
+  var _duplas = _merged.filter(_isPair);
+  if (!_solos.length && !_duplas.length) return '';
+  var _canPair = isOrg || (t && t.manualPairing === 'open');
+  var ci = t.checkedIn || {};
+  var _nameFs = (window._INSCRITO_NAME_FONT_PX || 17);
+
+  var _photoOf = function (nm) {
+    var _fb = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+    var c = window._playerPhotoCache && window._playerPhotoCache[nm.toLowerCase()];
+    return { url: (c && c.indexOf('dicebear.com') === -1) ? c : _fb, fb: _fb };
+  };
+  // Bloco de UMA pessoa: avatar + nome (17px) e, ABAIXO, o toggle de presença (pedido do dono).
+  var _memberBlock = function (nm, pObj) {
+    var ph = _photoOf(nm);
+    var mc = window._idMapHas ? window._idMapHas(t, ci, pObj || { displayName: nm, name: nm }) : false;
+    var safeName = _sa(nm);
+    return '<div style="display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 42%;">'
+      + '<div style="display:flex;align-items:center;gap:7px;min-width:0;"><img src="' + _safeHtml(ph.url) + '" onerror="this.onerror=null;this.src=\'' + ph.fb + '\'" data-player-name="' + _safeHtml(nm) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:' + _nameFs + 'px;color:var(--text-bright);line-height:1.18;word-break:break-word;min-width:0;">' + _safeHtml(nm) + '</span></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + safeName + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>'
+      + '</div>';
+  };
+
+  // Cards SEM DUPLA (âmbar). Arrastar via GRIP ⠿ (pointer-drag mouse+touch, igual ao
+  // arrastar-real-sobre-vaga) — NÃO usa HTML5 DnD nativo (trava no touch). Só o grip inicia
+  // o arraste; o resto do card rola normal e o toggle de presença continua clicável.
+  var solosHtml = _solos.map(function (p) {
+    var nm = _nm(p);
+    var uid = (typeof p === 'object' ? (p.uid || '') : '');
+    var keyAttr = _safeHtml(uid || nm);
+    var badge = (window._enrollNumberBadge && window._enrollNumber && window._buildEnrollOrderMap)
+      ? window._enrollNumberBadge(window._enrollNumber(window._buildEnrollOrderMap(t), p)) : '';
+    var grip = _canPair
+      ? '<span data-lj-grip="' + keyAttr + '" data-lj-tid="' + _safeHtml(t.id) + '" data-lj-name="' + _safeHtml(nm) + '" title="Arraste para formar dupla" style="cursor:grab;touch-action:none;font-size:1.2rem;color:#f59e0b;flex-shrink:0;user-select:none;-webkit-user-select:none;padding:0 4px;line-height:1;align-self:center;">⠿</span>'
+      : '';
+    return '<div data-lj-card="1" data-lj-key="' + keyAttr + '" style="background:linear-gradient(135deg,rgba(180,120,20,0.32),rgba(245,158,11,0.26));border:1px solid rgba(245,158,11,0.5);border-radius:12px;padding:12px;position:relative;overflow:hidden;">'
+      + badge
+      + '<div style="position:relative;z-index:1;display:flex;align-items:stretch;gap:8px;">' + grip + '<div style="flex:1;min-width:0;">' + _memberBlock(nm, p)
+      + '<div style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:5px;">' + (_canPair ? 'Arraste o ⠿ sobre outro card para formar dupla' : 'Sem dupla') + '</div></div></div>'
+      + '</div>';
+  }).join('');
+
+  // Cards DUPLA FORMADA (teal) — 2 pessoas + Desfazer.
+  var duplasHtml = _duplas.map(function (p) {
+    var m1 = String(p.p1Name).trim(), m2 = String(p.p2Name).trim();
+    var desfazer = isOrg
+      ? '<button type="button" class="btn btn-danger btn-micro" onclick="event.stopPropagation();window._splitLateDupla(\'' + tIdSafe + '\',\'' + _sa(_nm(p)) + '\')" style="min-height:0;height:26px;padding:0 10px;font-size:0.68rem;font-weight:800;white-space:nowrap;">↩️ Desfazer</button>'
+      : '';
+    return '<div style="background:linear-gradient(135deg,rgba(15,118,110,0.5),rgba(20,184,166,0.42));border:1px solid rgba(20,184,166,0.5);border-radius:12px;padding:12px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memberBlock(m1, { displayName: m1, name: m1, uid: p.p1Uid }) + _memberBlock(m2, { displayName: m2, name: m2, uid: p.p2Uid }) + '</div>'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;"><span style="font-size:0.65rem;color:#34d399;">✅ Dupla formada</span>' + desfazer + '</div>'
+      + '</div>';
+  }).join('');
+
+  var _readyMsg = (_duplas.length >= 1)
+    ? '<div style="font-size:0.72rem;color:#2dd4bf;font-weight:700;margin-top:2px;">✔️ ' + _duplas.length + ' dupla(s) formada(s) na lista de espera.</div>'
+    : '';
+
+  return '<div id="late-join-pairing-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.25);border-radius:16px;padding:1.5rem;">'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">inscrições abertas · R1</span></div>'
+    + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste o ⠿ de um card sobre outro para formar uma dupla na lista de espera. Enquanto as inscrições estão abertas (R1), avulsos podem se juntar em duplas.</div>'
+    + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:1.1rem;">' + solosHtml + '</div>' : '')
+    + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">' + duplasHtml + '</div>' : '')
+    + _readyMsg
+    + '</div>';
+};
+
+// Formar dupla na LISTA DE ESPERA (standbyParticipants + waitlist): remove os 2 avulsos de
+// onde estiverem e empurra {p1Name,p2Name,_lateJoin} pra standbyParticipants. Chamado pelo
+// pointer-drag (_ljEnd) — não depende de HTML5 DnD.
+window._formLateJoinDupla = function (tId, src, tgt) {
+  if (!src || !tgt || src === tgt) return;
+  var t = window.AppStore && window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
+  if (!t) return;
+  var _keyOf = function (p) { var uid = (typeof p === 'object' ? (p.uid || '') : ''); var nm = (window._pName ? window._pName(p, '') : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '')); return uid || nm; };
+  var _pull = function (key) {
+    var stores = [t.standbyParticipants, t.waitlist];
+    for (var s = 0; s < stores.length; s++) {
+      var arr = stores[s]; if (!Array.isArray(arr)) continue;
+      for (var i = 0; i < arr.length; i++) {
+        var p = arr[i];
+        if (p && p.p1Name && p.p2Name) continue;
+        if (_keyOf(p) === key) { arr.splice(i, 1); return p; }
+      }
+    }
+    return null;
+  };
+  var a = _pull(src), b = _pull(tgt);
+  if (!a || !b) { if (a) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(a); } if (b) { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; t.standbyParticipants.push(b); } return; }
+  var an = (window._pName ? window._pName(a, '') : (a.displayName || a.name || '')), bn = (window._pName ? window._pName(b, '') : (b.displayName || b.name || ''));
+  if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+  t.standbyParticipants.push({
+    p1Name: an, p1Uid: (typeof a === 'object' ? (a.uid || '') : ''),
+    p2Name: bn, p2Uid: (typeof b === 'object' ? (b.uid || '') : ''),
+    displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true
+  });
+  t.updatedAt = new Date().toISOString();
+  window.FirestoreDB.saveTournament(t).then(function () {
+    if (typeof showNotification !== 'undefined') showNotification('🤝 Dupla formada', an + ' / ' + bn, 'success');
+    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+  });
+};
+
+// Pointer-drag (mouse + touch) da seção de pareamento tardio — mesmo mecanismo do
+// arrastar-real-sobre-vaga (_wirePlaceholderDnD): clone flutuante + elementFromPoint.
+// Só o grip ⠿ (data-lj-grip) inicia; o alvo é qualquer card com data-lj-key.
+(function () {
+  var _ljDrag = null;
+  function _ljPoint(e) { return (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e; }
+  function _ljKeyAtPoint(x, y) {
+    var el = document.elementFromPoint(x, y);
+    for (var i = 0; el && i < 6; i++) {
+      if (el.closest) { var c = el.closest('[data-lj-key]'); if (c) return { key: c.getAttribute('data-lj-key'), card: c }; }
+      el = el.parentElement;
+    }
+    return null;
+  }
+  function _ljStart(e, grip) {
+    var key = grip.getAttribute('data-lj-grip'); if (key == null) return;
+    var pt = _ljPoint(e);
+    var nm = grip.getAttribute('data-lj-name') || key;
+    var clone = document.createElement('div');
+    clone.textContent = '👤 ' + nm;
+    clone.style.cssText = 'position:fixed;z-index:100060;pointer-events:none;background:#f59e0b;color:#111;font-weight:800;font-size:0.8rem;padding:6px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:translate(-50%,-160%);left:' + pt.clientX + 'px;top:' + pt.clientY + 'px;';
+    document.body.appendChild(clone);
+    _ljDrag = { key: key, tId: grip.getAttribute('data-lj-tid'), clone: clone, hi: null };
+    document.body.style.userSelect = 'none';
+    if (e.cancelable) e.preventDefault();
+  }
+  function _ljMove(e) {
+    if (!_ljDrag) return;
+    var pt = _ljPoint(e);
+    if (_ljDrag.clone) { _ljDrag.clone.style.left = pt.clientX + 'px'; _ljDrag.clone.style.top = pt.clientY + 'px'; }
+    if (_ljDrag.hi) { _ljDrag.hi.style.outline = ''; _ljDrag.hi = null; }
+    var hit = _ljKeyAtPoint(pt.clientX, pt.clientY);
+    if (hit && hit.key !== _ljDrag.key) { hit.card.style.outline = '3px solid #f59e0b'; hit.card.style.outlineOffset = '2px'; _ljDrag.hi = hit.card; }
+    if (e.cancelable) e.preventDefault();
+  }
+  function _ljEnd(e) {
+    if (!_ljDrag) return;
+    var d = _ljDrag; _ljDrag = null;
+    if (d.clone) d.clone.remove();
+    if (d.hi) d.hi.style.outline = '';
+    document.body.style.userSelect = '';
+    var pt = _ljPoint(e);
+    var hit = _ljKeyAtPoint(pt.clientX, pt.clientY);
+    if (!hit || hit.key === d.key) return;
+    if (typeof window._formLateJoinDupla === 'function') window._formLateJoinDupla(d.tId, d.key, hit.key);
+  }
+  window._wireLateJoinPairDnD = function () {
+    var grips = document.querySelectorAll('[data-lj-grip]');
+    for (var i = 0; i < grips.length; i++) {
+      var g = grips[i]; if (g._ljWired) continue; g._ljWired = true;
+      (function (gg) {
+        gg.addEventListener('mousedown', function (e) { _ljStart(e, gg); });
+        gg.addEventListener('touchstart', function (e) { _ljStart(e, gg); }, { passive: false });
+      })(g);
+    }
+    if (!window._ljDndGlobalWired) {
+      window._ljDndGlobalWired = true;
+      document.addEventListener('mousemove', _ljMove);
+      document.addEventListener('mouseup', _ljEnd);
+      document.addEventListener('touchmove', _ljMove, { passive: false });
+      document.addEventListener('touchend', _ljEnd);
+    }
+  };
+})();
+
+window._splitLateDupla = function (tId, duplaName) {
+  var t = window.AppStore && window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
+  if (!t || !Array.isArray(t.standbyParticipants)) return;
+  var arr = t.standbyParticipants;
+  var idx = arr.findIndex(function (p) { return (window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || '') === duplaName && p && p.p1Name && p.p2Name; });
+  if (idx === -1) return;
+  var e = arr[idx];
+  var s1 = e.p1Uid ? { displayName: e.p1Name, name: e.p1Name, uid: e.p1Uid, _lateJoin: true } : e.p1Name;
+  var s2 = e.p2Uid ? { displayName: e.p2Name, name: e.p2Name, uid: e.p2Uid, _lateJoin: true } : e.p2Name;
+  arr.splice(idx, 1, s1, s2);
+  t.updatedAt = new Date().toISOString();
+  window.FirestoreDB.saveTournament(t).then(function () {
+    if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', (e.p1Name || '') + ' e ' + (e.p2Name || '') + ' voltaram para Sem dupla.', 'info');
+    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+  });
+};
 window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   var _t = window._t || function(k) { return k; };
   // v4.x: Pontos Corridos (Liga) com sorteios sucessivos → a lista de espera é gerida pela
@@ -687,6 +908,15 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     ? window._getWaitlist(t)
     : (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : []);
   if (_merged.length === 0) return '';
+
+  // v4.5.18: DUPLAS com janela de inscrição tardia ABERTA (R1) → a lista de espera vira
+  // seção de PAREAMENTO (arrastar/soltar formando duplas). Fora disso, lista padrão.
+  var _teamSizeSb = parseInt(t.teamSize) || 1;
+  var _isDuplasSb = _teamSizeSb === 2 || (window._isTeamEnrollMode && window._isTeamEnrollMode(t.enrollmentMode));
+  if (_isDuplasSb && typeof window._lateEnrollWindowOpen === 'function' && window._lateEnrollWindowOpen(t) && typeof window._renderLateJoinPairing === 'function') {
+    var _ljHtml = window._renderLateJoinPairing(t, isOrg);
+    if (_ljHtml) return _ljHtml;
+  }
 
   const getName = (p) => window._pName(p, '?');
   const _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");

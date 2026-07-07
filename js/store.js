@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.5.1-beta';
+window.SCOREPLACE_VERSION = '4.5.20-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -918,6 +918,7 @@ window._softRefreshView = function() {
                   document.getElementById('casual-match-overlay') ||
                   document.getElementById('unified-resolution-panel') ||
                   document.getElementById('inactive-phase-panel') ||
+                  document.getElementById('phase-promote-panel') ||
                   document.getElementById('groups-config-panel') ||
                   document.getElementById('remainder-resolution-panel') ||
                   document.getElementById('vagas-draw-panel') ||
@@ -4197,7 +4198,7 @@ window._drawBtnBusy = function(btn, tId) {
   btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>Sorteando…';
   window._drawBusyBtn = s;
   // Fim = primeira tela de solução no DOM (qualquer painel da cadeia de sorteio).
-  var _PANELS = /resolution-panel|groups-config-panel|reopen-panel|final-review-panel|presence-draw-choice|solo-manual-pair-panel|removal-subchoice-panel/;
+  var _PANELS = /resolution-panel|groups-config-panel|reopen-panel|final-review-panel|presence-draw-choice|solo-manual-pair-panel|removal-subchoice-panel|phase-promote-panel/;
   if (typeof MutationObserver === 'function') {
     s.obs = new MutationObserver(function(muts) {
       for (var i = 0; i < muts.length; i++) {
@@ -6503,14 +6504,24 @@ window._enrollNumberBadge = function(num, side) {
   // transbordava o próprio box e a borda do card (overflow:hidden) cortava. Fix: `textLength`
   // = largura da viewBox (lengthAdjust ajusta espaçamento/glifo) trava a largura, e a viewBox
   // tem largura por dígito generosa (60) — o número nunca vaza, nem na direita nem na esquerda.
-  // height 52% + folga vertical (medido: ~12px topo/base, livre dos cantos arredondados).
+  // v4.5.x: CANÔNICO = 60% da altura do card (centralizado vertical → ~20% de folga topo/base),
+  // como o dono canonizou na v2.8.61. A técnica anti-corte (textLength + viewBox com 60/dígito)
+  // já impede o glifo de vazar, então dá pra voltar aos 60% sem o corte que motivou o 52%+cap.
+  // SEM max-height: 60% resolve contra a caixa do card em qualquer altura (auto-height).
   var vbH = 76;                            // glifo (fonte 100) preenche a viewBox → número cheio
   var vbW = n.length * 60;
-  return '<svg aria-hidden="true" style="position:absolute;top:50%;transform:translateY(-50%);' + side + ':14px;height:52%;max-height:54px;width:auto;pointer-events:none;user-select:none;z-index:0;overflow:visible;" ' +
+  return '<svg aria-hidden="true" style="position:absolute;top:50%;transform:translateY(-50%);' + side + ':14px;height:60%;width:auto;pointer-events:none;user-select:none;z-index:0;overflow:visible;" ' +
     'viewBox="0 0 ' + vbW + ' ' + vbH + '" preserveAspectRatio="xMidYMid meet">' +
     '<text x="' + (vbW / 2) + '" y="' + (vbH / 2) + '" textLength="' + vbW + '" lengthAdjust="spacingAndGlyphs" text-anchor="middle" dominant-baseline="central" font-size="100" font-weight="900" ' +
     'fill="rgba(255,255,255,0.10)" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif">' + window._safeHtml(n) + '</text></svg>';
 };
+
+// CANÔNICO (v4.5.13): tamanho da fonte do NOME do participante nos cards de inscrito (individual,
+// dupla formada, dupla pendente, solo "sem dupla"). Dimensionado pra acompanhar a marca-d'água do
+// nº de inscrição (_enrollNumberBadge, 60% da altura do card). FONTE ÚNICA — todo card de inscrito
+// deve usar `window._INSCRITO_NAME_FONT_PX` no `font-size` (e no `data-fit-max` do auto-fit de 2
+// linhas). NUNCA hardcodar outro valor (0.95rem/0.92rem etc.) → é regressão. O dono canonizou 17px.
+window._INSCRITO_NAME_FONT_PX = 17;
 
 // ═══════════════════════════════════════════════════════════════════════════════════
 // CANÔNICO (v3.1.33): pódio(s) + classificação(ões) do torneio encerrado — UMA fonte só.

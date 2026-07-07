@@ -1165,6 +1165,24 @@ function renderTournaments(container, tournamentId = null) {
             if (typeof window._showLoading === 'function') window._showLoading('Preparando sorteio…');
             // Auto-mover solos para waitlist em torneios de duplas
             var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+            // v4.5.6: SNAPSHOT do elenco no INÍCIO do ciclo de decisões do sorteio (sem-dupla /
+            // pow2 / standby movem o elenco EM MEMÓRIA). Guardado FORA do doc (map por tId) → não
+            // persiste. Cancelar QUALQUER painel antes do sorteio efetivo restaura isto (ver
+            // _cancelDrawResolution) → as decisões são reavaliadas do zero no próximo Sortear
+            // (pedido do dono). Só na 1ª entrada: re-entradas via _soloResolved não re-snapshotam;
+            // o snapshot é DESCARTADO quando o sorteio efetiva (generateDrawFunction) ou no reset.
+            if (t && !t._soloResolved) {
+                try {
+                    window._drawPrepSnapshots = window._drawPrepSnapshots || {};
+                    window._drawPrepSnapshots[String(tId)] = JSON.parse(JSON.stringify({
+                        participants: t.participants || [],
+                        waitlist: t.waitlist || [],
+                        standbyParticipants: t.standbyParticipants || [],
+                        monarchWaitlist: t.monarchWaitlist || {},
+                        teamOrigins: t.teamOrigins || {}
+                    }));
+                } catch (_eSnap) {}
+            }
             // v4.0.53: solos sem dupla → resolução CONSCIENTE antes do sorteio
             // (Ajuste manual / Lista de espera / Exclusão), em vez de mover pra
             // waitlist em silêncio. One-shot: o painel seta _soloResolved e re-chama
@@ -1190,9 +1208,14 @@ function renderTournaments(container, tournamentId = null) {
                 var _enrM = t.enrollmentMode || t.enrollment || 'individual';
                 if ((_enrM === 'time' || _enrM === 'teams') && typeof window._diagnoseAll === 'function') {
                     var _diagTeams = window._diagnoseAll(t);
-                    // dispara quando há jogadores SEM equipe (individuais soltos)
-                    // ou nenhum time formado — em ambos não dá pra sortear os times.
-                    if (_diagTeams.individuals > 0 || _diagTeams.preFormedTeams === 0) {
+                    // v4.4.x: só dispara quando NÃO há NENHUM time formado (pow2 mostraria
+                    // "0 times"). Se já existem times formados, os avulsos são resolvidos pelo
+                    // painel sem-dupla (_showSoloResolutionPanel, acima) → lista de espera /
+                    // exclusão / ajuste manual; depois disso o sorteio segue pra resolução de
+                    // pow2 com os times que sobraram. Antes o gate também disparava com
+                    // `individuals > 0`, o que fazia a tela "Falta montar os times" voltar em
+                    // loop mesmo depois do organizador mandar os sem-dupla pra espera.
+                    if (_diagTeams.preFormedTeams === 0) {
                         if (typeof window._warnTeamsNotFormed === 'function') { window._warnTeamsNotFormed(tId); return; }
                     }
                 }
@@ -1241,11 +1264,18 @@ function renderTournaments(container, tournamentId = null) {
         // diálogo "encerrar prematuramente"; sorteia direto SEM setar 'closed'.
         var _tSort = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
         var _lateMode = !!(_tSort && (_tSort.lateEnrollment === 'standby' || _tSort.lateEnrollment === 'expand'));
-        if (!skipGates && isAberto && _lateMode) {
+        // v4.5.9: o gate dispara SEMPRE que as inscrições NÃO estão formalmente fechadas
+        // (status !== 'closed'), não só quando `isAberto` — que fica false quando o PRAZO
+        // já venceu mesmo com o torneio ainda aberto. Pedido do dono: "com as inscrições
+        // abertas, clicar Sortear deve SEMPRE avisar e perguntar se quer encerrar as
+        // inscrições e realizar sorteio antecipado (cancelar/confirmar)". Só status=='closed'
+        // (inscrições já encerradas pelo organizador) pula direto pro sorteio.
+        var _inscricoesAbertas = !!(_tSort && (_tSort.status !== 'closed' || _tSort._autoClosedByDeadline));
+        if (!skipGates && _inscricoesAbertas && _lateMode) {
             // v2.2.39: inscrições seguem abertas após o sorteio — perguntar se
             // sorteia com todos (antes da chamada) ou só entre os presentes.
             window._showPresenceDrawChoice(tId, _startDraw);
-        } else if (!skipGates && isAberto) {
+        } else if (!skipGates && _inscricoesAbertas) {
             showConfirmDialog(
                 _t('org.closeRegConfirmTitle'),
                 _t('org.closeRegConfirmMsg'),
@@ -1638,12 +1668,24 @@ function renderTournaments(container, tournamentId = null) {
         // (que seta status='closed'). lateEnrollManaged = quando esse modo está
         // ativo após o sorteio (pra mostrar o botão Encerrar/Reabrir).
         const lateEnrollManaged = sorteioRealizado && !isFinished && (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
-        const lateEnrollOpen = lateEnrollManaged && t.status !== 'closed';
+        // v4.5.15 (regra do dono): a inscrição tardia só fica ABERTA durante a R1 da fase —
+        // FECHA no 1º resultado (ou 1º ponto no placar ao vivo) da R2. window._lateEnrollWindowOpen
+        // já é essa regra canônica (round>=2 com resultado, por fase). Depois de fechar, isAberto
+        // vira false → +Participante inativo + estado "encerradas (em andamento)".
+        const lateEnrollOpen = lateEnrollManaged && (typeof window._lateEnrollWindowOpen === 'function'
+          ? window._lateEnrollWindowOpen(t)
+          : t.status !== 'closed');
         const isAberto = (!isFinished && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
 
         // Auto-close: if deadline passed but status hasn't been updated yet, close it now
         if (!isAberto && !isFinished && !sorteioRealizado && t.status !== 'closed' && t.registrationLimit && new Date(t.registrationLimit) < new Date()) {
           t.status = 'closed';
+          // v4.5.10: marca que o fechamento foi AUTOMÁTICO (prazo vencido), não uma decisão
+          // explícita do organizador. O gate do Sortear ainda pede a confirmação "Encerrar
+          // Inscrições?" pra torneios auto-fechados (o organizador não escolheu fechar) —
+          // só pula a confirmação quando ELE fechou de propósito via "Encerrar Inscrições".
+          // Flag em memória (não persiste no save de status abaixo; re-derivada a cada render).
+          t._autoClosedByDeadline = true;
           if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
             window.FirestoreDB.saveTournament({ id: t.id, status: 'closed' }).catch(function() {});
           }
@@ -1969,8 +2011,16 @@ function renderTournaments(container, tournamentId = null) {
         // lista de espera).
         // v4.0.90: "+ Participante" e "Placeholders" consolidados na page-route
         // #participantes/<tId> (campo nome + Adicionar · campo placeholders + Adicionar).
+        // v4.5.15 (regra do dono): +Participante ATIVO enquanto a inscrição está aberta; quando
+        // fecha (1º resultado/ponto — ou 1º resultado de R2 na inscrição tardia), fica CINZA e
+        // INATIVO (não some) — sinaliza "inscrições encerradas, torneio em andamento". Vale pra
+        // qualquer formato. Só some quando o torneio ENCERRA (campeão definido).
         const addParticipantBtns = isOrg ? `
-             ${isAberto ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.location.hash='#participantes/${t.id}'">👤 + Participante</button>` : ''}
+             ${isAberto
+               ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.location.hash='#participantes/${t.id}'">👤 + Participante</button>`
+               : (!isFinished
+                 ? `<button class="btn" disabled title="Inscrições encerradas — o torneio já começou (primeiro resultado lançado). Não é possível adicionar participantes." style="cursor:not-allowed;background:#64748b;color:#e2e8f0;border:1px solid #475569;box-shadow:none;">👤 + Participante</button>`
+                 : '')}
              ${((allowsTeams && !isDoublesMode) && !sorteioRealizado) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
         ` : '';
 
@@ -2001,7 +2051,11 @@ function renderTournaments(container, tournamentId = null) {
         // v2.1.0: mostra o botão Encerrar/Reabrir também APÓS o sorteio quando as
         // inscrições tardias estão ativas (lateEnrollManaged) — é o único jeito de
         // fechar as inscrições nesse modo (o sorteio não fecha).
-        let toggleRegBtn = ((!hasDraw || lateEnrollManaged) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${t.status === 'closed' ? 'btn-success' : 'btn-danger'} hover-lift" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${t.status === 'closed' ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${t.status === 'closed' ? '✅ ' + _t('org.reopenRegistration') : '🛑 ' + _t('org.closeRegistration')}</button>` : '';
+        // v4.5.16 (regra do dono): o botão Encerrar/Reabrir Inscrições SOME quando a R2 (2ª
+        // rodada) começa a ser jogada — a inscrição já fechou sozinha, não há mais o que
+        // encerrar nem reabrir. Antes some só o lateEnrollManaged, agora gated por R2 não iniciada.
+        const _r2Started = (typeof window._lateEnrollR2Started === 'function') && window._lateEnrollR2Started(t);
+        let toggleRegBtn = ((!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${t.status === 'closed' ? 'btn-success' : 'btn-danger'} hover-lift" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${t.status === 'closed' ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${t.status === 'closed' ? '✅ ' + _t('org.reopenRegistration') : '🛑 ' + _t('org.closeRegistration')}</button>` : '';
         // v4.1.18: Reabrir/Encerrar EM ANDAMENTO deste torneio → botão cinza "Reabrindo…"/
         // "Encerrando…" (mesma UX do Sortear) mesmo se o detalhe re-renderizar antes de
         // concluir. Limpo em _regBtnDone (dialog/painel/refresh/backstop).
@@ -3174,7 +3228,7 @@ function renderTournaments(container, tournamentId = null) {
                             const _mCrown = _mIsOrg ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
                             const _mPend = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, n)) ? window._pendingCoHostBadgeHtml() : '';
                             const _mNSafe = n.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                            return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_mNSafe}',{tournamentId:'${t.id}'})" title="Ver perfil de ${window._safeHtml(n)}"><img src="${_mPhoto}" onerror="this.onerror=null;this.src='${_mFallback}'" data-player-name="${window._safeHtml(n)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.95rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${window._safeHtml(n)}</span>${_mCrown}${_mPend}</div>`;
+                            return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_mNSafe}',{tournamentId:'${t.id}'})" title="Ver perfil de ${window._safeHtml(n)}"><img src="${_mPhoto}" onerror="this.onerror=null;this.src='${_mFallback}'" data-player-name="${window._safeHtml(n)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${window._safeHtml(n)}</span>${_mCrown}${_mPend}</div>`;
                         }).join('');
                     } else {
                         const _pSeed = encodeURIComponent(pName);
@@ -3200,7 +3254,7 @@ function renderTournaments(container, tournamentId = null) {
                         var _pPendBadge = (typeof window._pendingCoHostFor === 'function' && window._pendingCoHostFor(t, pName, _pUid, _pEmail)) ? window._pendingCoHostBadgeHtml() : '';
                         const _pNSafe = pName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
                         const _pUidOpts = _pUid ? (',uid:\''+_pUid+'\'') : '';
-                        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pNSafe}',{tournamentId:'${t.id}'${_pUidOpts}})" title="Ver perfil de ${window._safeHtml(pName)}"><img src="${_pPhoto}" onerror="this.onerror=null;this.src='${_pFallback}'" data-player-name="${window._safeHtml(pName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">${window._safeHtml(pName)}</span>${_crownInline}${_vipInline}${_pPendBadge}</div>`;
+                        pNameHtml = `<div style="display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_pNSafe}',{tournamentId:'${t.id}'${_pUidOpts}})" title="Ver perfil de ${window._safeHtml(pName)}"><img src="${_pPhoto}" onerror="this.onerror=null;this.src='${_pFallback}'" data-player-name="${window._safeHtml(pName)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:${window._INSCRITO_NAME_FONT_PX||17}px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">${window._safeHtml(pName)}</span>${_crownInline}${_vipInline}${_pPendBadge}</div>`;
                     }
 
                     const vipBadge = isVip ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;margin-left:4px;">💎 VIP</span>' : '';
@@ -3461,10 +3515,10 @@ function renderTournaments(container, tournamentId = null) {
                 nameHtml = members.map(function(n) {
                   var ms='https://api.dicebear.com/9.x/initials/svg?seed='+encodeURIComponent(n)+'&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                   var mp=(window._playerPhotoCache&&window._playerPhotoCache[n.toLowerCase()]&&window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com')===-1)?window._playerPhotoCache[n.toLowerCase()]:ms;
-                  return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;"><img src="'+window._safeHtml(mp)+'" onerror="this.onerror=null;this.src=\''+ms+'\'" data-player-name="'+window._safeHtml(n)+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:0.92rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+window._safeHtml(n)+'</span></div>';
+                  return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;"><img src="'+window._safeHtml(mp)+'" onerror="this.onerror=null;this.src=\''+ms+'\'" data-player-name="'+window._safeHtml(n)+'" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:'+(window._INSCRITO_NAME_FONT_PX||17)+'px;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+window._safeHtml(n)+'</span></div>';
                 }).join('');
               } else {
-                nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="'+window._safeHtml(_photo)+'" onerror="this.onerror=null;this.src=\''+_fb+'\'" data-player-name="'+window._safeHtml(nm)+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:600;font-size:0.95rem;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">'+window._safeHtml(nm)+'</span>'+_crown+'</div>';
+                nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="'+window._safeHtml(_photo)+'" onerror="this.onerror=null;this.src=\''+_fb+'\'" data-player-name="'+window._safeHtml(nm)+'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:'+(window._INSCRITO_NAME_FONT_PX||17)+'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">'+window._safeHtml(nm)+'</span>'+_crown+'</div>';
               }
               // Estilo igual ao card normal
               var bgStyle = draggable
@@ -3507,7 +3561,8 @@ function renderTournaments(container, tournamentId = null) {
                   // (altura 44px); só ENCOLHE via auto-fit JS _fitTwoLineNames em casos extremos.
                   // class sp-fit-name + data-fit-h/max alimentam o medidor; avatar acompanha
                   // (align-items:center). title = nome completo no hover.
-                  var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="17" style="font-weight:700;font-size:17px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
+                  var _nmFs = (window._INSCRITO_NAME_FONT_PX || 17);
+                  var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="' + _nmFs + '" style="font-weight:700;font-size:' + _nmFs + 'px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
                   var _av = right
                     ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
                     : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
@@ -3551,16 +3606,30 @@ function renderTournaments(container, tournamentId = null) {
               return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
                 ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
                 _enrollBadge + _wmL + _wmR +
-                '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' +
-                  _body +
-                  // CANÔNICO: status (Dupla formada / Arraste para formar dupla) na
-                  // linha de cima; ação (Desfazer + 🗑️) numa linha ABAIXO à direita,
+                (function(){
+                  // CANÔNICO (v4.5.14): a AÇÃO (↩️ Desfazer + 🗑️) NÃO ocupa linha própria — economiza
+                  // 1 linha de altura (o nº de inscrição segue 60% da altura do card, que agora é menor).
+                  //  • DUPLA formada → ação à DIREITA na MESMA linha do status "✅ Dupla formada" (esq).
+                  //  • Individual/solo → ação (🗑️) à DIREITA na MESMA linha do NOME (esq), alinhada ao topo.
                   // 🗑️ sempre por último. Ver [[project_inscrito_card_canonical]].
-                  labelHtml +
-                  ((desfazerBtn || _delBtnDupla)
-                    ? '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">' + desfazerBtn + _delBtnDupla + '</div>'
-                    : '') +
-                '</div></div>';
+                  var _actions = (desfazerBtn || _delBtnDupla)
+                    ? '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' + desfazerBtn + _delBtnDupla + '</div>'
+                    : '';
+                  var _inner;
+                  if (members) {
+                    var _labelRow = _actions
+                      ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' + (labelHtml || '<span></span>') + _actions + '</div>'
+                      : labelHtml;
+                    _inner = _body + _labelRow;
+                  } else {
+                    var _nameRow = _actions
+                      ? '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="min-width:0;flex:1;">' + _body + '</div>' + _actions + '</div>'
+                      : _body;
+                    _inner = _nameRow + labelHtml;
+                  }
+                  return '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' + _inner + '</div>';
+                })() +
+                '</div>';
             }
             function _safeAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 
