@@ -54,5 +54,74 @@ ok(!fantasma, 'NÃO existe linha fantasma da Vivi Hirata roubando os jogos da Vi
 // total de linhas = 4 (os 4 do grupo), não 5
 eq(st.length, 4, 'a tabela tem 4 linhas (os 4 do grupo), sem duplicar por nome');
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// _computeStandings (Liga/Suíço INDIVIDUAL) por UID (v4.4.120) — dirige o motor REAL.
+// FALHA no código velho (chave por NOME): entries sem `.uid`; jogo com nome clobberado
+// credita a PESSOA errada (homônima); dois homônimos colapsam numa linha só.
+// PASSA no novo (chave por UID via p1Uid/p2Uid + seed por p.uid).
+// ═══════════════════════════════════════════════════════════════════════════════
+const row = (s, p) => s.find(p);
+
+// ── (a) DERIVA DE NOME: os jogos da Vivian tiveram o nome clobberado pra "Vivi Hirata"
+//        (uid dela CORRETO nos slots). A tabela deve creditar a Vivian (uid), não a outra
+//        pessoa chamada "Vivi Hirata" que também está no torneio. ──
+(function () {
+  const uVIAN = 'uVIAN', uVIVI = 'uVIVIH', uM = 'uMARJ', uR = 'uROD';
+  const t = {
+    participants: [
+      { uid: uVIAN, displayName: 'Vivian', name: 'Vivian' },
+      { uid: uVIVI, displayName: 'Vivi Hirata', name: 'Vivi Hirata' }, // outra pessoa, homônima-prefixo
+      { uid: uM, displayName: 'Marjorie', name: 'Marjorie' },
+      { uid: uR, displayName: 'Rodrigo', name: 'Rodrigo' }
+    ],
+    rounds: [{ matches: [
+      // Vivian (uVIAN) vence 2 — mas o NOME nos slots está clobberado pra "Vivi Hirata".
+      { p1: 'Vivi Hirata', p1Uid: uVIAN, p2: 'Marjorie', p2Uid: uM, winner: 'Vivi Hirata', scoreP1: 6, scoreP2: 2 },
+      { p1: 'Vivi Hirata', p1Uid: uVIAN, p2: 'Rodrigo', p2Uid: uR, winner: 'Vivi Hirata', scoreP1: 6, scoreP2: 1 },
+      // A OUTRA Vivi Hirata (uVIVI) joga o SEU jogo e perde — nome igual, uid diferente.
+      { p1: 'Vivi Hirata', p1Uid: uVIVI, p2: 'Marjorie', p2Uid: uM, winner: 'Marjorie', scoreP1: 3, scoreP2: 6 }
+    ] }]
+  };
+  const s = W._computeStandings(t);
+  const vian = row(s, r => r.uid === uVIAN);
+  const vivi = row(s, r => r.uid === uVIVI);
+  ok(!!vian, '[deriva] existe linha da Vivian por uid');
+  ok(!!vivi, '[deriva] existe linha da Vivi Hirata (uVIVI) por uid');
+  if (vian) {
+    eq(vian.name, 'Vivian', '[deriva] linha mostra o nome do elenco (Vivian), não o clobberado');
+    eq(vian.wins, 2, '[deriva] Vivian leva as 2 vitórias (por uid, mesmo com nome clobberado)');
+  }
+  if (vivi) {
+    eq(vivi.wins, 0, '[deriva] a OUTRA Vivi Hirata NÃO herda as vitórias da Vivian');
+    eq(vivi.losses, 1, '[deriva] a Vivi Hirata (uVIVI) fica só com a própria derrota');
+  }
+  eq(s.length, 4, '[deriva] 4 linhas (os 4 do elenco), sem fantasma');
+})();
+
+// ── (b) HOMÔNIMOS não se juntam: duas pessoas com o MESMO nome "João" (uids distintos),
+//        cada uma vence um jogo (uid no slot). Devem virar DUAS linhas, não uma somada. ──
+(function () {
+  const uJ1 = 'uJOAO1', uJ2 = 'uJOAO2', uP = 'uPEDRO', uL = 'uLUCAS';
+  const t = {
+    participants: [
+      { uid: uJ1, displayName: 'João', name: 'João' },
+      { uid: uJ2, displayName: 'João', name: 'João' }, // homônimo verdadeiro
+      { uid: uP, displayName: 'Pedro', name: 'Pedro' },
+      { uid: uL, displayName: 'Lucas', name: 'Lucas' }
+    ],
+    rounds: [{ matches: [
+      { p1: 'João', p1Uid: uJ1, p2: 'Pedro', p2Uid: uP, winner: 'João', scoreP1: 6, scoreP2: 3 },
+      { p1: 'João', p1Uid: uJ2, p2: 'Lucas', p2Uid: uL, winner: 'João', scoreP1: 6, scoreP2: 4 }
+    ] }]
+  };
+  const s = W._computeStandings(t);
+  const joaos = s.filter(r => r.name === 'João');
+  eq(joaos.length, 2, '[homônimo] duas linhas "João" (uma por uid), não uma só somada');
+  const j1 = row(s, r => r.uid === uJ1), j2 = row(s, r => r.uid === uJ2);
+  ok(!!j1 && !!j2, '[homônimo] cada João tem linha própria por uid');
+  if (j1) eq(j1.wins, 1, '[homônimo] João(uJ1) com 1 vitória');
+  if (j2) eq(j2.wins, 1, '[homônimo] João(uJ2) com 1 vitória (não 2 num só)');
+})();
+
 console.log((fail === 0 ? '✅' : '❌') + ' standings-uid-identity: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);
