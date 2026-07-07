@@ -108,6 +108,24 @@
   // Carry-forward ('keep') implícito: se as colocações já SÃO times (dupla veio
   // formada da fase anterior), elas seguem juntas — fixedPairs/pairingStrategy são
   // ignorados, ninguém é re-pareado.
+  // v4.4.109: a linha "de baixo" (pior) de um byDest — pra onde inativos incluídos vão e
+  // pra onde a contagem do medidor deve somá-los. Preferência lower → main → última chave.
+  function _lowestDestKey(bd) {
+    if (!bd) return null;
+    if (bd.lower) return 'lower';
+    if (bd.main) return 'main';
+    var ks = Object.keys(bd);
+    return ks.length ? ks[ks.length - 1] : null;
+  }
+  // v4.4.111: a linha "de cima" (melhor) — destino de quem é promovido da linha de baixo.
+  function _highestDestKey(bd) {
+    if (!bd) return null;
+    if (bd.upper) return 'upper';
+    if (bd.main) return 'main';
+    var ks = Object.keys(bd);
+    return ks.length ? ks[0] : null;
+  }
+
   function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, opts) {
     opts = opts || {};
     var scope = opts.scope || 'per_group';
@@ -197,13 +215,31 @@
     // (nenhuma chave, só a grande final). Nesse caso usa POR GRUPO: cada linha vira
     // uma faixa de colocação (Linha 1 = 1º de cada grupo, Linha 2 = 2º, …) — chaves
     // de verdade. Geral só vale com 1 linha OU 1 grupo (pool único de verdade).
+    // v4.4.x: EXCEÇÃO Rei/Rainha (opts.flatOverall): os "grupos" são rotativos de 4 (uma
+    // rodada), então o ranking GERAL é uma lista plana de N jogadores — pool geral de
+    // verdade. Aí NÃO degenera: usa o pool global e respeita o corte do slider (maxRankTo).
     var _nLines = destKeys.length;
     var _multiGroup = (prevGroups || []).length >= 2;
-    var _useOverall = (scope === 'overall') && !(_nLines >= 2 && _multiGroup);
+    var _useOverall = (scope === 'overall') && (opts.flatOverall === true || !(_nLines >= 2 && _multiGroup));
+    // v4.4.110: INATIVOS "incluídos" (opts.includeInactive = objetos de participante).
+    // Entram POR CLASSIFICAÇÃO — a MESMA régua dos ativos. Não jogaram → 0 pts naquelas
+    // rodadas; quem jogou antes guarda os pontos. Ver project_phase_inactive_resolution.
+    var _ina = (opts.includeInactive || []).filter(Boolean);
     if (_useOverall) {
-      // Pool agregado (ranking geral) — usado por Cabeças de chave e por qualquer
-      // estratégia em escopo Geral.
-      var global = _globalStandings(prevGroups, computeStandings);
+      // ESCOPO GERAL: monta um grupo SINTÉTICO só com os inativos + TODOS os jogos da
+      // fase, e joga no _globalStandings — assim eles são ranqueados junto com todo mundo
+      // (0 pts cai embaixo naturalmente; com pontos, pode SUBIR). Nunca destino fixo.
+      var _pgForGlobal = prevGroups || [];
+      if (_ina.length) {
+        var _allMs = [];
+        (prevGroups || []).forEach(function (g) {
+          (g.matches || []).forEach(function (m) { _allMs.push(m); });
+          (g.rounds || []).forEach(function (r) { (r.matches || []).forEach(function (m) { _allMs.push(m); }); });
+        });
+        var _inaNames = _ina.map(function (p) { return (p && (p.displayName || p.name)) || ''; }).filter(Boolean);
+        _pgForGlobal = (prevGroups || []).concat([{ name: '__inativos__', players: _inaNames, matches: _allMs }]);
+      }
+      var global = _globalStandings(_pgForGlobal, computeStandings);
       var gdepth = (maxRankTo >= 999 || maxRankTo <= 0) ? global.length : Math.min(maxRankTo, global.length);
       _distributePool(global.slice(0, gdepth), destKeys);
     } else {
@@ -212,6 +248,35 @@
         var depth = (maxRankTo >= 999 || maxRankTo <= 0) ? standings.length : Math.min(maxRankTo, standings.length);
         _distributePool(standings.slice(0, depth), destKeys);
       });
+      // ESCOPO POR GRUPO: os inativos não pertencem a nenhum grupo → não há como entrar
+      // na formação {1º,2º}/{3º,4º} de um grupo. Como são os piores classificados (0 pts),
+      // entram como duplas entre si no FIM da PIOR linha. É a mesma consequência de
+      // classificação — só que aqui não há caminho pra linha de cima (o dono confirmou:
+      // "aqui não ocorreria por ser formada a dupla dentro de cada grupo").
+      if (_ina.length) {
+        var _lo = _lowestDestKey(byDest);
+        if (_lo) {
+          if (!byDest[_lo]) byDest[_lo] = [];
+          var _members = _ina.map(function (p) {
+            return { name: (p && (p.displayName || p.name)) || '', uid: p && p.uid, email: p && p.email, photoURL: p && p.photoURL };
+          }).filter(function (m) { return m.name; });
+          var _step = (fixedPairs ? 2 : 1);
+          for (var _k = 0; _k < _members.length; _k += _step) byDest[_lo].push(mkTeam(_members.slice(_k, _k + _step)));
+        }
+      }
+    }
+    // v4.4.111: PROMOVER LINHA — sobe os N MELHORES da pior linha pra melhor, rebalanceando
+    // o resto (cima +N, baixo −N). O promovido é o melhor de baixo → entra como PIOR semente
+    // de cima. Se ainda sobrar degrau de potência de 2, o organizador resolve no painel
+    // normal (BYE/repescagem). Nunca esvazia a linha de baixo (guard length>1).
+    var _promote = parseInt(opts.promoteLines, 10) || 0;
+    if (_promote > 0) {
+      var _hiK = _highestDestKey(byDest), _loK2 = _lowestDestKey(byDest);
+      if (_hiK && _loK2 && _hiK !== _loK2 && Array.isArray(byDest[_loK2]) && Array.isArray(byDest[_hiK])) {
+        for (var _pm = 0; _pm < _promote && byDest[_loK2].length > 1; _pm++) {
+          byDest[_hiK].push(byDest[_loK2].shift());
+        }
+      }
     }
     return byDest;
   }
@@ -223,9 +288,15 @@
   //   'exclusion': corta os piores colocados até a potência ABAIXO → chave limpa.
   //   'playin': classificatória (round 0) entre os últimos → reduz pra potência abaixo;
   //             os melhores entram direto, os vencedores do play-in completam a chave.
-  function genTierBracket(teams, bracketKey, idPrefix, resolution, tierThird) {
+  function genTierBracket(teams, bracketKey, idPrefix, resolution, tierThird, seedMode) {
     teams = teams || [];
     resolution = resolution || 'bye';
+    // v4.4.x: seedMode = REGRA GERAL do torneio (cabeças de chave × equilíbrio dos
+    // confrontos). 'seed' (default) = espelho 1×N (cabeças protegidas); 'balanced' =
+    // colocações adjacentes (1×2, 3×4…) — jogos parelhos desde a R1. Só afeta o caminho
+    // padrão (bye/pow2 e o pós-corte de exclusão/espera); a repescagem (playin) tem
+    // semeadura própria (todos jogam a R1) e ignora o modo.
+    seedMode = (seedMode === 'balanced') ? 'balanced' : 'seed';
     var n = teams.length;
     if (n === 0) return { matches: [], finalMatchId: null, soleWinner: null };
     if (n === 1) return { matches: [], finalMatchId: null, soleWinner: teams[0].displayName };
@@ -336,10 +407,29 @@
 
     var pow = 1; while (pow < slots.length) pow *= 2; // 'bye' → pow > n; senão pow == lo
     var totalRounds = Math.round(Math.log(pow) / Math.log(2));
+
+    // v4.4.x: pareamento da R1 conforme seedMode.
+    //   'seed' (Cabeças de chave): espelho 1×N — o melhor pega o pior, o 2º o penúltimo…;
+    //     os BYEs (fora de pow2) caem sobre os melhores colocados (folga merecida) e os
+    //     cabeças só se cruzam nas fases finais.
+    //   'balanced' (Equilíbrio dos confrontos): colocações ADJACENTES (1×2, 3×4…) — jogos
+    //     parelhos desde a R1, sem proteger os melhores. Os BYEs vão pros melhores; o
+    //     restante pareia adjacente por rank. Mesmo nº de jogos (pow/2) → árvore idêntica.
+    var _r1Pairs = [];
+    if (seedMode === 'balanced') {
+      var _byeN = pow - slots.length;
+      for (var _bi = 0; _bi < _byeN; _bi++) _r1Pairs.push([slots[_bi] || null, null]);
+      var _restS = slots.slice(_byeN);
+      for (var _rj = 0; _rj + 1 < _restS.length; _rj += 2) _r1Pairs.push([_restS[_rj], _restS[_rj + 1]]);
+      if (_restS.length % 2 === 1) _r1Pairs.push([_restS[_restS.length - 1], null]); // guarda (2n-pow é par → não ocorre)
+    } else {
+      for (var _si = 0; _si < pow / 2; _si++) _r1Pairs.push([slots[_si] || null, slots[pow - 1 - _si] || null]);
+    }
+
     var roundsMap = {};
     var r1 = [];
-    for (var i = 0; i < pow / 2; i++) {
-      var s1 = slots[i] || null, s2 = slots[pow - 1 - i] || null;
+    for (var i = 0; i < _r1Pairs.length; i++) {
+      var s1 = _r1Pairs[i][0], s2 = _r1Pairs[i][1];
       var t1 = (s1 && s1.team) ? s1.team : null, t2 = (s2 && s2.team) ? s2.team : null;
       var pi1 = (s1 && s1.fromPlayIn) ? s1.fromPlayIn : null, pi2 = (s2 && s2.fromPlayIn) ? s2.fromPlayIn : null;
       var isBye = !s1 || !s2;
@@ -419,10 +509,16 @@
     var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 2 }];
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs !== false) : true;
     var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
+    var bracketSeeding = (phaseCfg && phaseCfg.bracketSeeding === 'balanced') ? 'balanced' : 'seed'; // cabeças × equilíbrio
     var scope = src.scope || 'per_group';            // 'per_group' | 'overall'
     var rankingBasis = src.rankingBasis || 'individual'; // 'individual' | 'team' (keep)
 
-    var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
+    // v4.4.110: inativos "incluídos" (phaseCfg._includeInactive) entram POR CLASSIFICAÇÃO
+    // dentro de buildEntrantsByDest — escopo geral ranqueia junto; por-grupo cai na pior
+    // linha. Ver project_phase_inactive_resolution.
+    var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy,
+      { scope: scope, rankingBasis: rankingBasis, includeInactive: (phaseCfg && phaseCfg._includeInactive) || null,
+        promoteLines: (phaseCfg && phaseCfg._promoteLines) || 0 });
 
     // v4.1.29: DUPLA ELIMINATÓRIA CLÁSSICA como fase (pedido do dono: "escolhi dupla
     // eliminatória e parece simples"). Linha ÚNICA ('main', sem Ouro/Prata) + formato dupla
@@ -458,7 +554,7 @@
       // v2.7.23: resolução de potência-de-2 escolhida pelo organizador (uma só pra
       // todas as linhas). Default 'bye' = comportamento legado. Setado pelo painel.
       var _res = (phaseCfg && phaseCfg.bracketResolution) || 'bye';
-      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res, _tierThird);
+      var res = genTierBracket(byDest[dest], bracketKey, idPrefix + '-' + bracketKey, _res, _tierThird, bracketSeeding);
       // v2.6.79: nome da linha/chave = o que o organizador digitou (mapping[].label);
       // sem ícone de medalha hardcoded. Fallback genérico "Chave N" (ordem da linha).
       var _mp = mapping.filter(function (m) { return m.dest === dest; })[0];
@@ -595,22 +691,29 @@
     var counter = 0;
     function mkId() { return idPrefix + '-' + (counter++); }
     var allMatches = [];
+    // v4.4.x: ida-e-volta (turnos=2) — repete o round-robin com mando invertido.
+    // GATED: só quando phaseCfg.turnos==='ida_volta' (ou _doubleRR); ausente = single-RR (comportamento legado).
+    var _turnos = (phaseCfg && (phaseCfg.turnos === 'ida_volta' || phaseCfg._doubleRR)) ? 2 : 1;
     groups.forEach(function (g) {
       // v3.1.9: round-robin via núcleo compartilhado (método do círculo) → rodadas
-      // BALANCEADAS dentro do grupo (mesmo SET de pares de antes; agora com nº de rodada,
-      // igual à Fase 0). Estático: todos os jogos existem de uma vez (todas as rodadas).
-      roundRobinSchedule(g.players).forEach(function (rd) {
-        rd.pairs.forEach(function (pr) {
-          var A = pr.a, B = pr.b;
-          var m = {
-            id: mkId(), round: rd.round, bracket: 'group', groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
-            p1: A.displayName, p2: B.displayName, team1Obj: A, team2Obj: B,
-            winner: null, scoreP1: null, scoreP2: null,
-            label: g.name + ' • ' + A.displayName + ' vs ' + B.displayName
-          };
-          g.matches.push(m); allMatches.push(m);
+      // BALANCEADAS dentro do grupo. Estático: todos os jogos existem de uma vez.
+      var sched = roundRobinSchedule(g.players);
+      var nRounds = sched.length;
+      for (var turn = 0; turn < _turnos; turn++) {
+        sched.forEach(function (rd) {
+          rd.pairs.forEach(function (pr) {
+            var A = (turn === 0) ? pr.a : pr.b;   // volta: inverte mando
+            var B = (turn === 0) ? pr.b : pr.a;
+            var m = {
+              id: mkId(), round: rd.round + turn * nRounds, bracket: 'group', groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
+              p1: A.displayName, p2: B.displayName, team1Obj: A, team2Obj: B,
+              winner: null, scoreP1: null, scoreP2: null,
+              label: (_turnos > 1 ? ((turn === 0 ? 'Ida' : 'Volta') + ' • ') : '') + g.name + ' • ' + A.displayName + ' vs ' + B.displayName
+            };
+            g.matches.push(m); allMatches.push(m);
+          });
         });
-      });
+      }
     });
     var _ret = { matches: allMatches, groups: groups };
     if (_waitlist.length) _ret.waitlist = _waitlist;  // suplentes (grupos de mesmo tamanho) → storePhase → standbyParticipants
@@ -776,7 +879,8 @@
       return _duplaR1FromPool(pool, _res, idPrefix);
     }
     // Linha única = bracket 'main' (igual à Fase N) → _renderPhaseBracket renderiza por 1 render só.
-    return genTierBracket(pool, 'main', idPrefix, _res, _third);
+    var _seed = (cfg && cfg.bracketSeeding === 'balanced') ? 'balanced' : 'seed'; // cabeças × equilíbrio
+    return genTierBracket(pool, 'main', idPrefix, _res, _third, _seed);
   }
 
   function generatePhase(pool, cfg, ctx) {
@@ -825,10 +929,15 @@
     } else if (fmt === 'groups') {
       built = genGroupsFromPool(pool, cfg, idPrefix);
     } else {
-      // Eliminatória: split por CATEGORIA (cada categoria = chave independente). Sem
-      // categorias → 1 chave. O split é um EIXO da fase (cfg.categories), não código de
+      // Eliminatória: split por CATEGORIA só quando há 2+ categorias REAIS (cada uma =
+      // chave independente). O split é um EIXO da fase (cfg.categories), não código de
       // posição. Cada chave tagueia seus matches com a categoria.
-      var cats = (cfg && Array.isArray(cfg.categories) && cfg.categories.length) ? cfg.categories : null;
+      // v4.4.101 (raiz, sem fallback): categoria ÚNICA (ex.: Casais "Misto Obrig.") = UMA
+      // chave — split de 1 categoria é no-op e FRÁGIL: bastava catOf não bater o único
+      // `cat` (categoria não gravada no participante naquele instante) pra sumir todo mundo
+      // → 'no-entrants' → sorteio fantasma. Categoria única NÃO passa pelo split; a chave
+      // sai do pool inteiro e os jogos são taggeados com ela. Split existe só p/ 2+.
+      var cats = (cfg && Array.isArray(cfg.categories) && cfg.categories.length > 1) ? cfg.categories : null;
       if (cats && ctx && typeof ctx.catOf === 'function') {
         var allM = [], needsDE = false, repMetas = [];
         cats.forEach(function (cat, ci) {
@@ -852,11 +961,20 @@
         if (needsDE) built.needsDoubleElim = true;
         if (repMetas.length) {
           built.needsRepechageDoubleElim = true;
-          built.repMeta = repMetas[0];                 // caso comum: 1 categoria (ex.: Casais "Misto Obrig.")
+          built.repMeta = repMetas[0];
           if (repMetas.length > 1) built.repMetaByCat = repMetas; // multi-categoria: builder por categoria
         }
       } else {
+        // Sem split (0 ou 1 categoria): UMA chave do pool inteiro. Se há exatamente 1
+        // categoria, tagueia os jogos com ela (o filtro por categoria em _computeStandings
+        // exige a tag). Igual ao ramo do split: matches taggeados + repMeta.category setado
+        // → _buildRepechageDoubleElim carimba os jogos que cria depois (upper R2+/lower/grand).
         built = _genElimFromPool(pool, cfg, idPrefix);
+        var _loneCat = (cfg && Array.isArray(cfg.categories) && cfg.categories.length === 1) ? cfg.categories[0] : null;
+        if (_loneCat != null) {
+          (built.matches || []).forEach(function (m) { if (m.category == null) m.category = _loneCat; });
+          if (built.repMeta && built.repMeta.category == null) built.repMeta.category = _loneCat;
+        }
       }
     }
     if (cfg && cfg.category != null) (built.matches || []).forEach(function (m) { if (m.category == null) m.category = cfg.category; });
@@ -878,7 +996,8 @@
     var fixedPairs = cfg ? (cfg.fixedPairs !== false) : true;
     var pairingStrategy = (cfg && cfg.pairingStrategy) || 'top';
     return buildEntrantsByDest(prevGroups, mapping, fixedPairs, ctx.computeStandings, pairingStrategy,
-      { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual' });
+      { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual', flatOverall: src.flatOverall === true,
+        includeInactive: (cfg && cfg._includeInactive) || null, promoteLines: (cfg && cfg._promoteLines) || 0 });
   }
 
   // v3.1: LIGA / PONTOS CORRIDOS como fase posterior. Tabela ÚNICA (não grupos):
@@ -1431,6 +1550,18 @@
       if (window.showAlertDialog) window.showAlertDialog('Fase incompleta', 'Conclua todos os jogos da fase atual antes de avançar.', null, { type: 'warning' });
       return;
     }
+    // v4.4.109 (staging): INATIVOS — participantes que desativaram o toggle (ligaActive=false)
+    // não jogaram a classificatória, então não têm colocação e somem da transição. ANTES de
+    // montar as linhas da próxima fase, perguntar ao organizador: incluir / lista de espera /
+    // excluir. Uma vez por transição (keyed por nextIdx via t._inactiveResolvedPhase).
+    var _niIdx = (t.currentPhaseIndex || 0) + 1;
+    if (t._inactiveResolvedPhase !== _niIdx && typeof window._phasePendingInactives === 'function') {
+      var _inatvList = window._phasePendingInactives(t);
+      if (_inatvList.length && typeof window._showInactivePhasePanel === 'function') {
+        window._showInactivePhasePanel(tId, _inatvList);
+        return;
+      }
+    }
     // Escolhe a função de standings conforme a forma dos grupos da fase anterior:
     //  • Rei/Rainha (monarchGroups) → standings INDIVIDUAL (_computeMonarchStandings).
     //  • Fase de Grupos (t.groups, individuais OU duplas) → _groupTeamStandings
@@ -1474,6 +1605,8 @@
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _src = _nextCfg.source || {};
       var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+      // v4.4.110: selectQualifiers já inclui os inativos (por classificação) no _byDest,
+      // então a contagem por linha do medidor já reflete cima/baixo corretamente.
       var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }) });
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       var _anyNonPow2 = _lines.some(function (l) { return l.size > 1 && (l.size & (l.size - 1)) !== 0; });

@@ -579,7 +579,7 @@ function renderDashboard(container) {
 
     let enrollmentText = _t('enroll.modeMixed');
     if (t.enrollmentMode === 'individual') enrollmentText = _t('enroll.modeIndividual');
-    else if (t.enrollmentMode === 'time') enrollmentText = _t('enroll.modeTeam');
+    else if (t.enrollmentMode === 'time' || t.enrollmentMode === 'teams') enrollmentText = _t('enroll.modeTeam');
     else if (t.enrollmentMode === 'misto') enrollmentText = _t('enroll.modeMixed');
 
     // v2.8.42: isOrg por UID (identidade primária) — email só como fallback legado
@@ -831,27 +831,35 @@ function renderDashboard(container) {
                 var _cm = { '#10b981': '16,185,129', '#fb923c': '251,146,60', '#8b5cf6': '139,92,246' };
                 var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
                 var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-                // 4. Começou, sem sorteio agendado e fora das 48h finais → TEMPO DECORRIDO.
-                if (!_ligaEv && sorteioRealizado && typeof window._ligaElapsedSinceTs === 'function') {
-                  var _elSinceD = window._ligaElapsedSinceTs(t);
-                  if (_elSinceD && _elSinceD <= _now) {
-                    var _elTextD = window._formatCountdown ? window._formatCountdown(_now - _elSinceD) : '';
+                // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
+                // (fonte única _ligaRoundInProgressRow — decorrido da rodada atual, tick automático).
+                if (!_ligaEv && sorteioRealizado && typeof window._ligaRoundInProgressRow === 'function') {
+                  var _ripStandaloneD = window._ligaRoundInProgressRow(t, _ctColor);
+                  if (_ripStandaloneD) {
                     return _toggleRowDash +
-                      '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' +
-                      '<span style="font-size:1.3rem;">⏱️</span>' +
-                      '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">Tempo decorrido</span>' +
-                      '<span data-elapsed-since="' + _elSinceD + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _elTextD + '</span>' +
-                    '</div>';
+                      '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandaloneD + '</div>';
                   }
                 }
                 if (!_ligaEv) return _toggleRowDash; // sem countdown → só o toggle (direita)
                 var _ct = window._formatCountdown ? window._formatCountdown(_ligaEv.ts - _now) : '';
                 var _rgb = _cm[_ligaEv.color] || '139,92,246';
+                // v4.4.x: 2ª linha "Rodada em andamento" (tempo decorrido da rodada) sempre que
+                // o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
+                var _roundLineD = '';
+                if (_ligaEv.label === _t('tourn.nextDraw') && typeof window._ligaRoundInProgressRow === 'function') {
+                  var _ripRowD = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.1rem', labelSize: '0.8rem', valueSize: '1.05rem' });
+                  if (_ripRowD) {
+                    _roundLineD = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRowD + '</div>';
+                  }
+                }
                 return _toggleRowDash +
-                  '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
-                  '<span style="font-size:1.3rem;">' + _ligaEv.icon + '</span>' +
-                  '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;">' + _ligaEv.label + '</span>' +
-                  '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _ct + '</span>' +
+                  '<div style="margin-top:' + (_toggleRowDash ? '4px' : '10px') + ';padding:10px 14px;background:' + _rbCt.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;">' +
+                  '<div style="display:flex;align-items:center;gap:10px;">' +
+                    '<span style="font-size:1.3rem;flex-shrink:0;">' + _ligaEv.icon + '</span>' +
+                    '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _ligaEv.label + '</span>' +
+                    '<span data-countdown-target="' + _ligaEv.ts + '" style="margin-left:auto;font-size:1.1rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _ct + '</span>' +
+                  '</div>' +
+                  _roundLineD +
                 '</div>';
               }
 
@@ -879,7 +887,7 @@ function renderDashboard(container) {
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt2.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ' !important;">' + _next.label + '</span>' +
-                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText + '</span>' +
+                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.1rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
               '</div>';
             })()}
 
@@ -2294,6 +2302,10 @@ function renderDashboard(container) {
 
   // Separate active and finished when showing "Todos"
   let filteredHtml = '';
+  // v4.4.x: a seção "Torneios Encerrados" é EXTRAÍDA da lista principal e renderizada só DEPOIS
+  // do runningBottomHtml ("Em andamento" que não é desta semana) — encerrado só fica na frente
+  // dos OCULTADOS (pedido do dono). Assim o de casais (em andamento) vem ANTES dos encerrados.
+  let finishedSectionHtml = '';
   if (curFilter === 'todos' && !curSport && !curLocation && !curFormat && encerradosCount > 0) {
     // v2.1.12: torneio encerrado só vai pra seção "Encerrados" depois de 24h.
     // v2.1.48: nas primeiras 12h após encerrar, continua na lista principal (pra
@@ -2311,7 +2323,7 @@ function renderDashboard(container) {
     const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
     filteredHtml = visibleActive.length > 0
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
-      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
+      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml || finishedList.length > 0) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
     if (activeList.length > visibleActive.length) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
     }
@@ -2338,7 +2350,7 @@ function renderDashboard(container) {
         if (myFinished.length > 0) finishedCards += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);margin-bottom:8px;opacity:0.7;">' + _t('dashboard.otherFinished', {count: otherFinished.length}) + '</div>';
         finishedCards += _renderTGroup(otherFinished);
       }
-      filteredHtml += '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
+      finishedSectionHtml = '<div style="margin-top:1.25rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
     }
   } else {
     // When viewing "encerrados" filter, sort user's tournaments first
@@ -2888,6 +2900,7 @@ function renderDashboard(container) {
       ${(window._dashView === 'compact') ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : '<div class="cards-grid">' + filteredHtml + '</div>'}
     </div>
     ${runningBottomHtml}
+    ${(window._dashView === 'compact') ? '' : finishedSectionHtml}
     ${(() => {
       // v0.16.60: diag SEMPRE visível, independente de filtro — usuário
       // reportou "nelson ainda nao ve torneio algum" mas o diag da v0.16.59

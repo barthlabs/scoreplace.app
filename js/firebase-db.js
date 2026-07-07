@@ -87,6 +87,19 @@ window.FirestoreDB = {
     return obj;
   },
 
+  // v4.4.70 FONTE ÚNICA Rei/Rainha: delega pro normalizador CANÔNICO em
+  // bracket-model.js (window._foldMonarchGroups) — mesma função que o servidor
+  // (autoDraw, via draw-core shim) chama antes de gravar. Uma implementação só,
+  // zero drift. Remove group.matches do PAYLOAD e deixa só matchIds; round.matches
+  // continua a única lista de jogos persistida. Chamado em saveTournament e
+  // mutateTournament — todo write de torneio inteiro passa aqui.
+  _foldMonarchGroups(cleanData) {
+    if (typeof window !== 'undefined' && typeof window._foldMonarchGroups === 'function') {
+      return window._foldMonarchGroups(cleanData);
+    }
+    return cleanData;
+  },
+
   // ---- Tournaments ----
 
   // Denormalized field `memberEmails[]` holds every email that has a
@@ -197,6 +210,7 @@ window.FirestoreDB = {
     if (!this.db) return;
     var docId = String(tourData.id);
     var cleanData = this._cleanUndefined(tourData);
+    this._foldMonarchGroups(cleanData); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
     // When skipParticipants is true, exclude participants array to prevent
     // overwriting enrollments made by other users via transactions.
     // This is critical: sync() and organizer edits should NOT touch participants.
@@ -314,6 +328,9 @@ window.FirestoreDB = {
       var doc = await transaction.get(ref);
       if (!doc.exists) throw new Error('Tournament not found: ' + tournamentId);
       var data = doc.data();
+      // Rei/Rainha: o doc fresco traz grupos só com matchIds. Hidrata group.matches
+      // como refs de round.matches ANTES do mutator (W.O./substituição leem g.matches).
+      try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(data); } catch (_hmErr) {}
       var out = mutatorFn(data);
       if (out === false) return { aborted: true, data: data };
       // Recomputa denormalizados a partir do estado FINAL (mesmos helpers do save).
@@ -338,7 +355,11 @@ window.FirestoreDB = {
         }
       } catch (_ndErr) { /* otimização; nunca derruba a transação */ }
       var clean = self._cleanUndefined(data);
+      self._foldMonarchGroups(clean); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
       transaction.set(ref, clean); // set (sem merge) DENTRO da txn = clobber-free
+      // Devolve o estado autoritativo HIDRATADO (group.matches como refs) pro caller
+      // sincronizar o AppStore sem depender de um render pra reconstruir os grupos.
+      try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(clean); } catch (_hmErr2) {}
       return { aborted: false, data: clean };
     });
   },
@@ -833,7 +854,11 @@ window.FirestoreDB = {
     if (!this.db || !id) return null;
     try {
       var doc = await this.db.collection('tournaments').doc(String(id)).get();
-      return doc.exists ? doc.data() : null;
+      if (!doc.exists) return null;
+      var _t = doc.data();
+      // Rei/Rainha: o doc traz grupos só com matchIds — reidrata group.matches como refs.
+      try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(_t); } catch (_hmErr) {}
+      return _t;
     } catch (e) {
       window._error('Erro ao carregar torneio:', e);
       return null;

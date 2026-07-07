@@ -236,19 +236,8 @@ window._devSimulateCurrentPhase = function (tId) {
       m.resultAt = Math.round(startMs + ((i + 1) / todo.length) * span); // último = agora
       if (m.id != null) byId[String(m.id)] = m;
     });
-    // sincroniza Rei/Rainha (monarchGroups) por id, caso sejam objetos separados de round.matches
-    if (Array.isArray(t.rounds)) {
-      t.rounds.forEach(function (r) {
-        if (r && Array.isArray(r.monarchGroups)) {
-          r.monarchGroups.forEach(function (g) {
-            if (g && Array.isArray(g.matches)) g.matches.forEach(function (gm) {
-              var src = (gm && gm.id != null) ? byId[String(gm.id)] : null;
-              if (src && gm !== src) { gm.scoreP1 = src.scoreP1; gm.scoreP2 = src.scoreP2; gm.winner = src.winner; gm.draw = src.draw; gm.startedAt = src.startedAt; gm.resultAt = src.resultAt; }
-            });
-          });
-        }
-      });
-    }
+    // v4.4.69: sync Rei/Rainha REMOVIDO — group.matches são REFERÊNCIAS de round.matches
+    // (FONTE ÚNICA, hidratada no load). Mutar o jogo no plano já reflete no grupo.
     // Simular resultado É JOGAR: marca PRESENÇA dos jogadores (igual ao lançamento real, que
     // passa por _applyResultToTournament) e registra o INÍCIO. Sem isso, a seção "prontos para
     // chamar" (exige presença) e a barra (exige início) ficavam vazias após simular. (dono)
@@ -461,7 +450,7 @@ window._createExtraGamesFromWaitlist = function(t) {
   // 1) pareia 2 solos tardios → 1 jogo solo-vs-solo (NUNCA formar dupla numa chave
   // individual — decisão do dono 1-jul). O mínimo do pool muda: 4 (duplas) vs 2 (indiv).
   var _teamSize = parseInt(t.teamSize) || 1;
-  var _isTeams = _teamSize > 1 || t.enrollmentMode === 'time' || t.enrollmentMode === 'misto';
+  var _isTeams = _teamSize > 1 || window._isTeamEnrollMode(t.enrollmentMode);
   var _minPool = _isTeams ? 4 : 2;
   if (pool.length < _minPool) return 0;
   // v3.1.22: sorteia a ordem do pareamento dos entrantes (os jogos já criados ficam
@@ -617,6 +606,16 @@ window._rebuildIntegratedBracket = function(t) {
   return true;
 };
 
+// v4.4.x: FONTE ÚNICA — o torneio forma as duplas MANUALMENTE (participantes/organizador
+// montam), em vez de por SORTEIO? Sinal definitivo = fmt2.formacaoDupla === 'manual'; legado =
+// manualPairing === 'open'. Quando manual, os avulsos (sem dupla) são PENDÊNCIA a resolver
+// (reabrir/formar/lista/exclusão), NÃO gente pra auto-parear nem pra contar como time na pow2.
+window._isManualPairing = function (t) {
+  if (!t) return false;
+  if (t.fmt2 && typeof t.fmt2 === 'object' && t.fmt2.formacaoDupla) return t.fmt2.formacaoDupla === 'manual';
+  return t.manualPairing === 'open';
+};
+
 // ─── v2.1.20: Diálogo de gênero pré-sorteio (duplas mistas, sorteio livre) ────
 // Mostra ANTES do sorteio quando: duplas (teamSize 2) formadas por pareamento de
 // indivíduos, SEM categoria masc/fem separada. Deixa o organizador (a) atribuir
@@ -633,9 +632,14 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   // (gênero + Livre/Equilibrado) só faz sentido em Eliminatórias/Grupos de duplas fixas.
   // Pular pra Liga — senão o "Sortear" abre essa tela errada (exposto após reset).
   if (window._isLigaFormat && window._isLigaFormat(t)) return false;
+  // v4.4.x: DUPLAS FORMADAS (manual) — as duplas são montadas pelos participantes/organizador,
+  // NÃO se auto-formam por sorteio. Os avulsos (sem dupla) são PENDÊNCIA (reabrir/formar/lista/
+  // exclusão), não gente pra parear ao acaso. Então esse diálogo (Livre/Equilibrado) não se
+  // aplica — pular. Só vale quando a formação é por SORTEIO (formacaoDupla !== 'manual').
+  if (typeof window._isManualPairing === 'function' && window._isManualPairing(t)) return false;
   var enrMode = t.enrollmentMode || t.enrollment || 'individual';
   var teamSize = parseInt(t.teamSize) || 1;
-  if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+  if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
   if (teamSize !== 2) return false; // só duplas
   var gc = Array.isArray(t.genderCategories) ? t.genderCategories : [];
   var hasGenderSplit = gc.some(function(c){ return /masc/i.test(String(c)) || /fem/i.test(String(c)); });
@@ -954,6 +958,9 @@ window._buildPhase0Cfg = function (t) {
         source: { type: 'enrollment' }
     };
     if (code === 'liga') cfg.ligaCadence = (t.ligaDrawMode === 'round_robin') ? 'round_robin' : 'incremental';
+    // v4.4.x: ida-e-volta em Fase de Grupos (tabela única de duplas fixas) — propaga o
+    // turnos pro genGroupsFromPool. Ausente/ida = single-RR (legado). Ver format2.
+    if (code === 'grupos_mata') cfg.turnos = (t.turnos === 'ida_volta' || parseInt(t.ligaTurnos, 10) === 2) ? 'ida_volta' : 'ida';
     return cfg;
 };
 
@@ -1204,7 +1211,7 @@ window.generateDrawFunction = function (tId) {
         // NUNCA em Rei/Rainha (força individual).
         var _ts0 = _isMon0 ? 1 : (parseInt(t.teamSize, 10) || 1);
         var _enr0 = t.enrollmentMode || t.enrollment || 'individual';
-        if (!_isMon0 && (_enr0 === 'time' || _enr0 === 'misto') && _ts0 < 2) _ts0 = 2;
+        if (!_isMon0 && window._isTeamEnrollMode(_enr0) && _ts0 < 2) _ts0 = 2;
         if (_ts0 > 1) {
             if (!t.teamOrigins) t.teamOrigins = {};
             var _f0 = _formDoublesTeams(Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}), _ts0, t.teamOrigins, t._drawBalanceMode);
@@ -1275,7 +1282,16 @@ window.generateDrawFunction = function (tId) {
 
         // Eliminatória / Grupos / Rei-Rainha: matches flat taggeados na fase 0 via storePhase.
         var _r0 = _E0.storePhase(t, 0, _built0);
-        if (!_r0 || !_r0.ok) { showNotification(_t('draw.warning'), _t('tdraw.drawDone'), 'warning'); return; }
+        // v4.4.100: storePhase FALHOU (ex.: 'no-entrants' — o split por categoria não casou
+        // ninguém). NÃO reusar a mensagem de SUCESSO (_t('tdraw.drawDone') = "Sorteio
+        // realizado com sucesso!") aqui — era isso que fazia o "diz que sorteou mas não
+        // mostra chave". Encerra o loader e mostra ERRO real. (O motor agora tem rede de
+        // segurança que evita chegar aqui no caso de categoria — ver phases-engine.js.)
+        if (!_r0 || !_r0.ok) {
+            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            showNotification('⚠️ Sorteio não gerou a chave', 'Nenhum jogo foi criado (' + ((_r0 && _r0.error) || 'motor vazio') + '). Confira inscritos/categorias e tente de novo.', 'error');
+            return;
+        }
         // Dupla Eliminatória clássica: _buildDoubleElimBracket monta upper R2+/lower/grande
         // final a partir da R1 (lê t.matches) e tagueia tudo na fase 0. Mesmo do legado.
         if (_built0.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {
@@ -1320,7 +1336,7 @@ window.generateDrawFunction = function (tId) {
     let teamSize = parseInt(t.teamSize) || 1;
     // Fallback: se modo de inscrição é time/misto mas teamSize ficou 1, forçar mínimo 2
     const enrMode = t.enrollmentMode || t.enrollment || 'individual';
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) {
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) {
         teamSize = 2;
     }
     if (teamSize > 1) {

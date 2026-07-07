@@ -62,17 +62,37 @@ async function _enqueueMail(dbRef, doc) {
 // MODULE-LEVEL HELPERS — account deduplication (phone + email)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Replace name references inside a match array. Returns {arr, hit}. */
-function _replaceNameInMatches(matches, oldName, newName) {
-  if (!Array.isArray(matches)) return { arr: matches, hit: false };
+/** v4.4.116 — IDENTIDADE POR UID. Renomeia (e, no merge, re-aponta o uid) SÓ do slot cujo
+ *  uid armazenado === oldUid: team1Uids/team2Uids (Rei/Rainha) e p1Uid/p2Uid (individual/
+ *  dupla). Slot SEM uid é DEIXADO EM PAZ — nunca renomeia por string de nome (fim do clobber
+ *  de homônimo, ex.: duas "Vivian"). newUid default = oldUid (rename puro, não-merge).
+ *  Ver project_uid_audit_sweep / o incidente Vivian×Vivi Hirata. Returns {arr, hit}. */
+function _replaceNameInMatches(matches, oldUid, newName, newUid) {
+  if (!Array.isArray(matches) || !oldUid) return { arr: matches, hit: false };
+  newUid = newUid || oldUid;
   let hit = false;
   const arr = matches.map(m => {
+    if (!m || typeof m !== "object") return m;
     const nm = Object.assign({}, m);
-    if (nm.p1 === oldName)    { nm.p1    = newName; hit = true; }
-    if (nm.p2 === oldName)    { nm.p2    = newName; hit = true; }
-    if (nm.winner === oldName){ nm.winner = newName; hit = true; }
-    if (Array.isArray(nm.team1)) nm.team1 = nm.team1.map(x => x === oldName ? (hit = true, newName) : x);
-    if (Array.isArray(nm.team2)) nm.team2 = nm.team2.map(x => x === oldName ? (hit = true, newName) : x);
+    const oldP1 = nm.p1, oldP2 = nm.p2;
+    let ch1 = false, ch2 = false;
+    if (Array.isArray(nm.team1) && Array.isArray(nm.team1Uids)) {
+      nm.team1 = nm.team1.map((x, i) => (nm.team1Uids[i] === oldUid) ? (ch1 = true, newName) : x);
+      nm.team1Uids = nm.team1Uids.map(u => u === oldUid ? newUid : u);
+    }
+    if (Array.isArray(nm.team2) && Array.isArray(nm.team2Uids)) {
+      nm.team2 = nm.team2.map((x, i) => (nm.team2Uids[i] === oldUid) ? (ch2 = true, newName) : x);
+      nm.team2Uids = nm.team2Uids.map(u => u === oldUid ? newUid : u);
+    }
+    if (!Array.isArray(nm.team1) && nm.p1Uid === oldUid) { nm.p1 = newName; nm.p1Uid = newUid; ch1 = true; }
+    if (!Array.isArray(nm.team2) && nm.p2Uid === oldUid) { nm.p2 = newName; nm.p2Uid = newUid; ch2 = true; }
+    if (ch1 && Array.isArray(nm.team1)) nm.p1 = nm.team1.join(" / ");
+    if (ch2 && Array.isArray(nm.team2)) nm.p2 = nm.team2.join(" / ");
+    if (ch1 || ch2) {
+      hit = true;
+      if (nm.winner === oldP1) nm.winner = nm.p1;
+      else if (nm.winner === oldP2) nm.winner = nm.p2;
+    }
     return nm;
   });
   return { arr, hit };
@@ -144,8 +164,10 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
       if (changed) update.participants = parts;
     }
 
-    // p1/p2/winner strings across all match structures
-    if (dropName && keepName && dropName !== keepName) {
+    // v4.4.116: re-aponta uid + nome nos jogos POR UID (dropUid → keepUid). Nunca por nome
+    // (fim do clobber de homônimo). Também trata monarchGroups[].matches, que existem além
+    // de rounds[].matches em Rei/Rainha.
+    if (dropUid && keepName) {
       const structs = [
         { key: "matches", plain: true  },
         { key: "rounds",  plain: false },
@@ -155,15 +177,27 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
       for (const { key, plain } of structs) {
         if (!Array.isArray(t[key])) continue;
         if (plain) {
-          const r = _replaceNameInMatches(t[key], dropName, keepName);
+          const r = _replaceNameInMatches(t[key], dropUid, keepName, keepUid);
           if (r.hit) { update[key] = r.arr; changed = true; }
         } else {
           let hit = false;
           const updated = t[key].map(item => {
-            if (!item || !Array.isArray(item.matches)) return item;
-            const r = _replaceNameInMatches(item.matches, dropName, keepName);
-            if (r.hit) hit = true;
-            return Object.assign({}, item, { matches: r.arr });
+            if (!item || typeof item !== "object") return item;
+            let it = item;
+            if (Array.isArray(item.matches)) {
+              const r = _replaceNameInMatches(item.matches, dropUid, keepName, keepUid);
+              if (r.hit) { hit = true; it = Object.assign({}, it, { matches: r.arr }); }
+            }
+            if (Array.isArray(item.monarchGroups)) {
+              const mg = item.monarchGroups.map(g => {
+                if (!g || !Array.isArray(g.matches)) return g;
+                const r = _replaceNameInMatches(g.matches, dropUid, keepName, keepUid);
+                if (r.hit) { hit = true; return Object.assign({}, g, { matches: r.arr }); }
+                return g;
+              });
+              it = Object.assign({}, it, { monarchGroups: mg });
+            }
+            return it;
           });
           if (hit) { update[key] = updated; changed = true; }
         }
@@ -4732,6 +4766,7 @@ exports.requestEmailMerge = onCall(
 exports.confirmEmailMerge = onCall(
   { region: "us-central1", memory: "512MiB", timeoutSeconds: 300, cors: APP_ORIGINS },
   async (request) => {
+    // v4.4.116: usa _repairTournaments/_replaceNameInMatches uid-scoped (marcador força redeploy).
     const token = String((request.data && request.data.token) || "").trim();
     if (!token) throw new HttpsError("invalid-argument", "token ausente");
     const db = admin.firestore();
@@ -4928,32 +4963,32 @@ exports.mergePhoneAccount = onCall(
 
       // 2c. Strings p1/p2 em matches/rounds/groups que referenciam o nome antigo
       if (oldName && newName && oldName !== newName) {
-        function replaceNameInMatches(matches) {
-          if (!Array.isArray(matches)) return { arr: matches, hit: false };
-          let hit = false;
-          const arr = matches.map(m => {
-            const nm = Object.assign({}, m);
-            if (nm.p1 === oldName) { nm.p1 = newName; hit = true; }
-            if (nm.p2 === oldName) { nm.p2 = newName; hit = true; }
-            if (nm.winner === oldName) { nm.winner = newName; hit = true; }
-            if (Array.isArray(nm.team1)) nm.team1 = nm.team1.map(x => x === oldName ? (hit = true, newName) : x);
-            if (Array.isArray(nm.team2)) nm.team2 = nm.team2.map(x => x === oldName ? (hit = true, newName) : x);
-            return nm;
-          });
-          return { arr, hit };
-        }
+        // v4.4.116: jogos re-apontados POR UID (oldUid → callerUid), não por nome. Cobre
+        // t.matches, rounds/groups/rodadas[].matches E rounds[].monarchGroups[].matches.
         if (Array.isArray(t.matches)) {
-          const r = replaceNameInMatches(t.matches);
+          const r = _replaceNameInMatches(t.matches, oldUid, newName, callerUid);
           if (r.hit) { update.matches = r.arr; changed = true; }
         }
         ["rounds", "groups", "rodadas"].forEach(structKey => {
           if (!Array.isArray(t[structKey])) return;
           let structHit = false;
           const arr = t[structKey].map(col => {
-            if (!col || !Array.isArray(col.matches)) return col;
-            const r = replaceNameInMatches(col.matches);
-            if (r.hit) structHit = true;
-            return Object.assign({}, col, { matches: r.arr });
+            if (!col || typeof col !== "object") return col;
+            let c = col;
+            if (Array.isArray(col.matches)) {
+              const r = _replaceNameInMatches(col.matches, oldUid, newName, callerUid);
+              if (r.hit) { structHit = true; c = Object.assign({}, c, { matches: r.arr }); }
+            }
+            if (Array.isArray(col.monarchGroups)) {
+              const mg = col.monarchGroups.map(g => {
+                if (!g || !Array.isArray(g.matches)) return g;
+                const r = _replaceNameInMatches(g.matches, oldUid, newName, callerUid);
+                if (r.hit) { structHit = true; return Object.assign({}, g, { matches: r.arr }); }
+                return g;
+              });
+              c = Object.assign({}, c, { monarchGroups: mg });
+            }
+            return c;
           });
           if (structHit) { update[structKey] = arr; changed = true; }
         });
@@ -5421,6 +5456,7 @@ exports.fixMergedParticipants = onRequest(
 exports.autoMergeOnProfileUpdate = onDocumentWritten(
   { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 120 },
   async (event) => {
+    // v4.4.116: merge por uid (_scanAndMergeByField/_executeMerge/_replaceNameInMatches uid-scoped).
     const after  = event.data.after;
     const before = event.data.before;
 
@@ -5669,13 +5705,17 @@ exports.reconcileParticipantNames = onSchedule(
 // sejam resolvidas.
 exports.scheduledAutoMergeCleanup = onSchedule(
   {
-    schedule:  "45 7 * * *",       // 04:45 BRT = 07:45 UTC
+    // v4.4.117: BUG corrigido — o cron "45 7" estava em UTC (07:45) mas o timeZone é
+    // Sao_Paulo, então rodava 07:45 BRT (3h ATRASADO). Agora "04:45" no fuso Sao_Paulo,
+    // igual aos outros scheduled. Fireava 3h fora do pretendido.
+    schedule:  "every day 04:45",  // 04:45 BRT (timeZone Sao_Paulo)
     timeZone:  "America/Sao_Paulo",
     region:    "us-central1",
     memory:    "512MiB",
     timeoutSeconds: 540,
   },
   async () => {
+    // v4.4.116: merge por uid (_scanAndMergeByField/_repairTournaments/_replaceNameInMatches uid-scoped).
     const db = admin.firestore();
     console.log("[scheduledAutoMergeCleanup] Iniciando varredura diária de duplicatas");
 

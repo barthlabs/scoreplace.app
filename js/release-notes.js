@@ -9,6 +9,49 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.0-beta — a classificação nunca mais confunde dois jogadores <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🆔 Classificação e desempate por identidade, não por nome:</b> a tabela de classificação (Pontos Corridos, Suíço e Rei/Rainha) agora identifica cada pessoa pela sua conta, e não mais só pelo nome escrito no jogo. Antes, se alguém trocava o nome no meio do torneio, ou se havia dois jogadores com nomes parecidos, os pontos e o critério de <b>confronto direto</b> podiam cair na linha errada — misturando dois jogadores ou "sumindo" com os jogos de um deles. Agora cada linha soma exatamente os jogos da pessoa certa, e o nome exibido continua o do cadastro.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.120-beta — nada se perde quando todo mundo mexe no torneio ao mesmo tempo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🛡️ Gravações simultâneas não se atropelam mais:</b> quando duas pessoas mexem no mesmo torneio quase no mesmo instante — dois organizadores, ou um jogador e o organizador — cada alteração agora é aplicada sobre a versão <b>mais recente</b> do torneio, e não mais por cima de uma cópia antiga. Antes, a última gravação podia apagar sem querer o que a outra pessoa acabou de fazer (o clássico "sumiu o resultado que eu tinha lançado"). Vale para <b>lançamento de placar e sets</b>, <b>proposta/confirmação de resultado</b>, <b>sorteio da rodada</b>, <b>substituição por W.O.</b> e <b>chamada de presença</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.108-beta — avanço de fase: linhas contam duplas, não pessoas <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(6 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏷️ "Duplas", não "Inscritos", no ajuste de chaveamento:</b> ao avançar de fase num torneio de duplas, o medidor de potência de 2 dizia "Inscritos" (pessoas) para o que na verdade são as <b>duplas</b> de cada linha (Ouro/Prata). Agora mostra "24 Duplas", "sobram 8 duplas", "faltam 8 duplas" — a contagem certa da unidade certa. Em torneio individual, mostra "Classificados".</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.106-beta — você escolhe a estratégia da eliminatória <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎯 Estratégia da eliminatória:</b> na fase eliminatória você agora decide o critério do chaveamento com uma escolha só, que vale para qualquer torneio (individual ou duplas). <b>📈 Performance</b> beneficia os melhores — as equipes mais fortes ficam juntas e os cabeças de chave são protegidos, se cruzando só nas fases finais (1º × último, 2º × penúltimo…). <b>⚖️ Equilíbrio</b> deixa os jogos mais disputados desde o começo — confrontos parelhos já na 1ª rodada (1º × 2º, 3º × 4º…), sem proteger os melhores. Quando há duplas a formar, existe ainda a opção <b>🎲 Sorteio</b>.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.4.103-beta — novo criador de torneios por fases + polimento de duplas e sorteio <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(5 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🧩 Criador de torneios por fases:</b> montar o torneio ficou mais claro — uma Fase Classificatória (Pontos Corridos, grupos ou Rei/Rainha) seguida de uma Fase Eliminatória, cada uma com seu botão liga/desliga no título. Você escolhe como formar as equipes (Montadas, Sorteio ou Rei/Rainha), o número de rodadas, o agendamento dos sorteios e quantos avançam — por grupo ou pela classificação geral, com atalho "Todos". A fase classificatória trava (fica cinza) depois de sorteada; a eliminatória fica editável até você clicar "🏆 Avançar de fase".</li>' +
+        '<li><b>👫 Duplas montadas mais consistentes:</b> quem ainda está "sem dupla" aparece em cima e as duplas formadas embaixo. Ao sortear, o app pergunta primeiro o que fazer com quem ficou sem dupla (reabrir, lista de espera ou excluir) e só então monta a chave contando apenas as equipes completas. "Total de inscritos" passa a contar pessoas (uma dupla = 2).</li>' +
+        '<li><b>📊 Classificação por grupo à vista:</b> em Rei/Rainha e Fase de Grupos, a tabela de classificação aparece acima de cada grupo, e quem se classifica é marcado com uma tarja verde. Na classificação geral, as linhas (Ouro/Prata…) ganham cores próprias.</li>' +
+        '<li><b>⏱️ "Rodada em andamento" e "Rodada encerrada":</b> o box do próximo sorteio ganhou uma 2ª linha com o tempo decorrido da rodada; quando todos os resultados entram, o relógio congela em "🏁 Rodada encerrada". O número da contagem sempre cabe em uma linha.</li>' +
+        '<li><b>🎾 Dupla Eliminatória mais legível:</b> cada jogo mostra na lateral a cor da sua chave (Superior verde, Inferior âmbar). E no agendamento de quadras, os nomes das duplas ficam alinhados sem "escorregar".</li>' +
+        '<li><b>🔧 Sorteio à prova de falhas:</b> corrigimos casos em que o app dizia "sorteio realizado" mas a chave não aparecia. O sorteio de duplas montadas agora gera a chave de forma confiável, inclusive fora de potência de 2 (com repescagem).</li>' +
+        '<li><b>🗂️ Ordem da tela inicial:</b> torneios em andamento vêm antes dos encerrados; encerrados ficam só à frente dos que você ocultou. E o resumo de configuração do torneio agora abre sempre recolhido.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.36-beta — correções: nome da fase e seletor de quadra <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏷️ Nome da fase de eliminatórias:</b> o cabeçalho mostrava um código interno ("BRACKET.KNOCKOUT") em vez de "Eliminatória". Corrigido.</li>' +
+        '<li><b>📍 Seletor de quadra de volta:</b> nos jogos "prontos para chamar", o organizador voltou a ver o seletor pra designar a quadra de cada jogo — inclusive em torneios do atalho rápido. Sem quadras configuradas ele oferece "Quadra 1"; defina o número/nomes de quadras no torneio pra listar mais.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.3.35-beta — inclui o botão "Entrar" com mais volume (degradê + brilho esmeralda) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(3 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⏱️ Pontos Corridos respeita as suas rodadas:</b> o número de rodadas e a frequência dos sorteios agora seguem exatamente o que você configura (data do 1º sorteio, de quanto em quanto tempo repete e a data final). A barra de progresso, o cronômetro e o botão "Avançar de fase" acompanham — nada mais fica preso numa rodada só.</li>' +

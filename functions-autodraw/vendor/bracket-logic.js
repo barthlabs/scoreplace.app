@@ -43,15 +43,42 @@ window._computeMonarchStandings = function(group, t, category) {
   // W.O. — sempre aparece. Ghosts vêm de t.ligaGhosts (quando t disponível).
   var _ghostSet = (t && Array.isArray(t.ligaGhosts)) ? t.ligaGhosts : [];
   var _isGhostMon = function (n) { return n && _ghostSet.indexOf(n) !== -1; };
-  (group.players || []).forEach(function(name) {
-    if (_isGhostMon(name)) return; // ghost fora da classificação
-    stats[name] = {
-      name: name, wins: 0, losses: 0, played: 0,
-      pointsFor: 0, pointsAgainst: 0,
-      setsWon: 0, setsLost: 0,
-      gamesWon: 0, gamesLost: 0,
-      tiebreaksWon: 0, tiebreaksLost: 0
+  // v4.4.117: CLASSIFICAÇÃO POR UID. A chave da tabela é o uid (quando conhecido) — dois
+  // homônimos (Vivian × Vivi Hirata, ou 2 pessoas mesmo nome) NUNCA se somam na mesma linha.
+  // Seed do elenco usa group.playersUids (gravado no sorteio); cada jogo usa team1Uids/
+  // team2Uids. Sem uid (dados legados) → resolve por nome via _buildNameToUid; sem nem isso,
+  // cai em 'name:'+nome (mesmo comportamento antigo). O nome exibido vem do elenco (não do
+  // nome do jogo, que pode estar clobberado) — então mesmo com nome trocado a linha fica certa.
+  var _n2uMon = (t && typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
+  // v4.4.117: nome→uid derivado DOS PRÓPRIOS JOGOS (team1Uids/team2Uids). Garante que o SEED
+  // do elenco e o loop dos jogos usem a MESMA fonte de uid — senão elenco por nome × jogo por
+  // uid davam chaves diferentes e o jogo era pulado (0 vitórias). Ordem: uid explícito do slot
+  // → uid pelos jogos → uid pelo perfil (_n2uMon) → sem uid (name:).
+  var _matchN2u = {};
+  (function () {
+    var ms = (group.rounds && group.rounds[0]) ? group.rounds[0].matches : (group.matches || []);
+    (ms || []).forEach(function (m) {
+      if (!m) return;
+      (m.team1 || []).forEach(function (nm, i) { var u = (m.team1Uids || [])[i]; if (nm && u && !_matchN2u[nm]) _matchN2u[nm] = u; });
+      (m.team2 || []).forEach(function (nm, i) { var u = (m.team2Uids || [])[i]; if (nm && u && !_matchN2u[nm]) _matchN2u[nm] = u; });
+    });
+  })();
+  function _monKey(name, uid) {
+    var u = uid || _matchN2u[name] || _n2uMon[name] || null;
+    return u ? ('uid:' + u) : ('name:' + name);
+  }
+  function _monEnsure(name, uid) {
+    if (_isGhostMon(name)) return null;
+    var k = _monKey(name, uid);
+    if (!stats[k]) stats[k] = {
+      key: k, uid: (uid || _n2uMon[name] || null), name: name,
+      wins: 0, losses: 0, played: 0, pointsFor: 0, pointsAgainst: 0,
+      setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, tiebreaksLost: 0
     };
+    return k;
+  }
+  (group.players || []).forEach(function(name, i) {
+    _monEnsure(name, Array.isArray(group.playersUids) ? group.playersUids[i] : null);
   });
 
   var matches = (group.rounds && group.rounds[0]) ? group.rounds[0].matches : (group.matches || []);
@@ -90,31 +117,36 @@ window._computeMonarchStandings = function(group, t, category) {
       });
     }
 
-    m.team1.forEach(function(name) {
-      if (!stats[name]) return;
-      stats[name].played++;
-      stats[name].pointsFor += s1;
-      stats[name].pointsAgainst += s2;
-      stats[name].setsWon += sw1;
-      stats[name].setsLost += sw2;
-      stats[name].gamesWon += gw1;
-      stats[name].gamesLost += gw2;
-      stats[name].tiebreaksWon += tb1;
-      stats[name].tiebreaksLost += tb2;
-      if (team1Won) stats[name].wins++; else stats[name].losses++;
+    var _u1m = Array.isArray(m.team1Uids) ? m.team1Uids : [];
+    var _u2m = Array.isArray(m.team2Uids) ? m.team2Uids : [];
+    // v4.4.117: só ATUALIZA quem já está no elenco (seed) — NÃO cria linha nova a partir do
+    // nome do jogo (preserva "tabela = os do grupo"). Casa por UID (chave uid:...); se o nome
+    // do jogo está clobberado mas o uid bate o do elenco, encontra a linha certa.
+    m.team1.forEach(function(name, i) {
+      var k = _monKey(name, _u1m[i]); if (!stats[k]) return;
+      stats[k].played++;
+      stats[k].pointsFor += s1;
+      stats[k].pointsAgainst += s2;
+      stats[k].setsWon += sw1;
+      stats[k].setsLost += sw2;
+      stats[k].gamesWon += gw1;
+      stats[k].gamesLost += gw2;
+      stats[k].tiebreaksWon += tb1;
+      stats[k].tiebreaksLost += tb2;
+      if (team1Won) stats[k].wins++; else stats[k].losses++;
     });
-    m.team2.forEach(function(name) {
-      if (!stats[name]) return;
-      stats[name].played++;
-      stats[name].pointsFor += s2;
-      stats[name].pointsAgainst += s1;
-      stats[name].setsWon += sw2;
-      stats[name].setsLost += sw1;
-      stats[name].gamesWon += gw2;
-      stats[name].gamesLost += gw1;
-      stats[name].tiebreaksWon += tb2;
-      stats[name].tiebreaksLost += tb1;
-      if (!team1Won) stats[name].wins++; else stats[name].losses++;
+    m.team2.forEach(function(name, i) {
+      var k = _monKey(name, _u2m[i]); if (!stats[k]) return;
+      stats[k].played++;
+      stats[k].pointsFor += s2;
+      stats[k].pointsAgainst += s1;
+      stats[k].setsWon += sw2;
+      stats[k].setsLost += sw1;
+      stats[k].gamesWon += gw2;
+      stats[k].gamesLost += gw1;
+      stats[k].tiebreaksWon += tb2;
+      stats[k].tiebreaksLost += tb1;
+      if (!team1Won) stats[k].wins++; else stats[k].losses++;
     });
   });
 
@@ -133,7 +165,9 @@ window._computeMonarchStandings = function(group, t, category) {
   var _adv = !!(t && t.advancedScoring && t.advancedScoring.enabled && typeof window._calcAdvancedPoints === 'function');
   if (_adv) {
     Object.keys(stats).forEach(function(k) {
-      stats[k].points = window._calcAdvancedPoints(t, k, category || null, matches).total;
+      // v4.4.117: passa o uid EXATO (stats[k].uid) pro PA — casa os jogos por uid, não por
+      // nome (k agora é 'uid:...'; o nome do slot pode estar clobberado). Fecha o homônimo.
+      stats[k].points = window._calcAdvancedPoints(t, stats[k].name, category || null, matches, stats[k].uid).total;
     });
   }
 
@@ -227,7 +261,7 @@ function _woAdvPenalty(t) {
 }
 window._woAdvPenalty = _woAdvPenalty;
 
-function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
+function _calcAdvancedPoints(t, playerName, category, matchesOverride, uidOverride) {
   if (!t || !t.advancedScoring || !t.advancedScoring.enabled || !playerName) {
     return { total: 0, breakdown: [] };
   }
@@ -262,6 +296,18 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
   var total = 0;
   var breakdown = [];
 
+  // v4.4.115/117: uid do jogador consultado (casa jogos por UID). uidOverride (do caller,
+  // ex.: _computeMonarchStandings que já sabe o uid exato do slot) VENCE — fecha até o caso
+  // de dois homônimos com o MESMO nome. Sem override, resolve por nome (distinto → uid certo).
+  var _queryUid = null;
+  try {
+    if (uidOverride) _queryUid = uidOverride;
+    else {
+      var _n2uQ = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : null;
+      if (_n2uQ && Object.prototype.hasOwnProperty.call(_n2uQ, playerName)) _queryUid = _n2uQ[playerName] || null;
+    }
+  } catch (e) {}
+
   // v2.3.3: format-agnostic — varre TODAS as partidas do torneio (eliminatórias,
   // grupos, rounds de Liga/Suíço, Rei/Rainha) via coletor canônico, em vez de só
   // t.rounds. Assim Pontos Avançados funciona em qualquer tipo de torneio.
@@ -289,6 +335,27 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
     if (_seenMid[k]) return false;
     _seenMid[k] = 1; return true;
   });
+  // v4.4.113: dedup LÓGICO (além do id). Uma re-geração/re-sorteio da rodada pode criar
+  // cópias do MESMO jogo com IDs DIFERENTES (id carrega Date.now()) — a dedup por id não
+  // pega, e os games/participação DOBRAVAM nos Pontos Avançados (bug: 6 participações numa
+  // rodada Rei/Rainha de 3 jogos; games ganhos acima do máximo físico). Chave lógica: rodada
+  // + grupo + categoria + os dois lados (ordenados). Jogos legítimos SEMPRE diferem nessa
+  // chave (pares distintos por rodada), então nunca deduplica jogo real. Sit-outs passam
+  // (têm lógica própria de folga/inatividade).
+  var _seenLogical = {};
+  _allMatches = _allMatches.filter(function (m) {
+    if (!m || m.isSitOut) return true;
+    var _s1 = Array.isArray(m.team1) ? m.team1.slice().sort().join(',') : String(m.p1 || '');
+    var _s2 = Array.isArray(m.team2) ? m.team2.slice().sort().join(',') : String(m.p2 || '');
+    var _sides = [_s1, _s2].sort().join('__');
+    // v4.4.114: NÃO inclui monarchGroup na chave — uma re-geração da rodada põe os MESMOS
+    // 4 jogadores num índice de grupo diferente (gi=1 em vez de 0), e incluir o grupo
+    // deixava a cópia escapar (por isso "nada mudou"). Os times já identificam o jogo
+    // dentro da rodada (um jogador está em UM grupo só).
+    var lk = String(m.round || m.roundNumber || 0) + '|' + (m.category || '') + '|' + (m.bracket || '') + '|' + _sides;
+    if (_seenLogical[lk]) return false;
+    _seenLogical[lk] = 1; return true;
+  });
   // Rodadas em que o jogador LEVOU W.O.: ele NÃO jogou (foi substituído). NENHUM jogo
   // dessas rodadas pontua pra ele — só a punição de W.O. Blindagem contra jogos
   // "fantasma" com o nome dele que sobraram no doc após a substituição (a substituição
@@ -309,8 +376,21 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride) {
       var isMonarch = m.isMonarch && Array.isArray(m.team1) && Array.isArray(m.team2);
       var side1 = isMonarch ? m.team1 : m.p1;
       var side2 = isMonarch ? m.team2 : m.p2;
-      var isInP1 = _playerInSide(side1, playerName);
-      var isInP2 = _playerInSide(side2, playerName);
+      // v4.4.115: IDENTIDADE POR UID. Se sabemos o uid do jogador consultado E o jogo guarda
+      // uids nos slots, casa POR UID — imune a homônimo e a clobber de nome (ex.: os jogos da
+      // Vivian que viraram "Vivi Hirata" por string têm team1Uids da Vivian → não contam pra
+      // Vivi Hirata). Sem uid no jogo (dados legados) OU sem uid do consultado → cai no nome.
+      var _mHasUids = Array.isArray(m.team1Uids) || Array.isArray(m.team2Uids) || m.p1Uid != null || m.p2Uid != null;
+      var isInP1, isInP2;
+      if (_queryUid && _mHasUids) {
+        var _u1 = isMonarch ? (m.team1Uids || []) : [m.p1Uid];
+        var _u2 = isMonarch ? (m.team2Uids || []) : [m.p2Uid];
+        isInP1 = _u1.indexOf(_queryUid) !== -1;
+        isInP2 = _u2.indexOf(_queryUid) !== -1;
+      } else {
+        isInP1 = _playerInSide(side1, playerName);
+        isInP2 = _playerInSide(side2, playerName);
+      }
       if (!isInP1 && !isInP2) return;
 
       var isDraw = m.winner === 'draw' || m.draw;
@@ -520,6 +600,36 @@ function _computeStandings(t, category) {
   const _ghostSet = Array.isArray(t.ligaGhosts) ? t.ligaGhosts : [];
   const _isGhost = function(name) { return name && _ghostSet.indexOf(name) !== -1; };
 
+  // v4.4.122: CLASSIFICAÇÃO POR UID (mesma blindagem do _computeMonarchStandings v4.4.117 e
+  // do _buildHeadToHead v4.4.121). A linha da tabela é chaveada por UID quando conhecido —
+  // dois homônimos, ou um nome clobberado no meio do torneio com o uid correto no slot do jogo,
+  // NUNCA se somam na mesma linha nem racham em duas. Sem isto, o desempate confronto_direto
+  // (e a própria agregação de pontos) podia casar a linha errada. Fontes de uid, em ordem:
+  //   (1) uid do próprio slot do jogo (m.p1Uid/m.p2Uid nos 1v1; team1Uids/team2Uids no monarch);
+  //   (2) nome→uid derivado dos PRÓPRIOS jogos (cobre nome clobberado que só o jogo carrega o uid);
+  //   (3) nome→uid do elenco (_buildNameToUid).
+  // Sem uid (dados legados, dupla pré-formada "p1 / p2" que é UMA entidade sem uid único) → cai
+  // no nome puro = comportamento antigo. O nome exibido (s.name) vem do elenco no SEED (roda antes
+  // do loop de jogos) → nome clobberado no jogo não corrompe a label. Auto-contido pra valer também
+  // no Cloud Function autoDraw (vendor de bracket-logic.js).
+  var _n2u = (typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : {};
+  var _matchN2u = {};
+  (t.rounds || []).forEach(function (r) {
+    (r.matches || []).forEach(function (m) {
+      if (!m) return;
+      if (m.p1 && m.p1Uid && !_matchN2u[m.p1]) _matchN2u[m.p1] = m.p1Uid;
+      if (m.p2 && m.p2Uid && !_matchN2u[m.p2]) _matchN2u[m.p2] = m.p2Uid;
+      (m.team1 || []).forEach(function (nm, i) { var u = (m.team1Uids || [])[i]; if (nm && u && !_matchN2u[nm]) _matchN2u[nm] = u; });
+      (m.team2 || []).forEach(function (nm, i) { var u = (m.team2Uids || [])[i]; if (nm && u && !_matchN2u[nm]) _matchN2u[nm] = u; });
+    });
+  });
+  function _idKey(name, slotUid) {
+    if (name == null) return name;
+    var u = slotUid || _matchN2u[name] || _n2u[name] || null;
+    return u ? ('uid:' + u) : String(name);
+  }
+  function _uidOfKey(k) { return (typeof k === 'string' && k.indexOf('uid:') === 0) ? k.slice(4) : null; }
+
   const allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   allP.forEach(p => {
     // v4.0.76: nome de EXIBIÇÃO canônico (_entryDisplayName, derivado da estrutura) — a
@@ -543,7 +653,11 @@ function _computeStandings(t, category) {
         if (pCat !== category) return;
       }
     }
-    if (name && !scoreMap[name]) scoreMap[name] = { name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, category: category || '', setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0 };
+    // v4.4.122: uid do participante = identidade (só individual; dupla pré-formada "p1 / p2" e
+    // participante-string não têm uid único → name-key). O SEED define o s.name canônico.
+    var _pUid = (p && typeof p === 'object' && !(p.p1Name && p.p2Name) && !(Array.isArray(p.participants) && p.participants.length > 1)) ? (p.uid || null) : null;
+    var _pk = _idKey(name, _pUid);
+    if (name && !scoreMap[_pk]) scoreMap[_pk] = { key: _pk, uid: (_pUid || _uidOfKey(_pk)), name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, category: category || '', setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0 };
   });
 
   (t.rounds || []).forEach(round => {
@@ -551,14 +665,19 @@ function _computeStandings(t, category) {
       // If filtering by category, only count matches in that category
       if (category && m.category !== category) return;
 
-      // Helper to ensure dynamic entry has GSM fields
-      function _ensureEntry(name) {
-        if (_isGhost(name)) return; // Jogador X nunca entra na classificação
-        if (!scoreMap[name]) scoreMap[name] = { name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, category: category || '', setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0 };
+      // Helper to ensure dynamic entry has GSM fields. v4.4.122: chaveia por uid (via _idKey) e
+      // retorna a CHAVE (uid:… ou nome) — null pra ghost. O seed já fixou o s.name canônico; aqui
+      // só cai quem não estava no elenco (raro). Nome novo → row com name = nome do jogo.
+      function _ensureEntry(name, slotUid) {
+        if (_isGhost(name)) return null; // Jogador X nunca entra na classificação
+        var k = _idKey(name, slotUid);
+        if (!scoreMap[k]) scoreMap[k] = { key: k, uid: _uidOfKey(k), name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, category: category || '', setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0 };
+        return k;
       }
 
-      // Accumulate GSM (sets/games/tiebreaks) stats from match
-      function _accumulateGSM(m) {
+      // Accumulate GSM (sets/games/tiebreaks) stats from match. v4.4.122: recebe as CHAVES já
+      // resolvidas por uid (kP1/kP2) em vez de reler m.p1/m.p2 por nome.
+      function _accumulateGSM(m, kP1, kP2) {
         if (!Array.isArray(m.sets) || m.sets.length === 0) return;
         var sw1 = 0, sw2 = 0, gw1 = 0, gw2 = 0, tb1 = 0, tb2 = 0;
         m.sets.forEach(function(s) {
@@ -572,8 +691,8 @@ function _computeStandings(t, category) {
             if (tp1 > tp2) tb1++; else if (tp2 > tp1) tb2++;
           }
         });
-        if (scoreMap[m.p1]) { scoreMap[m.p1].setsWon += sw1; scoreMap[m.p1].setsLost += sw2; scoreMap[m.p1].gamesWon += gw1; scoreMap[m.p1].gamesLost += gw2; scoreMap[m.p1].tiebreaksWon += tb1; }
-        if (scoreMap[m.p2]) { scoreMap[m.p2].setsWon += sw2; scoreMap[m.p2].setsLost += sw1; scoreMap[m.p2].gamesWon += gw2; scoreMap[m.p2].gamesLost += gw1; scoreMap[m.p2].tiebreaksWon += tb2; }
+        if (scoreMap[kP1]) { scoreMap[kP1].setsWon += sw1; scoreMap[kP1].setsLost += sw2; scoreMap[kP1].gamesWon += gw1; scoreMap[kP1].gamesLost += gw2; scoreMap[kP1].tiebreaksWon += tb1; }
+        if (scoreMap[kP2]) { scoreMap[kP2].setsWon += sw2; scoreMap[kP2].setsLost += sw1; scoreMap[kP2].gamesWon += gw2; scoreMap[kP2].gamesLost += gw1; scoreMap[kP2].tiebreaksWon += tb2; }
       }
 
       // Sit-out (folga): NÃO pontua aqui. v2.3.12: a compensação é a MÉDIA das
@@ -610,75 +729,77 @@ function _computeStandings(t, category) {
             }
           });
         } else { _g1 = ms1; _g2 = ms2; }
-        m.team1.forEach(function(name) {
+        m.team1.forEach(function(name, _i) {
           if (_isGhost(name)) return; // Jogador X joga mas não pontua
-          _ensureEntry(name);
-          scoreMap[name].played++;
-          scoreMap[name].pointsDiff += (ms1 - ms2);
-          scoreMap[name].gamesWon += _g1; scoreMap[name].gamesLost += _g2;
-          scoreMap[name].setsWon += _sw1; scoreMap[name].setsLost += _sw2; scoreMap[name].tiebreaksWon += _tb1;
-          if (isDraw) { scoreMap[name].draws = (scoreMap[name].draws || 0) + 1; scoreMap[name].points += 1; }
-          else if (team1Won) { scoreMap[name].wins++; scoreMap[name].points += 3; }
-          else { scoreMap[name].losses++; }
+          var k = _ensureEntry(name, Array.isArray(m.team1Uids) ? m.team1Uids[_i] : null);
+          if (!k) return;
+          scoreMap[k].played++;
+          scoreMap[k].pointsDiff += (ms1 - ms2);
+          scoreMap[k].gamesWon += _g1; scoreMap[k].gamesLost += _g2;
+          scoreMap[k].setsWon += _sw1; scoreMap[k].setsLost += _sw2; scoreMap[k].tiebreaksWon += _tb1;
+          if (isDraw) { scoreMap[k].draws = (scoreMap[k].draws || 0) + 1; scoreMap[k].points += 1; }
+          else if (team1Won) { scoreMap[k].wins++; scoreMap[k].points += 3; }
+          else { scoreMap[k].losses++; }
         });
-        m.team2.forEach(function(name) {
+        m.team2.forEach(function(name, _i) {
           if (_isGhost(name)) return; // Jogador X joga mas não pontua
-          _ensureEntry(name);
-          scoreMap[name].played++;
-          scoreMap[name].pointsDiff += (ms2 - ms1);
-          scoreMap[name].gamesWon += _g2; scoreMap[name].gamesLost += _g1;
-          scoreMap[name].setsWon += _sw2; scoreMap[name].setsLost += _sw1; scoreMap[name].tiebreaksWon += _tb2;
-          if (isDraw) { scoreMap[name].draws = (scoreMap[name].draws || 0) + 1; scoreMap[name].points += 1; }
-          else if (team2Won) { scoreMap[name].wins++; scoreMap[name].points += 3; }
-          else { scoreMap[name].losses++; }
+          var k = _ensureEntry(name, Array.isArray(m.team2Uids) ? m.team2Uids[_i] : null);
+          if (!k) return;
+          scoreMap[k].played++;
+          scoreMap[k].pointsDiff += (ms2 - ms1);
+          scoreMap[k].gamesWon += _g2; scoreMap[k].gamesLost += _g1;
+          scoreMap[k].setsWon += _sw2; scoreMap[k].setsLost += _sw1; scoreMap[k].tiebreaksWon += _tb2;
+          if (isDraw) { scoreMap[k].draws = (scoreMap[k].draws || 0) + 1; scoreMap[k].points += 1; }
+          else if (team2Won) { scoreMap[k].wins++; scoreMap[k].points += 3; }
+          else { scoreMap[k].losses++; }
         });
         return;
       }
+
+      // v4.4.122: chaves por uid dos dois lados (kP1/kP2) — usadas em todo o bloco 1v1.
+      var kP1 = _ensureEntry(m.p1, m.p1Uid);
+      var kP2 = _ensureEntry(m.p2, m.p2Uid);
+      if (!kP1 || !kP2) return; // ghost em algum lado
 
       // Handle draws — both players get 1 point each
       if (m.winner === 'draw' || m.draw) {
-        _ensureEntry(m.p1); _ensureEntry(m.p2);
-        scoreMap[m.p1].draws = (scoreMap[m.p1].draws || 0) + 1;
-        scoreMap[m.p2].draws = (scoreMap[m.p2].draws || 0) + 1;
-        scoreMap[m.p1].points += 1;
-        scoreMap[m.p2].points += 1;
-        scoreMap[m.p1].played++;
-        scoreMap[m.p2].played++;
+        scoreMap[kP1].draws = (scoreMap[kP1].draws || 0) + 1;
+        scoreMap[kP2].draws = (scoreMap[kP2].draws || 0) + 1;
+        scoreMap[kP1].points += 1;
+        scoreMap[kP2].points += 1;
+        scoreMap[kP1].played++;
+        scoreMap[kP2].played++;
         var ds1 = parseInt(m.scoreP1) || 0;
         var ds2 = parseInt(m.scoreP2) || 0;
-        scoreMap[m.p1].pointsDiff += (ds1 - ds2);
-        scoreMap[m.p2].pointsDiff += (ds2 - ds1);
+        scoreMap[kP1].pointsDiff += (ds1 - ds2);
+        scoreMap[kP2].pointsDiff += (ds2 - ds1);
         if (!Array.isArray(m.sets) || !m.sets.length) {
-          scoreMap[m.p1].gamesWon += ds1; scoreMap[m.p1].gamesLost += ds2;
-          scoreMap[m.p2].gamesWon += ds2; scoreMap[m.p2].gamesLost += ds1;
+          scoreMap[kP1].gamesWon += ds1; scoreMap[kP1].gamesLost += ds2;
+          scoreMap[kP2].gamesWon += ds2; scoreMap[kP2].gamesLost += ds1;
         }
-        _accumulateGSM(m);
+        _accumulateGSM(m, kP1, kP2);
         return;
       }
 
-      const loser = m.winner === m.p1 ? m.p2 : m.p1;
-      _ensureEntry(m.winner); _ensureEntry(loser);
+      var winnerIsP1 = m.winner === m.p1;
+      var kW = winnerIsP1 ? kP1 : kP2;
+      var kL = winnerIsP1 ? kP2 : kP1;
 
-      scoreMap[m.winner].wins++;
-      scoreMap[m.winner].points += 3;
-      scoreMap[m.winner].played++;
-      scoreMap[loser].losses++;
-      scoreMap[loser].played++;
+      scoreMap[kW].wins++;
+      scoreMap[kW].points += 3;
+      scoreMap[kW].played++;
+      scoreMap[kL].losses++;
+      scoreMap[kL].played++;
 
       const s1 = parseInt(m.scoreP1) || 0;
       const s2 = parseInt(m.scoreP2) || 0;
-      if (m.winner === m.p1) {
-        scoreMap[m.p1].pointsDiff += (s1 - s2);
-        scoreMap[m.p2].pointsDiff += (s2 - s1);
-      } else {
-        scoreMap[m.p2].pointsDiff += (s2 - s1);
-        scoreMap[m.p1].pointsDiff += (s1 - s2);
-      }
+      scoreMap[kP1].pointsDiff += (s1 - s2);
+      scoreMap[kP2].pointsDiff += (s2 - s1);
       if (!Array.isArray(m.sets) || !m.sets.length) {
-        scoreMap[m.p1].gamesWon += s1; scoreMap[m.p1].gamesLost += s2;
-        scoreMap[m.p2].gamesWon += s2; scoreMap[m.p2].gamesLost += s1;
+        scoreMap[kP1].gamesWon += s1; scoreMap[kP1].gamesLost += s2;
+        scoreMap[kP2].gamesWon += s2; scoreMap[kP2].gamesLost += s1;
       }
-      _accumulateGSM(m);
+      _accumulateGSM(m, kP1, kP2);
     });
   });
 
@@ -687,32 +808,38 @@ function _computeStandings(t, category) {
   // Build Buchholz scores (sum of opponents' points)
   var allRoundMatches = (t.rounds || []).flatMap(r => r.matches || []);
   if (category) allRoundMatches = allRoundMatches.filter(m => m.category === category);
+  // v4.4.122: Buchholz/Sonneborn-Berger comparam por CHAVE (uid) — não mais por nome. mk1/mk2 são
+  // as chaves resolvidas dos dois lados do jogo; s.key é a chave da linha atual.
   standings.forEach(s => {
     s.buchholz = 0;
     allRoundMatches.forEach(m => {
       if (m.isBye || !m.winner) return;
+      var mk1 = _idKey(m.p1, m.p1Uid), mk2 = _idKey(m.p2, m.p2Uid);
       if (m.winner === 'draw' || m.draw) {
         // Empate: ambos jogaram contra o outro — contar pontos do oponente
-        if (m.p1 === s.name && scoreMap[m.p2]) s.buchholz += scoreMap[m.p2].points;
-        if (m.p2 === s.name && scoreMap[m.p1]) s.buchholz += scoreMap[m.p1].points;
+        if (mk1 === s.key && scoreMap[mk2]) s.buchholz += scoreMap[mk2].points;
+        if (mk2 === s.key && scoreMap[mk1]) s.buchholz += scoreMap[mk1].points;
         return;
       }
-      if (m.p1 === s.name && scoreMap[m.p2]) s.buchholz += scoreMap[m.p2].points;
-      if (m.p2 === s.name && scoreMap[m.p1]) s.buchholz += scoreMap[m.p1].points;
+      if (mk1 === s.key && scoreMap[mk2]) s.buchholz += scoreMap[mk2].points;
+      if (mk2 === s.key && scoreMap[mk1]) s.buchholz += scoreMap[mk1].points;
     });
     // Sonneborn-Berger: sum of points of opponents you beat + half points of opponents you drew
     s.sonnebornBerger = 0;
     allRoundMatches.forEach(m => {
       if (m.isBye || !m.winner) return;
+      var mk1 = _idKey(m.p1, m.p1Uid), mk2 = _idKey(m.p2, m.p2Uid);
       if (m.winner === 'draw' || m.draw) {
         // Empate: metade dos pontos do oponente
-        var opp = m.p1 === s.name ? m.p2 : (m.p2 === s.name ? m.p1 : null);
-        if (opp && scoreMap[opp]) s.sonnebornBerger += scoreMap[opp].points * 0.5;
+        var oppK = mk1 === s.key ? mk2 : (mk2 === s.key ? mk1 : null);
+        if (oppK && scoreMap[oppK]) s.sonnebornBerger += scoreMap[oppK].points * 0.5;
         return;
       }
-      if (m.winner === s.name) {
-        const opp = m.p1 === s.name ? m.p2 : m.p1;
-        if (scoreMap[opp]) s.sonnebornBerger += scoreMap[opp].points;
+      // vencedor desta partida = s? (compara a chave do vencedor com s.key)
+      var kWin = m.winner === m.p1 ? mk1 : mk2;
+      if (kWin === s.key) {
+        var oppK2 = mk1 === s.key ? mk2 : mk1;
+        if (scoreMap[oppK2]) s.sonnebornBerger += scoreMap[oppK2].points;
       }
     });
   });
@@ -769,18 +896,24 @@ function _computeStandings(t, category) {
   // v2.2.47: mapa nome→timestamp de nascimento (pros critérios antiguidade/juventude)
   var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
 
-  // Build head-to-head map for confronto_direto
+  // Build head-to-head map for confronto_direto.
+  // v4.4.122: chaveado por UID (via _idKey) dos dois lados — não mais por nome cru. Assim o
+  // desempate confronto_direto casa a linha certa mesmo com nome clobberado / homônimos (o uid
+  // correto vive no slot do jogo). Duplas pré-formadas (sem uid único) caem no nome, como antes.
   const h2h = {};
   allRoundMatches.forEach(m => {
     if (!m.winner || m.isBye || m.isSitOut) return;
+    var mk1 = _idKey(m.p1, m.p1Uid), mk2 = _idKey(m.p2, m.p2Uid);
     const isDraw = m.winner === 'draw' || m.draw;
     if (isDraw) {
-      const key = `${m.p1}|||${m.p2}|||d`;
+      const key = `${mk1}|||${mk2}|||d`;
       h2h[key] = (h2h[key] || 0) + 1;
-      const keyReverse = `${m.p2}|||${m.p1}|||d`;
+      const keyReverse = `${mk2}|||${mk1}|||d`;
       h2h[keyReverse] = (h2h[keyReverse] || 0) + 1;
     } else {
-      const key = `${m.winner}|||${m.winner === m.p1 ? m.p2 : m.p1}`;
+      var kWin = m.winner === m.p1 ? mk1 : mk2;
+      var kLos = m.winner === m.p1 ? mk2 : mk1;
+      const key = `${kWin}|||${kLos}`;
       h2h[key] = (h2h[key] || 0) + 1;
     }
   });
@@ -804,9 +937,10 @@ function _computeStandings(t, category) {
       let diff = 0;
       switch (tb) {
         case 'confronto_direto':
-          const aBeatsB = h2h[`${a.name}|||${b.name}`] || 0;
-          const bBeatsA = h2h[`${b.name}|||${a.name}`] || 0;
-          const aDrawsB = h2h[`${a.name}|||${b.name}|||d`] || 0;
+          // v4.4.122: compara pelas CHAVES (uid) das linhas, casando com o h2h uid-keyed acima.
+          const aBeatsB = h2h[`${a.key}|||${b.key}`] || 0;
+          const bBeatsA = h2h[`${b.key}|||${a.key}`] || 0;
+          const aDrawsB = h2h[`${a.key}|||${b.key}|||d`] || 0;
           diff = bBeatsA - aBeatsB; // negative means a wins
           if (diff !== 0) return diff < 0 ? -1 : 1;
           // If direct wins are equal, consider draws in the comparison
@@ -2467,161 +2601,6 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
   }
 }
 
-// ─── Round-robin ("Todos contra todos") schedule ─────────────────────────────
-
-// Build one turno: enough rounds so every pair of players has been in the same
-// group of 4 at least once. Uses greedy Monte Carlo (try 200 shuffles per round,
-// pick the one that maximises newly-covered pairs).
-function _buildOneTurno(players) {
-  var n = players.length;
-  if (n < 4) return [];
-
-  // Canonicalise pair key (always smaller string first)
-  function pairKey(a, b) { return a < b ? a + '|||' + b : b + '|||' + a; }
-
-  // All pairs that must be covered within this turno
-  var covered = {};
-  var totalPairs = 0;
-  for (var i = 0; i < n; i++) {
-    for (var j = i + 1; j < n; j++) {
-      covered[pairKey(players[i], players[j])] = false;
-      totalPairs++;
-    }
-  }
-
-  var numPlaying = n - (n % 4); // must be multiple of 4
-  var rounds = [];
-  var maxRounds = Math.ceil((n - 1) / 3) + n; // generous safety cap
-
-  for (var r = 0; r < maxRounds; r++) {
-    // Count uncovered pairs
-    var uncovered = 0;
-    for (var k in covered) { if (!covered[k]) uncovered++; }
-    if (uncovered === 0) break;
-
-    // Try 200 shuffles, pick the one covering most uncovered pairs
-    var best = null;
-    var bestNew = -1;
-    for (var a = 0; a < 200; a++) {
-      var shuffled = players.slice();
-      for (var si = shuffled.length - 1; si > 0; si--) {
-        var sj = Math.floor(Math.random() * (si + 1));
-        var stmp = shuffled[si]; shuffled[si] = shuffled[sj]; shuffled[sj] = stmp;
-      }
-      var playing = shuffled.slice(0, numPlaying);
-      var newCount = 0;
-      for (var gi = 0; gi < playing.length; gi += 4) {
-        var grp = playing.slice(gi, gi + 4);
-        for (var gii = 0; gii < grp.length; gii++) {
-          for (var gjj = gii + 1; gjj < grp.length; gjj++) {
-            var pk = pairKey(grp[gii], grp[gjj]);
-            if (!covered[pk]) newCount++;
-          }
-        }
-      }
-      if (newCount > bestNew) { bestNew = newCount; best = playing; }
-    }
-
-    if (!best || bestNew === 0) break; // can't improve further
-
-    // Form groups of 4 and mark pairs covered
-    var roundGroups = [];
-    for (var gi2 = 0; gi2 < best.length; gi2 += 4) {
-      var grp2 = best.slice(gi2, gi2 + 4);
-      roundGroups.push(grp2);
-      for (var gii2 = 0; gii2 < grp2.length; gii2++) {
-        for (var gjj2 = gii2 + 1; gjj2 < grp2.length; gjj2++) {
-          covered[pairKey(grp2[gii2], grp2[gjj2])] = true;
-        }
-      }
-    }
-    rounds.push(roundGroups);
-  }
-
-  return rounds;
-}
-
-// Pre-generate schedule for all turnos: array of {turno, groups[]}
-function _buildRoundRobinSchedule(players, numTurnos) {
-  var schedule = [];
-  for (var turno = 1; turno <= numTurnos; turno++) {
-    // Shuffle player order between turnos for variety
-    var tp = players.slice();
-    for (var i = tp.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = tp[i]; tp[i] = tp[j]; tp[j] = tmp;
-    }
-    var turnoRounds = _buildOneTurno(tp);
-    turnoRounds.forEach(function(groups) {
-      schedule.push({ turno: turno, groups: groups });
-    });
-  }
-  return schedule;
-}
-
-// Pop next round from pre-generated schedule and append to tournament
-window._drawFromRoundRobinSchedule = function(t, category, _rn) {
-  if (!t.ligaRRSchedule) t.ligaRRSchedule = {};
-  var catKey = (category || '_default_').replace(/\s+/g, '_');
-
-  // (Re-)generate schedule when empty
-  if (!t.ligaRRSchedule[catKey] || t.ligaRRSchedule[catKey].length === 0) {
-    var standings = _computeStandings(t, category);
-    var activeNames = _getActiveLigaPlayers(t);
-    var players = standings.map(function(s) { return s.name; }).filter(function(n) { return activeNames[n]; });
-    if (players.length < 4) return false;
-    var numTurnos = t.ligaTurnos || 1;
-    t.ligaRRSchedule[catKey] = _buildRoundRobinSchedule(players, numTurnos);
-  }
-
-  if (!t.ligaRRSchedule[catKey] || t.ligaRRSchedule[catKey].length === 0) return false;
-
-  var nextRound = t.ligaRRSchedule[catKey].shift(); // consume next entry
-  // v2.5.1: o nº da rodada deriva do MAIOR `round` já existente +1, não da
-  // contagem de colunas. Multi-categoria gera 1 coluna por categoria no MESMO
-  // sorteio — todas têm que ficar na MESMA rodada (C e D ambas Rodada 1), senão
-  // a 2ª categoria virava "Rodada 2". roundIndex (índice físico da coluna)
-  // continua = length.
-  var roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);
-  var ts = Date.now();
-  var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
-  var catLabel = category && window._displayCategoryName
-    ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
-  var turnoLabel = nextRound.turno ? ' [T' + nextRound.turno + ']' : '';
-
-  var allMatches = [];
-  var monarchGroups = [];
-
-  nextRound.groups.forEach(function(grp, gi) {
-    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: grp, category: category, ts: ts, nameSuffix: turnoLabel });
-    allMatches = allMatches.concat(g.matches);
-    monarchGroups.push(g);
-  });
-
-  // Sit-outs for players not in any group this round
-  var allPlaying = [];
-  nextRound.groups.forEach(function(g) { allPlaying = allPlaying.concat(g); });
-  var allActive = Object.keys(_getActiveLigaPlayers(t));
-  allActive.forEach(function(name, si) {
-    if (allPlaying.indexOf(name) === -1) {
-      var avgPts = _sitOutComp(t, name, category); // PA quando o torneio usa Pontos Avançados; senão pontos simples
-      var soObj = _buildSitOut({ player: name, roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: 'remainder', points: avgPts });
-      allMatches.push(soObj);
-      _recordSitOut(t, [name], category);
-    }
-  });
-
-  _recordOpponentHistory(t, monarchGroups, category);
-
-  window._appendCanonicalColumn(t, {
-    phase: 'monarch', round: roundNum, status: 'active',
-    format: 'rei_rainha', matches: allMatches, monarchGroups: monarchGroups,
-    turno: nextRound.turno
-  });
-
-  return true;
-};
-
 // ─── Swiss pairing ────────────────────────────────────────────────────────────
 function _generateNextRound(t) {
   // v2.4.28: ANTES de filtrar por categoria, encaixa quem está sem categoria
@@ -2649,20 +2628,14 @@ function _generateNextRound(t) {
   // virava round=2.
   var _batchRound = ((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1;
 
-  // "Todos contra todos" mode: pop next round from pre-generated schedule
-  if (isLiga && t.ligaDrawMode === 'round_robin') {
-    var cats = (typeof window._sortCategoriesBySkillOrder === 'function')
-      ? window._sortCategoriesBySkillOrder(t.combinedCategories || [], t.skillCategories)
-      : (t.combinedCategories || []);
-    if (cats.length === 0) {
-      window._drawFromRoundRobinSchedule(t, null, _batchRound);
-    } else {
-      cats.forEach(function(cat) { window._drawFromRoundRobinSchedule(t, cat, _batchRound); });
-    }
-    return;
-  }
+  // v4.4.114: CAMINHO ÚNICO CANÔNICO. O modo "round_robin" pré-agendado
+  // (_drawFromRoundRobinSchedule) foi APAGADO — era um 2º gerador de rodada monarca com
+  // lógica de folga/inativo DIVERGENTE (marcava tudo como 'remainder', nunca 'inactive'),
+  // fonte de regressão. format2 (motor canônico) nunca usa round_robin (sempre 'standard').
+  // Torneios legados com ligaDrawMode='round_robin' caem AQUI no gerador padrão incremental
+  // (Rei/Rainha ou simples), que trata inativo corretamente. Nada é gerado fora deste ponto.
 
-  // Standard Liga or Rei/Rainha
+  // Gerador padrão: Rei/Rainha OU simples — ÚNICO caminho de geração de rodada.
   var useReiRainha = t.ligaRoundFormat === 'rei_rainha';
   var genFn = useReiRainha ? _generateReiRainhaRoundForPlayers : _generateNextRoundForPlayers;
 
@@ -2929,6 +2902,11 @@ function _buildMonarchGroup(opts) {
     ? ' (' + window._displayCategoryName(category) + ')'
     : (category ? ' (' + category + ')' : '');
   var groupName = 'R' + roundNum + ' ' + window._groupName(gi) + nameSuffix;
+  // v4.4.115: IDENTIDADE POR UID. Cada slot do jogo guarda o uid do jogador (team1Uids/
+  // team2Uids) além do nome. Assim PA, render e o sync de nome resolvem por uid — homônimos
+  // (ex.: "Vivian" × "Vivi Hirata") nunca mais se misturam. nameToUid vem do chamador.
+  var _n2u = opts.nameToUid || null;
+  var _uidOf = function (nm) { return (_n2u && Object.prototype.hasOwnProperty.call(_n2u, nm)) ? (_n2u[nm] || null) : null; };
   var A = P[0], B = P[1], C = P[2], D = P[3];
   var pairings = [{ t1: [A, B], t2: [C, D] }, { t1: [A, C], t2: [B, D] }, { t1: [A, D], t2: [B, C] }];
   var matches = pairings.map(function (pair, mi) {
@@ -2937,6 +2915,7 @@ function _buildMonarchGroup(opts) {
       round: roundNum, roundIndex: opts.roundIndex,
       p1: pair.t1.join(' / '), p2: pair.t2.join(' / '),
       team1: pair.t1, team2: pair.t2,
+      team1Uids: pair.t1.map(_uidOf), team2Uids: pair.t2.map(_uidOf),
       winner: null, scoreP1: null, scoreP2: null,
       isMonarch: true, monarchGroup: gi,
       label: groupName + ' • Jogo ' + (mi + 1) + catLabel
@@ -2944,9 +2923,31 @@ function _buildMonarchGroup(opts) {
     if (category) m.category = category;
     return m;
   });
-  return { name: groupName, players: P.slice(), matches: matches };
+  return { name: groupName, players: P.slice(), playersUids: P.map(_uidOf), matches: matches };
 }
 window._buildMonarchGroup = _buildMonarchGroup;
+
+// v4.4.115: mapa nome→uid dos INDIVÍDUOS do torneio, pra o sorteio gravar o uid em cada
+// slot do jogo. Cobre indivíduos (uid+name) e membros de dupla (p1Name/p1Uid, p2Name/p2Uid,
+// sub-participants[]). Homônimos verdadeiros (2 pessoas mesmo nome) mantêm o último — é a
+// mesma ambiguidade que o sorteio já tem por operar em nomes; o ganho é que nomes DISTINTOS
+// (Vivian × Vivi Hirata) nunca mais se cruzam no PA/render/sync.
+function _buildNameToUid(t) {
+  var map = {};
+  var parr = Array.isArray(t && t.participants) ? t.participants : Object.values((t && t.participants) || {});
+  parr.forEach(function (p) {
+    if (!p || typeof p !== 'object') return;
+    if (p.p1Name && p.p1Uid) map[String(p.p1Name).trim()] = p.p1Uid;
+    if (p.p2Name && p.p2Uid) map[String(p.p2Name).trim()] = p.p2Uid;
+    if (Array.isArray(p.participants)) p.participants.forEach(function (s) {
+      if (s && s.uid) { var sn = String((s.displayName || s.name) || '').trim(); if (sn) map[sn] = s.uid; }
+    });
+    var nm = String((p.displayName || p.name) || '').trim();
+    if (nm && p.uid && !map[nm]) map[nm] = p.uid;
+  });
+  return map;
+}
+window._buildNameToUid = _buildNameToUid;
 
 // v2.7.3: ÚNICA fonte da partida de FOLGA (sit-out). Antes construída à mão em 3
 // lugares (round-robin, Rei/Rainha, Suíço) — drift de label/reason/pontos.
@@ -3035,10 +3036,11 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   eligible = _plainShuffle(eligible);
   var used = [];
   var formed = 0;
+  var _n2uMapWl = _buildNameToUid(t); // v4.4.115: identidade por uid nos jogos formados da espera
   while (eligible.length >= 4) {
     var grp = eligible.splice(0, 4);
     var gi = (col.monarchGroups || []).length;
-    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed });
+    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uMapWl });
     col.monarchGroups.push(g);
     col.matches = (col.matches || []).concat(g.matches);
     grp.forEach(function (n) { used.push(n); });
@@ -3278,10 +3280,11 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   // Divide playing players into groups of 4
   var numGroups = Math.floor(playingPlayers.length / 4);
   var groups = [];
+  var _n2uMap = _buildNameToUid(t); // v4.4.115: nome→uid pra gravar identidade nos jogos
 
   for (var gi = 0; gi < numGroups; gi++) {
     var gPlayers = playingPlayers.slice(gi * 4, gi * 4 + 4);
-    groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts }));
+    groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts, nameToUid: _n2uMap }));
   }
 
   // Record opponent pairings for anti-repeat logic in future rounds
@@ -3355,6 +3358,12 @@ function _generateNextRoundForPlayers(t, category, _rn) {
   const timestamp = Date.now();
   const catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
   const catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
+
+  // v4.4.122: nome→uid do elenco pra GRAVAR a identidade em cada slot do jogo (p1Uid/p2Uid nos
+  // 1v1; team1Uids/team2Uids nas duplas da Liga). Assim a classificação (_computeStandings) casa
+  // a linha por uid mesmo se o displayName for clobberado depois. Espelha o que o monarch já faz.
+  var _n2uGen = (typeof _buildNameToUid === 'function') ? _buildNameToUid(t) : {};
+  var _uidForName = function (n) { return (n && _n2uGen[n]) || null; };
 
   // Liga: filter inactive players, create sit-outs for them
   var inactiveSitOutsSwiss = [];
@@ -3434,6 +3443,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
         round: roundNum, roundIndex: roundIdx,
         p1: A + ' / ' + B, p2: C + ' / ' + D,
         team1: [A, B], team2: [C, D],
+        team1Uids: [_uidForName(A), _uidForName(B)], team2Uids: [_uidForName(C), _uidForName(D)],
         winner: null, scoreP1: null, scoreP2: null,
         isMonarch: true,
         label: 'R' + roundNum + ' • Partida ' + (newMatches.length + 1) + catLabel
@@ -3492,6 +3502,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
           id: `match-r${roundNum}-${newMatches.length}${catSuffix}-${timestamp}`,
           round: roundNum, roundIndex: roundIdx,
           p1: players[i], p2: players[j],
+          p1Uid: _uidForName(players[i]), p2Uid: _uidForName(players[j]),
           winner: null,
           label: `R${roundNum} • Partida ${newMatches.length + 1}` + catLabel
         };
@@ -3509,6 +3520,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
             id: `match-r${roundNum}-${newMatches.length}${catSuffix}-${timestamp}`,
             round: roundNum, roundIndex: roundIdx,
             p1: players[i], p2: players[j],
+            p1Uid: _uidForName(players[i]), p2Uid: _uidForName(players[j]),
             winner: null,
             label: `R${roundNum} • Partida ${newMatches.length + 1}` + catLabel
           };

@@ -15,6 +15,16 @@ window._isMonarchFormat = window._isMonarchFormat || function(t) {
     return !!(t && (t.drawMode === 'rei_rainha' || t.ligaRoundFormat === 'rei_rainha'));
 };
 
+// v4.4.96: enrollmentMode CANÔNICO — 'time' (legado) e 'teams' (format2, ver
+// format2.js:215/244) são SINÔNIMOS de "equipe/dupla"; 'misto' também permite
+// duplas. Helper único pra matar o drift 'time' vs 'teams' que fazia torneios de
+// dupla-formada criados pelo format2 (enrollmentMode='teams') caírem no grid
+// individual misturado (regressão do card canônico de duplas). Sempre usar este
+// helper — NUNCA comparar `enrollmentMode === 'time'` cru (fica cego a 'teams').
+window._isTeamEnrollMode = window._isTeamEnrollMode || function(mode) {
+    return mode === 'time' || mode === 'teams' || mode === 'misto';
+};
+
 // ── Merge Participants: mesclar dois participantes (organizer, após sorteio) ──
 // Supports both desktop drag-and-drop AND mobile touch drag.
 // Core logic in _executeMerge(); drag/touch just determine source+target names.
@@ -802,6 +812,30 @@ function _materializedPhaseGames(t, phaseIdx) {
   return (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && real(m); }).length;
 }
 
+// v4.4.48: jogos CONCLUÍDOS (com vencedor) de UMA fase — espelha _materializedPhaseGames
+// mas só conta os que já têm resultado. Usado pra escopar a barra VERDE do topo na fase
+// atual (a barra roxa "Torneio completo" segue somando todas as fases). BYE/folga fora.
+function _completedPhaseGames(t, phaseIdx) {
+  function done(m) {
+    if (!m || m.isBye || m.isSitOut) return false;
+    if (m.p1 === 'BYE' || m.p2 === 'BYE') return false;
+    return !!m.winner;
+  }
+  var c = 0;
+  if (phaseIdx === 0) {
+    (t.rounds || []).forEach(function (r) { (r.matches || []).forEach(function (m) { if (done(m)) c++; }); });
+    c += (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === 0 && done(m); }).length;
+    return c;
+  }
+  var slot = t.phaseRounds && t.phaseRounds[phaseIdx];
+  if (slot && Array.isArray(slot.rounds)) {
+    var lc = 0;
+    slot.rounds.forEach(function (r) { (r && r.matches || []).forEach(function (m) { if (done(m)) lc++; }); });
+    return lc;
+  }
+  return (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === phaseIdx && done(m); }).length;
+}
+
 // Conta os jogos PREVISTOS de uma fase de chave RODANDO O MOTOR REAL
 // (window._phasesEngine.buildPhaseBrackets) sobre os grupos da fase anterior.
 // Conta jogáveis = não-BYE (inclui rodadas futuras TBD + convergência se houver).
@@ -852,10 +886,11 @@ window._tournamentGamesPlan = function (t) {
   }
   var phases = t.phases;
   var curIdx = t.currentPhaseIndex || 0;
-  var totalP = 0, simComplete = true;
+  var totalP = 0, doneP = 0, simComplete = true;
   for (var i = 0; i < phases.length; i++) {
     if (i <= curIdx) {
       totalP += _materializedPhaseGames(t, i);            // fase já sorteada → jogos reais
+      doneP += _completedPhaseGames(t, i);                // v4.4.57: MESMA contagem (real+vencedor)
     } else if (i === curIdx + 1) {
       var sim = _simulatePhaseGames(t, i);                // próxima fase → motor real
       if (sim == null) simComplete = false; else totalP += sim;
@@ -863,10 +898,27 @@ window._tournamentGamesPlan = function (t) {
       simComplete = false;                                // fases 3+ só entram ao materializar a anterior
     }
   }
-  if (totalP < done) totalP = done;
-  return { multiPhase: true, totalPlanned: totalP, totalDone: done,
-           pct: totalP > 0 ? Math.round(done / totalP * 100) : 0,
+  // v4.4.57: `done` do TORNEIO COMPLETO vem da soma por-fase (_completedPhaseGames),
+  // NÃO de _getTournamentProgress().completed — este superconta 1 no multi-fase (contava
+  // 125/123 pra 124/122 reais), fazendo a barra dizer "falta 1 jogo" quando faltam 2
+  // (final + 3º lugar). Somar total e done com o MESMO filtro elimina a divergência.
+  if (totalP < doneP) totalP = doneP;
+  return { multiPhase: true, totalPlanned: totalP, totalDone: doneP,
+           pct: totalP > 0 ? Math.round(doneP / totalP * 100) : 0,
            phasesCount: phases.length, currentPhaseIndex: curIdx, partial: !simComplete };
+};
+
+// v4.4.48: progresso da FASE ATUAL (só o estágio corrente) — total = jogos planejados
+// da fase, done = jogos já concluídos dela. Escopa a barra VERDE do topo na fase (não no
+// torneio inteiro): numa Fase de Grupos com 72 jogos, quando os 72 saem → 100% (e o botão
+// de avançar fase aparece). Rodadas de grupos diferentes se encavalam → escopar por RODADA
+// enganaria; a fase toda é a medida certa. Torneio inteiro segue na barra roxa (_gp).
+window._currentPhaseGames = function (t) {
+  var idx = (t && t.currentPhaseIndex) || 0;
+  var total = _materializedPhaseGames(t, idx);
+  var done = _completedPhaseGames(t, idx);
+  if (total < done) total = done;
+  return { total: total, done: done, pct: total > 0 ? Math.round(done / total * 100) : 0, phaseIndex: idx };
 };
 
 // Janela PROGRAMADA do TORNEIO INTEIRO: início = MENOR data de início entre todas
@@ -953,14 +1005,17 @@ window._phaseCurrentRoundProgress = function(t) {
 // HTML interno (recomputado a cada tick).
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
-  // Multi-fase (ex.: Suíço classificatória → eliminatória): o "N/N partidas" e a barra
-  // do header refletem o TORNEIO INTEIRO (soma TODAS as fases via _tournamentGamesPlan),
-  // não só a fase atual — senão a classificatória sozinha aparece 100% (bug reportado).
-  // Liga tem escopo-de-rodada próprio no ramo _isLiga abaixo (que re-sobrepõe este prog).
-  if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentGamesPlan === 'function') {
-    var _gpHead = window._tournamentGamesPlan(t);
-    if (_gpHead && _gpHead.totalPlanned > 0) {
-      prog = { total: _gpHead.totalPlanned, completed: _gpHead.totalDone, pct: _gpHead.pct };
+  // v4.4.48: Multi-fase (ex.: Fase de Grupos → Eliminatória): a barra VERDE do topo reflete
+  // a FASE ATUAL (só o estágio corrente). Numa classificatória de 72 jogos, quando os 72
+  // saem → 100% e o botão "avançar de fase" aparece — é o que o dono quer VER no topo. O
+  // TORNEIO INTEIRO (soma todas as fases) vive na barra ROXA "🏆 Torneio completo" (_gp).
+  // Rodadas de grupos diferentes se encavalam → escopar por rodada enganaria; a fase toda é
+  // a medida certa. Liga (Pontos Corridos) e fase posterior de chave têm escopo-de-rodada
+  // próprio nos ramos _isLiga / _inLaterPhase abaixo (que re-sobrepõem este prog).
+  if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._currentPhaseGames === 'function') {
+    var _cpHead = window._currentPhaseGames(t);
+    if (_cpHead && _cpHead.total > 0) {
+      prog = { total: _cpHead.total, completed: _cpHead.done, pct: _cpHead.pct };
     }
   }
   if (!prog.total) return '';
@@ -1067,7 +1122,14 @@ window._buildProgressInner = function(t) {
       // no multi-fase _thisDraw vem de drawFirstDate+intervalo (que NÃO se aplica) e
       // gerava "INÍCIO REAL 21/06 (futuro/passado) + DECORRIDO 0/21h". Sem ponto jogado
       // → actualStart null → _notStarted true → selo "⏳ Aguardando início".
-      actualStart = _roundStart || null;
+      // v4.4.66: AUTO-DRAW (drawManual!==true) — a rodada foi sorteada automaticamente e já está
+      // VALENDO a partir do início PROGRAMADO da fase; não é "aguardando início" (não há botão de
+      // iniciar — é automático). Sem 1º ponto ainda, se a rodada está sorteada (_rTotal>0) e o
+      // início programado (schedStart) já passou, usa schedStart como início real → "em andamento".
+      // Antes do horário programado (ou manual) segue "aguardando início".
+      if (_roundStart) actualStart = _roundStart;
+      else if (t.drawManual !== true && _rTotal > 0 && schedStart && now >= schedStart) actualStart = schedStart;
+      else actualStart = null;
       _labelSchedStart = 'início programado';
       _labelSchedEnd = 'final programado';
     }
@@ -1646,6 +1708,73 @@ window._ligaElapsedSinceTs = function (t) {
     return null;
 };
 
+// v4.4.x: início (ms) da RODADA ATUAL da Liga — pra "Rodada em andamento" (tempo decorrido
+// da rodada, não do torneio). Mesma regra do progresso: 1º ponto real da rodada (m.startedAt);
+// sem ponto ainda, cai no horário PROGRAMADO do sorteio desta rodada (drawFirstDate + ri*intervalo);
+// sem agendamento (sorteio manual), usa createdAt/drawnAt da rodada. null se não há rodada.
+window._ligaCurrentRoundStartTs = function (t) {
+    if (!t || !Array.isArray(t.rounds) || !t.rounds.length) return null;
+    var _ri = t.rounds.length - 1;
+    var _curR = t.rounds[_ri] || {};
+    var _rMatches = (_curR.matches || []).filter(function (m) { return !m.isSitOut; });
+    var _starts = _rMatches.map(function (m) { return m.startedAt ? (+m.startedAt) : 0; }).filter(function (x) { return x; });
+    if (_starts.length) return Math.min.apply(null, _starts); // 1º ponto real da rodada
+    var _fdStr = String(t.drawFirstDate || '').indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate ? (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')) : '');
+    var _firstDrawMs = _fdStr ? new Date(_fdStr).getTime() : NaN;
+    if (!isNaN(_firstDrawMs)) {
+        var _intvDays = parseInt(t.drawIntervalDays) || 7; if (_intvDays < 1) _intvDays = 1;
+        return _firstDrawMs + _ri * (_intvDays * 86400000);
+    }
+    var _rt = _curR.createdAt || _curR.drawnAt || _curR.at; // sorteio manual: carimbo da rodada
+    if (_rt) { var _rm = new Date(_rt).getTime(); if (!isNaN(_rm)) return _rm; }
+    return null;
+};
+
+// v4.4.x: fim (ms) da RODADA ATUAL da Liga QUANDO todos os resultados já foram lançados
+// (todas as partidas não-folga têm vencedor). = último placar concluído (max m.resultAt) ou
+// completedAt da rodada. null se a rodada AINDA não encerrou (ou não dá pra carimbar o fim) →
+// nesse caso o relógio segue "em andamento". Usado pra CONGELAR o relógio em "Rodada encerrada".
+window._ligaCurrentRoundEndTs = function (t) {
+    if (!t || !Array.isArray(t.rounds) || !t.rounds.length) return null;
+    var _curR = t.rounds[t.rounds.length - 1] || {};
+    var _rMatches = (_curR.matches || []).filter(function (m) { return !m.isSitOut; });
+    if (!_rMatches.length) return null;
+    var _allDone = _rMatches.every(function (m) { return !!m.winner || m.isBye; });
+    if (!_allDone) return null; // rodada não encerrada
+    var _ends = _rMatches.map(function (m) { return m.resultAt ? (+m.resultAt) : 0; }).filter(function (x) { return x; });
+    if (_ends.length) return Math.max.apply(null, _ends);
+    if (_curR.completedAt) { var _c = new Date(_curR.completedAt).getTime(); if (!isNaN(_c)) return _c; }
+    return null; // encerrada mas sem carimbo de fim → não congela com valor errado
+};
+
+// v4.4.x: FONTE ÚNICA do indicador da RODADA ATUAL. Enquanto a rodada roda → "▶️ Rodada em
+// andamento" com o tempo decorrido tickando (data-elapsed-since). Quando TODOS os resultados
+// foram lançados → "🏁 Rodada encerrada" com a DURAÇÃO TOTAL CONGELADA (sem data-elapsed-since,
+// não conta mais). Qualquer box que mostre isso DEVE usar este helper — texto/semântica num só
+// lugar. Retorna os 3 <span> internos, ou '' quando não há rodada. O box (borda/fundo) é do chamador.
+//   color: cor do texto. opts: { iconSize, labelSize, valueSize }.
+window._ligaRoundInProgressRow = function (t, color, opts) {
+    var _since = (typeof window._ligaCurrentRoundStartTs === 'function' && window._ligaCurrentRoundStartTs(t))
+        || (typeof window._ligaElapsedSinceTs === 'function' && window._ligaElapsedSinceTs(t));
+    if (!_since || _since > Date.now()) return '';
+    opts = opts || {};
+    var _icon = opts.iconSize || '1.3rem', _lbl = opts.labelSize || '0.85rem', _val = opts.valueSize || '1.15rem';
+    var _endTs = (typeof window._ligaCurrentRoundEndTs === 'function') ? window._ligaCurrentRoundEndTs(t) : null;
+    var _valStyle = 'margin-left:auto;font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;';
+    var _lblStyle = 'font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    if (_endTs && _endTs >= _since) {
+        // ENCERRADA — relógio congelado na duração total (sem data-elapsed-since → não ticka).
+        var _dur = window._formatCountdown ? window._formatCountdown(_endTs - _since) : '';
+        return '<span style="font-size:' + _icon + ';flex-shrink:0;">🏁</span>' +
+            '<span style="' + _lblStyle + '">Rodada encerrada</span>' +
+            '<span style="' + _valStyle + '">' + _dur + '</span>';
+    }
+    var _txt = window._formatCountdown ? window._formatCountdown(Date.now() - _since) : '';
+    return '<span style="font-size:' + _icon + ';flex-shrink:0;">▶️</span>' +
+        '<span style="' + _lblStyle + '">Rodada em andamento</span>' +
+        '<span data-elapsed-since="' + _since + '" style="' + _valStyle + '">' + _txt + '</span>';
+};
+
 // Navigate to tournament detail and scroll to highlight the enrolled participant
 window._scrollToParticipant = function(tId, participantName) {
     // Guard: participantName pode ser null para inscritos sem nome (phone-only)
@@ -1807,7 +1936,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     }
     function fmtEnroll() {
         var m = t.enrollmentMode || 'individual';
-        return m === 'time' ? 'Apenas times' : m === 'misto' ? 'Misto (individual + times)' : 'Individual';
+        return (m === 'time' || m === 'teams') ? 'Apenas times' : m === 'misto' ? 'Misto (individual + times)' : 'Individual';
     }
     function fmtScoring() {
         var s = t.scoring;
@@ -1939,14 +2068,10 @@ window._buildTournamentConfigBox = function (t, opts) {
     // v4.x: sobre foto → tarja densa (_photoReadBox) + backdrop blur pra suavizar o fundo
     // agitado e garantir contraste do texto.
     var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);') : '';
-    // v2.7.47: persiste colapsado/expandido POR TORNEIO. Uma vez colapsado, fica
-    // colapsado (mesmo após re-render / mudança de versão); só expande se o usuário
-    // expandir. Sem estado salvo → usa o default (opts.open).
-    var _cfgKey = 'scoreplace_cfgbox_' + String((t && t.id) || '');
-    var _cfgSaved = null; try { _cfgSaved = localStorage.getItem(_cfgKey); } catch (e) {}
-    var _cfgOpen = (_cfgSaved === '1') ? true : (_cfgSaved === '0') ? false : !!(opts && opts.open);
-    var _cfgKeyJs = _cfgKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var openAttr = _cfgOpen ? ' open' : '';
+    // v4.4.x: SEMPRE colapsado por padrão — no DETALHE e na DASHBOARD (pedido do dono:
+    // "sempre fechado no detalhe e na dashboard"). Abre só quando o usuário clica (estado
+    // do <details> na sessão); sem persistência de "aberto" — todo render começa fechado.
+    var openAttr = '';
     // v4.x: TÍTULO = formatos das FASES juntos (ex.: "Pontos Corridos / Eliminatórias") —
     // multi-fase mostra as duas. O tipo de jogo (Duplas 2×2) desce pro digest, sem tanto peso.
     var _titleFmt = fmt;
@@ -1989,7 +2114,6 @@ window._buildTournamentConfigBox = function (t, opts) {
     // label "configuração ▾" do fim é cortada. O <span> do meio elipsa o texto
     // longo; o do fim nunca encolhe (flex-shrink:0 + nowrap) — fica sempre legível.
     return '<details class="info-box tourn-config-box"' + openAttr +
-        ' ontoggle="try{localStorage.setItem(\'' + _cfgKeyJs + '\', this.open?\'1\':\'0\')}catch(e){}"' +
         ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;' + bgStyle + '">' +
         '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;flex-direction:column;gap:3px;min-width:0;max-width:100%;">' +
         '<span style="display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;">' +

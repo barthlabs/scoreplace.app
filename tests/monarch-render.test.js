@@ -63,7 +63,10 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   const html = W._renderMonarchStage(t, false, false, { suppressAutoAdvance: true }) || '';
   ok(html.length > 100, '_renderMonarchStage produz HTML');
   ok(/<table/.test(html), 'render tem tabela de classificação');
-  ok(/CLASSIF/.test(html), 'render marca os classificados (CLASSIF.)');
+  // v4.4.117: a marcação de "quem classifica" é a TARJA VERDE na linha (rgba(34,197,94,0.10)),
+  // não mais o texto "CLASSIF." (removido). Vem da transição de fase (format2 mapping.rankTo)
+  // via _phaseClassifiedCount — 100% canônico. Antes o teste checava a string velha e falhava.
+  ok(/rgba\(34,\s*197,\s*94,\s*0\.1/.test(html), 'render marca os classificados (tarja verde, via format2)');
 })();
 
 // ---------- 3. COROA DO INVICTO: standings individuais + coroa quando alguém vence tudo ----------

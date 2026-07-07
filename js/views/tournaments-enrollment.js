@@ -442,7 +442,7 @@ window.enrollCurrentUser = function (tId) {
             showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
             return;
         }
-        if (t.enrollmentMode === 'time' && parseInt(t.teamSize || 2) > 1) {
+        if ((t.enrollmentMode === 'time' || t.enrollmentMode === 'teams') && parseInt(t.teamSize || 2) > 1) {
             // Duplas: inscreve como individual — a dupla é formada pela
             // seção "Sem Dupla" no torneio (arrastar e soltar).
             if (parseInt(t.teamSize || 2) === 2) {

@@ -4,12 +4,27 @@
 
 var _t = window._t || function(k) { return k; };
 
+// v4.4.45: torneio configurado no format2 já tem os grupos definidos (gruposCount/
+// gruposClassified) — não faz sentido re-perguntar a distribuição no Sortear. Fecha a
+// inscrição, salva e sorteia direto. Retorna true se tratou. DEFINIDA NO TOPO (não dentro
+// de _showGroupsConfigPanel) pra estar sempre disponível quando o gate do Sortear a chama.
+window._grupos_f2Direct = function(tId) {
+    var t = window._findTournamentById ? window._findTournamentById(tId) : null;
+    if (!t || !t.fmt2 || !(parseInt(t.gruposCount, 10) >= 1)) return false;
+    if (t.status !== 'closed') t.status = 'closed';
+    delete t._suspendedByPanel; delete t._previousStatus;
+    var _go = function() { if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId); };
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) { window.FirestoreDB.saveTournament(t).then(_go).catch(_go); }
+    else { _go(); }
+    return true;
+};
+
 // ============ UNIFIED RESOLUTION PANEL SYSTEM ============
 
 window._diagnoseAll = function(t) {
     const enrMode = t.enrollmentMode || t.enrollment || 'individual';
     let teamSize = parseInt(t.teamSize) || 1;
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
 
     const arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
 
@@ -17,6 +32,9 @@ window._diagnoseAll = function(t) {
     let preFormedTeams = 0;
     let individuals = 0;
     const incompleteTeams = [];
+    // v4.4.x: PESSOAS ≠ ENTRADAS — uma dupla é 2 pessoas, não 1 (regra do dono, nunca misturar).
+    // "Total inscritos" nos painéis é gente, não nº de cards. Soma os membros reais de cada entrada.
+    let totalPeople = 0;
 
     arr.forEach(function(p, idx) {
         const pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
@@ -28,14 +46,20 @@ window._diagnoseAll = function(t) {
                 incompleteTeams.push({ index: idx, name: pName, members: members, missing: teamSize - members.length });
             }
             preFormedTeams++;
+            totalPeople += members.length; // dupla completa = 2, incompleta = nº real
         } else {
             individuals++;
+            totalPeople += 1; // avulso = 1 pessoa
         }
     });
 
-    // Scenario A: Remainder (individuals that can't form teams)
-    const remainder = individuals % teamSize;
-    const completeTeamsFromIndividuals = Math.floor(individuals / teamSize);
+    // v4.4.x: DUPLAS FORMADAS (manual) — os avulsos NÃO se auto-formam por sorteio: são
+    // PENDÊNCIA (reabrir/formar/lista/exclusão). Então nenhum time sai dos avulsos e a pow2
+    // conta só os times FORMADOS; todos os avulsos entram como "resto" a resolver.
+    // Formação por SORTEIO (default) segue auto-formando os avulsos em duplas completas.
+    const _manualPair = (typeof window._isManualPairing === 'function') && window._isManualPairing(t);
+    const remainder = _manualPair ? individuals : (individuals % teamSize);
+    const completeTeamsFromIndividuals = _manualPair ? 0 : Math.floor(individuals / teamSize);
     const effectiveTeams = preFormedTeams + completeTeamsFromIndividuals;
 
     // Scenario B+C: Power of 2 check
@@ -57,6 +81,7 @@ window._diagnoseAll = function(t) {
         hasIssues: incompleteTeams.length > 0 || remainder > 0 || isOdd || !isPowerOf2,
         teamSize: teamSize,
         totalRawParticipants: arr.length,
+        totalPeople: totalPeople,
         individuals: individuals,
         preFormedTeams: preFormedTeams,
         effectiveTeams: effectiveTeams,
@@ -384,8 +409,16 @@ window._showRemainderPanel = function(tId, info, t) {
     var _totalPlayers = _arr.reduce(function(s, p) { return s + _playersOf(p); }, 0) || (info.effectiveTeams * _ts + info.remainder);
     var _maxTeams = Math.floor(_totalPlayers / _ts);
     var _targetTeams = _maxTeams >= 1 ? 1 : 0; while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
-    var teamsFormed = _targetTeams;
-    var remCount = _totalPlayers - (_targetTeams * _ts);
+    // v4.4.x: DUPLAS FORMADAS (manual) — o "resto" NÃO é sobra pra fechar potência de 2: são
+    // os AVULSOS que ficaram SEM DUPLA. Mostra as EQUIPES FORMADAS reais (não recompõe pow2)
+    // e X "sem dupla". Formação por SORTEIO segue a lógica antiga (pow2 do pool).
+    var _manualPair = (typeof window._isManualPairing === 'function') && _tObj && window._isManualPairing(_tObj);
+    var teamsFormed = _manualPair ? (info.preFormedTeams || 0) : _targetTeams;
+    var remCount = _manualPair ? (info.remainder || 0) : (_totalPlayers - (_targetTeams * _ts));
+    // Rótulos: dupla formada usa "sem dupla" / "equipes formadas"; sorteio mantém o legado.
+    var _lblTeamsFormed = _manualPair ? 'equipes formadas' : _t('predraw.teamsFormed');
+    var _lblRemainder = _manualPair ? 'sem dupla' : _t('predraw.remainderLabel');
+    var _lblWhatToDo = _manualPair ? 'O que fazer com quem ficou sem dupla?' : _t('predraw.whatToDo');
     var remLabel = remCount + ' ' + (remCount > 1 ? _t('predraw.unitParticipants') : _t('predraw.unitParticipantSingular'));
     var teamLabel = teamsFormed + ' ' + (teamsFormed > 1 ? _t('predraw.unitTeams') : _t('predraw.unitTeamSingular'));
 
@@ -406,8 +439,8 @@ window._showRemainderPanel = function(tId, info, t) {
             '<div style="display:flex;align-items:center;gap:10px;">' +
                 '<span style="font-size:1.3rem;">👥</span>' +
                 '<div>' +
-                    '<h3 style="margin:0;color:#ede9fe;font-size:1rem;font-weight:900;letter-spacing:-0.02em;">' + _t('predraw.remainderTitle') + '</h3>' +
-                    '<p style="margin:2px 0 0;color:#c4b5fd;font-size:0.72rem;">' + _t('predraw.remainderSubtitle', {label: remLabel, p: (remCount > 1 ? 'm' : '')}) + '</p>' +
+                    '<h3 style="margin:0;color:#ede9fe;font-size:1rem;font-weight:900;letter-spacing:-0.02em;">' + (_manualPair ? 'Participantes sem dupla' : _t('predraw.remainderTitle')) + '</h3>' +
+                    '<p style="margin:2px 0 0;color:#c4b5fd;font-size:0.72rem;">' + (_manualPair ? (remCount + ' sem dupla · ' + teamsFormed + ' equipe' + (teamsFormed > 1 ? 's' : '') + ' formada' + (teamsFormed > 1 ? 's' : '')) : _t('predraw.remainderSubtitle', {label: remLabel, p: (remCount > 1 ? 'm' : '')})) + '</p>' +
                 '</div>' +
             '</div>' +
             '<button onclick="window._cancelRemainderPanel(\'' + tIdSafe + '\')" style="background:rgba(0,0,0,0.25);color:#ede9fe;border:2px solid rgba(237,233,254,0.3);padding:6px 16px;border-radius:10px;font-weight:700;font-size:0.8rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\';this.style.borderColor=\'rgba(237,233,254,0.5)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.borderColor=\'rgba(237,233,254,0.3)\'">' + _t('predraw.cancelBtn') + '</button>' +
@@ -419,21 +452,21 @@ window._showRemainderPanel = function(tId, info, t) {
             '<div style="display:flex;gap:0.6rem;flex-wrap:wrap;">' +
                 '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
                     '<div style="font-size:1.4rem;font-weight:900;color:#a78bfa;line-height:1;">' + teamsFormed + '</div>' +
-                    '<div style="font-size:0.62rem;color:#c4b5fd;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _t('predraw.teamsFormed') + '</div>' +
+                    '<div style="font-size:0.62rem;color:#c4b5fd;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _lblTeamsFormed + '</div>' +
                 '</div>' +
                 '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
                     '<div style="font-size:1.4rem;font-weight:900;color:#f59e0b;line-height:1;">' + remCount + '</div>' +
-                    '<div style="font-size:0.62rem;color:#fcd34d;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _t('predraw.remainderLabel') + '</div>' +
+                    '<div style="font-size:0.62rem;color:#fcd34d;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _lblRemainder + '</div>' +
                 '</div>' +
                 '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
-                    '<div style="font-size:1.4rem;font-weight:900;color:#60a5fa;line-height:1;">' + info.totalRawParticipants + '</div>' +
+                    '<div style="font-size:1.4rem;font-weight:900;color:#60a5fa;line-height:1;">' + (info.totalPeople != null ? info.totalPeople : _totalPlayers) + '</div>' +
                     '<div style="font-size:0.62rem;color:#93c5fd;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _t('predraw.totalEnrolled') + '</div>' +
                 '</div>' +
             '</div>' +
         '</div>' +
         // Options
         '<div style="padding:0.85rem 1.25rem 1.1rem;">' +
-            '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.68rem;text-transform:uppercase;letter-spacing:1.8px;font-weight:700;">' + _t('predraw.whatToDo') + '</h4>' +
+            '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.68rem;text-transform:uppercase;letter-spacing:1.8px;font-weight:700;">' + _lblWhatToDo + '</h4>' +
             // Sorteio Geral toggle (default ON = random; OFF = last)
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:9px;">' +
                 '<div style="flex:1;min-width:0;">' +
@@ -575,29 +608,43 @@ window._executeRemoval = function(tId, mode, method) {
     if (!t) return;
 
     var arr = Array.isArray(t.participants) ? t.participants.slice() : [];
-    // v2.1.29: remove em PLAYERS até sobrar exatamente a maior potência de 2 de
-    // TIMES COMPLETOS — zero resto, zero BYE. Antes removia só o "remainder" (o
-    // avulso, 1), deixando nº de times fora da potência de 2 → BYE. Ex.: 19
-    // avulsos (dupla) → mantém 16 (8 duplas) e manda 3 pra espera.
     var _ts = parseInt(t.teamSize) || 1;
     var _enr = t.enrollmentMode || t.enrollment || 'individual';
-    if ((_enr === 'time' || _enr === 'misto') && _ts < 2) _ts = 2;
+    if (window._isTeamEnrollMode(_enr) && _ts < 2) _ts = 2;
     var _playersOf = function(p) { return window._entryTeamMembers(p) ? _ts : 1; }; // v3.0.x: time por estrutura, não por '/'
-    var _totalPlayers = arr.reduce(function(s, p) { return s + _playersOf(p); }, 0);
-    var _maxTeams = Math.floor(_totalPlayers / _ts);
-    var _targetTeams = _maxTeams >= 1 ? 1 : 0;
-    while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
-    var _playersToRemove = _totalPlayers - (_targetTeams * _ts);
+    var _manualPair = (typeof window._isManualPairing === 'function') && window._isManualPairing(t);
     var removed = [];
-    var _removedPlayers = 0;
-    if (method === 'last') {
-        while (_removedPlayers < _playersToRemove && arr.length > 0) {
-            var _e = arr.pop(); removed.unshift(_e); _removedPlayers += _playersOf(_e);
-        }
+    if (_manualPair) {
+        // v4.4.95: dupla FORMADA (formação manual) — os avulsos sem-dupla são
+        // INELEGÍVEIS (não têm com quem jogar). Move/exclui TODOS eles; os times
+        // já formados ficam intactos (a resolução pow2 roda depois só sobre eles).
+        // NUNCA calcula excedente pow2 sobre o pool inteiro de pessoas — era isso
+        // que deixava sem-dupla pra trás (34 pessoas → 32 → removia só 2 de 4).
+        var _keep = [];
+        arr.forEach(function(p) {
+            if (window._entryTeamMembers(p)) _keep.push(p); else removed.push(p);
+        });
+        arr = _keep;
     } else {
-        while (_removedPlayers < _playersToRemove && arr.length > 0) {
-            var _idx = Math.floor(Math.random() * arr.length);
-            var _e2 = arr.splice(_idx, 1)[0]; removed.push(_e2); _removedPlayers += _playersOf(_e2);
+        // v2.1.29: remove em PLAYERS até sobrar exatamente a maior potência de 2 de
+        // TIMES COMPLETOS — zero resto, zero BYE. Antes removia só o "remainder" (o
+        // avulso, 1), deixando nº de times fora da potência de 2 → BYE. Ex.: 19
+        // avulsos (dupla) → mantém 16 (8 duplas) e manda 3 pra espera.
+        var _totalPlayers = arr.reduce(function(s, p) { return s + _playersOf(p); }, 0);
+        var _maxTeams = Math.floor(_totalPlayers / _ts);
+        var _targetTeams = _maxTeams >= 1 ? 1 : 0;
+        while (_targetTeams * 2 <= _maxTeams) _targetTeams *= 2;
+        var _playersToRemove = _totalPlayers - (_targetTeams * _ts);
+        var _removedPlayers = 0;
+        if (method === 'last') {
+            while (_removedPlayers < _playersToRemove && arr.length > 0) {
+                var _e = arr.pop(); removed.unshift(_e); _removedPlayers += _playersOf(_e);
+            }
+        } else {
+            while (_removedPlayers < _playersToRemove && arr.length > 0) {
+                var _idx = Math.floor(Math.random() * arr.length);
+                var _e2 = arr.splice(_idx, 1)[0]; removed.push(_e2); _removedPlayers += _playersOf(_e2);
+            }
         }
     }
     var removeCount = removed.length;
@@ -656,10 +703,113 @@ window._phaseResToInfo = function(phaseCtx, t){
     var nonPow2 = sizes.filter(function(s){return s>1 && (s&(s-1))!==0;});
     var repr = nonPow2.length ? Math.max.apply(null,nonPow2) : Math.max.apply(null, sizes.concat([0]));
     var lo=_lo(repr), hi=lo*2;
+    // v4.4.108: as LINHAS da fase são CLASSIFICADOS (uma linha = um competidor que
+    // avança) — em torneio de duplas, cada linha é uma DUPLA, nunca uma pessoa. O
+    // medidor NÃO pode rotular isso como "inscritos" (pessoas). Deriva a unidade real
+    // do modo de inscrição pra rotular "duplas"/"times" corretamente. Regra de ouro:
+    // inscritos = PESSOAS; entrada de dupla = 2. Ver project_count_people_not_entries.
+    var _teamMode = !!(window._isTeamEnrollMode && window._isTeamEnrollMode(t && t.enrollmentMode));
+    var _tsz = parseInt(t && t.teamSize) || (_teamMode ? 2 : 1);
+    var _pUnit, _pUnitCenter;
+    if (_teamMode) {
+      var _isDupla = _tsz === 2;
+      _pUnit = _isDupla ? 'duplas' : 'times';
+      _pUnitCenter = _isDupla ? 'Duplas' : 'Times';
+    } else {
+      _pUnit = 'classificados';
+      _pUnitCenter = 'Classificados';
+    }
     return { hasIssues:true, isPowerOf2:(repr&(repr-1))===0, isOdd:(repr%2)===1,
       effectiveTeams:repr, loP2:lo, hiP2:hi, excess:Math.max(0,repr-lo), missing:Math.max(0,hi-repr),
       remainder:0, incompleteTeams:[], isTeam:false, teamSize:1, totalRawParticipants:repr,
-      _isPhase:true, _lines:(phaseCtx.lines||[]), _nLines:(phaseCtx.lines||[]).length, _nextIdx:phaseCtx.nextIdx, _nextName:phaseCtx.nextName };
+      _isPhase:true, _phaseTeamMode:_teamMode, _phaseTeamSize:_tsz, _phaseUnit:_pUnit, _phaseUnitCenter:_pUnitCenter,
+      _lines:(phaseCtx.lines||[]), _nLines:(phaseCtx.lines||[]).length, _nextIdx:phaseCtx.nextIdx, _nextName:phaseCtx.nextName };
+};
+
+// ============ INATIVOS NA TRANSIÇÃO DE FASE (v4.4.109 — staging) ============
+// Participantes que desativaram o toggle (ligaActive=false) não jogaram a classificatória,
+// então não têm colocação e somem da transição. Antes de montar as linhas da próxima fase,
+// o organizador decide: Incluir (formam duplas no fim da linha de baixo) / Lista de espera
+// (disponíveis pra W.O.) / Excluir (ficam de fora). Gate em advanceMultiPhase chama daqui.
+
+// Lista os inativos pendentes (objetos de participante). Vazio se auto-desativação está off.
+window._phasePendingInactives = function(t){
+    if (!t || t.allowSelfDeactivation === false) return [];
+    var allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    return allP.filter(function(p){ return p && typeof p === 'object' && p.ligaActive === false; });
+};
+
+// Aplica a escolha do organizador e retoma o avanço de fase.
+window._resolvePhaseInactives = function(tId, choice){
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var _niIdx = (t.currentPhaseIndex || 0) + 1;
+    var inativos = window._phasePendingInactives(t);
+    if (choice === 'standby') {
+        var _sb = Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : [];
+        var _have = {};
+        _sb.forEach(function(p){ var nm = (typeof p === 'string') ? p : (p && (p.displayName || p.name)); if (nm) _have[nm] = 1; });
+        inativos.forEach(function(p){ var nm = p.displayName || p.name; if (nm && !_have[nm]) { _sb.push(nm); _have[nm] = 1; } });
+        t.standbyParticipants = _sb;
+    } else if (choice === 'include') {
+        // Entram por classificação: como não jogaram (0 pts), são os piores → pior linha.
+        // Reativa (ligaActive=true) pra ficarem consistentes no resto do app.
+        if (t.phases && t.phases[_niIdx]) t.phases[_niIdx]._includeInactive = inativos.slice();
+        var _allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+        inativos.forEach(function(inp){
+            var _nm = inp && (inp.displayName || inp.name);
+            _allP.forEach(function(p){ if (p && typeof p === 'object' && (p.displayName || p.name) === _nm) p.ligaActive = true; });
+        });
+    }
+    // 'exclude' → nada a fazer (não entram na próxima fase)
+    t._inactiveResolvedPhase = _niIdx;
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+    var _p = document.getElementById('inactive-phase-panel'); if (_p) _p.remove();
+    document.body.style.overflow = '';
+    if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+};
+
+// Painel: 3 opções (Incluir / Lista de espera / Excluir). Mesma linguagem visual âmbar
+// do painel de resolução de potência de 2, mas ação direta (sem Nash).
+window._showInactivePhasePanel = function(tId, inativos){
+    inativos = inativos || [];
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var tIdSafe = String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var _n = inativos.length;
+    var _names = inativos.map(function(p){ return window._safeHtml((p && (p.displayName || p.name)) || 'Participante'); });
+    var _namesStr = _names.slice(0, 8).join(' · ') + (_names.length > 8 ? ' · +' + (_names.length - 8) : '');
+    var existing = document.getElementById('inactive-phase-panel'); if (existing) existing.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'inactive-phase-panel';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
+    document.body.style.overflow = 'hidden';
+    function _optCard(choice, icon, title, desc, accent){
+        return '<button onclick="window._spinButton&&window._spinButton(this,\'Aplicando…\'); window._resolvePhaseInactives(\'' + tIdSafe + '\', \'' + choice + '\')" ' +
+            'style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.04);border:1.5px solid ' + accent + ';border-radius:14px;padding:13px 15px;margin-bottom:10px;cursor:pointer;transition:all 0.15s;" ' +
+            'onmouseover="this.style.background=\'rgba(255,255,255,0.09)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.04)\'">' +
+            '<div style="font-size:0.98rem;font-weight:800;color:var(--text-bright,#f8fafc);margin-bottom:3px;">' + icon + ' ' + title + '</div>' +
+            '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.45;">' + desc + '</div>' +
+        '</button>';
+    }
+    overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">' +
+        '<div style="background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:14px 1.4rem;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+            '<div style="display:flex;align-items:center;gap:12px;">' +
+                '<span style="font-size:1.5rem;flex-shrink:0;">😴</span>' +
+                '<div style="min-width:0;">' +
+                    '<h3 style="margin:0;color:#fef3c7;font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">Participantes inativos</h3>' +
+                    '<p style="margin:2px 0 0;color:#fde68a;font-size:0.75rem;opacity:0.9;">' + _n + (_n === 1 ? ' participante desativou' : ' participantes desativaram') + ' a participação e não jogaram esta fase</p>' +
+                '</div>' +
+            '</div>' +
+        '</div>' +
+        '<div style="padding:16px 1.4rem;overflow-y:auto;">' +
+            '<div style="font-size:0.76rem;color:var(--text-muted,#94a3b8);background:rgba(148,163,184,0.08);border-radius:10px;padding:8px 11px;margin-bottom:14px;line-height:1.5;">' + _namesStr + '</div>' +
+            _optCard('include', '➕', 'Incluir na eliminatória', 'Entram por classificação, igual aos ativos: sobem ou descem de linha conforme os pontos que somaram. Quem não jogou fica com 0 e cai na linha de baixo.', 'rgba(74,222,128,0.5)') +
+            _optCard('standby', '⏱️', 'Lista de espera', 'Ficam disponíveis pra substituir num W.O., mas não entram na chave agora.', 'rgba(251,191,36,0.5)') +
+            _optCard('exclude', '🚫', 'Excluir da próxima fase', 'Ficam de fora da eliminatória. Continuam inscritos no torneio.', 'rgba(248,113,113,0.45)') +
+        '</div>' +
+    '</div>';
+    document.body.appendChild(overlay);
 };
 
 window.showUnifiedResolutionPanel = function(tId) {
@@ -691,6 +841,7 @@ window.showUnifiedResolutionPanel = function(tId) {
             // de "resto/potência de 2" da eliminatória. Só caímos no painel padrão se
             // houver TIMES INCOMPLETOS de verdade (duplas pré-formadas faltando membro).
             if (_diagG.incompleteTeams.length === 0) {
+                if (typeof window._grupos_f2Direct === 'function' && window._grupos_f2Direct(tId)) return; // format2 → sorteia direto
                 window._showGroupsConfigPanel(tId);
                 return;
             }
@@ -823,8 +974,9 @@ window.showUnifiedResolutionPanel = function(tId) {
     // v4.0.68: resumo por opção = TÍTULO (nome da opção) + passos (processo → chave).
     // A estimativa de tempo vem do _unifiedEstData. Mostrado no detalhe sticky ao
     // selecionar. Formato pedido pelo dono (ex. Play-in).
-    var _uUnit = info.isTeam ? 'times' : 'participantes';
-    var _uUnit1 = info.isTeam ? 'time' : 'participante';
+    // v4.4.108: em transição de FASE, a unidade é a real (duplas/times), nunca "participantes".
+    var _uUnit = info._isPhase ? info._phaseUnit : (info.isTeam ? 'times' : 'participantes');
+    var _uUnit1 = info._isPhase ? (info._phaseUnit || '').replace(/s$/, '') : (info.isTeam ? 'time' : 'participante');
     var _uG = Math.floor(info.effectiveTeams / 2);
     var _nBL = Math.max(0, info.loP2 - _uG), _nMiss = info.missing, _nExc = info.excess;
     // Repescagem — texto SIMPLIFICADO (a lógica EXATA vive em genTierBracket/phases-engine
@@ -845,7 +997,8 @@ window.showUnifiedResolutionPanel = function(tId) {
         exclusion: { title: _t('predraw.optExclusionTitle'), lines: ['Chave de ' + info.loP2, (_nExc === 1 ? 'O último é removido do torneio' : 'Os ' + _nExc + ' últimos são removidos do torneio')] },
         swiss:     { title: _t('predraw.optSwissTitle'),     lines: ['Troca pro formato Suíço', 'Todos jogam várias rodadas, sem eliminação direta', 'Classificação por pontos'] },
         dissolve:  { title: _t('predraw.optDissolveTitle'),  lines: ['Desfaz os times incompletos em jogadores individuais', 'Re-sorteia as duplas'] },
-        poll:      { title: _t('predraw.optPollTitle'),      lines: ['Cria uma enquete pros participantes', 'Eles votam na solução a aplicar'] }
+        poll:      { title: _t('predraw.optPollTitle'),      lines: ['Cria uma enquete pros participantes', 'Eles votam na solução a aplicar'] },
+        promote:   { title: 'Promover linha',                lines: ['A melhor dupla da linha de baixo sobe pra de cima', 'Rebalanceia (cima +1, baixo −1)', 'Se ainda sobrar, você escolhe BYE/repescagem'] }
     };
 
     // Render function (allows re-rendering on exclude)
@@ -871,9 +1024,11 @@ window.showUnifiedResolutionPanel = function(tId) {
         // Dynamic descriptions based on context
         var _remLabel = info.remainder > 0 ? info.remainder + ' ' + (info.remainder > 1 ? _t('predraw.unitParticipants') : _t('predraw.unitParticipantSingular')) : '';
         var _excessLabel = info.excess > 0
-            ? info.excess + ' ' + (info.isTeam
-                ? (info.excess > 1 ? _t('predraw.unitTeams') : _t('predraw.unitTeamSingular'))
-                : (info.excess > 1 ? _t('predraw.unitParts') : _t('predraw.unitParticipantSingular')))
+            ? info.excess + ' ' + (info._isPhase
+                ? (info.excess > 1 ? info._phaseUnit : (info._phaseUnit || '').replace(/s$/, ''))
+                : (info.isTeam
+                    ? (info.excess > 1 ? _t('predraw.unitTeams') : _t('predraw.unitTeamSingular'))
+                    : (info.excess > 1 ? _t('predraw.unitParts') : _t('predraw.unitParticipantSingular'))))
             : '';
         var _standbyDesc = info.remainder > 0
             ? _t('predraw.standbyRemDesc', {label: _remLabel})
@@ -891,7 +1046,8 @@ window.showUnifiedResolutionPanel = function(tId) {
             { key: 'exclusion', icon: '🚫', title: _t('predraw.optExclusionTitle'), desc: _exclusionDesc },
             { key: 'swiss', icon: '🏅', title: _t('predraw.optSwissTitle'), desc: _t('predraw.optSwissDesc') },
             { key: 'dissolve', icon: '🧩', title: _t('predraw.optDissolveTitle'), desc: _t('predraw.optDissolveDesc') },
-            { key: 'poll', icon: '🗳️', title: _t('predraw.optPollTitle'), desc: _t('predraw.optPollDesc') }
+            { key: 'poll', icon: '🗳️', title: _t('predraw.optPollTitle'), desc: _t('predraw.optPollDesc') },
+            { key: 'promote', icon: '⬆️', title: 'Promover linha', desc: 'A melhor dupla da linha de baixo sobe pra completar a de cima. Rebalanceia o resto; se ainda não fechar, você escolhe BYE/repescagem.' }
         ];
 
         // Filter options based on context
@@ -905,7 +1061,10 @@ window.showUnifiedResolutionPanel = function(tId) {
         let activeOptions = allOptions.filter(function(o) {
             if (excludedKeys.indexOf(o.key) !== -1) return false;
             if (t._phaseResInfo) {
-                if (['playin','standby','bye','exclusion'].indexOf(o.key) === -1) return false;
+                // v4.4.111: "Promover linha" só faz sentido com 2+ linhas (sobe da pior pra melhor).
+                var _phaseAllowed = ['playin','standby','bye','exclusion'];
+                if ((t._phaseResInfo.lines || []).length >= 2) _phaseAllowed.push('promote');
+                if (_phaseAllowed.indexOf(o.key) === -1) return false;
                 if (o.key === 'bye' && _phaseNextIsDupla) return false;
                 return true;
             }
@@ -924,7 +1083,8 @@ window.showUnifiedResolutionPanel = function(tId) {
             exclusion: { f: 3,  i: 2,  e: 10 },
             swiss:     { f: 9,  i: 10, e: 5 },
             dissolve:  { f: 7,  i: 7,  e: 4 },
-            poll:      { f: 10, i: 10, e: 2 }
+            poll:      { f: 10, i: 10, e: 2 },
+            promote:   { f: 8,  i: 10, e: 7 }
         };
 
         // Boost effort for reopen if missing is small
@@ -1115,6 +1275,18 @@ window.showUnifiedResolutionPanel = function(tId) {
         if (t._phaseResInfo) {
             var _pi = t._phaseResInfo;
             var _idx = (_pi.nextIdx != null) ? _pi.nextIdx : ((t.currentPhaseIndex||0)+1);
+            // v4.4.111: PROMOVER LINHA — não é uma resolução de chave; rebalanceia (sobe 1
+            // da linha de baixo pra de cima) e RE-AVALIA. Se ainda não fechar em pow2, o
+            // painel reaparece com as contagens novas pro organizador escolher BYE/repescagem
+            // (ou promover de novo). Ver project_phase_inactive_resolution.
+            if (option === 'promote') {
+                if (t.phases && t.phases[_idx]) t.phases[_idx]._promoteLines = (parseInt(t.phases[_idx]._promoteLines, 10) || 0) + 1;
+                delete t._phaseResInfo;
+                var _pp2 = document.getElementById('unified-resolution-panel'); if (_pp2) _pp2.remove();
+                document.body.style.overflow = '';
+                if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+                return;
+            }
             if (t.phases && t.phases[_idx]) t.phases[_idx].bracketResolution = option;
             delete t._phaseResInfo;
             var _pp = document.getElementById('unified-resolution-panel'); if (_pp) _pp.remove();
@@ -1158,14 +1330,23 @@ window.showUnifiedResolutionPanel = function(tId) {
 
     // Build the panel HTML
     let gaugeHtml = '';
-    var _centerLabel = info.isTeam ? _t('predraw.gaugeCenterTeams') : _t('predraw.gaugeCenterParts');
-    var _centerSub = info.isTeam ? '(' + info.totalRawParticipants + ' ' + _t('predraw.unitParticipants') + ')' : '';
-    var _loSub = info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.loP2 * info.teamSize}) : _t('predraw.gaugeCenterParts');
-    var _hiSub = info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.hiP2 * info.teamSize}) : _t('predraw.gaugeCenterParts');
+    // v4.4.108: transição de FASE → as linhas são CLASSIFICADOS (duplas/times em
+    // torneio de duplas), NUNCA "inscritos" (pessoas). Usa a unidade real derivada
+    // em _phaseResToInfo. Fora de fase (resolução de inscrição), mantém o comportamento
+    // antigo (isTeam → times; senão inscritos).
+    var _isPhaseGauge = !!info._isPhase;
+    var _centerLabel = _isPhaseGauge ? info._phaseUnitCenter
+        : (info.isTeam ? _t('predraw.gaugeCenterTeams') : _t('predraw.gaugeCenterParts'));
+    var _centerSub = (!_isPhaseGauge && info.isTeam) ? '(' + (info.totalPeople != null ? info.totalPeople : info.totalRawParticipants) + ' ' + _t('predraw.unitParticipants') + ')' : '';
+    var _loSub = _isPhaseGauge ? info._phaseUnit
+        : (info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.loP2 * info.teamSize}) : _t('predraw.gaugeCenterParts'));
+    var _hiSub = _isPhaseGauge ? info._phaseUnit
+        : (info.isTeam ? _t('predraw.gaugeTeamsLabel', {n: info.hiP2 * info.teamSize}) : _t('predraw.gaugeCenterParts'));
 
     var _excessCount = info.effectiveTeams - info.loP2;
     var _missingCount = info.hiP2 - info.effectiveTeams;
-    var _unitLabel = info.isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts');
+    var _unitLabel = _isPhaseGauge ? info._phaseUnit
+        : (info.isTeam ? _t('predraw.unitTeams') : _t('predraw.unitParts'));
 
     // v4.2.3 (pedido do dono): NOMES DAS LINHAS acima do medidor de potência de 2 —
     // cada linha numa row própria ("Ouro (25)", quebra, "Prata (25)"). Só em transição
@@ -1384,7 +1565,7 @@ window._soloManualPairPage = function (tId) {
 window.checkIncompleteTeams = function (t) {
     const enrMode = t.enrollmentMode || t.enrollment || 'individual';
     let teamSize = parseInt(t.teamSize) || 1;
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
     const participants = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
 
     const incomplete = [];
@@ -1578,7 +1759,7 @@ window._saveDissolveResolution = function (tId) {
 
     var enrMode = t.enrollmentMode || t.enrollment || 'individual';
     var teamSize = parseInt(t.teamSize) || 1;
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
 
     var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     var newParts = [];
@@ -1641,7 +1822,7 @@ window.checkOddEntries = function (t) {
     var arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     var teamSize = parseInt(t.teamSize) || 1;
     var enrMode = t.enrollmentMode || t.enrollment || 'individual';
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
 
     var preFormedTeams = 0, individuals = 0;
     arr.forEach(function(p) {
@@ -1719,7 +1900,7 @@ window.checkPowerOf2 = function (t) {
     const arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     let teamSize = parseInt(t.teamSize) || 1;
     const enrMode = t.enrollmentMode || t.enrollment || 'individual';
-    if ((enrMode === 'time' || enrMode === 'misto') && teamSize < 2) teamSize = 2;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
 
     // Count effective bracket entries (teams or individuals)
     let preFormedTeams = 0;
@@ -2984,6 +3165,7 @@ window.toggleRegistrationStatus = function (tId) {
                 return;
             }
         }
+        if (typeof window._grupos_f2Direct === 'function' && window._grupos_f2Direct(tId)) return; // format2 → sorteia direto
         window._showGroupsConfigPanel(tId);
         return;
     }

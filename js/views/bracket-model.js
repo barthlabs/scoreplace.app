@@ -396,6 +396,51 @@
     return cols;
   }
 
+  // ── FONTE ÚNICA Rei/Rainha: normalizador de escrita (persistência) ─────────
+  // v4.4.70: casa canônica ÚNICA do fold. Remove `group.matches` do payload e
+  // deixa só `matchIds` — round.matches continua a única lista de jogos gravada.
+  // Sem isto o Firestore grava cada jogo Rei/Rainha DUAS vezes (round.matches +
+  // monarchGroups[i].matches) e as cópias divergem ao carregar.
+  //
+  // Roda no deep-clone do save (NÃO na memória, que mantém group.matches como
+  // referências hidratadas). Idempotente. Trata `data.rounds[]` (Fase 0) E
+  // `data.phaseRounds[k].rounds[]` (Liga multi-fase) — a mesma duplicação
+  // acontece nas rodadas de fase posterior.
+  //
+  // Vive aqui (bracket-model.js, arquivo vendored p/ functions-autodraw) para ser
+  // FONTE ÚNICA: tanto o cliente (firebase-db.js) quanto o servidor (autoDraw,
+  // via draw-core shim) chamam ESTA função antes de gravar. Zero drift, zero
+  // segundo lugar pra esquecer de foldar.
+  function _foldRoundsArray(rounds) {
+    if (!Array.isArray(rounds)) return;
+    rounds.forEach(function (r) {
+      if (!r || !Array.isArray(r.monarchGroups)) return;
+      r.monarchGroups.forEach(function (g) {
+        if (!g || !Array.isArray(g.matches)) return;
+        if (!Array.isArray(g.matchIds) || !g.matchIds.length) {
+          g.matchIds = g.matches
+            .map(function (m) { return m && m.id; })
+            .filter(function (x) { return x != null; })
+            .map(String);
+        }
+        delete g.matches; // fonte única = round.matches
+      });
+    });
+  }
+  window._foldMonarchGroups = function _foldMonarchGroups(data) {
+    if (!data) return data;
+    _foldRoundsArray(data.rounds);
+    // phaseRounds: objeto { [phaseIndex]: { rounds: [...] } } — Liga incremental
+    // de fase posterior. Mesma duplicação Rei/Rainha; folda também.
+    if (data.phaseRounds && typeof data.phaseRounds === 'object') {
+      Object.keys(data.phaseRounds).forEach(function (k) {
+        var slot = data.phaseRounds[k];
+        if (slot && Array.isArray(slot.rounds)) _foldRoundsArray(slot.rounds);
+      });
+    }
+    return data;
+  };
+
   // ── Canonical write helper ────────────────────────────────────────────────
   // Append matches (and optional monarchGroups) into the correct legacy field
   // on t based on the column's phase. Generators should prefer this over
@@ -446,9 +491,36 @@
       if (Array.isArray(desc.monarchGroups)) col.monarchGroups = desc.monarchGroups.slice();
       t.rounds[idx] = col;
     } else {
-      existing.matches = existing.matches.concat(desc.matches);
+      // v4.4.113: GUARDA contra re-append — se a rodada for re-gerada (auto-draw
+      // disparando 2×, re-sorteio, race), NÃO duplica jogos já presentes. Sem isto,
+      // o concat criava cópias do mesmo jogo com IDs diferentes → games/participação
+      // DOBRAVAM nos Pontos Avançados. Chave: id OU (rodada + grupo + times ordenados).
+      var _lk = function (m) {
+        if (!m) return '';
+        var s1 = Array.isArray(m.team1) ? m.team1.slice().sort().join(',') : String(m.p1 || '');
+        var s2 = Array.isArray(m.team2) ? m.team2.slice().sort().join(',') : String(m.p2 || '');
+        // v4.4.114: SEM monarchGroup — a re-geração põe os mesmos times num índice de grupo
+        // diferente; os times já identificam o jogo dentro da rodada.
+        return String(m.round || 0) + '|' + (m.category || '') + '|' + (m.isSitOut ? ('so:' + (m.p1 || '')) : [s1, s2].sort().join('__'));
+      };
+      var _have = {};
+      (existing.matches || []).forEach(function (m) { if (m) { if (m.id != null) _have['id:' + m.id] = 1; _have['lk:' + _lk(m)] = 1; } });
+      var _fresh = (desc.matches || []).filter(function (m) {
+        if (!m) return false;
+        if (m.id != null && _have['id:' + m.id]) return false;
+        if (_have['lk:' + _lk(m)]) return false;
+        return true;
+      });
+      existing.matches = existing.matches.concat(_fresh);
       if (Array.isArray(desc.monarchGroups)) {
-        existing.monarchGroups = (existing.monarchGroups || []).concat(desc.monarchGroups);
+        // dedup grupos monarca por assinatura dos jogadores (grupo re-gerado = mesmos 4).
+        var _haveG = {};
+        (existing.monarchGroups || []).forEach(function (g) { if (g) _haveG[(g.players || []).slice().sort().join(',')] = 1; });
+        var _freshG = desc.monarchGroups.filter(function (g) {
+          var sig = (g && g.players || []).slice().sort().join(',');
+          if (_haveG[sig]) return false; _haveG[sig] = 1; return true;
+        });
+        existing.monarchGroups = (existing.monarchGroups || []).concat(_freshG);
       }
       if (desc.format) existing.format = desc.format;
     }

@@ -274,10 +274,14 @@ function mkT() {
   // (c) preenchido → pill 🔁 + Reverter; ausente CONTINUA na tabela (vermelho) e o
   // substituto é ACRESCENTADO (g.players já reescrito pelo _rewriteSlot no fluxo real).
   var _origPlayers = g.players.slice();
-  g.players = g.players.map(function (n) { return n === absent ? 'Sub Real' : n; });
+  var _origPUids = Array.isArray(g.playersUids) ? g.playersUids.slice() : null;
+  // v4.4.117: espelha o _rewriteSlot REAL — troca nome E uid do slot (substituto convidado
+  // sem conta → uid null). Sem nullar o uid, o slot ficaria com o uid do ausente e a
+  // classificação por uid confundiria os dois (era o que o dono via).
+  g.players = g.players.map(function (n, i) { if (n === absent) { if (Array.isArray(g.playersUids)) g.playersUids[i] = null; return 'Sub Real'; } return n; });
   g.matches.forEach(function (m) {
-    if (Array.isArray(m.team1)) m.team1 = m.team1.map(function (n) { return n === absent ? 'Sub Real' : n; });
-    if (Array.isArray(m.team2)) m.team2 = m.team2.map(function (n) { return n === absent ? 'Sub Real' : n; });
+    if (Array.isArray(m.team1)) m.team1 = m.team1.map(function (n, i) { if (n === absent) { if (Array.isArray(m.team1Uids)) m.team1Uids[i] = null; return 'Sub Real'; } return n; });
+    if (Array.isArray(m.team2)) m.team2 = m.team2.map(function (n, i) { if (n === absent) { if (Array.isArray(m.team2Uids)) m.team2Uids[i] = null; return 'Sub Real'; } return n; });
     if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
   });
   g.subStatus = 'filled'; g.subName = 'Sub Real'; g.subIsGuest = false;
@@ -289,9 +293,11 @@ function mkT() {
 
   // (d) REVERTIDO → substituto some da tabela; ausente volta à posição normal (sem cor/tag)
   g.players = _origPlayers.slice();
+  if (_origPUids && Array.isArray(g.playersUids)) g.playersUids = _origPUids.slice();
+  var _absUid = _origPUids ? _origPUids[1] : null; // ausente estava no índice 1
   g.matches.forEach(function (m) {
-    if (Array.isArray(m.team1)) m.team1 = m.team1.map(function (n) { return n === 'Sub Real' ? absent : n; });
-    if (Array.isArray(m.team2)) m.team2 = m.team2.map(function (n) { return n === 'Sub Real' ? absent : n; });
+    if (Array.isArray(m.team1)) m.team1 = m.team1.map(function (n, i) { if (n === 'Sub Real') { if (Array.isArray(m.team1Uids)) m.team1Uids[i] = _absUid; return absent; } return n; });
+    if (Array.isArray(m.team2)) m.team2 = m.team2.map(function (n, i) { if (n === 'Sub Real') { if (Array.isArray(m.team2Uids)) m.team2Uids[i] = _absUid; return absent; } return n; });
     if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
   });
   delete g.woAbsent; delete g.subStatus; delete g.subName; delete g.subIsGuest;

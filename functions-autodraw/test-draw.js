@@ -234,5 +234,52 @@ console.log('   colunas geradas: ' + tc.rounds.length + ' · jogadores sorteados
   assert(W._nextOwedDrawMs(Object.assign({}, base, { status: 'finished' }), first + day) == null, 'finished → null');
 })();
 
+// ─── v4.4.70 FONTE ÚNICA: fold server-side grava a forma canônica ────────────
+// Prova que o autoDraw, ao normalizar o payload com a MESMA função vendored do
+// cliente (window._foldMonarchGroups), grava grupos Rei/Rainha só com matchIds
+// (sem group.matches embutido) e mantém round.matches como fonte única. Sem
+// isto, o sorteio do SERVIDOR regravava cada jogo em dobro.
+(function testFoldMonarchGroupsPersist() {
+  console.log('\n[FONTE ÚNICA] fold server-side → grupos só com matchIds, round.matches intacto');
+  const W = require('./draw-core.js')._window;
+  assert(typeof W._foldMonarchGroups === 'function', 'window._foldMonarchGroups exposto no vendor (bracket-model.js)');
+
+  const tf = mkConfra(80);
+  generateLigaRound(tf, new Date('2026-06-14T19:00:00-03:00'));
+  const memCol = tf.rounds[0];
+  const memGroups = memCol.monarchGroups || [];
+  // Em memória (pré-fold) os grupos carregam matches embutidos (refs).
+  assert(memGroups.length > 0 && Array.isArray(memGroups[0].matches), 'pré-fold: grupos têm group.matches embutido (memória)');
+
+  // Simula o que o autoDraw grava: clona rounds e folda (não muta a memória).
+  const payload = { rounds: JSON.parse(JSON.stringify(tf.rounds)) };
+  W._foldMonarchGroups(payload);
+  const col = payload.rounds[0];
+  const groups = col.monarchGroups || [];
+  const flatIds = new Set((col.matches || []).map(m => String(m.id)));
+
+  let embedded = 0, missingIds = 0, danglingIds = 0, totalIds = 0;
+  groups.forEach(g => {
+    if ('matches' in g) embedded++;                          // não pode sobrar embutido
+    if (!Array.isArray(g.matchIds) || !g.matchIds.length) { missingIds++; return; }
+    g.matchIds.forEach(id => { totalIds++; if (!flatIds.has(String(id))) danglingIds++; });
+  });
+  assert(embedded === 0, 'nenhum grupo mantém group.matches após fold (embutidos: ' + embedded + ')');
+  assert(missingIds === 0, 'todo grupo ficou com matchIds (sem ids: ' + missingIds + ')');
+  assert(danglingIds === 0, 'todo matchId resolve em round.matches — fonte única (órfãos: ' + danglingIds + ')');
+
+  // A memória NÃO foi tocada (fold rodou no clone): grupos ainda têm .matches.
+  assert(Array.isArray(memGroups[0].matches), 'fold no clone não mutou a memória (group.matches preservado)');
+
+  // round.matches continua com todos os jogos reais do grupo (nada se perdeu).
+  const realFlat = (col.matches || []).filter(m => !m.isSitOut && !m.isBye).length;
+  assert(realFlat === groups.length * 3, 'round.matches mantém grupos×3 jogos reais (got ' + realFlat + ' / esperado ' + (groups.length * 3) + ')');
+
+  // Idempotente: foldar de novo não muda nada nem quebra.
+  const before = JSON.stringify(payload.rounds);
+  W._foldMonarchGroups(payload);
+  assert(before === JSON.stringify(payload.rounds), 'fold é idempotente (2ª passada não altera)');
+})();
+
 console.log('\n' + (failures === 0 ? '✅ TODOS OS TESTES PASSARAM' : '❌ ' + failures + ' FALHA(S)'));
 process.exit(failures === 0 ? 0 : 1);

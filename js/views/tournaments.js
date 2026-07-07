@@ -48,13 +48,24 @@ window._addPlaceholdersCore = function (id, qtd, onDone) {
         dest = 'inscritos';
     }
     if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
+    // v4.4.72: onDone SÓ após o save resolver (ou falhar) — mantém o botão em
+    // "Adicionando…" (cinza) até o commit REAL + toast, dando o retorno visual do
+    // comando commitado. Antes onDone era síncrono (fora do .then) e revertia o
+    // botão no mesmo tick do clique, antes de pintar o cinza → parecia que nada
+    // acontecia. Espelha o fluxo do participante (_doAddParticipant no .then).
+    var _finishAdd = function () {
+        if (typeof onDone === 'function') { onDone(); return; }
+        var container = document.getElementById('view-container');
+        if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); }
+    };
     if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
         window.FirestoreDB.saveTournament(t).then(function () {
             showNotification('Placeholders adicionados', qtd + ' placeholder(s) em ' + dest + '.', 'success');
-        }).catch(function (err) { if (window._error) window._error('Erro ao salvar placeholders:', err); showNotification('Erro', 'Não foi possível salvar.', 'error'); });
+            _finishAdd();
+        }).catch(function (err) { if (window._error) window._error('Erro ao salvar placeholders:', err); showNotification('Erro', 'Não foi possível salvar.', 'error'); _finishAdd(); });
+    } else {
+        _finishAdd();
     }
-    if (typeof onDone === 'function') { onDone(); }
-    else { var container = document.getElementById('view-container'); if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); } }
 };
 
 // v2.7.32: handlers de ação do inscrito (remover/split) definidos no NÍVEL DO MÓDULO
@@ -932,9 +943,16 @@ function renderTournaments(container, tournamentId = null) {
     // Auto-mover participantes solo para waitlist antes do sorteio em torneios de duplas
     window._autoMoveSoloToWaitlist = function(t) {
         if (!t) return 0;
+        // v4.4.97: dupla FORMADA (manual) — os avulsos sem-dupla são PENDÊNCIA
+        // CONSCIENTE (reabrir/formar/lista/exclusão via _showRemainderPanel), NUNCA
+        // mover em silêncio pra lista de espera. Só o modo SORTEIO (auto-pareamento)
+        // move solos automaticamente. Sem isso, o painel de sem-dupla era pulado e o
+        // fluxo caía direto no pow2 ignorando os avulsos (regressão do v4.4.96, que
+        // fez esta função reconhecer 'teams' e passar a comê-los antes de perguntar).
+        if (typeof window._isManualPairing === 'function' && window._isManualPairing(t)) return 0;
         var enrollmentMode = t.enrollmentMode || t.enrollment || 'individual';
         var teamSize = parseInt(t.teamSize) || 1;
-        if (!((enrollmentMode === 'time' || enrollmentMode === 'misto') && teamSize === 2)) return 0;
+        if (!(window._isTeamEnrollMode(enrollmentMode) && teamSize === 2)) return 0;
 
         var parts = Array.isArray(t.participants) ? t.participants : [];
         var solo = parts.filter(function(p) {
@@ -1124,8 +1142,11 @@ function renderTournaments(container, tournamentId = null) {
                 startDraw();
             };
             // persiste ANTES de sortear — senão o onSnapshot devolve os ausentes
-            if (moved > 0 && window.AppStore && typeof window.AppStore.syncImmediate === 'function') {
-                Promise.resolve(window.AppStore.syncImmediate(tId)).then(proceed).catch(proceed);
+            if (moved > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
+                // BLINDAGEM (project_concurrency_safe_saves): re-aplica o move (ausentes→
+                // espera) no doc FRESCO, em vez de syncImmediate (doc inteiro → clobbera
+                // check-in/W.O. concorrente). A função de move é pura + idempotente.
+                Promise.resolve(window.AppStore.mutate(tId, function (ft) { window._moveAbsentToWaitlistForPresentDraw(ft); })).then(proceed).catch(proceed);
             } else {
                 proceed();
             }
@@ -1153,7 +1174,7 @@ function renderTournaments(container, tournamentId = null) {
             } else if (t) {
                 var _eMode = t.enrollmentMode || t.enrollment || 'individual';
                 var _tSz = parseInt(t.teamSize) || 1;
-                if ((_eMode === 'time' || _eMode === 'misto') && _tSz === 2 &&
+                if (window._isTeamEnrollMode(_eMode) && _tSz === 2 &&
                     typeof window._listSoloEntries === 'function' && typeof window._showSoloResolutionPanel === 'function' &&
                     window._listSoloEntries(t).length > 0) {
                     window._showSoloResolutionPanel(tId, isAberto);
@@ -1167,7 +1188,7 @@ function renderTournaments(container, tournamentId = null) {
             // de Inscrição. Intercepta ANTES de mover solos pra lista de espera.
             if (t) {
                 var _enrM = t.enrollmentMode || t.enrollment || 'individual';
-                if (_enrM === 'time' && typeof window._diagnoseAll === 'function') {
+                if ((_enrM === 'time' || _enrM === 'teams') && typeof window._diagnoseAll === 'function') {
                     var _diagTeams = window._diagnoseAll(t);
                     // dispara quando há jogadores SEM equipe (individuais soltos)
                     // ou nenhum time formado — em ambos não dá pra sortear os times.
@@ -1195,13 +1216,16 @@ function renderTournaments(container, tournamentId = null) {
             // O listener onSnapshot substitui store.tournaments inteiro quando chega
             // dados do servidor — sem salvar primeiro, os participantes originais
             // (com ausentes) voltam do Firestore e o sorteio os inclui mesmo assim.
-            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.syncImmediate === 'function') {
+            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
                 var _doGenderThenDraw = function() {
                     if (typeof window._maybeShowGenderDrawDialog === 'function' &&
                         window._maybeShowGenderDrawDialog(tId, _continueDraw)) return;
                     _continueDraw();
                 };
-                Promise.resolve(window.AppStore.syncImmediate(tId)).then(_doGenderThenDraw).catch(_doGenderThenDraw);
+                // BLINDAGEM (project_concurrency_safe_saves): re-aplica o move de ausentes
+                // no doc FRESCO, em vez de syncImmediate (doc inteiro → clobbera check-in/
+                // W.O. concorrente). _autoMoveAbsentToStandby é pura + idempotente.
+                Promise.resolve(window.AppStore.mutate(tId, function (ft) { window._autoMoveAbsentToStandby(ft); })).then(_doGenderThenDraw).catch(_doGenderThenDraw);
                 return;
             }
             // v2.1.20: em duplas mistas com sorteio livre (sem categoria masc/fem),
@@ -1658,7 +1682,7 @@ function renderTournaments(container, tournamentId = null) {
 
         let enrollmentText = _t('enroll.modeMixed');
         if (t.enrollmentMode === 'individual') enrollmentText = _t('enroll.modeIndividual');
-        else if (t.enrollmentMode === 'time') enrollmentText = _t('enroll.modeTeam');
+        else if (t.enrollmentMode === 'time' || t.enrollmentMode === 'teams') enrollmentText = _t('enroll.modeTeam');
         else if (t.enrollmentMode === 'misto') enrollmentText = _t('enroll.modeMixed');
 
         const sortearOnClick = `event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._handleSortearClick('${t.id}', ${isAberto})`;
@@ -1926,7 +1950,7 @@ function renderTournaments(container, tournamentId = null) {
 
         // --- Variáveis de botões do organizador (escopo global do card para evitar ReferenceError) ---
         const allowsIndividual = !t.enrollmentMode || t.enrollmentMode === 'individual' || t.enrollmentMode === 'misto';
-        const allowsTeams = t.enrollmentMode === 'time' || t.enrollmentMode === 'misto';
+        const allowsTeams = window._isTeamEnrollMode(t.enrollmentMode);
         // Para duplas (teamSize===2 com enrollmentMode=time): mostrar "+ Participante"
         // pois inscrições são individuais e duplas formadas por arrastar e soltar.
         const isDoublesMode = allowsTeams && parseInt(t.teamSize || 2) === 2;
@@ -2411,18 +2435,13 @@ function renderTournaments(container, tournamentId = null) {
                 if (!_ligaEvent && _tEndTs != null && _tEndTs > _now && (_tEndTs - _now) <= _H48) {
                   _ligaEvent = { ts: _tEndTs, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' };
                 }
-                // 4. Começou, sem sorteio agendado e fora das 48h finais → TEMPO DECORRIDO
-                // (conta pra cima desde o início; usa o mesmo tick via data-elapsed-since).
-                if (!_ligaEvent && sorteioRealizado && typeof window._ligaElapsedSinceTs === 'function') {
-                  var _elSince = window._ligaElapsedSinceTs(t);
-                  if (_elSince && _elSince <= _now) {
-                    var _elText = window._formatCountdown ? window._formatCountdown(_now - _elSince) : '';
-                    var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
-                    return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' +
-                      '<span style="font-size:1.3rem;">⏱️</span>' +
-                      '<span style="font-size:0.85rem;font-weight:700;color:' + _rbEl.fg + ' !important;">Tempo decorrido</span>' +
-                      '<span data-elapsed-since="' + _elSince + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _rbEl.fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _elText + '</span>' +
-                    '</div>';
+                // 4. Começou, sem sorteio agendado e fora das 48h finais → RODADA EM ANDAMENTO
+                // (fonte única _ligaRoundInProgressRow — decorrido da rodada atual, tick automático).
+                if (!_ligaEvent && sorteioRealizado && typeof window._ligaRoundInProgressRow === 'function') {
+                  var _rbEl = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
+                  var _ripStandalone = window._ligaRoundInProgressRow(t, _rbEl.fg);
+                  if (_ripStandalone) {
+                    return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbEl.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _ripStandalone + '</div>';
                   }
                 }
                 if (!_ligaEvent) return '';
@@ -2435,11 +2454,23 @@ function renderTournaments(container, tournamentId = null) {
                 // sem tarja, usa a cor semântica sobre o tint claro.
                 var _rbCt = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
                 var _ctColor = _rbCt.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
+                // v4.4.x: 2ª linha "Rodada em andamento" com o tempo DECORRIDO da rodada atual —
+                // sempre que o box for o de "Próximo sorteio". Tick automático via data-elapsed-since.
+                var _roundLine = '';
+                if (_ligaEvent.label === _t('tourn.nextDraw') && typeof window._ligaRoundInProgressRow === 'function') {
+                  var _ripRow = window._ligaRoundInProgressRow(t, _ctColor, { iconSize: '1.2rem', labelSize: '0.9rem', valueSize: '1.25rem' });
+                  if (_ripRow) {
+                    _roundLine = '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(' + _rgb + ',0.3);">' + _ripRow + '</div>';
+                  }
+                }
                 // v4.x: MAIS DESTAQUE pro cronômetro do sorteio — box maior, número grande.
-                return '<div style="margin-top:10px;display:flex;align-items:center;gap:12px;padding:14px 18px;background:' + _rbCt.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);">' +
-                  '<span style="font-size:1.7rem;">' + _ligaEvent.icon + '</span>' +
-                  '<span style="font-size:0.95rem;font-weight:700;color:' + _ctColor + ' !important;">' + _ligaEvent.label + '</span>' +
-                  '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.7rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;line-height:1;">' + _countdownText + '</span>' +
+                return '<div style="margin-top:10px;padding:14px 18px;background:' + _rbCt.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);">' +
+                  '<div style="display:flex;align-items:center;gap:12px;">' +
+                    '<span style="font-size:1.5rem;flex-shrink:0;">' + _ligaEvent.icon + '</span>' +
+                    '<span style="font-size:0.95rem;font-weight:700;color:' + _ctColor + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _ligaEvent.label + '</span>' +
+                    '<span data-countdown-target="' + _ligaEvent.ts + '" style="margin-left:auto;font-size:1.35rem;font-weight:900;color:' + _ctColor + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
+                  '</div>' +
+                  _roundLine +
                 '</div>';
               }
 
@@ -2469,13 +2500,13 @@ function renderTournaments(container, tournamentId = null) {
               return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt2.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ' !important;">' + _next.label + '</span>' +
-                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.5px;">' + _countdownText2 + '</span>' +
+                '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.15rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _countdownText2 + '</span>' +
               '</div>';
             })()}
 
             ${t.venue ? `
             <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: 8px; ${_pReadBg ? 'background:'+_pReadBg+';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:'+_pReadFg+' !important;border-radius:10px;padding:8px 11px;' : 'opacity: 0.65;'}">
-               <span style="font-size: 1rem; flex-shrink:0;">📍</span>
+               ${t.venueLat && t.venueLon ? '<a href="' + (t.venuePlaceId ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(t.venue) + '&query_place_id=' + t.venuePlaceId : 'https://www.google.com/maps/search/?api=1&query=' + t.venueLat + ',' + t.venueLon) + '" target="_blank" title="Ver no mapa" style="font-size:1.15rem; flex-shrink:0; line-height:1; text-decoration:none;">🗺️</a>' : '<span style="font-size: 1rem; flex-shrink:0;">📍</span>'}
                <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;">
                  <span style="font-weight:600;">${window._safeHtml(t.venue)}</span>
                  ${t.courtCount > 0 ? '<span style="font-size:0.75rem; font-weight:400; opacity:0.7;">' + t.courtCount + (t.courtCount > 1 ? ' quadras' : ' quadra') + '</span>' : ''}
@@ -2483,7 +2514,6 @@ function renderTournaments(container, tournamentId = null) {
                </span>
                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; align-self:stretch;">
                  ${(t.venuePlaceId || t.venue) ? '<button onclick="event.stopPropagation();window._openVenueFromTournament(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')" title="Ver detalhes do local (movimento, contatos, reviews)" style="background:linear-gradient(135deg,#FFD700,#DAA520);border:none;color:#1a0f00;border-radius:8px;padding:5px 10px;font-size:0.72rem;font-weight:800;cursor:pointer;white-space:nowrap;">📍 Place</button>' : ''}
-                 ${t.venueLat && t.venueLon ? '<a href="' + (t.venuePlaceId ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(t.venue) + '&query_place_id=' + t.venuePlaceId : 'https://www.google.com/maps/search/?api=1&query=' + t.venueLat + ',' + t.venueLon) + '" target="_blank" title="Ver no mapa" style="color:#818cf8; text-decoration:none; font-size:1.2rem; line-height:1;">🗺️</a>' : ''}
                  ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="margin-top:auto;flex-shrink:0;width:clamp(44px,14vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
                </div>
             </div>
@@ -2567,6 +2597,11 @@ function renderTournaments(container, tournamentId = null) {
                 ${toggleRegBtn}
                 ${sortearBtn}
                 ${sortearAberto}
+                ${/* v4.4.50: "Avançar de fase" também nas Ferramentas do Organizador — mesma
+                      condição do banner do bracket (multi-fase, fase atual concluída, existe
+                      próxima fase). _advanceMultiPhase abre o painel de resolução se a chave
+                      da próxima fase não for pow2. */ ''}
+                ${(isOrg && !isFinished && window._isMultiPhase && window._isMultiPhase(t) && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && ((t.currentPhaseIndex || 0) + 1) < ((t.phases || []).length)) ? `<button class="btn btn-success hover-lift btn-shine" onclick="event.stopPropagation(); window._advanceMultiPhase('${t.id}')">🏆 Avançar de fase</button>` : ''}
                 ${(!isFinished && hasDraw && !window._isLigaFormat(t)) ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window.finishTournament('${t.id}')">🏁 ${_t('org.finishTournament')}</button>` : ''}
                 ${/* v2.6.29/31: botão "Configurar Playoffs (Fase Final)" removido e o
                       módulo de playoff (tournaments-playoff.js, rota #fase-final,
@@ -3289,6 +3324,10 @@ function renderTournaments(container, tournamentId = null) {
                     for (var _pcsi = 0; _pcsi < _pCardSkillCats.length; _pcsi++) { if (_pCardCatStr === _pCardSkillCats[_pcsi] || _pCardCatStr.endsWith(' ' + _pCardSkillCats[_pcsi])) { _pCardSkill = _pCardSkillCats[_pcsi]; break; } }
                     var _pCardOrder = (typeof bgNum === 'number' || /^[0-9]+$/.test(String(bgNum))) ? (parseInt(bgNum, 10) - 1) : idx;
                     var _pCardNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
+                    // v4.4.75: inativo (Liga com auto-desativação) → data-part-inactive p/ o FILTRO
+                    // ativo/inativo da barra (mesma regra de participants.js:1902/2148). Faltava aqui
+                    // → o filtro 🔴 inativos casava zero na lista da detail page.
+                    var _pCardInactive = (t.allowSelfDeactivation !== false && typeof p === 'object' && p && p.ligaActive === false) ? '1' : '0';
                     // Linha inferior CANÔNICA: tipo de inscrição (esquerda) + 🗑️ remover (direita).
                     var _typeAndDelRow = (typeLabel || _delBtn2)
                         ? '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">' +
@@ -3298,7 +3337,7 @@ function renderTournaments(container, tournamentId = null) {
                         : '';
 
                     return `
-                      <div class="participant-card" data-part-card="1" data-part-org="${_pCardOrg ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="0" data-part-name="${_pCardNameAttr}" data-part-gender="${_pCardGender}" data-part-skill="${String(_pCardSkill).replace(/"/g, '&quot;')}" data-part-order="${_pCardOrder}" data-participant-name="${window._safeHtml(pName)}" data-merge-name="${window._safeHtml(pName)}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+                      <div class="participant-card" data-part-card="1" data-part-org="${_pCardOrg ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="0" data-part-name="${_pCardNameAttr}" data-part-inactive="${_pCardInactive}" data-part-gender="${_pCardGender}" data-part-skill="${String(_pCardSkill).replace(/"/g, '&quot;')}" data-part-order="${_pCardOrder}" data-participant-name="${window._safeHtml(pName)}" data-merge-name="${window._safeHtml(pName)}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                           ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(bgNum) : ('<div style="position:absolute;right:8px;bottom:6px;font-size:' + (String(bgNum).length > 2 ? '1.6rem' : '2rem') + ';font-weight:900;color:rgba(255,255,255,0.08);line-height:1;pointer-events:none;user-select:none;">' + bgNum + '</div>')}
                           <div style="position:relative;z-index:1;">
                               <!-- HEADER: avatar + nome + coroa (igual ao card #participants) | toggle ativado/desativado da Liga -->
@@ -3366,7 +3405,7 @@ function renderTournaments(container, tournamentId = null) {
             </div>`;
 
             // ── Torneios de duplas: layout em duas seções ─────────────────────────
-            const _isDoublesTournament = (t.enrollmentMode === 'time' || t.enrollmentMode === 'misto') && parseInt(t.teamSize || 2) === 2;
+            const _isDoublesTournament = window._isTeamEnrollMode(t.enrollmentMode) && parseInt(t.teamSize || 2) === 2;
             const _allParts = Array.isArray(t.participants) ? t.participants : [];
             // v2.7.90: dupla = entrada com p1Name E p2Name (verdade ESTRUTURAL) OU nome
             // "A / B" (legado). NÃO depender só de "/" no displayName: duplas formadas
@@ -3464,11 +3503,11 @@ function renderTournaments(container, tournamentId = null) {
                   var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                   var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
                   var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
-                  // v2.8.68: nome NÃO trunca — quebra em até 2 linhas e a fonte ENCOLHE
-                  // (auto-fit JS _fitTwoLineNames) até caber na altura do avatar (28px).
+                  // v2.8.68/v4.4.105: nome maior (17px) que NÃO trunca — quebra em até 2 linhas
+                  // (altura 44px); só ENCOLHE via auto-fit JS _fitTwoLineNames em casos extremos.
                   // class sp-fit-name + data-fit-h/max alimentam o medidor; avatar acompanha
                   // (align-items:center). title = nome completo no hover.
-                  var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="28" data-fit-max="13.5" style="font-weight:700;font-size:13.5px;color:var(--text-bright);line-height:1.1;max-height:28px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
+                  var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="17" style="font-weight:700;font-size:17px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
                   var _av = right
                     ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
                     : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
@@ -3507,7 +3546,9 @@ function renderTournaments(container, tournamentId = null) {
               var _dpOrder = members
                 ? (parseInt(_s1 || '0', 10) || 0)
                 : (window._enrollNumber ? (parseInt(window._enrollNumber(_enrollOrderMapD, p), 10) || 0) : 0);
-              return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
+              // v4.4.75: inativo → data-part-inactive p/ o FILTRO ativo/inativo da barra (faltava aqui).
+              var _dpInactive = (t.allowSelfDeactivation !== false && typeof p === 'object' && p && p.ligaActive === false) ? '1' : '0';
+              return '<div class="participant-card" data-part-card="1" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(nm) + '" ' + dragAttrs +
                 ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
                 _enrollBadge + _wmL + _wmR +
                 '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;">' +
@@ -3539,9 +3580,9 @@ function renderTournaments(container, tournamentId = null) {
                 var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
                 var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
                 var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
-                // v2.8.88: nome longo NÃO trunca — encolhe a fonte e quebra em até 2 linhas
-                // respeitando a altura do avatar (28px), igual ao card de dupla formada.
-                var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="28" data-fit-max="13.5" style="font-weight:700;font-size:13.5px;color:var(--text-bright);line-height:1.1;max-height:28px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
+                // v2.8.88/v4.4.105: nome maior (17px), quebra em até 2 linhas (altura 44px) e só
+                // encolhe em casos extremos — igual ao card de dupla formada.
+                var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="17" style="font-weight:700;font-size:17px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
                 var _av = right
                   ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
                   : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';

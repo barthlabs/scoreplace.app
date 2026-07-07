@@ -418,7 +418,12 @@ function renderBracket(container, tournamentId, isInline) {
   // (Pontos Corridos) mostrava só "Rodada 1 · Fase 1" SEM os cards dos jogos.
   var _canonHasPhase0Matches = (t.matches || []).some(function (m) { return (m.phaseIndex || 0) === 0 && !m.isSitOut && !m.isBye; });
   if (t._canonicalDraw && (t.currentPhaseIndex || 0) === 0 && _canonHasPhase0Matches && typeof window._renderPhaseBracket === 'function') {
-    container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
+    // v4.4.49: incluir _phaseAdvanceBanner — este caminho canônico (Fase de Grupos/elim
+    // sorteada pelo motor, jogos taggeados em t.matches, t.groups vazio) é o que a Confra
+    // usa. Sem ele, a fase classificatória fechava 100% mas o botão "Avançar" nunca aparecia
+    // (banner era calculado na linha ~402 e descartado). Os outros ramos (Liga 428, grupos 436)
+    // já o inseriam; só este esquecia.
+    container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
     _applyMyMatchesFilter();
     return;
   }
@@ -464,9 +469,9 @@ function renderBracket(container, tournamentId, isInline) {
   // (see renderSingleElimBracket / renderDoubleElimBracket). No separate card.
   try {
     if (isDupla) {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
     } else {
-      container.innerHTML = headerHtml + startTournamentBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult, standbyHtml);
     }
   } catch (bracketErr) {
     window._error('[Bracket] Render error:', bracketErr);
@@ -554,13 +559,18 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
   const renderSideRow = (name) => {
     if (!name || name === 'TBD' || name === 'BYE') return '';
     const members = name.includes(' / ') ? name.split(' / ').map(n => n.trim()).filter(n => n) : [name];
-    const dots = members.map(n => {
+    const dots = members.map((n, i) => {
       const present = window._idMapHas(t, ci, n);
       const isAbs = window._idMapHas(t, absentMap, n);
       const dotColor = present ? '#10b981' : isAbs ? '#ef4444' : '#64748b';
       const textColor = present ? '#4ade80' : isAbs ? '#f87171' : '#94a3b8';
-      return `<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block;"></span><span style="font-size:0.78rem;color:${textColor};">${_sh(n)}</span></span>`;
-    }).join('<span style="font-size:0.65rem;color:rgba(255,255,255,0.15);margin:0 2px;">/</span>');
+      // v4.4.99: a "/" separadora fica COLADA ao FIM do nome de cima (inline, DENTRO do
+      // próprio span do nome), nunca como item flex solto entre os dois. Assim, quando o
+      // nome do topo quebra em 2 linhas, a "/" acompanha "…Souza /" em vez de vazar pro
+      // começo da linha do 2º nome (o deslocamento que aparecia na Karla/Adriano). (dono)
+      const sep = (i < members.length - 1) ? '<span style="font-size:0.65rem;color:rgba(255,255,255,0.2);margin-left:4px;">/</span>' : '';
+      return `<span style="display:inline-flex;align-items:baseline;gap:3px;"><span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block;align-self:center;"></span><span style="font-size:0.78rem;color:${textColor};">${_sh(n)}${sep}</span></span>`;
+    }).join('');
     return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${dots}</div>`;
   };
 
@@ -1584,17 +1594,78 @@ window._phaseGameOffset = function (t, phaseIndex) {
 // de cada fase: Dupla Elim intercala upper/lower por rodada + grand no fim; senão tiers na
 // ordem gold→silver→main→line3→line4→(extras), colunas por rodada asc, 3º-lugar ANTES da
 // final, grande-final por último. BYEs não consomem número (igual ao render).
+// v4.4.69 FONTE ÚNICA Rei/Rainha (schema, sem gambiarra): o jogo mora UMA vez em
+// round.matches. Os grupos guardam só `matchIds` — o Firestore NUNCA mais grava
+// cópia do jogo (o fold em saveTournament/mutateTournament/_saveToCache remove
+// group.matches do payload). Esta função HIDRATA a leitura: reconstrói
+// group.matches como REFERÊNCIAS aos objetos de round.matches (o MESMO objeto,
+// nunca cópia) — divergência é impossível por construção, sem sync perpétuo.
+// Idempotente. MIGRA docs legados com group.matches embutido: dobra em matchIds,
+// garante o objeto no plano (fundindo resultado se só a cópia do grupo tinha) e
+// relinka. Roda no ingest (onSnapshot/cache), no topo do render e na transação.
+window._hydrateMonarchGroups = function (t) {
+  if (!t || !Array.isArray(t.rounds)) return t;
+  t.rounds.forEach(function (rd) {
+    if (!rd || !Array.isArray(rd.monarchGroups) || !rd.monarchGroups.length) return;
+    if (!Array.isArray(rd.matches)) rd.matches = [];
+    var byId = {};
+    rd.matches.forEach(function (m) { if (m && m.id != null) byId[String(m.id)] = m; });
+    rd.monarchGroups.forEach(function (g) {
+      if (!g) return;
+      // (a) LEGADO: cópias embutidas sem matchIds → dobra em matchIds + migra pro plano.
+      if (!Array.isArray(g.matchIds) && Array.isArray(g.matches)) {
+        g.matchIds = [];
+        g.matches.forEach(function (gm) {
+          if (!gm || gm.id == null) return;
+          g.matchIds.push(String(gm.id));
+          var flat = byId[String(gm.id)];
+          if (!flat) { rd.matches.push(gm); byId[String(gm.id)] = gm; } // só no grupo → adota no plano
+          else if (flat !== gm && gm.winner && !flat.winner) {          // placar salvo só na cópia → funde
+            flat.winner = gm.winner; flat.scoreP1 = gm.scoreP1; flat.scoreP2 = gm.scoreP2; flat.draw = gm.draw;
+            if (!flat.startedAt) flat.startedAt = gm.startedAt; if (!flat.resultAt) flat.resultAt = gm.resultAt;
+          }
+        });
+      }
+      // (b) reconstrói group.matches como REFERÊNCIAS do plano (fonte única).
+      if (Array.isArray(g.matchIds)) {
+        g.matches = g.matchIds.map(function (id) { return byId[String(id)]; }).filter(Boolean);
+      }
+    });
+  });
+  return t;
+};
+
 window._assignGlobalGameNumbers = function (t) {
   if (!t) return;
+  if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(t); // FONTE ÚNICA
   var isBye = window._isByeMatch || function () { return false; };
   var n = 0;
+  // v4.4.69: id→número. Após _hydrateMonarchGroups, group.matches[j] É o MESMO objeto de
+  // round.matches (ref compartilhada, fonte única). `stamp` carimba pelo id: a 1ª ocorrência
+  // ganha ++n; visitar o mesmo objeto de novo (grupo e depois plano) reaproveita numById —
+  // idempotente. Rei/Rainha numera POR GRUPO (ordem dos grupos), depois o plano confirma pelas
+  // MESMAS ids. Zero cópia, zero colisão, zero fallback.
+  var numById = {};
   function stamp(m) {
     if (!m) return;
     if (m.isSitOut || isBye(m)) { m._gameNum = null; return; }
+    if (m.id != null && numById[m.id] != null) { m._gameNum = numById[m.id]; return; } // cópia já numerada
     m._gameNum = ++n;
+    if (m.id != null) numById[m.id] = m._gameNum;
   }
   // (1) Classificatória Liga/Suíço (t.rounds) — rodada asc (ordem do array), índice do array.
-  (t.rounds || []).forEach(function (rd) { (((rd && rd.matches) || [])).forEach(stamp); });
+  //     Rei/Rainha numera POR GRUPO na ordem do array de grupos (A, B, C…), jogos dentro do grupo
+  //     em ordem (a1 antes de b2) — a fonte de ordem é o GRUPO, não o array plano rd.matches (que a
+  //     inscrição tardia deixa fora de ordem). Depois carimba o array plano pelas MESMAS ids
+  //     (reaproveita numById) pra as duas cópias baterem.
+  (t.rounds || []).forEach(function (rd) {
+    if (rd && Array.isArray(rd.monarchGroups) && rd.monarchGroups.length) {
+      rd.monarchGroups.forEach(function (g) { (((g && g.matches) || [])).forEach(stamp); });
+      (((rd && rd.matches) || [])).forEach(stamp); // cópias plano por id (num já definido acima)
+    } else {
+      (((rd && rd.matches) || [])).forEach(stamp);
+    }
+  });
   // (2) Fases canônicas (t.matches) por phaseIndex asc.
   var byPhase = {};
   (t.matches || []).forEach(function (m) { var p = (m && m.phaseIndex) || 0; (byPhase[p] = byPhase[p] || []).push(m); });
@@ -2906,10 +2977,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       </div>`;
   }
 
-  // v4.3.17: borda ESQUERDA do card inteiro com a cor da LINHA (Ouro/Prata/…) — mesma
-  // paleta canônica das chaves. Só nas linhas paralelas (gold/silver/line3/line4); linha
-  // única 'main', grande final e 3º lugar não recebem (não há "linha" a distinguir).
-  var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6' };
+  // v4.3.17/v4.4.98: borda ESQUERDA do card inteiro com a cor da LINHA — mesma paleta
+  // canônica das chaves. Regra do dono: SEMPRE que a eliminatória tem mais de uma linha
+  // paralela, cada box de jogo ganha a cor da sua linha. (a) Ouro/Prata/… do construtor
+  // de fases: gold/silver/line3/line4. (b) Dupla Eliminatória: 'upper' (Chave Superior,
+  // verde) e 'lower' (Chave Inferior, âmbar) — MESMAS cores dos cabeçalhos das seções
+  // (ver renderSection em ~1551-1552). Linha única 'main', Grande Final ('grand') e 3º
+  // lugar NÃO recebem (culminação/linha única — não há "linha paralela" a distinguir).
+  var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
   var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + _tierLC[m.bracket] + ';') : '';
   return `
     <div id="card-${m.id}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:120px;background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
@@ -3020,11 +3095,11 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       var setDiff = s.setsWon - s.setsLost;
       var gameDiff = s.gamesWon - s.gamesLost;
       var winRatePct = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
-      var bg = i < classified ? 'rgba(251,191,36,0.08)' : '';
-      var clr = i < classified ? '#fbbf24' : 'var(--text-muted)';
+      var bg = i < classified ? 'rgba(34,197,94,0.10)' : '';
+      var clr = i < classified ? '#4ade80' : 'var(--text-muted)';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(s.name, window._currentBracketTournament) : window._safeHtml(s.name))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + (i < classified ? ' <span style="font-size:0.6rem;color:#fbbf24;font-weight:800;">CLASSIF.</span>' : '') + '</td>' +
+        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(s.name, window._currentBracketTournament) : window._safeHtml(s.name))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
         (s.points != null
@@ -3068,7 +3143,8 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // jogador no LOCAL, não de cada partida. Suprime o botão por-jogo aqui.
     window._suppressMatchArrivedBtn = true;
     var matchCards = matches.map(function(m, mi) {
-      return renderMatchCard(m, canEnterResult, t.id, (gi * 3) + mi + 1);
+      // v4.4.68: FONTE ÚNICA — m._gameNum, SEM fallback (o stamp carimba as duas cópias por id).
+      return renderMatchCard(m, canEnterResult, t.id, m._gameNum);
     }).join('');
     window._suppressMatchArrivedBtn = false;
 
@@ -3250,7 +3326,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const rows = sorted.map((s, i) => `
       <tr style="border-bottom:1px solid var(--border-color);${i < classified ? 'background:rgba(34,197,94,0.08);' : ''}">
         <td style="padding:8px 12px;font-weight:700;color:${i < classified ? '#4ade80' : 'var(--text-muted)'};">${medal(i)}</td>
-        <td style="padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))} ${i < classified ? '<span style="font-size:0.65rem;color:#4ade80;font-weight:800;">CLASSIF.</span>' : ''}</td>
+        <td style="padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</td>
         <td style="padding:8px 12px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>
         <td style="padding:8px 12px;text-align:center;color:#4ade80;">${s.wins}</td>
         ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>` : ''}
@@ -3309,7 +3385,6 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
         </div>
         ${matchesHtml ? `
           <div style="border-top:1px solid var(--border-color);padding-top:1rem;">
-            <h4 style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.75rem;border-left:3px solid var(--text-muted);padding-left:8px;">Jogos</h4>
             ${matchesHtml}
           </div>` : ''}
       </div>`;
@@ -3490,6 +3565,52 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // (o "Saldo" já é o saldo de games). Hide data-driven.
   var _anyRealSets = _allStandingsRows.some(function(s){ return ((s.setsWon||0)+(s.setsLost||0)) > 0; });
   var _showGsm = _useSetsStandings && _anyRealSets;
+  // v4.4.x: DESTAQUE de "quem classifica" na CLASSIFICAÇÃO GERAL (por seção/categoria), quando a
+  // transição pra próxima fase é OVERALL (Rei/Rainha / Pontos Corridos). Cada LINHA da próxima
+  // fase (Ouro/Prata/…) recebe sua própria tarja ATENUADA (cor da linha, não verde) — assim numa
+  // config "todos classificam em 2 linhas por performance" dá pra LER quem vai pra qual linha.
+  //   _geralLinePlan: null (sem próxima fase overall → sem tarja na geral; Fase de Grupos marca
+  //   por grupo) | {mode:'ranges', ranges:[{from,to,idx}]} (top-N por linha via mapping) |
+  //   {mode:'splitAll', nLines} (todos classificam → divide o campo por performance nas N linhas).
+  var _geralLinePlan = null;
+  (function () {
+    if (!(window._isMultiPhase && window._isMultiPhase(t))) return;
+    var _np = t.phases[(t.currentPhaseIndex || 0) + 1];
+    if (!_np || !_np.source) return;
+    if (((_np.source.scope) || _np.scope || 'per_group') !== 'overall') return;
+    var _src = _np.source;
+    var _map = Array.isArray(_src.mapping) ? _src.mapping : [];
+    var _nLines = _map.length || 1;
+    var _isAll = _src.qualifyQuantity === 'all' || _src.qualifyMode === 'all' ||
+      (_map.length > 0 && _map.every(function (mp) { return (parseInt(mp.rankTo, 10) || 0) >= 999; }));
+    if (_isAll) { _geralLinePlan = { mode: 'splitAll', nLines: _nLines }; return; }
+    if (_map.length) {
+      var _ranges = _map.map(function (mp, idx) {
+        return { from: parseInt(mp.rankFrom, 10) || 1, to: parseInt(mp.rankTo, 10) || 0, idx: idx };
+      }).filter(function (r) { return r.to > 0 && r.to < 999; });
+      if (_ranges.length) { _geralLinePlan = { mode: 'ranges', ranges: _ranges }; return; }
+    }
+    var _cut = parseInt(_src.qualifyTopN, 10) || 0;
+    if (_cut > 0) _geralLinePlan = { mode: 'ranges', ranges: [{ from: 1, to: _cut, idx: 0 }] };
+  })();
+  // Cores ATENUADAS por linha (ideia de Ouro/Prata/Bronze mantendo leitura). Índice = ordem da
+  // linha na próxima fase (0 = 1ª linha = "Ouro").
+  var _GERAL_LINE_TINTS = ['rgba(251,191,36,0.16)', 'rgba(203,213,225,0.16)', 'rgba(234,88,12,0.15)', 'rgba(34,211,238,0.14)'];
+  // Índice da linha (0-based) que a posição i (0-based) da seção alimenta, ou -1 se não classifica.
+  var _geralLineIdxFor = function (i, total) {
+    if (!_geralLinePlan) return -1;
+    if (_geralLinePlan.mode === 'splitAll') {
+      var n = _geralLinePlan.nLines; if (n <= 1) return 0;
+      var per = Math.ceil((total || 0) / n) || 1;
+      return Math.min(Math.floor(i / per), n - 1);
+    }
+    var rank = i + 1;
+    for (var k = 0; k < _geralLinePlan.ranges.length; k++) {
+      var r = _geralLinePlan.ranges[k];
+      if (rank >= r.from && rank <= r.to) return r.idx;
+    }
+    return -1;
+  };
   // v2.3.15: nova ordem de colunas — [PA ou Pts] · %G · V · D · [E] · Saldo · [±S ±G] · J
   const _buildStandingsRows = function(computed) {
     return computed.map((s, i) => {
@@ -3511,7 +3632,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         ? `<td style="padding:11px 14px;text-align:center;color:${_setsDiff >= 0 ? '#06b6d4' : '#f87171'};">${_setsDiff >= 0 ? '+' : ''}${_setsDiff}</td><td style="padding:11px 14px;text-align:center;color:${_gamesDiff >= 0 ? '#8b5cf6' : '#f87171'};">${_gamesDiff >= 0 ? '+' : ''}${_gamesDiff}</td>`
         : '';
       return `
-    <tr style="border-bottom:1px solid var(--border-color);${i < 3 ? 'background:rgba(251,191,36,0.03)' : ''}">
+    ${(() => {
+      var _lineIdx = _geralLineIdxFor(i, computed.length);
+      var _bg = _lineIdx >= 0 ? _GERAL_LINE_TINTS[_lineIdx % _GERAL_LINE_TINTS.length] : (i < 3 && !_geralLinePlan ? 'rgba(251,191,36,0.03)' : '');
+      return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + _bg + ';' : '') + '">';
+    })()}
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
       <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver confrontos">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(s.name, t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(s.name, t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span></td>
       ${_scoreCell}
@@ -3868,12 +3993,21 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // Renderização das ordens fixas (myGroups primeiro, depois otherGroups)
         // mantém numeração consistente independente do sort visual.
         var _monarchGlobalMatchNum = _monarchPrevRoundsMatches;
-        // v2.7.18: classificação POR GRUPO volta quando a transição p/ a próxima
-        // fase é POR GRUPO — o organizador precisa ver 1º/2º/3º/4º de cada grupo
-        // pra entender quem vai pra qual linha (Ouro/Prata). A geral continua acima.
+        // v4.4.x: classificação POR GRUPO SEMPRE visível acima de cada grupo (pedido do
+        // dono — "estou sentindo falta da classificação por grupos acima de cada grupo").
+        // A geral continua acima das rodadas. Quem classifica pra próxima fase (transição
+        // POR GRUPO) ganha só a TARJA VERDE na linha — sem texto "CLASSIF.".
         var _nextPhT = (window._isMultiPhase && window._isMultiPhase(t)) ? (t.phases[(t.currentPhaseIndex || 0) + 1] || null) : null;
         var _nextScopeT = _nextPhT ? (((_nextPhT.source && _nextPhT.source.scope) || _nextPhT.scope || 'per_group')) : null;
-        var _showGroupStandings = !!_nextPhT && _nextScopeT !== 'overall';
+        var _showGroupStandings = true;
+        // v4.4.x: no Rei/Rainha (grupos rotativos de 4) a classificação que define quem avança
+        // é a GERAL (overall) — a tarja verde de "quem classifica" NÃO vai na tabela do grupo
+        // (senão, se todos classificam, tudo fica verde e não informa nada). Ela vai só na
+        // CLASSIFICAÇÃO GERAL (ver _geralLinePlan — tarja por linha Ouro/Prata). Aqui a por-grupo
+        // só marca verde quando a transição é POR GRUPO (Fase de Grupos, corte por grupo → _classifN).
+        // v4.4.x: o botão "Editar" (corrigir placar) fica disponível na classificatória
+        // ATÉ a fase avançar — depois disso (eliminatória/encerrado/visão read-only) some.
+        var _phaseLocked = (t.currentStage === 'elimination') || (t.status === 'finished') || !!(opts && opts.suppressAutoAdvance);
         var _renderGroup = function(g) {
           // v2.3.19: classificação POR GRUPO removida — a classificação geral
           // (todos os jogadores) fica acima das rodadas. Aqui só renderizamos
@@ -3911,6 +4045,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             _gst = _gst.slice().sort(function (a, b) { return _stRank(a.name) - _stRank(b.name); });
             // Pts AVANÇADOS visíveis na tabela quando o torneio usa Pontos Avançados.
             var _advPtsOn = !!(t.advancedScoring && t.advancedScoring.enabled);
+            // Quantos classificam POR GRUPO pra próxima fase (0 = fase única → sem tarja verde).
+            var _classifN = (_nextPhT && _nextScopeT !== 'overall' && typeof window._phaseClassifiedCount === 'function') ? window._phaseClassifiedCount(t, _gst.length) : 0;
             if (_gst.length) {
               var _gstRows = _gst.map(function(s, idx) {
                 var _pos = idx + 1, _md = _pos === 1 ? '🥇' : _pos === 2 ? '🥈' : _pos === 3 ? '🥉' : '';
@@ -3921,7 +4057,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _woTag = (_isRed || _isAmb)
                   ? ' <span style="font-size:0.58rem;font-weight:900;color:' + (_isRed ? '#f87171' : '#fbbf24') + ';border:1px solid ' + (_isRed ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)') + ';border-radius:5px;padding:0 5px;vertical-align:middle;">W.O.</span>'
                   : '';
-                return '<tr style="border-top:1px solid rgba(255,255,255,0.06);">' +
+                var _clsGreen = (idx < _classifN && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
+                return '<tr style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
                   '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + window._safeHtml(s.name) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + '</td>' +
                   (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:#fbbf24;font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
@@ -3959,10 +4096,10 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // do _renderMonarchStage).
           window._suppressMatchArrivedBtn = true;
           var gCards = g.matches.map(function(m) {
-            // v1.0.64-beta: usa contador global em vez de mi+1 (que resetava por grupo)
-            _monarchGlobalMatchNum++;
-            // v2.3.19: grupo concluído → cards compactos (sem botão Editar).
-            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, _monarchGlobalMatchNum, gDone, _pendingSub) + '</div>';
+            // v4.4.68: FONTE ÚNICA — m._gameNum, SEM fallback (relink + stamp garantem carimbo).
+            // v4.4.x: o botão Editar (corrigir placar) fica ATÉ a fase avançar (_phaseLocked),
+            // não some só porque o grupo concluiu — o organizador ainda pode corrigir placar.
+            return '<div>' + renderMatchCard(m, canEnterResult && !_gPending, t.id, m._gameNum, _phaseLocked, _pendingSub) + '</div>';
           }).join('');
           window._suppressMatchArrivedBtn = false;
           // "Em andamento" REMOVIDO (pedido do dono — é óbvio, só rouba espaço). Só o
@@ -3997,10 +4134,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // o substituto convidado já surge nos cards de jogo (via _pendingSub).
           // _woName já foi calculado acima.
           return '<div data-group-box="1" style="scroll-margin-top:120px;background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
-            // Header EMPILHADO (pedido do dono): nome do grupo → SEU GRUPO (só no grupo
-            // do usuário) → 👑 Rei/Rainha, um abaixo do outro; controles à direita.
-            '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;">' +
-              '<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start;">' +
+            // Header do grupo: nome + SEU GRUPO + 👑 Rei/Rainha. Quando NÃO há botões
+            // (_rightCtrl vazio) economiza espaço colocando tudo numa LINHA só (pedido do
+            // dono); com botões, empilha à esquerda e deixa os controles à direita.
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;">' +
+              '<div style="display:flex;' + (_rightCtrl ? 'flex-direction:column;align-items:flex-start;gap:5px;' : 'flex-direction:row;align-items:center;gap:8px;flex-wrap:wrap;') + '">' +
                 '<span style="display:inline-flex;align-items:center;gap:6px;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + statusBadge + '</span>' +
                 (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') +
                 _monarchBadge +
@@ -4218,8 +4356,32 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       prevRoundsInner += '<div style="margin-bottom: 12px;">' +
         '<div style="font-weight: 700; font-size: 0.85rem; color: var(--text-bright); margin-bottom: 8px;">' + (rdIsRR ? '👑 ' : '') + _t('bracket.round', {n: ri + 1}) + (rdComplete ? ' — ' + _t('bracket.complete') + ' ✓' : '') + '</div>' +
         '<div style="display: flex; flex-wrap: wrap; gap: 12px;">';
-      rd.matches.forEach(function(m, mi) {
+      // v4.4.114: ordena — jogos reais primeiro, depois FOLGA (âmbar), depois INATIVO (vermelho).
+      var _rdOrdered = (rd.matches || []).slice().sort(function(a, b){
+        function rank(x){ if(!x || !x.isSitOut) return 0; return x.sitOutReason === 'inactive' ? 2 : 1; }
+        return rank(a) - rank(b);
+      });
+      _rdOrdered.forEach(function(m, mi) {
         if (!m.p1 && !m.p2) return;
+        // v4.4.114: FOLGA/INATIVO têm card próprio — nunca renderiza como jogo "/ FOLGA" com
+        // rótulo "Pendente" (folga/inatividade não é jogo pendente). Inativo = vermelho
+        // "INATIVO"; sobra de sorteio = âmbar "FOLGA".
+        if (m.isSitOut) {
+          var _inact = m.sitOutReason === 'inactive';
+          var _soLbl = _inact ? 'INATIVO' : 'FOLGA';
+          var _soCol = _inact ? '#ef4444' : '#fbbf24';
+          var _soBg2 = _inact ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.08)';
+          var _soBd2 = _inact ? 'rgba(239,68,68,0.22)' : 'rgba(245,158,11,0.22)';
+          var _soIc2 = _inact ? '🔴' : '😴';
+          prevRoundsInner += '<div style="min-width:200px;flex:1;max-width:280px;background:' + _soBg2 + ';border:1px solid ' + _soBd2 + ';border-radius:8px;padding:8px 12px;font-size:0.8rem;">' +
+            '<div style="display:flex;align-items:center;gap:6px;">' +
+              '<span style="flex-shrink:0;">' + _soIc2 + '</span>' +
+              '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-muted);">' + window._safeHtml(window._resolveSideLive(t, m.p1) || m.p1) + '</span>' +
+              '<span style="flex-shrink:0;font-weight:800;font-size:0.6rem;color:' + _soCol + ';text-transform:uppercase;letter-spacing:0.4px;">' + _soLbl + '</span>' +
+            '</div>' +
+          '</div>';
+          return;
+        }
         var w = m.winner;
         var isDraw = w === 'draw' || m.draw;
         var p1Win = !!w && w === m.p1;

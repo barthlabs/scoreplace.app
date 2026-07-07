@@ -275,14 +275,12 @@ window._suggestFriendsForGuestName = function(typedName, excludeUids) {
 
 
 // v0.16.87: propaga mutação de um match (m) pra todas as refs com mesmo id
-// no tournament. Necessário porque após Firestore deserialização (onSnapshot
-// dispara em todo save), refs entre t.rounds[i].matches[k] e
-// t.rounds[i].monarchGroups[gi].matches[mi] ficam SEPARADAS — antes eram o
-// mesmo object (criado em _generateReiRainhaRoundForPlayers e shared), mas
-// JSON serialize/deserialize só preserva valores. Se mutar uma ref, a outra
-// continua estale e o renderer lê dela. Fix: após mutar a "primary" ref,
-// achar todas as outras refs com mesmo id e copiar os campos mutáveis.
-// Lista de campos cobre o que `_saveResultInline` e `_editResult` mexem.
+// no tournament (chaves eliminatórias/grupos que podem repetir o match em mais
+// de uma estrutura legada). Lista de campos cobre o que `_saveResultInline` e
+// `_editResult` mexem.
+// v4.4.69: o branch monarchGroups[gi].matches saiu daqui — Rei/Rainha agora é
+// FONTE ÚNICA: group.matches são REFERÊNCIAS de round.matches (hidratadas no
+// load), então mutar round.matches já muta o grupo. Nada a propagar/sincronizar.
 function _propagateMatchUpdate(t, m) {
   if (!t || !m || !m.id) return;
   var FIELDS = ['winner', 'draw', 'scoreP1', 'scoreP2', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'isBye', 'pendingResult', 'wo', 'woAbsentSide'];
@@ -299,22 +297,12 @@ function _propagateMatchUpdate(t, m) {
   };
   // 1. Walk t.matches (flat elim list)
   if (Array.isArray(t.matches)) t.matches.forEach(updateRef);
-  // 2. Walk t.rounds[i].matches and t.rounds[i].monarchGroups[gi].matches
+  // 2. Walk t.rounds[i].matches — FONTE ÚNICA do Rei/Rainha (os grupos referenciam
+  //    esses mesmos objetos, então não há segunda cópia pra sincronizar).
   if (Array.isArray(t.rounds)) {
     t.rounds.forEach(function(r) {
       if (!r) return;
       if (Array.isArray(r.matches)) r.matches.forEach(updateRef);
-      if (Array.isArray(r.monarchGroups)) {
-        r.monarchGroups.forEach(function(g) {
-          if (g && Array.isArray(g.matches)) g.matches.forEach(updateRef);
-          if (g && Array.isArray(g.rounds)) {
-            g.rounds.forEach(function(gr) {
-              if (Array.isArray(gr)) gr.forEach(updateRef);
-              else if (gr && Array.isArray(gr.matches)) gr.matches.forEach(updateRef);
-            });
-          }
-        });
-      }
     });
   }
   // 3. Walk t.groups (group stage)
@@ -1371,8 +1359,22 @@ window._saveSetResult = function(tId, matchId) {
     var _ovGsm = document.getElementById('set-scoring-overlay');
     if (_ovGsm) _ovGsm.remove();
     _propagateMatchUpdate(t, m);
-    window.AppStore.logAction(tId, 'Resultado proposto (sets): ' + m.p1 + ' vs ' + m.p2 + ' — aguardando aprovação (' + m.pendingResult.proposedByName + ')');
-    window.AppStore.syncImmediate(tId);
+    var _pendingGsmObj = m.pendingResult;
+    var _gsmPropLogMsg = 'Resultado proposto (sets): ' + m.p1 + ' vs ' + m.p2 + ' — aguardando aprovação (' + m.pendingResult.proposedByName + ')';
+    window.AppStore.logAction(tId, _gsmPropLogMsg);
+    // BLINDAGEM DE CORRIDA (project_concurrency_safe_saves): re-aplica a proposta GSM
+    // (pendingResult) no match FRESCO via commitTournamentTx, em vez de syncImmediate
+    // (doc inteiro → lost-update quando 2 propostas/resultados concorrem). Espelha o
+    // caminho de proposta simples de _saveResultInline.
+    window.AppStore.commitTournamentTx(tId, function (freshT) {
+      var fm = window._findMatch(freshT, matchId);
+      if (fm) {
+        fm.pendingResult = _pendingGsmObj;
+        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(freshT, fm);
+      }
+      if (!Array.isArray(freshT.history)) freshT.history = [];
+      freshT.history.push({ date: new Date().toISOString(), message: _gsmPropLogMsg });
+    });
     // 4.1 DUAL-WRITE: espelha a proposta (sets) no doc do jogo.
     _dualWriteResult(tId, matchId);
     try { _notifyPendingApproval(t, m, m.pendingResult.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
@@ -1452,8 +1454,16 @@ window._saveSetResult = function(tId, matchId) {
     : (s.gamesP1 + '-' + s.gamesP2)
   ).join(' ');
 
-  window.AppStore.logAction(tId, 'Resultado: ' + m.p1 + ' vs ' + m.p2 + ' — ' + scoreText + ' — Vencedor: ' + m.winner);
-  window.AppStore.syncImmediate(tId);
+  var _gsmLogMsg = 'Resultado: ' + m.p1 + ' vs ' + m.p2 + ' — ' + scoreText + ' — Vencedor: ' + m.winner;
+  window.AppStore.logAction(tId, _gsmLogMsg);
+  // BLINDAGEM DE CORRIDA (project_concurrency_safe_saves): em vez de syncImmediate
+  // (grava o doc INTEIRO → lost-update quando 2 resultados de jogos diferentes
+  // concorrem, o último clobbera o outro), re-aplica o resultado GSM sobre o estado
+  // FRESCO via commitResultTx → _applyResultToTournament(gsmFinal). A `t` local já
+  // foi mutada acima (UI otimista); a transação reproduz a MESMA mutação no fresco.
+  window.AppStore.commitResultTx(tId, matchId, {
+    gsmFinal: true, sets: sets, setsWonP1: p1Sets, setsWonP2: p2Sets, isFixedSet: !!isFixedSet
+  }, _gsmLogMsg);
 
   // Persist per-user matchHistory record (GSM path) — uses richer m.sets data.
   try { _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGamesP1, totalGamesP2); } catch(e) {}
@@ -1544,7 +1554,29 @@ window._applyResultToTournament = function (t, matchId, payload) {
   }));
   var allowDraw = isGroupMatch || isRoundMatch;
 
-  if (useSets) {
+  if (payload.gsmFinal) {
+    // Caminho GSM multi-set (best-of-N): a payload já traz o array de sets computado
+    // por _saveSetResult. Espelha EXATAMENTE a mutação final daquela função (m.sets,
+    // setsWon, fixedSet, scores, totalGames, winner). Re-aplicável sobre o doc FRESCO
+    // dentro da transação (commitResultTx) → sem lost-update quando 2 resultados
+    // concorrem. GSM final nunca é empate. project_concurrency_safe_saves.
+    var _gs = payload.sets || [];
+    m.sets = _gs;
+    m.setsWonP1 = payload.setsWonP1; m.setsWonP2 = payload.setsWonP2;
+    if (payload.isFixedSet) {
+      m.fixedSet = true;
+      var _gf0 = _gs[0];
+      m.scoreP1 = _gf0 ? _gf0.gamesP1 : payload.setsWonP1;
+      m.scoreP2 = _gf0 ? _gf0.gamesP2 : payload.setsWonP2;
+    } else {
+      m.scoreP1 = payload.setsWonP1; m.scoreP2 = payload.setsWonP2;
+    }
+    var _gtg1 = 0, _gtg2 = 0;
+    _gs.forEach(function (s) { _gtg1 += (s.gamesP1 || 0); _gtg2 += (s.gamesP2 || 0); });
+    m.totalGamesP1 = _gtg1; m.totalGamesP2 = _gtg2;
+    if (payload.setsWonP1 > payload.setsWonP2) { m.winner = m.p1; m.draw = false; }
+    else if (payload.setsWonP2 > payload.setsWonP1) { m.winner = m.p2; m.draw = false; }
+  } else if (useSets) {
     var setData = { gamesP1: s1, gamesP2: s2 };
     if (isFixedSet) setData.fixedSet = true;
     if (isTiebreakEntry) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
@@ -1558,10 +1590,12 @@ window._applyResultToTournament = function (t, matchId, payload) {
     m.scoreP1 = s1; m.scoreP2 = s2;
   }
 
-  if (s1 === s2 && allowDraw) {
-    m.winner = 'draw'; m.draw = true;
-  } else {
-    m.winner = s1 > s2 ? m.p1 : m.p2; m.draw = false;
+  if (!payload.gsmFinal) {
+    if (s1 === s2 && allowDraw) {
+      m.winner = 'draw'; m.draw = true;
+    } else {
+      m.winner = s1 > s2 ? m.p1 : m.p2; m.draw = false;
+    }
   }
   m.resultAt = Date.now();
   if (!m.startedAt) m.startedAt = m.resultAt;
@@ -3334,10 +3368,21 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
   var roundStatus = {};  // roundNum -> 'played' | 'folga' | 'inativo'
   var allRoundSet = {};
   Object.keys(playedRoundSet).forEach(function(rk) { roundStatus[rk] = 'played'; allRoundSet[rk] = true; });
+  // v4.4.113: uma rodada só entra como folga/inativo se REALMENTE COMEÇOU (tem ao menos
+  // 1 jogo com resultado). Sem isto, uma rodada gerada mas ainda SEM placar (ex.: R2
+  // sorteada e não jogada) aparecia como "inativo" pro jogador — confuso ("por que inativo
+  // na R2 se ela nem foi jogada?"). Rodada pendente não conta folga/inatividade.
+  var _roundStarted = {};
+  _allM.forEach(function(m) {
+    if (!m || m.isSitOut || m.isBye) return;
+    if (category && m.category !== category) return;
+    if (m.winner) _roundStarted[m.round || m.roundNumber || 0] = true;
+  });
   _allM.forEach(function(m) {
     if (category && m.category !== category) return;
     var rk = m.round || m.roundNumber || 0;
     if (!rk) return;
+    if (roundStatus[rk] !== 'played' && !_roundStarted[rk]) return; // rodada pendente (sem resultado) — ignora
     allRoundSet[rk] = true;
     if (roundStatus[rk] === 'played') return;
     if (m.isSitOut && (m.p1 === playerName || _paInSide(m.p1))) {
@@ -4926,11 +4971,44 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (typeof window._advanceWinner === 'function') window._advanceWinner(t, m);
     if (typeof window._maybeFinishElimination === 'function') window._maybeFinishElimination(t);
 
-    // Save & sync (includes the advance mutations above)
-    window.AppStore.syncImmediate(tId);
-    if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) {
-      window.FirestoreDB.saveTournament(t);
-    }
+    // BLINDAGEM DE CORRIDA (project_concurrency_safe_saves): antes eram DOIS saves de
+    // doc inteiro (syncImmediate + saveTournament) → lost-update quando 2 jogos são
+    // finalizados ao mesmo tempo. Agora re-aplica os campos JÁ computados do resultado
+    // no match FRESCO (+ check-in + advance no fresco), atomicamente. A `t` local já foi
+    // mutada acima (UI otimista).
+    var _liveResult = {
+      sets: m.sets, setsWonP1: m.setsWonP1, setsWonP2: m.setsWonP2,
+      scoreP1: m.scoreP1, scoreP2: m.scoreP2,
+      totalGamesP1: m.totalGamesP1, totalGamesP2: m.totalGamesP2,
+      fixedSet: m.fixedSet, winner: m.winner, draw: m.draw,
+      liveScored: true, resultAt: m.resultAt, startedAt: m.startedAt
+    };
+    var _liveSides = [m.p1, m.p2];
+    var _liveLogMsg = 'Resultado (ao vivo): ' + m.p1 + ' vs ' + m.p2 + (m.winner === 'draw' ? ' — Empate' : ' — Vencedor: ' + m.winner);
+    window.AppStore.logAction(tId, _liveLogMsg);
+    window.AppStore.commitTournamentTx(tId, function (freshT) {
+      var fm = window._findMatch(freshT, matchId);
+      if (!fm) return;
+      Object.keys(_liveResult).forEach(function (k) { if (_liveResult[k] !== undefined) fm[k] = _liveResult[k]; });
+      if (!freshT.checkedIn) freshT.checkedIn = {};
+      if (!freshT.absent) freshT.absent = {};
+      _liveSides.forEach(function (side) {
+        if (!side || side === 'TBD' || side === 'BYE') return;
+        var _ns = side.indexOf(' / ') !== -1 ? side.split(' / ')
+                : side.indexOf('/') !== -1 ? side.split('/') : [side];
+        _ns.forEach(function (raw) {
+          var nm = raw.trim();
+          if (!nm) return;
+          if (!window._idMapHas(freshT, freshT.checkedIn, nm)) window._idMapSet(freshT, freshT.checkedIn, nm, Date.now());
+          window._idMapDel(freshT, freshT.absent, nm);
+        });
+      });
+      if (!freshT.tournamentStarted) freshT.tournamentStarted = Date.now();
+      if (typeof window._advanceWinner === 'function') window._advanceWinner(freshT, fm);
+      if (typeof window._maybeFinishElimination === 'function') window._maybeFinishElimination(freshT);
+      if (!Array.isArray(freshT.history)) freshT.history = [];
+      freshT.history.push({ date: new Date().toISOString(), message: _liveLogMsg });
+    });
 
     // Persist detailed tournament match stats in each registered participant's
     // account so their per-user history outlives the tournament.

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '4.3.35-beta';
+window.SCOREPLACE_VERSION = '4.5.1-beta';
 
 // v2.8.82: preservação de scroll em re-renders por AÇÃO. Chamado no início das
 // funções de render (renderTournaments/renderParticipants/renderBracket). Captura
@@ -874,6 +874,13 @@ window._softRefreshView = function() {
   // close/redirect. Block entirely; user exits intentionally via Voltar/Salvar.
   var _currentView = (window.location.hash || '').replace('#', '').split('/')[0];
   if (_currentView === 'novo-torneio') return;
+  // v4.4.112: #participantes ("+ Participante" / placeholders) é PÁGINA DE FORMULÁRIO —
+  // não tem lista, só campos + botões. Um snapshot do Firestore (o próprio write echoa)
+  // re-renderizava a página e RECRIAVA o botão azul ANTES do cinza "Adicionando…" pintar
+  // → o feedback do _addBtnLoading nunca aparecia ("parece que clicou e nada acontece").
+  // A contagem se atualiza cirurgicamente via _refreshCount no callback. Mesmo padrão do
+  // novo-torneio (form page não re-renderiza em soft-refresh).
+  if (_currentView === 'participantes') return;
   // v2.8.23/60: a DASHBOARD não faz soft-refresh a cada snapshot (rebuild constante do
   // innerHTML = "travada no scroll"). MAS quando o CONJUNTO de torneios muda de verdade
   // (dados que chegaram async do listener — torneios que "não apareciam até navegar"),
@@ -933,6 +940,7 @@ window._softRefreshView = function() {
                   document.getElementById('live-scoring-overlay') ||
                   document.getElementById('casual-match-overlay') ||
                   document.getElementById('unified-resolution-panel') ||
+                  document.getElementById('inactive-phase-panel') ||
                   document.getElementById('groups-config-panel') ||
                   document.getElementById('remainder-resolution-panel') ||
                   document.getElementById('vagas-draw-panel') ||
@@ -3239,7 +3247,7 @@ window._fbAction = function (key, field, val, noRerender) {
     var st = window._filterBarState[key] || (window._filterBarState[key] = {});
     st[field] = val;
     var opts = window._filterBarCfg[key] || {};
-    var idMap = { sort: opts.sortId, gender: opts.genderId, skill: opts.skillId, sport: opts.sportId, search: opts.searchId };
+    var idMap = { sort: opts.sortId, gender: opts.genderId, skill: opts.skillId, sport: opts.sportId, search: opts.searchId, active: opts.activeId };
     var el = idMap[field] && document.getElementById(idMap[field]);
     if (el && el.value !== val) el.value = val;
     if (!noRerender) {
@@ -3253,7 +3261,7 @@ window._fbAction = function (key, field, val, noRerender) {
 window._fbSortPill = function (key, dim) {
     var st = window._filterBarState[key] || (window._filterBarState[key] = {});
     var cur = st.sort || 'order-asc';
-    var curDim = cur.indexOf('name') === 0 ? 'name' : 'order';
+    var curDim = cur.indexOf('name') === 0 ? 'name' : (cur.indexOf('active') === 0 ? 'active' : 'order');
     var curDir = cur.indexOf('-desc') >= 0 ? 'desc' : 'asc';
     var nd = (curDim === dim) ? (curDir === 'asc' ? 'desc' : 'asc') : (st[dim + 'Dir'] || 'asc');
     st[dim + 'Dir'] = nd;
@@ -3281,7 +3289,7 @@ window._fbInner = function (key) {
     var BLUE = { bg: 'rgba(96,165,250,0.22)', bd: 'rgba(96,165,250,0.7)', fg: '#93c5fd' };
     var PINK = { bg: 'rgba(244,114,182,0.22)', bd: 'rgba(244,114,182,0.7)', fg: '#f9a8d4' };
     // SORT (Opção 1): A-Z e 🕒, cada um uma pílula; ativo indigo + seta da direção.
-    var curDim = sort.indexOf('name') === 0 ? 'name' : 'order';
+    var curDim = sort.indexOf('name') === 0 ? 'name' : (sort.indexOf('active') === 0 ? 'active' : 'order');
     var curDir = sort.indexOf('-desc') >= 0 ? 'desc' : 'asc';
     if (!st.nameDir) st.nameDir = (curDim === 'name') ? curDir : 'asc';
     if (!st.orderDir) st.orderDir = (curDim === 'order') ? curDir : 'asc';
@@ -3293,6 +3301,26 @@ window._fbInner = function (key) {
         'Ordem alfabética ' + (nameDir === 'desc' ? '(Z→A)' : '(A→Z)') + ' — clique p/ inverter', 'min-width:auto;');
     var clockPill = pill(orderActive, IND, '🕒' + ar(orderDir), "window._fbSortPill('" + key + "','order')",
         'Ordem de inscrição ' + (orderDir === 'desc' ? '(mais recentes 1º)' : '(mais antigos 1º)') + ' — clique p/ inverter', 'min-width:auto;');
+    // FILTRO ATIVO/INATIVO (bola verde/vermelha) — só quando a regra permite o participante se
+    // desativar (opts.activeSort). Cíclico como o gênero: ⚪ Todos → 🟢 Só ativos → 🔴 Só inativos.
+    // FILTRA a lista de verdade (encolhe) — o sort era imperceptível: "ativos em cima" não mudava
+    // nada porque a lista já é quase toda de ativos. Filtro por data-part-inactive (#part-active).
+    var activePill = '';
+    var aCur = 'all';
+    if (opts.activeSort) {
+        var aOrder = ['all', 'active', 'inactive'];
+        aCur = (aOrder.indexOf(st.active) >= 0) ? st.active : 'all';
+        st.active = aCur;
+        var aNext = aOrder[(aOrder.indexOf(aCur) + 1) % aOrder.length];
+        var aMap = {
+            all:      { sym: '⚪', t: 'Todos',       c: { bg: 'rgba(255,255,255,0.05)', bd: 'rgba(255,255,255,0.14)', fg: 'var(--text-muted)' } },
+            active:   { sym: '🟢', t: 'Só ativos',   c: GREEN },
+            inactive: { sym: '🔴', t: 'Só inativos', c: RED }
+        };
+        var aCfg = aMap[aCur];
+        activePill = pill(aCur !== 'all', aCfg.c, aCfg.sym, "window._fbAction('" + key + "','active','" + aNext + "')",
+            'Atividade: ' + aCfg.t + ' — clique p/ alternar', 'font-size:0.9rem;min-width:34px;');
+    }
     // GÊNERO cíclico: ⚥ ambos(verde) → ♂ masc(azul) → ♀ fem(rosa) → 🚫 sem gênero(vermelho)
     var gOrder = ['all', 'Masc', 'Fem', 'none'];
     var gMap = {
@@ -3345,6 +3373,7 @@ window._fbInner = function (key) {
     // (pedido do dono). Sem botão e sem input oculto de gênero nesse modo.
     if (opts.genderId && !modeT) hidden += '<input type="hidden" id="' + opts.genderId + '" value="' + gCur + '">';
     if (opts.skillId) hidden += '<input type="hidden" id="' + opts.skillId + '" value="' + sCur + '">';
+    if (opts.activeId) hidden += '<input type="hidden" id="' + opts.activeId + '" value="' + aCur + '">';
     if (opts.sportId) hidden += '<input type="hidden" id="' + opts.sportId + '" value="' + esc(spCur) + '">';
     var searchInp = '';
     if (opts.searchId) {
@@ -3360,7 +3389,7 @@ window._fbInner = function (key) {
     // as pílulas na mesma linha.
     return hidden
         + '<div style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;">'
-        + azPill + clockPill
+        + azPill + clockPill + activePill
         + '<span style="flex:0 0 auto;width:1px;height:22px;background:rgba(255,255,255,0.12);margin:0 1px;"></span>'
         + (modeT ? '' : genderBtn) + thirdBtn + searchInp
         + '</div>';
@@ -3410,7 +3439,11 @@ window._inscritosBar = function (t, show) {
         stateKey: 'inscritos', sort: 'name-asc', sticky: true,
         searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
         onChange: 'window._partApplyFilter()',
-        skillCategories: ((t && t.skillCategories) || [])
+        skillCategories: ((t && t.skillCategories) || []),
+        // v4.4.63/65: FILTRO ativos/inativos (bola verde/vermelha) só quando a regra permite o
+        // participante se desativar (allowSelfDeactivation, conceito de Liga/Pontos Corridos).
+        activeId: 'part-active',
+        activeSort: !!(t && t.allowSelfDeactivation !== false && window._isLigaFormat && window._isLigaFormat(t))
     });
     return bar + '<div id="part-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum inscrito encontrado.</div>';
 };
@@ -4662,12 +4695,32 @@ window.AppStore = {
       // perdeu as fases horas depois". Strip numa cópia rasa: não muta o objeto vivo
       // (a flag em memória se auto-limpa no próximo echo do onSnapshot).
       var clean = this.tournaments.map(function(t) {
-        if (t && t._allowConfigReset !== undefined) {
-          var c = Object.assign({}, t);
-          delete c._allowConfigReset;
-          return c;
+        if (!t) return t;
+        // v4.4.69 FONTE ÚNICA Rei/Rainha: o cache local também guarda os grupos só
+        // com matchIds (round.matches é a única lista de jogos). Sem isto o
+        // localStorage duplicaria cada jogo (group.matches são refs → JSON as copia).
+        // Clona só o que for tocado — nunca muta o objeto vivo (que mantém as refs).
+        var _needFold = Array.isArray(t.rounds) && t.rounds.some(function(r){ return r && Array.isArray(r.monarchGroups) && r.monarchGroups.some(function(g){ return g && Array.isArray(g.matches); }); });
+        if (t._allowConfigReset === undefined && !_needFold) return t;
+        var c = Object.assign({}, t);
+        delete c._allowConfigReset;
+        if (_needFold) {
+          c.rounds = t.rounds.map(function(r){
+            if (!r || !Array.isArray(r.monarchGroups)) return r;
+            var rc = Object.assign({}, r);
+            rc.monarchGroups = r.monarchGroups.map(function(g){
+              if (!g || !Array.isArray(g.matches)) return g;
+              var gc = Object.assign({}, g);
+              if (!Array.isArray(gc.matchIds) || !gc.matchIds.length) {
+                gc.matchIds = g.matches.map(function(m){ return m && m.id; }).filter(function(x){ return x != null; }).map(String);
+              }
+              delete gc.matches;
+              return gc;
+            });
+            return rc;
+          });
         }
-        return t;
+        return c;
       });
       var data = { ts: Date.now(), tournaments: clean };
       localStorage.setItem(this._cacheKey, JSON.stringify(data));
@@ -4688,6 +4741,11 @@ window.AppStore = {
           });
         } else {
           this.tournaments = data.tournaments;
+        }
+        // v4.4.69 Rei/Rainha: o cache guarda grupos só com matchIds — reidrata
+        // group.matches como refs de round.matches antes de qualquer consumidor.
+        if (typeof window._hydrateMonarchGroups === 'function') {
+          this.tournaments.forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
         }
         // Loaded from local cache
         return true;
@@ -5088,7 +5146,12 @@ window.AppStore = {
           }
         });
         store.tournaments = tournaments;
-        store._saveToCache();
+        store._saveToCache(); // cache enxuto (matchIds) — foldado dentro do _saveToCache
+        // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte
+        // única) DEPOIS de cachear — todo consumidor em memória vê os grupos montados.
+        if (typeof window._hydrateMonarchGroups === 'function') {
+          tournaments.forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
+        }
         store._loading = false;
 
         // v1.9.81: detecta remoções (presente antes, ausente agora) e, se o
@@ -5188,7 +5251,9 @@ window.AppStore = {
                 snap2.forEach(function(doc) {
                   var id = String(doc.id);
                   if (!existing.has(id)) {
-                    store.tournaments.push(doc.data());
+                    var _td = doc.data();
+                    if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(_td); } catch(e){} }
+                    store.tournaments.push(_td);
                     added++;
                   }
                 });
@@ -5559,6 +5624,10 @@ window.AppStore = {
       }
       this.tournaments = tournaments;
       this._saveToCache();
+      // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte única).
+      if (typeof window._hydrateMonarchGroups === 'function') {
+        this.tournaments.forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
+      }
       // Tournaments loaded from Firestore
     } catch (e) {
       window._error('Erro ao carregar torneios:', e);

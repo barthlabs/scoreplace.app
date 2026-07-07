@@ -56,7 +56,12 @@ window._processWoSubstitutions = function(tId) {
   if (!t) return { ok: false, reason: 'no-tournament' };
   const r = window._applyWoSubsToTournament(t);
   if (r && r.subCount > 0) {
-    if (typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
+    // BLINDAGEM (project_concurrency_safe_saves): re-aplica as substituições no doc
+    // FRESCO via portão (o núcleo é idempotente — absent já substituído = no-op), em
+    // vez de syncImmediate (doc inteiro → lost-update com check-in/resultado concorrente).
+    if (window.AppStore && typeof window.AppStore.mutate === 'function') {
+      window.AppStore.mutate(tId, function (ft) { window._applyWoSubsToTournament(ft); });
+    } else if (typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
     else window.AppStore.sync();
   }
   return r;
@@ -754,48 +759,44 @@ window._showAbsenteeResolutionDialog = function (tId, present, absentees, procee
 window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  if (!t.checkedIn) t.checkedIn = {};
-  if (!t.absent) t.absent = {};
-  const parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  const present = [];
-  const absentees = [];
-  parts.forEach(function (p) {
-    const en = window._pName(p);
-    if (window._idMapHas(t, t.checkedIn, p)) present.push(p);
-    else absentees.push(p);
-  });
-
-  if (mode === 'waitlist') {
-    if (!Array.isArray(t.waitlist)) t.waitlist = [];
-    absentees.forEach(function (p) {
-      const en = window._pName(p);
-      const exists = t.waitlist.some(function (w) { return window._pName(w) === en; });
-      if (!exists) t.waitlist.push(p);
-      // Estado neutro na lista de espera (pode ser chamado depois p/ substituir W.O.)
-      window._idMapDel(t, t.checkedIn, p);
-      window._idMapDel(t, t.absent, p);
+  // Núcleo PURO da chamada pré-sorteio (transaction-safe): particiona presentes×
+  // ausentes pelo check-in do `tt` passado, move ausentes p/ espera|desclassificados
+  // (dedup por nome) e seta participants=presentes. Idempotente (2ª passada: todos os
+  // participantes restantes já são presentes → ninguém a mover). Reusável no portão.
+  var _applyRoll = function (tt) {
+    if (!tt.checkedIn) tt.checkedIn = {};
+    if (!tt.absent) tt.absent = {};
+    var _pp = Array.isArray(tt.participants) ? tt.participants : Object.values(tt.participants || {});
+    var pres = [], abs = [];
+    _pp.forEach(function (p) { if (window._idMapHas(tt, tt.checkedIn, p)) pres.push(p); else abs.push(p); });
+    var bucket = (mode === 'waitlist') ? 'waitlist' : 'disqualified';
+    if (!Array.isArray(tt[bucket])) tt[bucket] = [];
+    abs.forEach(function (p) {
+      var en = window._pName(p);
+      if (!tt[bucket].some(function (w) { return window._pName(w) === en; })) tt[bucket].push(p);
+      // Estado neutro (pode ser chamado depois p/ substituir W.O.)
+      window._idMapDel(tt, tt.checkedIn, p);
+      window._idMapDel(tt, tt.absent, p);
     });
-  } else { // disqualify
-    if (!Array.isArray(t.disqualified)) t.disqualified = [];
-    absentees.forEach(function (p) {
-      const en = window._pName(p);
-      const exists = t.disqualified.some(function (w) { return window._pName(w) === en; });
-      if (!exists) t.disqualified.push(p);
-      window._idMapDel(t, t.checkedIn, p);
-      window._idMapDel(t, t.absent, p);
-    });
-  }
-
-  t.participants = present;
+    tt.participants = pres;
+    return { present: pres, absent: abs };
+  };
+  var _rc = _applyRoll(t); // local otimista + arrays pra UI/log
+  var present = _rc.present, absentees = _rc.absent;
 
   if (window.AppStore && typeof window.AppStore.logAction === 'function') {
     window.AppStore.logAction(tId, 'Chamada pré-sorteio: ' + present.length + ' presente(s), ' +
       absentees.length + (mode === 'waitlist' ? ' à lista de espera' : ' desclassificado(s)'));
   }
 
-  const savePromise = (window.AppStore && typeof window.AppStore.syncImmediate === 'function')
-    ? window.AppStore.syncImmediate(tId)
-    : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve());
+  // BLINDAGEM (project_concurrency_safe_saves): re-aplica a chamada no doc FRESCO via
+  // portão (idempotente), em vez de syncImmediate (doc inteiro → clobbera check-in
+  // concorrente). Re-particiona pela presença fresca — mais correto sob concorrência.
+  const savePromise = (window.AppStore && typeof window.AppStore.mutate === 'function')
+    ? window.AppStore.mutate(tId, function (ft) { _applyRoll(ft); })
+    : ((window.AppStore && typeof window.AppStore.syncImmediate === 'function')
+        ? window.AppStore.syncImmediate(tId)
+        : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve()));
 
   Promise.resolve(savePromise).then(function () {
     if (typeof showNotification === 'function') {
@@ -977,6 +978,9 @@ window._partApplyFilter = function () {
   var sort = (document.getElementById('part-sort') || {}).value || 'name-asc';
   var gf = (document.getElementById('part-gender') || {}).value || 'all';
   var sk = (document.getElementById('part-skill') || {}).value || 'all';
+  // v4.4.65: FILTRO ativos/inativos (bola verde/vermelha). all=todos, active=só ativos,
+  // inactive=só inativos. Lê data-part-inactive (1=inativo).
+  var af = (document.getElementById('part-active') || {}).value || 'all';
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-part-card]'));
   if (!cards.length) return;
   var shown = 0;
@@ -989,10 +993,12 @@ window._partApplyFilter = function () {
     // (data-part-name casa qualquer um dos nomes). Pra solo, mantém o casamento exato,
     // tolerando também valor multi (g/s separados por vírgula) por segurança.
     var isMulti = c.getAttribute('data-part-multi') === '1';
+    var _inact = c.getAttribute('data-part-inactive') === '1';
     var okSearch = !q || nm.indexOf(q) !== -1;
     var okGender = isMulti || gf === 'all' || g === gf || g.split(',').indexOf(gf) !== -1;
     var okSkill = isMulti || sk === 'all' || s === sk || s.split(',').indexOf(sk) !== -1;
-    var ok = okSearch && okGender && okSkill;
+    var okActive = af === 'all' || (af === 'active' ? !_inact : _inact);
+    var ok = okSearch && okGender && okSkill && okActive;
     c.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
@@ -1015,6 +1021,7 @@ window._partApplyFilter = function () {
       var r = (a.getAttribute('data-part-name') || '').localeCompare(b.getAttribute('data-part-name') || '', 'pt-BR', { sensitivity: 'base' });
       return sort === 'name-desc' ? -r : r;
     }
+    // v4.4.65: ativo/inativo virou FILTRO (acima), não sort — sort era imperceptível.
     var oa = parseInt(a.getAttribute('data-part-order') || '0', 10), ob = parseInt(b.getAttribute('data-part-order') || '0', 10);
     return sort === 'order-desc' ? (ob - oa) : (oa - ob);
   };
@@ -2137,8 +2144,11 @@ function renderParticipants(container, tournamentId) {
       const _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
       const _fOrder = (_fEnrollNum !== '' && _fEnrollNum != null) ? (_fEnrollNum - 1) : idx;
       const _fNameAttr = (pName || '').toLowerCase().replace(/"/g, '&quot;');
+      // v4.4.64: inativo (Liga com auto-desativação) → data-part-inactive p/ o sort ativos/inativos
+      // funcionar TAMBÉM neste renderer (antes só a lista compacta 1937 tinha o attr).
+      const _fInactive = (t.allowSelfDeactivation !== false && _gPart && _gPart.ligaActive === false) ? '1' : '0';
       return `
-        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="${_isStandbyEntry ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+        <div class="participant-card" data-part-card="1" data-part-org="${_isOrgP ? '1' : '0'}" data-part-vip="${isVip ? '1' : '0'}" data-part-standby="${_isStandbyEntry ? '1' : '0'}" data-part-name="${_fNameAttr}" data-part-inactive="${_fInactive}" data-part-gender="${_fGender}" data-part-skill="${String(_fSkill).replace(/"/g, '&quot;')}" data-part-order="${_fOrder}" ${dragProps} style="${cardStyle} border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;${isOrg ? 'cursor:grab;' : ''}${_rcCardExtra}" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
             ${(function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })()}
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (igual ao card pós-sorteio) -->

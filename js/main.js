@@ -1510,15 +1510,10 @@ window.renderHelpPage = function (container) {
     const liga = document.getElementById('liga-open-enrollment');
     if (liga) liga.checked = true;
     // elimThirdPlace is always true — no toggle needed
-    // Construtor de fases: torneio novo começa com fase única (sem fases extras)
-    window._extraPhases = [];
-    // v3.0.x: resetar também a flag "usuário mexeu nas fases". Sem isto, se o organizador
-    // editou um torneio multi-fase (touched=true) e, na mesma sessão, abre "Detalhes
-    // Avançados" pra um torneio NOVO, a flag fica stale e o save grava _allowConfigReset=true
-    // num torneio recém-criado — autoriza reset de config sem o usuário ter tocado nas fases.
-    window._phasesUserTouched = false;
+    // v4.4.x (Camada 2): construtor de fases 2+ removido. Torneio novo começa limpo — o
+    // configurador único (format2) monta com o default do esporte no _f2MountInEditForm.
     window._phase1Name = '';
-    window._phase1Rounds = 1;
+    window._f2PendingTemplateCfg = null;
 
     // Pré-selecionar sport
     const sportSelect = document.getElementById('select-sport');

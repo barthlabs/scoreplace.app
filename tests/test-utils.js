@@ -102,6 +102,17 @@ assert(window._notifLevelAllowed('fundamentais', 'fundamental') === true, 'funda
 assert(window._notifLevelAllowed(null, 'all') === true, 'null level allows all');
 assert(window._notifLevelAllowed(undefined, 'important') === true, 'undefined level allows all');
 
+// ─── _isTeamEnrollMode (v4.4.96 — drift 'time' vs 'teams' que quebrava o card de duplas) ───
+console.log('\n📋 _isTeamEnrollMode');
+assert(typeof window._isTeamEnrollMode === 'function', 'helper canônico existe');
+assert(window._isTeamEnrollMode('time') === true, "'time' (legado) é modo de equipe");
+assert(window._isTeamEnrollMode('teams') === true, "'teams' (format2) é modo de equipe — REGRESSÃO se falhar");
+assert(window._isTeamEnrollMode('misto') === true, "'misto' permite equipes");
+assert(window._isTeamEnrollMode('individual') === false, "'individual' NÃO é equipe");
+assert(window._isTeamEnrollMode(undefined) === false, 'undefined não é equipe');
+assert(window._isTeamEnrollMode(null) === false, 'null não é equipe');
+assert(window._isTeamEnrollMode('') === false, 'string vazia não é equipe');
+
 // ─── Summary ───
 console.log('\n' + '─'.repeat(40));
 console.log('Results: ' + passed + ' passed, ' + failed + ' failed');
