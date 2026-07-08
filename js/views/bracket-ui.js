@@ -6307,8 +6307,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var gamesCenter = '';
     if (showGamesBox) {
       gamesCenter =
-        '<div class="live-games-box" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:4px clamp(14px,3.5vw,22px);">' +
-          '<span style="font-size:0.62rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
+        '<div class="live-games-box" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:clamp(12px,3vh,24px) clamp(16px,4vw,36px);">' +
+          '<span style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Games</span>' +
           '<div style="display:flex;align-items:center;gap:clamp(12px,4vw,24px);">' +
             '<span style="font-size:calc(clamp(4rem,14vw,7rem) * var(--live-score-scale,1));font-weight:900;color:' + _gamesLeftClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + _gamesLeftStr + '</span>' +
             '<span style="font-size:calc(clamp(2rem,6vw,3.5rem) * var(--live-score-scale,1));font-weight:300;color:rgba(255,255,255,0.25);">–</span>' +
@@ -6324,73 +6324,56 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var display = player === 1 ? p1Display : p2Display;
       var plateBg = _isDeuce ? '#f97316' : '#fff';
       var plateClr = _isDeuce ? '#fff' : '#111';
-      // v4.5.29: a placa BRANCA abraça o número (padding e raio FIXOS — não
-      // escalam com o slider, senão só cresceria vazio+arredondamento). O número
-      // preenche a LARGURA da placa via _fitLivePlateText (mesmo tamanho p/ 0/15/
-      // 30/40/AD). A linha da placa é flex:0 0 auto → sem espaço vazio reservado.
-      return '<div class="ls-plate-box" style="width:100%;height:auto;background:' + plateBg + ';border-radius:16px;padding:4px 8px;box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
-        '<span class="ls-plate-num" style="font-size:clamp(3rem,32vw,9rem);font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
+      // v4.0.11: height:auto → o box BRANCO abraça o número (sem espaço branco
+      // sobrando); o número é dimensionado pela largura (mesmo tamanho p/ 0/15/
+      // 30/40/AD) no _fitLivePlateText. max-height:100% impede transbordar a linha.
+      return '<div class="ls-plate-box" style="width:100%;height:auto;max-height:100%;background:' + plateBg + ';border-radius:calc(18px * var(--live-plate-scale,1));padding:calc(10px * var(--live-plate-scale,1)) calc(6px * var(--live-plate-scale,1));box-shadow:0 6px 36px rgba(0,0,0,0.5),0 0 0 4px ' + clr + ';display:flex;align-items:center;justify-content:center;">' +
+        '<span class="ls-plate-num" style="font-size:calc(clamp(4rem,20vw,9rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
       '</div>';
     };
 
-    // v2.2.16-beta: ajusta o tamanho do número do placar e dos botões.
-    // v4.5.29-beta: mede APENAS a LARGURA da placa (offsetWidth — estável, não
-    // depende de altura de linha, fotos ou timing → determinístico, sem o glitch
-    // do single-RAF). O número preenche a largura interna da placa; como a placa
-    // é height:auto e a linha é flex:0 0 auto, ela ABRAÇA o número (zero vazio).
-    // Sempre 2 chars de referência (15/30/40/AD) → todos os placares no MESMO
-    // tamanho, independente do valor. O slider "Placar" (--live-plate-scale)
-    // escala em cima disso, com teto em 100% da largura (nunca estoura a placa).
-    var _doFitLivePlateText = function(ov) {
-      var boxes = ov.querySelectorAll('.ls-plate-box');
-      if (!boxes.length) return;
-      var plateScale = parseFloat(getComputedStyle(ov).getPropertyValue('--live-plate-scale')) || 1;
-      if (!(plateScale > 0)) plateScale = 1;
-      // Peso 900 tabular: cada char ≈ 0.62× o font-size em largura.
-      var REF_CHARS = 2, CHAR_W = 0.62;
-      var minFillW = Infinity;
-      boxes.forEach(function(box) {
-        var padX = parseFloat(getComputedStyle(box).paddingLeft) || 0;
-        var bw = box.offsetWidth - padX * 2;
-        if (bw > 10 && bw < minFillW) minFillW = bw;
-      });
-      if (minFillW === Infinity) return;
-      var fullFs = minFillW / (REF_CHARS * CHAR_W);          // 100% da largura
-      // Base a 94% (respiro nas bordas). O slider cresce até 100% e para —
-      // em retrato 2 placares lado a lado, a largura é o limite físico.
-      var fs = Math.floor(fullFs * Math.min(plateScale * 0.94, 0.97));
-      if (fs < 12) return;
-      boxes.forEach(function(box) {
-        var span = box.querySelector('.ls-plate-num');
-        if (span) span.style.fontSize = fs + 'px';
-      });
-      // Botões ↑/↓ preenchem a altura sobrando — o glifo acompanha a altura real.
-      ov.querySelectorAll('.ls-up-btn').forEach(function(btn) {
-        var h = btn.offsetHeight;
-        if (h > 10) btn.style.fontSize = Math.floor(h * 0.5) + 'px';
-      });
-      ov.querySelectorAll('.ls-down-btn').forEach(function(btn) {
-        var h = btn.offsetHeight;
-        if (h > 10) btn.style.fontSize = Math.floor(h * 0.5) + 'px';
-      });
-    };
+    // v2.2.16-beta: ajusta o tamanho do número e dos botões para preencher o
+    // box disponível em modo portrait. Chamado após render e ao mover o slider.
     var _fitLivePlateText = function() {
       var ov = document.getElementById('live-scoring-overlay');
       if (!ov) return;
       requestAnimationFrame(function() {
-        requestAnimationFrame(function() {
-          var el = document.getElementById('live-scoring-overlay');
-          if (el) _doFitLivePlateText(el);
+        var boxes = ov.querySelectorAll('.ls-plate-box');
+        if (!boxes.length) return;
+        // Usa sempre 2 chars como referência — pior caso do sistema de pontuação
+        // (15, 30, 40, AD). Garante que todos os boxes tenham o mesmo fontSize
+        // independente do valor atual ("0" não fica maior que "40").
+        // Fonte weight-900 tabular: cada char ≈ 0.65× fontSize em largura.
+        var REF_CHARS = 2;
+        var minFs = Infinity;
+        boxes.forEach(function(box) {
+          var pad = parseFloat(getComputedStyle(box).paddingTop) || 6;
+          // v4.0.11: altura disponível = do PAI (wrapper com a altura da linha),
+          // NÃO do próprio box — o box agora tem height:auto (abraça o número), e
+          // medir a altura dele criaria circularidade (encolhia o número). A
+          // largura é a real restrição (2 chars na metade da tela); usamos ~0.9
+          // dela pro maior valor (AD/40) caber sempre no MESMO tamanho.
+          var availH = ((box.parentElement && box.parentElement.clientHeight) || box.offsetHeight) - pad * 2;
+          var bw = box.offsetWidth - pad * 2;
+          if (availH < 10 || bw < 10) return;
+          var fs = Math.min(availH * 0.92, (bw * 0.9) / (REF_CHARS * 0.66));
+          if (fs < minFs) minFs = fs;
+        });
+        if (minFs === Infinity || minFs < 16) return;
+        var fs = Math.floor(minFs);
+        boxes.forEach(function(box) {
+          var span = box.querySelector('.ls-plate-num');
+          if (span) span.style.fontSize = fs + 'px';
+        });
+        ov.querySelectorAll('.ls-up-btn').forEach(function(btn) {
+          var h = btn.offsetHeight;
+          if (h > 10) btn.style.fontSize = Math.floor(h * 0.55) + 'px';
+        });
+        ov.querySelectorAll('.ls-down-btn').forEach(function(btn) {
+          var h = btn.offsetHeight;
+          if (h > 10) btn.style.fontSize = Math.floor(h * 0.52) + 'px';
         });
       });
-      // Re-fit tardio: as fotos/avatares dos jogadores carregam async e mudam a
-      // altura da linha de nomes → a linha da placa reflowa depois do 2º frame.
-      // Um ajuste extra a ~220ms garante o tamanho certo mesmo nesse caso (é
-      // idempotente: se já estiver correto, reescreve o mesmo px, sem "pulo").
-      setTimeout(function() {
-        var el = document.getElementById('live-scoring-overlay');
-        if (el) _doFitLivePlateText(el);
-      }, 220);
     };
     window._fitLivePlateText = _fitLivePlateText;
 
@@ -6420,8 +6403,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var plateClr = _isDeuce ? '#fff' : '#111';
         // v4.0.5: classes ls-plate-box/ls-plate-num pra o _fitLivePlateText tratar
         // o NÚMERO em paisagem também — reserva 2 chars (15/30/40/AD), sem truncar.
-        return '<div class="ls-plate-box" style="width:100%;background:' + plateBg + ';border-radius:14px;padding:clamp(8px,3vh,20px) 4px;box-shadow:0 4px 24px rgba(0,0,0,0.5),0 0 0 3px ' + clr + ';display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
-          '<span class="ls-plate-num" style="font-size:clamp(3rem,20vw,7rem);font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + display + '</span>' +
+        return '<div class="ls-plate-box" style="width:100%;background:' + plateBg + ';border-radius:calc(14px * var(--live-plate-scale,1));padding:calc(clamp(10px,4vh,28px) * var(--live-plate-scale,1)) calc(4px * var(--live-plate-scale,1));box-shadow:0 4px 24px rgba(0,0,0,0.5),0 0 0 3px ' + clr + ';display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
+          '<span class="ls-plate-num" style="font-size:calc(clamp(3.5rem,14vw,7rem) * var(--live-plate-scale,1));font-weight:900;color:' + plateClr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + display + '</span>' +
         '</div>';
       };
       var _lsUpBtn = function(player) {
@@ -6467,11 +6450,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
               _lsBtns(leftTeam) +
             '</div>' +
             // Left plate
-            '<div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;max-width:32vw;">' +
+            '<div style="flex:1;display:flex;align-items:center;justify-content:center;max-width:32vw;">' +
               _lsPlate(leftTeam) +
             '</div>' +
             // Right plate
-            '<div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;max-width:32vw;">' +
+            '<div style="flex:1;display:flex;align-items:center;justify-content:center;max-width:32vw;">' +
               _lsPlate(rightTeam) +
             '</div>' +
             // Right column: names + buttons stacked
@@ -6538,12 +6521,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
               _buildNameStack(rightTeam) +
             '</div>' +
           '</div>' +
-          // Placares — v4.5.29: flex:0 0 auto → a linha ABRAÇA a placa (que abraça
-          // o número). NÃO reserva bloco vertical (era flex:2.8*scale, criava o
-          // vazio escuro em volta do número). Os botões abaixo preenchem a sobra.
-          '<div style="flex:0 0 auto;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
-            '<div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;min-height:0;">' + _buildPlate(leftTeam) + '</div>' +
-            '<div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;min-height:0;">' + _buildPlate(rightTeam) + '</div>' +
+          // Placares — flex escala com --live-plate-scale
+          '<div style="flex:calc(2.8 * var(--live-plate-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
+            '<div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;">' + _buildPlate(leftTeam) + '</div>' +
+            '<div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;">' + _buildPlate(rightTeam) + '</div>' +
           '</div>' +
           // Botões ↑ — flex escala com --live-btn-scale
           (!state.isFinished ? '<div style="flex:calc(3 * var(--live-btn-scale,1));min-height:0;display:flex;align-items:stretch;width:100%;gap:4px;padding:2px clamp(4px,1.5vw,10px);">' +
