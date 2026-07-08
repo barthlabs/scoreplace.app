@@ -211,6 +211,27 @@ function renderBracket(container, tournamentId, isInline) {
     } catch (e) {}
   }
 
+  // INCREMENT 2: duplas formadas na lista de espera (Dupla Eliminatória) entram na chave, por
+  // progressão do torneio — Tier 1 (R2 upper não começou) → R1 do upper. Ver _integrateLateDuplas.
+  if (isOrg && typeof window._integrateLateDuplas === 'function') {
+    try {
+      var _nLJ = window._integrateLateDuplas(t);
+      if (_nLJ > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
+        window.FirestoreDB.saveTournament(t);
+        if (typeof showNotification !== 'undefined') showNotification('🤝 ' + _nLJ + ' dupla(s) na chave', 'Entraram na R1 da chave superior (vencedor sobe, derrotado cai pro lower).', 'success');
+      } else if (_nLJ === -3 && typeof window._dissolveLateDuplas === 'function') {
+        // Tier 3: R2 do lower já começou → duplas viram suplentes individuais.
+        var _nd = window._dissolveLateDuplas(t);
+        if (_nd > 0 && window.FirestoreDB) { window.FirestoreDB.saveTournament(t);
+          if (typeof showNotification !== 'undefined') showNotification('👤 Suplentes individuais', 'O torneio já avançou na chave inferior — as duplas em espera viraram suplentes individuais.', 'info'); }
+      } else if (_nLJ === -2) {
+        if (!window._ljLockNotif) window._ljLockNotif = {};
+        if (!window._ljLockNotif[t.id]) { window._ljLockNotif[t.id] = 1;
+          if (typeof showNotification !== 'undefined') showNotification('⏳ Duplas na lista de espera', 'A R2 do upper já começou — as duplas novas entrarão na chave inferior (em construção). Por ora ficam na lista de espera.', 'info'); }
+      }
+    } catch (e) {}
+  }
+
   // v3.1.22: Rei/Rainha — novos GRUPOS a partir da lista de espera (Inscrições durante
   // a fase, "Novos Confrontos"). Regra canônica: só quando expand, mesmo-dia conta
   // presença, sorteia o pareamento. Idempotente (forma 0 em regime → sem loop/save).
@@ -767,7 +788,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
 
   return '<div id="late-join-pairing-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.25);border-radius:16px;padding:1.5rem;">'
     + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">inscrições abertas · R1</span></div>'
-    + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste o ⠿ de um card sobre outro para formar uma dupla na lista de espera. Enquanto as inscrições estão abertas (R1), avulsos podem se juntar em duplas.</div>'
+    + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste o ⠿ de um card sobre outro para formar uma dupla. Enquanto a 2ª rodada do upper não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai pro lower).</div>'
     + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:1.1rem;">' + solosHtml + '</div>' : '')
     + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">' + duplasHtml + '</div>' : '')
     + _readyMsg

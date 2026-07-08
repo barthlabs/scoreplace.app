@@ -440,6 +440,168 @@ window._applyMixedOriginCategories = function(t, participants) {
 // semis→quartas…), vencedores avançam e, ao terminar a R1, os melhores
 // derrotados (originais + tardios) entram por repescagem pra fechar a potência
 // de 2. Reusa o motor de repescagem/avanço que já existe.
+// Constrói o POOL da fase 0 (entradas com displayName) do jeito EXATO do sorteio inicial.
+// Extraído de generateDrawFunction pra ser reusado pela regeneração de dupla-elim quando
+// duplas tardias entram (window._integrateLateDuplas). isMon = Rei/Rainha (decompõe em pessoas);
+// ts = teamSize efetivo (duplas mantidas como 1 entrada). NÃO forma duplas — assume que
+// t.participants já tem as entradas certas (o sorteio inicial já rodou _formDoublesTeams).
+window._buildPhase0Pool = function (t, isMon, ts) {
+  var _raw = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}));
+  var _pName = window._pName ? window._pName : function (p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
+  var pool;
+  if (isMon) {
+    pool = [];
+    _raw.forEach(function (p) {
+      if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
+        p.participants.forEach(function (s) { var nm = (s && (s.displayName || s.name)) || String(s || ''); pool.push((s && typeof s === 'object') ? Object.assign({ displayName: nm }, s) : { displayName: nm }); });
+      } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+        pool.push({ displayName: p.p1Name || p.p1Uid || '', uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || p.gender });
+        pool.push({ displayName: p.p2Name || p.p2Uid || '', uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || p.gender });
+      } else {
+        var nm = _pName(p); pool.push((typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm });
+      }
+    });
+  } else {
+    pool = _raw
+      .filter(function (p) { return ts <= 1 || !!window._entryTeamMembers(p) || (typeof p === 'object' && !p.p1Name && !Array.isArray(p.participants)); })
+      .map(function (p) { var nm = _pName(p); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
+  }
+  return pool;
+};
+
+// INCREMENT 2 (regra do dono): duplas formadas na lista de espera durante a R1 (janela de
+// inscrição tardia aberta) entram na chave "como se tivessem sido sorteadas no sorteio
+// original" — vencedor segue no upper, derrotado cai pro lower, e o ajuste de pow2 (repescagem/
+// bye) é REFEITO pela resolução escolhida pelo organizador. Como a estrutura da dupla-elim
+// (repescagem: quem vai direto pro upper vs. play-in, tamanho do lower) é derivada do TOTAL de
+// duplas e a semeadura re-pareia a R1, a única forma correta e segura é REGENERAR a fase 0 com o
+// pool completo (originais + tardias) — reusando o MESMO motor do sorteio inicial. Só roda
+// enquanto NENHUM jogo da R1 tem resultado (re-semear não pode atropelar jogo já jogado); se já
+// houver resultado, retorna -1 (o chamador mantém as duplas como suplentes e avisa).
+// Retorna: nº de duplas integradas (>0), 0 (nada a fazer), -1 (travado por jogo já jogado).
+//
+// ⚠️ DESABILITADA (v4.5.22): a abordagem de REGENERAR estava ERRADA (pedido do dono). O modelo
+// correto é APPEND por progressão: 2 duplas (ou 1 numa vaga sem adversário) → jogo na R1 do UPPER
+// se a R2 do upper não começou; se a R2 do upper já começou → jogo na R1 do LOWER; se a R2 do
+// lower já começou → suplentes individuais (duplas desfeitas). Sendo reconstruída nesse modelo.
+// Modelo de APPEND por progressão (repescagem/playin). Retorno:
+//   >0  = nº de duplas integradas na R1 do upper (Tier 1)
+//    0  = nada a fazer (sem duplas formadas, ou 1 dupla sem par disponível → aguarda)
+//   -2  = Tier 2 (R2 do upper já começou) → append no LOWER R1 (ainda não implementado)
+//   -3  = Tier 3 (R2 do lower já começou) → suplentes individuais (caller dissolve as duplas)
+window._integrateLateDuplas = function (t) {
+  if (!t) return 0;
+  if (t.lateEnrollment !== 'expand' && t.lateEnrollment !== 'standby') return 0;
+  if (!/dupla/i.test(t.format || '')) return 0; // Eliminatória Simples: _createExtraGamesFromWaitlist
+  if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio ainda não feito
+  if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-cat: fora do escopo
+
+  var _isPair = function (p) { return p && typeof p === 'object' && p.p1Name && p.p2Name; };
+  var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
+  var formed = [];
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (Array.isArray(t[k])) t[k].forEach(function (p) { if (_isPair(p) && p._lateJoin) formed.push(p); });
+  });
+  if (!formed.length) return 0;
+
+  // Só a estrutura de REPESCAGEM (playin) tem repR1 round 0 (todos jogam a "R1 do upper").
+  // Pow2 puro (needsDoubleElim, byes na upper R1) fica pra depois.
+  var repR1 = t.matches.filter(function (m) { return m && m.round === 0 && m.isPhaseRepR1 && m.bracket === 'upper'; });
+  if (!repR1.length) return 0;
+
+  // Tier: "R1 upper" = round 0; "R2 upper" = round 1. "R1 lower" = round 1; "R2 lower" = round 2.
+  var _hasResult = function (m) { return m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || (m.sets && m.sets.length) || m.startedAt); };
+  var upperR2Started = t.matches.some(function (m) { return m && m.bracket === 'upper' && m.round >= 1 && _hasResult(m); });
+  var lowerR2Started = t.matches.some(function (m) { return m && m.bracket === 'lower' && m.round >= 2 && _hasResult(m); });
+  if (lowerR2Started) return -3; // TIER 3
+  if (upperR2Started) return -2; // TIER 2 (lower R1) — TODO
+
+  // ===== TIER 1: append no upper R1 (round-0 repR1) preservando resultados + rebuild + re-propaga =====
+  // satTeam atual = dupla inscrita que NÃO está em nenhum jogo repR1 (ficou de fora / foi pro lower).
+  var inRep = {};
+  repR1.forEach(function (m) { if (m.p1) inRep[m.p1] = 1; if (m.p2) inRep[m.p2] = 1; });
+  var parts = Array.isArray(t.participants) ? t.participants : [];
+  var satTeam = null;
+  for (var pi = 0; pi < parts.length && !satTeam; pi++) { if (_isPair(parts[pi]) && !inRep[_nm(parts[pi])]) satTeam = parts[pi]; }
+
+  // Pool não-pareado = [satTeam?] + duplas tardias. Forma jogos 2-a-2; SOBRA de 1 dupla nova aguarda.
+  var unpaired = (satTeam ? [satTeam] : []).concat(formed);
+  var idp = 'p0-lj-' + Date.now();
+  var newGames = [], usedNames = {};
+  var base = repR1.length;
+  for (var i = 0; i + 1 < unpaired.length; i += 2) {
+    var a = unpaired[i], b = unpaired[i + 1];
+    var gnum = base + newGames.length;
+    newGames.push({
+      id: idp + '-rep' + gnum, round: 0, bracket: 'upper', isPhaseRepR1: true,
+      p1: _nm(a), p2: _nm(b), team1Obj: a, team2Obj: b,
+      p1Seed: gnum * 2, p2Seed: gnum * 2 + 1, winner: null, phaseIndex: 0, category: null
+    });
+    usedNames[_nm(a)] = 1; usedNames[_nm(b)] = 1;
+  }
+  if (!newGames.length) return 0; // 1 dupla nova sem par (e sem satTeam) → aguarda na lista de espera
+
+  // As duplas NOVAS que entraram num jogo viram inscritas; saem da lista de espera. A que sobrou fica.
+  if (!Array.isArray(t.participants)) t.participants = [];
+  if (!t.teamOrigins) t.teamOrigins = {};
+  var integrated = 0;
+  formed.forEach(function (d) {
+    if (!usedNames[_nm(d)]) return; // sobra: continua na lista de espera
+    var clone = Object.assign({}, d); delete clone._lateJoin;
+    t.participants.push(clone); t.teamOrigins[_nm(d)] = 'formada'; integrated++;
+  });
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames[_nm(p)]); });
+  });
+
+  // Conjunto repR1 final = antigos (com resultados) + novos. Downstream é reconstruído do zero.
+  var allRep = repR1.concat(newGames);
+  t.matches = allRep.slice();
+  if (t.thirdPlaceMatch) delete t.thirdPlaceMatch;
+
+  // meta nova (todos pareados → sem satTeam; n par). Mesma matemática de _duplaR1FromPool.
+  var g = allRep.length;
+  var T = 1; while (T < g) T *= 2;
+  var meta = {
+    g: g, T: T, promote: (T - g), toLower: (2 * g - T), n: (2 * g),
+    hasSat: false, satName: null, satObj: null, idPrefix: idp, category: null, mode: 'playin'
+  };
+  window._buildRepechageDoubleElim(t, meta);
+  t.matches.forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; });
+
+  // Re-propaga os vencedores JÁ decididos dos repR1 (winner→upper); _resolveRepFills fecha o resto.
+  allRep.forEach(function (m) { if (m.winner && typeof window._advanceWinner === 'function') { try { window._advanceWinner(t, m); } catch (e) {} } });
+  if (typeof window._resolveRepFills === 'function') { try { window._resolveRepFills(t); } catch (e) {} }
+
+  if (typeof window._computeMemberUids === 'function') { try { window._computeMemberUids(t); } catch (e) {} }
+  if (window.AppStore && typeof window.AppStore.logAction === 'function') {
+    window.AppStore.logAction(t.id, integrated + ' dupla(s) tardia(s) → R1 upper (append) — chave estendida');
+  }
+  return integrated;
+};
+
+// TIER 3: desfaz as duplas formadas na lista de espera de volta em suplentes INDIVIDUAIS.
+// Usado quando a R2 da chave inferior já começou (tarde demais pra formar confronto novo).
+// Retorna nº de duplas desfeitas.
+window._dissolveLateDuplas = function (t) {
+  if (!t) return 0;
+  var _isPair = function (p) { return p && typeof p === 'object' && p.p1Name && p.p2Name; };
+  var undone = 0;
+  ['standbyParticipants', 'waitlist'].forEach(function (k) {
+    if (!Array.isArray(t[k])) return;
+    var out = [];
+    t[k].forEach(function (p) {
+      if (_isPair(p) && p._lateJoin) {
+        out.push(p.p1Uid ? { displayName: p.p1Name, name: p.p1Name, uid: p.p1Uid, _lateJoin: true } : p.p1Name);
+        out.push(p.p2Uid ? { displayName: p.p2Name, name: p.p2Name, uid: p.p2Uid, _lateJoin: true } : p.p2Name);
+        undone++;
+      } else { out.push(p); }
+    });
+    t[k] = out;
+  });
+  return undone;
+};
+
 window._createExtraGamesFromWaitlist = function(t) {
   if (!t) return 0;
   if (t.lateEnrollment !== 'expand') return 0;
@@ -1268,32 +1430,9 @@ window.generateDrawFunction = function (tId) {
         // taggeado, ou t.rounds/t.standings nativo no caso da Liga/Suíço).
         t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
         t.currentPhaseIndex = 0; delete t._phaseMaterialized;
-        var _rawParts0 = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}));
-        var _pool0;
-        if (_isMon0) {
-            // Rei/Rainha: DECOMPÕE qualquer entrada-time (casais/misto pré-formados) nos seus
-            // membros individuais — o parceiro rotaciona, então cada PESSOA é uma entrada do
-            // pool. Cada uma carrega uid pra resolução de nome AO VIVO pelo perfil.
-            _pool0 = [];
-            _rawParts0.forEach(function (p) {
-                if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
-                    p.participants.forEach(function (s) {
-                        var nm = (s && (s.displayName || s.name)) || String(s || '');
-                        _pool0.push((s && typeof s === 'object') ? Object.assign({ displayName: nm }, s) : { displayName: nm });
-                    });
-                } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
-                    _pool0.push({ displayName: p.p1Name || p.p1Uid || '', uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || p.gender });
-                    _pool0.push({ displayName: p.p2Name || p.p2Uid || '', uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || p.gender });
-                } else {
-                    var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || ''));
-                    _pool0.push((typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm });
-                }
-            });
-        } else {
-            _pool0 = _rawParts0
-                .filter(function (p) { return _ts0 <= 1 || !!window._entryTeamMembers(p) || (typeof p === 'object' && !p.p1Name && !Array.isArray(p.participants)); })
-                .map(function (p) { var nm = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName || p.name || '')); return (typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm }; });
-        }
+        // v4.5.21: pool-build extraído p/ window._buildPhase0Pool (reusado pela integração de
+        // duplas tardias _integrateLateDuplas — MESMO pool que o sorteio inicial).
+        var _pool0 = window._buildPhase0Pool(t, _isMon0, _ts0);
         var _built0 = _E0.generatePhase(_pool0, _cfg0, {
             t: t, idPrefix: 'p0-' + Date.now(),
             isVip: function (e) { return window._entryHasVip(t, e); },

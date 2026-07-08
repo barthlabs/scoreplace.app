@@ -9,6 +9,13 @@
 window._RELEASE_NOTES_HTML = (function () {
   var html =
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.24-beta — duplas da lista de espera entram na chave (Dupla Eliminatória) <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(8 de Julho, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🤝 Formou 2 duplas na lista de espera → viram confronto na chave:</b> em <b>Dupla Eliminatória</b> com inscrição aberta, ao juntar 2 duplas na lista de espera (arrastando), elas entram como um <b>novo confronto na 1ª rodada da chave superior</b> — como se tivessem sido sorteadas: o vencedor segue na chave superior e o derrotado cai pra chave inferior. Uma dupla sozinha pode preencher uma vaga sem adversário; se sobrar 1 dupla sem par, ela aguarda. Os jogos da 1ª rodada <b>já jogados são preservados</b>.</li>' +
+        '<li><b>👤 Entrou tarde demais? Vira suplente:</b> se o torneio já avançou muito (a 2ª rodada da chave inferior já começou), as pessoas na lista de espera passam a ser <b>suplentes individuais</b> (cobrem W.O.), e as duplas ali formadas são desfeitas.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(16,185,129,0.07);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">🏷️ v4.5.20-beta — inscrição aberta na 1ª rodada e formação de duplas na lista de espera <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(7 de Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📝 Inscrições abertas durante a 1ª rodada, encerram na 2ª:</b> quando o organizador configura inscrição depois do início, o torneio segue aceitando gente e formando novos confrontos durante a <b>1ª rodada da fase</b>. No <b>primeiro resultado (ou primeiro ponto no placar ao vivo) da 2ª rodada</b>, as inscrições se encerram automaticamente — o botão <b>+ Participante</b> fica cinza e o <b>Encerrar Inscrições</b> some. Vale para qualquer formato, por fase.</li>' +
