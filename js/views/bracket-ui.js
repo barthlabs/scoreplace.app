@@ -6334,22 +6334,43 @@ window._openLiveScoring = function(tId, matchId, opts) {
       '</div>';
     };
 
-    // v4.5.31: o TAMANHO do número é 100% CSS — font-size:calc(clamp(3rem,30vw,
-    // 9rem) * --live-plate-scale) no _buildPlate. Como é baseado em viewport (vw),
-    // TODOS os valores (0/15/30/40/AD) ficam no MESMO tamanho e peso automaticamente
-    // (não depende do conteúdo) e NÃO há glitch de timing (o problema do single-RAF
-    // que fazia "às vezes menor" some — não há medição JS do número). O slider
-    // "Placar" cresce/encolhe o número via a var CSS. A placa (height:auto) abraça
-    // o número → número domina o branco; overflow:hidden é a rede se passar de 100%.
-    // O fit aqui só dimensiona o GLIFO ▲/▼ dos botões pra acompanhar a altura real.
+    // v4.5.33: dimensiona o número das metades (.ls-score-half) medindo a FONTE
+    // REAL — cria um "40" invisível a 100px, mede a largura de 2 dígitos e calcula
+    // o font-size pra "40" caber ~90% da largura da metade. Assim NUNCA estoura
+    // (independente de aparelho/fonte), TODOS os valores ficam no MESMO tamanho
+    // (a referência é sempre "40", não o valor atual → sem glitch por conteúdo),
+    // e o slider "Placar" cresce até ~99% e trava (não clipa). Mede clientWidth em
+    // DUPLO RAF (layout assentado). Também limita pela altura da metade.
     var _doFitLivePlateText = function(ov) {
-      ov.querySelectorAll('.ls-up-btn').forEach(function(btn) {
-        var h = btn.offsetHeight;
-        if (h > 10) btn.style.fontSize = Math.floor(h * 0.5) + 'px';
+      var halves = ov.querySelectorAll('.ls-score-half');
+      if (!halves.length) return;
+      var ps = parseFloat(getComputedStyle(ov).getPropertyValue('--live-plate-scale')) || 1;
+      if (!(ps > 0)) ps = 1;
+      // largura de "40" (pior caso) a 100px, medindo a fonte real da 1ª metade.
+      var probe = document.createElement('span');
+      probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;font-weight:900;font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;font-size:100px;';
+      probe.textContent = '40';
+      halves[0].appendChild(probe);
+      var w2 = probe.scrollWidth;
+      if (probe.parentNode) probe.parentNode.removeChild(probe);
+      if (w2 <= 0) return;
+      var minW = Infinity, minH = Infinity;
+      halves.forEach(function(h) {
+        if (h.clientWidth > 10 && h.clientWidth < minW) minW = h.clientWidth;
+        if (h.clientHeight > 10 && h.clientHeight < minH) minH = h.clientHeight;
       });
-      ov.querySelectorAll('.ls-down-btn').forEach(function(btn) {
-        var h = btn.offsetHeight;
-        if (h > 10) btn.style.fontSize = Math.floor(h * 0.5) + 'px';
+      if (minW === Infinity) return;
+      // "40" ocupa 90% da largura no padrão (ps=1); teto = 99% (nunca clipa).
+      var baseFs = 0.90 * minW * 100 / w2;
+      var capFs  = 0.99 * minW * 100 / w2;
+      var fs = Math.min(baseFs * ps, capFs);
+      // não deixa passar da altura da metade (line-height 1 → altura ≈ fs).
+      if (minH !== Infinity && fs > minH * 0.94) fs = minH * 0.94;
+      fs = Math.floor(fs);
+      if (fs < 12) return;
+      halves.forEach(function(h) {
+        var n = h.querySelector('.ls-plate-num');
+        if (n) n.style.fontSize = fs + 'px';
       });
     };
     var _fitLivePlateText = function() {
@@ -6361,6 +6382,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
           if (el) _doFitLivePlateText(el);
         });
       });
+      setTimeout(function() {
+        var el = document.getElementById('live-scoring-overlay');
+        if (el) _doFitLivePlateText(el);
+      }, 180);
     };
     window._fitLivePlateText = _fitLivePlateText;
 
@@ -6486,8 +6511,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var display = team === 1 ? p1Display : p2Display;
         var tag = state.isFinished ? 'div' : 'button';
         var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
+        // Fallback CSS conservador (nunca estoura 2 dígitos); _fitLivePlateText
+        // mede a fonte real e ajusta o tamanho pra caber ~90% da largura da metade.
         return '<' + tag + ' class="ls-score-half" ' + act + ' style="flex:1;min-width:0;height:100%;border:none;cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + tint + ';border-radius:16px;display:flex;align-items:center;justify-content:center;padding:0;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
-          '<span class="ls-plate-num" style="font-size:calc(clamp(3rem,32vw,10rem) * var(--live-plate-scale,1));font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;">' + display + '</span>' +
+          '<span class="ls-plate-num" style="font-size:clamp(2.5rem,16vw,7rem);font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + display + '</span>' +
         '</' + tag + '>';
       };
 
